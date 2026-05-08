@@ -22,9 +22,12 @@ export function unpublishSfuTracksForClient(sfuClient, tracks) {
   }
 }
 
-export function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
+export function stopRetiredLocalStreams(retiredStreams, preservedStreams = [], options = {}) {
   const preserved = new Set();
   const preservedTrackIds = new Set();
+  const protectedTrackIds = new Set(Array.isArray(options?.protectedTrackIds) ? options.protectedTrackIds : []);
+  const reason = String(options?.reason || 'retired_local_stream_cleanup');
+  const captureDiagnostic = typeof options?.captureDiagnostic === 'function' ? options.captureDiagnostic : null;
   for (const stream of preservedStreams) {
     if (stream instanceof MediaStream) {
       preserved.add(stream);
@@ -39,6 +42,22 @@ export function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
     if (preserved.has(stream)) continue;
     for (const track of stream.getTracks()) {
       if (track?.id && preservedTrackIds.has(track.id)) continue;
+      if (track?.id && protectedTrackIds.has(track.id)) {
+        captureDiagnostic?.({
+          category: 'media',
+          level: 'info',
+          eventType: 'local_media_cleanup_preserved_active_track',
+          code: 'local_media_cleanup_preserved_active_track',
+          message: 'Stale local media cleanup preserved an active camera, microphone, or screen-share track.',
+          payload: {
+            reason,
+            track_id: track.id,
+            track_kind: String(track.kind || ''),
+            media_runtime_path: String(options?.mediaRuntimePath || ''),
+          },
+        });
+        continue;
+      }
       try {
         track.stop();
       } catch {
