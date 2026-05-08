@@ -186,31 +186,34 @@ try {
     $openAccessId = (string) (($openLink['access_link'] ?? [])['id'] ?? '');
     videochat_call_access_admin_prevention_assert($openAccessId !== '', 'anonymous/open access id should be present');
 
+    $guestCountBeforeOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     $openSession = videochat_issue_session_for_call_access(
         $pdo,
         $openAccessId,
-        videochat_call_access_admin_prevention_session('sess_admin_prevention_open_guest'),
+        videochat_call_access_admin_prevention_session('sess_admin_prevention_open_account'),
         ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-admin-prevention-contract'],
         [
             'authenticated_user_id' => $standardUserId,
             'guest_name' => 'Anonymous Admin Prevention Guest',
         ]
     );
-    videochat_call_access_admin_prevention_assert((bool) ($openSession['ok'] ?? false), 'anonymous/open guest session should issue');
-    $guestUserId = (int) (($openSession['user'] ?? [])['id'] ?? 0);
-    videochat_call_access_admin_prevention_assert($guestUserId > 0, 'anonymous/open guest user should be present');
-    videochat_call_access_admin_prevention_assert($guestUserId !== $standardUserId, 'anonymous/open link must not promote the logged-in normal account');
+    videochat_call_access_admin_prevention_assert((bool) ($openSession['ok'] ?? false), 'anonymous/open account session should issue');
+    $openUserId = (int) (($openSession['user'] ?? [])['id'] ?? 0);
+    videochat_call_access_admin_prevention_assert($openUserId === $standardUserId, 'anonymous/open link must keep the logged-in normal account');
+    $guestCountAfterOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
+    videochat_call_access_admin_prevention_assert($guestCountAfterOpenJoin === $guestCountBeforeOpenJoin, 'logged-in anonymous/open link must not create a temporary guest identity');
     videochat_call_access_admin_prevention_assert_no_admin(
         $pdo,
-        'anonymous open link guest',
-        'sess_admin_prevention_open_guest',
+        'anonymous open link account',
+        'sess_admin_prevention_open_account',
         $openCallId,
-        $guestUserId,
-        true
+        $standardUserId,
+        false
     );
+    $openParticipant = videochat_call_access_admin_prevention_participant($pdo, $openCallId, $standardUserId);
     videochat_call_access_admin_prevention_assert(
-        videochat_call_access_admin_prevention_participant($pdo, $openCallId, $standardUserId) === null,
-        'anonymous/open link must not add the logged-in normal account as a call participant'
+        is_array($openParticipant) && (string) ($openParticipant['invite_state'] ?? '') === 'invited',
+        'anonymous/open logged-in account should wait for host admission'
     );
     videochat_call_access_admin_prevention_assert(
         videochat_can_administer_call($pdo, $openCallId, 'user', $standardUserId, $adminUserId) === false,

@@ -11,6 +11,10 @@ function videochat_lobby_state_init(): array
 
 function videochat_lobby_can_moderate(array $connection): bool
 {
+    if ((bool) ($connection['can_moderate_call'] ?? false)) {
+        return true;
+    }
+
     $rawRole = strtolower(trim((string) ($connection['raw_role'] ?? $connection['role'] ?? '')));
     $globalRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
     if ($globalRole === 'admin' || $rawRole === 'moderator') {
