@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../realtime/realtime_gossipmesh_room_state.php';
 require_once __DIR__ . '/../realtime/realtime_sfu_store.php';
 
 /**
@@ -23,6 +24,7 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
     videochat_realtime_presence_db_prune($pdo, $nowMs);
 
     $rows = videochat_video_operations_fetch_live_call_rows($pdo, $nowMs);
+    $participantsByCall = videochat_video_operations_fetch_live_call_participants_by_key($pdo, $nowMs);
     $runningCalls = [];
     $concurrentParticipants = 0;
 
@@ -33,14 +35,30 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
         }
 
         $concurrentParticipants += $liveTotal;
+        $callId = videochat_video_operations_string($row['id'] ?? '');
+        $roomId = videochat_video_operations_string($row['room_id'] ?? '');
         $runningSince = videochat_video_operations_string($row['running_since'] ?? '');
         $ownerEmail = videochat_video_operations_string($row['owner_email'] ?? '');
         $ownerDisplayName = videochat_video_operations_string($row['owner_display_name'] ?? '');
         $host = $ownerDisplayName !== '' ? $ownerDisplayName : $ownerEmail;
+        $gossipParticipants = $participantsByCall[videochat_video_operations_call_key($callId, $roomId)] ?? [];
+        $gossipTopologyByPeerId = [];
+        if ($gossipParticipants !== []) {
+            try {
+                $gossipTopologyByPeerId = videochat_gossipmesh_room_state_payloads_by_peer(
+                    $callId,
+                    $roomId,
+                    $gossipParticipants,
+                    'operations_snapshot'
+                );
+            } catch (Throwable) {
+                $gossipTopologyByPeerId = [];
+            }
+        }
 
         $runningCalls[] = [
-            'id' => videochat_video_operations_string($row['id'] ?? ''),
-            'room_id' => videochat_video_operations_string($row['room_id'] ?? ''),
+            'id' => $callId,
+            'room_id' => $roomId,
             'title' => videochat_video_operations_string($row['title'] ?? 'Untitled call'),
             'status' => 'live',
             'call_status' => videochat_video_operations_string($row['status'] ?? 'scheduled'),
@@ -68,6 +86,14 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
                 'ttl_ms' => videochat_realtime_presence_db_ttl_ms(),
                 'source' => 'realtime_presence_connections',
             ],
+            'gossip' => [
+                'scope' => 'call',
+                'lifecycle' => 'running',
+                'topology_state' => $gossipTopologyByPeerId === [] ? 'waiting' : 'spawned',
+                'topology_source' => 'realtime_presence_connections',
+                'topology_peer_count' => count($gossipTopologyByPeerId),
+            ],
+            'gossip_topology_by_peer_id' => $gossipTopologyByPeerId,
             'running_since' => $runningSince,
             'uptime_seconds' => videochat_video_operations_uptime_seconds($runningSince, $now),
             'starts_at' => videochat_video_operations_string($row['starts_at'] ?? ''),
@@ -193,6 +219,107 @@ SQL
     return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
 }
 
+function videochat_video_operations_call_key(string $callId, string $roomId): string
+{
+    return strtolower(trim($callId)) . '::' . strtolower(trim($roomId));
+}
+
+/**
+ * @return array<string, array<int, array<string, mixed>>>
+ */
+function videochat_video_operations_fetch_live_call_participants_by_key(PDO $pdo, int $nowMs): array
+{
+    $presenceCutoffMs = max(0, $nowMs - videochat_realtime_presence_db_ttl_ms());
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT
+    rpc.connection_id,
+    rpc.call_id,
+    rpc.room_id,
+    rpc.user_id,
+    rpc.display_name AS presence_display_name,
+    rpc.role AS presence_role,
+    rpc.call_role AS presence_call_role,
+    rpc.connected_at,
+    cp.participant_display_name,
+    cp.participant_call_role,
+    users.display_name AS user_display_name,
+    roles.slug AS role_slug
+FROM realtime_presence_connections rpc
+LEFT JOIN (
+    SELECT
+        call_id,
+        user_id,
+        MAX(display_name) AS participant_display_name,
+        MAX(call_role) AS participant_call_role
+    FROM call_participants
+    WHERE user_id IS NOT NULL
+    GROUP BY call_id, user_id
+) cp ON cp.call_id = rpc.call_id AND cp.user_id = rpc.user_id
+LEFT JOIN users ON users.id = rpc.user_id
+LEFT JOIN roles ON roles.id = users.role_id
+WHERE rpc.last_seen_at_ms >= :presence_cutoff_ms
+ORDER BY
+    rpc.call_id ASC,
+    rpc.room_id ASC,
+    rpc.display_name ASC,
+    rpc.user_id ASC,
+    rpc.connection_id ASC
+SQL
+    );
+    $statement->execute([
+        ':presence_cutoff_ms' => $presenceCutoffMs,
+    ]);
+
+    $participantsByKey = [];
+    while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $callId = videochat_video_operations_string($row['call_id'] ?? '');
+        $roomId = videochat_video_operations_string($row['room_id'] ?? '');
+        $userId = videochat_video_operations_int($row['user_id'] ?? 0);
+        if ($callId === '' || $roomId === '' || $userId <= 0) {
+            continue;
+        }
+        $key = videochat_video_operations_call_key($callId, $roomId);
+        if (isset($participantsByKey[$key][(string) $userId])) {
+            continue;
+        }
+
+        $displayName = videochat_video_operations_first_string(
+            $row['presence_display_name'] ?? '',
+            $row['participant_display_name'] ?? '',
+            $row['user_display_name'] ?? '',
+            'User ' . $userId
+        );
+        $participantsByKey[$key][(string) $userId] = [
+            'connection_id' => videochat_video_operations_string($row['connection_id'] ?? ('operations:' . $callId . ':' . $userId)),
+            'room_id' => $roomId,
+            'user' => [
+                'id' => $userId,
+                'display_name' => $displayName,
+                'role' => videochat_video_operations_role_slug(
+                    videochat_video_operations_first_string($row['presence_role'] ?? '', $row['role_slug'] ?? '', 'user')
+                ),
+                'call_role' => videochat_video_operations_call_role(
+                    videochat_video_operations_first_string($row['presence_call_role'] ?? '', $row['participant_call_role'] ?? '', 'participant')
+                ),
+            ],
+            'connected_at' => videochat_video_operations_string($row['connected_at'] ?? ''),
+        ];
+    }
+
+    $normalized = [];
+    foreach ($participantsByKey as $key => $participantsByUserId) {
+        if (is_array($participantsByUserId)) {
+            $normalized[(string) $key] = array_values($participantsByUserId);
+        }
+    }
+
+    return $normalized;
+}
+
 function videochat_video_operations_uptime_seconds(string $runningSince, int $nowEpoch): int
 {
     $trimmed = trim($runningSince);
@@ -223,6 +350,30 @@ function videochat_video_operations_int(mixed $value): int
     }
 
     return 0;
+}
+
+function videochat_video_operations_first_string(mixed ...$values): string
+{
+    foreach ($values as $value) {
+        $normalized = videochat_video_operations_string($value);
+        if ($normalized !== '') {
+            return $normalized;
+        }
+    }
+
+    return '';
+}
+
+function videochat_video_operations_role_slug(mixed $value): string
+{
+    $normalized = strtolower(videochat_video_operations_string($value));
+    return in_array($normalized, ['admin', 'user'], true) ? $normalized : 'user';
+}
+
+function videochat_video_operations_call_role(mixed $value): string
+{
+    $normalized = strtolower(videochat_video_operations_string($value));
+    return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
 }
 
 function videochat_video_operations_string(mixed $value): string

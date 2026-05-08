@@ -650,6 +650,7 @@ function sendSocketFrame(payload) {
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
+  getAssignedGossipNeighborCount,
   handleGossipNeighborSignal,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
@@ -1044,6 +1045,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     markParticipantActivity,
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
+    getAssignedGossipNeighborCount,
     normalizeRoomId,
     onLocalScreenShareStateChanged: (active, reason = '') => {
       refreshUsersDirectoryPresentation();

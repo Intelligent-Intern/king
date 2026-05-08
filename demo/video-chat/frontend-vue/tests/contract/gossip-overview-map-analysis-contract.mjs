@@ -37,6 +37,18 @@ assert.match(
 
 assert.match(
   mapSource,
+  /export function useGossipNetworkMaps\([\s\S]*operationsState\.runningCalls[\s\S]*buildGossipNetworkMapForCall/,
+  'overview gossip map state must build one map per live call instead of one aggregate mesh',
+);
+
+assert.match(
+  mapSource,
+  /callKey:\s*string[\s\S]*roomId:\s*string[\s\S]*lifecycle:\s*string/,
+  'each gossip map must carry call identity and lifecycle metadata',
+);
+
+assert.match(
+  mapSource,
   /function buildAnalysis\([\s\S]*gossip_analysis_topology[\s\S]*gossip_analysis_health/,
   'gossip network map must build visible topology and health analysis text',
 );
@@ -66,9 +78,21 @@ assert.match(
 );
 
 assert.match(
+  templateSource,
+  /class="gossip-network-call-picker"[\s\S]*v-model="selectedGossipCallKey"[\s\S]*v-for="option in gossipCallOptions"/,
+  'overview gossip map must expose a live-call selector',
+);
+
+assert.match(
   cssSource,
   /\.gossip-network-analysis[\s\S]*\.gossip-network-analysis li/,
   'overview gossip analysis text must have dedicated styling',
+);
+
+assert.match(
+  cssSource,
+  /\.gossip-network-call-picker[\s\S]*\.gossip-network-call-select/,
+  'overview gossip live-call selector must have dedicated styling',
 );
 
 for (const key of [
@@ -77,6 +101,7 @@ for (const key of [
   'users.overview.gossip_analysis_topology',
   'users.overview.gossip_analysis_traffic',
   'users.overview.gossip_analysis_waiting',
+  'users.overview.gossip_select_call',
 ]) {
   assert.match(messagesSource, new RegExp(key.replaceAll('.', '\\.')), `${key} must be localized`);
 }

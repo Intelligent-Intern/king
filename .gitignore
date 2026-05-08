@@ -127,6 +127,9 @@ demo/video-chat/backend-king-php/.local/
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/king_logo-withslogan.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/avatar-placeholder.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icons/*.png
+!demo/video-chat/backend-king-php/support/workspace_background_seed/*.png
+!demo/video-chat/backend-king-php/support/workspace_background_seed/*.jpg
+!demo/video-chat/backend-king-php/support/workspace_background_seed/*.webp
 !mock/assets/orgas/intelligent-intern/logo.svg
 !mock/assets/orgas/intelligent-intern/icon.svg
 !mock/assets/orgas/intelligent-intern/icons/*.png

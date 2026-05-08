@@ -37,6 +37,8 @@ try {
   const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.ts');
   const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const callWorkspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
   const packageJson = read('package.json');
 
   requireContains(videoFrameSource, 'new MediaStreamTrackProcessorCtor({ track: videoTrack, maxBufferSize: 1 })', 'VideoFrame source constructs bounded track processor');
@@ -65,6 +67,20 @@ try {
 
   requireContains(publisherPipeline, "from './publisherSourceReadback'", 'publisher pipeline imports source readback controller');
   requireContains(publisherPipeline, 'createPublisherSourceReadbackController({', 'publisher pipeline creates source readback controller');
+  requireContains(publisherPipeline, 'function shouldPublishOutboundMedia()', 'publisher pipeline owns a receiver-aware outbound media gate');
+  requireContains(publisherPipeline, "eventType: 'outbound_media_idle_no_receivers'", 'publisher pipeline diagnoses solo-call media idle state');
+  assert.ok(
+    publisherPipeline.indexOf('if (!shouldPublishOutboundMedia())') < publisherPipeline.indexOf('const bufferedAmount = getSfuClientBufferedAmount();'),
+    'publisher must idle solo calls before SFU buffered-amount pressure handling',
+  );
+  assert.ok(
+    publisherPipeline.indexOf('if (!shouldPublishOutboundMedia())') < publisherPipeline.indexOf('sourceReadbackController.readFrame({'),
+    'publisher must idle solo calls before allocating VideoFrames for readback',
+  );
+  requireContains(mediaStack, 'getConnectedParticipantCount: () => refs.connectedParticipantUsers.value.length', 'media stack wires live participant count to publisher gate');
+  requireContains(mediaStack, 'getRemotePeerCount: () => refs.remotePeersRef.value.size', 'media stack wires remote peer count to publisher gate');
+  requireContains(mediaStack, 'getAssignedGossipNeighborCount: callbacks.getAssignedGossipNeighborCount', 'media stack wires gossip neighbor count to publisher gate');
+  requireContains(callWorkspaceView, 'getAssignedGossipNeighborCount,', 'workspace owns assigned gossip neighbor count for publisher gating');
   requireContains(publisherPipeline, 'sourceReadbackController.readFrame({', 'publisher pipeline reads from source controller');
   assert.equal(publisherPipeline.includes('ctx.drawImage(video'), false, 'publisher pipeline must not draw the video element directly');
   assert.equal(publisherPipeline.includes('ctx.getImageData'), false, 'publisher pipeline must not own DOM readback directly');

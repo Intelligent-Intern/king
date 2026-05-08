@@ -46,6 +46,9 @@ export function createLocalPublisherPipelineHelpers({
     captureClientDiagnostic = () => {},
     currentSfuVideoProfile,
     ensureMediaSecuritySession,
+    getAssignedGossipNeighborCount = () => 0,
+    getConnectedParticipantCount = () => 0,
+    getRemotePeerCount = () => 0,
     getSfuClientBufferedAmount,
     handleWlvcEncodeBackpressure,
     handleWlvcFrameSendFailure,
@@ -74,6 +77,7 @@ export function createLocalPublisherPipelineHelpers({
     ? callbacks.additionalPublisherFrameMetrics
     : () => ({});
   const mountLocalPreview = callbacks.mountLocalPreview !== false;
+  let lastOutboundIdleDiagnosticAtMs = 0;
 
   function unpublishSfuTracks(tracks) {
     unpublishSfuTracksForClient(refs.sfuClientRef.value, tracks);
@@ -90,6 +94,37 @@ export function createLocalPublisherPipelineHelpers({
     const stream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
     if (!(stream instanceof MediaStream)) return false;
     return stream.getTracks().some((track) => String(track?.readyState || '').trim().toLowerCase() === 'live');
+  }
+
+  function shouldPublishOutboundMedia() {
+    const connectedParticipantCount = Math.max(0, Number(getConnectedParticipantCount() || 0));
+    const remotePeerCount = Math.max(0, Number(getRemotePeerCount() || 0));
+    const assignedGossipNeighborCount = Math.max(0, Number(getAssignedGossipNeighborCount() || 0));
+    return connectedParticipantCount > 1
+      || remotePeerCount > 0
+      || assignedGossipNeighborCount > 0;
+  }
+
+  function diagnoseOutboundMediaIdle(videoTrack, videoProfile) {
+    const nowMs = Date.now();
+    if (nowMs - lastOutboundIdleDiagnosticAtMs < 5000) return;
+    lastOutboundIdleDiagnosticAtMs = nowMs;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'outbound_media_idle_no_receivers',
+      code: 'outbound_media_idle_no_receivers',
+      message: 'Local publisher is idling encoded media because the call has no remote receiver or assigned gossip neighbor.',
+      payload: {
+        media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+        track_id: String(videoTrack?.id || ''),
+        outgoing_video_quality_profile: String(videoProfile?.id || ''),
+        connected_participant_count: Math.max(0, Number(getConnectedParticipantCount() || 0)),
+        remote_peer_count: Math.max(0, Number(getRemotePeerCount() || 0)),
+        assigned_gossip_neighbor_count: Math.max(0, Number(getAssignedGossipNeighborCount() || 0)),
+      },
+    });
   }
 
   function scheduleLocalTrackRecovery(reason = 'track_ended') {
@@ -509,6 +544,10 @@ export function createLocalPublisherPipelineHelpers({
         if (state.wlvcEncodeInFlight) return;
         if (!refs.videoEncoderRef.value) return;
         if (publisherRequiresSfuBeforeEncode() && !currentOpenSfuClient()) return;
+        if (!shouldPublishOutboundMedia()) {
+          diagnoseOutboundMediaIdle(videoTrack, videoProfile);
+          return;
+        }
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {

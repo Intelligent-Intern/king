@@ -57,6 +57,14 @@
             }) }}
           </p>
         </div>
+        <label v-if="gossipCallOptions.length > 0" class="gossip-network-call-picker">
+          <span>{{ t('users.overview.gossip_select_call') }}</span>
+          <select v-model="selectedGossipCallKey" class="gossip-network-call-select">
+            <option v-for="option in gossipCallOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
         <span class="tag" :class="gossipNetworkMap.summary.statusTagClass">{{ gossipNetworkMap.summary.statusLabel }}</span>
       </header>
 
