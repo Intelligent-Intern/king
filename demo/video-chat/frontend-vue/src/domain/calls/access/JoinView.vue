@@ -24,6 +24,14 @@
         <div v-else-if="state.contextError" class="calls-modal-body call-access-join-context-body">
           <section class="call-access-join-status error">{{ state.contextError }}</section>
         </div>
+        <StrongMismatchHostVerificationModal
+          v-else-if="state.strongMismatchRequired"
+          :access-id="normalizeAccessId(route.params.accessId)"
+          :verified-context="state.verifiedAccessContext"
+          @cancel="goToLogin"
+          @verified="handleStrongMismatchHostVerified"
+          @continue="continueAfterStrongMismatchDeclineUpdate"
+        />
         <template v-else>
           <div class="calls-modal-body calls-enter-body">
             <div class="calls-enter-layout">
@@ -186,6 +194,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../../components/AppSelect.vue';
+import StrongMismatchHostVerificationModal from './StrongMismatchHostVerificationModal.vue';
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
@@ -255,6 +264,7 @@ const state = reactive({
   previewError: '',
   micLevelPercent: 0,
   verifiedAccessContext: null,
+  strongMismatchRequired: false,
 });
 
 const {
@@ -296,6 +306,7 @@ function resetJoinContextDetails() {
   state.admissionMessage = '';
   state.joinError = '';
   state.verifiedAccessContext = null;
+  state.strongMismatchRequired = false;
 }
 
 function showSafeInvalidAccessState() {
@@ -621,6 +632,29 @@ function startAdmissionWait(accessId) {
   return true;
 }
 
+function isStrongMismatchHostVerificationError(payload) {
+  const error = payload && typeof payload === 'object' ? payload.error || {} : {};
+  const details = error && typeof error === 'object' ? error.details || {} : {};
+  const fields = details && typeof details === 'object' ? details.fields || {} : {};
+  return String(error.code || '') === 'call_access_forbidden'
+    && String(details.mismatch || '') === 'strong_personalized_link'
+    && String(fields.host_name || '') === 'not_verified';
+}
+
+function handleStrongMismatchHostVerified(result) {
+  const call = result?.call && typeof result.call === 'object' ? result.call : {};
+  state.callId = normalizeCallId(call.id || state.callId);
+  state.roomId = normalizeRoomId(call.room_id || state.roomId || 'lobby');
+  state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
+}
+
+function continueAfterStrongMismatchDeclineUpdate() {
+  const accessId = normalizeAccessId(route.params.accessId);
+  if (accessId === '') return;
+  state.strongMismatchRequired = false;
+  startAdmissionWait(accessId);
+}
+
 async function loadJoinContext() {
   state.loadingContext = true;
   state.contextError = '';
@@ -647,6 +681,11 @@ async function loadJoinContext() {
       const errorPayload = payload && typeof payload === 'object'
         ? payload
         : { error: { code: 'call_access_validation_failed' } };
+      if (response.status === 403 && isStrongMismatchHostVerificationError(errorPayload)) {
+        state.verifiedAccessContext = callAccessVerifiedContextFromSession(sessionState);
+        state.strongMismatchRequired = true;
+        return;
+      }
       state.contextError = localizedApiErrorMessage(errorPayload, t('public.join.resolve_failed'));
       return;
     }
@@ -738,7 +777,7 @@ onMounted(async () => {
   });
   detachDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await loadJoinContext();
-  if (state.contextError) return;
+  if (state.contextError || state.strongMismatchRequired) return;
   await refreshCallMediaDevices({ requestPermissions: true });
   await startPreview();
 });

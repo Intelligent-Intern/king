@@ -150,6 +150,9 @@ function videochat_validate_call_access_session_binding(
     $callTenantSelect = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
         ? 'calls.tenant_id AS resolved_call_tenant_id'
         : 'NULL AS resolved_call_tenant_id';
+    $hostVerifiedSelect = videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'host_verified_at')
+        ? 'call_access_sessions.host_verified_at AS host_verified_at'
+        : 'NULL AS host_verified_at';
 
     try {
         $statement = $pdo->prepare(
@@ -164,6 +167,7 @@ SELECT
     call_access_sessions.issued_at,
     call_access_sessions.expires_at,
     call_access_sessions.created_at,
+    {$hostVerifiedSelect},
     call_access_links.id AS link_id,
     call_access_links.call_id AS link_call_id,
     call_access_links.participant_user_id AS link_participant_user_id,
@@ -219,6 +223,7 @@ SQL
         'issued_at' => (string) ($row['issued_at'] ?? ''),
         'expires_at' => (string) ($row['expires_at'] ?? ''),
         'created_at' => (string) ($row['created_at'] ?? ''),
+        'host_verified_at' => is_string($row['host_verified_at'] ?? null) ? (string) $row['host_verified_at'] : null,
     ];
 
     $fail = static function (string $reason) use ($binding): array {
@@ -315,11 +320,12 @@ SQL
     $userEmail = videochat_normalize_call_access_email(
         is_string($row['resolved_user_email'] ?? null) ? (string) $row['resolved_user_email'] : null
     );
+    $personalLinkHostVerified = trim((string) ($row['host_verified_at'] ?? '')) !== '';
     if ($linkKind === 'personal') {
-        if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId) {
+        if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId && !$personalLinkHostVerified) {
             return $fail('call_access_binding_mismatch');
         }
-        if ($linkParticipantUserId <= 0 && $linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail) {
+        if ($linkParticipantUserId <= 0 && $linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail && !$personalLinkHostVerified) {
             return $fail('call_access_binding_mismatch');
         }
     } elseif ($linkParticipantUserId > 0 || $linkParticipantEmail !== '') {

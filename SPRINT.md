@@ -1467,22 +1467,22 @@ the authenticated account authoritative for the issued session.
 - [ ] Strong mismatch is detected when first name differs
 - [ ] Strong mismatch is detected when last name differs
 - [ ] Strong mismatch is detected when first and last name differ
-- [ ] Warning modal is displayed
-- [ ] Warning modal explains link may have been issued for someone else
-- [ ] Warning modal explains link data differs from account data
-- [ ] Warning modal asks for host name
+- [x] Warning modal is displayed
+- [x] Warning modal explains link may have been issued for someone else
+- [x] Warning modal explains link data differs from account data
+- [x] Warning modal asks for host name
 - [x] Link data of other person is not displayed
 - [x] Differing link data is not exposed in clear text
 - [x] Host name is verified server-side
 - [x] Wrong host name grants no direct access
 - [x] Wrong host name does not reveal foreign data
-- [ ] Wrong host name may lead to lobby / manual review
-- [ ] Correct host name is accepted
-- [ ] Correct host name shows success confirmation
-- [ ] After correct host name, user is asked whether account data should be updated
-- [ ] User can decline update
-- [ ] Declining update leaves logged-in account unchanged
-- [ ] Declining update continues with logged-in account
+- [x] Wrong host name may lead to lobby / manual review
+- [x] Correct host name is accepted
+- [x] Correct host name shows success confirmation
+- [x] After correct host name, user is asked whether account data should be updated
+- [x] User can decline update
+- [x] Declining update leaves logged-in account unchanged
+- [x] Declining update continues with logged-in account
 - [x] User can request account update
 - [x] User must re-enter differing values manually
 - [x] System does not show differing link values
@@ -1494,7 +1494,7 @@ the authenticated account authoritative for the issued session.
 - [x] After update, user remains logged in as original account
 - [x] Update does not modify temporary foreign account
 - [x] Update does not modify other registered accounts
-- [ ] Flow is audit-logged
+- [x] Flow is audit-logged
 - [x] Host-name brute force is rate-limited
 - [ ] Repeated wrong host names trigger lock / review if configured
 - [x] Host-name error messages leak no host data
@@ -1517,6 +1517,15 @@ persisted.
 path by requiring manually re-entered values, sending confirmation only to the
 logged-in account, refusing updates before confirmation, and confirming only
 the re-entered fields without adopting the link-target session.
+Proof: `call-access-strong-mismatch-host-verification.spec.js` covers the
+browser warning modal, foreign-link/account-difference copy, host-name field,
+wrong-host denial with manual-review wording, correct-host success
+confirmation, update-choice prompt, decline-without-update path, and unchanged
+logged-in account identity. Docker PHP 8.4 with `pdo_sqlite` passed
+`call-access-strong-mismatch-privacy-contract.php`, proving correct-host
+session issuance for the logged-in account, host-verified binding validation,
+wrong-host review flagging, no pre-confirmation account update, and safe audit
+logging for failed and successful host-name verification.
 
 ## 8. Duplicate Personalized Link / Abuse Detection
 
@@ -2465,7 +2474,7 @@ no call, invitee, host, link, or session leakage.
 - [ ] Link-account vs logged-in-account comparison is logged
 - [x] Strong mismatch is logged
 - [x] Host-name verification is logged
-- [ ] Successful host-name verification is logged
+- [x] Successful host-name verification is logged
 - [x] Failed host-name verification is logged
 - [ ] Account-update request is logged
 - [ ] Confirmation email dispatch is logged
@@ -2515,8 +2524,8 @@ tokens, SDP, ICE, and account emails.
 - [x] Registered but logged-out guest books appointment, opens personalized link logged out, temporary account is used, no automatic account takeover
 - [x] Registered logged-in guest opens own personalized link with matching data, remains logged in, joins as registered user
 - [ ] Registered logged-in guest opens personalized link with light mismatch, remains logged in, joins after permission check
-- [ ] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
-- [ ] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
+- [x] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
+- [x] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
 - [ ] Registered logged-in user opens personalized link with strong mismatch, enters correct host name, re-enters data, confirms email, account is updated
 - [x] Same personalized link is opened by second logged-in account and review flag is created
 - [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
