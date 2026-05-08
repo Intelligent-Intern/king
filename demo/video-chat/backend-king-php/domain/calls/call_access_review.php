@@ -666,7 +666,7 @@ SQL
     } catch (Throwable) {
         return ['ok' => false, 'reason' => 'attempt_write_failed'];
     }
-    videochat_audit_record_call_access_host_verification($pdo, $accessLink, $call, $actorUserId, $normalizedOutcome, [
+    videochat_audit_record_call_access_host_verification($pdo, $accessLink, $call, null, $actorUserId, $normalizedOutcome, [
         'host_name_fingerprint_recorded' => $normalizedHostName !== '',
     ]);
 

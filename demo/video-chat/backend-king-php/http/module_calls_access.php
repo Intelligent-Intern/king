@@ -578,13 +578,28 @@ function videochat_handle_call_access_routes(
                 ]);
             }
             if ($reason === 'forbidden') {
+                $fields = is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [];
+                $details = ['fields' => $fields];
+                if (array_key_exists('host_name', $fields)) {
+                    $details['mismatch'] = 'strong_personalized_link';
+                    if ((string) ($fields['host_name'] ?? '') === 'wrong_host_name') {
+                        $details['review'] = 'manual_review_required';
+                    }
+                }
+
                 return $errorResponse(403, 'call_access_forbidden', 'Call access link is not allowed for this call participant.', [
-                    'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
+                    ...$details,
                 ]);
             }
             if ($reason === 'rate_limited') {
+                $fields = is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [];
+                $details = ['fields' => $fields];
+                if (array_key_exists('host_name', $fields)) {
+                    $details['mismatch'] = 'strong_personalized_link';
+                }
+
                 return $errorResponse(429, 'call_access_rate_limited', 'Call access confirmation is rate-limited.', [
-                    'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
+                    ...$details,
                 ]);
             }
 
