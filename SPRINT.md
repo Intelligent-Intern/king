@@ -2287,25 +2287,25 @@ integrated IAM call-access E2E run, which passed 43 tests.
 - [x] Call does not exist
 - [x] Call was deleted
 - [x] Call was ended
-- [ ] Call has not started yet if time-limited
-- [ ] Call has expired if time-limited
-- [ ] Organization does not exist
+- [x] Call has not started yet if time-limited
+- [x] Call has expired if time-limited
+- [x] Organization does not exist
 - [x] Organization is disabled
-- [ ] Host no longer exists
+- [x] Host no longer exists
 - [x] Host is disabled
 - [x] Invited temporary account was deleted
 - [x] Registered account was disabled
 - [x] Registered account was deleted
 - [ ] User email is unconfirmed if relevant
-- [ ] Calendar appointment was cancelled
+- [x] Calendar appointment was cancelled
 - [x] Calendar appointment was moved
-- [ ] Personalized link belongs to another appointment of same host
-- [ ] Personalized link belongs to another call of same host
-- [ ] Host name differs in capitalization
-- [ ] Host name contains special characters
-- [ ] Host name contains spaces / double names
-- [ ] Host name is ambiguous
-- [ ] Host name changed after invitation
+- [x] Personalized link belongs to another appointment of same host
+- [x] Personalized link belongs to another call of same host
+- [x] Host name differs in capitalization
+- [x] Host name contains special characters
+- [x] Host name contains spaces / double names
+- [x] Host name is ambiguous
+- [x] Host name changed after invitation
 - [ ] First name / last name of logged-in user is missing
 - [ ] First name / last name of temporary link account is missing
 - [ ] Only first name differs
@@ -2337,7 +2337,17 @@ in `call-access-join.spec.js` covers the disabled organization, disabled host,
 and deleted temporary-account browser states and proves no Join button/session
 POST is possible. `call-access-edge-error-matrix-contract.mjs` binds the Sprint
 checkboxes, package script, CI gate, backend contract, browser proof, and runtime
-tenant/host session-binding checks.
+tenant/host session-binding checks. Calendar edge hardening now adds a
+time-window guard for inconsistent active time-limited calls outside
+`starts_at`/`ends_at`, treats missing tenant/host rows as safe not-found states,
+and makes cancelled or cross-bound appointment booking links invalidated. Docker
+PHP 8.4 proof passed for `call-access-edge-error-matrix-contract.php`,
+`call-calendar-invitation-flow-contract.php`, and
+`call-access-strong-mismatch-privacy-contract.php`; these cover not-started and
+expired active time windows, missing organization, missing host, cancelled
+appointment links, same-host appointment/call binding mismatches, and
+capitalization/special-character/spaced/ambiguous/changed host-name attempts with
+no call, invitee, host, link, or session leakage.
 
 ## 31. Audit and Monitoring
 

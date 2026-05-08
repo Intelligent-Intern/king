@@ -66,6 +66,27 @@ function videochat_call_invite_state_allows_scoped_role(mixed $value): bool
     return !in_array($normalized, ['declined', 'cancelled'], true);
 }
 
+function videochat_call_time_window_state(array $call, ?int $nowUnix = null): string
+{
+    $status = strtolower(trim((string) ($call['status'] ?? '')));
+    if ($status !== 'active') {
+        return 'ok';
+    }
+
+    $now = $nowUnix ?? time();
+    $startsAt = strtotime((string) ($call['starts_at'] ?? ''));
+    if (is_int($startsAt) && $startsAt > $now) {
+        return 'not_started';
+    }
+
+    $endsAt = strtotime((string) ($call['ends_at'] ?? ''));
+    if (is_int($endsAt) && $endsAt <= $now) {
+        return 'expired';
+    }
+
+    return 'ok';
+}
+
 function videochat_normalize_call_schedule_timezone(mixed $value, string $fallback = 'UTC'): string
 {
     $fallbackTimezone = trim($fallback);

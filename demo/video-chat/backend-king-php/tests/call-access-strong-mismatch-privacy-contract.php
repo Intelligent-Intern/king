@@ -313,6 +313,45 @@ try {
     $unverifiedRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_strong_mismatch_unverified_host_should_not_issue'")->fetchColumn();
     videochat_call_access_strong_mismatch_privacy_assert($unverifiedRows === 0, 'unverified host denial must not persist a session');
 
+    $changedHostName = 'Changed Host ' . $secret;
+    $pdo->prepare('UPDATE users SET display_name = :display_name, updated_at = :updated_at WHERE id = :id')->execute([
+        ':display_name' => $changedHostName,
+        ':updated_at' => gmdate('c'),
+        ':id' => $hostUserId,
+    ]);
+    $hostNameVariants = [
+        'capitalization' => strtoupper($hostName),
+        'special characters' => "Dr. Host-Name O'Connor / QA? " . $secret,
+        'spaces double name' => 'Mary Ann Van Buren ' . $secret,
+        'ambiguous changed host' => 'Private Host',
+    ];
+    foreach ($hostNameVariants as $variantLabel => $variantHostName) {
+        $sessionId = 'sess_strong_mismatch_' . str_replace(' ', '_', $variantLabel) . '_should_not_issue';
+        $variantSession = $callAccessRoute(
+            '/session',
+            'POST',
+            [
+                'Authorization' => 'Bearer sess_strong_mismatch_wrong',
+                'Content-Type' => 'application/json',
+                'User-Agent' => 'strong-mismatch-host-' . str_replace(' ', '-', $variantLabel),
+            ],
+            json_encode(['host_name' => $variantHostName], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            $sessionId
+        );
+        videochat_call_access_strong_mismatch_privacy_assert((int) ($variantSession['status'] ?? 0) === 403, "{$variantLabel} host variant should not issue a call session");
+        videochat_call_access_strong_mismatch_privacy_assert_no_needles($variantSession, [...$secretNeedles, $variantHostName, $changedHostName, $sessionId], "{$variantLabel} host variant response");
+        $variantRows = (int) $pdo->query('SELECT COUNT(*) FROM sessions WHERE id = ' . $pdo->quote($sessionId))->fetchColumn();
+        videochat_call_access_strong_mismatch_privacy_assert($variantRows === 0, "{$variantLabel} host variant denial must not persist a session");
+    }
+    $attemptRows = $pdo->query('SELECT * FROM call_access_host_verification_attempts')->fetchAll(PDO::FETCH_ASSOC);
+    $attemptPayload = json_encode($attemptRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_access_strong_mismatch_privacy_assert(is_string($attemptPayload), 'host attempt rows should encode');
+    videochat_call_access_strong_mismatch_privacy_assert_no_needles(
+        ['body' => $attemptPayload],
+        [...array_values($hostNameVariants), $hostName, $changedHostName, $accessId],
+        'host verification attempt storage'
+    );
+
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-strong-mismatch-privacy-contract] PASS\n");
     exit(0);

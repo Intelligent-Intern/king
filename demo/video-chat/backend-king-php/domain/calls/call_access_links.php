@@ -395,6 +395,15 @@ function videochat_resolve_call_access_for_user(
                 'call' => null,
             ];
         }
+        if (in_array($decisionReason, ['call_not_started', 'call_expired'], true)) {
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['call_id' => $decisionReason],
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
 
         return [
             'ok' => false,
