@@ -88,6 +88,10 @@ assert(
   'gossip contract suite must include the dedicated neighbor lifecycle contract',
 )
 assert(
+  packageJson.includes('gossip-neighbor-renegotiate-stack-contract.mjs'),
+  'gossip contract suite must include the production stack-overflow renegotiation proof',
+)
+assert(
   /- \[x\] GSP-04 Dedicated bounded neighbor lifecycle/.test(sprint),
   'SPRINT.md must mark GSP-04 complete when dedicated neighbor lifecycle proof exists',
 )
