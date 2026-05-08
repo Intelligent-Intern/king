@@ -145,6 +145,155 @@ try {
     videochat_iam_rejoin_contract_assert((string) ($ownerKick['action'] ?? '') === 'lobby/remove', 'kick should normalize to lobby/remove', $label);
     videochat_iam_rejoin_contract_assert(!isset($lobbyState['rooms'][$roomId]['admitted_by_user'][$waitingUserId]), 'owner kick should remove admitted user from lobby state', $label);
 
+    $tempCase = 'e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin';
+    $overrideCase = 'e2e_rejoin_005_kick_overrides_previous_admission';
+    $tempCall = videochat_iam_rejoin_contract_create_active_call(
+        $pdo,
+        $ownerUserId,
+        [],
+        $tenantId,
+        'IAM Temporary Guest Kick Rejoin Contract',
+        'free_for_all'
+    );
+    $tempCallId = $tempCall['call_id'];
+    $tempRoomId = $tempCall['room_id'];
+    $tempSessionId = 'sess_iam_temp_guest_kick_rejoin';
+    $tempGuestSession = videochat_iam_rejoin_contract_issue_open_guest_session(
+        $pdo,
+        $tempCallId,
+        $ownerUserId,
+        $tenantId,
+        $tempSessionId,
+        'Temporary Kick Rejoin Guest',
+        $label
+    );
+    $tempGuestUser = (array) ($tempGuestSession['user'] ?? []);
+    $tempGuestUserId = (int) ($tempGuestUser['id'] ?? 0);
+    videochat_iam_rejoin_contract_assert($tempGuestUserId > 0, "{$tempCase}: temporary guest user id should exist", $label);
+
+    $tempInitialResolution = videochat_realtime_resolve_connection_rooms(
+        (array) ($tempGuestSession['auth'] ?? []),
+        $tempRoomId,
+        $openDatabase,
+        $tempCallId
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempInitialResolution['ok'] ?? false), "{$tempCase}: initial temp guest room resolution should succeed", $label);
+    videochat_iam_rejoin_contract_assert((string) ($tempInitialResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), "{$tempCase}: temporary guest should wait before approval", $label);
+    videochat_iam_rejoin_contract_assert((string) ($tempInitialResolution['pending_room_id'] ?? '') === $tempRoomId, "{$tempCase}: temporary guest pending room should stay bound to call room", $label);
+
+    $tempPresenceState = videochat_presence_state_init();
+    $tempLobbyState = videochat_lobby_state_init();
+    $tempOwnerConnection = videochat_iam_rejoin_contract_connection(
+        $pdo,
+        $tempPresenceState,
+        $tempRoomId,
+        $tempCallId,
+        $ownerUserId,
+        'Call Owner',
+        'admin',
+        'temp-owner',
+        $tenantId
+    );
+    $tempGuestWaitingConnection = videochat_iam_rejoin_contract_waiting_connection(
+        $pdo,
+        $tempPresenceState,
+        $tempRoomId,
+        $tempCallId,
+        $tempGuestUserId,
+        'Temporary Kick Rejoin Guest',
+        'temp-guest-waiting',
+        $tenantId,
+        $tempSessionId
+    );
+
+    $tempQueue = videochat_iam_rejoin_contract_apply_lobby_command(
+        $tempLobbyState,
+        $tempPresenceState,
+        $tempGuestWaitingConnection,
+        $openDatabase,
+        'lobby/queue/join',
+        $tempRoomId,
+        0,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempQueue['ok'] ?? false), "{$tempCase}: temporary guest should queue for renewed approval", $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $tempCallId, $tempGuestUserId) === 'pending', "{$tempCase}: queued temporary guest should persist pending state", $label);
+
+    $tempAllow = videochat_iam_rejoin_contract_apply_lobby_command(
+        $tempLobbyState,
+        $tempPresenceState,
+        $tempOwnerConnection,
+        $openDatabase,
+        'lobby/allow',
+        $tempRoomId,
+        $tempGuestUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempAllow['ok'] ?? false), "{$tempCase}: owner should approve temporary guest", $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $tempCallId, $tempGuestUserId) === 'allowed', "{$tempCase}: approval should persist allowed state", $label);
+
+    $tempApprovedResolution = videochat_realtime_resolve_connection_rooms(
+        (array) ($tempGuestSession['auth'] ?? []),
+        $tempRoomId,
+        $openDatabase,
+        $tempCallId
+    );
+    videochat_iam_rejoin_contract_assert((string) ($tempApprovedResolution['initial_room_id'] ?? '') === $tempRoomId, "{$tempCase}: approval should allow direct call-room entry", $label);
+
+    $tempKick = videochat_iam_rejoin_contract_apply_lobby_command(
+        $tempLobbyState,
+        $tempPresenceState,
+        $tempOwnerConnection,
+        $openDatabase,
+        'lobby/kick',
+        $tempRoomId,
+        $tempGuestUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempKick['ok'] ?? false), "{$tempCase}: owner should kick the admitted temporary guest", $label);
+    videochat_iam_rejoin_contract_assert((string) ($tempKick['action'] ?? '') === 'lobby/remove', "{$tempCase}: kick should apply the removal state transition", $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $tempCallId, $tempGuestUserId) === 'invited', "{$overrideCase}: kick should override the previous allowed admission", $label);
+
+    $tempKickedResolution = videochat_realtime_resolve_connection_rooms(
+        (array) ($tempGuestSession['auth'] ?? []),
+        $tempRoomId,
+        $openDatabase,
+        $tempCallId
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempKickedResolution['ok'] ?? false), "{$tempCase}: kicked temporary guest room resolution should remain explicit", $label);
+    videochat_iam_rejoin_contract_assert((string) ($tempKickedResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), "{$tempCase}: kicked temporary guest must not directly rejoin the call room", $label);
+    videochat_iam_rejoin_contract_assert((string) ($tempKickedResolution['pending_room_id'] ?? '') === $tempRoomId, "{$tempCase}: kicked temporary guest should require renewed approval for the same room", $label);
+
+    $tempRenewedQueue = videochat_iam_rejoin_contract_apply_lobby_command(
+        $tempLobbyState,
+        $tempPresenceState,
+        $tempGuestWaitingConnection,
+        $openDatabase,
+        'lobby/queue/join',
+        $tempRoomId,
+        0,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempRenewedQueue['ok'] ?? false), "{$overrideCase}: kicked temporary guest should be able to request renewed approval", $label);
+    $tempRenewedAllow = videochat_iam_rejoin_contract_apply_lobby_command(
+        $tempLobbyState,
+        $tempPresenceState,
+        $tempOwnerConnection,
+        $openDatabase,
+        'lobby/allow',
+        $tempRoomId,
+        $tempGuestUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($tempRenewedAllow['ok'] ?? false), "{$overrideCase}: renewed approval should succeed after kick", $label);
+    $tempRenewedResolution = videochat_realtime_resolve_connection_rooms(
+        (array) ($tempGuestSession['auth'] ?? []),
+        $tempRoomId,
+        $openDatabase,
+        $tempCallId
+    );
+    videochat_iam_rejoin_contract_assert((string) ($tempRenewedResolution['initial_room_id'] ?? '') === $tempRoomId, "{$overrideCase}: only renewed approval should restore direct call-room entry", $label);
+
     videochat_iam_rejoin_contract_queue_user($lobbyState, $roomId, $waitingUserId, 'IAM Kick Waiting');
     $participantReject = videochat_lobby_apply_command(
         $lobbyState,
