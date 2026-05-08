@@ -1417,7 +1417,7 @@ this host because `pdo_sqlite` is unavailable.
 - [x] Temporary account cannot see other users’ data
 - [x] Temporary account receives no registered account rights
 - [x] Temporary account cannot administer call unless explicitly permitted
-- [ ] Temporary account cannot assume another identity by changing link parameters
+- [x] Temporary account cannot assume another identity by changing link parameters
 - [x] Temporary account remains consistent for same link / call
 - [x] Temporary account can be recognized after leaving
 - [x] Temporary account cannot receive organization-wide rights
@@ -1440,6 +1440,17 @@ focused run passed 3 tests; the integrated seed-matrix run passed 21 tests.
 temporary guest can be persisted as an allowed call participant, leave, and
 rejoin with the same call-access session/user binding. Docker PHP 8.4 with
 `pdo_sqlite` passed the contract.
+`call-guest-list-direct-join-contract.php` now also creates a personalized
+temporary guest-list link, proves forged body identity/call fields do not change
+the bound temporary account or call, rejects a mutated link id without session
+issuance, and recognizes the same temporary account after `left_at`.
+`call-access-temp-guest-list-direct-join.spec.js` covers
+`e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join` and
+`e2e_personalized_logged_out_007_manipulated_link_rejected`: the logged-out
+temporary personalized guest on the guest list enters the workspace directly
+without lobby queueing or verified identity proof, URL identity parameters are
+not sent as session authority, and a changed link id renders a safe invalid-link
+state without issuing a session.
 
 ## 6. Personalized Link: Logged-In User, No / Light Mismatch
 
@@ -2711,11 +2722,11 @@ against duplicate join/session request loops.
 
 - [x] `e2e_personalized_logged_out_001_temp_account_created_from_link`
 - [x] `e2e_personalized_logged_out_002_existing_account_not_auto_logged_in`
-- [ ] `e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join`
+- [x] `e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join`
 - [x] `e2e_personalized_logged_out_004_temp_guest_not_on_guest_list_lobby`
 - [x] `e2e_personalized_logged_out_005_temp_guest_no_registered_rights`
 - [x] `e2e_personalized_logged_out_006_temp_guest_no_org_rights`
-- [ ] `e2e_personalized_logged_out_007_manipulated_link_rejected`
+- [x] `e2e_personalized_logged_out_007_manipulated_link_rejected`
 - [ ] `e2e_personalized_logged_out_008_invalid_link_safe_error`
 
 ## Test Group: Personalized Link Logged In Without Strong Mismatch
