@@ -1,4 +1,9 @@
 import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';
+import {
+  captureBackgroundBackendInitDiagnostic,
+  captureBackgroundMatteRejectionDiagnostic,
+  resolveBackgroundMatteRejection,
+} from './diagnostics/runtimeDiagnostics';
 import { toNumber } from './math';
 import { createBackgroundPipelineController } from './pipeline/controller';
 import { createBackgroundCompositorStage } from './pipeline/compositorStage';
@@ -258,17 +263,33 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     const initFailures = [];
     segmentationBackendInitPromise = (async () => {
       try {
+        captureBackgroundBackendInitDiagnostic({
+          backend: segmentationBackendKind,
+          phase: 'starting',
+        });
         segmentationBackendLease = await acquireWorkerSegmenterBackendLease({
           detectIntervalMs: runtimeConfig.detectIntervalMs,
           ownerId: `background-filter-${performance.now().toFixed(3)}`,
         });
         segmentationBackend = segmentationBackendLease.backend;
+        segmentationBackendKind = segmentationBackend?.kind || 'none';
+        captureBackgroundBackendInitDiagnostic({
+          backend: segmentationBackendKind,
+          phase: 'ready',
+        });
         if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
           releaseSegmentationBackend({ keepWarm: true });
         }
       } catch (error) {
         initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
         segmentationBackend = null;
+        segmentationBackendKind = 'none';
+        captureBackgroundBackendInitDiagnostic({
+          backend: 'none',
+          error,
+          failures: initFailures,
+          phase: 'failed',
+        });
       }
       segmentationBackendKind = segmentationBackend?.kind || 'none';
       if (segmentationBackendKind === 'none' && initFailures.length > 0) {
@@ -297,6 +318,12 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
         selected: segmentationBackendKind,
         requested: 'worker-segmenter',
         failures: [error?.message || 'init_failed'],
+      });
+      captureBackgroundBackendInitDiagnostic({
+        backend: 'none',
+        error,
+        failures: [error?.message || 'init_failed'],
+        phase: 'failed',
       });
       notifySegmentationUnavailable('init_failed', [error?.message || 'init_failed']);
     });
@@ -385,6 +412,20 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
       : { detectSampleMs: null, matteMaskValues: null };
+    const matteRejection = canRunSegmentation
+      ? resolveBackgroundMatteRejection(segmentation)
+      : null;
+    if (matteRejection) {
+      captureBackgroundMatteRejectionDiagnostic({
+        backend: segmentationBackendKind,
+        detectSampleMs: segmentation.detectSampleMs,
+        maskHeight: matteRejection.maskHeight,
+        maskKind: matteRejection.maskKind,
+        maskWidth: matteRejection.maskWidth,
+        mode: runtimeConfig.mode,
+        reason: matteRejection.reason,
+      });
+    }
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);

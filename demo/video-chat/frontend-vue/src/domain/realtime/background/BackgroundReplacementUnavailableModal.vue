@@ -44,6 +44,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import { captureBackgroundModalChoiceDiagnostic } from './diagnostics/runtimeDiagnostics';
 import {
   callMediaPrefs,
   clearCallBackgroundFallbackVideo,
@@ -70,6 +71,20 @@ const failureLabel = computed(() => {
   return failures.length > 0 ? failures[0] : '';
 });
 
+function modalDiagnosticDetails() {
+  return {
+    backgroundBackdropMode: callMediaPrefs.backgroundBackdropMode,
+    backgroundFilterMode: callMediaPrefs.backgroundFilterMode,
+    backgroundQualityProfile: callMediaPrefs.backgroundQualityProfile,
+    backend: callMediaPrefs.backgroundFilterBackend || 'none',
+    failures: callMediaPrefs.backgroundReplacementUnavailableFailures,
+    reason: callMediaPrefs.backgroundReplacementUnavailableReason || 'segmentation_unavailable',
+    reasonUserChoiceRequired: callMediaPrefs.backgroundReplacementUnavailableReason || 'segmentation_unavailable',
+    requestedBackend: 'worker-segmenter',
+    selectedBackend: callMediaPrefs.backgroundFilterBackend || 'none',
+  };
+}
+
 async function reconfigure() {
   if (typeof props.reconfigureBackground !== 'function') return;
   try {
@@ -81,13 +96,17 @@ async function reconfigure() {
 
 async function useDefaultAvatar() {
   statusMessage.value = '';
+  const diagnosticDetails = modalDiagnosticDetails();
   useCallBackgroundFallbackAvatar(DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL);
+  captureBackgroundModalChoiceDiagnostic('standard_avatar', diagnosticDetails);
   await reconfigure();
 }
 
 async function sendUnfilteredVideo() {
   statusMessage.value = '';
+  const diagnosticDetails = modalDiagnosticDetails();
   clearCallBackgroundFallbackVideo();
+  captureBackgroundModalChoiceDiagnostic('unfiltered_video', diagnosticDetails);
   await reconfigure();
 }
 
@@ -101,8 +120,10 @@ async function handleAvatarFile(event) {
     return;
   }
   try {
+    const diagnosticDetails = modalDiagnosticDetails();
     const dataUrl = await readAvatarFileAsDataUrl(file);
     useCallBackgroundFallbackAvatar(dataUrl);
+    captureBackgroundModalChoiceDiagnostic('uploaded_avatar', diagnosticDetails);
     statusMessage.value = '';
     await reconfigure();
   } catch {
