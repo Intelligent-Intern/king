@@ -104,5 +104,35 @@ assert.match(
   /expect\(joinGetCount\)\.toBe\(1\)[\s\S]*expect\(sessionPostCount\)\.toBe\(1\)/,
   'login-switch E2E must guard against reload or duplicate session POST loops',
 );
+assert.match(
+  callAccessJoinSpec,
+  /logout during verified call-access link context fails closed without leaking or joining/,
+  'public join E2E must cover logout after verified link context',
+);
+assert.match(
+  callAccessJoinSpec,
+  /const \{ logoutSession, sessionState \} = await import\('\/src\/domain\/auth\/session\.ts'\);[\s\S]*await logoutSession\(\)/,
+  'logout E2E must exercise the real browser logout/session-clear path',
+);
+assert.match(
+  callAccessJoinSpec,
+  /expect\(sessionPostCount\)\.toBe\(0\)/,
+  'logout E2E must prove no call-access session request is issued after verified context is logged out',
+);
+assert.match(
+  callAccessJoinSpec,
+  /expect\(page\.url\(\)\)\.not\.toContain\('\/workspace\/call'\)/,
+  'logout E2E must prove the browser does not enter the workspace',
+);
+assert.match(
+  callAccessJoinSpec,
+  /logout denial must not render \$\{value\}/,
+  'logout E2E must prove foreign call/invite/host/session data is not rendered',
+);
+assert.match(
+  callAccessJoinSpec,
+  /storedSession\.sessionToken \|\| ''\)\.toBe\(''\)[\s\S]*JSON\.stringify\(storedSession\)\)\.not\.toContain\(rejectedSessionToken\)/,
+  'logout E2E must prove no foreign call-access session is adopted',
+);
 
 console.log('[call-access-verified-context-ui-contract] PASS');
