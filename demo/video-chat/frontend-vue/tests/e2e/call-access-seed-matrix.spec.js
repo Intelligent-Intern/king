@@ -22,6 +22,8 @@ const allowedDirectJoinScenarios = [
 ];
 
 const deniedDirectJoinScenarios = [
+  'direct_join_system_admin_explicit_ended_call_denied',
+  'direct_join_org_admin_explicit_ended_call_denied',
   'direct_join_org_admin_foreign_organization_denied',
   'direct_join_forged_client_admin_role_denied',
 ];
@@ -67,6 +69,9 @@ test('IAM call-access seed matrix covers required principals without temporary a
     const decision = directJoinDecisionForSeedUser(scenario.principal_user_key, scenario.call_key);
     expect(decision.source).toBe(scenario.expected.decision_source);
     expect(decision.allowed).toBe(scenario.expected.state === 'resolved');
+    if (scenario.expected.decision_reason) {
+      expect(decision.reason).toBe(scenario.expected.decision_reason);
+    }
     expect(decision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
     const tenant = tenantSnapshotForSeedUser(scenario.principal_user_key, scenario.call_key);
     expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);

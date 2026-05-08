@@ -54,13 +54,28 @@ function videochat_handle_call_routes(
             $callResolution = videochat_get_call_for_user($pdo, $callRef, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
             if ((bool) ($callResolution['ok'] ?? false)) {
+                $resolvedCall = is_array($callResolution['call'] ?? null) ? $callResolution['call'] : [];
+                if (!videochat_is_call_joinable_status((string) ($resolvedCall['status'] ?? ''))) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'call_id',
+                            'reason' => 'call_not_joinable_from_status',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+
                 return $jsonResponse(200, [
                     'status' => 'ok',
                     'result' => [
                         'state' => 'resolved',
                         'resolved_as' => 'call_id',
                         'access_link' => null,
-                        'call' => $callResolution['call'] ?? null,
+                        'call' => $resolvedCall,
                     ],
                     'time' => gmdate('c'),
                 ]);
@@ -103,6 +118,19 @@ function videochat_handle_call_routes(
                 }
 
                 $accessReason = (string) ($accessResolution['reason'] ?? 'internal_error');
+                if (in_array($accessReason, ['call_not_joinable', 'conflict'], true)) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'access_id',
+                            'reason' => 'call_not_joinable_from_status',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
                 if ($accessReason === 'expired') {
                     return $jsonResponse(200, [
                         'status' => 'ok',
