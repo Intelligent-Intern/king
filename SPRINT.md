@@ -1329,17 +1329,17 @@ The sprint is complete when:
 - [ ] Organization admin sees waiting participant for own organization call
 - [ ] System admin sees waiting participant
 - [ ] Unauthorized user sees no lobby management controls
-- [ ] Host can admit participant
+- [x] Host can admit participant
 - [ ] Temporary moderator can admit participant
-- [ ] Organization admin can admit participant
-- [ ] System admin can admit participant
-- [ ] Host can reject participant
+- [x] Organization admin can admit participant
+- [x] System admin can admit participant
+- [x] Host can reject participant
 - [ ] Temporary moderator can reject participant
-- [ ] Organization admin can reject participant
-- [ ] System admin can reject participant
+- [x] Organization admin can reject participant
+- [x] System admin can reject participant
 - [ ] Rejected participant cannot enter call
 - [ ] Admitted participant enters call
-- [ ] Admission is stored call-scoped
+- [x] Admission is stored call-scoped
 - [ ] Admission does not apply to other calls
 - [ ] Admission does not apply to other organizations
 - [ ] Temporary user admission applies only to same temporary user / link context
@@ -1349,7 +1349,7 @@ The sprint is complete when:
 - [ ] Participant is removed from lobby after admission
 - [ ] Participant is removed from lobby after aborting join attempt
 - [ ] Participant is not shown twice in lobby
-- [ ] Manipulated lobby-admission request without permission is rejected
+- [x] Manipulated lobby-admission request without permission is rejected
 
 ## 12. Rejoin, Leave, Kick
 
@@ -1394,39 +1394,39 @@ The sprint is complete when:
 - [ ] Foreign link data is not shown on strong mismatch
 - [ ] Differing data is not shown as comparison list
 - [ ] User must re-enter differing data manually
-- [ ] Guessed link reveals no personal data
-- [ ] Invalid link reveals no personal data
+- [x] Guessed link reveals no personal data
+- [x] Invalid link reveals no personal data
 - [ ] Wrong host name reveals no personal data
 - [ ] Account data is updated only after email confirmation
 - [ ] Email confirmation goes only to logged-in account
 - [ ] Temporary account data is not persisted unnecessarily
 - [ ] Temporary accounts are removed when logged-in user uses anonymous link
 - [ ] Temporary accounts are not merged with wrong registered account
-- [ ] Audit logs contain only necessary personal data
-- [ ] Frontend state contains no foreign link data
-- [ ] API responses contain no foreign link data
-- [ ] Browser DevTools / network response contains no foreign link data
-- [ ] Error messages contain no foreign link data
+- [x] Audit logs contain only necessary personal data
+- [x] Frontend state contains no foreign link data
+- [x] API responses contain no foreign link data
+- [x] Browser DevTools / network response contains no foreign link data
+- [x] Error messages contain no foreign link data
 - [ ] Email texts contain no foreign link data unless explicitly safe and necessary
 - [ ] Host-name verification does not allow host enumeration
 - [ ] Rate limits protect sensitive verification paths
-- [ ] Privacy-relevant actions are logged
+- [x] Privacy-relevant actions are logged
 
 ## 15. Security and Manipulation Cases
 
-- [ ] Personalized link with modified link ID is rejected
+- [x] Personalized link with modified link ID is rejected
 - [ ] Personalized link with modified call ID is rejected
 - [ ] Anonymous link with modified call ID is rejected
 - [ ] Expired link is rejected
 - [ ] Disabled link is rejected
-- [ ] Deleted temporary account cannot be revived through old link
+- [x] Deleted temporary account cannot be revived through old link
 - [ ] API request with forged user ID is rejected
-- [ ] API request with forged role parameter is rejected
+- [x] API request with forged role parameter is rejected
 - [ ] API request with forged organization parameter is rejected
-- [ ] API request with foreign call ID is rejected
-- [ ] Owner transfer request without owner/admin right is rejected
-- [ ] Lobby admission request without moderator right is rejected
-- [ ] Kick request without moderator right is rejected
+- [x] API request with foreign call ID is rejected
+- [x] Owner transfer request without owner/admin right is rejected
+- [x] Lobby admission request without moderator right is rejected
+- [x] Kick request without moderator right is rejected
 - [ ] Account-data update request without email confirmation is rejected
 - [ ] Replay of old email confirmation link is prevented
 - [ ] Email confirmation link is one-time use
@@ -1470,14 +1470,14 @@ The sprint is complete when:
 - [ ] Host can add registered user to guest list
 - [ ] Host can add temporary invited account to guest list
 - [ ] Host can remove guest-list entry
-- [ ] User on guest list can directly join
-- [ ] User not on guest list cannot directly join
+- [x] User on guest list can directly join
+- [x] User not on guest list cannot directly join
 - [ ] Temporary account on guest list can directly join
 - [ ] Temporary account not on guest list lands in lobby
-- [ ] Organization admin does not need guest-list entry for own organization call
-- [ ] System admin does not need guest-list entry
-- [ ] Guest list is call-scoped
-- [ ] Guest list of one call grants no rights to another call
+- [x] Organization admin does not need guest-list entry for own organization call
+- [x] System admin does not need guest-list entry
+- [x] Guest list is call-scoped
+- [x] Guest list of one call grants no rights to another call
 - [ ] Guest list of one organization grants no rights to another organization
 - [ ] Duplicate guest-list entries are prevented or merged
 - [ ] Removing guest-list entry affects new join attempts immediately
@@ -1486,29 +1486,29 @@ The sprint is complete when:
 
 ## 18. System Admin
 
-- [ ] System admin can join call from every organization
+- [x] System admin can join call from every organization
 - [ ] System admin can join call without organization if such calls exist
-- [ ] System admin can join without guest-list entry
-- [ ] System admin can manage lobby
-- [ ] System admin can admit participants
-- [ ] System admin can reject participants
-- [ ] System admin can kick participants
+- [x] System admin can join without guest-list entry
+- [x] System admin can manage lobby
+- [x] System admin can admit participants
+- [x] System admin can reject participants
+- [x] System admin can kick participants
 - [ ] System admin can view / handle review flags if supported
-- [ ] System admin rights are never granted to temporary accounts
-- [ ] System admin rights cannot be simulated through link data
-- [ ] System admin rights remain after owner transfer
-- [ ] System admin cannot be degraded through call-owner transfer
+- [x] System admin rights are never granted to temporary accounts
+- [x] System admin rights cannot be simulated through link data
+- [x] System admin rights remain after owner transfer
+- [x] System admin cannot be degraded through call-owner transfer
 
 ## 19. Organization Admin
 
-- [ ] Organization admin can join every active call of own organization
-- [ ] Organization admin can join own organization call without guest-list entry
-- [ ] Organization admin can manage lobby for own organization calls
-- [ ] Organization admin can admit participants for own organization calls
-- [ ] Organization admin can reject participants for own organization calls
-- [ ] Organization admin can kick participants for own organization calls
-- [ ] Organization admin cannot join foreign organization calls through this role
-- [ ] Organization admin cannot manage lobby of foreign organization
+- [x] Organization admin can join every active call of own organization
+- [x] Organization admin can join own organization call without guest-list entry
+- [x] Organization admin can manage lobby for own organization calls
+- [x] Organization admin can admit participants for own organization calls
+- [x] Organization admin can reject participants for own organization calls
+- [x] Organization admin can kick participants for own organization calls
+- [x] Organization admin cannot join foreign organization calls through this role
+- [x] Organization admin cannot manage lobby of foreign organization
 - [ ] Organization admin rights remain after owner transfer
 - [ ] Organization admin can transfer owner rights if allowed
 - [ ] Organization admin keeps admin rights when transferring ownership
@@ -1521,15 +1521,15 @@ The sprint is complete when:
 - [ ] Normal user becomes owner of own call
 - [ ] Normal user has admin rights in own call
 - [ ] Normal user can join foreign call only when authorized
-- [ ] Normal user can join foreign call when on guest list
-- [ ] Normal user cannot join foreign call when not on guest list
-- [ ] Normal user cannot manage foreign lobby
-- [ ] Normal user can admit participants in own call
-- [ ] Normal user can reject participants in own call
-- [ ] Normal user can kick participants in own call
-- [ ] Normal user loses call-admin rights when transferring ownership
-- [ ] Normal user cannot perform owner actions after owner transfer
-- [ ] Normal user keeps no hidden admin rights after owner transfer
+- [x] Normal user can join foreign call when on guest list
+- [x] Normal user cannot join foreign call when not on guest list
+- [x] Normal user cannot manage foreign lobby
+- [x] Normal user can admit participants in own call
+- [x] Normal user can reject participants in own call
+- [x] Normal user can kick participants in own call
+- [x] Normal user loses call-admin rights when transferring ownership
+- [x] Normal user cannot perform owner actions after owner transfer
+- [x] Normal user keeps no hidden admin rights after owner transfer
 - [ ] Normal user cannot receive admin rights through anonymous link
 - [ ] Normal user cannot receive admin rights through personalized link
 
@@ -1538,9 +1538,9 @@ The sprint is complete when:
 - [ ] User from organization A opens personalized link for organization A call
 - [ ] User from organization A opens personalized link for organization B call
 - [ ] User from organization A opens anonymous link for organization B call
-- [ ] Organization admin from organization A opens link to organization A call
-- [ ] Organization admin from organization A opens link to organization B call
-- [ ] Organization admin from organization A receives no org-admin rights in organization B call
+- [x] Organization admin from organization A opens link to organization A call
+- [x] Organization admin from organization A opens link to organization B call
+- [x] Organization admin from organization A receives no org-admin rights in organization B call
 - [ ] User with accounts in multiple organizations is checked in correct call context
 - [ ] Changing active organization in frontend does not change server-side call permission
 - [ ] Guest-list entry in organization A does not apply to organization B
@@ -1577,7 +1577,7 @@ The sprint is complete when:
 - [ ] Removed invited user cannot access organization resources
 - [ ] Removed invited user cannot manage call unless separately owner/moderator
 - [ ] Removed invited user cannot use stale role data from token/session/cache
-- [ ] Removed invited user is blocked if invite was manually invalidated
+- [x] Removed invited user is blocked if invite was manually invalidated
 - [ ] Removed invited user is blocked if call was deleted
 - [ ] Removed invited user is blocked if call was ended
 - [ ] Removed invited user is blocked or routed according to policy if kicked
@@ -1587,9 +1587,9 @@ The sprint is complete when:
 - [ ] Removed org-admin already inside call remains only if explicit call-scoped access exists
 - [ ] Removed user can leave and rejoin same call only while invitation remains valid
 - [ ] Removed user cannot rejoin after invite invalidation
-- [ ] Audit log records membership removal
+- [x] Audit log records membership removal
 - [ ] Audit log records permission downgrade
-- [ ] Audit log records continued call-scoped access
+- [x] Audit log records continued call-scoped access
 - [ ] User invited as org member but later moved to another organization joins only through call-scoped invitation
 - [ ] User invited as org admin but later downgraded to user loses org-admin access but keeps explicit invite access
 - [ ] User invited as normal user but later promoted to org admin receives current org-admin rights if still member
@@ -1606,25 +1606,25 @@ browser path and waiting-for-host state.
 
 ## 24. Invite Link Invalidation
 
-- [ ] Personalized invite link is manually invalidated before use
+- [x] Personalized invite link is manually invalidated before use
 - [ ] Personalized invite link is invalidated after first use
 - [ ] Personalized invite link is invalidated while invitee is in lobby
 - [ ] Personalized invite link is invalidated while invitee is already in call
 - [ ] Anonymous join link is manually invalidated before use
 - [ ] Anonymous join link is invalidated while anonymous guest is in lobby
 - [ ] Anonymous join link is invalidated while anonymous guest is already in call
-- [ ] Invalidated link cannot be used for fresh join attempts
+- [x] Invalidated link cannot be used for fresh join attempts
 - [ ] Invalidated link cannot be used for rejoin unless product rule allows admitted rejoin
-- [ ] Invalidated link does not reveal whether original invitee exists
-- [ ] Invalidated link does not reveal guest account data
-- [ ] Invalidated link does not recreate deleted temporary accounts
-- [ ] Invalidated link state is enforced server-side
+- [x] Invalidated link does not reveal whether original invitee exists
+- [x] Invalidated link does not reveal guest account data
+- [x] Invalidated link does not recreate deleted temporary accounts
+- [x] Invalidated link state is enforced server-side
 - [ ] Invalidated link state works across browsers
 - [ ] Invalidated link state works across devices
 - [ ] Invalidated link state works across sessions
 - [ ] Invalidated link state survives application restart during CI
-- [ ] Rejected invalidated link shows safe invalid-link state
-- [ ] Rejected invalidated link does not leak personal data
+- [x] Rejected invalidated link shows safe invalid-link state
+- [x] Rejected invalidated link does not leak personal data
 - [ ] Stale client-side state cannot join with invalidated link
 
 ## 25. Guest Account Lifecycle
@@ -1632,21 +1632,21 @@ browser path and waiting-for-host state.
 - [ ] Guest account is created from personalized calendar invitation
 - [ ] Guest account is deleted when call is deleted
 - [ ] Guest account is deleted or invalidated when invitation is deleted
-- [ ] Guest account is deleted or invalidated when invite link is manually invalidated
+- [x] Guest account is deleted or invalidated when invite link is manually invalidated
 - [ ] Guest account is updated, recreated, or invalidated when call is rescheduled according to product rule
 - [ ] Guest account cannot join original call after call was rescheduled and original link invalidated
 - [ ] Guest account cannot join after call was deleted
 - [ ] Guest account cannot join after call was ended
-- [ ] Guest account cannot rejoin after cleanup
+- [x] Guest account cannot rejoin after cleanup
 - [ ] Guest account cannot be used to infer deleted call data
-- [ ] Guest account cleanup does not delete registered user accounts
-- [ ] Guest account cleanup does not alter registered user profile data
-- [ ] Guest account cleanup does not remove unrelated temporary guests from other calls
-- [ ] Guest account cleanup is scoped to affected call / invitation
+- [x] Guest account cleanup does not delete registered user accounts
+- [x] Guest account cleanup does not alter registered user profile data
+- [x] Guest account cleanup does not remove unrelated temporary guests from other calls
+- [x] Guest account cleanup is scoped to affected call / invitation
 - [ ] Guest account cleanup is idempotent
 - [ ] Guest account cleanup is audit-logged
-- [ ] Old guest account cannot be revived through old personalized link
-- [ ] Old guest account cannot be revived through stale browser state
+- [x] Old guest account cannot be revived through old personalized link
+- [x] Old guest account cannot be revived through stale browser state
 - [ ] Old guest account cannot be revived after application restart
 
 ## 26. Call Rescheduling
