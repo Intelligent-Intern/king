@@ -95,14 +95,14 @@ function videochat_issue_session_for_call_access(
         );
     }
 
-    $callPermission = videochat_get_call_for_user(
+    $callDecision = videochat_decide_call_access_for_user(
         $pdo,
         (string) ($call['id'] ?? ''),
         $userId,
         $userRole,
         $tenantId
     );
-    if (!(bool) ($callPermission['ok'] ?? false)) {
+    if (!(bool) ($callDecision['allowed'] ?? false)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
