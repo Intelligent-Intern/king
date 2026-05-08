@@ -149,6 +149,7 @@ FROM call_participants
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
+  AND invite_state NOT IN ('declined', 'cancelled')
 LIMIT 1
 SQL
     );
@@ -544,7 +545,7 @@ WHERE calls.room_id = :room_id
   AND calls.status IN ('active', 'scheduled')
   AND (
       calls.owner_user_id = :user_id
-      OR cp.user_id IS NOT NULL
+      OR (cp.user_id IS NOT NULL AND cp.invite_state NOT IN ('declined', 'cancelled'))
       OR calls.access_mode = 'free_for_all'
   )
 ORDER BY
@@ -635,7 +636,7 @@ function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, 
         $isOwner = $authUserId > 0 && $authUserId === (int) ($call['owner_user_id'] ?? 0);
         $participantCheck = $pdo->prepare(
             <<<'SQL'
-SELECT 1
+SELECT invite_state
 FROM call_participants
 WHERE call_id = :call_id
   AND user_id = :user_id
@@ -647,7 +648,10 @@ SQL
             ':call_id' => (string) ($call['id'] ?? ''),
             ':user_id' => $authUserId,
         ]);
-        $isInternalParticipant = $participantCheck->fetchColumn() !== false;
+        $participantInviteState = $participantCheck->fetchColumn();
+        $isInternalParticipant = is_string($participantInviteState) || is_numeric($participantInviteState)
+            ? !in_array(videochat_normalize_call_invite_state($participantInviteState), ['declined', 'cancelled'], true)
+            : false;
 
         $isFreeForAll = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only') === 'free_for_all';
         $isOrganizationAdmin = videochat_user_is_organization_admin_for_call($pdo, $call, $authUserId, $tenantId);
