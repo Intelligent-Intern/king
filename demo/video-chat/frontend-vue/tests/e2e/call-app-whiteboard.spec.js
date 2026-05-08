@@ -583,6 +583,7 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
   await page.mouse.move(cursorScreenPoint.x, cursorScreenPoint.y);
   await expect.poll(() => canvasRegionNonWhiteCount(page, 'participant', cursorRegion))
     .toBeGreaterThan(cursorRegionBefore + 40);
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveText('Owner');
   const cursorRegionWithOwner = await canvasRegionNonWhiteCount(page, 'participant', cursorRegion);
   expect(cursorRegionWithOwner).toBeGreaterThan(cursorRegionBefore + 40);
   await expect.poll(() => page.evaluate(() => window.whiteboardHarness.state.presenceDeliveries))
@@ -644,6 +645,7 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
   await page.evaluate(() => window.whiteboardHarness.revoke('participant'));
   await expect(participantFrame.locator('#modeBadge')).toHaveText('No access');
   await expect(participantFrame.locator('[data-tool="pen"]')).toBeDisabled();
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveCount(0);
   await expect.poll(() => canvasRegionNonWhiteCount(page, 'participant', cursorRegion))
     .toBeLessThanOrEqual(cursorRegionBefore + 12);
   const participantPresenceDeliveriesAfterRevoke = await page.evaluate(() => (

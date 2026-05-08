@@ -47,6 +47,12 @@ assert.match(
   'whiteboard runtime must render a fixed-format canvas workspace',
 );
 
+assert.match(
+  whiteboardSource,
+  /id="cursorOverlay" class="cursor-overlay"[\s\S]*\.remote-cursor-label[\s\S]*function syncCursorOverlay[\s\S]*label\.textContent = displayNameLabel\(cursor\.label \|\| cursor\.display_name\)/,
+  'whiteboard runtime must render remote cursor display names in an accessible overlay tied to presence labels',
+);
+
 for (const tool of ['select', 'pen', 'highlighter', 'line', 'rect', 'ellipse', 'text', 'sticky', 'delete']) {
   assert.match(
     iframeSource,
@@ -203,7 +209,7 @@ assert.match(
 
 assert.match(
   packageJsonSource,
-  /"test:e2e:call-app-whiteboard":\s*"playwright test tests\/e2e\/call-app-whiteboard\.spec\.js"/,
+  /"test:e2e:call-app-whiteboard":\s*"playwright test tests\/e2e\/call-app-whiteboard\.spec\.js/,
   'package scripts must expose the Whiteboard Call App browser E2E proof',
 );
 

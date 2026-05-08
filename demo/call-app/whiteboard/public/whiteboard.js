@@ -13,6 +13,7 @@
   const status = document.getElementById('status');
   const clock = document.getElementById('clock');
   const modeBadge = document.getElementById('modeBadge');
+  const cursorOverlay = document.getElementById('cursorOverlay');
   const widthInput = document.getElementById('width');
   const inlineEditor = document.getElementById('inlineEditor');
   const inlineText = document.getElementById('inlineText');
@@ -228,6 +229,25 @@
 
   function render() {
     renderScene(ctx, true);
+    syncCursorOverlay();
+  }
+
+  function syncCursorOverlay() {
+    if (!cursorOverlay) return;
+    const labels = [];
+    for (const cursor of state.cursors.values()) {
+      if (cursor.actor_id === actorId) continue;
+      const x = Math.max(0, Math.min(boardWidth, Number(cursor.x || 0)));
+      const y = Math.max(0, Math.min(boardHeight, Number(cursor.y || 0)));
+      const label = document.createElement('span');
+      label.className = 'remote-cursor-label';
+      label.textContent = displayNameLabel(cursor.label || cursor.display_name);
+      label.style.left = `${(x / boardWidth) * 100}%`;
+      label.style.top = `${(y / boardHeight) * 100}%`;
+      label.style.borderLeftColor = cursor.color || '#1582bf';
+      labels.push(label);
+    }
+    cursorOverlay.replaceChildren(...labels);
   }
 
   function drawStroke(targetCtx, stroke) {

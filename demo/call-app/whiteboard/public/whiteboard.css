@@ -113,6 +113,29 @@ canvas {
   background: var(--text-primary);
 }
 
+.cursor-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.remote-cursor-label {
+  position: absolute;
+  max-width: 220px;
+  transform: translate(20px, 8px);
+  padding: 5px 9px;
+  border-left: 4px solid var(--accent);
+  background: rgba(0, 0, 16, 0.82);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .inline-editor {
   position: absolute;
   z-index: 4;
