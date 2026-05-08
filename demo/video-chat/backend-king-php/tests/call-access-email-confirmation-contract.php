@@ -113,6 +113,14 @@ try {
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT=2');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_WINDOW_SECONDS=900');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_TTL_SECONDS=3600');
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN=https://app.kingrt.test');
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX=1');
+
+    $outboxPath = sys_get_temp_dir() . '/videochat-call-access-email-confirmation-outbox-' . bin2hex(random_bytes(6)) . '.log';
+    if (is_file($outboxPath)) {
+        @unlink($outboxPath);
+    }
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH=' . $outboxPath);
 
     $databasePath = sys_get_temp_dir() . '/videochat-call-access-email-confirmation-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
@@ -228,6 +236,25 @@ try {
     videochat_call_access_email_confirmation_assert((bool) ($firstRequest['sent_to_link_account'] ?? true) === false, 'confirmation must not go to link account');
     $firstToken = (string) ($firstRequest['token'] ?? '');
     videochat_call_access_email_confirmation_assert($firstToken !== '', 'first request should create a confirmation token');
+    videochat_call_access_email_confirmation_assert(str_starts_with($firstToken, 'cau_') && strlen($firstToken) >= 52, 'confirmation token should be high-entropy and scoped');
+    $firstExpiresAt = strtotime((string) ($firstRequest['expires_at'] ?? ''));
+    videochat_call_access_email_confirmation_assert(is_int($firstExpiresAt) && $firstExpiresAt > time(), 'confirmation link should expose its future expiry');
+    videochat_call_access_email_confirmation_assert($firstExpiresAt <= time() + 3660, 'confirmation link expiry should follow configured ttl');
+    videochat_call_access_email_confirmation_assert((int) ($firstRequest['expires_in_seconds'] ?? 0) === 3600, 'confirmation link should expose configured ttl seconds');
+    $firstConfirmationUrl = (string) ($firstRequest['confirmation_url'] ?? '');
+    videochat_call_access_email_confirmation_assert(
+        str_starts_with($firstConfirmationUrl, 'https://app.kingrt.test/account-update-confirmation?'),
+        'confirmation email should contain a secure HTTPS confirmation link'
+    );
+    videochat_call_access_email_confirmation_assert(str_contains($firstConfirmationUrl, rawurlencode($firstToken)), 'secure confirmation link should carry the account-update token');
+    videochat_call_access_email_confirmation_assert(!str_contains($firstConfirmationUrl, $accessId), 'secure confirmation link must not expose raw call-access id');
+    videochat_call_access_email_confirmation_assert((string) (($firstRequest['email_delivery'] ?? [])['channel'] ?? '') === 'outbox', 'confirmation email should be dispatched to outbox in contract mode');
+    $outbox = is_file($outboxPath) ? (string) file_get_contents($outboxPath) : '';
+    videochat_call_access_email_confirmation_assert(str_contains($outbox, 'TO=' . $currentEmail), 'confirmation email must be addressed to current account');
+    videochat_call_access_email_confirmation_assert(str_contains($outbox, 'SUBJECT=Confirm your account update'), 'confirmation email subject missing');
+    videochat_call_access_email_confirmation_assert(str_contains($outbox, $firstConfirmationUrl), 'confirmation email must contain the secure confirmation link');
+    videochat_call_access_email_confirmation_assert(str_contains($outbox, 'The link expires at '), 'confirmation email must describe link expiry');
+    videochat_call_access_email_confirmation_assert_no_needles($outbox, [$linkEmail, $linkName, $hostEmail, $hostName, $accessId, 'sess_confirmation_current'], 'confirmation email');
 
     $beforeConfirmUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($beforeConfirmUser['display_name'] ?? '') === $currentName, 'account data must not update before confirmation');
@@ -336,6 +363,9 @@ SQL
     videochat_call_access_email_confirmation_assert((string) ($expired['reason'] ?? '') === 'expired', 'expired reason mismatch');
     $afterExpiredUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($afterExpiredUser['display_name'] ?? '') === $confirmedName, 'expired confirmation must not update data');
+    $expiredConsumed = $pdo->prepare('SELECT coalesce(consumed_at, \'\') FROM call_access_account_update_confirmations WHERE id = :id LIMIT 1');
+    $expiredConsumed->execute([':id' => $expiredToken]);
+    videochat_call_access_email_confirmation_assert((string) $expiredConsumed->fetchColumn() === '', 'expired confirmation must not consume token');
 
     $confirmationRows = $pdo->query('SELECT pending_payload_json, recipient_email_fingerprint, access_fingerprint FROM call_access_account_update_confirmations')->fetchAll();
     $confirmationDump = json_encode($confirmationRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
@@ -359,7 +389,13 @@ SQL
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_WINDOW_SECONDS');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_TTL_SECONDS');
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN');
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX');
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH');
     if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
         @unlink($databasePath);
+    }
+    if (isset($outboxPath) && is_string($outboxPath) && is_file($outboxPath)) {
+        @unlink($outboxPath);
     }
 }

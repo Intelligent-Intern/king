@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/../../support/auth_request.php';
 require_once __DIR__ . '/../users/user_email_identity.php';
 require_once __DIR__ . '/call_access_contract.php';
 
@@ -47,6 +48,154 @@ function videochat_call_access_account_confirmation_ttl_seconds(): int
 {
     $seconds = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_TTL_SECONDS') ?: 3600);
     return max(300, min(86_400, $seconds));
+}
+
+function videochat_call_access_account_confirmation_normalize_origin(string $origin): string
+{
+    $candidate = trim($origin);
+    if ($candidate === '') {
+        return '';
+    }
+    if (!preg_match('#^https?://#i', $candidate)) {
+        $candidate = 'https://' . $candidate;
+    }
+
+    $parts = parse_url($candidate);
+    if (!is_array($parts)) {
+        return '';
+    }
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host = strtolower(trim((string) ($parts['host'] ?? '')));
+    if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+        return '';
+    }
+
+    $origin = $scheme . '://' . $host;
+    if (is_numeric($parts['port'] ?? null)) {
+        $origin .= ':' . (int) $parts['port'];
+    }
+
+    return $origin;
+}
+
+function videochat_call_access_account_confirmation_is_loopback_host(string $host): bool
+{
+    $value = strtolower(trim($host, " \t\n\r\0\x0B[]"));
+    return $value === 'localhost' || $value === '127.0.0.1' || $value === '::1';
+}
+
+function videochat_call_access_account_confirmation_is_secure_origin(string $origin): bool
+{
+    $parts = parse_url($origin);
+    if (!is_array($parts)) {
+        return false;
+    }
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    if ($scheme === 'https') {
+        return true;
+    }
+    if ($scheme !== 'http') {
+        return false;
+    }
+
+    return videochat_call_access_account_confirmation_is_loopback_host((string) ($parts['host'] ?? ''));
+}
+
+function videochat_call_access_account_confirmation_frontend_origin(array $options = []): string
+{
+    $configured = is_string($options['frontend_origin'] ?? null) ? trim((string) $options['frontend_origin']) : '';
+    $candidates = [
+        $configured,
+        (string) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN') ?: ''),
+        (string) (getenv('VIDEOCHAT_FRONTEND_ORIGIN') ?: ''),
+        'https://app.kingrt.com',
+    ];
+
+    foreach ($candidates as $candidate) {
+        $origin = videochat_call_access_account_confirmation_normalize_origin($candidate);
+        if ($origin !== '' && videochat_call_access_account_confirmation_is_secure_origin($origin)) {
+            return $origin;
+        }
+    }
+
+    return 'https://app.kingrt.com';
+}
+
+function videochat_build_call_access_account_confirmation_url(string $token, array $options = []): string
+{
+    $trimmedToken = trim($token);
+    if ($trimmedToken === '') {
+        return '';
+    }
+
+    return videochat_call_access_account_confirmation_frontend_origin($options)
+        . '/account-update-confirmation?'
+        . http_build_query([
+            'call_access_account_update_confirmation_token' => $trimmedToken,
+        ], '', '&', PHP_QUERY_RFC3986);
+}
+
+function videochat_call_access_account_confirmation_outbox_path(): string
+{
+    return trim((string) (getenv('VIDEOCHAT_EMAIL_OUTBOX_PATH') ?: (__DIR__ . '/../../.local/email-outbox.log')));
+}
+
+function videochat_call_access_account_confirmation_truthy_env(string $name): bool
+{
+    $value = strtolower(trim((string) (getenv($name) ?: '')));
+    return in_array($value, ['1', 'true', 'yes', 'on'], true);
+}
+
+/**
+ * @return array{sent: bool, channel: string}
+ */
+function videochat_send_call_access_account_update_confirmation_mail(
+    string $recipientEmail,
+    string $recipientName,
+    string $confirmationUrl,
+    string $expiresAt
+): array {
+    $to = strtolower(trim($recipientEmail));
+    if ($to === '' || filter_var($to, FILTER_VALIDATE_EMAIL) === false || trim($confirmationUrl) === '') {
+        return ['sent' => false, 'channel' => 'none'];
+    }
+
+    $displayName = trim($recipientName);
+    if ($displayName === '') {
+        $displayName = 'there';
+    }
+    $expiresAtText = trim($expiresAt) !== '' ? trim($expiresAt) : 'the recorded expiration time';
+
+    $subject = 'Confirm your account update';
+    $body = "Hello {$displayName},\n\n"
+        . "Confirm your account update by opening this secure confirmation link:\n"
+        . "{$confirmationUrl}\n\n"
+        . "The link expires at {$expiresAtText} and can only be used once from your account.\n";
+    $headers = "MIME-Version: 1.0\r\n"
+        . "Content-Type: text/plain; charset=UTF-8\r\n"
+        . "From: no-reply@intelligent-intern.local\r\n";
+
+    $forceOutbox = videochat_call_access_account_confirmation_truthy_env('VIDEOCHAT_EMAIL_FORCE_OUTBOX')
+        || videochat_call_access_account_confirmation_truthy_env('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX');
+    if (!$forceOutbox && function_exists('mail')) {
+        try {
+            if (@mail($to, $subject, $body, $headers)) {
+                return ['sent' => true, 'channel' => 'mail'];
+            }
+        } catch (Throwable) {
+            // Fall through to the local outbox so confirmation remains inspectable.
+        }
+    }
+
+    $outboxPath = videochat_call_access_account_confirmation_outbox_path();
+    $outboxDir = dirname($outboxPath);
+    if (!is_dir($outboxDir)) {
+        @mkdir($outboxDir, 0775, true);
+    }
+    $entry = '[' . gmdate('c') . "] TO={$to}\nSUBJECT={$subject}\n{$body}\n---\n";
+    @file_put_contents($outboxPath, $entry, FILE_APPEND | LOCK_EX);
+
+    return ['sent' => false, 'channel' => 'outbox'];
 }
 
 function videochat_call_access_account_confirmation_rate_limit(): int
@@ -218,12 +367,14 @@ function videochat_call_access_request_account_update_confirmation(
 
     $token = videochat_call_access_account_confirmation_token();
     $createdAt = gmdate('c');
-    $expiresAt = gmdate('c', time() + videochat_call_access_account_confirmation_ttl_seconds());
+    $ttlSeconds = videochat_call_access_account_confirmation_ttl_seconds();
+    $expiresAt = gmdate('c', time() + $ttlSeconds);
     $payloadJson = json_encode($pendingPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($payloadJson) || $payloadJson === '') {
         $payloadJson = '{}';
     }
     $recipientEmail = strtolower(trim((string) ($user['email'] ?? '')));
+    $confirmationUrl = videochat_build_call_access_account_confirmation_url($token, $options);
 
     $insert = $pdo->prepare(
         <<<'SQL'
@@ -258,6 +409,13 @@ SQL
         ];
     }
 
+    $delivery = videochat_send_call_access_account_update_confirmation_mail(
+        $recipientEmail,
+        (string) ($user['display_name'] ?? ''),
+        $confirmationUrl,
+        $expiresAt
+    );
+
     videochat_audit_record_event($pdo, [
         'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
         'event_type' => 'call_access_account_update_confirmation_requested',
@@ -272,8 +430,13 @@ SQL
             'sent_to_logged_in_account' => true,
             'sent_to_link_account' => false,
             'pending_fields' => array_keys($pendingPayload),
+            'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
+                videochat_call_access_account_confirmation_frontend_origin($options)
+            ),
+            'expires_at' => $expiresAt,
             'raw_link_identifier_logged' => false,
             'recipient_email_logged' => false,
+            'confirmation_token_logged' => false,
         ],
     ]);
 
@@ -283,10 +446,13 @@ SQL
         'errors' => [],
         'token' => $token,
         'expires_at' => $expiresAt,
+        'expires_in_seconds' => $ttlSeconds,
+        'confirmation_url' => $confirmationUrl,
         'recipient_email' => $recipientEmail,
         'recipient_user_id' => $authenticatedUserId,
         'sent_to_logged_in_account' => true,
         'sent_to_link_account' => false,
+        'email_delivery' => $delivery,
     ];
 }
 

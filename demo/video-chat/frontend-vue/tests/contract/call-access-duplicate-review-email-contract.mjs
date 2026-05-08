@@ -160,6 +160,21 @@ assert.match(
 );
 assert.match(
   confirmationHelper,
+  /videochat_build_call_access_account_confirmation_url[\s\S]*call_access_account_update_confirmation_token/,
+  'backend confirmation helper must build a confirmation URL carrying only the account-update token',
+);
+assert.match(
+  confirmationHelper,
+  /videochat_call_access_account_confirmation_is_secure_origin[\s\S]*https/,
+  'backend confirmation helper must restrict confirmation URLs to secure origins, except local loopback',
+);
+assert.match(
+  confirmationHelper,
+  /videochat_send_call_access_account_update_confirmation_mail[\s\S]*secure confirmation link[\s\S]*The link expires at/,
+  'backend confirmation helper must send an email containing the secure expiring confirmation link',
+);
+assert.match(
+  confirmationHelper,
   /'sent_to_logged_in_account' => true[\s\S]*'sent_to_link_account' => false/,
   'backend confirmation helper must target the logged-in account only',
 );
@@ -191,8 +206,18 @@ assert.match(
 );
 assert.match(
   callAccessRoutes,
-  /debug_confirmation_token[\s\S]*VIDEOCHAT_KING_ENV[\s\S]*production[\s\S]*null/,
+  /VIDEOCHAT_KING_ENV[\s\S]*debug_confirmation_token[\s\S]*production[\s\S]*null/,
   'HTTP routes must not expose confirmation tokens in production responses',
+);
+assert.match(
+  callAccessRoutes,
+  /debug_confirmation_url[\s\S]*production[\s\S]*null/,
+  'HTTP routes must not expose confirmation URLs in production responses',
+);
+assert.match(
+  callAccessRoutes,
+  /'expires_at' => \$requestResult\['expires_at'\]/,
+  'HTTP routes must expose confirmation expiry metadata without exposing the production token',
 );
 
 assert.match(
@@ -233,6 +258,11 @@ assert.match(
 );
 assert.match(
   emailContract,
+  /confirmation email should contain a secure HTTPS confirmation link[\s\S]*confirmation email must describe link expiry/,
+  'backend email contract must prove the dispatched email contains a secure time-limited confirmation link',
+);
+assert.match(
+  emailContract,
   /expired pending-confirmation session should be rejected[\s\S]*expired_session/,
   'backend email contract must reject expired sessions while confirmation is pending',
 );
@@ -255,6 +285,11 @@ assert.match(
   emailContract,
   /confirmation token replay should fail/,
   'backend email contract must prove one-time confirmation tokens',
+);
+assert.match(
+  emailContract,
+  /expired confirmation should fail[\s\S]*expired confirmation must not update data[\s\S]*expired confirmation must not consume token/,
+  'backend email contract must prove expired confirmation links update no data and remain unconsumed',
 );
 
 console.log('[call-access-duplicate-review-email-contract] PASS');

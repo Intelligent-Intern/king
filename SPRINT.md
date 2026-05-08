@@ -1766,15 +1766,15 @@ SQLite backend leg because `pdo_sqlite` is unavailable.
 - [x] Email is triggered only after explicit update request
 - [x] Email is sent to logged-in account
 - [x] Email is not sent to temporary account
-- [ ] Email contains secure confirmation link
+- [x] Email contains secure confirmation link
 - [x] Confirmation link is account-bound
 - [x] Confirmation link cannot be used by another logged-in account
-- [ ] Confirmation link is time-limited
+- [x] Confirmation link is time-limited
 - [x] Confirmation link is one-time use
 - [x] Without confirmation, account data remains unchanged
 - [x] After confirmation, only re-entered data is updated
 - [ ] Confirmation success state is shown
-- [ ] Expired confirmation link updates no data
+- [x] Expired confirmation link updates no data
 - [x] Already used confirmation link updates no data again
 - [ ] Confirmation is audit-logged
 - [x] Failed confirmation shows no sensitive data
@@ -1788,9 +1788,14 @@ confirmation request, logged-in-account-only delivery, account-bound
 confirmation, wrong-account denial, cross-browser same-account confirmation,
 replay denial, rate limiting, no update before confirmation, manually re-entered
 field updates, pending-state continuity, and safe failed-confirmation payloads.
-The backend `call-access-email-confirmation-contract.php` is wired into the IAM
-contract gate; runtime execution is skipped locally because `pdo_sqlite` is not
-available.
+The backend `call-access-email-confirmation-contract.php` additionally proves
+the dispatched email contains an absolute HTTPS account-update confirmation URL,
+the URL carries only the high-entropy confirmation token, the email and API
+response expose the configured expiry, expired confirmations update no account
+data and remain unconsumed, and no raw call-access id, host, link-target, or
+session data leaks into email, storage, or responses. Host PHP still skips this
+runtime proof because `pdo_sqlite` is unavailable; Docker PHP 8.4 with
+`pdo_sqlite` passed the contract locally.
 
 ## 17. Guest List
 
@@ -2565,10 +2570,10 @@ access/session fingerprints and safe counts remain.
 - [x] `e2e_email_003_email_not_sent_to_temp_account`
 - [x] `e2e_email_004_confirmation_link_account_bound`
 - [x] `e2e_email_005_confirmation_link_one_time_use`
-- [ ] `e2e_email_006_confirmation_link_time_limited`
+- [x] `e2e_email_006_confirmation_link_time_limited`
 - [x] `e2e_email_007_no_update_without_confirmation`
 - [x] `e2e_email_008_confirmation_updates_only_reentered_data`
-- [ ] `e2e_email_009_expired_confirmation_link_no_update`
+- [x] `e2e_email_009_expired_confirmation_link_no_update`
 - [ ] `e2e_email_010_multiple_pending_confirmations_resolved`
 
 ## Test Group: Guest List
