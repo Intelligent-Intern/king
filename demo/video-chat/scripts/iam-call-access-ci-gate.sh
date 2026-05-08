@@ -116,6 +116,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-email-confirmation-contract.sh"
   "tests/call-access-admin-prevention-contract.sh"
   "tests/call-access-cross-org-contract.sh"
+  "tests/call-access-active-permission-change-contract.sh"
   "tests/call-access-membership-active-removal-contract.sh"
   "tests/call-access-membership-removal-contract.sh"
   "tests/call-access-stale-organization-role-contract.sh"
