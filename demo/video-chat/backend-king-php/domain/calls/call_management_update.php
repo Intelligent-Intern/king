@@ -220,7 +220,8 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
         (string) ($existingCall['id'] ?? $callId),
         $authRole,
         $authUserId,
-        (int) $existingCall['owner_user_id']
+        (int) $existingCall['owner_user_id'],
+        $tenantId
     )) {
         return [
             'ok' => false,
