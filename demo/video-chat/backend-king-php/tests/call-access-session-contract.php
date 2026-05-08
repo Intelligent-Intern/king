@@ -344,6 +344,69 @@ SQL
     videochat_call_access_session_assert((string) ($openPendingResolution['requested_room_id'] ?? '') === $openCallId, 'open guest should keep the bound requested room');
     videochat_call_access_session_assert((string) ($openPendingResolution['pending_room_id'] ?? '') === $openCallId, 'open guest should keep the pending FFA room for host admission');
 
+    $sameUserDeviceA = videochat_issue_session_for_call_access(
+        $pdo,
+        $openAccessId,
+        static fn (): string => 'sess_call_access_same_user_device_a',
+        ['client_ip' => '127.0.0.2', 'user_agent' => 'same-user-device-a'],
+        [
+            'authenticated_user_id' => $standardUserId,
+            'authenticated_session_id' => 'sess_standard_same_user_device_a',
+            'verified_user_id' => $standardUserId,
+            'verified_session_id' => 'sess_standard_same_user_device_a',
+        ]
+    );
+    videochat_call_access_session_assert((bool) ($sameUserDeviceA['ok'] ?? false), 'same logged-in user device A should issue from reusable open link');
+
+    $sameUserDeviceB = videochat_issue_session_for_call_access(
+        $pdo,
+        $openAccessId,
+        static fn (): string => 'sess_call_access_same_user_device_b',
+        ['client_ip' => '127.0.0.3', 'user_agent' => 'same-user-device-b'],
+        [
+            'authenticated_user_id' => $standardUserId,
+            'authenticated_session_id' => 'sess_standard_same_user_device_b',
+            'verified_user_id' => $standardUserId,
+            'verified_session_id' => 'sess_standard_same_user_device_b',
+        ]
+    );
+    videochat_call_access_session_assert((bool) ($sameUserDeviceB['ok'] ?? false), 'same logged-in user device B should issue from reusable open link');
+    videochat_call_access_session_assert(
+        (string) ((($sameUserDeviceA['session'] ?? [])['id'] ?? '')) !== (string) ((($sameUserDeviceB['session'] ?? [])['id'] ?? '')),
+        'same user devices should receive distinct browser sessions'
+    );
+
+    $sameUserParticipantQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    );
+    $sameUserParticipantQuery->execute([
+        ':call_id' => $openCallId,
+        ':user_id' => $standardUserId,
+    ]);
+    videochat_call_access_session_assert((int) $sameUserParticipantQuery->fetchColumn() === 1, 'same user concurrent devices must not create duplicate participant rows');
+
+    $sameUserBindingQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_access_sessions
+WHERE access_id = :access_id
+  AND call_id = :call_id
+  AND user_id = :user_id
+SQL
+    );
+    $sameUserBindingQuery->execute([
+        ':access_id' => $openAccessId,
+        ':call_id' => $openCallId,
+        ':user_id' => $standardUserId,
+    ]);
+    videochat_call_access_session_assert((int) $sameUserBindingQuery->fetchColumn() === 2, 'same user devices should keep separate call-access sessions');
+
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-session-contract] PASS\n");
 } catch (Throwable $error) {
