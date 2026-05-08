@@ -720,6 +720,32 @@ completion marker for unchecked leaves.
   `call-access-stale-organization-role-contract`, and
   `demo/video-chat/backend-king-php/tests/call-guest-lifecycle-contract.php`.
 
+## IAM Pending Proof Merge Audit
+
+Audit date: 2026-05-09. Base inspected: `iam-e2e-integration` at `bf1186a2`.
+This is a status report only; it does not merge candidate branches.
+
+Current result: no remaining no-merged IAM proof branch qualifies as a clean
+docs-only or test-only merge candidate. The registered-invitee stale checklist
+state was consumed by `5d22a7de`; the duplicate-link warning-modal,
+same-browser, cross-device, and cross-browser stale checklist state was consumed
+by `7ea9757a`; and the registered-invitee post-merge proof status was consumed
+by `bf1186a2`.
+
+`git merge-tree --write-tree iam-e2e-integration <branch>` now reports conflicts
+for all 42 remaining no-merged IAM proof branches in the audited set, including
+the previously low-risk docs/test branches:
+
+- `local/iam-e2e-review-abuse-cross-browser-proof-3` now conflicts in
+  `SPRINT.md` because the cross-browser duplicate-link boxes are already closed.
+- `local/iam-e2e-review-warning-modal-policy-proof-3` now conflicts in
+  `call-access-duplicate-review-contract.php` after the duplicate-review abuse
+  integration proof landed.
+
+Recommendation: do not take any further candidate under the docs-only/test-only
+constraint until new branch state is produced or the remaining conflicts are
+intentionally resolved in a dedicated integration pass.
+
 ## Background
 
 The product supports:
