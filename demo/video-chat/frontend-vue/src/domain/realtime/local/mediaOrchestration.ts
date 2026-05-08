@@ -459,6 +459,55 @@ export function createLocalMediaOrchestrationHelpers({
       || name === 'AbortError';
   }
 
+  function wantsLocalAudioCapture() {
+    return controlState.micEnabled !== false;
+  }
+
+  function wantsLocalVideoCapture() {
+    return controlState.cameraEnabled !== false;
+  }
+
+  async function acquireAudioOnlyLocalMediaStream(reason = 'video_capture_failed') {
+    if (!wantsLocalAudioCapture()) return null;
+    const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
+    const audioOnlyConstraints = buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: audioOnlyConstraints });
+      captureDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'local_media_audio_only_fallback_started',
+        code: 'local_media_audio_only_fallback_started',
+        message: 'Local video capture failed; microphone audio continues without camera video.',
+        payload: {
+          reason: String(reason || 'video_capture_failed'),
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+          selected_microphone: microphoneDeviceId !== '',
+        },
+      });
+      return stream;
+    } catch (error) {
+      if (microphoneDeviceId === '') throw error;
+    }
+
+    const looseAudioConstraints = buildOptionalCallAudioCaptureConstraints(true);
+    const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: looseAudioConstraints });
+    captureDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'local_media_audio_only_fallback_started',
+      code: 'local_media_audio_only_fallback_started',
+      message: 'Local video capture failed; microphone audio continues without camera video.',
+      payload: {
+        reason: `${String(reason || 'video_capture_failed')}_loose_microphone`,
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+        selected_microphone: false,
+      },
+    });
+    return stream;
+  }
+
   function enterReceiveOnlyLocalMediaMode(reason = 'local_media_unavailable') {
     const receiveOnlyStream = new MediaStream();
     refs.localRawStreamRef.value = receiveOnlyStream;
@@ -503,12 +552,21 @@ export function createLocalMediaOrchestrationHelpers({
         video: controlState.cameraEnabled !== false,
         audio: buildOptionalCallAudioCaptureConstraints(controlState.micEnabled !== false),
       };
-      if (fallbackConstraints.video !== true && fallbackConstraints.audio !== true) {
+      if (fallbackConstraints.video === false && fallbackConstraints.audio === false) {
         return new MediaStream();
       }
-      const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-      await enforceSfuVideoCaptureProfile(stream, 'boolean_fallback');
-      return stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+        await enforceSfuVideoCaptureProfile(stream, 'boolean_fallback');
+        return stream;
+      } catch (fallbackError) {
+        if (!wantsLocalVideoCapture() || !wantsLocalAudioCapture() || !shouldRetryWithLooseConstraints(fallbackError)) {
+          throw fallbackError;
+        }
+        const stream = await acquireAudioOnlyLocalMediaStream('boolean_video_fallback_failed');
+        if (stream instanceof MediaStream) return stream;
+        throw fallbackError;
+      }
     }
   }
 

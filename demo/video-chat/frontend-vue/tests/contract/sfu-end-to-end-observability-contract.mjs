@@ -28,7 +28,7 @@ function main() {
   const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.ts');
   const diagnostics = readFrontend('src/support/clientDiagnostics.ts');
 
-  requireContains(sprint, '6. [x] `[end-to-end-media-pressure-observability]`', 'sprint issue 6 must be checked');
+  requireContains(sprint, 'Completed sprint detail is intentionally removed from this file.', 'active sprint keeps completed SFU issue history out of SPRINT.md');
   requireContains(packageJson, 'sfu-end-to-end-observability-contract.mjs', 'SFU contract suite includes observability proof');
   requireContains(transportSample, 'resolveSfuFirstOverBudgetStage', 'transport sample helper resolves first over-budget stage');
   requireContains(transportSample, 'buildSfuEndToEndPerformancePayload', 'transport sample helper builds end-to-end report payload');

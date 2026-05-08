@@ -21,24 +21,25 @@ function readRepo(relativePath) {
 }
 
 try {
-  const workspace = readFrontend('src/domain/realtime/CallWorkspaceView.vue');
+  const socketLifecycle = readFrontend('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const workspaceLifecycle = readFrontend('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
   assert.match(
-    workspace,
+    socketLifecycle,
     /function closeSocket\(options = \{\}\)[\s\S]*const leaveRoom = options\?\.leaveRoom === true;/,
     'workspace closeSocket must distinguish real leave from reconnect',
   );
   assert.match(
-    workspace,
+    socketLifecycle,
     /if \(leaveRoom && socket\.readyState === WebSocket\.OPEN\) \{[\s\S]*socket\.send\(JSON\.stringify\(\{ type: 'room\/leave' \}\)\);/,
     'workspace must send room/leave before closing a real leave socket',
   );
   assert.match(
-    workspace,
+    socketLifecycle,
     /previousSocket\.close\(1000, 'reconnect'\);/,
     'workspace reconnect socket replacement must not be treated as room leave',
   );
   assert.match(
-    workspace,
+    workspaceLifecycle,
     /closeSocket\(\{ leaveRoom: true \}\);/,
     'workspace unmount must explicitly leave the realtime room',
   );

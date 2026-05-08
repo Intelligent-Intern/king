@@ -14,6 +14,9 @@
           <td :data-label="t('marketplace.name')">
             <div class="marketplace-name">{{ app.name }}</div>
             <div class="marketplace-subline">{{ categoryLabel(app.category) }}</div>
+            <div v-if="catalogApp(app)" class="marketplace-subline marketplace-call-app-state">
+              Call App: {{ callAppStateLabel(app) }}
+            </div>
           </td>
           <td :data-label="t('marketplace.manufacturer')">
             <div>{{ app.manufacturer || t('common.not_available') }}</div>
@@ -27,6 +30,13 @@
           </td>
           <td :data-label="t('marketplace.actions')">
             <div class="actions-inline">
+              <AppIconButton
+                v-if="catalogApp(app)"
+                icon="/assets/orgas/kingrt/icons/add.png"
+                :title="installTitle(app)"
+                :disabled="installingAppId === app.id || !canInstallCallApp(app)"
+                @click="$emit('install-call-app', app)"
+              />
               <AppIconButton
                 icon="/assets/orgas/kingrt/icons/gear.png"
                 :title="t('marketplace.edit_app')"
@@ -75,9 +85,13 @@ defineProps({
     type: Number,
     default: 0,
   },
+  installingAppId: {
+    type: Number,
+    default: 0,
+  },
 });
 
-defineEmits(['edit-app', 'delete-app']);
+defineEmits(['install-call-app', 'edit-app', 'delete-app']);
 
 function categoryLabel(category) {
   const normalized = String(category || '').toLowerCase();
@@ -91,6 +105,47 @@ function formatDateTime(value) {
     timeFormat: sessionState.timeFormat,
     fallback: t('common.not_available'),
   });
+}
+
+function catalogApp(app) {
+  const catalog = app?.call_app_catalog;
+  if (!catalog || typeof catalog !== 'object') return null;
+  return String(catalog.app_key || '').trim() !== '' ? catalog : null;
+}
+
+function organizationState(app) {
+  const catalog = catalogApp(app);
+  const organization = catalog?.organization;
+  return organization && typeof organization === 'object' ? organization : {};
+}
+
+function isCatalogHealthy(app) {
+  const status = String(catalogApp(app)?.health_status || '').toLowerCase();
+  return status === '' || status === 'healthy' || status === 'degraded';
+}
+
+function isInstalled(app) {
+  return organizationState(app).installed === true;
+}
+
+function canInstallCallApp(app) {
+  return Boolean(catalogApp(app) && isCatalogHealthy(app));
+}
+
+function callAppStateLabel(app) {
+  const state = organizationState(app);
+  if (state.installed === true) return 'installed for organization';
+  if (state.status === 'disabled') return 'disabled for organization';
+  if (state.ordered === true) return 'ordered, not installed';
+  if (!isCatalogHealthy(app)) return 'catalog unhealthy';
+  return 'not installed';
+}
+
+function installTitle(app) {
+  if (isInstalled(app)) return 'Verify organization installation';
+  if (!isCatalogHealthy(app)) return 'Call App catalog is not healthy';
+  if (organizationState(app).status === 'disabled') return 'Enable for organization';
+  return 'Install for organization';
 }
 </script>
 

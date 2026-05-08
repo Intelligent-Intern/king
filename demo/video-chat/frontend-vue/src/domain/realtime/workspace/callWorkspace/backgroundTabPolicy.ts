@@ -24,15 +24,14 @@ function shouldPauseSfuVideoForBackground(context = {}, documentRef = null) {
   return reason === 'pagehide' || reason === 'document_hidden';
 }
 
+const REMOTE_PUBLISHER_BACKGROUND_POLICY = 'preserve_remote_publisher_with_keyframe_marker';
+const LOCAL_PREVIEW_BACKGROUND_POLICY = 'pause_local_preview_video_keep_audio_status';
+
 export function createSfuBackgroundTabPolicy({
   callbacks = {},
   refs = {},
   documentRef = typeof document !== 'undefined' ? document : null,
 } = {}) {
-  let backgroundVideoPaused = false;
-  let backgroundVideoPausedAtMs = 0;
-  let backgroundPauseCount = 0;
-
   const {
     captureClientDiagnostic = () => {},
     getConnectedParticipantCount = () => 0,
@@ -50,22 +49,30 @@ export function createSfuBackgroundTabPolicy({
     sfuClientRef = {},
   } = refs;
 
+  let backgroundVideoPausedAtMs = 0;
+
   function mediaRuntimeIsSfu() {
     return String(mediaRuntimePath.value || '').trim() === 'wlvc_wasm';
   }
 
-  function diagnosticPayload(reason, track) {
+  function remotePublisherObligationActive() {
     const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
     const connectedParticipantCount = normalizedConnectedParticipantCount(getConnectedParticipantCount());
-    const shouldPreservePublisher = remotePeerCount > 0 || connectedParticipantCount > 1;
+    return remotePeerCount > 0 || connectedParticipantCount > 1;
+  }
+
+  function diagnosticPayload(reason, track, overrides = {}) {
+    const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
+    const connectedParticipantCount = normalizedConnectedParticipantCount(getConnectedParticipantCount());
+    const backgroundVideoPolicy = String(overrides.background_video_policy || REMOTE_PUBLISHER_BACKGROUND_POLICY);
+    const backgroundPauseIntentional = Boolean(overrides.background_pause_intentional ?? false);
+    const activePublisherLayer = String(overrides.active_publisher_layer || 'primary_keyframe_marker');
     return {
       reason: String(reason || ''),
-      background_video_policy: shouldPreservePublisher
-        ? 'preserve_remote_publisher_with_keyframe_marker'
-        : 'pause_local_preview_video_keep_audio_status',
+      background_video_policy: backgroundVideoPolicy,
       browser_visibility_state: String(documentRef?.visibilityState || ''),
-      background_pause_intentional: !shouldPreservePublisher,
-      active_publisher_layer: shouldPreservePublisher ? 'primary_keyframe_marker' : 'none',
+      background_pause_intentional: backgroundPauseIntentional,
+      active_publisher_layer: activePublisherLayer,
       remote_peer_count: remotePeerCount,
       connected_participant_count: connectedParticipantCount,
       track_id: String(track?.id || ''),
@@ -77,11 +84,9 @@ export function createSfuBackgroundTabPolicy({
   function preserveRemotePublisherObligationForBackground(context = {}, videoTrack = null) {
     const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
     const connectedParticipantCount = normalizedConnectedParticipantCount(getConnectedParticipantCount());
-    if (remotePeerCount <= 0 && connectedParticipantCount <= 1) return false;
-
     const requested = requestWlvcFullFrameKeyframe('sfu_background_tab_publisher_marker', {
       requested_action: 'force_full_keyframe',
-      background_publish_policy: 'preserve_remote_publisher_with_keyframe_marker',
+      background_publish_policy: REMOTE_PUBLISHER_BACKGROUND_POLICY,
       background_pause_intentional: false,
       browser_visibility_state: String(documentRef?.visibilityState || ''),
       remote_peer_count: remotePeerCount,
@@ -104,64 +109,65 @@ export function createSfuBackgroundTabPolicy({
     return true;
   }
 
-  function pauseVideoForBackground(context = {}) {
-    if (!shouldPauseSfuVideoForBackground(context, documentRef)) return false;
-    if (!mediaRuntimeIsSfu()) return false;
-    if (backgroundVideoPaused) return false;
-
-    const videoTrack = firstLiveVideoTrack(localStreamRef.value);
-    if (!videoTrack) return false;
-    if (preserveRemotePublisherObligationForBackground(context, videoTrack)) return true;
-
-    backgroundVideoPaused = true;
-    backgroundVideoPausedAtMs = Date.now();
-    backgroundPauseCount += 1;
+  function pauseLocalPreviewVideoForBackground(context = {}, videoTrack = null) {
     stopLocalEncodingPipeline();
-
-    try {
-      sfuClientRef.value?.unpublishTrack?.(videoTrack.id);
-      localTracksPublishedToSfuRef?.set?.(false);
-    } catch {
-      // The foreground reconnect path republishes the track if the socket changed.
-    }
-
+    sfuClientRef.value?.unpublishTrack?.(videoTrack.id);
+    localTracksPublishedToSfuRef?.set?.(false);
+    backgroundVideoPausedAtMs = Date.now();
     captureClientDiagnostic({
       category: 'media',
-      level: 'warning',
+      level: 'info',
       eventType: 'sfu_background_tab_video_paused',
       code: 'sfu_background_tab_video_paused',
-      message: 'SFU video publishing was paused because the browser moved the call tab into the background.',
-      payload: {
-        ...diagnosticPayload(context?.reason || 'background', videoTrack),
-        background_pause_count: backgroundPauseCount,
-      },
+      message: 'Background tab paused local preview SFU video while no remote publisher obligation was active.',
+      payload: diagnosticPayload(context?.reason || 'background', videoTrack, {
+        background_video_policy: LOCAL_PREVIEW_BACKGROUND_POLICY,
+        background_pause_intentional: true,
+        active_publisher_layer: 'local_preview_paused',
+      }),
       immediate: true,
     });
     return true;
   }
 
-  async function resumeVideoAfterForeground(context = {}) {
-    if (!backgroundVideoPaused) return false;
+  function pauseVideoForBackground(context = {}) {
+    if (!shouldPauseSfuVideoForBackground(context, documentRef)) return false;
+    if (!mediaRuntimeIsSfu()) return false;
+
     const videoTrack = firstLiveVideoTrack(localStreamRef.value);
+    if (!videoTrack) return false;
+    if (remotePublisherObligationActive()) {
+      return preserveRemotePublisherObligationForBackground(context, videoTrack);
+    }
+    return pauseLocalPreviewVideoForBackground(context, videoTrack);
+  }
+
+  async function resumeVideoAfterForeground(context = {}) {
+    if (backgroundVideoPausedAtMs <= 0) return false;
+    const videoTrack = firstLiveVideoTrack(localStreamRef.value);
+    if (!videoTrack) return false;
     const pausedForMs = Math.max(0, Date.now() - backgroundVideoPausedAtMs);
-    backgroundVideoPaused = false;
-    backgroundVideoPausedAtMs = 0;
 
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
       eventType: 'sfu_background_tab_video_resumed',
       code: 'sfu_background_tab_video_resumed',
-      message: 'SFU video publishing is resuming after the call tab returned to the foreground.',
+      message: 'SFU video publishing remained active while backgrounded and refreshed after returning to the foreground.',
       payload: {
-        ...diagnosticPayload(context?.reason || 'foreground', videoTrack),
+        ...diagnosticPayload(context?.reason || 'foreground', videoTrack, {
+          background_video_policy: LOCAL_PREVIEW_BACKGROUND_POLICY,
+          background_pause_intentional: true,
+          active_publisher_layer: 'local_preview_republish',
+        }),
         background_paused_for_ms: pausedForMs,
       },
       immediate: true,
     });
 
-    await publishLocalTracks();
-    return true;
+    const published = await publishLocalTracks();
+    if (published) backgroundVideoPausedAtMs = 0;
+    return Boolean(published);
   }
 
   return {

@@ -27,42 +27,7 @@
     </section>
 
     <section class="toolbar calls-toolbar">
-      <div class="calls-toolbar-left">
-        <div class="calls-view-tabs" role="tablist" :aria-label="t('calls.admin.view_mode_aria')">
-          <button
-            class="tab"
-            :class="{ active: viewMode === 'calls' }"
-            type="button"
-            role="tab"
-            :aria-selected="viewMode === 'calls'"
-            @click="setViewMode('calls')"
-          >
-            {{ t('calls.admin.tab_calls') }}
-          </button>
-          <button
-            class="tab"
-            :class="{ active: viewMode === 'calendar' }"
-            type="button"
-            role="tab"
-            :aria-selected="viewMode === 'calendar'"
-            @click="setViewMode('calendar')"
-          >
-            {{ t('calls.admin.tab_calendar') }}
-          </button>
-          <button
-            class="tab"
-            :class="{ active: viewMode === 'personalCalendar' }"
-            type="button"
-            role="tab"
-            :aria-selected="viewMode === 'personalCalendar'"
-            @click="setViewMode('personalCalendar')"
-          >
-            {{ t('calls.admin.tab_personal_calendar') }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="viewMode !== 'personalCalendar'" class="calls-toolbar-right">
+      <div class="calls-toolbar-right">
         <label class="calls-search calls-search-main" :aria-label="t('calls.admin.search_aria')">
           <input
             v-model="queryDraft"
@@ -102,7 +67,7 @@
       {{ noticeMessage }}
     </section>
 
-    <section v-if="viewMode === 'calls'" class="table-wrap calls-table-wrap">
+    <section class="table-wrap calls-table-wrap">
       <CallsListTable
         :calls="calls"
         :format-range="formatRange"
@@ -130,23 +95,7 @@
       </section>
     </section>
 
-    <section v-else-if="viewMode === 'calendar'" class="table-wrap calls-calendar-wrap">
-      <section v-if="calendarError" class="section calls-empty calls-error">
-        {{ calendarError }}
-      </section>
-      <section v-else class="calls-calendar-shell">
-        <section v-if="loadingCalendar" class="calls-calendar-loading calls-inline-hint">
-          {{ t('calls.admin.loading_calendar') }}
-        </section>
-        <section ref="callsCalendarEl" class="calls-calendar-full"></section>
-      </section>
-    </section>
-
-    <section v-else class="table-wrap calls-personal-calendar-wrap">
-      <AppointmentConfigPanel @saved="setNotice('ok', t('calls.admin.appointment_slots_saved'))" />
-    </section>
-
-    <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
+    <section class="footer calls-pagination-wrap">
       <AppPagination
         :page="pagination.page"
         :page-count="pagination.pageCount"

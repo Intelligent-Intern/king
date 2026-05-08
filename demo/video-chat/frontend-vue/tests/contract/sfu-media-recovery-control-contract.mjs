@@ -29,7 +29,7 @@ function main() {
   const recoveryBroker = read('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_recovery_requests.php');
   const packageJson = read('demo/video-chat/frontend-vue/package.json');
 
-  requireContains(sprint, '4. [x] `[packet-layer-sfu-forwarder]`', 'sprint issue 4 must be checked after recovery control routing lands');
+  requireContains(sprint, 'Completed sprint detail is intentionally removed from this file.', 'active sprint keeps completed SFU issue history out of SPRINT.md');
 
   requireContains(sfuClient, 'requestPublisherMediaRecovery(', 'SFU client exposes publisher media recovery control');
   requireContains(sfuClient, "type: 'sfu/media-recovery-request'", 'publisher recovery request stays on SFU control plane');

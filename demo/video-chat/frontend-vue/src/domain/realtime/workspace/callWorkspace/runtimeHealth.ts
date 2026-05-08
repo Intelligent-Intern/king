@@ -257,6 +257,61 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return true;
   }
 
+  function requestSfuSubscriberLayerPreference(peer, publisherId, requestedVideoLayer, reason, nowMs = Date.now(), payload = {}) {
+    if (!peer || typeof peer !== 'object') return false;
+    const normalizedPublisherId = String(publisherId || '').trim();
+    const layer = String(requestedVideoLayer || '').trim().toLowerCase();
+    if (normalizedPublisherId === '' || (layer !== 'thumbnail' && layer !== 'primary')) return false;
+    if (!sfuClientRef.value || typeof sfuClientRef.value.setSubscriberLayerPreference !== 'function') return false;
+
+    if (!(peer.sfuLayerPreferenceLastByKey instanceof Map)) {
+      peer.sfuLayerPreferenceLastByKey = new Map();
+    }
+    const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_remote_video_recovery_layer_preference');
+    const preferenceKey = `${normalizedPublisherId}:${layer}:${normalizedReason}`;
+    const lastAtMs = Number(peer.sfuLayerPreferenceLastByKey.get(preferenceKey) || 0);
+    const backoffMs = layer === 'thumbnail'
+      ? Math.max(remoteVideoStallThresholdMs, 3000)
+      : Math.max(remoteVideoFreezeThresholdMs, 6000);
+    if (lastAtMs > 0 && (nowMs - lastAtMs) < backoffMs) return false;
+
+    const sent = sfuClientRef.value.setSubscriberLayerPreference(normalizedPublisherId, {
+      ...payload,
+      requested_action: layer === 'thumbnail' ? 'prefer_thumbnail_video_layer' : 'prefer_primary_video_layer',
+      requested_video_layer: layer,
+      reason: normalizedReason,
+      render_surface_role: String(payload?.render_surface_role || 'recovery'),
+    });
+    if (!sent) return false;
+
+    peer.sfuLayerPreferenceLastByKey.set(preferenceKey, nowMs);
+    peer.sfuRecoveryThumbnailLayerActive = layer === 'thumbnail';
+    captureClientDiagnostic({
+      category: 'media',
+      level: layer === 'thumbnail' ? 'warning' : 'info',
+      eventType: layer === 'thumbnail'
+        ? 'sfu_remote_video_recovery_thumbnail_layer_requested'
+        : 'sfu_remote_video_recovery_primary_layer_restored',
+      code: layer === 'thumbnail'
+        ? 'sfu_remote_video_recovery_thumbnail_layer_requested'
+        : 'sfu_remote_video_recovery_primary_layer_restored',
+      message: layer === 'thumbnail'
+        ? 'Remote SFU video recovery temporarily requested the thumbnail layer before a socket reconnect.'
+        : 'Remote SFU video recovered and requested the primary layer again.',
+      payload: {
+        lane: 'data',
+        ...payload,
+        publisher_id: normalizedPublisherId,
+        publisher_user_id: Number(peer.userId || 0),
+        requested_video_layer: layer,
+        reason: normalizedReason,
+        media_runtime_path: mediaRuntimePath.value,
+      },
+      immediate: layer === 'thumbnail',
+    });
+    return true;
+  }
+
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
     const payloadBody = payload && typeof payload === 'object' ? { ...payload } : {};
     const bypassRecoveryThrottle = Boolean(payloadBody.bypass_recovery_throttle);
@@ -391,6 +446,14 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       if (frameCount > 0) {
         const decodedGapMs = lastDecodedFrameAtMs > 0 ? Math.max(0, nowMs - lastDecodedFrameAtMs) : Number.POSITIVE_INFINITY;
         if (decodedGapMs < remoteVideoFreezeThresholdMs) {
+          if (peer.sfuRecoveryThumbnailLayerActive === true) {
+            requestSfuSubscriberLayerPreference(peer, publisherId, 'primary', 'sfu_remote_video_recovered_primary_layer', nowMs, {
+              recovery_ladder_trigger: 'remote_video_recovered',
+              decoded_frame_gap_ms: decodedGapMs,
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+            });
+          }
           if (String(peer.mediaConnectionState || '') !== 'live' || String(peer.mediaConnectionMessage || '') !== '') {
             setRemoteVideoStatus(peer, 'live', '', nowMs);
           }
@@ -441,6 +504,16 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               last_decoded_frame_skip_reason: String(peer.lastDecodedFrameSkipReason || ''),
             }
           )
+          : false;
+        const recoveryLayerPreferenceSent = !receivingFreshFrames
+          ? requestSfuSubscriberLayerPreference(peer, publisherId, 'thumbnail', 'sfu_remote_video_frozen', nowMs, {
+            frozen_age_ms: frozenAgeMs,
+            receive_gap_ms: receiveGapMs,
+            freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+            frame_count: frameCount,
+            received_frame_count: Number(peer.receivedFrameCount || 0),
+            recovery_ladder_trigger: 'remote_video_frozen',
+          })
           : false;
         const compatibilityFallbackSent = receivingFreshFrames && peer.freezeRecoveryCount >= 2
           ? requestPublisherCompatibilityCodecFallback(
@@ -549,6 +622,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
             remote_quality_pressure_sent: remoteQualityPressureSent,
+            recovery_layer_preference_sent: recoveryLayerPreferenceSent,
             compatibility_fallback_sent: compatibilityFallbackSent,
             socket_restart_attempted: socketRestarted,
             socket_restart_deferred: shouldRestartFrozenVideo && !socketRestarted,
@@ -586,6 +660,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           received_frame_count: Number(peer.receivedFrameCount || 0),
         })
         : false;
+      const recoveryLayerPreferenceSent = requestSfuSubscriberLayerPreference(peer, publisherId, 'thumbnail', 'sfu_remote_video_never_started', nowMs, {
+        age_ms: stalledAgeMs,
+        stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+        received_frame_count: Number(peer.receivedFrameCount || 0),
+        recovery_ladder_trigger: 'remote_video_never_started',
+      });
       const compatibilityFallbackSent = peer.stallRecoveryCount >= 2 || shouldRestartNeverStartedVideo
         ? requestPublisherCompatibilityCodecFallback(
           peer,
@@ -630,6 +710,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           received_frame_count: Number(peer.receivedFrameCount || 0),
           age_ms: stalledAgeMs,
           remote_quality_pressure_sent: remoteQualityPressureSent,
+          recovery_layer_preference_sent: recoveryLayerPreferenceSent,
           compatibility_fallback_sent: compatibilityFallbackSent,
           remote_peer_count: remotePeersRef.value.size,
           connected_participant_count: connectedParticipantUsers.value.length,

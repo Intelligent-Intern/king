@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-function videochat_edge_serve_call_app_static($client, array $request, string $callAppRoot, callable $writeResponse, callable $contentType, string $assetVersion): void
+function videochat_edge_serve_call_app_static($client, array $request, string $callAppRoot, callable $writeResponse, callable $contentType, string $assetVersion, string $allowedEmbedderOrigin = ''): void
 {
+    $allowedEmbedderOrigin = trim($allowedEmbedderOrigin);
     $corsHeaders = [
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
@@ -45,14 +46,22 @@ function videochat_edge_serve_call_app_static($client, array $request, string $c
     }
 
     $body = (string) @file_get_contents($candidate);
+    $isHtmlEntrypoint = basename($candidate) === 'index.html';
     $headers = [
         'Content-Type' => $contentType($candidate),
-        'Cache-Control' => basename($candidate) === 'index.html'
+        'Cache-Control' => $isHtmlEntrypoint
             ? 'no-store'
             : 'public, max-age=31536000, immutable',
         'Strict-Transport-Security' => 'max-age=31536000; includeSubDomains',
         'X-Content-Type-Options' => 'nosniff',
     ] + $corsHeaders;
+    if ($isHtmlEntrypoint) {
+        $headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:"
+            . ($allowedEmbedderOrigin !== '' ? '; frame-ancestors ' . $allowedEmbedderOrigin : '');
+        if ($allowedEmbedderOrigin !== '') {
+            $headers['Allow-CSP-From'] = $allowedEmbedderOrigin;
+        }
+    }
     if ($assetVersion !== '') {
         $headers['X-KingRT-Asset-Version'] = $assetVersion;
     }

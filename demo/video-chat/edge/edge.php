@@ -674,6 +674,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     $clientOpen = true;
     $upstreamOpen = true;
     $isWebSocket = $request['upgrade'] === 'websocket';
+    $webSocketHandshakeAccepted = !$isWebSocket;
     $idleTimeout = $isWebSocket ? $wsIdleTimeout : ($isBackgroundUpload ? $backgroundUploadBodyTimeout : $httpIdleTimeout);
     $lastActivity = microtime(true);
     $lastClientReadProgress = $lastActivity;
@@ -719,7 +720,11 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         }
 
         $read = [];
-        if ($clientOpen && strlen($toUpstream) < 1048576) {
+        $canReadClient = $clientOpen && strlen($toUpstream) < 1048576;
+        if ($isWebSocket && !$webSocketHandshakeAccepted) {
+            $canReadClient = false;
+        }
+        if ($canReadClient) {
             $read[] = $client;
         }
         if ($upstreamOpen && strlen($toClient) < 1048576) {
@@ -774,13 +779,10 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($chunk === '') {
                 if (feof($stream)) {
                     if ($isWebSocket) {
-                        if ($stream === $upstreamStream && $toClient !== '') {
-                            // Preserve buffered websocket upstream response
-                            // bytes until they have been flushed to the client.
-                            $upstreamOpen = false;
-                            $toUpstream = '';
-                        } else {
+                        if ($stream === $client) {
                             $closeWebSocketTunnel();
+                        } else {
+                            $upstreamOpen = false;
                         }
                         $madeProgress = true;
                         continue;
@@ -832,6 +834,16 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                 $lastUpstreamReadProgress = $lastActivity;
                 if ($toClient === '') {
                     $lastClientWriteProgress = $lastActivity;
+                }
+                if ($isWebSocket && !$webSocketHandshakeAccepted) {
+                    $handshakeProbe = $toClient . $chunk;
+                    $statusLineEnd = strpos($handshakeProbe, "\r\n");
+                    if ($statusLineEnd !== false) {
+                        $statusLine = substr($handshakeProbe, 0, $statusLineEnd);
+                        if (preg_match('/^HTTP\/\d(?:\.\d)?\s+101\b/i', $statusLine) === 1) {
+                            $webSocketHandshakeAccepted = true;
+                        }
+                    }
                 }
                 $toClient .= $chunk;
                 if ($isBackgroundUpload && $upstreamResponseStatus === '') {
@@ -1066,7 +1078,7 @@ $handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot,
         return;
     }
     if ($upstream === 'call_app_static') {
-        videochat_edge_serve_call_app_static($client, $request, $callAppRoot, $writeResponse, $contentType, $assetVersion);
+        videochat_edge_serve_call_app_static($client, $request, $callAppRoot, $writeResponse, $contentType, $assetVersion, 'https://' . $domain);
         @fclose($client);
         return;
     }

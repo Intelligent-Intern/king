@@ -2,10 +2,12 @@ import {
   shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
+import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRelay.js';
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
+  'call/answer',
   'call/ice',
   'call/media-quality-pressure',
   'call/offer',
@@ -43,6 +45,7 @@ export function createCallWorkspaceSocketHelpers({
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleCallAppPresenceSignal = () => false,
     handleGossipNeighborSignal = () => false,
     handleMediaSecuritySignal,
     handleNativeSignalingEvent,
@@ -296,6 +299,11 @@ export function createCallWorkspaceSocketHelpers({
       return;
     }
 
+    if (type === CALL_APP_PRESENCE_SIGNAL_TYPE) {
+      handleCallAppPresenceSignal(payloadBody || {}, sender);
+      return;
+    }
+
     if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
       if (refs.shouldBlockNativeRuntimeSignaling()) {
         mediaDebugLog('[WebRTC] ignoring native signal while runtime is still pending', type);
@@ -337,7 +345,6 @@ export function createCallWorkspaceSocketHelpers({
     }
 
     if (type === 'system/welcome') {
-      refs.hasRealtimeRoomSync.value = true;
       const welcomeRoom = normalizeRoomId(payload.active_room_id || refs.desiredRoomId.value);
       refs.serverRoomId.value = welcomeRoom;
       ensureRoomBuckets(welcomeRoom);
@@ -912,7 +919,7 @@ export function createCallWorkspaceSocketHelpers({
         }
         void syncControlStateToPeers();
         void syncModerationStateToPeers();
-        void sendMediaSecuritySync(isReconnectOpen);
+        void sendMediaSecuritySync(false);
       });
 
       socket.addEventListener('message', handleSocketMessage);

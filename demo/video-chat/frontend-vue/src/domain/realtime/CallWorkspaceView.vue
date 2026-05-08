@@ -56,6 +56,7 @@ import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gos
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
 import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
 import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
+import { dispatchCallAppPresenceSignal } from './callApps/callAppPresenceRelay.js';
 import {
   createNativePeerAudioElement,
   createNativePeerVideoElement,
@@ -923,6 +924,7 @@ const mediaSecurityRuntimeState = {
     activeSocketCallId,
     connectedParticipantUsers,
     currentUserId,
+    hasRealtimeRoomSync,
     isNativeWebRtcRuntimePath,
     isSocketOnline,
     isWlvcRuntimePath,
@@ -1522,6 +1524,7 @@ const {
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleCallAppPresenceSignal: (...args) => dispatchCallAppPresenceSignal(...args),
     handleGossipNeighborSignal,
     handleMediaSecuritySignal: (...args) => handleMediaSecuritySignal(...args),
     handleNativeSignalingEvent,
@@ -1911,6 +1914,41 @@ const {
   usersVisibleRows,
   usersVirtualWindow,
 } = participantUiHelpers;
+
+function currentCallAppSidebarControls() {
+  const controls = workspaceSidebarState?.callAppControls;
+  return controls && typeof controls === 'object' ? controls : null;
+}
+
+function syncCallAppSidebarControls() {
+  const controls = currentCallAppSidebarControls();
+  if (!controls) return;
+
+  controls.activeSession = activeCallAppSession.value || null;
+  controls.participants = Array.isArray(snapshotUsersRows.value) ? snapshotUsersRows.value.map((row) => ({ ...row })) : [];
+  controls.sendSocketFrame = sendSocketFrame;
+  controls.requestRoomSnapshot = (...args) => requestRoomSnapshot(...args);
+}
+
+function clearCallAppSidebarControls() {
+  const controls = currentCallAppSidebarControls();
+  if (!controls) return;
+
+  controls.activeSession = null;
+  controls.participants = [];
+  controls.sendSocketFrame = null;
+  controls.requestRoomSnapshot = null;
+}
+
+watch(
+  [activeCallAppSession, snapshotUsersRows],
+  () => syncCallAppSidebarControls(),
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  clearCallAppSidebarControls();
+});
 
 const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   activeCallId,

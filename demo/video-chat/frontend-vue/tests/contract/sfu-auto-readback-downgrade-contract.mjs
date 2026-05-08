@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-auto-readback-downgrade-contract] FAIL: ${message}`);
@@ -20,7 +21,6 @@ function read(relativePath) {
 }
 
 async function main() {
-  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
@@ -36,7 +36,7 @@ async function main() {
     PUBLISHER_BACKPRESSURE_ACTIONS,
     createPublisherBackpressureController,
     decidePublisherBackpressureAction,
-  } = await import(pathToFileURL(controllerPath).href);
+  } = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 
   const pressureConfig = {
     backpressureWindowMs: 1000,

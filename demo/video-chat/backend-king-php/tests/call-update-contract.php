@@ -7,6 +7,7 @@ require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_directory.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
 
 function videochat_call_update_assert(bool $condition, string $message): void
 {
@@ -70,6 +71,15 @@ SQL
     ]);
     $moderatorUserId = (int) $pdo->lastInsertId();
     videochat_call_update_assert($moderatorUserId > 0, 'expected inserted participant user');
+    $createParticipant->execute([
+        ':email' => 'free-for-all-join@intelligent-intern.com',
+        ':display_name' => 'Free For All Join',
+        ':password_hash' => $participantPassword,
+        ':role_id' => $userRoleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+    $freeForAllJoinUserId = (int) $pdo->lastInsertId();
+    videochat_call_update_assert($freeForAllJoinUserId > 0, 'expected inserted free for all join user');
 
     $created = videochat_create_call($pdo, $adminUserId, [
         'room_id' => 'lobby',
@@ -265,6 +275,19 @@ SQL
         videochat_call_access_link_kind(is_array($freeForAllLink['access_link'] ?? null) ? $freeForAllLink['access_link'] : null) === 'open',
         'default access link for free_for_all should be open'
     );
+    $freeForAllUserCall = videochat_get_call_for_user($pdo, $callId, $freeForAllJoinUserId, 'user');
+    videochat_call_update_assert((bool) ($freeForAllUserCall['ok'] ?? false), 'logged-in users should resolve free_for_all calls before participant row creation');
+    $freeForAllRealtimeContext = videochat_realtime_call_role_context_for_room_user(
+        $pdo,
+        $callId,
+        $freeForAllJoinUserId,
+        $callId,
+        'user'
+    );
+    videochat_call_update_assert(
+        (string) ($freeForAllRealtimeContext['invite_state'] ?? '') === 'allowed',
+        'logged-in users should bypass admission for free_for_all calls'
+    );
 
     $moderatorRoleUpdate = videochat_update_call_participant_role(
         $pdo,
@@ -305,10 +328,10 @@ SQL
         'link_kind' => 'personal',
         'participant_user_id' => $moderatorUserId,
     ]);
-    videochat_call_update_assert($freeForAllPersonalLink['ok'] === false, 'personal link in free_for_all mode should fail');
+    videochat_call_update_assert((bool) ($freeForAllPersonalLink['ok'] ?? false), 'personal link request in free_for_all mode should be coerced to open');
     videochat_call_update_assert(
-        (string) (($freeForAllPersonalLink['errors'] ?? [])['link_kind'] ?? '') === 'free_for_all_requires_open_link',
-        'personal link in free_for_all mode error mismatch'
+        videochat_call_access_link_kind(is_array($freeForAllPersonalLink['access_link'] ?? null) ? $freeForAllPersonalLink['access_link'] : null) === 'open',
+        'personal link request in free_for_all mode should return an open link'
     );
 
     $participantRows = $pdo->prepare(

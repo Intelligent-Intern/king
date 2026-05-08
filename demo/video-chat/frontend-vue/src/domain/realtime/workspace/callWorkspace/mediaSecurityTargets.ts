@@ -7,6 +7,7 @@ export function defaultNativeAudioBridgeFailureMessage() {
 export function createMediaSecurityTargetHelpers({
   connectedParticipantUsers,
   currentUserId,
+  hasRealtimeRoomSync,
   isWlvcRuntimePath,
   nativePeerConnectionsRef,
   mediaRuntimeCapabilities,
@@ -16,7 +17,14 @@ export function createMediaSecurityTargetHelpers({
   supportsNativeTransforms,
 }) {
   function mediaSecurityTargetIds() {
+    if (sfuRuntimeEnabled && isWlvcRuntimePath() && hasRealtimeRoomSync?.value !== true) {
+      return [];
+    }
     return connectedParticipantUsers.value
+      .filter((row) => {
+        const mediaPeerSource = String(row?.mediaPeerSource || '').trim();
+        return mediaPeerSource === '' || row?.hasSnapshotConnection === true;
+      })
       .map((row) => Number(row?.userId || 0))
       .filter((userId) => (
         Number.isInteger(userId)

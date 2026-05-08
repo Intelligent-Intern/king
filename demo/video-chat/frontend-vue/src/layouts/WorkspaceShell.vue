@@ -17,6 +17,7 @@
           :call-layout-sidebar-state="callLayoutSidebarState"
           :active-sidebar-call-id="activeSidebarCallId"
           :can-manage-sidebar-call-apps="canManageSidebarCallApps"
+          :call-app-sidebar-state="callAppSidebarState"
           :api-request="apiRequest"
           @toggle-sidebar="handleLeftSidebarToggle"
           @set-camera-device="setCallCameraDevice"
@@ -667,6 +668,12 @@ const callLayoutSidebarState = reactive({
   setMode: null,
   setStrategy: null,
 });
+const callAppSidebarState = reactive({
+  activeSession: null,
+  participants: [],
+  sendSocketFrame: null,
+  requestRoomSnapshot: null,
+});
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
 const showCallOwnerInviteLink = computed(() => (
@@ -675,7 +682,12 @@ const showCallOwnerInviteLink = computed(() => (
   && normalizeCallAccessMode(callOwnerEditState.accessMode) === 'free_for_all'
 ));
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
-const activeSidebarCallId = computed(() => String(callOwnerEditState.callId || callOwnerEditState.resolvedCallId || '').trim());
+const activeSidebarCallId = computed(() => String(
+  callOwnerEditState.callId
+  || callOwnerEditState.resolvedCallId
+  || (isCallWorkspace.value ? route.params.callRef : '')
+  || ''
+).trim());
 const canManageSidebarCallApps = computed(() => Boolean(callOwnerEditState.visible || callLayoutSidebarState.canModerate));
 
 function applySidebarLayoutMode(mode) {
@@ -690,6 +702,13 @@ function applySidebarLayoutStrategy(strategy) {
 
 function handleCallAppSessionCreated() {
   applySidebarLayoutMode('call_app_workspace');
+}
+
+function clearCallAppSidebarState() {
+  callAppSidebarState.activeSession = null;
+  callAppSidebarState.participants = [];
+  callAppSidebarState.sendSocketFrame = null;
+  callAppSidebarState.requestRoomSnapshot = null;
 }
 
 function extractCallFromPayload(payload) {
@@ -1203,6 +1222,7 @@ provide('workspaceSidebarState', {
   showLeftSidebar,
   setMicLevelMonitorStream: attachMicLevelStream,
   callLayoutControls: callLayoutSidebarState,
+  callAppControls: callAppSidebarState,
 });
 
 watch(settingsTiles, () => {
@@ -1224,6 +1244,7 @@ watch(isCallWorkspace, (nextValue) => {
     detachCallMediaWatcher();
     detachCallMediaWatcher = null;
   }
+  clearCallAppSidebarState();
 }, { immediate: true });
 
 watch(

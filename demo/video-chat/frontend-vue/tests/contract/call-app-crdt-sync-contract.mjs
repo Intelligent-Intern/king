@@ -16,6 +16,9 @@ const [
   routeSource,
   hostSource,
   bridgeSource,
+  presenceRelaySource,
+  runtimeConfigSource,
+  signalingSource,
   iframeSource,
   iframeRuntimeSource,
   lifecycleTestSource,
@@ -27,6 +30,9 @@ const [
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts'),
+  read('demo/video-chat/backend-king-php/domain/realtime/realtime_signaling.php'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
@@ -117,6 +123,26 @@ assert.match(
   bridgeSource,
   /call_app\.presence\.published[\s\S]*persisted:\s*false[\s\S]*call_app\.presence\.publish/s,
   'frontend bridge must accept non-persistent Call App presence without routing it through CRDT persistence',
+);
+
+assert.match(
+  bridgeSource,
+  /CALL_APP_PRESENCE_SIGNAL_TYPE[\s\S]*sendSocketFrame[\s\S]*target_user_id[\s\S]*call_app\.presence\.update/s,
+  'frontend bridge must relay non-persistent Call App presence over targeted call signaling and back into active iframes',
+);
+
+assert.match(
+  bridgeSource,
+  /const senderDisplayName = normalizeCallAppPresenceDisplayName[\s\S]*payload\.display_name = senderDisplayName[\s\S]*payload\.label = senderDisplayName/s,
+  'frontend bridge must restore sender display names onto remote cursor presence before posting into the iframe',
+);
+
+assert.match(runtimeConfigSource, /['"]call-app\/presence['"]/, 'frontend signaling allowlist must include Call App presence relay');
+assert.match(signalingSource, /['"]call-app\/presence['"]/, 'backend signaling allowlist must route Call App presence relay');
+assert.match(
+  presenceRelaySource,
+  /CALL_APP_PRESENCE_PAYLOAD_TYPES[\s\S]*cursor\.move[\s\S]*selection\.update[\s\S]*tool\.preview[\s\S]*plainClone/s,
+  'Call App presence relay must sanitize cloneable non-persistent payloads before socket forwarding',
 );
 
 assert.doesNotMatch(

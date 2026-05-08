@@ -67,6 +67,10 @@ try {
   requireContains(runtimeHealth, 'function canRequestSfuSocketRestartForPeer', 'remote video restart checks the peer backoff gate');
   requireContains(runtimeHealth, 'function requestSfuSocketRestartForPeer', 'remote video hard restart records peer restart state');
   requireContains(runtimeHealth, 'peer.nextSfuSocketRestartAllowedAtMs = nowMs + restartBackoffMs;', 'remote video restart stores next allowed time');
+  requireContains(runtimeHealth, 'function requestSfuSubscriberLayerPreference', 'remote video recovery can lower one subscriber to thumbnail before socket restart');
+  requireContains(runtimeHealth, "requested_action: layer === 'thumbnail' ? 'prefer_thumbnail_video_layer' : 'prefer_primary_video_layer'", 'remote video recovery uses SFU subscriber layer preference instead of global publisher downshift first');
+  requireContains(runtimeHealth, "requestSfuSubscriberLayerPreference(peer, publisherId, 'thumbnail', 'sfu_remote_video_never_started'", 'never-started video asks for thumbnail replay before reconnect');
+  requireContains(runtimeHealth, "requestSfuSubscriberLayerPreference(peer, publisherId, 'primary', 'sfu_remote_video_recovered_primary_layer'", 'recovered video restores the primary layer');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_reconnect_gate'", 'never-started video restart gate is diagnosed separately');
   requireContains(runtimeHealth, 'socket_restart_backoff_remaining_ms', 'remote video diagnostics expose restart backoff remaining time');
   requireContains(runtimeHealth, 'sfu_socket_restart_count', 'remote video diagnostics expose peer socket restart count');

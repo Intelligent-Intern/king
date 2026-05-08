@@ -6,6 +6,16 @@ import {
   emitCallAppDiagnostic,
   emitCallAppResponseDiagnostics,
 } from './callAppDiagnostics.js';
+import {
+  CALL_APP_PRESENCE_SIGNAL_TYPE,
+  CALL_APP_PRESENCE_WINDOW_EVENT,
+  createCallAppPresenceSignalPayload,
+  normalizeCallAppPresenceDisplayName,
+  normalizeCallAppPresenceParticipantRows,
+  normalizeCallAppPresencePayload,
+  normalizeCallAppPresencePayloadType,
+  normalizeRemoteCallAppPresenceSignal,
+} from './callAppPresenceRelay.js';
 
 function postToIframe(frameWindow, session, type, payload = {}) {
   if (!frameWindow || !session) return;
@@ -28,7 +38,21 @@ function safeClock(value) {
   return Math.floor(parsed);
 }
 
-export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest } = {}) {
+function unrefValue(value) {
+  if (value && typeof value === 'object' && 'value' in value) return value.value;
+  if (typeof value === 'function') return value();
+  return value;
+}
+
+export function createCallAppCrdtBridge({
+  activeSession,
+  iframeRef,
+  apiRequest,
+  participants,
+  currentUserId,
+  currentUserDisplayName,
+  sendSocketFrame,
+} = {}) {
   async function handleBootstrap(frameWindow, session, message) {
     const startedAt = callAppDiagnosticNow();
     const params = new URLSearchParams();
@@ -133,15 +157,74 @@ export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest }
     });
   }
 
+  function sendPresenceToPeers(session, payloadType, payload) {
+    if (typeof unrefValue(sendSocketFrame) !== 'function') return 0;
+    const signalPayload = createCallAppPresenceSignalPayload(session, payloadType, payload);
+    if (!signalPayload) return 0;
+    const targetParticipants = normalizeCallAppPresenceParticipantRows(
+      unrefValue(participants),
+      Number(unrefValue(currentUserId) || 0),
+    );
+    let sentCount = 0;
+    for (const participant of targetParticipants) {
+      const sent = unrefValue(sendSocketFrame)({
+        type: CALL_APP_PRESENCE_SIGNAL_TYPE,
+        target_user_id: participant.userId,
+        payload: signalPayload,
+      });
+      if (sent) sentCount += 1;
+    }
+    if (sentCount > 0) {
+      emitCallAppDiagnostic('call_app_presence_relayed', {
+        session_id: session.id,
+        app_key: session.app_key,
+        payload_type: payloadType,
+        target_count: sentCount,
+      });
+    }
+    return sentCount;
+  }
+
   function handlePresencePublish(frameWindow, session, message) {
+    const payloadType = normalizeCallAppPresencePayloadType(message?.payload_type);
+    const displayName = normalizeCallAppPresenceDisplayName(unrefValue(currentUserDisplayName));
+    const payload = normalizeCallAppPresencePayload(payloadType, message?.payload || {}, {
+      actorId: message?.actor_id || message?.payload?.actor_id,
+      displayName,
+    });
+    const sentCount = payloadType !== '' && payload ? sendPresenceToPeers(session, payloadType, payload) : 0;
     postToIframe(frameWindow, session, 'call_app.presence.published', {
       request_id: requestId(message),
       result: {
-        ok: true,
-        state: 'accepted',
+        ok: payloadType !== '' && Boolean(payload),
+        state: payloadType !== '' && payload ? 'accepted' : 'ignored',
         persisted: false,
-        payload_type: String(message?.payload_type || '').trim(),
+        payload_type: payloadType,
+        sent_count: sentCount,
       },
+    });
+  }
+
+  function handleRemotePresence(event) {
+    const frameWindow = iframeRef?.value?.contentWindow || null;
+    const session = activeSession?.value || null;
+    if (!frameWindow || !session) return;
+    const signal = normalizeRemoteCallAppPresenceSignal(event?.detail?.signal || event?.detail?.payload || {});
+    if (!signal) return;
+    if (String(signal.app_session_id || '').trim() !== String(session.id || '').trim()) return;
+    if (String(signal.app_key || '').trim() !== String(session.app_key || '').trim()) return;
+    const senderDisplayName = normalizeCallAppPresenceDisplayName(
+      event?.detail?.sender?.display_name || event?.detail?.sender?.displayName || ''
+    );
+    const payload = signal.payload && typeof signal.payload === 'object' ? { ...signal.payload } : {};
+    if (senderDisplayName !== '' && !payload.display_name && !payload.label) {
+      payload.display_name = senderDisplayName;
+      if (signal.payload_type === 'cursor.move') payload.label = senderDisplayName;
+    }
+    postToIframe(frameWindow, session, 'call_app.presence.update', {
+      payload_type: signal.payload_type,
+      actor_id: signal.actor_id || payload.actor_id || '',
+      payload,
     });
   }
 
@@ -197,11 +280,13 @@ export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest }
 
   if (typeof window !== 'undefined') {
     window.addEventListener('message', handleMessage);
+    window.addEventListener(CALL_APP_PRESENCE_WINDOW_EVENT, handleRemotePresence);
   }
 
   onBeforeUnmount(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('message', handleMessage);
+      window.removeEventListener(CALL_APP_PRESENCE_WINDOW_EVENT, handleRemotePresence);
     }
   });
 

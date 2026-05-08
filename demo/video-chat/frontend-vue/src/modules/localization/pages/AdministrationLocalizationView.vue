@@ -44,68 +44,21 @@
       </table>
     </AdminTableFrame>
 
-    <section v-if="editorOpen" class="localization-editor">
-      <header class="localization-editor-header">
-        <div>
-          <h2>{{ t('localization.admin.editor_title') }}</h2>
-          <p>{{ t('localization.admin.editor_count', { count: translationRows.length }) }}</p>
-        </div>
-      </header>
-
-      <div class="localization-editor-grid">
-        <section class="localization-editor-column">
-          <label class="field">
-            <span>{{ t('localization.admin.left_language') }}</span>
-            <select v-model="editorLeftLocale" class="ii-select">
-              <option v-for="language in languages" :key="`left-${language.code}`" :value="language.code">
-                {{ language.label }} ({{ language.code }})
-              </option>
-            </select>
-          </label>
-          <div class="localization-editor-fields" :aria-busy="editorLoading">
-            <label v-for="row in translationRows" :key="`left-${row.fullKey}`" class="localization-resource-field">
-              <span>{{ row.fullKey }}</span>
-              <textarea
-                class="input localization-resource-input"
-                :dir="localeDirection(editorLeftLocale)"
-                :disabled="editorLoading || saving"
-                :value="editorValue(editorLeftLocale, row.fullKey)"
-                @input="updateEditorValue(editorLeftLocale, row.fullKey, $event.target.value)"
-              />
-            </label>
-          </div>
-        </section>
-
-        <section class="localization-editor-column">
-          <label class="field">
-            <span>{{ t('localization.admin.right_language') }}</span>
-            <select v-model="editorRightLocale" class="ii-select">
-              <option v-for="language in languages" :key="`right-${language.code}`" :value="language.code">
-                {{ language.label }} ({{ language.code }})
-              </option>
-            </select>
-          </label>
-          <div class="localization-editor-fields" :aria-busy="editorLoading">
-            <label v-for="row in translationRows" :key="`right-${row.fullKey}`" class="localization-resource-field">
-              <span>{{ row.fullKey }}</span>
-              <textarea
-                class="input localization-resource-input"
-                :dir="localeDirection(editorRightLocale)"
-                :disabled="editorLoading || saving"
-                :value="editorValue(editorRightLocale, row.fullKey)"
-                @input="updateEditorValue(editorRightLocale, row.fullKey, $event.target.value)"
-              />
-            </label>
-          </div>
-        </section>
-      </div>
-
-      <footer class="localization-editor-footer">
-        <button class="btn btn-cyan" type="button" :disabled="editorLoading || saving" @click="saveEditor">
-          {{ saving ? t('localization.admin.saving_translations') : t('localization.admin.save_translations') }}
-        </button>
-      </footer>
-    </section>
+    <AdministrationLocalizationEditor
+      :open="editorOpen"
+      :languages="languages"
+      :translation-rows="translationRows"
+      :editor-left-locale="editorLeftLocale"
+      :editor-right-locale="editorRightLocale"
+      :editor-loading="editorLoading"
+      :saving="saving"
+      :editor-value="editorValue"
+      :locale-direction="localeDirection"
+      @update:left-locale="editorLeftLocale = $event"
+      @update:right-locale="editorRightLocale = $event"
+      @update-value="updateEditorValue($event.locale, $event.fullKey, $event.value)"
+      @save="saveEditor"
+    />
 
     <template #footer>
       <AppPagination
@@ -133,6 +86,7 @@ import {
   localizationLanguageDirection,
 } from '../../../support/localizationOptions';
 import { buildLocalizedApiError } from '../apiErrorMessages.js';
+import AdministrationLocalizationEditor from '../components/AdministrationLocalizationEditor.vue';
 import { ENGLISH_MESSAGES } from '../englishMessages.js';
 import { t } from '../i18nRuntime.js';
 
@@ -384,91 +338,4 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
-.localization-editor {
-  min-height: 0;
-  margin: 20px;
-  border: 1px solid var(--border);
-  background: var(--surface-navy);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.localization-editor-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.localization-editor-header h2,
-.localization-editor-header p {
-  margin: 0;
-}
-
-.localization-editor-header h2 {
-  font-size: 1rem;
-}
-
-.localization-editor-header p {
-  margin-top: 4px;
-  color: var(--text-muted);
-}
-
-.localization-editor-grid {
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
-  padding: 20px;
-  overflow: hidden;
-}
-
-.localization-editor-column {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.localization-editor-fields {
-  min-height: 420px;
-  max-height: 58vh;
-  overflow: auto;
-  display: grid;
-  gap: 12px;
-  padding-inline-end: 6px;
-}
-
-.localization-resource-field {
-  display: grid;
-  gap: 6px;
-}
-
-.localization-resource-field > span {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-}
-
-.localization-resource-input {
-  min-height: 76px;
-  resize: vertical;
-}
-
-.localization-editor-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 20px 20px;
-}
-
-@media (max-width: 860px) {
-  .localization-editor-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .localization-editor-fields {
-    max-height: none;
-  }
-}
 </style>

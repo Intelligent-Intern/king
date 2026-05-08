@@ -66,7 +66,7 @@ try {
   requireContains(sendFailureDetails, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
   requireContains(sendFailureDetails, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
   requireContains(sendFailureDetails, 'retryAfterMs: Math.max(0, Number(details.retryAfterMs || 0))', 'sfu client persists retry-after pacing on failure');
-  requireContains(sfuClient, 'metrics.send_drain_ms = drain.waitedMs', 'sfu client records send-drain timing');
+  requireContains(sfuClient, 'send_drain_ms: drain.waitedMs', 'sfu client records send-drain timing');
   requireContains(sfuClient, 'metrics.queued_age_ms = postDrainQueueAgeMs', 'sfu client stamps post-drain queue age before binary encode');
   requireContains(sfuClient, 'prepared.metrics = {\n      ...prepared.metrics,\n      ...metrics,', 'sfu client writes fresh queue age into binary envelope metadata before encode');
   requireContains(sfuClient, 'sfu_queue_age_budget_exceeded', 'sfu client enforces queue-age budget before send');

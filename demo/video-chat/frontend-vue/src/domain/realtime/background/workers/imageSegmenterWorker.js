@@ -124,7 +124,7 @@ function buildModelCandidates(inputPath) {
 
 async function isFetchableBinary(url) {
   try {
-    const res = await fetch(`${url}?cb=${Date.now()}`, { method: 'GET', cache: 'no-store' });
+    const res = await fetch(cacheBustUrl(url), { method: 'GET', cache: 'no-store' });
     if (!res.ok) return false;
     const contentType = String(res.headers.get('content-type') || '').toLowerCase();
     if (contentType.includes('text/html')) return false;
@@ -132,6 +132,12 @@ async function isFetchableBinary(url) {
   } catch {
     return false;
   }
+}
+
+function cacheBustUrl(url) {
+  const text = String(url || '');
+  const separator = text.includes('?') ? '&' : '?';
+  return `${text}${separator}cb=${Date.now()}`;
 }
 
 async function resolveWasmPath(inputPath) {
@@ -273,7 +279,7 @@ async function initialize({ modelAssetPath, delegate, wasmPath }) {
 
     const fileset = sanitizeFilesetPaths(await FilesetResolver.forVisionTasks(resolvedWasm));
 
-    const response = await fetch(resolvedModel);
+    const response = await fetch(cacheBustUrl(resolvedModel), { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Failed to fetch model (${response.status}): ${resolvedModel}`);
     }

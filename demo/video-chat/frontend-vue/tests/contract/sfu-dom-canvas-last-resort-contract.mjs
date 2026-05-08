@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-dom-canvas-last-resort-contract] FAIL: ${message}`);
@@ -53,8 +54,7 @@ try {
   requireContains(frameTrace, 'trace_dom_canvas_compatibility_throttle_ms', 'trace exposes DOM compatibility throttle timing');
   requireContains(packageJson, 'sfu-dom-canvas-last-resort-contract.mjs', 'SFU suite includes DOM last-resort proof');
 
-  const policyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/domCanvasFallbackPolicy.ts')).href;
-  const policy = await import(policyUrl);
+  const policy = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/domCanvasFallbackPolicy.ts');
   const profile = {
     frameWidth: 1280,
     frameHeight: 720,

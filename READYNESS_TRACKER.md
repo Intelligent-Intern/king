@@ -17,6 +17,34 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 App Configuration background images extraction: split the
+  background image administration tab into
+  `AppConfigurationBackgroundImagesTab.vue`,
+  `AppConfigurationBackgroundImageGrid.vue`, and
+  `useAppConfigurationBackgroundImages.js`. The wrapper now owns only hidden
+  file input wiring, status display, pagination, and crop modal wiring; the
+  grid owns the metadata-free dropzone, cards, edit/delete actions, drag state
+  presentation, and file-size labels; the composable owns list/page/load,
+  image-type and twelve-image bulk selection validation, crop-modal lifecycle,
+  edit-source fetch, upload/update/delete API calls, and post-save reload.
+  Proof: `node tests/contract/app-configuration-refactor-contract.mjs`,
+  `node tests/contract/shared-admin-components-contract.mjs`,
+  `node tests/contract/background-image-upload-diagnostics-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
+- 2026-05-07 Localization admin editor extraction: split the two-column
+  translation editor matrix out of
+  `AdministrationLocalizationView.vue` into
+  `AdministrationLocalizationEditor.vue`. The view keeps authoritative locale
+  state, localized backend-error mapping, and save API wiring; the component
+  owns the paired language selectors, scrollable entry matrix, textarea
+  direction handling, and bottom save action without reintroducing CSV/import
+  UI. Proof:
+  `node tests/contract/localization-admin-editor-refactor-contract.mjs`,
+  `node tests/contract/shared-admin-components-contract.mjs`,
+  `node tests/contract/backend-errors-localization-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 App Configuration email texts extraction: split the
   administration email texts CRUD into `AppConfigurationEmailTextsTab.vue`,
   `AppConfigurationEmailTextsTable.vue`,

@@ -37,10 +37,13 @@ try {
   requireContains(sfuClient, 'resolveSfuSendDrainTargetBytes(metrics)', 'client uses the shared drain target helper');
   requireContains(sfuClient, 'sfu_projected_buffer_budget_exceeded', 'client drops frames that would refill bufferedAmount above budget');
   requireContains(sfuClient, 'projected_buffered_after_send_bytes', 'client reports projected websocket buffer pressure before send');
+  requireContains(sfuClient, "await waitForProfileSendBufferDrain('pre_send_projected_buffer_budget')", 'client gives projected-buffer pressure one bounded drain before dropping');
   requireContains(outboundFrameBudget, 'export function shouldDropProjectedSfuFrameForBufferBudget(', 'client has a shared projected websocket buffer guard');
   requireContains(outboundFrameBudget, 'projectedBufferedAfterSendBytes > bufferedBudgetBytes', 'client applies a strict projected websocket buffer budget');
   requireContains(outboundFrameBudget, 'export const SFU_FRAME_WIRE_BUDGET_WINDOW_MS = 1000', 'client enforces a rolling one-second wire budget');
   requireContains(outboundFrameBudget, 'metrics.budget_max_wire_bytes_per_second', 'wire budget follows the active quality profile budget');
+  requireContains(outboundFrameBudget, 'export function shouldBypassSfuWireBudgetForRecoveryKeyframe(', 'client can preserve socket-safe keyframes through the rolling wire budget');
+  requireContains(sfuClient, 'wire_budget_recovery_keyframe_bypass', 'wire-budget keyframe bypass is explicit in diagnostics');
   requireContains(sfuClient, 'private outboundWireBudget = new SfuOutboundWireBudget()', 'client tracks rolling outbound wire bytes per socket session');
   requireContains(sfuClient, 'sfu_wire_rate_budget_exceeded', 'client drops frames that would exceed rolling wire bytes per second');
   requireContains(sfuClient, 'retryAfterMs: wireBudget.retryAfterMs', 'wire budget send failures preserve the measured retry window');

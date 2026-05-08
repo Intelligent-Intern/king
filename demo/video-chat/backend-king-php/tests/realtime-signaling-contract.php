@@ -321,6 +321,37 @@ try {
     videochat_realtime_signaling_assert((string) ($controlStateTargetFrame['type'] ?? '') === 'call/control-state', 'target should receive control-state');
     videochat_realtime_signaling_assert((string) (($controlStateTargetFrame['payload'] ?? [])['kind'] ?? '') === 'workspace-control-state', 'control-state payload kind mismatch');
 
+    $frames = [];
+    $decodedCallAppPresence = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call-app/presence',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'call_app_presence',
+            'app_session_id' => 'session-whiteboard-1',
+            'app_key' => 'whiteboard',
+            'payload_type' => 'cursor.move',
+            'actor_id' => 'user_pseudo_actor',
+            'payload' => [
+                'actor_id' => 'user_pseudo_actor',
+                'x' => 420,
+                'y' => 180,
+                'label' => 'Alice',
+            ],
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedCallAppPresence['ok'] ?? false), 'call-app presence should decode');
+    $callAppPresencePublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedCallAppPresence,
+        $sender,
+        1_780_300_124_800
+    );
+    videochat_realtime_signaling_assert((bool) ($callAppPresencePublish['ok'] ?? false), 'call-app presence publish should succeed');
+    $callAppPresenceTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($callAppPresenceTargetFrame['type'] ?? '') === 'call-app/presence', 'target should receive call-app presence');
+    videochat_realtime_signaling_assert((string) (($callAppPresenceTargetFrame['payload'] ?? [])['payload_type'] ?? '') === 'cursor.move', 'call-app presence payload type mismatch');
+
     $decodedMediaQualityPressure = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/media-quality-pressure',
         'target_user_id' => 200,

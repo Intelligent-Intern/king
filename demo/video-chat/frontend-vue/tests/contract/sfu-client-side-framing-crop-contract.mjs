@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-client-side-framing-crop-contract] FAIL: ${message}`);
@@ -68,8 +69,7 @@ async function main() {
   requireContains(worker, 'context.drawImage(', 'worker draws source into cropped output');
   requireContains(worker, 'crop.x', 'worker uses crop x before readback');
 
-  const sizingUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/videoFrameSizing.ts')).href;
-  const sizing = await import(sizingUrl);
+  const sizing = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/videoFrameSizing.ts');
   const landscape = sizing.resolveCoverFrameSizeFromDimensions(1920, 1080, 1280, 720, 1);
   assert.equal(landscape.frameWidth, 720, 'landscape-to-square output must use square width within profile height');
   assert.equal(landscape.frameHeight, 720, 'landscape-to-square output must use square height');

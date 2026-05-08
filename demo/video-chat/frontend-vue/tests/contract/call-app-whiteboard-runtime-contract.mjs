@@ -124,6 +124,17 @@ assert.match(
   'whiteboard runtime must publish cursor and selection state through the presence lane',
 );
 
+assert.match(
+  whiteboardSource,
+  /function sendCursor[\s\S]*display_name:\s*participantLabel[\s\S]*label:\s*participantLabel/,
+  'whiteboard runtime must label cursor presence with the participant display name from the launch context',
+);
+assert.match(
+  whiteboardSource,
+  /participantLabel\s*=\s*displayNameLabel\(context\.participant\?\.display_name/,
+  'whiteboard runtime must derive the local cursor label from the launch participant display name',
+);
+
 assert.doesNotMatch(
   whiteboardSource,
   /appendOperation\('(cursor\.move|selection\.update)'/,

@@ -17,7 +17,9 @@ export function useCallLeftSidebarTabs({
   const showTabs = computed(() => Boolean(
     normalizedCallId.value !== ''
     && (
-      unref(callAppsCatalogStore.hasAvailableApps)
+      unref(callAppsCatalogStore.loading)
+      || asText(callAppsCatalogStore.error) !== ''
+      || unref(callAppsCatalogStore.hasAvailableApps)
       || asText(currentLayoutMode) === 'call_app_workspace'
     ),
   ));

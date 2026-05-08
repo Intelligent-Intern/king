@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-fullscreen-render-scheduler-contract] FAIL: ${message}`);
@@ -79,8 +80,7 @@ async function main() {
   requireContains(stageCss, '[data-call-video-surface-role="fullscreen"]', 'fullscreen surface role has explicit CSS presentation');
   requireContains(stageCss, 'object-position: center center !important;', 'remote surfaces center letterboxed media');
 
-  const schedulerUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteRenderScheduler.ts')).href;
-  const scheduler = await import(schedulerUrl);
+  const scheduler = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/sfu/remoteRenderScheduler.ts');
   const node = { dataset: {} };
   assert.equal(
     scheduler.applyRemoteVideoSurfaceRole(node, { role: scheduler.REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN, userId: 7, layoutMode: 'main_only' }),

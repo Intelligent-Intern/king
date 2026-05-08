@@ -68,7 +68,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     }
     return;
   }
-  if (!allowMissingSnapshotSupplement && !isScreenSharePeer) return;
+  if (!allowMissingSnapshotSupplement) return;
 
   aggregate.set(peerUserId, {
     userId: peerUserId,
@@ -77,6 +77,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     callRole,
     connectedAt: '',
     connections: 1,
+    hasSnapshotConnection: false,
     mediaPeerSource: source,
     ...(isScreenSharePeer ? {
       mediaSource: SCREEN_SHARE_MEDIA_SOURCE,

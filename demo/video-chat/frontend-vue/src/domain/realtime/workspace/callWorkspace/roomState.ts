@@ -115,6 +115,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       callRole,
       connectedAt: currentUserConnectedAt,
       connections: 1,
+      hasSnapshotConnection: true,
     };
   }
 
@@ -134,12 +135,14 @@ export function createCallWorkspaceRoomStateHelpers(context) {
           callRole: normalized.callRole,
           connectedAt: normalized.connectedAt,
           connections: normalized.hasConnection ? 1 : 0,
+          hasSnapshotConnection: normalized.hasConnection,
         });
         continue;
       }
 
       if (normalized.hasConnection) {
         existing.connections += 1;
+        existing.hasSnapshotConnection = true;
       }
       if (roleRank(normalized.role) < roleRank(existing.role)) {
         existing.role = normalized.role;
@@ -178,6 +181,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
         existing.role = currentUser.role;
         existing.callRole = currentUser.callRole;
         existing.connections = Math.max(1, Number(existing.connections || 0));
+        existing.hasSnapshotConnection = true;
       } else {
         aggregate.set(currentUser.userId, currentUser);
       }
@@ -194,7 +198,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
 
   function hasConnectedParticipantEvidence(row) {
     if (Number(row?.connections || 0) > 0) return true;
-    return String(row?.connectedAt || row?.connected_at || '').trim() !== '';
+    return String(row?.connectionId || row?.connection_id || '').trim() !== '';
   }
 
   const connectedParticipantUsers = computed(() => (
@@ -355,6 +359,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
   }
 
   function applyRoomSnapshot(payload) {
+    const hadRealtimeRoomSync = hasRealtimeRoomSync.value === true;
     hasRealtimeRoomSync.value = true;
     const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || desiredRoomId.value);
     const previousRoomId = normalizeRoomId(serverRoomId.value || roomId);
@@ -400,7 +405,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     if (isSocketOnline.value) {
       void syncControlStateToPeers();
       void syncModerationStateToPeers();
-      if (participantsChanged) {
+      if (participantsChanged || !hadRealtimeRoomSync) {
         void syncMediaSecurityWithParticipants();
       }
     }

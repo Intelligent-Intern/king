@@ -1,16 +1,11 @@
 <template src="./CallsView.template.html"></template>
 
 <script setup>
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Calendar } from '@fullcalendar/core';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import CallBackgroundControls from '../../realtime/background/CallBackgroundControls.vue';
-import AppointmentConfigPanel from '../appointment/AppointmentConfigPanel.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
 import {
@@ -20,7 +15,7 @@ import {
 } from '../dashboard/viewState';
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
-import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
+import { formatDateRangeDisplay, formatDateTimeDisplay } from '../../../support/dateTimeFormat';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
@@ -37,12 +32,6 @@ import { createEnterCallController, normalizeCallAccessMode } from './enterCall'
 
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
-
-const callsCalendarEl = ref(null);
-let calendarInstance = null;
-let calendarRootEl = null;
-let lastCalendarDateClickAt = 0;
-let lastCalendarDateKey = '';
 
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
@@ -184,7 +173,6 @@ function isInvitable(call) {
 
 const callListStore = createCallListStore({ defaultScope: 'all' });
 const {
-  viewMode,
   queryDraft,
   queryApplied,
   statusFilter,
@@ -193,18 +181,13 @@ const {
   loadingCalls,
   callsError,
   pagination,
-  calendarCalls,
-  loadingCalendar,
-  calendarError,
 } = callListStore;
-const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
-  ? t('calls.admin.schedule_video_call')
-  : t('calls.admin.new_video_call')));
+const primaryActionLabel = computed(() => t('calls.admin.new_video_call'));
 const deleteAllCallsBusy = ref(false);
 const canDeleteAllCalls = computed(() => !deleteAllCallsBusy.value && !loadingCalls.value);
 
 function openPrimaryCompose() {
-  openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
+  openCompose('create');
 }
 
 const {
@@ -229,10 +212,7 @@ function clearAdminSyncReloadTimer() {
 }
 
 async function reloadCallsFromAdminSync() {
-  await Promise.all([
-    loadCalls(),
-    loadCalendar({ background: true }),
-  ]);
+  await loadCalls();
 }
 
 function queueReloadCallsFromAdminSync() {
@@ -308,38 +288,8 @@ async function loadCalls() {
   }
 }
 
-async function loadCalendar({ background = false } = {}) {
-  const hasVisibleCalendarData = Array.isArray(calendarCalls.value) && calendarCalls.value.length > 0;
-  const useBlockingLoadingState = !background || !hasVisibleCalendarData;
-
-  if (useBlockingLoadingState) {
-    loadingCalendar.value = true;
-    calendarError.value = '';
-  }
-
-  try {
-    const payload = await apiRequest('/api/calls', {
-      query: {
-        scope: scopeFilter.value,
-        status: statusFilter.value,
-        query: queryApplied.value,
-        page: 1,
-        page_size: 100,
-      },
-    });
-
-    calendarCalls.value = Array.isArray(payload.calls) ? payload.calls : [];
-    calendarError.value = '';
-  } catch (error) {
-    if (useBlockingLoadingState) {
-      calendarCalls.value = [];
-      calendarError.value = error instanceof Error ? error.message : 'Could not load calendar calls.';
-    }
-  } finally {
-    if (useBlockingLoadingState) {
-      loadingCalendar.value = false;
-    }
-  }
+async function loadCalendar() {
+  // Calendar rendering moved to the dedicated Calendar module.
 }
 
 async function deleteAllCalls() {
@@ -361,7 +311,7 @@ async function deleteAllCalls() {
     setNotice('ok', deletedCount === 1 ? '1 call deleted.' : `${deletedCount} calls deleted.`);
     publishAdminSync('calls', 'all_calls_deleted');
     publishAdminSync('overview', 'all_calls_deleted');
-    await Promise.all([loadCalls(), loadCalendar()]);
+    await loadCalls();
   } catch (error) {
     setNotice('error', error instanceof Error ? error.message : 'Could not delete all calls.');
   } finally {
@@ -369,262 +319,11 @@ async function deleteAllCalls() {
   }
 }
 
-function toCalendarEvents() {
-  const events = [];
-  for (const call of calendarCalls.value) {
-    const startsAt = new Date(String(call?.starts_at || ''));
-    const endsAt = new Date(String(call?.ends_at || ''));
-    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
-      continue;
-    }
-
-    events.push({
-      id: String(call.id || ''),
-      title: String(call.title || call.id || 'Video call'),
-      start: startsAt,
-      end: endsAt,
-      allDay: false,
-      editable: isEditable(call),
-      extendedProps: {
-        callPayload: call,
-      },
-    });
-  }
-  return events;
-}
-
-function syncCalendarEvents() {
-  if (!calendarInstance) return;
-  calendarInstance.removeAllEvents();
-  for (const event of toCalendarEvents()) {
-    calendarInstance.addEvent(event);
-  }
-}
-
-function openComposeForCalendarDoubleClick(dateValue) {
-  const start = dateValue instanceof Date ? new Date(dateValue.getTime()) : new Date();
-  const end = new Date(start.getTime() + (45 * 60 * 1000));
-  openCompose('schedule');
-  composeState.startsLocal = isoToLocalInput(start.toISOString());
-  composeState.endsLocal = isoToLocalInput(end.toISOString());
-}
-
-function openComposeForCalendarSelection(startValue, endValue) {
-  const start = startValue instanceof Date ? startValue : new Date(startValue);
-  const end = endValue instanceof Date ? endValue : new Date(endValue);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return;
-  openCompose('schedule');
-  composeState.startsLocal = isoToLocalInput(start.toISOString());
-  composeState.endsLocal = isoToLocalInput(end.toISOString());
-}
-
-function openComposeForCalendarEvent(eventApi) {
-  const call = eventApi?.extendedProps?.callPayload;
-  if (call && typeof call === 'object') {
-    openCompose('edit', call);
-  }
-}
-
-function resolveCalendarEventCall(eventApi) {
-  const payloadCall = eventApi?.extendedProps?.callPayload;
-  if (payloadCall && typeof payloadCall === 'object') {
-    return payloadCall;
-  }
-
-  const callId = String(eventApi?.id || '').trim();
-  if (callId === '') {
-    return null;
-  }
-
-  for (const call of calendarCalls.value) {
-    if (String(call?.id || '') === callId) {
-      return call;
-    }
-  }
-
-  return null;
-}
-
-async function persistCalendarEventWindow(eventApi, revert) {
-  const call = resolveCalendarEventCall(eventApi);
-  const callId = String(call?.id || eventApi?.id || '').trim();
-  if (callId === '') {
-    if (typeof revert === 'function') revert();
-    setNotice('error', 'Could not update call schedule (missing call id).');
-    return;
-  }
-
-  if (!isEditable(call)) {
-    if (typeof revert === 'function') revert();
-    setNotice('error', 'Only scheduled and active calls can be rescheduled.');
-    return;
-  }
-
-  const startDate = eventApi?.start instanceof Date ? new Date(eventApi.start.getTime()) : null;
-  let endDate = eventApi?.end instanceof Date ? new Date(eventApi.end.getTime()) : null;
-  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
-    if (typeof revert === 'function') revert();
-    setNotice('error', 'Could not update call schedule (invalid start timestamp).');
-    return;
-  }
-
-  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
-    const fallbackStart = new Date(String(call?.starts_at || ''));
-    const fallbackEnd = new Date(String(call?.ends_at || ''));
-    if (!Number.isNaN(fallbackStart.getTime()) && !Number.isNaN(fallbackEnd.getTime()) && fallbackEnd.getTime() > fallbackStart.getTime()) {
-      endDate = new Date(startDate.getTime() + (fallbackEnd.getTime() - fallbackStart.getTime()));
-    }
-  }
-
-  if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime()) || endDate.getTime() <= startDate.getTime()) {
-    if (typeof revert === 'function') revert();
-    setNotice('error', 'End timestamp must be after start timestamp.');
-    return;
-  }
-
-  const startsAt = startDate.toISOString();
-  const endsAt = endDate.toISOString();
-
-  try {
-    await apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
-      method: 'PATCH',
-      body: {
-        starts_at: startsAt,
-        ends_at: endsAt,
-      },
-    });
-
-    if (call && typeof call === 'object') {
-      call.starts_at = startsAt;
-      call.ends_at = endsAt;
-    }
-    setNotice('ok', 'Call schedule updated.');
-    publishAdminSync('calls', 'call_schedule_updated');
-    await Promise.all([loadCalls(), loadCalendar({ background: true })]);
-  } catch (error) {
-    if (typeof revert === 'function') revert();
-    setNotice('error', error instanceof Error ? error.message : 'Could not update call schedule.');
-  }
-}
-
-function handleCalendarEventMoveOrResize(info) {
-  if (!info || !info.event) return;
-  const revert = typeof info.revert === 'function' ? info.revert : null;
-  void persistCalendarEventWindow(info.event, revert);
-}
-
-async function initCallsCalendar() {
-  if (!(callsCalendarEl.value instanceof HTMLElement)) return;
-  if (calendarInstance && calendarRootEl !== callsCalendarEl.value) {
-    calendarInstance.destroy();
-    calendarInstance = null;
-    calendarRootEl = null;
-  }
-  if (calendarInstance) return;
-  try {
-    calendarRootEl = callsCalendarEl.value;
-    calendarInstance = new Calendar(callsCalendarEl.value, {
-      plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-      initialView: 'dayGridMonth',
-      headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek,timeGridDay',
-      },
-      height: '100%',
-      expandRows: true,
-      eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
-      selectable: true,
-      selectMirror: true,
-      selectMinDistance: 1,
-      editable: true,
-      eventStartEditable: true,
-      eventDurationEditable: true,
-      eventResizableFromStart: true,
-      events: [],
-      dateClick(info) {
-        const now = Date.now();
-        const dateKey = `${String(info.view?.type || '')}:${info.dateStr}`;
-        const isDoubleClick = dateKey === lastCalendarDateKey && now - lastCalendarDateClickAt < 360;
-        lastCalendarDateKey = dateKey;
-        lastCalendarDateClickAt = now;
-        if (!isDoubleClick) return;
-        openComposeForCalendarDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
-      },
-      select(info) {
-        const viewType = String(info.view?.type || '');
-        if (!viewType.startsWith('timeGrid')) {
-          calendarInstance?.unselect();
-          return;
-        }
-        openComposeForCalendarSelection(info.start, info.end);
-        calendarInstance?.unselect();
-      },
-      eventClick(info) {
-        openComposeForCalendarEvent(info.event);
-      },
-      eventDrop(info) {
-        handleCalendarEventMoveOrResize(info);
-      },
-      eventResize(info) {
-        handleCalendarEventMoveOrResize(info);
-      },
-    });
-    calendarInstance.render();
-    syncCalendarEvents();
-  } catch {
-    calendarInstance = null;
-    calendarRootEl = null;
-    if (!calendarError.value) {
-      calendarError.value = 'Could not load FullCalendar.';
-    }
-  }
-}
-
-function setViewMode(nextMode) {
-  if (nextMode !== 'calls' && nextMode !== 'calendar' && nextMode !== 'personalCalendar') {
-    return;
-  }
-
-  viewMode.value = nextMode;
-  if (nextMode === 'calendar' && calendarCalls.value.length === 0 && !loadingCalendar.value) {
-    void loadCalendar();
-  }
-}
-
-async function ensureCalendarUiReady() {
-  if (viewMode.value !== 'calendar') return;
-  if (loadingCalendar.value || calendarError.value) return;
-  await nextTick();
-  await initCallsCalendar();
-  if (!calendarInstance) return;
-  await nextTick();
-  calendarInstance.updateSize();
-  syncCalendarEvents();
-}
-
-watch(viewMode, () => {
-  void ensureCalendarUiReady();
-});
-
-watch(loadingCalendar, () => {
-  void ensureCalendarUiReady();
-});
-
-watch(calendarError, () => {
-  void ensureCalendarUiReady();
-});
-
-watch(calendarCalls, () => {
-  syncCalendarEvents();
-  void ensureCalendarUiReady();
-});
-
 async function applyFilters() {
   clearNotice();
   queryApplied.value = queryDraft.value.trim();
   pagination.page = 1;
-  await Promise.all([loadCalls(), loadCalendar()]);
+  await loadCalls();
 }
 
 async function goToPage(nextPage) {
@@ -743,7 +442,7 @@ onMounted(() => {
   startAdminSyncSocket();
   window.addEventListener('keydown', handleEscape);
 
-  void Promise.all([loadCalls(), loadCalendar()]);
+  void loadCalls();
 });
 
 onBeforeUnmount(() => {
@@ -751,11 +450,6 @@ onBeforeUnmount(() => {
   stopAdminSyncSocket();
   window.removeEventListener('keydown', handleEscape);
   unmountEnterCallPreview();
-  if (calendarInstance) {
-    calendarInstance.destroy();
-    calendarInstance = null;
-    calendarRootEl = null;
-  }
 });
 
 watch(
@@ -775,13 +469,6 @@ watch(
   }
 );
 
-watch(
-  () => sessionState.timeFormat,
-  () => {
-    if (!calendarInstance) return;
-    calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
-  }
-);
 </script>
 
 <style scoped src="./CallsView.css"></style>

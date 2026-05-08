@@ -437,6 +437,67 @@ function videochat_call_app_installation_row(array $row): array
     ];
 }
 
+function videochat_call_app_entitlement_is_active(?array $entitlement, ?int $nowEpoch = null): bool
+{
+    if (!is_array($entitlement) || (string) ($entitlement['status'] ?? '') !== 'active') {
+        return false;
+    }
+
+    $expiresAt = trim((string) ($entitlement['expires_at'] ?? ''));
+    if ($expiresAt === '') {
+        return true;
+    }
+
+    $expiresEpoch = strtotime($expiresAt);
+    if ($expiresEpoch === false) {
+        return false;
+    }
+
+    return $expiresEpoch > ($nowEpoch ?? time());
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_organization_state(PDO $pdo, int $tenantId, string $appKey, string $version): array
+{
+    $entitlement = $tenantId > 0 ? videochat_call_app_fetch_entitlement($pdo, $tenantId, $appKey, $version) : null;
+    $installation = $tenantId > 0 ? videochat_call_app_fetch_installation($pdo, $tenantId, $appKey, $version) : null;
+    $ordered = videochat_call_app_entitlement_is_active($entitlement);
+    $installed = $ordered && is_array($installation) && (string) ($installation['status'] ?? '') === 'enabled';
+    $status = 'not_installed';
+    if ($installed) {
+        $status = 'installed';
+    } elseif ($ordered && is_array($installation) && (string) ($installation['status'] ?? '') === 'disabled') {
+        $status = 'disabled';
+    } elseif ($ordered) {
+        $status = 'ordered';
+    }
+
+    return [
+        'tenant_id' => $tenantId,
+        'status' => $status,
+        'ordered' => $ordered,
+        'installed' => $installed,
+        'entitlement' => $entitlement,
+        'installation' => $installation,
+    ];
+}
+
+/**
+ * @param array<int, array<string, mixed>> $catalogApps
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_call_app_attach_organization_state(PDO $pdo, int $tenantId, array $catalogApps): array
+{
+    return array_map(static function (array $app) use ($pdo, $tenantId): array {
+        $appKey = (string) ($app['app_key'] ?? '');
+        $version = (string) ($app['version'] ?? '');
+        $app['organization'] = videochat_call_app_organization_state($pdo, $tenantId, $appKey, $version);
+        return $app;
+    }, $catalogApps);
+}
+
 function videochat_call_app_create_organization_installation(PDO $pdo, int $tenantId, int $actorUserId, string $appKey, array $payload = []): array
 {
     if ($tenantId <= 0 || $actorUserId <= 0) {

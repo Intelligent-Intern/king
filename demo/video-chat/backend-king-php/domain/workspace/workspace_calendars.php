@@ -40,6 +40,47 @@ function videochat_workspace_calendar_text(mixed $value, int $maxLength): string
     return $text;
 }
 
+function videochat_workspace_calendar_max_count(): int
+{
+    return 5;
+}
+
+/** @return array<int, string> */
+function videochat_workspace_calendar_allowed_colors(): array
+{
+    return [
+        '#000010',
+        '#00052D',
+        '#1582BF',
+        '#59C7F2',
+        '#EFEFE7',
+        '#FFFFFF',
+        '#03275A',
+        '#00652F',
+        '#F47221',
+        '#EF4423',
+    ];
+}
+
+function videochat_workspace_calendar_color(mixed $value): string
+{
+    $candidate = strtoupper(trim((string) $value));
+    if ($candidate === '') {
+        return '#1582BF';
+    }
+    if (preg_match('/^#[0-9A-F]{6}$/', $candidate) !== 1) {
+        return '#1582BF';
+    }
+
+    return in_array($candidate, videochat_workspace_calendar_allowed_colors(), true) ? $candidate : '#1582BF';
+}
+
+function videochat_workspace_calendar_member_access_role(mixed $value): string
+{
+    $role = strtolower(trim((string) $value));
+    return in_array($role, ['editor', 'viewer'], true) ? $role : 'viewer';
+}
+
 /** @return array<int, int> */
 function videochat_workspace_calendar_member_ids_from_payload(array $payload, int $ownerUserId): array
 {
@@ -60,6 +101,60 @@ function videochat_workspace_calendar_member_ids_from_payload(array $payload, in
 
     sort($ids);
     return $ids;
+}
+
+/** @return array<int, string> */
+function videochat_workspace_calendar_members_from_payload(array $payload, int $ownerUserId): array
+{
+    $source = $payload['members'] ?? ($payload['member_user_ids'] ?? []);
+    if (!is_array($source)) {
+        return [];
+    }
+
+    $members = [];
+    foreach ($source as $item) {
+        $candidate = is_array($item) ? ($item['user_id'] ?? $item['id'] ?? 0) : $item;
+        $id = filter_var($candidate, FILTER_VALIDATE_INT);
+        if (!is_int($id) || $id <= 0 || $id === $ownerUserId) {
+            continue;
+        }
+        $members[$id] = is_array($item)
+            ? videochat_workspace_calendar_member_access_role($item['access_role'] ?? $item['role'] ?? 'viewer')
+            : 'viewer';
+    }
+
+    ksort($members);
+    return $members;
+}
+
+/** @return array<int, string> */
+function videochat_workspace_calendar_sync_ids_from_value(mixed $value, string $ownCalendarId = ''): array
+{
+    $source = $value;
+    if (is_string($source)) {
+        $decoded = json_decode($source, true);
+        $source = is_array($decoded) ? $decoded : [];
+    }
+    if (!is_array($source)) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($source as $item) {
+        $id = videochat_workspace_calendar_normalize_id(is_array($item) ? (string) ($item['id'] ?? '') : (string) $item);
+        if ($id === '' || $id === $ownCalendarId || in_array($id, $ids, true)) {
+            continue;
+        }
+        $ids[] = $id;
+    }
+    sort($ids);
+    return $ids;
+}
+
+/** @return array<int, string> */
+function videochat_workspace_calendar_sync_ids_from_payload(array $payload, string $ownCalendarId = ''): array
+{
+    return videochat_workspace_calendar_sync_ids_from_value($payload['sync_calendar_ids'] ?? ($payload['sync_calendars'] ?? []), $ownCalendarId);
 }
 
 /** @return array<int, int> */
@@ -102,6 +197,42 @@ SQL
 
     sort($active);
     return $active;
+}
+
+function videochat_workspace_calendar_owned_count(PDO $pdo, int $tenantId, int $ownerUserId): int
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM workspace_calendars
+WHERE tenant_id = :tenant_id
+  AND owner_user_id = :owner_user_id
+  AND status = 'active'
+SQL
+    );
+    $query->execute([
+        ':tenant_id' => $tenantId,
+        ':owner_user_id' => $ownerUserId,
+    ]);
+
+    return (int) $query->fetchColumn();
+}
+
+/** @return array<int, string> */
+function videochat_workspace_calendar_visible_sync_ids(PDO $pdo, int $userId, int $tenantId, array $syncCalendarIds): array
+{
+    $visible = [];
+    foreach ($syncCalendarIds as $calendarId) {
+        $normalized = videochat_workspace_calendar_normalize_id((string) $calendarId);
+        if ($normalized === '') {
+            continue;
+        }
+        if (videochat_workspace_calendar_fetch_visible($pdo, $normalized, $userId, $tenantId) !== null) {
+            $visible[] = $normalized;
+        }
+    }
+    sort($visible);
+    return $visible;
 }
 
 function videochat_workspace_calendar_get_or_create_personal(PDO $pdo, int $userId, int $tenantId): ?array
@@ -171,7 +302,7 @@ function videochat_workspace_calendar_sync_members(
     string $calendarId,
     int $tenantId,
     int $ownerUserId,
-    array $memberUserIds,
+    array $memberUserRoles,
     bool $replaceMembers = true
 ): void {
     $now = videochat_workspace_calendar_now();
@@ -204,18 +335,26 @@ SQL
     $insert = $pdo->prepare(
         <<<'SQL'
 INSERT INTO workspace_calendar_members(calendar_id, tenant_id, user_id, access_role, status, created_at, updated_at)
-VALUES(:calendar_id, :tenant_id, :user_id, 'viewer', 'active', :created_at, :updated_at)
+VALUES(:calendar_id, :tenant_id, :user_id, :access_role, 'active', :created_at, :updated_at)
 ON CONFLICT(calendar_id, user_id) DO UPDATE SET
-    access_role = 'viewer',
+    access_role = excluded.access_role,
     status = 'active',
     updated_at = excluded.updated_at
 SQL
     );
-    foreach ($memberUserIds as $memberUserId) {
+    foreach ($memberUserRoles as $memberUserId => $accessRole) {
+        $normalizedMemberId = is_int($memberUserId) && $memberUserId > 0 ? $memberUserId : (int) $accessRole;
+        $normalizedAccessRole = is_int($memberUserId) && $memberUserId > 0
+            ? videochat_workspace_calendar_member_access_role($accessRole)
+            : 'viewer';
+        if ($normalizedMemberId <= 0 || $normalizedMemberId === $ownerUserId) {
+            continue;
+        }
         $insert->execute([
             ':calendar_id' => $calendarId,
             ':tenant_id' => $tenantId,
-            ':user_id' => (int) $memberUserId,
+            ':user_id' => $normalizedMemberId,
+            ':access_role' => $normalizedAccessRole,
             ':created_at' => $now,
             ':updated_at' => $now,
         ]);
@@ -284,6 +423,8 @@ function videochat_workspace_calendar_row(array $row, array $members): array
         'owner_email' => (string) ($row['owner_email'] ?? ''),
         'name' => (string) ($row['name'] ?? ''),
         'description' => (string) ($row['description'] ?? ''),
+        'color' => videochat_workspace_calendar_color($row['color'] ?? '#1582BF'),
+        'sync_calendar_ids' => videochat_workspace_calendar_sync_ids_from_value($row['sync_calendar_ids'] ?? []),
         'calendar_type' => (string) ($row['calendar_type'] ?? 'shared'),
         'is_personal' => (string) ($row['calendar_type'] ?? '') === 'personal',
         'access_role' => (string) ($row['access_role'] ?? 'viewer'),
@@ -412,14 +553,21 @@ function videochat_workspace_calendar_save(PDO $pdo, int $userId, int $tenantId,
     $effectiveTenantId = videochat_workspace_calendar_tenant_id($pdo, $tenantId);
     $name = videochat_workspace_calendar_text($payload['name'] ?? '', 120);
     $description = videochat_workspace_calendar_text($payload['description'] ?? '', 600);
-    $memberIds = videochat_workspace_calendar_member_ids_from_payload($payload, $userId);
+    $color = videochat_workspace_calendar_color($payload['color'] ?? '#1582BF');
+    $memberRoles = videochat_workspace_calendar_members_from_payload($payload, $userId);
+    $memberIds = array_keys($memberRoles);
     $activeMemberIds = videochat_workspace_calendar_active_user_ids($pdo, $effectiveTenantId, $memberIds);
+    $syncCalendarIds = videochat_workspace_calendar_sync_ids_from_payload($payload, (string) ($calendarId ?? ''));
+    $visibleSyncCalendarIds = videochat_workspace_calendar_visible_sync_ids($pdo, $userId, $effectiveTenantId, $syncCalendarIds);
     $errors = [];
     if ($name === '') {
         $errors['name'] = 'required';
     }
     if ($activeMemberIds !== $memberIds) {
-        $errors['member_user_ids'] = 'contains_unknown_or_inactive_user';
+        $errors['members'] = 'contains_unknown_or_inactive_user';
+    }
+    if ($visibleSyncCalendarIds !== $syncCalendarIds) {
+        $errors['sync_calendar_ids'] = 'contains_unknown_or_inaccessible_calendar';
     }
     if ($errors !== []) {
         return ['ok' => false, 'errors' => $errors];
@@ -429,11 +577,17 @@ function videochat_workspace_calendar_save(PDO $pdo, int $userId, int $tenantId,
     try {
         $now = videochat_workspace_calendar_now();
         if ($calendarId === null) {
+            videochat_workspace_calendar_get_or_create_personal($pdo, $userId, $effectiveTenantId);
+            if (videochat_workspace_calendar_owned_count($pdo, $effectiveTenantId, $userId) >= videochat_workspace_calendar_max_count()) {
+                $pdo->rollBack();
+                return ['ok' => false, 'errors' => ['calendar' => 'calendar_limit_reached']];
+            }
+
             $calendarId = videochat_workspace_calendar_id();
             $insert = $pdo->prepare(
                 <<<'SQL'
-INSERT INTO workspace_calendars(id, tenant_id, owner_user_id, name, description, calendar_type, status, created_at, updated_at)
-VALUES(:id, :tenant_id, :owner_user_id, :name, :description, 'shared', 'active', :created_at, :updated_at)
+INSERT INTO workspace_calendars(id, tenant_id, owner_user_id, name, description, color, sync_calendar_ids, calendar_type, status, created_at, updated_at)
+VALUES(:id, :tenant_id, :owner_user_id, :name, :description, :color, :sync_calendar_ids, 'shared', 'active', :created_at, :updated_at)
 SQL
             );
             $insert->execute([
@@ -442,6 +596,8 @@ SQL
                 ':owner_user_id' => $userId,
                 ':name' => $name,
                 ':description' => $description,
+                ':color' => $color,
+                ':sync_calendar_ids' => json_encode($visibleSyncCalendarIds, JSON_THROW_ON_ERROR),
                 ':created_at' => $now,
                 ':updated_at' => $now,
             ]);
@@ -455,16 +611,38 @@ SQL
                 $pdo->rollBack();
                 return ['ok' => false, 'errors' => ['calendar' => 'owner_required']];
             }
-            $update = $pdo->prepare('UPDATE workspace_calendars SET name = :name, description = :description, updated_at = :updated_at WHERE id = :id');
+            $visibleSyncCalendarIds = videochat_workspace_calendar_visible_sync_ids(
+                $pdo,
+                $userId,
+                $effectiveTenantId,
+                videochat_workspace_calendar_sync_ids_from_payload($payload, $calendarId)
+            );
+            $update = $pdo->prepare(
+                <<<'SQL'
+UPDATE workspace_calendars
+SET name = :name,
+    description = :description,
+    color = :color,
+    sync_calendar_ids = :sync_calendar_ids,
+    updated_at = :updated_at
+WHERE id = :id
+SQL
+            );
             $update->execute([
                 ':name' => $name,
                 ':description' => $description,
+                ':color' => $color,
+                ':sync_calendar_ids' => json_encode($visibleSyncCalendarIds, JSON_THROW_ON_ERROR),
                 ':updated_at' => $now,
                 ':id' => $calendarId,
             ]);
         }
 
-        videochat_workspace_calendar_sync_members($pdo, $calendarId, $effectiveTenantId, $userId, $activeMemberIds);
+        $activeMemberRoles = [];
+        foreach ($activeMemberIds as $activeMemberId) {
+            $activeMemberRoles[$activeMemberId] = $memberRoles[$activeMemberId] ?? 'viewer';
+        }
+        videochat_workspace_calendar_sync_members($pdo, $calendarId, $effectiveTenantId, $userId, $activeMemberRoles);
         $pdo->commit();
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) {

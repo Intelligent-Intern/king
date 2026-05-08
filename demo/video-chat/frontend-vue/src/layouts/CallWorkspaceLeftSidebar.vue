@@ -41,7 +41,11 @@
       v-if="showCallAppsPanel"
       :call-id="activeSidebarCallId"
       :can-manage="canManageSidebarCallApps"
+      :active-session="callAppSidebarActiveSession"
+      :participants="callAppSidebarParticipants"
       :api-request="apiRequest"
+      :send-socket-frame="callAppSidebarSendSocketFrame"
+      :request-room-snapshot="callAppSidebarRequestRoomSnapshot"
       @session-created="$emit('call-app-session-created', $event)"
     />
 
@@ -314,6 +318,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  callAppSidebarState: {
+    type: Object,
+    default: () => ({}),
+  },
   apiRequest: {
     type: Function,
     required: true,
@@ -337,6 +345,23 @@ defineEmits([
 
 const activeSidebarCallId = computed(() => props.activeSidebarCallId);
 const currentLayoutMode = computed(() => props.callLayoutSidebarState?.currentMode || '');
+const callAppSidebarActiveSession = computed(() => {
+  const session = props.callAppSidebarState?.activeSession;
+  return session && typeof session === 'object' ? session : null;
+});
+const callAppSidebarParticipants = computed(() => (
+  Array.isArray(props.callAppSidebarState?.participants) ? props.callAppSidebarState.participants : []
+));
+const callAppSidebarSendSocketFrame = computed(() => (
+  typeof props.callAppSidebarState?.sendSocketFrame === 'function'
+    ? props.callAppSidebarState.sendSocketFrame
+    : () => false
+));
+const callAppSidebarRequestRoomSnapshot = computed(() => (
+  typeof props.callAppSidebarState?.requestRoomSnapshot === 'function'
+    ? props.callAppSidebarState.requestRoomSnapshot
+    : () => {}
+));
 
 const {
   activePanel,

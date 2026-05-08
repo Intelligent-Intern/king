@@ -78,6 +78,7 @@
     "@mediapipe/tasks-vision": "^0.10.35",
     "driver.js": "^1.4.0",
     "markdown-it": "^14.1.1",
+    "onnxruntime-web": "^1.26.0-dev.20260416-b7804b056c",
     "pinia": "^3.0.4",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"

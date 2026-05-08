@@ -86,6 +86,12 @@ try {
             'status' => 'active',
         ],
         'session' => ['id' => 'sess_admin_contract'],
+        'tenant' => [
+            'id' => 1,
+            'tenant_id' => 1,
+            'role' => 'owner',
+            'permissions' => ['tenant_admin' => true, 'platform_admin' => true],
+        ],
     ];
 
     $emptyList = videochat_handle_marketplace_routes(
@@ -149,8 +155,8 @@ try {
             'method' => 'POST',
             'uri' => '/api/admin/marketplace/apps',
             'body' => json_encode([
-                'name' => 'Shared Whiteboard',
-                'manufacturer' => 'Intelligent Intern',
+                'name' => 'Whiteboard',
+                'manufacturer' => 'KINGRT',
                 'website' => 'https://intelligent-intern.com/apps/whiteboard',
                 'category' => 'whiteboard',
                 'description' => 'Collaborative drawing board for calls.',
@@ -180,8 +186,8 @@ try {
             'method' => 'POST',
             'uri' => '/api/admin/marketplace/apps',
             'body' => json_encode([
-                'name' => 'Shared Whiteboard',
-                'manufacturer' => 'Intelligent Intern',
+                'name' => 'Whiteboard',
+                'manufacturer' => 'KINGRT',
                 'website' => 'https://intelligent-intern.com/apps/whiteboard-v2',
                 'category' => 'whiteboard',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -212,6 +218,39 @@ try {
     $filteredPayload = videochat_admin_marketplace_decode($filteredList);
     videochat_admin_marketplace_assert((int) (($filteredPayload['pagination'] ?? [])['total'] ?? 0) === 1, 'filtered list total should be 1');
     videochat_admin_marketplace_assert((string) (($filteredPayload['apps'][0] ?? [])['category'] ?? '') === 'whiteboard', 'filtered list category mismatch');
+    $listedCatalog = is_array(($filteredPayload['apps'][0] ?? [])['call_app_catalog'] ?? null)
+        ? ($filteredPayload['apps'][0] ?? [])['call_app_catalog']
+        : [];
+    videochat_admin_marketplace_assert((string) ($listedCatalog['app_key'] ?? '') === 'whiteboard', 'admin marketplace row must expose matching Call App catalog key');
+    videochat_admin_marketplace_assert((string) (($listedCatalog['organization'] ?? [])['status'] ?? '') === 'not_installed', 'admin marketplace row should start as not installed');
+
+    $installPdo = $openDatabase();
+    $orderResult = videochat_call_app_create_organization_order($installPdo, 1, 1, 'whiteboard');
+    videochat_admin_marketplace_assert((bool) ($orderResult['ok'] ?? false), 'admin marketplace contract order setup should succeed');
+    $installResult = videochat_call_app_create_organization_installation($installPdo, 1, 1, 'whiteboard');
+    videochat_admin_marketplace_assert((bool) ($installResult['ok'] ?? false), 'admin marketplace contract install setup should succeed');
+
+    $installedList = videochat_handle_marketplace_routes(
+        '/api/admin/marketplace/apps',
+        'GET',
+        [
+            'method' => 'GET',
+            'uri' => '/api/admin/marketplace/apps?query=whiteboard&category=whiteboard&page=1&page_size=10',
+            'query' => 'query=whiteboard&category=whiteboard&page=1&page_size=10',
+        ],
+        $apiAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_admin_marketplace_assert((int) ($installedList['status'] ?? 0) === 200, 'installed list status should be 200');
+    $installedPayload = videochat_admin_marketplace_decode($installedList);
+    $installedCatalog = is_array(($installedPayload['apps'][0] ?? [])['call_app_catalog'] ?? null)
+        ? ($installedPayload['apps'][0] ?? [])['call_app_catalog']
+        : [];
+    videochat_admin_marketplace_assert((bool) (($installedCatalog['organization'] ?? [])['installed'] ?? false) === true, 'admin marketplace row must expose installed organization state');
+    videochat_admin_marketplace_assert((string) ((($installedCatalog['organization'] ?? [])['installation'] ?? [])['status'] ?? '') === 'enabled', 'admin marketplace row must expose enabled installation');
 
     $updatedResponse = videochat_handle_marketplace_routes(
         '/api/admin/marketplace/apps/' . $appId,

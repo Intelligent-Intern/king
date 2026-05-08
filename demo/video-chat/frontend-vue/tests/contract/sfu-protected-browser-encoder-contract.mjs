@@ -37,6 +37,7 @@ try {
   const security = read('src/domain/realtime/media/security.ts');
   const securityCore = read('src/domain/realtime/media/securityCore.ts');
   const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const mediaSecuritySfuPublishGate = read('src/domain/realtime/workspace/callWorkspace/mediaSecuritySfuPublishGate.ts');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
@@ -137,8 +138,12 @@ try {
   requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_waiting_for_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
   requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'RGBA fallback publisher must resync keys while the publish security gate is closed');
   requireContains(publisherPipeline, "protect_frame_unavailable_waiting_for_security", 'RGBA fallback publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
-  requireContains(mediaSecurityRuntime, 'return currentSfuSenderKeySignaledTargetIds(targetUserIds).length > 0;', 'SFU publish gate must not require every receiver to finish a bidirectional handshake');
-  requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))', 'SFU publish gate must wait until the current sender key was signaled to at least one ready receiver');
+  requireContains(mediaSecurityRuntime, "from './mediaSecuritySfuPublishGate'", 'media-security runtime must keep SFU publish gate logic extracted');
+  requireContains(mediaSecuritySfuPublishGate, 'return targetUserIds.every((userId) => signaledTargetIds.has(userId));', 'SFU publish gate must wait until the current sender key was signaled to every current receiver');
+  requireContains(mediaSecuritySfuPublishGate, 'mediaSecuritySenderKeySentAtBySignalKey().set(signalKey, Date.now());', 'SFU publish gate must record sender-key send time before reopening protected video');
+  requireContains(mediaSecuritySfuPublishGate, 'return sentAtMs > 0 && (nowMs - sentAtMs) >= propagationMs;', 'SFU publish gate must hold protected frames until sender-key signals can reach receivers');
+  requireContains(mediaSecuritySfuPublishGate, 'currentSfuSenderKeySignalsCoverTargets(targetUserIds)', 'SFU publish gate must require full current-target sender-key coverage before propagation readiness');
+  requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))', 'SFU publish gate must use sender-key signal receipts from the current media-security session');
   requireContains(mediaSecurityRuntime, 'shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey)', 'participant joins must not force a global sender-key cache reset while existing receivers can still decrypt video');
   assert.equal(
     publisherPipeline.includes('sending transport-only frame'),

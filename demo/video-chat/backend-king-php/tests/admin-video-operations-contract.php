@@ -93,6 +93,22 @@ SQL
         ['call-ops-ended', 'room-ops-ended', 'Ended With Stale Presence', $adminUserId, 'ended', '2026-04-21T10:00:00Z', '2026-04-21T10:30:00Z'],
     ];
 
+    $insertRoom = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+SQL
+    );
+    foreach ($calls as [$id, $roomId, $title, $ownerUserId, $_status, $startsAt]) {
+        $insertRoom->execute([
+            ':id' => $roomId,
+            ':name' => $title . ' Room',
+            ':created_by_user_id' => $ownerUserId,
+            ':created_at' => $startsAt,
+            ':updated_at' => $startsAt,
+        ]);
+    }
+
     foreach ($calls as [$id, $roomId, $title, $ownerUserId, $status, $startsAt, $endsAt]) {
         $insertCall->execute([
             ':id' => $id,
@@ -140,6 +156,14 @@ SQL
 
     videochat_realtime_presence_db_bootstrap($pdo);
     videochat_sfu_bootstrap($pdo);
+    $brokerDatabasePath = sys_get_temp_dir() . '/videochat-admin-video-ops-broker-' . bin2hex(random_bytes(6)) . '.sqlite';
+    if (is_file($brokerDatabasePath)) {
+        @unlink($brokerDatabasePath);
+    }
+    putenv('VIDEOCHAT_KING_DB_PATH=' . $databasePath);
+    putenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH=' . $brokerDatabasePath);
+    $brokerPdo = videochat_open_sqlite_pdo($brokerDatabasePath);
+    videochat_sfu_bootstrap($brokerPdo);
     $snapshotNow = (int) strtotime('2026-04-21T12:00:00Z');
     $snapshotNowMs = $snapshotNow * 1000;
     $insertPresence = $pdo->prepare(
@@ -191,6 +215,19 @@ SQL
             ':updated_at_ms' => $updatedAtMs,
         ]);
     }
+    $insertBrokerSfuPublisher = $brokerPdo->prepare(
+        <<<'SQL'
+INSERT INTO sfu_publishers(room_id, publisher_id, user_id, user_name, updated_at_ms)
+VALUES(:room_id, :publisher_id, :user_id, :user_name, :updated_at_ms)
+SQL
+    );
+    $insertBrokerSfuPublisher->execute([
+        ':room_id' => 'tenant:1:room:room-ops-beta',
+        ':publisher_id' => 'pub-beta-admin-broker',
+        ':user_id' => (string) $adminUserId,
+        ':user_name' => 'Platform Admin',
+        ':updated_at_ms' => $snapshotNowMs - 1000,
+    ]);
 
     $snapshot = videochat_video_operations_snapshot($pdo, $snapshotNow);
     videochat_admin_video_ops_assert((string) ($snapshot['status'] ?? '') === 'ok', 'snapshot status mismatch');
@@ -205,8 +242,21 @@ SQL
     videochat_admin_video_ops_assert((int) (($runningCalls[0]['sfu'] ?? [])['publisher_users'] ?? 0) === 2, 'alpha SFU publisher users mismatch');
     videochat_admin_video_ops_assert((int) (($runningCalls[0] ?? [])['uptime_seconds'] ?? 0) === 7200, 'alpha uptime mismatch');
     videochat_admin_video_ops_assert((int) (($runningCalls[1]['live_participants'] ?? [])['external'] ?? 0) === 1, 'beta live external participants mismatch');
-    videochat_admin_video_ops_assert((int) (($runningCalls[1]['sfu'] ?? [])['publishers'] ?? 0) === 1, 'beta SFU publishers mismatch');
+    videochat_admin_video_ops_assert((int) (($runningCalls[1]['sfu'] ?? [])['publishers'] ?? 0) === 2, 'beta SFU publishers must include broker database rows');
+    videochat_admin_video_ops_assert((int) (($runningCalls[1]['sfu'] ?? [])['publisher_users'] ?? 0) === 2, 'beta SFU publisher users must include broker database rows');
     videochat_admin_video_ops_assert(!in_array('call-ops-idle', array_column($runningCalls, 'id'), true), 'idle call without fresh presence must not be live');
+
+    $routeNowMs = time() * 1000;
+    $refreshRoutePresence = $pdo->prepare(
+        "UPDATE realtime_presence_connections SET last_seen_at_ms = :last_seen_at_ms WHERE call_id IN ('call-ops-alpha', 'call-ops-beta')"
+    );
+    $refreshRoutePresence->execute([':last_seen_at_ms' => $routeNowMs]);
+    $refreshRouteSfu = $pdo->prepare(
+        "UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms WHERE room_id IN ('room-ops-alpha', 'room-ops-beta')"
+    );
+    $refreshRouteSfu->execute([':updated_at_ms' => $routeNowMs]);
+    $refreshRouteBrokerSfu = $brokerPdo->prepare("UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms");
+    $refreshRouteBrokerSfu->execute([':updated_at_ms' => $routeNowMs]);
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [

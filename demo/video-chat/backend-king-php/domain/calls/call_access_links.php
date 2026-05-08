@@ -75,13 +75,7 @@ function videochat_create_call_access_link_for_user(
     }
 
     if ($callAccessMode === 'free_for_all' && $linkKind !== 'open') {
-        return [
-            'ok' => false,
-            'reason' => 'validation_failed',
-            'errors' => ['link_kind' => 'free_for_all_requires_open_link'],
-            'access_link' => null,
-            'call' => null,
-        ];
+        $linkKind = 'open';
     }
 
     if ($callAccessMode === 'invite_only' && $linkKind !== 'personal') {

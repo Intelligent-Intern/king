@@ -398,13 +398,14 @@ export function registerCallWorkspaceLifecycleHelpers({
     }
 
     await publishLocalTracks();
-    ensureSfuVideoQualityRecoveryProbeSeries?.('initial_outgoing_video_quality_probe', {
-      trigger: 'workspace_publish_local_tracks',
-    });
 
     if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
       initSFU();
     }
+
+    ensureSfuVideoQualityRecoveryProbeSeries?.('initial_outgoing_video_quality_probe', {
+      trigger: 'workspace_publish_local_tracks',
+    });
 
     await nextTick();
     syncUsersListViewport();

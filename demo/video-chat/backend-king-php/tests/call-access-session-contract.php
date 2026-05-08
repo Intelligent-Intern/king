@@ -297,6 +297,11 @@ SQL
     videochat_call_access_session_assert((string) ($openBinding['room_id'] ?? '') === $openCallId, 'open binding room id mismatch');
     videochat_call_access_session_assert((int) ($openBinding['user_id'] ?? 0) === $guestUserId, 'open binding user id mismatch');
     videochat_call_access_session_assert((string) ($openBinding['link_kind'] ?? '') === 'open', 'open binding link kind mismatch');
+    $openAccessAfterFirstJoin = videochat_fetch_call_access_link($pdo, $openAccessId);
+    videochat_call_access_session_assert(
+        is_array($openAccessAfterFirstJoin) && (($openAccessAfterFirstJoin['consumed_at'] ?? null) === null || (string) ($openAccessAfterFirstJoin['consumed_at'] ?? '') === ''),
+        'open access links must remain reusable after a guest joins'
+    );
 
     $guestParticipant = $pdo->prepare(
         <<<'SQL'

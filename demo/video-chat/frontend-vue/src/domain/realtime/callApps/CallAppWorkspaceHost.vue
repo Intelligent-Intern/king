@@ -76,6 +76,22 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  participants: {
+    type: Array,
+    default: () => [],
+  },
+  currentUserId: {
+    type: Number,
+    default: 0,
+  },
+  currentUserDisplayName: {
+    type: String,
+    default: '',
+  },
+  sendSocketFrame: {
+    type: Function,
+    default: null,
+  },
   miniVideoSlotId: {
     type: Function,
     required: true,
@@ -113,6 +129,10 @@ const appKey = computed(() => String(props.activeSession?.app_key || props.activ
 const iframeEntrypoint = computed(() => String(props.activeSession?.app?.iframe_entrypoint || '').trim());
 const iframeSrc = computed(() => (hasActiveSession.value ? callAppWorkspaceIframeUrl(props.activeSession) : 'about:blank'));
 const activeSessionRef = computed(() => props.activeSession);
+const participantsRef = computed(() => props.participants);
+const currentUserIdRef = computed(() => props.currentUserId);
+const currentUserDisplayNameRef = computed(() => props.currentUserDisplayName);
+const sendSocketFrameRef = computed(() => props.sendSocketFrame);
 const iframeTitle = computed(() => {
   const name = String(props.activeSession?.app?.name || appKey.value || 'Call App').trim();
   return `${name} workspace`;
@@ -122,11 +142,16 @@ const { launchState, handleIframeLoad } = createCallAppIframeBridge({
   activeSession: activeSessionRef,
   iframeRef,
   apiRequest: props.apiRequest,
+  participantDisplayName: currentUserDisplayNameRef,
 });
 createCallAppCrdtBridge({
   activeSession: activeSessionRef,
   iframeRef,
   apiRequest: props.apiRequest,
+  participants: participantsRef,
+  currentUserId: currentUserIdRef,
+  currentUserDisplayName: currentUserDisplayNameRef,
+  sendSocketFrame: sendSocketFrameRef,
 });
 const launchStatusLabel = computed(() => {
   if (launchState.value.status === 'error') return launchState.value.error || 'Call App launch failed.';
