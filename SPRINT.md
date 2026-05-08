@@ -1475,7 +1475,10 @@ Proof: `call-access-session-fixation-contract` rejects reuse of an existing
 session ID for a new call-access binding, rejects login/account switches between
 verified and authenticated context, rejects wrong-account personalized-link
 issuance, and makes tampered or expired call-access session bindings fail
-session validation.
+session validation. `call-access-session-route-guard-contract` proves the real
+`/api/call-access/{id}/session` route passes authenticated and verified
+user/session context into that guard, rejects wrong logged-in accounts and
+session switches safely, and preserves anonymous personalized/open-link issuance.
 
 ## 16. Email Confirmation for Account Data Update
 
