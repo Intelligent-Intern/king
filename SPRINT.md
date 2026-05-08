@@ -2164,11 +2164,11 @@ requests a fresh `room/snapshot/request`.
 - [x] Audit log records membership removal
 - [ ] Audit log records permission downgrade
 - [x] Audit log records continued call-scoped access
-- [ ] User invited as org member but later moved to another organization joins only through call-scoped invitation
-- [ ] User invited as org admin but later downgraded to user loses org-admin access but keeps explicit invite access
-- [ ] User invited as normal user but later promoted to org admin receives current org-admin rights if still member
-- [ ] Removed org admin cannot use org-admin rights from stale invite payload
-- [ ] Removed user in lobby loses org-based rights but may remain in lobby through call-scoped invitation
+- [x] User invited as org member but later moved to another organization joins only through call-scoped invitation
+- [x] User invited as org admin but later downgraded to user loses org-admin access but keeps explicit invite access
+- [x] User invited as normal user but later promoted to org admin receives current org-admin rights if still member
+- [x] Removed org admin cannot use org-admin rights from stale invite payload
+- [x] Removed user in lobby loses org-based rights but may remain in lobby through call-scoped invitation
 
 Proof: `call-access-membership-removal-contract` removes tenant, organization,
 and group memberships before opening the personalized link; proves a pre-removal
@@ -2198,6 +2198,17 @@ org admin stays in the call only through explicit call-scoped access, immediatel
 loses organization resource access, org-admin call rights, realtime moderator
 controls, and snapshot moderation flags, while a removed org admin without
 call-scoped permission loses the active call binding.
+Stale-invite membership proof:
+`call-access-membership-stale-invite-rights-contract` covers invited members
+moved to another organization, invited org admins downgraded to members,
+invited members promoted to org admin while still in the organization, removed
+org admins with stale personal invite state, and removed lobby users. It proves
+old organization resource grants and org-admin/direct-entry rights are
+revalidated from current membership, explicit personal links still issue
+call-scoped sessions for the invited call only, promoted users gain current
+org-admin moderation/direct-entry rights, stale forged admin role data does not
+restore removed org-admin controls, and lobby users keep only their call-scoped
+pending room binding.
 
 ## 24. Invite Link Invalidation
 
