@@ -44,6 +44,57 @@ function authSessionPayload(account) {
   };
 }
 
+function resolvedJoinPayload({ accessId, callTitle = 'Parallel Account Tabs Call' }) {
+  return {
+    status: 'ok',
+    result: {
+      state: 'resolved',
+      access_link: { id: accessId },
+      link_kind: 'personal',
+      call: {
+        id: 'parallel-account-call',
+        room_id: 'lobby',
+        title: callTitle,
+      },
+      target_hint: { participant_email: null },
+      join_path: `/join/${accessId}`,
+    },
+  };
+}
+
+function sessionStartedPayload({ account, sessionToken, callTitle = 'Parallel Account Tabs Call' }) {
+  return {
+    status: 'ok',
+    result: {
+      state: 'session_started',
+      session: {
+        id: sessionToken,
+        token: sessionToken,
+        expires_at: '2026-09-01T10:05:00Z',
+      },
+      user: {
+        id: account.userId,
+        email: account.email,
+        display_name: account.displayName,
+        role: 'user',
+        status: 'active',
+      },
+      tenant: {
+        id: 1,
+        uuid: 'tenant-1',
+        label: 'Intelligent Intern',
+        role: 'member',
+        permissions: { tenant_admin: false },
+      },
+      call: {
+        id: 'parallel-account-call',
+        room_id: 'lobby',
+        title: callTitle,
+      },
+    },
+  };
+}
+
 function readPostJson(request) {
   const raw = request.postData();
   if (!raw) return null;
@@ -120,8 +171,12 @@ async function installAdmissionSocketShim(context) {
   });
 }
 
-async function createAccountTab(browser, baseURL, account, accessId, routes) {
-  const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
+async function createAccountPage(browser, baseURL, account, contextOptions = {}) {
+  const context = await browser.newContext({
+    baseURL,
+    permissions: ['camera', 'microphone'],
+    ...contextOptions,
+  });
   await installMediaDeviceShim(context);
   await installAdmissionSocketShim(context);
   await context.addInitScript(({ key, session }) => {
@@ -129,6 +184,11 @@ async function createAccountTab(browser, baseURL, account, accessId, routes) {
   }, { key: sessionStorageKey, session: storedSessionFor(account) });
 
   const page = await context.newPage();
+  return { context, page };
+}
+
+async function createAccountTab(browser, baseURL, account, accessId, routes) {
+  const { context, page } = await createAccountPage(browser, baseURL, account);
   await page.route('**/api/auth/session-state', async (route) => {
     const authorization = route.request().headers().authorization || '';
     routes.sessionState.push({ label: account.label, authorization });
@@ -159,21 +219,7 @@ async function createAccountTab(browser, baseURL, account, accessId, routes) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'ok',
-        result: {
-          state: 'resolved',
-          access_link: { id: accessId },
-          link_kind: 'personal',
-          call: {
-            id: 'parallel-account-call',
-            room_id: 'lobby',
-            title: 'Parallel Account Tabs Call',
-          },
-          target_hint: { participant_email: null },
-          join_path: `/join/${accessId}`,
-        },
-      }),
+      body: JSON.stringify(resolvedJoinPayload({ accessId })),
     });
   });
 
@@ -200,6 +246,12 @@ async function readRuntimeSession(page) {
       email: sessionState.email,
     };
   });
+}
+
+async function expectDialogOmits(dialog, values) {
+  for (const value of values) {
+    await expect(dialog, `duplicate denial must not render ${value}`).not.toContainText(value);
+  }
 }
 
 test('e2e_duplicate_link_005/e2e_duplicate_link_006 parallel account tabs detect duplicate use without merging sessions', async ({ browser }) => {
@@ -247,36 +299,7 @@ test('e2e_duplicate_link_005/e2e_duplicate_link_006 parallel account tabs detect
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          status: 'ok',
-          result: {
-            state: 'session_started',
-            session: {
-              id: linkedCallAccessSession,
-              token: linkedCallAccessSession,
-              expires_at: '2026-09-01T10:05:00Z',
-            },
-            user: {
-              id: linkedAccount.userId,
-              email: linkedAccount.email,
-              display_name: linkedAccount.displayName,
-              role: 'user',
-              status: 'active',
-            },
-            tenant: {
-              id: 1,
-              uuid: 'tenant-1',
-              label: 'Intelligent Intern',
-              role: 'member',
-              permissions: { tenant_admin: false },
-            },
-            call: {
-              id: 'parallel-account-call',
-              room_id: 'lobby',
-              title: 'Parallel Account Tabs Call',
-            },
-          },
-        }),
+        body: JSON.stringify(sessionStartedPayload({ account: linkedAccount, sessionToken: linkedCallAccessSession })),
       });
     });
 
@@ -302,7 +325,11 @@ test('e2e_duplicate_link_005/e2e_duplicate_link_006 parallel account tabs detect
             code: 'call_access_conflict',
             message: 'Call access cannot be used for the current call state.',
             details: {
-              fields: { auth: 'session_context_changed' },
+              fields: {
+                auth: 'not_bound_to_current_user',
+                host_name: 'not_verified',
+              },
+              mismatch: 'strong_personalized_link',
               review: {
                 flag: 'duplicate_personalized_link',
                 state: 'manual_review_required',
@@ -360,8 +387,8 @@ test('e2e_duplicate_link_005/e2e_duplicate_link_006 parallel account tabs detect
       { label: 'other', authorization: `Bearer ${otherAccount.sessionToken}` },
     ]));
     expect(routes.join).toEqual(expect.arrayContaining([
-      { label: 'linked', authorization: '' },
-      { label: 'other', authorization: '' },
+      { label: 'linked', authorization: `Bearer ${linkedAccount.sessionToken}` },
+      { label: 'other', authorization: `Bearer ${otherAccount.sessionToken}` },
     ]));
     expect(routes.sessions).toEqual(expect.arrayContaining([
       {
@@ -385,9 +412,7 @@ test('e2e_duplicate_link_005/e2e_duplicate_link_006 parallel account tabs detect
     await expect(linkedDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
     await expect(otherDialog).toContainText(/cannot be used for the current call state/i);
     await expect(otherDialog).not.toContainText(/Call owner has been notified|Waiting for host/i);
-    for (const value of foreignNeedles) {
-      await expect(otherDialog, `duplicate denial must not render ${value}`).not.toContainText(value);
-    }
+    await expectDialogOmits(otherDialog, foreignNeedles);
 
     const linkedStoredSession = await readStoredSession(linkedTab.page);
     expect(linkedStoredSession.sessionId).toBe(linkedCallAccessSession);

@@ -23,6 +23,48 @@ function videochat_call_access_session_string_option(array $options, string $key
     return trim((string) $options[$key]);
 }
 
+function videochat_call_access_record_context_switch_review(
+    PDO $pdo,
+    string $linkKind,
+    array $accessLink,
+    array $call,
+    ?array $targetUser,
+    int $verifiedUserId,
+    string $verifiedSessionId,
+    int $authenticatedUserId,
+    string $authenticatedSessionId
+): void {
+    if ($linkKind !== 'personal' || $authenticatedUserId <= 0 || !is_array($targetUser)) {
+        return;
+    }
+
+    $targetUserId = is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : 0;
+    if ($targetUserId <= 0 || $authenticatedUserId === $targetUserId) {
+        return;
+    }
+
+    $verifiedAccountSwitched = $verifiedUserId > 0 && $verifiedUserId !== $authenticatedUserId;
+    $verifiedSessionSwitched = $verifiedSessionId !== ''
+        && $authenticatedSessionId !== ''
+        && !hash_equals($verifiedSessionId, $authenticatedSessionId);
+    if (!$verifiedAccountSwitched && !$verifiedSessionSwitched) {
+        return;
+    }
+
+    videochat_call_access_record_duplicate_personalized_link_review(
+        $pdo,
+        $accessLink,
+        $call,
+        $targetUser,
+        $authenticatedUserId,
+        'session_context_changed',
+        [
+            'session_id' => $authenticatedSessionId,
+            'verified_session_id' => $verifiedSessionId,
+        ]
+    );
+}
+
 function videochat_call_access_host_display_name(array $call): string
 {
     $owner = is_array($call['owner'] ?? null) ? $call['owner'] : [];
@@ -122,6 +164,17 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($verifiedSessionId !== '' && $authenticatedSessionId !== '' && !hash_equals($verifiedSessionId, $authenticatedSessionId)) {
+        videochat_call_access_record_context_switch_review(
+            $pdo,
+            $linkKind,
+            $accessLink,
+            $call,
+            $targetUser,
+            $verifiedUserId,
+            $verifiedSessionId,
+            $authenticatedUserId,
+            $authenticatedSessionId
+        );
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -133,6 +186,17 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($verifiedUserId > 0 && $authenticatedUserId > 0 && $verifiedUserId !== $authenticatedUserId) {
+        videochat_call_access_record_context_switch_review(
+            $pdo,
+            $linkKind,
+            $accessLink,
+            $call,
+            $targetUser,
+            $verifiedUserId,
+            $verifiedSessionId,
+            $authenticatedUserId,
+            $authenticatedSessionId
+        );
         return [
             'ok' => false,
             'reason' => 'conflict',

@@ -1617,7 +1617,7 @@ path. Validated with `demo/video-chat/scripts/iam-call-access-ci-gate.sh --stati
 - [x] Account A may appear as affected reference in audit log
 - [x] Flag is created even if account B provides correct host name
 - [x] Flag is created even if account B does not enter the call
-- [ ] Flag is created when account B reaches warning modal if policy requires it
+- [x] Flag is created when account B reaches warning modal if policy requires it
 - [x] Concurrent use of same personalized link by two accounts is detected
 - [x] Race condition on parallel link open creates no inconsistent assignment
 - [x] Link already used inside call marks later use by other account as suspicious
@@ -1625,30 +1625,65 @@ path. Validated with `demo/video-chat/scripts/iam-call-access-ci-gate.sh --stati
 - [x] Review flag contains call, link ID, affected accounts, and timestamps
 - [x] Review flag contains no unnecessary sensitive link data
 - [x] Admin / reviewer can understand the flag
-- [ ] Abuse detection works after logout / login switch in same browser
-- [ ] Abuse detection works across devices
-- [ ] Abuse detection works across browsers
+- [x] Abuse detection works after logout / login switch in same browser
+- [x] Abuse detection works across devices
+- [x] Abuse detection works across browsers
 
 Proof: `call-access-duplicate-review-email-contract.mjs` pins duplicate-link
 review flags, safe review payloads, logged-in account preservation,
 host-verification rate limiting, account-bound confirmation tokens, manual
 re-entry, no pre-confirmation update, no session rebinding, and the duplicate
-race E2E coverage. `call-access-duplicate-review-contract.php` now proves a
+race E2E coverage. `call-access-parallel-account-tabs-contract.mjs` additionally
+pins the focused device/browser duplicate-link proof in
+`call-access-duplicate-link-device-browser.spec.js` and the SQLite backend proof
+in `call-access-parallel-account-tabs-contract.php`: same-browser logout/login
+switches, cross-device attempts, and cross-browser attempts are review-flagged,
+receive no call-access session, preserve the current account context, and leave
+the personalized link assigned to the original linked account. The backend
+session issuance path now records duplicate-link review before returning early
+verified-context conflicts caused by a login switch.
+`call-access-duplicate-review-contract.php` now proves a
 real `pcntl` parallel linked-account/foreign-account session race against
 SQLite: the linked account reopens the personal link, the foreign account is
 review-flagged and receives no session, the link assignment remains unchanged,
 and a later foreign use references the first in-call linked account. It also
-pins foreign personalized-link review flags and audit events to the call's
-organization/call, records the foreign actor plus linked-account affected
-reference, keeps reviewer status understandable as manual review, and proves
-raw link IDs, host names, session IDs, tokens, SDP, ICE, and account emails are
-omitted in favor of fingerprints. `npx
+pins the warning-modal reach policy: the public join `join_opened` path creates
+exactly one minimized duplicate-personalized-link review flag and audit event
+for account B before host-name submission, and later host-verification attempts
+reuse that same flag. It pins foreign personalized-link review flags and audit
+events to the call's organization/call, records the foreign actor plus
+linked-account affected reference, keeps reviewer status understandable as
+manual review, and proves raw link IDs, host names, session IDs, tokens, SDP,
+ICE, and account emails are omitted in favor of fingerprints. `npx
 playwright test tests/e2e/call-access-duplicate-review-email.spec.js
 tests/e2e/call-access-duplicate-race.spec.js --workers=1 --reporter=list`
-passed 5 tests; `npm run test:ci:iam-call-access:static` passed. Host PHP still
+passed 5 tests. Cross-browser proof is the duplicate-race case `security
+duplicate group marks later foreign use after the linked account is already in
+the call as suspicious`: account A joins from one isolated browser context,
+account B opens the same personalized link from a separate context, B receives
+the minimized `duplicate_personalized_link` / `manual_review_required` review
+state, no session issuance is attempted for B, the raw link and linked-account
+details stay out of the response, and B's browser session remains isolated.
+`npm run test:ci:iam-call-access:static` passed. Host PHP still
 lacks `pdo_sqlite`, so host IAM SQLite wrappers skip cleanly; the duplicate PHP
 proof was validated in `php:8.4-cli` with `pdo_sqlite`; that local image lacks
 `pcntl_fork`, so the optional parallel fork subcheck skipped cleanly.
+Additional same-browser switch proof: `call-access-duplicate-review-contract.php`
+now drives account A through a personalized-link session, then submits the stale
+verified account-A context with account B's bearer after a logout/login switch.
+The route returns only `session_context_changed`, does not issue or bind account
+B, preserves the link assignment, and creates/reuses sanitized duplicate-review
+and audit state. `call-access-duplicate-logout-login-switch.spec.js` proves the
+browser keeps account B's session, sends account A's verified context plus
+account B's bearer, renders no foreign link data, and does not navigate into the
+call.
+Focused proof for this leaf: `PLAYWRIGHT_FRONTEND_PORT=4184 npx playwright test
+tests/e2e/call-access-duplicate-link-device-browser.spec.js
+tests/e2e/call-access-parallel-account-tabs.spec.js --workers=1
+--reporter=list` passed 3 tests, `npm run test:ci:iam-call-access:static`
+passed, and Docker `php:8.4-cli` ran
+`backend-king-php/tests/call-access-parallel-account-tabs-contract.php` with
+`pdo_sqlite` and passed.
 
 ## 9. Anonymous Join Link: User Logged In
 
@@ -2918,10 +2953,10 @@ against duplicate join/session request loops.
 - [x] `e2e_duplicate_link_002_second_account_uses_link_flag_created`
 - [x] `e2e_duplicate_link_003_second_account_flag_even_without_join`
 - [x] `e2e_duplicate_link_004_second_account_flag_even_with_correct_host_name`
-- [ ] `e2e_duplicate_link_005_concurrent_two_accounts_same_link_detected`
-- [ ] `e2e_duplicate_link_006_parallel_open_no_inconsistent_assignment`
-- [ ] `e2e_duplicate_link_007_cross_device_duplicate_detected`
-- [ ] `e2e_duplicate_link_008_cross_browser_duplicate_detected`
+- [x] `e2e_duplicate_link_005_concurrent_two_accounts_same_link_detected`
+- [x] `e2e_duplicate_link_006_parallel_open_no_inconsistent_assignment`
+- [x] `e2e_duplicate_link_007_cross_device_duplicate_detected`
+- [x] `e2e_duplicate_link_008_cross_browser_duplicate_detected`
 - [x] `e2e_duplicate_link_009_review_flag_contains_required_metadata`
 - [x] `e2e_duplicate_link_010_review_flag_avoids_sensitive_data`
 
