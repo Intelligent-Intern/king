@@ -2323,7 +2323,7 @@ invalidated.
 - [x] Call-ended state deletes or invalidates temporary guest accounts
 - [x] Call-ended state clears lobby entries
 - [x] Call-ended state preserves audit log
-- [ ] Call-ended state is visible to late users opening old links
+- [x] Call-ended state is visible to late users opening old links
 - [x] Timer is based on server time, not client time
 - [x] CI test uses fake/test time and does not wait 15 real minutes
 
@@ -2353,6 +2353,12 @@ cross-participant countdown synchronization, and the existing live-region
 participant notification banner. `iam-king-participants-owner-timeout-contract.mjs`,
 `realtime-presence-contract.php`, `php -l`, `node --check`, and `git diff --check`
 also passed for this leaf.
+`call-access-owner-absence-browser.spec.js` drives the browser workspace through
+timer-start notification, final-countdown UI, countdown update, cross-participant
+sync, participant refresh resync, owner-absence automatic end, late old-link
+ended state, and owner return cancellation paths using the backend timer
+constants and room snapshots. The focused Playwright run passed 5 tests and the
+integrated frontend build passed.
 
 ## 30. Error and Edge Cases
 

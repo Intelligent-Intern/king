@@ -10,11 +10,17 @@ export function normalizeOwnerAbsencePayload(payload) {
     enabled: Boolean(payload.enabled),
     status: String(payload.status || '').trim().toLowerCase(),
     callStatus: String(payload.call_status ?? payload.callStatus ?? '').trim().toLowerCase(),
+    ownerPresent: Boolean(payload.owner_present ?? payload.ownerPresent ?? false),
     countdownStarted: Boolean(payload.countdown_started ?? payload.countdownStarted ?? false),
     countdownRemainingMs: Number.isFinite(countdownRemainingMs) ? Math.max(0, Math.round(countdownRemainingMs)) : 0,
     timerMs: Number.isFinite(timerMs) ? Math.max(0, Math.round(timerMs)) : 0,
     countdownMs: Number.isFinite(countdownMs) ? Math.max(0, Math.round(countdownMs)) : 0,
   };
+}
+
+export function shouldShowOwnerAbsenceMonitoring(payload) {
+  const state = normalizeOwnerAbsencePayload(payload);
+  return Boolean(state?.enabled && state.status === 'monitoring' && !state.ownerPresent);
 }
 
 export function shouldShowOwnerAbsenceCountdown(payload) {
