@@ -1299,9 +1299,19 @@ skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 - [ ] Calendar appointment is correctly associated with call / host
 - [ ] Multiple invitees receive different personalized links
 - [ ] Appointment change does not modify unrelated invitations
-- [ ] Invitation cancellation invalidates personalized link
-- [ ] Expired personalized link cannot be used if expiry exists
+- [x] Invitation cancellation invalidates personalized link
+- [x] Expired personalized link cannot be used if expiry exists
 - [ ] Reopening same personalized link by same valid context behaves consistently
+
+Proof: `call-access-invalidation-contract.sh`,
+`call-access-invitation-cancellation-contract.sh`,
+`call-access-expired-personalized-link-contract.sh`, and
+`call-access-invite-invalidation.spec.js` cover manual invite
+invalidation, call cancellation invalidation, expired personalized links,
+stale session rejection, stale websocket rejoin rejection, and safe
+invalid-link UI without private invite data. Frontend E2E and static
+contracts passed locally; SQLite-backed PHP runtime execution is blocked on
+this host because PHP does not load `pdo_sqlite`.
 
 ## 5. Personalized Link: User Not Logged In
 
@@ -1319,7 +1329,7 @@ skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 - [ ] Temporary account remains consistent for same link / call
 - [ ] Temporary account can be recognized after leaving
 - [ ] Temporary account cannot receive organization-wide rights
-- [ ] Invalid personalized link is rejected
+- [x] Invalid personalized link is rejected
 - [ ] Manipulated personalized link is rejected
 - [x] Error state for invalid personalized link leaks no data
 
@@ -1859,14 +1869,14 @@ path and waiting-for-host state.
 ## 24. Invite Link Invalidation
 
 - [x] Personalized invite link is manually invalidated before use
-- [ ] Personalized invite link is invalidated after first use
+- [x] Personalized invite link is invalidated after first use
 - [ ] Personalized invite link is invalidated while invitee is in lobby
 - [ ] Personalized invite link is invalidated while invitee is already in call
 - [ ] Anonymous join link is manually invalidated before use
 - [ ] Anonymous join link is invalidated while anonymous guest is in lobby
 - [ ] Anonymous join link is invalidated while anonymous guest is already in call
 - [x] Invalidated link cannot be used for fresh join attempts
-- [ ] Invalidated link cannot be used for rejoin unless product rule allows admitted rejoin
+- [x] Invalidated link cannot be used for rejoin unless product rule allows admitted rejoin
 - [x] Invalidated link does not reveal whether original invitee exists
 - [x] Invalidated link does not reveal guest account data
 - [x] Invalidated link does not recreate deleted temporary accounts
@@ -1877,7 +1887,16 @@ path and waiting-for-host state.
 - [ ] Invalidated link state survives application restart during CI
 - [x] Rejected invalidated link shows safe invalid-link state
 - [x] Rejected invalidated link does not leak personal data
-- [ ] Stale client-side state cannot join with invalidated link
+- [x] Stale client-side state cannot join with invalidated link
+
+Proof: `call-access-invalidation-contract` proves manual personalized invite
+invalidation before use and after a session was issued, rejects fresh
+join/session attempts without exposing call, link, or target-user data, and
+rejects stale websocket rejoin through the call-access session binding.
+`call-access-invite-invalidation.spec.js` proves stale browser state renders
+the safe invalid-link state and does not issue a replacement session. Local
+PHP syntax checks passed; SQLite-backed contract execution is blocked on this
+host by missing `pdo_sqlite`.
 
 ## 25. Guest Account Lifecycle
 
@@ -2396,16 +2415,16 @@ against duplicate join/session request loops.
 
 ## Test Group: Invite Invalidation
 
-- [ ] `e2e_invite_invalid_001_personalized_link_invalidated_before_use`
-- [ ] `e2e_invite_invalid_002_personalized_link_invalidated_after_first_use`
+- [x] `e2e_invite_invalid_001_personalized_link_invalidated_before_use`
+- [x] `e2e_invite_invalid_002_personalized_link_invalidated_after_first_use`
 - [ ] `e2e_invite_invalid_003_personalized_link_invalidated_in_lobby`
 - [ ] `e2e_invite_invalid_004_personalized_link_invalidated_in_call`
 - [ ] `e2e_invite_invalid_005_anonymous_link_invalidated_before_use`
 - [ ] `e2e_invite_invalid_006_anonymous_link_invalidated_in_lobby`
 - [ ] `e2e_invite_invalid_007_anonymous_link_invalidated_in_call`
-- [ ] `e2e_invite_invalid_008_invalidated_link_blocks_fresh_join`
-- [ ] `e2e_invite_invalid_009_invalidated_link_blocks_rejoin_if_required`
-- [ ] `e2e_invite_invalid_010_invalidated_link_no_data_leak`
+- [x] `e2e_invite_invalid_008_invalidated_link_blocks_fresh_join`
+- [x] `e2e_invite_invalid_009_invalidated_link_blocks_rejoin_if_required`
+- [x] `e2e_invite_invalid_010_invalidated_link_no_data_leak`
 - [ ] `e2e_invite_invalid_011_invalidated_link_does_not_recreate_temp_account`
 - [ ] `e2e_invite_invalid_012_invalidated_link_survives_app_restart`
 
