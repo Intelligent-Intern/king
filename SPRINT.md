@@ -1370,15 +1370,15 @@ this host because `pdo_sqlite` is unavailable.
 - [x] Temporary account from link data is created / used
 - [x] Temporary account does not automatically log in existing registered account
 - [x] User enters intended flow with temporary account
-- [ ] Temporary account may be on guest list
-- [ ] Temporary account on guest list can join directly
+- [x] Temporary account may be on guest list
+- [x] Temporary account on guest list can join directly
 - [x] Temporary account not on guest list lands in lobby
 - [x] Temporary account cannot see other users’ data
 - [x] Temporary account receives no registered account rights
 - [x] Temporary account cannot administer call unless explicitly permitted
 - [ ] Temporary account cannot assume another identity by changing link parameters
 - [x] Temporary account remains consistent for same link / call
-- [ ] Temporary account can be recognized after leaving
+- [x] Temporary account can be recognized after leaving
 - [x] Temporary account cannot receive organization-wide rights
 - [x] Invalid personalized link is rejected
 - [x] Manipulated personalized link is rejected
@@ -1395,6 +1395,10 @@ registered-but-logged-out invitee path uses a temporary guest account, does not
 take over the existing registered account, enters lobby/admission flow, and
 does not expose registered account data or grant tenant/lobby/admin rights. The
 focused run passed 3 tests; the integrated seed-matrix run passed 21 tests.
+`call-access-rejoin-refresh-session-safety-contract.php` also proves a
+temporary guest can be persisted as an allowed call participant, leave, and
+rejoin with the same call-access session/user binding. Docker PHP 8.4 with
+`pdo_sqlite` passed the contract.
 
 ## 6. Personalized Link: Logged-In User, No / Light Mismatch
 
@@ -1656,10 +1660,10 @@ Docker SQLite run passed.
 - [x] Admitted temporary user can leave call
 - [x] Admitted temporary user can reopen same call
 - [x] Admitted temporary user can rejoin without approval
-- [ ] Rejoin works after browser refresh
+- [x] Rejoin works after browser refresh
 - [x] Rejoin works after short network interruption
-- [ ] Rejoin works after closing tab and reopening if session remains
-- [ ] Rejoin does not work as another user with same temporary context if account binding is violated
+- [x] Rejoin works after closing tab and reopening if session remains
+- [x] Rejoin does not work as another user with same temporary context if account binding is violated
 - [x] Kicked temporary user cannot directly rejoin
 - [x] Kicked temporary user lands back in lobby or is blocked
 - [x] Kicked logged-in user cannot immediately reenter through same link if kick overrides access
@@ -1667,13 +1671,13 @@ Docker SQLite run passed.
 - [x] Kick state is stored server-side
 - [ ] Kick state is scoped to affected call if intended
 - [ ] Kick state is scoped to affected user / temporary account
-- [ ] Registered authorized user can rejoin after leaving
-- [ ] Admin can rejoin after leaving
-- [ ] Organization admin can rejoin after leaving
-- [ ] Guest-list user can rejoin after leaving
-- [ ] Rejoin after guest-list removal is denied or routed to lobby
+- [x] Registered authorized user can rejoin after leaving
+- [x] Admin can rejoin after leaving
+- [x] Organization admin can rejoin after leaving
+- [x] Guest-list user can rejoin after leaving
+- [x] Rejoin after guest-list removal is denied or routed to lobby
 - [x] Rejoin after admin-role removal uses updated permissions
-- [ ] Rejoin after owner transfer uses updated permissions
+- [x] Rejoin after owner transfer uses updated permissions
 
 Proof: `call-access-rejoin-kick-membership.spec.js` covers network reconnect
 backfill without a leave frame, explicit hangup followed by same-session rejoin
@@ -1691,6 +1695,13 @@ second approval in the full lobby-to-call journey. The backend
 kicked temporary guests and active logged-in participants cannot directly
 rejoin, are routed back to renewed approval/blocked state, and that the
 persisted kick state overrides previous admission.
+Additional proof: `call-access-rejoin-refresh-session-safety-contract.php`
+passed in Docker PHP 8.4 and covers registered, system-admin, org-admin,
+guest-list, temporary guest-list, guest-list-removal, owner-transfer, and
+temporary account-binding rejoin safety. `npx playwright test
+tests/e2e/call-access-rejoin-kick-membership.spec.js --workers=1
+--reporter=list` passed 6 tests, including browser refresh, same-context tab
+close/reopen, and network reconnect.
 
 ## 13. Temporary Moderators
 
@@ -2623,14 +2634,14 @@ against duplicate join/session request loops.
 ## Test Group: Rejoin and Kick
 
 - [x] `e2e_rejoin_001_admitted_temp_user_can_rejoin`
-- [ ] `e2e_rejoin_002_rejoin_after_refresh`
-- [ ] `e2e_rejoin_003_rejoin_after_network_interruption`
+- [x] `e2e_rejoin_002_rejoin_after_refresh`
+- [x] `e2e_rejoin_003_rejoin_after_network_interruption`
 - [x] `e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin`
 - [x] `e2e_rejoin_005_kick_overrides_previous_admission`
-- [ ] `e2e_rejoin_006_registered_guest_can_rejoin`
+- [x] `e2e_rejoin_006_registered_guest_can_rejoin`
 - [x] `e2e_rejoin_007_rejoin_after_guest_list_removal_blocked_or_lobby`
 - [x] `e2e_rejoin_008_rejoin_after_admin_role_removed_uses_new_permissions`
-- [ ] `e2e_rejoin_009_rejoin_after_owner_transfer_uses_new_permissions`
+- [x] `e2e_rejoin_009_rejoin_after_owner_transfer_uses_new_permissions`
 - [x] `e2e_rejoin_010_kicked_logged_in_user_cannot_direct_rejoin`
 
 ## Test Group: Temporary Moderators
