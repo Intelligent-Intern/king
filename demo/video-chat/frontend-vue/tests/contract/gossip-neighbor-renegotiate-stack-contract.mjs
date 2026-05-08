@@ -108,6 +108,65 @@ class StableDeferredPeerConnection {
   }
 }
 
+class SetLocalGlareDeferredPeerConnection {
+  static instances = []
+
+  constructor() {
+    this.listeners = new Map()
+    this.signalingState = 'stable'
+    this.connectionState = 'new'
+    this.localDescription = null
+    this.remoteDescription = null
+    this.createOfferCalls = 0
+    this.setLocalOfferCalls = 0
+    this.closed = false
+    SetLocalGlareDeferredPeerConnection.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  async createOffer() {
+    this.createOfferCalls += 1
+    return { type: 'offer', sdp: 'v=0\r\n' }
+  }
+
+  async setLocalDescription(description) {
+    if (description?.type === 'offer') {
+      this.setLocalOfferCalls += 1
+      if (this.setLocalOfferCalls === 1) {
+        this.signalingState = 'have-remote-offer'
+        throw new Error(
+          "Failed to execute 'setLocalDescription' on 'RTCPeerConnection': Failed to set local offer sdp: Called in wrong state: have-remote-offer",
+        )
+      }
+      this.signalingState = 'have-local-offer'
+    }
+    this.localDescription = description
+  }
+
+  async setRemoteDescription(description) {
+    this.remoteDescription = description
+  }
+
+  async createAnswer() {
+    return { type: 'answer', sdp: 'v=0\r\n' }
+  }
+
+  async addIceCandidate() {}
+
+  releaseStableSignaling() {
+    this.signalingState = 'stable'
+    this.listeners.get('signalingstatechange')?.({ type: 'signalingstatechange' })
+  }
+
+  close() {
+    this.closed = true
+    this.signalingState = 'closed'
+  }
+}
+
 try {
   globalThis.RTCPeerConnection = ReentrantOfferFailurePeerConnection
 
@@ -212,6 +271,56 @@ try {
     'stable signaling transition must release the queued gossip renegotiation exactly once',
   )
   assert.equal(sentFrames.length, 1, 'stable signaling release must send the deferred gossip offer')
+
+  globalThis.RTCPeerConnection = SetLocalGlareDeferredPeerConnection
+  const glareDiagnostics = []
+  const glareSentFrames = []
+  const glareLifecycle = createGossipNeighborLifecycle({
+    callbacks: {
+      activeCallId: () => 'call-prod-set-local-glare',
+      activeRoomId: () => 'room-prod-set-local-glare',
+      captureClientDiagnostic: (event) => glareDiagnostics.push(event),
+      currentUserId: () => 3001,
+      getDataTransport: () => ({
+        bindPeerConnection: () => {},
+        close: () => {},
+      }),
+      sendSocketFrame: (frame) => {
+        glareSentFrames.push(frame)
+        return true
+      },
+    },
+  })
+
+  glareLifecycle.applyAssignedNeighbors(
+    { topology_epoch: 44, admitted_peers: [{ peer_id: 3002 }] },
+    new Set(['3002']),
+  )
+
+  await delay(75)
+  const glarePeerConnection = SetLocalGlareDeferredPeerConnection.instances[0]
+  assert.equal(
+    glarePeerConnection.createOfferCalls,
+    1,
+    'setLocalDescription wrong-state glare must not spin before signaling returns to stable',
+  )
+  assert.equal(
+    glareDiagnostics.filter((event) => event?.eventType === 'gossip_neighbor_offer_failed').length,
+    0,
+    'setLocalDescription wrong-state glare must be deferred rather than reported as a dead offer failure',
+  )
+  assert.ok(
+    glareDiagnostics.some((event) => event?.eventType === 'gossip_neighbor_offer_deferred'),
+    'setLocalDescription wrong-state glare must emit a deferred offer diagnostic',
+  )
+  glarePeerConnection.releaseStableSignaling()
+  await delay(75)
+  assert.equal(
+    glarePeerConnection.setLocalOfferCalls,
+    2,
+    'stable signaling after setLocalDescription glare must retry the local offer once',
+  )
+  assert.equal(glareSentFrames.length, 1, 'setLocalDescription glare recovery must send the deferred gossip offer')
 
   console.log('[gossip-neighbor-renegotiate-stack-contract] PASS')
 } finally {
