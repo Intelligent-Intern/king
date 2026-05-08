@@ -9,6 +9,7 @@ require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../http/module_calls.php';
 
 function videochat_call_lifecycle_contract_assert(bool $condition, string $message): void
 {
@@ -26,6 +27,41 @@ function videochat_call_lifecycle_contract_user(PDO $pdo, int $userId): array
     $query->execute([':id' => $userId]);
     $row = $query->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : [];
+}
+
+function videochat_call_lifecycle_contract_json_response(int $status, array $payload): array
+{
+    return [
+        'status' => $status,
+        'headers' => ['content-type' => 'application/json; charset=utf-8'],
+        'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+    ];
+}
+
+function videochat_call_lifecycle_contract_error_response(int $status, string $code, string $message, array $details = []): array
+{
+    $error = ['code' => $code, 'message' => $message];
+    if ($details !== []) {
+        $error['details'] = $details;
+    }
+
+    return videochat_call_lifecycle_contract_json_response($status, [
+        'status' => 'error',
+        'error' => $error,
+        'time' => gmdate('c'),
+    ]);
+}
+
+function videochat_call_lifecycle_contract_decode_body(array $request): array
+{
+    $payload = json_decode((string) ($request['body'] ?? ''), true);
+    return is_array($payload) ? [$payload, null] : [null, 'invalid_json'];
+}
+
+function videochat_call_lifecycle_contract_response_payload(array $response): array
+{
+    $payload = json_decode((string) ($response['body'] ?? ''), true);
+    return is_array($payload) ? $payload : [];
 }
 
 function videochat_call_lifecycle_contract_participant(PDO $pdo, string $callId, int $userId): array
@@ -228,6 +264,91 @@ function videochat_call_lifecycle_contract_create_personal_link(
     return $accessId;
 }
 
+function videochat_call_lifecycle_contract_create_open_link(
+    PDO $pdo,
+    string $callId,
+    int $ownerUserId,
+    int $tenantId
+): string {
+    $result = videochat_create_call_access_link_for_user($pdo, $callId, $ownerUserId, 'admin', [
+        'link_kind' => 'open',
+    ], $tenantId);
+    videochat_call_lifecycle_contract_assert((bool) ($result['ok'] ?? false), 'open access link should be created');
+    $accessId = videochat_call_lifecycle_contract_access_id($result);
+    videochat_call_lifecycle_contract_assert($accessId !== '', 'open access id should be present');
+    return $accessId;
+}
+
+function videochat_call_lifecycle_contract_lobby_waiting_count(PDO $pdo, string $callId): int
+{
+    return videochat_call_lifecycle_contract_count(
+        $pdo,
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND source = 'internal'
+  AND coalesce(call_role, 'participant') <> 'owner'
+  AND invite_state IN ('pending', 'allowed')
+  AND (joined_at IS NULL OR joined_at = '')
+SQL,
+        [':call_id' => $callId]
+    );
+}
+
+function videochat_call_lifecycle_contract_insert_late_retained_link(
+    PDO $pdo,
+    string $callId,
+    int $ownerUserId,
+    int $participantUserId,
+    int $tenantId
+): string {
+    $accessId = videochat_generate_call_access_uuid();
+    $tenantColumn = videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id') ? ', tenant_id' : '';
+    $tenantValue = $tenantColumn !== '' ? ', :tenant_id' : '';
+    $insert = $pdo->prepare(
+        <<<SQL
+INSERT INTO call_access_links(
+    id,
+    call_id,
+    participant_user_id,
+    participant_email,
+    invite_code_id,
+    created_by_user_id,
+    created_at,
+    expires_at,
+    last_used_at,
+    consumed_at{$tenantColumn}
+) VALUES(
+    :id,
+    :call_id,
+    :participant_user_id,
+    NULL,
+    NULL,
+    :created_by_user_id,
+    :created_at,
+    :expires_at,
+    NULL,
+    NULL{$tenantValue}
+)
+SQL
+    );
+    $params = [
+        ':id' => $accessId,
+        ':call_id' => $callId,
+        ':participant_user_id' => $participantUserId,
+        ':created_by_user_id' => $ownerUserId,
+        ':created_at' => gmdate('c'),
+        ':expires_at' => gmdate('c', time() + 3600),
+    ];
+    if ($tenantColumn !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $insert->execute($params);
+
+    return $accessId;
+}
+
 function videochat_call_lifecycle_contract_mark_joined(PDO $pdo, string $callId, int $userId, string $state): void
 {
     $update = $pdo->prepare(
@@ -261,6 +382,7 @@ try {
 
     videochat_bootstrap_sqlite($databasePath);
     $pdo = videochat_open_sqlite_pdo($databasePath);
+    $openDatabase = static fn (): PDO => $pdo;
 
     $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
     $adminUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('admin@intelligent-intern.com') LIMIT 1")->fetchColumn();
@@ -405,7 +527,13 @@ try {
     $endRoomId = (string) ($endCall['room_id'] ?? '');
     $endGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle End Guest', $tenantId);
     $endGuestId = (int) ($endGuest['id'] ?? 0);
+    $endPendingGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle End Pending Guest', $tenantId);
+    $endPendingGuestId = (int) ($endPendingGuest['id'] ?? 0);
+    $endAdmittedGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle End Admitted Guest', $tenantId);
+    $endAdmittedGuestId = (int) ($endAdmittedGuest['id'] ?? 0);
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endGuestId, (string) ($endGuest['email'] ?? ''), (string) ($endGuest['display_name'] ?? ''), 'allowed');
+    videochat_ensure_internal_call_participant($pdo, $endCallId, $endPendingGuestId, (string) ($endPendingGuest['email'] ?? ''), (string) ($endPendingGuest['display_name'] ?? ''), 'pending');
+    videochat_ensure_internal_call_participant($pdo, $endCallId, $endAdmittedGuestId, (string) ($endAdmittedGuest['email'] ?? ''), (string) ($endAdmittedGuest['display_name'] ?? ''), 'allowed');
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $registeredUserId, 'allowed');
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $endGuestId, 'allowed');
     $endRegisteredAccessId = videochat_call_lifecycle_contract_create_personal_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
@@ -416,38 +544,122 @@ try {
     videochat_call_lifecycle_contract_assert((bool) (videochat_call_lifecycle_contract_issue_session($pdo, $endGuestAccessId, $endGuestSessionId)['ok'] ?? false), 'end guest session should issue');
     videochat_call_lifecycle_contract_add_presence($pdo, $endCallId, $endRoomId, $registeredUserId, $endRegisteredSessionId, 'end_registered');
     videochat_call_lifecycle_contract_add_presence($pdo, $endCallId, $endRoomId, $endGuestId, $endGuestSessionId, 'end_guest');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_lobby_waiting_count($pdo, $endCallId) === 2, 'end setup should have queued and admitted lobby entries');
 
     $endResult = videochat_end_call($pdo, $endCallId, $adminUserId, 'admin', $tenantId);
     videochat_call_lifecycle_contract_assert((bool) ($endResult['ok'] ?? false), 'end call should succeed');
     videochat_call_lifecycle_contract_assert((string) (($endResult['call'] ?? [])['status'] ?? '') === 'ended', 'end should return ended call');
     videochat_call_lifecycle_contract_assert((string) (videochat_resolve_call_access_public($pdo, $endRegisteredAccessId)['reason'] ?? '') === 'not_found', 'ended registered stale link should be safe not-found');
     videochat_call_lifecycle_contract_assert((string) (videochat_resolve_call_access_public($pdo, $endGuestAccessId)['reason'] ?? '') === 'not_found', 'ended guest stale link should be safe not-found');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_link_count($pdo, $endCallId) === 0, 'end should delete personalized links');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_session_revoked($pdo, $endRegisteredSessionId), 'end registered session should be revoked');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_session_revoked($pdo, $endGuestSessionId), 'end guest session should be revoked');
     videochat_call_lifecycle_contract_assert_auth_denied($pdo, $endRegisteredSessionId, $endCallId);
     videochat_call_lifecycle_contract_assert_auth_denied($pdo, $endGuestSessionId, $endCallId);
     videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $endGuestId)['status'] ?? '') === 'disabled', 'end should disable temp guest');
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $endPendingGuestId)['status'] ?? '') === 'disabled', 'end should disable pending temp guest');
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $endAdmittedGuestId)['status'] ?? '') === 'disabled', 'end should disable admitted temp guest');
     videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $registeredUserId)['status'] ?? '') === 'active', 'end must not disable registered user');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_presence_count($pdo, $endCallId) === 0, 'end should clear stored presence');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_lobby_waiting_count($pdo, $endCallId) === 0, 'end should clear lobby entries');
     $endedRegisteredParticipant = videochat_call_lifecycle_contract_participant($pdo, $endCallId, $registeredUserId);
     videochat_call_lifecycle_contract_assert((string) ($endedRegisteredParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel registered participant');
     videochat_call_lifecycle_contract_assert(trim((string) ($endedRegisteredParticipant['left_at'] ?? '')) !== '', 'end should mark active registered participant left');
     $endedGuestParticipant = videochat_call_lifecycle_contract_participant($pdo, $endCallId, $endGuestId);
     videochat_call_lifecycle_contract_assert((string) ($endedGuestParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel guest participant');
+    $endedPendingParticipant = videochat_call_lifecycle_contract_participant($pdo, $endCallId, $endPendingGuestId);
+    videochat_call_lifecycle_contract_assert((string) ($endedPendingParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel queued lobby participant');
+    $endedAdmittedParticipant = videochat_call_lifecycle_contract_participant($pdo, $endCallId, $endAdmittedGuestId);
+    videochat_call_lifecycle_contract_assert((string) ($endedAdmittedParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel admitted lobby participant');
     $endedOwnerDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $adminUserId, 'admin', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedOwnerDecision['allowed'] ?? true), 'ended call should deny owner/admin join');
     videochat_call_lifecycle_contract_assert((string) ($endedOwnerDecision['reason'] ?? '') === 'call_not_joinable', 'ended owner denial reason mismatch');
+    $endedResolvePath = '/api/calls/resolve/' . $endCallId;
+    $endedResolveResponse = videochat_handle_call_routes(
+        $endedResolvePath,
+        'GET',
+        ['method' => 'GET', 'uri' => $endedResolvePath, 'headers' => []],
+        [
+            'ok' => true,
+            'user' => ['id' => $adminUserId, 'role' => 'admin'],
+            'session' => ['id' => 'sess_call_lifecycle_admin_resolve'],
+            'tenant' => ['id' => $tenantId],
+        ],
+        'videochat_call_lifecycle_contract_json_response',
+        'videochat_call_lifecycle_contract_error_response',
+        'videochat_call_lifecycle_contract_decode_body',
+        $openDatabase
+    );
+    videochat_call_lifecycle_contract_assert(is_array($endedResolveResponse), 'ended direct resolve response should exist');
+    videochat_call_lifecycle_contract_assert((int) ($endedResolveResponse['status'] ?? 0) === 200, 'ended direct resolve should use safe ok envelope');
+    $endedResolvePayload = videochat_call_lifecycle_contract_response_payload($endedResolveResponse);
+    videochat_call_lifecycle_contract_assert((string) (($endedResolvePayload['result'] ?? [])['state'] ?? '') === 'forbidden', 'ended direct resolve should be forbidden');
+    videochat_call_lifecycle_contract_assert((string) (($endedResolvePayload['result'] ?? [])['reason'] ?? '') === 'call_not_joinable_from_status', 'ended direct resolve reason mismatch');
+    videochat_call_lifecycle_contract_assert(($endedResolvePayload['result']['call'] ?? null) === null, 'ended direct resolve must not expose call payload');
+    videochat_call_lifecycle_contract_assert(!str_contains((string) ($endedResolveResponse['body'] ?? ''), 'Lifecycle End Call'), 'ended direct resolve must not leak title');
     $endedRegisteredDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $registeredUserId, 'user', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedRegisteredDecision['allowed'] ?? true), 'ended call should deny active participant join');
     videochat_call_lifecycle_contract_assert((string) ($endedRegisteredDecision['reason'] ?? '') === 'call_not_joinable', 'ended participant denial reason mismatch');
+    $lateEndedAccessId = videochat_call_lifecycle_contract_insert_late_retained_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
+    $lateEndedResolve = videochat_resolve_call_access_public($pdo, $lateEndedAccessId);
+    videochat_call_lifecycle_contract_assert(!(bool) ($lateEndedResolve['ok'] ?? true), 'late retained ended link must not resolve');
+    videochat_call_lifecycle_contract_assert((string) ($lateEndedResolve['reason'] ?? '') === 'conflict', 'late retained ended link should expose safe ended-call conflict');
+    videochat_call_lifecycle_contract_assert(($lateEndedResolve['call'] ?? null) === null, 'late retained ended link must not expose call payload');
+    $lateEndedSession = videochat_call_lifecycle_contract_issue_session(
+        $pdo,
+        $lateEndedAccessId,
+        'sess_call_lifecycle_late_ended'
+    );
+    videochat_call_lifecycle_contract_assert(!(bool) ($lateEndedSession['ok'] ?? true), 'late retained ended link must not issue a session');
+    videochat_call_lifecycle_contract_assert((string) ($lateEndedSession['reason'] ?? '') === 'conflict', 'late retained ended session reason mismatch');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count($pdo, 'SELECT COUNT(*) FROM sessions WHERE id = :id', [':id' => 'sess_call_lifecycle_late_ended']) === 0, 'late retained ended session must not be inserted');
     videochat_call_lifecycle_contract_assert_lifecycle_audit($pdo, $tenantId, $endCallId, 'call_ended', 'ended', 2, 2, 2);
     videochat_call_lifecycle_contract_assert_guest_cleanup_event($pdo, $tenantId, $endCallId);
     videochat_call_lifecycle_contract_assert_no_audit_leak($pdo, $endCallId, [
         $endRegisteredAccessId,
         $endGuestAccessId,
+        $lateEndedAccessId,
         $endRegisteredSessionId,
         $endGuestSessionId,
         (string) ($endGuest['email'] ?? ''),
+        (string) ($endPendingGuest['email'] ?? ''),
+        (string) ($endAdmittedGuest['email'] ?? ''),
+    ]);
+
+    $openEndCreate = videochat_create_call($pdo, $adminUserId, [
+        'title' => 'Lifecycle End Anonymous Link Call',
+        'access_mode' => 'free_for_all',
+        'starts_at' => '2026-10-14T09:00:00Z',
+        'ends_at' => '2026-10-14T10:00:00Z',
+        'internal_participant_user_ids' => [],
+        'external_participants' => [],
+    ], $tenantId);
+    videochat_call_lifecycle_contract_assert((bool) ($openEndCreate['ok'] ?? false), 'open end call should be created');
+    $openEndCall = is_array($openEndCreate['call'] ?? null) ? $openEndCreate['call'] : [];
+    $openEndCallId = (string) ($openEndCall['id'] ?? '');
+    $openEndAccessId = videochat_call_lifecycle_contract_create_open_link($pdo, $openEndCallId, $adminUserId, $tenantId);
+    $openEndSessionId = 'sess_call_lifecycle_end_open_guest';
+    $openEndSession = videochat_call_lifecycle_contract_issue_session($pdo, $openEndAccessId, $openEndSessionId, [
+        'guest_name' => 'Lifecycle End Anonymous Guest',
+    ]);
+    videochat_call_lifecycle_contract_assert((bool) ($openEndSession['ok'] ?? false), 'end open guest session should issue');
+    $openEndGuestId = (int) (($openEndSession['user'] ?? [])['id'] ?? 0);
+    videochat_call_lifecycle_contract_assert($openEndGuestId > 0, 'end open guest id should be present');
+    $openEndResult = videochat_end_call($pdo, $openEndCallId, $adminUserId, 'admin', $tenantId);
+    videochat_call_lifecycle_contract_assert((bool) ($openEndResult['ok'] ?? false), 'open end call should end');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_link_count($pdo, $openEndCallId) === 0, 'end should delete anonymous open link');
+    videochat_call_lifecycle_contract_assert((string) (videochat_resolve_call_access_public($pdo, $openEndAccessId)['reason'] ?? '') === 'not_found', 'ended anonymous stale link should be safe not-found');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_session_revoked($pdo, $openEndSessionId), 'end anonymous session should be revoked');
+    videochat_call_lifecycle_contract_assert_auth_denied($pdo, $openEndSessionId, $openEndCallId);
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $openEndGuestId)['status'] ?? '') === 'disabled', 'end should disable anonymous temp guest');
+    $openEndedAdminDecision = videochat_decide_call_access_for_user($pdo, $openEndCallId, $adminUserId, 'admin', $tenantId);
+    videochat_call_lifecycle_contract_assert(!(bool) ($openEndedAdminDecision['allowed'] ?? true), 'ended open call should deny system admin normal join');
+    videochat_call_lifecycle_contract_assert_lifecycle_audit($pdo, $tenantId, $openEndCallId, 'call_ended', 'ended', 1, 1, 0);
+    videochat_call_lifecycle_contract_assert_guest_cleanup_event($pdo, $tenantId, $openEndCallId);
+    videochat_call_lifecycle_contract_assert_no_audit_leak($pdo, $openEndCallId, [
+        $openEndAccessId,
+        $openEndSessionId,
+        (string) (($openEndSession['user'] ?? [])['email'] ?? ''),
     ]);
 
     @unlink($databasePath);

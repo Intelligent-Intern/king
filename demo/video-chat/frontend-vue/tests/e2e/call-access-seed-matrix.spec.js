@@ -23,6 +23,8 @@ const allowedDirectJoinScenarios = [
 ];
 
 const deniedDirectJoinScenarios = [
+  'direct_join_system_admin_explicit_ended_call_denied',
+  'direct_join_org_admin_explicit_ended_call_denied',
   'direct_join_org_admin_foreign_organization_denied',
   'direct_join_system_admin_deleted_call_denied',
   'direct_join_system_admin_ended_call_denied',
