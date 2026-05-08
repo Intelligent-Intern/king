@@ -438,6 +438,10 @@ Tickets:
       `presence.types` and are rejected by CRDT append persistence.
     - Whiteboard emits throttled `call_app.presence.publish` messages for
       cursor and selection state.
+    - Additional merged proof gates cursor presence by Call App grants, keeps
+      named remote cursors visible only for authorized participants, and clears
+      cursor/selection state after revocation:
+      `call-app-whiteboard-cursors-access-contract`.
     - Move undo/redo for shapes, text, and sticky notes uses CRDT update ops.
     - Browser E2E covers duplicate/out-of-order replay injection, throttled
       non-persistent presence, snapshot compaction, revoke, and reconnect.
@@ -487,6 +491,10 @@ Tickets:
       snapshot compaction.
     - Frontend Call App bridges emit `king:call-app-diagnostic` browser events
       and redact sensitive fields before dispatching diagnostics.
+    - `prod-debug.sh` provides a read-only production diagnostics process for
+      runtime/version, app/CDN/API/WS/SFU reachability, marketplace/call-app
+      checks, container status, and redacted recent logs without deploys,
+      restarts, DB writes, DNS changes, or admin actions.
     - `WHITEBOARD_CHECK.md` is an unfilled manual acceptance form for owner,
       moderator, participant, guest, revoked participant, reconnect, and export.
     - Exact commands:
@@ -1106,9 +1114,9 @@ The sprint is complete when:
 - [ ] Logged-in user remains logged in when opening a call link
 - [ ] Logged-out user has no active account session
 - [ ] User without organization cannot receive organization-based rights
-- [ ] User from organization A does not receive rights from organization B
-- [ ] Organization admin from organization A cannot join organization B calls through org-admin rights
-- [ ] Organization role is evaluated server-side
+- [x] User from organization A does not receive rights from organization B
+- [x] Organization admin from organization A cannot join organization B calls through org-admin rights
+- [x] Organization role is evaluated server-side
 - [ ] Stale organization role in client cache is ignored
 - [ ] Stale organization role in session token is revalidated where required
 
@@ -1543,7 +1551,7 @@ The sprint is complete when:
 - [x] Organization admin from organization A receives no org-admin rights in organization B call
 - [ ] User with accounts in multiple organizations is checked in correct call context
 - [ ] Changing active organization in frontend does not change server-side call permission
-- [ ] Guest-list entry in organization A does not apply to organization B
+- [x] Guest-list entry in organization A does not apply to organization B
 - [ ] Temporary account from organization A invitation receives no rights in organization B
 - [ ] Owner rights of organization A call do not apply to organization B call
 - [ ] Review flags are assigned to correct organization / call
