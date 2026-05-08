@@ -101,6 +101,7 @@
         "frontend-vue/tests/e2e/call-access-cross-org-foreign-join.spec.js",
         "frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js",
         "frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js",
+        "frontend-vue/tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js",
         "frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js"
       ]
     },
