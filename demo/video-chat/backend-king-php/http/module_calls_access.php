@@ -266,19 +266,16 @@ function videochat_handle_call_access_routes(
             }
             if ($reason === 'conflict') {
                 return $errorResponse(409, 'call_access_conflict', 'Call access cannot be used for the current call state.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
             if ($reason === 'forbidden') {
                 return $errorResponse(403, 'call_access_forbidden', 'Call access link is not allowed for this call participant.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
             if ($reason === 'rate_limited') {
                 return $errorResponse(429, 'call_access_rate_limited', 'Call access confirmation is rate-limited.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
