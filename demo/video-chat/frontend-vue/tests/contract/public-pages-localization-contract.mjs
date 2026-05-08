@@ -83,6 +83,7 @@ assert.match(appointmentBookingModalCssSource, /\.appointment-mobile-day-rail\s*
 assert.match(appointmentApiSource, /localizedApiErrorMessage\(payload,\s*fallback\)/, 'public appointment API errors must resolve through stable codes');
 assert.doesNotMatch(appointmentApiSource, /payload\?\.error\?\.message/, 'public appointment API must not display backend English error messages directly');
 assert.match(joinViewSource, /localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must resolve through stable codes');
+assert.match(joinViewSource, /payload = payload && typeof payload === 'object'[\s\S]*localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must preserve backend stable codes before localization');
 assert.match(joinViewSource, /localizedApiErrorMessage\(\{ error: \{ code: 'call_access_validation_failed' \} \},\s*t\('public\.join\.access_invalid'\)\)/, 'public join validation fallback must use translation keys');
 assert.match(joinViewSource, /localizedApiErrorMessage\(errorPayload,\s*t\('public\.join\.start_session_failed'\)\)/, 'public join session errors must resolve through stable codes');
 assert.doesNotMatch(joinViewSource, /result\.message/, 'public join session errors must not display pre-localized backend messages directly');
