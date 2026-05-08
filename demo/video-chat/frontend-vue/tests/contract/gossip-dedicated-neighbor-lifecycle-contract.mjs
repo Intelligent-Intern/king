@@ -52,6 +52,19 @@ assert(
   'gossip_neighbor signaling must be consumed by the dedicated lifecycle, not by native media signaling',
 )
 assert(
+  /function scheduleQueuedRenegotiate\(peer,\s*reason = 'queued_renegotiate'\)/.test(lifecycle)
+    && /queuedRenegotiateTimer/.test(lifecycle)
+    && /GOSSIP_NEIGHBOR_RENEGOTIATE_MAX_ATTEMPTS/.test(lifecycle)
+    && /gossip_neighbor_renegotiate_quarantined/.test(lifecycle)
+    && /scheduleQueuedRenegotiate\(peer,\s*'queued_renegotiate'\)/.test(lifecycle)
+    && !/void negotiatePeer\(peer,\s*'queued_renegotiate'\)/.test(lifecycle),
+  'queued Gossip neighbor renegotiation must be deduped and bounded instead of recursively calling negotiatePeer from finally',
+)
+assert(
+  /function closePeer\(peerId,\s*reason = 'retired'\)[\s\S]*clearQueuedRenegotiate\(peer\)[\s\S]*peer\.pc\?\.close\?\.\(\)/.test(lifecycle),
+  'closing a Gossip neighbor must clear pending queued renegotiation timers before closing the peer connection',
+)
+assert(
   /import \{ createGossipNeighborLifecycle \} from '\.\/gossipNeighborLifecycle'/.test(dataLane)
     && /const assignedGossipNeighborIds = new Set\(\)/.test(dataLane)
     && /ensureGossipNeighborLifecycle\(\)\?\.applyAssignedNeighbors\(topologyHint,\s*assignedGossipNeighborIds\)/.test(dataLane)
