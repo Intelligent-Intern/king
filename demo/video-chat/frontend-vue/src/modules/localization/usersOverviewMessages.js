@@ -16,6 +16,7 @@ export const USERS_OVERVIEW_MESSAGES = Object.freeze({
   'users.overview.gossip_no_node_selected': 'No node selected',
   'users.overview.gossip_peer_detail': '{neighbors} neighbors · {sent} sent · {received} received · {repairs} repairs',
   'users.overview.gossip_room_detail': '{neighbors} assigned gossip links',
+  'users.overview.gossip_select_call': 'Live call',
   'users.overview.gossip_status_degraded': 'degraded',
   'users.overview.gossip_status_healthy': 'healthy',
   'users.overview.gossip_status_observing': 'observing',

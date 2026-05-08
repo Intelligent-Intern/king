@@ -93,6 +93,23 @@ SQL
         ['call-ops-ended', 'room-ops-ended', 'Ended With Stale Presence', $adminUserId, 'ended', '2026-04-21T10:00:00Z', '2026-04-21T10:30:00Z'],
     ];
 
+    $insertRoom = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+SQL
+    );
+    foreach ($calls as $call) {
+        [$id, $roomId, $title, $ownerUserId] = $call;
+        $insertRoom->execute([
+            ':id' => $roomId,
+            ':name' => $title,
+            ':created_by_user_id' => $ownerUserId,
+            ':created_at' => '2026-04-21T09:00:00Z',
+            ':updated_at' => '2026-04-21T09:00:00Z',
+        ]);
+    }
+
     foreach ($calls as [$id, $roomId, $title, $ownerUserId, $status, $startsAt, $endsAt]) {
         $insertCall->execute([
             ':id' => $id,
@@ -204,8 +221,19 @@ SQL
     videochat_admin_video_ops_assert((int) (($runningCalls[0]['assigned_participants'] ?? [])['total'] ?? 0) === 3, 'alpha assigned participants mismatch');
     videochat_admin_video_ops_assert((int) (($runningCalls[0]['sfu'] ?? [])['publisher_users'] ?? 0) === 2, 'alpha SFU publisher users mismatch');
     videochat_admin_video_ops_assert((int) (($runningCalls[0] ?? [])['uptime_seconds'] ?? 0) === 7200, 'alpha uptime mismatch');
+    videochat_admin_video_ops_assert((string) (($runningCalls[0]['gossip'] ?? [])['scope'] ?? '') === 'call', 'alpha gossip map must be scoped to the running call');
+    videochat_admin_video_ops_assert((string) (($runningCalls[0]['gossip'] ?? [])['topology_state'] ?? '') === 'spawned', 'alpha gossip topology must spawn from fresh call presence');
+    videochat_admin_video_ops_assert((int) (($runningCalls[0]['gossip'] ?? [])['topology_peer_count'] ?? 0) === 2, 'alpha gossip topology peer count mismatch');
+    $alphaTopologyByPeer = (array) (($runningCalls[0] ?? [])['gossip_topology_by_peer_id'] ?? []);
+    videochat_admin_video_ops_assert(count($alphaTopologyByPeer) === 2, 'alpha must expose one gossip topology payload per fresh peer');
+    $alphaFirstTopology = (array) reset($alphaTopologyByPeer);
+    videochat_admin_video_ops_assert((string) ($alphaFirstTopology['topology_feature'] ?? '') === 'room_state', 'alpha gossip topology must use room-state feature hints');
+    videochat_admin_video_ops_assert(is_array($alphaFirstTopology['admitted_peers'] ?? null), 'alpha gossip topology must expose admitted peers');
+    videochat_admin_video_ops_assert(is_array($alphaFirstTopology['assigned_neighbors'] ?? null), 'alpha gossip topology must expose assigned neighbor links');
     videochat_admin_video_ops_assert((int) (($runningCalls[1]['live_participants'] ?? [])['external'] ?? 0) === 1, 'beta live external participants mismatch');
     videochat_admin_video_ops_assert((int) (($runningCalls[1]['sfu'] ?? [])['publishers'] ?? 0) === 1, 'beta SFU publishers mismatch');
+    videochat_admin_video_ops_assert((string) (($runningCalls[1]['gossip'] ?? [])['lifecycle'] ?? '') === 'running', 'beta gossip map lifecycle must follow the live call');
+    videochat_admin_video_ops_assert((int) (($runningCalls[1]['gossip'] ?? [])['topology_peer_count'] ?? 0) === 1, 'beta gossip topology peer count mismatch');
     videochat_admin_video_ops_assert(!in_array('call-ops-idle', array_column($runningCalls, 'id'), true), 'idle call without fresh presence must not be live');
 
     $jsonResponse = static function (int $status, array $payload): array {
@@ -248,6 +276,24 @@ SQL
         $openDatabase
     );
     videochat_admin_video_ops_assert($unrelated === null, 'unrelated route should not be handled');
+
+    $routeNowMs = time() * 1000;
+    $refreshPresence = $pdo->prepare(
+        <<<'SQL'
+UPDATE realtime_presence_connections
+SET last_seen_at_ms = :last_seen_at_ms
+WHERE connection_id IN ('presence-alpha-admin', 'presence-alpha-user', 'presence-beta-guest', 'presence-cancelled-fresh')
+SQL
+    );
+    $refreshPresence->execute([':last_seen_at_ms' => $routeNowMs]);
+    $refreshSfu = $pdo->prepare(
+        <<<'SQL'
+UPDATE sfu_publishers
+SET updated_at_ms = :updated_at_ms
+WHERE publisher_id IN ('pub-alpha-admin', 'pub-alpha-user', 'pub-beta-guest')
+SQL
+    );
+    $refreshSfu->execute([':updated_at_ms' => $routeNowMs]);
 
     $response = videochat_handle_operations_routes(
         '/api/admin/video-operations',

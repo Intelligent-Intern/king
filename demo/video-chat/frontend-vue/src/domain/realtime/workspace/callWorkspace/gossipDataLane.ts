@@ -849,6 +849,10 @@ export function createCallWorkspaceGossipDataLane({
     return lastGossipRolloutGateState ? { ...lastGossipRolloutGateState } : null;
   }
 
+  function getAssignedGossipNeighborCount() {
+    return assignedGossipNeighborIds.size;
+  }
+
   function teardownGossipDataLane() {
     if (typeof unsubscribeLiveGossipDelivery === 'function') {
       unsubscribeLiveGossipDelivery();
@@ -872,6 +876,7 @@ export function createCallWorkspaceGossipDataLane({
   return {
     applyGossipTelemetryAck,
     applyGossipTopologyHint,
+    getAssignedGossipNeighborCount,
     getGossipRolloutGateState,
     handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
     pruneGossipNeighborForUserId,

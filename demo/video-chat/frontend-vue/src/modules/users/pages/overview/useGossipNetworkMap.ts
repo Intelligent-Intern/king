@@ -32,6 +32,11 @@ export interface GossipNetworkEdge {
 }
 
 export interface GossipNetworkMap {
+  callKey: string;
+  callId: string;
+  roomId: string;
+  title: string;
+  lifecycle: string;
   nodes: GossipNetworkNode[];
   edges: GossipNetworkEdge[];
   analysis: string[];
@@ -86,6 +91,13 @@ function healthTagClass(health: GossipNetworkHealth): string {
 function compactLabel(value: string, fallback: string): string {
   const label = value.trim() || fallback;
   return label.length > 24 ? `${label.slice(0, 21)}...` : label;
+}
+
+export function gossipNetworkMapCallKey(callValue: unknown): string {
+  const call = asRecord(callValue);
+  const roomId = firstString(call.room_id, call.roomId);
+  const callId = firstString(call.id, call.call_id, roomId);
+  return `${callId || 'call'}::${roomId || 'room'}`;
 }
 
 function telemetryCounters(peerTelemetry: RawRecord): RawRecord {
@@ -227,22 +239,21 @@ function buildAnalysis({
   return lines;
 }
 
-export function useGossipNetworkMap(
-  operationsState: RawRecord,
-  selectedNodeId: Ref<string>,
-) {
-  return computed<GossipNetworkMap>(() => {
+function buildGossipNetworkMapForCall(
+  callValue: unknown,
+  aggregateTelemetry: RawRecord,
+  selectedNodeId: string,
+): GossipNetworkMap {
     const nodes = new Map<string, GossipNetworkNode>();
     const edges = new Map<string, Omit<GossipNetworkEdge, 'x1' | 'y1' | 'x2' | 'y2'>>();
-    const runningCalls = asArray(operationsState.runningCalls);
-    const aggregateTelemetry = asRecord(operationsState.gossipTelemetry);
+    const call = asRecord(callValue);
+    const roomId = firstString(call.room_id, call.roomId, call.id);
+    const callId = firstString(call.id, call.call_id, roomId);
+    const callKey = gossipNetworkMapCallKey(call);
+    const title = compactLabel(firstString(call.title, callId), t('users.overview.untitled_call'));
+    const lifecycle = firstString(asRecord(call.gossip).lifecycle, call.status, 'running');
 
-    for (const callValue of runningCalls) {
-      const call = asRecord(callValue);
-      const roomId = firstString(call.room_id, call.roomId, call.id);
-      const callId = firstString(call.id, call.call_id, roomId);
-      if (roomId === '') continue;
-
+    if (roomId !== '') {
       const topology = asRecord(call.gossip_topology || asRecord(call.gossip).topology);
       const topologyByPeer = asRecord(call.gossip_topology_by_peer_id);
       const roomTelemetry = asRecord(asRecord(aggregateTelemetry.rooms)[roomId] || asRecord(aggregateTelemetry)[roomId] || call.gossip_telemetry);
@@ -253,7 +264,7 @@ export function useGossipNetworkMap(
 
       addNode(nodes, {
         id: roomId,
-        label: compactLabel(firstString(call.title, callId), t('users.overview.untitled_call')),
+        label: title,
         kind: 'room',
         health: roomHealth,
         x: 50,
@@ -322,7 +333,7 @@ export function useGossipNetworkMap(
 
     const positionedNodes = positionNodes(Array.from(nodes.values()));
     const positionedEdges = positionEdges(Array.from(edges.values()), positionedNodes);
-    const selectedNode = positionedNodes.find((node) => node.id === selectedNodeId.value) || positionedNodes[0] || null;
+    const selectedNode = positionedNodes.find((node) => node.id === selectedNodeId) || positionedNodes[0] || null;
     const healthyCount = positionedNodes.filter((node) => node.health === 'healthy').length;
     const degradedCount = positionedNodes.filter((node) => node.health === 'degraded').length;
     const statusLabel = positionedNodes.length === 0
@@ -334,6 +345,11 @@ export function useGossipNetworkMap(
           : t('users.overview.gossip_status_observing');
 
     return {
+      callKey,
+      callId,
+      roomId,
+      title,
+      lifecycle,
       nodes: positionedNodes,
       edges: positionedEdges,
       analysis: buildAnalysis({
@@ -341,7 +357,7 @@ export function useGossipNetworkMap(
         edgeCount: positionedEdges.length,
         healthyCount,
         degradedCount,
-        aggregateTelemetry,
+        aggregateTelemetry: asRecord(asRecord(aggregateTelemetry.rooms)[roomId] || asRecord(aggregateTelemetry)[roomId] || call.gossip_telemetry),
       }),
       selectedNode,
       summary: {
@@ -353,5 +369,35 @@ export function useGossipNetworkMap(
         statusTagClass: healthTagClass(degradedCount > 0 ? 'degraded' : healthyCount > 0 ? 'healthy' : 'idle'),
       },
     };
+}
+
+export function useGossipNetworkMaps(
+  operationsState: RawRecord,
+  selectedNodeIdsByCall: RawRecord,
+) {
+  return computed<GossipNetworkMap[]>(() => {
+    const aggregateTelemetry = asRecord(operationsState.gossipTelemetry);
+    return asArray(operationsState.runningCalls)
+      .map((callValue) => {
+        const callKey = gossipNetworkMapCallKey(callValue);
+        const selectedNodeId = cleanString(selectedNodeIdsByCall[callKey]);
+        return buildGossipNetworkMapForCall(callValue, aggregateTelemetry, selectedNodeId);
+      })
+      .filter((map) => map.callId !== '' || map.roomId !== '');
+  });
+}
+
+export function useGossipNetworkMap(
+  operationsState: RawRecord,
+  selectedNodeId: Ref<string>,
+) {
+  return computed<GossipNetworkMap>(() => {
+    const maps = asArray(operationsState.runningCalls);
+    const firstMap = buildGossipNetworkMapForCall(
+      maps[0] || {},
+      asRecord(operationsState.gossipTelemetry),
+      selectedNodeId.value,
+    );
+    return firstMap;
   });
 }
