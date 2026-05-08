@@ -203,7 +203,7 @@ export function createSfuRemotePeerHelpers({
     }
 
     return {
-      publisherId: normalizedPublisherId,
+      publisherId: fallback.publisherId,
       peer: fallback.peer,
       matchedBy: 'publisher_user_id',
     };
