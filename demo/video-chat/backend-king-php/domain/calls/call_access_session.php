@@ -86,6 +86,7 @@ function videochat_issue_session_for_call_access(
     $authenticatedUserId = videochat_call_access_session_int_option($options, 'authenticated_user_id');
     $verifiedSessionId = videochat_call_access_session_string_option($options, 'verified_session_id');
     $authenticatedSessionId = videochat_call_access_session_string_option($options, 'authenticated_session_id');
+    $hostName = videochat_call_access_session_string_option($options, 'host_name');
     if ($verifiedSessionId !== '' && $authenticatedSessionId !== '' && !hash_equals($verifiedSessionId, $authenticatedSessionId)) {
         return [
             'ok' => false,
@@ -166,11 +167,14 @@ function videochat_issue_session_for_call_access(
         return [
             'ok' => false,
             'reason' => 'forbidden',
-            'errors' => ['auth' => 'not_bound_to_current_user'],
+            'errors' => [
+                'auth' => 'not_bound_to_current_user',
+                'host_name' => $hostName === '' ? 'not_verified' : 'wrong_host_name',
+            ],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
