@@ -26,6 +26,19 @@ run_step() {
   log "OK: ${step}"
 }
 
+should_run_guest_cleanup_sqlite_proof() {
+  case "${VIDEOCHAT_SMOKE_RUN_GUEST_CLEANUP_SQLITE_PROOF:-auto}" in
+    1|true|TRUE|yes|YES)
+      return 0
+      ;;
+    0|false|FALSE|no|NO)
+      return 1
+      ;;
+  esac
+
+  [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" && "${VIDEOCHAT_SMOKE_REQUIRE_COMPOSE:-0}" == "1" ]]
+}
+
 validate_tcp_port() {
   local candidate="${1:-}"
   if [[ ! "${candidate}" =~ ^[0-9]+$ ]]; then
@@ -594,6 +607,11 @@ run_step "deployment baseline: multi-node runtime architecture" bash -lc "'${ROO
 run_step "deployment baseline: ops hardening" bash -lc "'${ROOT_DIR}/scripts/check-ops-hardening.sh'"
 run_step "deployment baseline: production endpoint smoke syntax" bash -lc "bash -n '${ROOT_DIR}/scripts/deploy-smoke.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
+if should_run_guest_cleanup_sqlite_proof; then
+  run_step "backend contract: guest cleanup Docker SQLite proof" bash -lc "'${BACKEND_DIR}/tests/call-guest-cleanup-sqlite-proof.sh'"
+else
+  log "SKIP: guest cleanup Docker SQLite proof not selected; set VIDEOCHAT_SMOKE_RUN_GUEST_CLEANUP_SQLITE_PROOF=1 to run outside required compose-only smoke"
+fi
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then
   log "Compose-only smoke checks passed."
