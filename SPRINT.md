@@ -1689,9 +1689,9 @@ admission.
 - [x] Login switch during link verification does not cause wrong account binding
 - [x] Logout during link verification causes no data leak
 - [ ] Parallel tabs with different accounts cause no incorrect merge
-- [ ] Permission changes during active call are applied correctly
-- [ ] Owner transfer during active call is applied correctly
-- [ ] Guest-list change during active call is applied correctly
+- [x] Permission changes during active call are applied correctly
+- [x] Owner transfer during active call is applied correctly
+- [x] Guest-list change during active call is applied correctly
 - [ ] Kick during active call removes user
 - [ ] Deleted call cannot be entered
 - [ ] Ended call cannot be entered
@@ -1715,6 +1715,13 @@ The focused Playwright logout case clears the verified browser session after
 link verification and proves the join flow fails locally without a
 call-access session POST, workspace navigation, foreign data rendering, or
 foreign session adoption.
+`call-access-active-permission-change-contract` proves active-call permissions
+are revalidated from current backend state: guest-list removal routes stale
+guest sessions back to renewed approval, organization-admin downgrade removes
+stale moderation and direct call binding, and owner transfer revalidates old and
+new owner rights without trusting stale connection fields. The Docker PHP 8.4
+runtime proof passed with `pdo_sqlite`; host PHP reports the same proof as
+skipped because the local extension is unavailable.
 
 ## 16. Email Confirmation for Account Data Update
 
@@ -1762,8 +1769,8 @@ available.
 - [x] Guest list of one call grants no rights to another call
 - [ ] Guest list of one organization grants no rights to another organization
 - [ ] Duplicate guest-list entries are prevented or merged
-- [ ] Removing guest-list entry affects new join attempts immediately
-- [ ] Removing guest-list entry during active call follows product rule
+- [x] Removing guest-list entry affects new join attempts immediately
+- [x] Removing guest-list entry during active call follows product rule
 - [ ] Guest-list changes are audit-logged
 
 ## 18. System Admin
@@ -1794,7 +1801,7 @@ available.
 - [x] Organization admin rights remain after owner transfer
 - [ ] Organization admin can transfer owner rights if allowed
 - [ ] Organization admin keeps admin rights when transferring ownership
-- [ ] Revoking organization-admin role affects new joins and admin actions immediately
+- [x] Revoking organization-admin role affects new joins and admin actions immediately
 - [ ] Organization admin rights cannot be expanded through manipulated organization ID
 
 ## 20. Normal User
@@ -2452,8 +2459,8 @@ against duplicate join/session request loops.
 - [x] `e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin`
 - [x] `e2e_rejoin_005_kick_overrides_previous_admission`
 - [ ] `e2e_rejoin_006_registered_guest_can_rejoin`
-- [ ] `e2e_rejoin_007_rejoin_after_guest_list_removal_blocked_or_lobby`
-- [ ] `e2e_rejoin_008_rejoin_after_admin_role_removed_uses_new_permissions`
+- [x] `e2e_rejoin_007_rejoin_after_guest_list_removal_blocked_or_lobby`
+- [x] `e2e_rejoin_008_rejoin_after_admin_role_removed_uses_new_permissions`
 - [ ] `e2e_rejoin_009_rejoin_after_owner_transfer_uses_new_permissions`
 
 ## Test Group: Temporary Moderators
