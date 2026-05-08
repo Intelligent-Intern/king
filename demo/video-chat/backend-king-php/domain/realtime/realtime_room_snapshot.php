@@ -5,9 +5,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/../call_apps/call_app_sessions.php';
 require_once __DIR__ . '/realtime_activity_layout.php';
 require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
+require_once __DIR__ . '/realtime_owner_absence.php';
 require_once __DIR__ . '/realtime_presence.php';
 
-function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
+function videochat_realtime_db_room_participants(callable $openDatabase, array $connection, ?int $nowMs = null): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
     $callId = videochat_realtime_normalize_call_id(
@@ -19,9 +20,10 @@ function videochat_realtime_db_room_participants(callable $openDatabase, array $
     }
 
     try {
+        $effectiveNowMs = is_int($nowMs) && $nowMs > 0 ? $nowMs : videochat_realtime_presence_db_now_ms();
         $pdo = $openDatabase();
         videochat_realtime_presence_db_bootstrap($pdo);
-        videochat_realtime_presence_db_prune($pdo);
+        videochat_realtime_presence_db_prune($pdo, $effectiveNowMs);
         $statement = $pdo->prepare(
             <<<'SQL'
 SELECT
@@ -54,7 +56,7 @@ SQL
         $statement->execute([
             ':call_id' => $callId,
             ':room_id' => $roomId,
-            ':cutoff_ms' => videochat_realtime_presence_db_now_ms() - videochat_realtime_presence_db_ttl_ms(),
+            ':cutoff_ms' => $effectiveNowMs - videochat_realtime_presence_db_ttl_ms(),
         ]);
     } catch (Throwable) {
         return [];
@@ -185,7 +187,8 @@ function videochat_realtime_room_snapshot_payload(
     array $presenceState,
     array $connection,
     callable $openDatabase,
-    string $reason
+    string $reason,
+    ?int $nowMs = null
 ): array {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
     $callId = videochat_realtime_normalize_call_id(
@@ -195,7 +198,7 @@ function videochat_realtime_room_snapshot_payload(
     $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : 0;
     $participants = videochat_realtime_merge_room_participants(
         videochat_presence_room_participants($presenceState, $roomId, $tenantId > 0 ? $tenantId : null),
-        videochat_realtime_db_room_participants($openDatabase, $connection)
+        videochat_realtime_db_room_participants($openDatabase, $connection, $nowMs)
     );
     $activityLayout = [
         'layout' => videochat_layout_default_state($callId, $roomId),
@@ -229,6 +232,14 @@ function videochat_realtime_room_snapshot_payload(
             trim($reason) === '' ? 'snapshot' : trim($reason)
         );
     }
+    $ownerAbsence = videochat_realtime_owner_absence_disabled_payload();
+    if ($callId !== '' && $roomId !== '') {
+        try {
+            $ownerAbsence = videochat_realtime_apply_owner_absence_timeout($openDatabase(), $callId, $roomId, $nowMs);
+        } catch (Throwable) {
+            $ownerAbsence = videochat_realtime_owner_absence_disabled_payload('error');
+        }
+    }
 
     return [
         'type' => 'room/snapshot',
@@ -250,8 +261,12 @@ function videochat_realtime_room_snapshot_payload(
         ],
         'call_apps' => $callApps,
         'gossip_topology' => $gossipTopology,
+        'call_lifecycle' => [
+            'status' => (string) ($ownerAbsence['call_status'] ?? ''),
+            'owner_absence' => $ownerAbsence,
+        ],
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
-        'time' => gmdate('c'),
+        'time' => is_int($nowMs) && $nowMs > 0 ? gmdate('c', (int) floor($nowMs / 1000)) : gmdate('c'),
     ];
 }
 
@@ -264,6 +279,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'activity' => $payload['activity'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
         'gossip_topology' => $payload['gossip_topology'] ?? [],
+        'call_lifecycle' => $payload['call_lifecycle'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
