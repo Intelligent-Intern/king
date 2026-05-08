@@ -25,6 +25,8 @@ requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_snapsho
 requireContains(ownerAbsence, 'function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence transition clock');
 requireContains(ownerAbsence, "'status' => 'owner_present'", 'owner return cancellation status');
 requireContains(ownerAbsence, "'status' => 'no_participants'", 'no-participant non-ending state');
+requireContains(ownerAbsence, '$endsAtMs = $absentSinceMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;', '15-minute total owner absence deadline');
+requireContains(ownerAbsence, '$countdownStartsAtMs = max($absentSinceMs, $endsAtMs - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS);', 'countdown is inside final five minutes');
 requireContains(ownerAbsence, "$status = $countdownStarted ? 'countdown' : 'monitoring';", 'monitoring-to-countdown state split');
 requireContains(ownerAbsence, "$status = 'ended';", 'implicit ended state');
 requireContains(ownerAbsence, "SET status = 'ended',", 'persisted implicit call ending');
@@ -46,7 +48,8 @@ requireContains(kingParticipantsHelper, 'videochat_realtime_presence_db_upsert($
 requireContains(kingParticipantsHelper, 'videochat_realtime_remove_call_presence(static fn (): PDO => $pdo, $effectiveConnection);', 'participant leave removes realtime presence');
 
 requireContains(ownerTimeoutContract, 'videochat_iam_king_participant_client(', 'owner-timeout contract uses simulated clients');
-requireContains(ownerTimeoutContract, 'VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - 1000', 'before-countdown boundary proof');
+requireContains(ownerTimeoutContract, 'VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS - 1000', 'before-countdown boundary proof');
+requireContains(ownerTimeoutContract, 'VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;', 'countdown start boundary proof');
 requireContains(ownerTimeoutContract, "($beforeCountdown['status'] ?? '') === 'monitoring'", 'monitoring assertion');
 requireContains(ownerTimeoutContract, "($countdown['status'] ?? '') === 'countdown'", 'countdown assertion');
 requireContains(ownerTimeoutContract, "($countdown['countdown_remaining_ms'] ?? 0) === VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS", 'five-minute countdown assertion');

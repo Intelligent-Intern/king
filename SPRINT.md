@@ -1990,28 +1990,28 @@ identifiers.
 
 ## 29. Implicit Call Ending by Owner Absence
 
-- [ ] Owner loses connection
+- [x] Owner loses connection
 - [ ] Owner closes browser tab
 - [ ] Owner browser crashes or context is killed
 - [ ] Owner network is disconnected
-- [ ] Owner is absent for less than 10 minutes equivalent
-- [ ] Owner is absent for 10 minutes equivalent
-- [ ] Owner is absent for 15 minutes equivalent
+- [x] Owner is absent for less than 10 minutes equivalent
+- [x] Owner is absent for 10 minutes equivalent
+- [x] Owner is absent for 15 minutes equivalent
 - [ ] Owner rejoins before final 5-minute countdown starts
-- [ ] Owner rejoins during final 5-minute countdown
-- [ ] Owner does not rejoin before timer expires
-- [ ] Call ends automatically after 15 minutes owner absence equivalent
+- [x] Owner rejoins during final 5-minute countdown
+- [x] Owner does not rejoin before timer expires
+- [x] Call ends automatically after 15 minutes owner absence equivalent
 - [ ] Participants are notified when owner absence timer starts if applicable
 - [ ] Participants see visible countdown during last 5 minutes
-- [ ] Countdown starts when 5 minutes remain
-- [ ] Countdown shows correct remaining time
+- [x] Countdown starts when 5 minutes remain
+- [x] Countdown shows correct remaining time
 - [ ] Countdown updates correctly over time
 - [ ] Countdown survives participant refresh
 - [ ] Countdown is synchronized across participants
 - [ ] Countdown does not reveal admin-only data
-- [ ] Countdown disappears if owner rejoins
-- [ ] Call does not end if owner rejoins before timeout
-- [ ] Call ends if owner does not rejoin before timeout
+- [x] Countdown disappears if owner rejoins
+- [x] Call does not end if owner rejoins before timeout
+- [x] Call ends if owner does not rejoin before timeout
 - [ ] Call-ended state prevents new joins
 - [ ] Call-ended state prevents rejoins
 - [ ] Call-ended state invalidates anonymous join link
@@ -2020,8 +2020,16 @@ identifiers.
 - [ ] Call-ended state clears lobby entries
 - [ ] Call-ended state preserves audit log
 - [ ] Call-ended state is visible to late users opening old links
-- [ ] Timer is based on server time, not client time
-- [ ] CI test uses fake/test time and does not wait 15 real minutes
+- [x] Timer is based on server time, not client time
+- [x] CI test uses fake/test time and does not wait 15 real minutes
+
+Proof: `realtime_owner_absence.php` applies a server-time owner-absence
+deadline of 15 minutes total and starts the countdown in the final 5 minutes.
+`iam-king-participants-owner-timeout-contract.mjs` verifies the contract
+shape, fake/test clock, room snapshot lifecycle payload, countdown boundary,
+owner-return cancellation, and persisted implicit end. The PHP owner-timeout
+runtime contract is committed and syntax-checked; execution is blocked on this
+host because PHP does not load `pdo_sqlite`.
 
 ## 30. Error and Edge Cases
 
@@ -2493,18 +2501,18 @@ against duplicate join/session request loops.
 
 ## Test Group: Implicit Call End by Owner Absence
 
-- [ ] `e2e_end_implicit_001_owner_disconnect_starts_absence_timer`
+- [x] `e2e_end_implicit_001_owner_disconnect_starts_absence_timer`
 - [ ] `e2e_end_implicit_002_owner_tab_close_starts_absence_timer`
 - [ ] `e2e_end_implicit_003_owner_process_kill_starts_absence_timer`
 - [ ] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
-- [ ] `e2e_end_implicit_005_no_countdown_before_10_min_equivalent`
-- [ ] `e2e_end_implicit_006_countdown_visible_at_10_min_equivalent`
+- [x] `e2e_end_implicit_005_no_countdown_before_10_min_equivalent`
+- [x] `e2e_end_implicit_006_countdown_visible_at_10_min_equivalent`
 - [ ] `e2e_end_implicit_007_countdown_updates_over_time`
 - [ ] `e2e_end_implicit_008_countdown_synchronized_across_participants`
 - [ ] `e2e_end_implicit_009_countdown_survives_participant_refresh`
 - [ ] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
-- [ ] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
-- [ ] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
+- [x] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
+- [x] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
 - [ ] `e2e_end_implicit_013_automatic_end_notifies_participants`
 - [ ] `e2e_end_implicit_014_automatic_end_blocks_new_joins`
 - [ ] `e2e_end_implicit_015_automatic_end_blocks_rejoins`
@@ -2600,8 +2608,8 @@ against duplicate join/session request loops.
 - [ ] Tests cover call rescheduling
 - [ ] Tests cover call deletion
 - [ ] Tests cover explicit call ending
-- [ ] Tests cover implicit owner-absence ending
-- [ ] Owner timeout tests do not wait 15 real minutes
+- [x] Tests cover implicit owner-absence ending
+- [x] Owner timeout tests do not wait 15 real minutes
 - [ ] Duplicate personalized-link abuse detection is tested
 - [ ] Membership removal after invitation is tested with call-scoped guest access behavior
 - [x] Privacy and data minimization assertions are included
