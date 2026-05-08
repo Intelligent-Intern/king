@@ -53,7 +53,9 @@ Current baseline:
   reconnect-specific diagnostics instead of looking like an intentional media
   shutdown. A second browser-oriented smoke runs the real retired-stream cleanup
   helper in a fake MediaStream sandbox and proves active camera, microphone, and
-  screen-share tracks stay live while retired tracks stop once.
+  screen-share tracks stay live while retired tracks stop once. The main smoke
+  script exposes a deterministic Node-only release gate for these reconnect and
+  screenshare contracts without requiring real devices.
 
 Contract anchors:
 - `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
