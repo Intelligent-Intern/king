@@ -3,6 +3,8 @@ import { test, expect } from '@playwright/test';
 import {
   accessIdFromJoinPath,
   createCallAccessMatrixPage,
+  createDirectJoinMatrixPage,
+  directJoinDecisionForSeedUser,
   getSeedAccessLink,
   getSeedCall,
   getSeedScenario,
@@ -11,6 +13,22 @@ import {
   sessionStorageKey,
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+
+const allowedDirectJoinScenarios = [
+  'direct_join_system_admin_without_guest_list',
+  'direct_join_org_admin_own_organization_without_guest_list',
+  'direct_join_normal_owner_without_guest_list',
+  'direct_join_guest_list_user_allowed',
+];
+
+const deniedDirectJoinScenarios = [
+  'direct_join_org_admin_foreign_organization_denied',
+  'direct_join_forged_client_admin_role_denied',
+];
+
+function escapeRegExp(input) {
+  return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
@@ -39,6 +57,20 @@ test('IAM call-access seed matrix covers required principals without temporary a
     expect(user.system_admin).toBe(false);
     expect(tenant?.permissions?.platform_admin ?? false).toBe(false);
     expect(tenant?.permissions?.tenant_admin ?? false).toBe(false);
+  }
+
+  for (const scenarioKey of [
+    ...allowedDirectJoinScenarios,
+    ...deniedDirectJoinScenarios,
+  ]) {
+    const scenario = getSeedScenario(scenarioKey);
+    const decision = directJoinDecisionForSeedUser(scenario.principal_user_key, scenario.call_key);
+    expect(decision.source).toBe(scenario.expected.decision_source);
+    expect(decision.allowed).toBe(scenario.expected.state === 'resolved');
+    expect(decision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+    const tenant = tenantSnapshotForSeedUser(scenario.principal_user_key, scenario.call_key);
+    expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
+    expect(tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
   }
 });
 
@@ -102,6 +134,99 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
     }, sessionStorageKey);
     expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
     expect(storedSession.sessionId).toBe(sessionPayload?.result?.session?.id);
+  } finally {
+    await context.close();
+  }
+});
+
+for (const scenarioKey of allowedDirectJoinScenarios) {
+  test(`direct workspace join allows ${scenarioKey} through server-side role evaluation`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+    try {
+      const resolveResponsePromise = page.waitForResponse((response) => (
+        response.url().includes(`/api/calls/resolve/${call.id}`)
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const resolveResponse = await resolveResponsePromise;
+      expect(resolveResponse.status()).toBe(200);
+      const resolvePayload = await resolveResponse.json();
+      expect(resolvePayload?.result?.state).toBe('resolved');
+      expect(resolvePayload?.result?.call?.id).toBe(call.id);
+      expect(resolvePayload?.result?.access_decision?.source).toBe(scenario.expected.decision_source);
+      expect(resolvePayload?.result?.access_decision?.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+
+      await expect(page).toHaveURL(new RegExp(`/workspace/call/${escapeRegExp(call.id)}(?:[/?#].*)?$`));
+      await expect(page.locator('.workspace-call-view')).toBeVisible({ timeout: 20_000 });
+      expect(directJoinDecisions.some((decision) => (
+        decision.call_id === call.id
+        && decision.allowed === true
+        && decision.source === scenario.expected.decision_source
+      ))).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+for (const scenarioKey of deniedDirectJoinScenarios) {
+  test(`direct workspace join denies ${scenarioKey} without leaking call payload`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+    try {
+      const resolveResponsePromise = page.waitForResponse((response) => (
+        response.url().includes(`/api/calls/resolve/${call.id}`)
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const resolveResponse = await resolveResponsePromise;
+      expect(resolveResponse.status()).toBe(200);
+      const resolvePayload = await resolveResponse.json();
+      expect(resolvePayload?.result?.state).toBe('forbidden');
+      expect(resolvePayload?.result?.call ?? null).toBe(null);
+
+      await expect(page).toHaveURL(/\/(user\/dashboard|admin\/calls)(?:[/?#].*)?$/);
+      await expect(page.locator('body')).not.toContainText(call.title);
+      expect(directJoinDecisions.some((decision) => (
+        decision.call_id === call.id
+        && decision.allowed === false
+        && decision.source === 'none'
+      ))).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('direct workspace join denies a forged system-admin session token before call resolution', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenarioKey = 'direct_join_forged_session_token_denied';
+  const scenario = getSeedScenario(scenarioKey);
+  const call = getSeedCall(scenario.call_key);
+  const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+  try {
+    const authResponsePromise = page.waitForResponse((response) => (
+      response.url().includes('/api/auth/session-state')
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(`/workspace/call/${call.id}`);
+    const authResponse = await authResponsePromise;
+    expect(authResponse.status()).toBe(401);
+
+    await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
+    await expect(page.locator('body')).not.toContainText(call.title);
+    expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
   } finally {
     await context.close();
   }
