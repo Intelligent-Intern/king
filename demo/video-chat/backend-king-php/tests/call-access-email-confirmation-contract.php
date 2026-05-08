@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../http/module_calls.php';
 
 function videochat_call_access_email_confirmation_assert(bool $condition, string $message): void
 {
@@ -47,7 +48,13 @@ SQL
     return $userId;
 }
 
-function videochat_call_access_email_confirmation_insert_session(PDO $pdo, string $sessionId, int $userId, int $tenantId): void
+function videochat_call_access_email_confirmation_insert_session(
+    PDO $pdo,
+    string $sessionId,
+    int $userId,
+    int $tenantId,
+    int $expiresInSeconds = 3600
+): void
 {
     $tenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id') ? ', active_tenant_id' : '';
     $tenantValue = $tenantColumn !== '' ? ', :active_tenant_id' : '';
@@ -57,16 +64,24 @@ INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, 
 VALUES(:id, :user_id, :issued_at, :expires_at, NULL, '127.0.0.1', 'call-access-email-confirmation-contract'{$tenantValue})
 SQL
     );
+    $issuedAt = $expiresInSeconds <= 0 ? gmdate('c', time() - 3600) : gmdate('c', time() - 30);
+    $expiresAt = gmdate('c', time() + $expiresInSeconds);
     $params = [
         ':id' => $sessionId,
         ':user_id' => $userId,
-        ':issued_at' => gmdate('c', time() - 30),
-        ':expires_at' => gmdate('c', time() + 3600),
+        ':issued_at' => $issuedAt,
+        ':expires_at' => $expiresAt,
     ];
     if ($tenantColumn !== '') {
         $params[':active_tenant_id'] = $tenantId;
     }
     $insert->execute($params);
+}
+
+function videochat_call_access_email_confirmation_decode(array $response): array
+{
+    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    return is_array($decoded) ? $decoded : [];
 }
 
 function videochat_call_access_email_confirmation_user(PDO $pdo, int $userId): array
@@ -130,6 +145,8 @@ try {
     videochat_tenant_attach_user($pdo, $linkUserId, $defaultTenantId, 'member');
     videochat_tenant_attach_user($pdo, $currentUserId, $defaultTenantId, 'member');
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_current', $currentUserId, $defaultTenantId);
+    videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_current_browser_b', $currentUserId, $defaultTenantId);
+    videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_expired_pending', $currentUserId, $defaultTenantId, -60);
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_link_target', $linkUserId, $defaultTenantId);
 
     $createCall = videochat_create_call($pdo, $hostUserId, [
@@ -150,6 +167,54 @@ try {
     $accessId = (string) (($access['access_link'] ?? [])['id'] ?? '');
     videochat_call_access_email_confirmation_assert($accessId !== '', 'access id should be present');
 
+    $jsonResponse = static function (int $status, array $payload): array {
+        return [
+            'status' => $status,
+            'headers' => ['content-type' => 'application/json; charset=utf-8'],
+            'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ];
+    };
+    $errorResponse = static function (int $status, string $code, string $message, array $details = []) use ($jsonResponse): array {
+        $error = ['code' => $code, 'message' => $message];
+        if ($details !== []) {
+            $error['details'] = $details;
+        }
+        return $jsonResponse($status, ['status' => 'error', 'error' => $error, 'time' => gmdate('c')]);
+    };
+    $decodeJsonBody = static function (array $request): array {
+        $decoded = json_decode((string) ($request['body'] ?? ''), true);
+        return is_array($decoded) ? [$decoded, null] : [null, 'invalid_json'];
+    };
+    $openDatabase = static function () use ($databasePath): PDO {
+        return videochat_open_sqlite_pdo($databasePath);
+    };
+    $callRoute = static function (
+        string $path,
+        string $method,
+        array $headers,
+        string $body = ''
+    ) use ($jsonResponse, $errorResponse, $decodeJsonBody, $openDatabase): array {
+        $response = videochat_handle_call_routes(
+            $path,
+            $method,
+            [
+                'method' => $method,
+                'uri' => $path,
+                'headers' => $headers,
+                'remote_address' => '127.0.0.1',
+                'body' => $body,
+            ],
+            [],
+            $jsonResponse,
+            $errorResponse,
+            $decodeJsonBody,
+            $openDatabase,
+            static fn (): string => 'sess_confirmation_route_should_not_issue'
+        );
+        videochat_call_access_email_confirmation_assert(is_array($response), "{$method} {$path} should return a response");
+        return $response;
+    };
+
     $firstRequest = videochat_call_access_request_account_update_confirmation(
         $pdo,
         $accessId,
@@ -168,6 +233,24 @@ try {
     videochat_call_access_email_confirmation_assert((string) ($beforeConfirmUser['display_name'] ?? '') === $currentName, 'account data must not update before confirmation');
     $sessionUserBefore = (int) $pdo->query("SELECT user_id FROM sessions WHERE id = 'sess_confirmation_current' LIMIT 1")->fetchColumn();
     videochat_call_access_email_confirmation_assert($sessionUserBefore === $currentUserId, 'current session must remain bound to current account before confirmation');
+
+    $expiredConfirm = $callRoute(
+        '/api/call-access/account-update-confirmations/' . $firstToken . '/confirm',
+        'POST',
+        [
+            'Authorization' => 'Bearer sess_confirmation_expired_pending',
+            'User-Agent' => 'call-access-email-confirmation-expired-session',
+        ]
+    );
+    videochat_call_access_email_confirmation_assert((int) ($expiredConfirm['status'] ?? 0) === 401, 'expired pending-confirmation session should be rejected');
+    $expiredPayload = videochat_call_access_email_confirmation_decode($expiredConfirm);
+    videochat_call_access_email_confirmation_assert((string) (($expiredPayload['error'] ?? [])['code'] ?? '') === 'auth_failed', 'expired pending-confirmation code mismatch');
+    videochat_call_access_email_confirmation_assert((string) ((($expiredPayload['error'] ?? [])['details'] ?? [])['reason'] ?? '') === 'expired_session', 'expired pending-confirmation reason mismatch');
+    $afterExpiredSessionUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
+    videochat_call_access_email_confirmation_assert((string) ($afterExpiredSessionUser['display_name'] ?? '') === $currentName, 'expired pending-confirmation session must not update account data');
+    $pendingConsumed = $pdo->prepare('SELECT coalesce(consumed_at, \'\') FROM call_access_account_update_confirmations WHERE id = :id LIMIT 1');
+    $pendingConsumed->execute([':id' => $firstToken]);
+    videochat_call_access_email_confirmation_assert((string) $pendingConsumed->fetchColumn() === '', 'expired pending-confirmation session must not consume the token');
 
     $secondRequest = videochat_call_access_request_account_update_confirmation(
         $pdo,
@@ -197,8 +280,19 @@ try {
     $afterWrongAccount = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($afterWrongAccount['display_name'] ?? '') === $currentName, 'wrong-account confirmation must not update data');
 
-    $confirm = videochat_call_access_confirm_account_update($pdo, $firstToken, $currentUserId);
-    videochat_call_access_email_confirmation_assert((bool) ($confirm['ok'] ?? false), 'confirmation should update current account');
+    $confirmResponse = $callRoute(
+        '/api/call-access/account-update-confirmations/' . $firstToken . '/confirm',
+        'POST',
+        [
+            'Authorization' => 'Bearer sess_confirmation_current_browser_b',
+            'User-Agent' => 'call-access-email-confirmation-browser-b',
+        ]
+    );
+    videochat_call_access_email_confirmation_assert((int) ($confirmResponse['status'] ?? 0) === 200, 'another browser session for same account should confirm');
+    $confirmPayload = videochat_call_access_email_confirmation_decode($confirmResponse);
+    videochat_call_access_email_confirmation_assert((string) (($confirmPayload['result'] ?? [])['state'] ?? '') === 'confirmed', 'browser-b confirmation state mismatch');
+    videochat_call_access_email_confirmation_assert((int) (((($confirmPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0)) === $currentUserId, 'browser-b confirmation user mismatch');
+    videochat_call_access_email_confirmation_assert_no_needles((string) ($confirmResponse['body'] ?? ''), [$linkEmail, $linkName, $hostEmail, $hostName, $accessId, $firstToken], 'browser-b confirmation response');
     $afterConfirmUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($afterConfirmUser['display_name'] ?? '') === $confirmedName, 'confirmed display name mismatch');
     videochat_call_access_email_confirmation_assert((string) ($afterConfirmUser['email'] ?? '') === $currentEmail, 'confirmation must not change email');
@@ -206,6 +300,8 @@ try {
     videochat_call_access_email_confirmation_assert((string) ($linkTargetAfterConfirm['display_name'] ?? '') === $linkName, 'confirmation must not update link target account');
     $sessionUserAfter = (int) $pdo->query("SELECT user_id FROM sessions WHERE id = 'sess_confirmation_current' LIMIT 1")->fetchColumn();
     videochat_call_access_email_confirmation_assert($sessionUserAfter === $currentUserId, 'confirmation must not rebind the current session');
+    $browserBSessionUserAfter = (int) $pdo->query("SELECT user_id FROM sessions WHERE id = 'sess_confirmation_current_browser_b' LIMIT 1")->fetchColumn();
+    videochat_call_access_email_confirmation_assert($browserBSessionUserAfter === $currentUserId, 'confirmation must not rebind the browser-b session');
 
     $replay = videochat_call_access_confirm_account_update($pdo, $firstToken, $currentUserId);
     videochat_call_access_email_confirmation_assert((bool) ($replay['ok'] ?? true) === false, 'confirmation token replay should fail');

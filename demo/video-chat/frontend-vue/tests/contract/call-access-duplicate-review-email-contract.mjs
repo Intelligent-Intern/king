@@ -52,6 +52,36 @@ assert.match(
 );
 assert.match(
   e2eSpec,
+  /pending email confirmation confirms in another browser and rejects expired session safely/,
+  'frontend E2E must cover pending confirmation refresh, other-browser confirmation, and expired-session denial',
+);
+assert.match(
+  e2eSpec,
+  /await browserA\.page\.reload\(\)[\s\S]*expect\(joinGetCount\)\.toBe\(2\)/,
+  'pending confirmation E2E must keep the original join page safe after refresh',
+);
+assert.match(
+  e2eSpec,
+  /expiredResult\.payload\.error\.details\.reason\)\.toBe\('expired_session'\)/,
+  'pending confirmation E2E must reject expired sessions without consuming the confirmation',
+);
+assert.match(
+  e2eSpec,
+  /wrongResult\.payload\.error\.details\.fields\.token\)\.toBe\('account_bound'\)/,
+  'pending confirmation E2E must prove another account cannot consume the token',
+);
+assert.match(
+  e2eSpec,
+  /confirmResult\.payload\.result\.user\.id\)\.toBe\(currentAccountA\.userId\)[\s\S]*storedBrowserB\.sessionToken\)\.toBe\(currentAccountB\.sessionToken\)/,
+  'pending confirmation E2E must update the correct account while preserving the other browser session',
+);
+assert.match(
+  e2eSpec,
+  /replayResult\.payload\.error\.details\.fields\.token\)\.toBe\('already_consumed'\)/,
+  'pending confirmation E2E must prove replay is rejected after cross-browser confirmation',
+);
+assert.match(
+  e2eSpec,
   /account-update-confirmation[\s\S]*confirmation:\s*'rate_limited'/,
   'confirmation E2E must cover the rate-limit field contract',
 );
@@ -200,6 +230,21 @@ assert.match(
   emailContract,
   /third confirmation request should be rate-limited/,
   'backend email contract must prove confirmation request rate limiting',
+);
+assert.match(
+  emailContract,
+  /expired pending-confirmation session should be rejected[\s\S]*expired_session/,
+  'backend email contract must reject expired sessions while confirmation is pending',
+);
+assert.match(
+  emailContract,
+  /another browser session for same account should confirm[\s\S]*browser-b confirmation user mismatch/,
+  'backend email contract must allow another active session for the same account to confirm',
+);
+assert.match(
+  emailContract,
+  /expired pending-confirmation session must not consume the token/,
+  'backend email contract must prove expired sessions do not consume pending confirmations',
 );
 assert.match(
   emailContract,
