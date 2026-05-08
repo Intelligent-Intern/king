@@ -82,3 +82,19 @@ export function joinPathFromAccessPayload(payload) {
 
   return '';
 }
+
+export function callAccessVerifiedContextFromSession(sessionPayload) {
+  const session = sessionPayload && typeof sessionPayload === 'object' ? sessionPayload : {};
+  const userId = normalizeUserId(session.userId ?? session.user_id);
+  const sessionId = String(session.sessionId ?? session.session_id ?? '').trim();
+  const sessionToken = String(session.sessionToken ?? session.session_token ?? '').trim();
+  if (userId <= 0 || sessionId === '' || sessionToken === '') {
+    return null;
+  }
+
+  return {
+    userId,
+    sessionId,
+    sessionToken,
+  };
+}

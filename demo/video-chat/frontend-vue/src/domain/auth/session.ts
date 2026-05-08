@@ -208,7 +208,7 @@ function applyUserSnapshot(user, tenant = null) {
   }
   sessionState.status = normalizeString(user.status);
 }
-function applySessionEnvelope(session, user, tenant = null) {
+export function applySessionEnvelope(session, user, tenant = null) {
   if (!session || typeof session !== 'object' || !user || typeof user !== 'object') {
     throw new Error('Backend authentication response is missing session/user data.');
   }
@@ -380,59 +380,6 @@ export async function loginWithEmailChangeToken(token) {
       ok: false,
       status: 0,
       message: normalizeNetworkErrorMessage(error, 'Email confirmation request failed.'),
-    };
-  }
-}
-export async function loginWithCallAccess(accessId, options = {}) {
-  const normalizedAccessId = String(accessId || '').trim().toLowerCase();
-  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalizedAccessId)) {
-    return {
-      ok: false,
-      status: 422,
-      errorCode: 'call_access_validation_failed',
-      message: 'Call access id is invalid.',
-    };
-  }
-  try {
-    const guestName = typeof options?.guestName === 'string' ? options.guestName.trim() : '';
-    const requestBody = guestName !== '' ? JSON.stringify({ guest_name: guestName }) : undefined;
-    const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(normalizedAccessId)}/session`, {
-      method: 'POST',
-      headers: {
-        accept: 'application/json',
-        ...(requestBody ? { 'content-type': 'application/json' } : {}),
-      },
-      body: requestBody,
-    });
-    const payload = await readJsonResponse(response);
-    if (!response.ok) {
-      return {
-        ok: false,
-        status: response.status,
-        errorCode: errorCodeFromPayload(payload),
-        message: extractErrorMessage(payload, 'Could not start call access session.'),
-      };
-    }
-    if (!payload || payload.status !== 'ok') {
-      return {
-        ok: false,
-        status: response.status,
-        message: 'Call access response is invalid.',
-      };
-    }
-    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
-    applySessionEnvelope(result.session, result.user, result.tenant);
-    return {
-      ok: true,
-      role: sessionState.role,
-      accessLink: result.access_link || null,
-      call: result.call || null,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      status: 0,
-      message: normalizeNetworkErrorMessage(error, 'Call access session request failed.'),
     };
   }
 }
