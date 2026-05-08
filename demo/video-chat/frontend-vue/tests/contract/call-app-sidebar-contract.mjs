@@ -53,8 +53,8 @@ assert.match(
 
 assert.match(
   tabsComposableSource,
-  /showTabs[\s\S]*callAppsCatalogStore\.loading[\s\S]*callAppsCatalogStore\.error[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
-  'Call left sidebar tabs must stay visible while availability is loading, failed, available, or active in the call',
+  /showTabs\s*=\s*computed\(\(\)\s*=>\s*normalizedCallId\.value\s*!==\s*['"]['"]\)/,
+  'Call left sidebar tabs must stay visible for every resolved call so Call Apps can be attached even before catalog probe completion',
 );
 
 assert.match(
@@ -127,6 +127,12 @@ assert.match(
   sidebarSource,
   /function reconcileSelectedAppAfterLoad\(\)[\s\S]*availableApps\.value\.length === 1[\s\S]*selectApp\(availableApps\.value\[0\]\)/,
   'Call Apps sidebar must auto-select the only available installed app after loading availability',
+);
+
+assert.match(
+  sidebarSource,
+  /emit\(['"]session-created['"],\s*payload\?\.result\s*\|\|\s*\{\}\)[\s\S]*props\.requestRoomSnapshot\(\)/,
+  'Adding a Call App must immediately request a room snapshot so the workspace shows the active session without reload',
 );
 
 assert.match(

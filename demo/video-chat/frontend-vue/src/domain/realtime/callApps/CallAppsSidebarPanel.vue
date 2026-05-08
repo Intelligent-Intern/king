@@ -393,6 +393,7 @@ async function attachSelectedApp() {
     });
     notice.value = 'Call App added.';
     emit('session-created', payload?.result || {});
+    props.requestRoomSnapshot();
   } catch (attachError) {
     actionError.value = attachError instanceof Error ? attachError.message : 'Could not add Call App.';
   } finally {
