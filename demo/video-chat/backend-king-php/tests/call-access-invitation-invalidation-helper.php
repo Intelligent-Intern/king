@@ -117,9 +117,20 @@ SQL
     ]);
 }
 
-function videochat_iam_invitation_invalidation_cancel_personal_invitation(PDO $pdo, array $fixture): void
+function videochat_iam_invitation_invalidation_cancel_personal_invitation(PDO $pdo, array $fixture, array $context = []): array
 {
-    videochat_iam_invitation_invalidation_set_invite_state($pdo, $fixture, 'cancelled');
+    $result = videochat_invalidate_call_access_invitation(
+        $pdo,
+        (string) ($fixture['access_id'] ?? ''),
+        'cancelled',
+        (int) ($fixture['admin_user_id'] ?? 0),
+        [
+            'invalidation_reason' => 'participant_invite_cancelled',
+            ...$context,
+        ]
+    );
+
+    return $result;
 }
 
 function videochat_iam_invitation_invalidation_expire_link(PDO $pdo, array $fixture): void
@@ -159,6 +170,93 @@ function videochat_iam_invitation_invalidation_assert_no_private_data(string $bo
         videochat_iam_invitation_invalidation_assert(
             !str_contains($body, $needle),
             "{$context} must not leak private fixture data: {$needle}",
+            $label
+        );
+    }
+}
+
+function videochat_iam_invitation_invalidation_payload_has_key(mixed $value, string $needle): bool
+{
+    if (is_object($value)) {
+        $value = get_object_vars($value);
+    }
+    if (!is_array($value)) {
+        return false;
+    }
+
+    foreach ($value as $key => $entry) {
+        if ((string) $key === $needle) {
+            return true;
+        }
+        if (videochat_iam_invitation_invalidation_payload_has_key($entry, $needle)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function videochat_iam_invitation_invalidation_assert_audit_logged(
+    PDO $pdo,
+    array $fixture,
+    string $label,
+    string $expectedReason,
+    string $expectedSessionId = '',
+    bool $requireSessionFingerprint = true
+): void {
+    $events = videochat_audit_fetch_events($pdo, [
+        'tenant_id' => (int) ($fixture['tenant_id'] ?? 0),
+        'call_id' => (string) ($fixture['call_id'] ?? ''),
+        'event_type' => 'call_access_invitation_invalidated',
+        'limit' => 20,
+    ]);
+    videochat_iam_invitation_invalidation_assert($events !== [], 'invite invalidation audit event missing', $label);
+
+    $event = $events[count($events) - 1] ?? [];
+    $payload = (array) (($event['payload'] ?? null) ?: []);
+    videochat_iam_invitation_invalidation_assert((string) ($event['resource_type'] ?? '') === 'call_access_link', 'audit resource type mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($event['resource_id'] ?? '') === '', 'audit must not persist raw access id as resource id', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($event['resource_fingerprint'] ?? '') === videochat_audit_fingerprint((string) ($fixture['access_id'] ?? '')), 'audit must fingerprint access id', $label);
+    videochat_iam_invitation_invalidation_assert((int) ($event['actor_user_id'] ?? 0) === (int) ($fixture['admin_user_id'] ?? 0), 'audit actor mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((int) ($event['target_user_id'] ?? 0) === (int) ($fixture['invited_user_id'] ?? 0), 'audit target mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($payload['audit_scope'] ?? '') === 'iam_call_access', 'audit scope mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($payload['action'] ?? '') === 'invalidate_invitation', 'audit action mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($payload['invalidation_reason'] ?? '') === $expectedReason, 'audit invalidation reason mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($payload['invite_state'] ?? '') === 'cancelled', 'audit invite state mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($payload['link_kind'] ?? '') === 'personal', 'audit link kind mismatch', $label);
+    videochat_iam_invitation_invalidation_assert((bool) ($payload['raw_link_identifier_logged'] ?? true) === false, 'audit must pin raw link omission', $label);
+    videochat_iam_invitation_invalidation_assert((bool) ($payload['raw_credential_identifier_logged'] ?? true) === false, 'audit must pin raw session omission', $label);
+    videochat_iam_invitation_invalidation_assert((bool) ($payload['raw_guest_identity_logged'] ?? true) === false, 'audit must pin raw guest omission', $label);
+
+    foreach (['access_id', 'session_id', 'token', 'participant_email', 'email', 'display_name', 'guest_name'] as $forbiddenKey) {
+        videochat_iam_invitation_invalidation_assert(
+            !videochat_iam_invitation_invalidation_payload_has_key($payload, $forbiddenKey),
+            "audit payload must not contain key {$forbiddenKey}",
+            $label
+        );
+    }
+
+    $encoded = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_iam_invitation_invalidation_assert(is_string($encoded), 'audit events should encode', $label);
+    foreach ([
+        (string) ($fixture['access_id'] ?? ''),
+        (string) ($fixture['invited_email'] ?? ''),
+        (string) ($fixture['invited_display_name'] ?? ''),
+        $expectedSessionId,
+    ] as $forbiddenText) {
+        if (trim($forbiddenText) === '') {
+            continue;
+        }
+        videochat_iam_invitation_invalidation_assert(
+            !str_contains($encoded, $forbiddenText),
+            'audit event leaked raw invite/session/guest data: ' . $forbiddenText,
+            $label
+        );
+    }
+    if (trim($expectedSessionId) !== '' && $requireSessionFingerprint) {
+        videochat_iam_invitation_invalidation_assert(
+            str_contains($encoded, videochat_audit_fingerprint($expectedSessionId)),
+            'audit event should retain session fingerprint',
             $label
         );
     }
@@ -332,10 +430,21 @@ function videochat_iam_invitation_invalidation_assert_existing_session_rejected_
     );
     videochat_iam_invitation_invalidation_assert((string) ($roomResolution['initial_room_id'] ?? '') === (string) ($fixture['call_id'] ?? ''), 'allowed user should resolve to the room before invalidation', $label);
 
-    videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $fixture);
+    $invalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $fixture, [
+        'session_id' => $sessionId,
+        'invalidation_reason' => 'participant_invite_cancelled_after_session',
+    ]);
+    videochat_iam_invitation_invalidation_assert((bool) ($invalidation['ok'] ?? false), 'invite invalidation should be audited', $label);
     $invalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($fixture['access_id'] ?? ''));
     videochat_iam_invitation_invalidation_assert(is_array($invalidatedLink), 'invalidated access link row should remain persisted', $label);
     videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'domain should classify cancelled participant invite as invalidated', $label);
+    videochat_iam_invitation_invalidation_assert_audit_logged(
+        $pdo,
+        $fixture,
+        $label,
+        'participant_invite_cancelled_after_session',
+        $sessionId
+    );
 
     $validationAfterCancel = videochat_validate_session_token($pdo, $sessionId);
     videochat_iam_invitation_invalidation_assert(!(bool) ($validationAfterCancel['ok'] ?? true), 'stale call-access session must fail after invite invalidation', $label);

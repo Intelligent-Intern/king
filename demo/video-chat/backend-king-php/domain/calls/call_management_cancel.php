@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call_lifecycle.php';
+require_once __DIR__ . '/call_access_invalidation.php';
 
 function videochat_validate_cancel_call_payload(array $payload): array
 {
@@ -106,6 +107,7 @@ function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string
     $updatedAt = $cancelledAt;
 
     $guestCleanup = null;
+    $invitationInvalidationAudit = ['ok' => true, 'reason' => 'not_applicable', 'events' => []];
 
     $pdo->beginTransaction();
     try {
@@ -152,6 +154,17 @@ SQL
         );
         if (!(bool) ($guestCleanup['ok'] ?? false)) {
             throw new RuntimeException('guest_cleanup_failed');
+        }
+
+        $invitationInvalidationAudit = videochat_call_access_record_invitation_invalidations_for_call(
+            $pdo,
+            (string) $existingCall['id'],
+            is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : $tenantId,
+            $authUserId,
+            ['invalidation_reason' => 'call_cancelled']
+        );
+        if (!(bool) ($invitationInvalidationAudit['ok'] ?? false)) {
+            throw new RuntimeException('invitation_invalidation_audit_failed');
         }
 
         $pdo->commit();
@@ -234,6 +247,7 @@ SQL
             'my_participation' => false,
         ],
         'guest_cleanup' => $guestCleanup,
+        'invitation_invalidation_audit' => $invitationInvalidationAudit,
     ];
 }
 

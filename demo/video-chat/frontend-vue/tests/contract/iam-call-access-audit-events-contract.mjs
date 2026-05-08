@@ -24,6 +24,7 @@ for (const helper of [
   'videochat_audit_record_call_participant_kicked',
   'videochat_audit_record_call_owner_transferred',
   'videochat_audit_record_call_access_strong_mismatch',
+  'videochat_audit_record_call_access_invitation_invalidated',
   'videochat_audit_record_membership_removal',
 ]) {
   assert.match(auditDomain, new RegExp(`function ${helper}\\(`), `audit domain must expose ${helper}`);
@@ -33,6 +34,7 @@ for (const eventType of [
   'call_access_link_opened',
   'call_access_duplicate_personalized_link_review',
   'call_access_strong_mismatch_denied',
+  'call_access_invitation_invalidated',
   'call_participant_joined',
   'call_participant_left',
   'call_participant_rejoined',
@@ -49,6 +51,7 @@ for (const actionProof of [
   'videochat_lobby_apply_command',
   'videochat_update_call_participant_role',
   'videochat_issue_session_for_call_access',
+  'videochat_invalidate_call_access_invitation',
   'videochat_iam_rejoin_contract_disable_tenant_membership',
 ]) {
   assert.ok(backendAuditContract.includes(actionProof), `backend audit contract must drive ${actionProof}`);
@@ -83,6 +86,11 @@ assert.match(
   /!videochat_tenant_user_is_member\([\s\S]*videochat_audit_record_membership_removal/s,
   'backend audit contract must prove membership is removed before the membership audit event',
 );
+assert.match(
+  backendAuditContract,
+  /videochat_invalidate_call_access_invitation\([\s\S]*invite invalidation should write an audit event[\s\S]*call_access_invitation_invalidated/s,
+  'backend audit contract must prove invite invalidation before the invite-invalidation audit event',
+);
 
 for (const sensitiveGuard of [
   'videochat_audit_fingerprint($accessId)',
@@ -103,6 +111,11 @@ assert.match(
   auditDomain,
   /host_name_logged' => false[\s\S]*foreign_account_data_logged' => false[\s\S]*raw_link_identifier_logged' => false/s,
   'strong-mismatch audit helper must explicitly pin host, foreign account, and raw link data as omitted',
+);
+assert.match(
+  auditDomain,
+  /call_access_invitation_invalidated[\s\S]*raw_link_identifier_logged' => false[\s\S]*raw_credential_identifier_logged' => false[\s\S]*raw_guest_identity_logged' => false/s,
+  'invite-invalidation audit helper must explicitly pin raw link, session, and guest data as omitted',
 );
 assert.match(
   liveFixtureHelper,
@@ -129,6 +142,7 @@ const auditProbe = liveFixtureModule.callAccessAuditProbe({
 assert.ok(auditProbe.expected_event_types.includes('call_participant_kicked'));
 assert.ok(auditProbe.expected_event_types.includes('call_owner_transferred'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_strong_mismatch_denied'));
+assert.ok(auditProbe.expected_event_types.includes('call_access_invitation_invalidated'));
 assert.equal(
   auditProbe.fingerprints.session_id,
   liveFixtureModule.iamFixtureFingerprint('sess-audit-contract'),

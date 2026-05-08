@@ -2664,7 +2664,7 @@ against duplicate join/session request loops.
 - [x] `e2e_audit_011_owner_transfer_logged`
 - [x] `e2e_audit_012_duplicate_link_flag_logged`
 - [x] `e2e_audit_013_membership_removal_logged`
-- [ ] `e2e_audit_014_invite_invalidation_logged`
+- [x] `e2e_audit_014_invite_invalidation_logged`
 - [x] `e2e_audit_015_reschedule_logged`
 - [x] `e2e_audit_016_delete_logged`
 - [x] `e2e_audit_017_explicit_end_logged`
