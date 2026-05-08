@@ -462,6 +462,15 @@ try {
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\([\s\S]*'sender_key_participant_mismatch',[\s\S]*false,[\s\S]*\);/m, 'sender-key participant mismatch must wait for a fresh hello instead of force-rekeying every stale transcript');
   assert.match(mediaSecurityRuntimeSource, /requestRemoteMediaSecuritySync\(normalizedTargetId, 'sender_key_participant_mismatch'/, 'sender-key participant mismatch must prompt the remote peer to refresh hello/sender-key state');
   assert.match(mediaSecurityRuntimeSource, /requestRoomSnapshot\(\);[\s\S]*scheduleMediaSecurityParticipantSync\([\s\S]*'sender_key_participant_mismatch',[\s\S]*false,[\s\S]*\);/m, 'sender-key participant mismatch must refresh the authoritative room snapshot before non-forced transcript recovery');
+  assert.match(mediaSecurityRuntimeSource, /type === 'media-security\/sender-key'[\s\S]*errorCode === 'participant_set_mismatch'[\s\S]*requestRemoteMediaSecuritySync\(normalizedSenderUserId, 'sender_key_participant_mismatch'[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, true\);[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_participant_mismatch', false\);[\s\S]*eventType: 'media_security_sender_key_participant_mismatch'/m, 'incoming stale sender-key participant mismatches must use sender-key recovery instead of the generic hard signal-failure path');
+  {
+    const senderKeyMismatchRecoveryIndex = mediaSecurityRuntimeSource.indexOf("type === 'media-security/sender-key'\n        && errorCode === 'participant_set_mismatch'");
+    const senderKeyMismatchReturnIndex = mediaSecurityRuntimeSource.indexOf('        return;', senderKeyMismatchRecoveryIndex);
+    const signalFailedIndex = mediaSecurityRuntimeSource.indexOf("captureClientDiagnosticError('media_security_signal_failed'", senderKeyMismatchRecoveryIndex);
+    assert.ok(senderKeyMismatchRecoveryIndex >= 0, 'sender-key participant mismatch receive recovery block must exist');
+    assert.ok(senderKeyMismatchReturnIndex > senderKeyMismatchRecoveryIndex, 'sender-key participant mismatch receive recovery must return after scheduling recovery');
+    assert.ok(signalFailedIndex < 0 || senderKeyMismatchReturnIndex < signalFailedIndex, 'sender-key participant mismatch receive recovery must not fall through to media_security_signal_failed');
+  }
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('hello_participant_set_changed', shouldForceRekey\);/, 'incoming hello participant-set additions must not force a fresh local sender-key epoch for already signaled receivers');
   assert.match(mediaSecurityRuntimeSource, /const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';/m, 'participant-set signal failures must not create a forced rekey storm while waiting for a fresh hello');
   assert.match(mediaSecurityRuntimeSource, /if \(errorCode === 'downgrade_attempt'\) \{[\s\S]*session\.markPeerRemoved\?\.\(normalizedSenderUserId\);[\s\S]*\}/m, 'downgrade-attempt recovery must clear stale peer key state before rebuilding the handshake');
