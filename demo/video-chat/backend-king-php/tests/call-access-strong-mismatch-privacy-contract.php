@@ -108,6 +108,7 @@ try {
 
     videochat_bootstrap_sqlite($databasePath);
     $pdo = videochat_open_sqlite_pdo($databasePath);
+    putenv('VIDEOCHAT_CALL_ACCESS_HOST_VERIFICATION_LIMIT=20');
 
     $defaultTenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
     $adminRoleId = videochat_call_access_strong_mismatch_privacy_role_id($pdo, 'admin');
@@ -141,7 +142,7 @@ try {
         'title' => $callTitle,
         'starts_at' => '2026-11-01T09:00:00Z',
         'ends_at' => '2026-11-01T10:00:00Z',
-        'internal_participant_user_ids' => [$targetUserId],
+        'internal_participant_user_ids' => [$targetUserId, $wrongUserId],
         'external_participants' => [
             ['email' => $externalEmail, 'display_name' => $externalName],
         ],
@@ -291,6 +292,43 @@ try {
     videochat_call_access_strong_mismatch_privacy_assert_no_needles($wrongHostSession, $secretNeedles, 'wrong-host session response');
     $wrongHostRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_strong_mismatch_wrong_host_should_not_issue'")->fetchColumn();
     videochat_call_access_strong_mismatch_privacy_assert($wrongHostRows === 0, 'wrong host denial must not persist a session');
+    $wrongHostReviewRows = (int) $pdo->query('SELECT COUNT(*) FROM call_access_review_flags WHERE subject_user_id = ' . (int) $wrongUserId . " AND status = 'open'")->fetchColumn();
+    videochat_call_access_strong_mismatch_privacy_assert($wrongHostReviewRows >= 1, 'wrong host denial should create a manual-review flag');
+
+    $correctHostSession = $callAccessRoute(
+        '/session',
+        'POST',
+        [
+            'Authorization' => 'Bearer sess_strong_mismatch_wrong',
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'strong-mismatch-correct-host',
+        ],
+        json_encode([
+            'verified_user_id' => $wrongUserId,
+            'verified_session_id' => 'sess_strong_mismatch_wrong',
+            'host_name' => $hostName,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'sess_strong_mismatch_correct_host_issued'
+    );
+    videochat_call_access_strong_mismatch_privacy_assert((int) ($correctHostSession['status'] ?? 0) === 200, 'correct host name should issue a logged-in account session');
+    $correctHostPayload = videochat_call_access_strong_mismatch_privacy_decode($correctHostSession);
+    videochat_call_access_strong_mismatch_privacy_assert((string) ($correctHostPayload['status'] ?? '') === 'ok', 'correct host response should be ok');
+    videochat_call_access_strong_mismatch_privacy_assert((int) (((($correctHostPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0)) === $wrongUserId, 'correct host must continue as logged-in account');
+    videochat_call_access_strong_mismatch_privacy_assert((string) (((($correctHostPayload['result'] ?? [])['user'] ?? [])['display_name'] ?? '')) === $wrongName, 'declining update baseline should leave logged-in account name unchanged');
+    videochat_call_access_strong_mismatch_privacy_assert((string) (((($correctHostPayload['result'] ?? [])['call'] ?? [])['id'] ?? '')) === $callId, 'correct host response should reference the call');
+    $correctSessionRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_strong_mismatch_correct_host_issued' AND user_id = " . (int) $wrongUserId)->fetchColumn();
+    videochat_call_access_strong_mismatch_privacy_assert($correctSessionRows === 1, 'correct host session must be bound to logged-in account');
+    $hostVerifiedBinding = $pdo->query("SELECT user_id, host_verified_at FROM call_access_sessions WHERE session_id = 'sess_strong_mismatch_correct_host_issued' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_strong_mismatch_privacy_assert(is_array($hostVerifiedBinding), 'correct host call-access binding should exist');
+    videochat_call_access_strong_mismatch_privacy_assert((int) ($hostVerifiedBinding['user_id'] ?? 0) === $wrongUserId, 'correct host binding must use logged-in account id');
+    videochat_call_access_strong_mismatch_privacy_assert(trim((string) ($hostVerifiedBinding['host_verified_at'] ?? '')) !== '', 'correct host binding must mark host verification');
+    $bindingValidation = videochat_validate_call_access_session_binding($pdo, 'sess_strong_mismatch_correct_host_issued', $wrongUserId);
+    videochat_call_access_strong_mismatch_privacy_assert((bool) ($bindingValidation['ok'] ?? false), 'host-verified foreign personal-link session binding should validate');
+    $wrongUserAfterCorrectHost = $pdo->query('SELECT display_name FROM users WHERE id = ' . (int) $wrongUserId)->fetch(PDO::FETCH_ASSOC);
+    $targetUserAfterCorrectHost = $pdo->query('SELECT display_name FROM users WHERE id = ' . (int) $targetUserId)->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_strong_mismatch_privacy_assert((string) ($wrongUserAfterCorrectHost['display_name'] ?? '') === $wrongName, 'correct host without update must leave logged-in account unchanged');
+    videochat_call_access_strong_mismatch_privacy_assert((string) ($targetUserAfterCorrectHost['display_name'] ?? '') === $targetName, 'correct host without update must leave link account unchanged');
+    videochat_call_access_strong_mismatch_privacy_assert_no_needles($correctHostSession, ['foreign-target-session'], 'correct-host session response');
 
     $unverifiedHostSession = $callAccessRoute(
         '/session',
@@ -346,10 +384,22 @@ try {
     $attemptRows = $pdo->query('SELECT * FROM call_access_host_verification_attempts')->fetchAll(PDO::FETCH_ASSOC);
     $attemptPayload = json_encode($attemptRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     videochat_call_access_strong_mismatch_privacy_assert(is_string($attemptPayload), 'host attempt rows should encode');
+    videochat_call_access_strong_mismatch_privacy_assert(str_contains($attemptPayload, 'correct_host_name'), 'correct host verification attempt should be recorded');
     videochat_call_access_strong_mismatch_privacy_assert_no_needles(
         ['body' => $attemptPayload],
         [...array_values($hostNameVariants), $hostName, $changedHostName, $accessId],
         'host verification attempt storage'
+    );
+    $auditEvents = videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 100]);
+    $auditPayload = json_encode($auditEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_access_strong_mismatch_privacy_assert(is_string($auditPayload), 'audit events should encode');
+    videochat_call_access_strong_mismatch_privacy_assert(str_contains($auditPayload, 'call_access_strong_mismatch_denied'), 'wrong host mismatch denial audit should be recorded');
+    videochat_call_access_strong_mismatch_privacy_assert(str_contains($auditPayload, 'call_access_host_verification_succeeded'), 'host verification success audit should be recorded');
+    videochat_call_access_strong_mismatch_privacy_assert(str_contains($auditPayload, '"account_update_offered":true'), 'success audit should record account-update offer');
+    videochat_call_access_strong_mismatch_privacy_assert_no_needles(
+        ['body' => $auditPayload],
+        [$hostName, $wrongHostName, $changedHostName, $accessId, 'sess_strong_mismatch_correct_host_issued'],
+        'host verification audit'
     );
 
     @unlink($databasePath);

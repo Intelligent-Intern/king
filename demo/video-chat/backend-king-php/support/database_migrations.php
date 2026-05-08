@@ -794,5 +794,6 @@ SQL,
         52 => ['name' => '0052_call_app_crdt_envelope', 'statements' => videochat_call_app_crdt_migration_statements()],
         53 => ['name' => '0053_workspace_calendar_settings', 'statements' => videochat_workspace_calendar_additive_migration_statements()],
         54 => ['name' => '0054_call_access_link_disable', 'statements' => ['ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT']],
+        55 => ['name' => '0055_call_access_host_verified_session', 'statements' => ['ALTER TABLE call_access_sessions ADD COLUMN host_verified_at TEXT']],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

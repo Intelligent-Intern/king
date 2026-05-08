@@ -1540,6 +1540,15 @@ persisted.
 path by requiring manually re-entered values, sending confirmation only to the
 logged-in account, refusing updates before confirmation, and confirming only
 the re-entered fields without adopting the link-target session.
+Proof: `call-access-strong-mismatch-host-verification.spec.js` covers the
+browser warning modal, foreign-link/account-difference copy, host-name field,
+wrong-host denial with manual-review wording, correct-host success
+confirmation, update-choice prompt, decline-without-update path, and unchanged
+logged-in account identity. Docker PHP 8.4 with `pdo_sqlite` passed
+`call-access-strong-mismatch-privacy-contract.php`, proving correct-host
+session issuance for the logged-in account, host-verified binding validation,
+wrong-host review flagging, no pre-confirmation account update, and safe audit
+logging for failed and successful host-name verification.
 
 Proof: `call-access-identity-mismatch-review-flow-contract.mjs` pins the
 frontend warning panel and host-name challenge wiring without exposing

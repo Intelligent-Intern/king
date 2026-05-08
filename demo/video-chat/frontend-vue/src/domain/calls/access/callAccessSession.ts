@@ -11,6 +11,15 @@ function errorCodeFromPayload(payload: unknown): string {
   return typeof code === 'string' ? code.trim() : '';
 }
 
+function errorDetailsFromPayload(payload: unknown): Record<string, unknown> {
+  const source = payload && typeof payload === 'object'
+    ? payload as { error?: { details?: unknown } }
+    : null;
+  return source?.error?.details && typeof source.error.details === 'object'
+    ? source.error.details as Record<string, unknown>
+    : {};
+}
+
 async function readJsonResponse(response: Response): Promise<any> {
   try {
     return await response.json();
@@ -89,6 +98,7 @@ export async function loginWithCallAccess(accessId: unknown, options: Record<str
         ok: false,
         status: response.status,
         errorCode: errorCodeFromPayload(payload),
+        errorDetails: errorDetailsFromPayload(payload),
         message: extractErrorMessage(payload, 'Could not start call access session.'),
       };
     }
@@ -104,6 +114,8 @@ export async function loginWithCallAccess(accessId: unknown, options: Record<str
     return {
       ok: true,
       role: sessionState.role,
+      session: result.session || null,
+      user: result.user || null,
       accessLink: result.access_link || null,
       call: result.call || null,
     };

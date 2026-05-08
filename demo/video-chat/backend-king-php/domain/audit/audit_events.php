@@ -360,30 +360,6 @@ function videochat_audit_record_call_access_account_compared(PDO $pdo, array $ac
     ]);
 }
 
-function videochat_audit_record_call_access_host_verification(PDO $pdo, array $accessLink, array $call, int $actorUserId, string $outcome, array $context = []): array
-{
-    $normalized = strtolower(trim($outcome));
-    $eventType = $normalized === 'correct_host_name'
-        ? 'call_access_host_name_verified'
-        : ($normalized === 'rate_limited' ? 'call_access_host_name_verification_rate_limited' : 'call_access_host_name_verification_failed');
-    return videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
-        'event_type' => $eventType,
-        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
-        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
-        'resource_type' => 'call_access_link',
-        'resource_fingerprint' => videochat_audit_fingerprint((string) ($accessLink['id'] ?? '')),
-        'payload' => [
-            'audit_scope' => 'iam_call_access',
-            'action' => 'verify_host_name',
-            'outcome' => $normalized ?: 'wrong_host_name',
-            'host_name_logged' => false,
-            'raw_link_identifier_logged' => false,
-            'raw_credential_identifier_logged' => false,
-        ] + videochat_audit_sanitize_payload($context),
-    ]);
-}
-
 function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $accessLink, array $call, array $targetUser, string $sessionId): array
 {
     return videochat_audit_record_event($pdo, [
@@ -672,6 +648,51 @@ function videochat_audit_record_call_access_strong_mismatch(
             'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
             'denial_reason' => strtolower(trim((string) ($context['denial_reason'] ?? 'not_bound_to_current_user'))) ?: 'not_bound_to_current_user',
             'host_name_verified' => (bool) ($context['host_name_verified'] ?? false),
+            'host_name_logged' => false,
+            'foreign_account_data_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_access_host_verification(
+    PDO $pdo,
+    array $accessLink,
+    array $call,
+    ?array $targetUser,
+    int $actorUserId,
+    string $outcome,
+    array $context = []
+): array {
+    $normalizedOutcome = strtolower(trim($outcome));
+    if (!in_array($normalizedOutcome, ['correct_host_name', 'wrong_host_name', 'rate_limited'], true)) {
+        $normalizedOutcome = 'wrong_host_name';
+    }
+
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    $targetUserId = is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null;
+    $hostNameVerified = $normalizedOutcome === 'correct_host_name';
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => $hostNameVerified ? 'call_access_host_verification_succeeded' : 'call_access_host_verification_failed',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $targetUserId,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'mismatch' => 'strong_personalized_link',
+            'stage' => strtolower(trim((string) ($context['stage'] ?? 'session_host_verification'))) ?: 'session_host_verification',
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'outcome' => $normalizedOutcome,
+            'host_name_verified' => $hostNameVerified,
+            'account_update_offered' => $hostNameVerified,
+            'compatibility_event_type' => $hostNameVerified ? 'call_access_host_name_verified' : 'call_access_host_name_rejected',
             'host_name_logged' => false,
             'foreign_account_data_logged' => false,
             'raw_link_identifier_logged' => false,
