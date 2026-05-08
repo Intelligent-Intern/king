@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +18,54 @@ function requireContains(source, needle, label) {
 
 function requireMissing(source, needle, label) {
   assert.equal(source.includes(needle), false, `${label} must not contain: ${needle}`);
+}
+
+function countContourBand(alpha, width, height) {
+  let transparentBackground = 0;
+  let contourAlpha = 0;
+  let opaqueCenter = 0;
+  let leakedInterior = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const value = alpha[y * width + x] ?? 0;
+      const inCenter = x >= 72 && x <= 87 && y >= 72 && y <= 87;
+      const outsidePerson = x < 24 || x > 135 || y < 24 || y > 135;
+      if (outsidePerson && value === 0) transparentBackground += 1;
+      if (inCenter && value === 255) opaqueCenter += 1;
+      if (inCenter && value > 0 && value < 255) leakedInterior += 1;
+      if (!outsidePerson && !inCenter && value > 0 && value < 255) contourAlpha += 1;
+    }
+  }
+  return { transparentBackground, contourAlpha, opaqueCenter, leakedInterior };
+}
+
+async function assertContourOnlyAlpha(frontendRoot) {
+  const { shapeForegroundAlpha } = await import(pathToFileURL(path.join(
+    frontendRoot,
+    'src/domain/realtime/background/maskPostprocess.js',
+  )).href);
+  const width = 160;
+  const height = 160;
+  const binaryPerson = new Uint8ClampedArray(width * height);
+  for (let y = 24; y <= 135; y += 1) {
+    for (let x = 24; x <= 135; x += 1) {
+      binaryPerson[y * width + x] = 255;
+    }
+  }
+
+  const shaped = shapeForegroundAlpha(binaryPerson, width, height, {
+    averageRadius: 0,
+    contrast: 1,
+    gamma: 1,
+    temporalFall: 1,
+    temporalRise: 1,
+  });
+  const counts = countContourBand(shaped, width, height);
+
+  assert.ok(counts.opaqueCenter >= 200, 'synthetic torso/face center must remain opaque');
+  assert.ok(counts.transparentBackground >= 13000, 'background pixels must stay transparent');
+  assert.ok(counts.contourAlpha > 0, 'contour band must receive the only smoothed alpha');
+  assert.equal(counts.leakedInterior, 0, 'interior foreground must not receive partial alpha');
 }
 
 try {
@@ -38,6 +87,8 @@ try {
   requireContains(maskPostprocess, 'function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {', 'shared contour shaping helper');
   requireContains(maskPostprocess, 'const inside = sampleInnerFeatherRamp(t);', 'stepped feather ramp application');
   requireMissing(maskPostprocess, '(raw - 0.5) * contrast + 0.5', 'mask global contrast alpha lift');
+  requireMissing(maskPostprocess, '1 / (1 + Math.exp', 'mask sigmoid fallback blending');
+  requireMissing(maskPostprocess, 'softmax', 'mask softmax fallback blending');
 
   requireContains(compositorShared, 'buildInnerDistanceFeatherAlpha(sourceAlpha, sourceWidth, sourceHeight)', 'bitmap matte contour shaping');
   requireContains(compositorShared, 'return buildInnerDistanceFeatherMaskValues(mask, width, height);', 'value matte contour shaping');
@@ -45,10 +96,12 @@ try {
   requireContains(compositorStage, 'createWebGlBackgroundCompositorStage(options)', 'WebGL compositor preference');
   requireContains(compositorStage, 'createCanvasBackgroundCompositorStage(options)', 'canvas compositor fallback');
   requireContains(compositorCanvas, 'getShowSourceUntilMask?.() === true', 'canvas preview warmup source policy');
+  requireContains(compositorCanvas, "drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);", 'canvas degraded mode keeps original source visible');
   requireContains(compositorCanvas, "ctx.fillStyle = '#061a4a';", 'canvas replacement warmup privacy placeholder');
   requireMissing(compositorCanvas, 'if (hasMatteMask && !maskUpdated) return;', 'canvas stale-mask frame freeze');
   requireContains(compositorWebgl, 'float maskAlpha = uHasMask == 1 ? readMask(vUv) : 0.0;', 'WebGL direct shaped alpha mask');
   requireContains(compositorWebgl, "const warmupPlaceholder = !hasRenderableMask && mode === 'replace' && !showSourceUntilMask;", 'WebGL replacement warmup privacy placeholder');
+  requireContains(compositorWebgl, "mode === 'off' || (!hasRenderableMask && showSourceUntilMask) ? 0 : 1", 'WebGL degraded mode bypasses synthetic replacement');
   requireMissing(compositorWebgl, 'smoothstep(uMaskLow, uMaskHigh', 'WebGL shader global mask blending');
   requireMissing(compositorWebgl, 'if (hasMatteMask && !maskUpdated', 'WebGL stale-mask frame freeze');
 
@@ -58,6 +111,8 @@ try {
   requireContains(stream, 'const readyTimer = setTimeout(', 'background stream readiness timeout');
   requireContains(stream, 'segmentationBackend = await createSinetWasmSegmentationBackend({', 'background stream lazy SINet acquisition');
   requireContains(stream, "requested: 'sinet-wasm'", 'background stream SINet diagnostics name');
+  requireContains(stream, 'stream: sourceStream, active: false, reason: "setup_failed", backend: "none"', 'background stream setup failure preserves original stream');
+  requireContains(stream, 'for (const audioTrack of sourceStream.getAudioTracks()) out.addTrack(audioTrack);', 'background stream preserves audio tracks in filtered output');
   requireContains(stream, 'maskContrast: runtimeConfig.maskContrast,', 'background stream mask contrast controls');
   requireContains(stream, 'averageRadius: runtimeConfig.averageRadius,', 'background stream Gaussian averaging controls');
   requireContains(stream, 'temporalRise: runtimeConfig.temporalRise,', 'background stream temporal rise controls');
@@ -74,8 +129,13 @@ try {
   requireContains(sinetBackend, "executionProviders: ['wasm']", 'SINet backend local WASM execution');
   requireContains(sinetBackend, 'pendingMaskValues = alphaToFloatMask(alpha);', 'SINet backend value masks');
   requireContains(sinetBackend, 'function binaryForegroundAlpha(value, threshold = 0)', 'SINet no-softmax foreground classification');
+  requireContains(sinetBackend, 'return Number(value) > Number(threshold) ? 255 : 0;', 'SINet hard foreground membership');
+  requireContains(sinetBackend, 'const threshold = probabilityLike ? 0.5 : 0;', 'SINet single-channel hard threshold');
+  requireContains(sinetBackend, 'alpha[i] = binaryForegroundAlpha(fg, bg);', 'SINet two-channel hard foreground-vs-background decision');
   requireMissing(sinetBackend, 'Math.exp(bg - max)', 'SINet softmax');
   requireMissing(sinetBackend, '1 / (1 + Math.exp', 'SINet sigmoid');
+
+  await assertContourOnlyAlpha(frontendRoot);
 
   console.log('[background-filter-mask-contract] PASS');
 } catch (error) {
