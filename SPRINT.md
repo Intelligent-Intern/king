@@ -1433,7 +1433,7 @@ name and proves a distinct guest user plus open call-scoped binding is created.
 - [x] Personalized link with modified link ID is rejected
 - [ ] Personalized link with modified call ID is rejected
 - [ ] Anonymous link with modified call ID is rejected
-- [ ] Expired link is rejected
+- [x] Expired link is rejected
 - [ ] Disabled link is rejected
 - [x] Deleted temporary account cannot be revived through old link
 - [ ] API request with forged user ID is rejected
@@ -1448,8 +1448,8 @@ name and proves a distinct guest user plus open call-scoped binding is created.
 - [ ] Email confirmation link is one-time use
 - [ ] Email confirmation link is time-limited
 - [ ] CSRF protection works for account-data change
-- [ ] Session fixation during link opening is prevented
-- [ ] Login switch during link verification does not cause wrong account binding
+- [x] Session fixation during link opening is prevented
+- [x] Login switch during link verification does not cause wrong account binding
 - [ ] Logout during link verification causes no data leak
 - [ ] Parallel tabs with different accounts cause no incorrect merge
 - [ ] Permission changes during active call are applied correctly
@@ -1458,6 +1458,12 @@ name and proves a distinct guest user plus open call-scoped binding is created.
 - [ ] Kick during active call removes user
 - [ ] Deleted call cannot be entered
 - [ ] Ended call cannot be entered
+
+Proof: `call-access-session-fixation-contract` rejects reuse of an existing
+session ID for a new call-access binding, rejects login/account switches between
+verified and authenticated context, rejects wrong-account personalized-link
+issuance, and makes tampered or expired call-access session bindings fail
+session validation.
 
 ## 16. Email Confirmation for Account Data Update
 
