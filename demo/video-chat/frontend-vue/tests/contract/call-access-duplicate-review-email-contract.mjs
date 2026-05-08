@@ -17,10 +17,13 @@ const raceE2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-dup
 const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
+const confirmationAuditHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php');
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const callAccessRoutes = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
 const duplicateContract = read('demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php');
 const emailContract = read('demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php');
+const router = read('demo/video-chat/frontend-vue/src/http/router.ts');
+const accountUpdateConfirmationView = read('demo/video-chat/frontend-vue/src/domain/calls/access/AccountUpdateConfirmationView.vue');
 
 assert.match(
   e2eSpec,
@@ -227,6 +230,31 @@ assert.match(
 );
 assert.match(
   confirmationHelper,
+  /superseded_at TEXT[\s\S]*superseded_by_id TEXT/,
+  'backend confirmation helper must persist superseded pending confirmation state',
+);
+assert.match(
+  confirmationHelper,
+  /VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER[\s\S]*VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_INVALIDATE_OLDER/,
+  'backend confirmation helper must expose configured newer-invalidates-older behavior',
+);
+assert.match(
+  confirmationAuditHelper,
+  /call_access_account_update_confirmation_failed/,
+  'backend confirmation helper must audit failed confirmation attempts',
+);
+assert.match(
+  confirmationHelper,
+  /call_access_account_update_confirmation_email_dispatched/,
+  'backend confirmation helper must audit confirmation email dispatch',
+);
+assert.match(
+  confirmationHelper,
+  /confirmation_already_consumed[\s\S]*consume_race[\s\S]*'reason' => 'conflict'/,
+  'backend confirmation helper must resolve consume races as deterministic conflicts',
+);
+assert.match(
+  confirmationHelper,
   /UPDATE users SET display_name = :display_name/,
   'backend confirmation helper must update only confirmed manually re-entered fields',
 );
@@ -260,6 +288,21 @@ assert.match(
   callAccessRoutes,
   /'expires_at' => \$requestResult\['expires_at'\]/,
   'HTTP routes must expose confirmation expiry metadata without exposing the production token',
+);
+assert.match(
+  router,
+  /path:\s*'\/account-update-confirmation'[\s\S]*AccountUpdateConfirmationView\.vue[\s\S]*requiresAuth:\s*true/,
+  'router must expose a signed-in account update confirmation success/failure state route',
+);
+assert.match(
+  accountUpdateConfirmationView,
+  /call_access_account_update_confirmation_token[\s\S]*account-update-confirmations\/\$\{encodeURIComponent\(token\)\}\/confirm/,
+  'confirmation view must consume the account-update confirmation token through the backend route',
+);
+assert.match(
+  accountUpdateConfirmationView,
+  /Account update confirmed[\s\S]*payload\?\.result\?\.state !== 'confirmed'/,
+  'confirmation view must show a confirmed success state only after backend confirmation succeeds',
 );
 
 assert.match(
@@ -377,6 +420,21 @@ assert.match(
   emailContract,
   /confirmation token replay should fail/,
   'backend email contract must prove one-time confirmation tokens',
+);
+assert.match(
+  emailContract,
+  /multiple pending confirmations must use distinct tokens[\s\S]*second pending confirmation should stay pending after first confirmation/,
+  'backend email contract must prove multiple pending confirmations resolve independently by default',
+);
+assert.match(
+  emailContract,
+  /newer request should supersede exactly one older pending confirmation[\s\S]*superseded confirmation should return deterministic conflict/,
+  'backend email contract must prove configured newer-invalidates-older behavior',
+);
+assert.match(
+  emailContract,
+  /newer invalidating replay should fail deterministically/,
+  'backend email contract must prove confirmation replay/race conflicts resolve deterministically',
 );
 assert.match(
   emailContract,

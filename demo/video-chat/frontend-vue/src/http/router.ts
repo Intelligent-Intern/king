@@ -38,6 +38,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['user'] },
   },
   {
+    path: '/account-update-confirmation',
+    name: 'call-access-account-update-confirmation',
+    component: () => import('../domain/calls/access/AccountUpdateConfirmationView.vue'),
+    meta: { requiresAuth: true, roles: ['admin', 'user'] },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('../domain/auth/LoginView.vue'),
