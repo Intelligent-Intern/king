@@ -128,12 +128,16 @@ Acceptance criteria:
   self-hosted call-app manifests that point at a private mothernode.
 
 Tickets:
-- [ ] BGF-01 Browser regression matrix and reproducible failure capture
+- [x] BGF-01 Browser regression matrix and reproducible failure capture
   - Capture Chrome Stable/Chromium Ubuntu/Firefox behavior for MediaPipe demo
     and King production paths.
   - Record exact browser versions, failing console signatures, backend choice,
     and whether CPU delegation still touches GPU internals.
   - Add a contract fixture for the known Chrome GPU-service init failure shape.
+  - Proof: `background-regression-matrix-fixture.json` records Chrome Stable,
+    Chromium Ubuntu, Firefox, disabled-GPU Chrome failure capture, exact
+    GPU-service signatures, and CPU delegation touching GPU internals; `node
+    tests/contract/background-regression-matrix-contract.mjs` PASS.
 
 - [x] BGF-02 Backend selection ladder with quarantine
   - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
@@ -170,19 +174,27 @@ Tickets:
     standard-avatar, uploaded-avatar, and unfiltered-video choices while
     preserving audio tracks and rendering avatars as static tile media.
 
-- [ ] BGF-05 Compositor and warmup safety
+- [x] BGF-05 Compositor and warmup safety
   - Make WebGL/canvas compositor warmup deterministic across backend changes.
   - Avoid stale-mask freeze, blue-screen swallow, and one-frame full-background
     flashes.
   - Add pixel-level compositor contracts for warmup, backend switch, and
     segmentation-unavailable states.
+  - Proof: `background-compositor-warmup-safety-contract.mjs` pins warmup,
+    stale-mask reuse, backend reset, no blue-background swallow, and
+    segmentation-unavailable source rendering; `npm run
+    test:contract:background-filter` PASS.
 
-- [ ] BGF-06 Runtime diagnostics and field observability
+- [x] BGF-06 Runtime diagnostics and field observability
   - Emit throttled diagnostics for backend init, unavailable transition, modal
     choice, and matte rejection.
   - Include enough local context to debug browser regressions without leaking
     media frames, SDP, ICE, or tokens.
   - Surface concise state in existing diagnostics channels, not new reload UI.
+  - Proof: `runtimeDiagnostics.js` emits throttled safe diagnostics for backend
+    init, unavailable transition, modal choice, and matte rejection without SDP,
+    ICE, token, or media-frame leakage; `node
+    tests/contract/background-runtime-diagnostics-contract.mjs` PASS.
 
 - [ ] BGF-07 Online proof, deploy, and browser smoke
   - Run focused background contracts, build, deploy, and production smoke.
