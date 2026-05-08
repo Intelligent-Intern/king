@@ -14,6 +14,7 @@ const admissionGate = read('src/domain/calls/access/admissionGate.ts');
 const callAccessSession = read('src/domain/calls/access/callAccessSession.ts');
 const joinView = read('src/domain/calls/access/JoinView.vue');
 const authSession = read('src/domain/auth/session.ts');
+const callAccessJoinSpec = read('tests/e2e/call-access-join.spec.js');
 
 assert.match(
   admissionGate,
@@ -66,6 +67,42 @@ assert.doesNotMatch(
   authSession,
   /export async function loginWithCallAccess/,
   'call-access login request logic belongs with public join/access helpers',
+);
+
+assert.match(
+  callAccessJoinSpec,
+  /login switch after verified call-access link fails without rebinding or leaking foreign data/,
+  'public join E2E must cover login switch after verified link context',
+);
+assert.match(
+  callAccessJoinSpec,
+  /sessionRequestAuthorization\)\.toBe\(`Bearer \$\{switchedSession\.sessionToken\}`\)/,
+  'login-switch E2E must prove session issuance uses the current bearer token',
+);
+assert.match(
+  callAccessJoinSpec,
+  /sessionRequestBody\)\.toEqual\(\{\s*verified_user_id:\s*2,\s*verified_session_id:\s*verifiedSession\.sessionId,\s*\}\)/,
+  'login-switch E2E must prove the verified user/session snapshot is sent',
+);
+assert.match(
+  callAccessJoinSpec,
+  /expect\(sessionPayload\?\.error\?\.code\)\.toBe\('call_access_conflict'\)/,
+  'login-switch E2E must require a safe conflict from the route guard',
+);
+assert.match(
+  callAccessJoinSpec,
+  /not\.toContainText\(foreignTitle\)[\s\S]*not\.toContainText\(foreignEmail\)[\s\S]*not\.toContainText\(rejectedCallAccessToken\)/,
+  'login-switch E2E must prove foreign call/person/session details are not rendered',
+);
+assert.match(
+  callAccessJoinSpec,
+  /storedSession\.sessionId\)\.toBe\(switchedSession\.sessionId\)[\s\S]*storedSession\.sessionToken\)\.toBe\(switchedSession\.sessionToken\)[\s\S]*storedSession\.sessionToken\)\.not\.toBe\(rejectedCallAccessToken\)/,
+  'login-switch E2E must prove the failed call-access response does not bind a new session',
+);
+assert.match(
+  callAccessJoinSpec,
+  /expect\(joinGetCount\)\.toBe\(1\)[\s\S]*expect\(sessionPostCount\)\.toBe\(1\)/,
+  'login-switch E2E must guard against reload or duplicate session POST loops',
 );
 
 console.log('[call-access-verified-context-ui-contract] PASS');

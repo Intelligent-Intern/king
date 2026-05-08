@@ -1520,7 +1520,10 @@ session switches safely, and preserves anonymous personalized/open-link issuance
 `call-access-verified-context-ui-contract` adds the frontend half of that
 contract by proving the browser join flow forwards the verified context and
 current bearer token into session issuance instead of trusting mutable local
-state.
+state. The focused Playwright case `call-access-join.spec.js` covers the
+browser login-switch path after link verification, asserting the session POST
+carries the verified context plus the current bearer, returns a safe conflict,
+does not render foreign response data, and does not replace local session state.
 
 ## 16. Email Confirmation for Account Data Update
 
