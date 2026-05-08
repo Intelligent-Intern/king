@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call-access-rejoin-kick-membership-helper.php';
+require_once __DIR__ . '/../http/module_call_apps.php';
 
 $label = 'call-access-active-permission-change-contract';
 
@@ -31,6 +32,37 @@ SQL
         ':organization_id' => $organizationId,
         ':user_id' => $userId,
     ]);
+}
+
+function videochat_iam_active_permission_contract_decode(array $response): array
+{
+    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function videochat_iam_active_permission_contract_error_response(int $status, string $code, string $message, array $details = []): array
+{
+    return [
+        'status' => $status,
+        'headers' => ['content-type' => 'application/json; charset=utf-8'],
+        'body' => json_encode([
+            'status' => 'error',
+            'error' => [
+                'code' => $code,
+                'message' => $message,
+                'details' => $details,
+            ],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+    ];
+}
+
+function videochat_iam_active_permission_contract_json_response(int $status, array $payload): array
+{
+    return [
+        'status' => $status,
+        'headers' => ['content-type' => 'application/json; charset=utf-8'],
+        'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+    ];
 }
 
 try {
@@ -165,6 +197,61 @@ try {
     $orgAdminAfterDowngrade = videochat_realtime_resolve_connection_rooms($orgAdminAuth, $orgAdminRoomId, $openDatabase, $orgAdminCallId);
     videochat_iam_rejoin_contract_assert((string) ($orgAdminAfterDowngrade['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'downgraded org admin should route to lobby', $label);
     videochat_iam_rejoin_contract_assert((string) ($orgAdminAfterDowngrade['pending_room_id'] ?? '') === $orgAdminRoomId, 'downgraded org admin should keep pending room request', $label);
+    videochat_iam_rejoin_contract_assert(
+        !videochat_realtime_connection_can_bypass_admission_for_room($staleOrgAdminConnection, $orgAdminRoomId, $openDatabase),
+        'downgraded org admin direct join must fail closed against stale moderator connection fields',
+        $label
+    );
+
+    $reconnectBackfillConnection = $staleOrgAdminConnection;
+    $reconnectBackfillConnection['room_id'] = videochat_realtime_waiting_room_id();
+    $reconnectBackfillConnection['requested_room_id'] = $orgAdminRoomId;
+    $reconnectBackfillConnection['pending_room_id'] = $orgAdminRoomId;
+    $reconnectBackfillConnection['requested_call_id'] = $orgAdminCallId;
+    $reconnectBackfillConnection['active_call_id'] = $orgAdminCallId;
+    $reconnectBackfillConnection = videochat_realtime_connection_with_call_context($reconnectBackfillConnection, $openDatabase);
+    videochat_iam_rejoin_contract_assert((string) ($reconnectBackfillConnection['active_call_id'] ?? '') === '', 'reconnect backfill must clear stale org-admin active call binding after downgrade', $label);
+    videochat_iam_rejoin_contract_assert((string) ($reconnectBackfillConnection['effective_call_role'] ?? '') === 'participant', 'reconnect backfill must not restore stale moderator role after downgrade', $label);
+    videochat_iam_rejoin_contract_assert(!(bool) ($reconnectBackfillConnection['can_moderate_call'] ?? true), 'reconnect backfill must not restore stale moderation flag after downgrade', $label);
+    videochat_iam_rejoin_contract_assert(!(bool) ($reconnectBackfillConnection['can_manage_call_owner'] ?? true), 'reconnect backfill must not restore stale owner-management flag after downgrade', $label);
+
+    $reconnectPresence = videochat_presence_state_init();
+    $reconnectJoin = videochat_presence_join_room($reconnectPresence, $reconnectBackfillConnection, videochat_realtime_waiting_room_id());
+    $reconnectBackfillConnection = (array) ($reconnectJoin['connection'] ?? $reconnectBackfillConnection);
+    $reconnectFrames = [];
+    $reconnectSender = static function (mixed $socket, array $payload) use (&$reconnectFrames): bool {
+        $reconnectFrames[] = $payload;
+        return true;
+    };
+    $reconnectRoomSnapshot = videochat_realtime_send_room_snapshot($reconnectPresence, $reconnectBackfillConnection, $openDatabase, 'permission_change_reconnect_backfill', $reconnectSender);
+    $reconnectPayload = is_array($reconnectRoomSnapshot['payload'] ?? null) ? $reconnectRoomSnapshot['payload'] : [];
+    $reconnectViewer = is_array($reconnectPayload['viewer'] ?? null) ? $reconnectPayload['viewer'] : [];
+    $reconnectCallApps = is_array($reconnectPayload['call_apps'] ?? null) ? $reconnectPayload['call_apps'] : [];
+    videochat_iam_rejoin_contract_assert((string) ($reconnectPayload['room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'reconnect snapshot should remain in waiting room after downgrade', $label);
+    videochat_iam_rejoin_contract_assert((string) ($reconnectViewer['call_id'] ?? 'stale') === '', 'reconnect snapshot viewer must not expose stale call id after downgrade', $label);
+    videochat_iam_rejoin_contract_assert((string) ($reconnectViewer['effective_call_role'] ?? '') === 'participant', 'reconnect snapshot viewer must not expose stale moderator role after downgrade', $label);
+    videochat_iam_rejoin_contract_assert(!(bool) ($reconnectViewer['can_moderate'] ?? true), 'reconnect snapshot viewer must not expose stale moderation after downgrade', $label);
+    videochat_iam_rejoin_contract_assert((int) ($reconnectCallApps['active_session_count'] ?? 0) === 0, 'reconnect snapshot must not backfill Call Apps without active call access after downgrade', $label);
+    videochat_iam_rejoin_contract_assert(((array) ($reconnectCallApps['active_sessions'] ?? [])) === [], 'reconnect snapshot must not leak Call App sessions from stale requested call id', $label);
+    videochat_iam_rejoin_contract_assert((string) (($reconnectFrames[0] ?? [])['reason'] ?? '') === 'permission_change_reconnect_backfill', 'reconnect snapshot frame reason mismatch', $label);
+
+    $callAppAvailability = videochat_handle_call_app_routes(
+        '/api/calls/' . rawurlencode($orgAdminCallId) . '/call-apps/available',
+        'GET',
+        [
+            'method' => 'GET',
+            'uri' => '/api/calls/' . rawurlencode($orgAdminCallId) . '/call-apps/available?query=whiteboard',
+            'path' => '/api/calls/' . rawurlencode($orgAdminCallId) . '/call-apps/available',
+            'body' => '',
+        ],
+        $orgAdminAuth,
+        'videochat_iam_active_permission_contract_json_response',
+        'videochat_iam_active_permission_contract_error_response',
+        $openDatabase
+    );
+    $callAppAvailabilityPayload = videochat_iam_active_permission_contract_decode($callAppAvailability ?? []);
+    videochat_iam_rejoin_contract_assert((int) (($callAppAvailability ?? [])['status'] ?? 0) === 403, 'downgraded org admin Call App availability must fail closed', $label);
+    videochat_iam_rejoin_contract_assert((string) (($callAppAvailabilityPayload['error'] ?? [])['code'] ?? '') === 'calls_forbidden', 'downgraded org admin Call App denial code mismatch', $label);
 
     $ownerUserId = videochat_iam_rejoin_contract_seed_user(
         $pdo,
