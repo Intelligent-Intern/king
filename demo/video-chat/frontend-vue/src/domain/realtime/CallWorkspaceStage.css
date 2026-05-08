@@ -57,6 +57,39 @@
   color: var(--color-heading);
 }
 
+.workspace-owner-absence-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 12px;
+  background: var(--color-warning);
+  color: var(--color-primary-navy);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-owner-absence-banner.ended {
+  background: var(--color-surface-navy);
+  color: var(--color-heading);
+}
+
+.workspace-owner-absence-text {
+  min-width: 0;
+  text-align: center;
+}
+
+.workspace-owner-absence-time {
+  min-width: 46px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-primary-navy) 12%, transparent);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .workspace-idle-toast {
   position: absolute;
   top: 12px;
