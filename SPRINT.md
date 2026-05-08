@@ -1356,6 +1356,12 @@ with `pdo_sqlite` and proves owner add/remove/restore, newly added registered
 and temporary users gaining direct join, removed entries losing direct join,
 duplicate adds merging into one row, call/organization scoping, and audit events
 without raw guest identifiers.
+For the two direct-join lifecycle leaves, the concrete backend assertions are
+`registered user should direct join after guest-list add`,
+`registered user should not direct join after guest-list removal`, and
+`owner should restore removed registered guest-list entry`, all routed through
+`videochat_user_can_direct_join_call()` so the server-side permission check is
+the authority.
 
 Proof: `call-access-deleted-ended-disabled-join-contract` and the integrated
 Playwright run of `call-access-seed-matrix.spec.js` plus
@@ -2002,6 +2008,10 @@ call/organization scoping, duplicate-entry merging, and scoped sanitized audit
 events for add, merge, remove, and restore. The static Node contract
 `iam-guest-list-management-audit-proof-contract.mjs` pins those backend proofs to
 `e2e_guest_list_001` through `e2e_guest_list_010`.
+The same backend proof closes `e2e_join_009_removed_guest_list_entry_revokes_join`
+and `e2e_join_010_added_guest_list_entry_grants_join` with an add -> direct join
+allowed -> remove -> direct join denied -> restore sequence against one
+registered user and one active invite-only call.
 
 ## 18. System Admin
 
