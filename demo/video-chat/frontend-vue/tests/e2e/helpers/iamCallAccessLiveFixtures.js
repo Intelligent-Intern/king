@@ -269,6 +269,7 @@ export function callAccessLobbyProbe({ origin = defaultBackendOrigin, session, c
       allow: { type: 'lobby/allow', room_id: roomId, call_id: callId, target_user_id: userId },
       reject: { type: 'lobby/reject', room_id: roomId, call_id: callId, target_user_id: userId },
       remove: { type: 'lobby/remove', room_id: roomId, call_id: callId, target_user_id: userId },
+      kick: { type: 'lobby/kick', room_id: roomId, call_id: callId, target_user_id: userId },
     },
   };
 }
@@ -287,6 +288,13 @@ export function callAccessAuditProbe({ tenant = null, call = null, accessLink = 
     expected_event_types: [
       'call_access_link_opened',
       'call_scoped_access_continued',
+      'call_access_duplicate_personalized_link_review',
+      'call_access_strong_mismatch_denied',
+      'call_participant_joined',
+      'call_participant_left',
+      'call_participant_rejoined',
+      'call_participant_kicked',
+      'call_owner_transferred',
       'membership_removed',
     ],
     fingerprints: {
