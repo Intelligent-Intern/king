@@ -287,11 +287,11 @@ Status:
   sprint moves the carrier from SFU-first fallback toward Gossip-primary media.
 - [x] `[sfu-control-data-plane-split]` remains closed by the SFU control/data
   split contracts and documentation.
-- 4. [x] `[packet-layer-sfu-forwarder]` remains closed by the recovery-control
+- [x] `[packet-layer-sfu-forwarder]` remains closed by the recovery-control
   routing and packet/layer forwarding contracts.
-- 5. [x] `[native-render-and-jitter-buffer]` remains closed by the receiver
+- [x] `[native-render-and-jitter-buffer]` remains closed by the receiver
   jitter-buffer contracts.
-- 6. [x] `[end-to-end-media-pressure-observability]` remains closed by the
+- [x] `[end-to-end-media-pressure-observability]` remains closed by the
   end-to-end media pressure diagnostics contracts.
 - [x] GSP-02 Publisher pipeline decoupling remains closed by
   `gossip-publisher-pipeline-decoupling-contract.mjs`.
@@ -2418,11 +2418,12 @@ separate personalized temporary guest link. It blocks owner/admin join as not
 found, rejects stale open and personalized links safely, revokes call-access
 sessions, clears presence/lobby/admitted participant state, disables only scoped
 temporary guests, preserves unrelated calls and unrelated guests, and emits
-sanitized delete/guest-cleanup audit events. `call-access-deleted-ended-
-disabled-join-contract` now also proves same-organization admin denial after
-deletion plus system-admin deleted normal-join denial and deleted personalized
-link denial. `call-access-seed-matrix.spec.js` passed the org-admin deleted
-direct-join denial and deleted personalized-link UI safe-screen case;
+sanitized delete/guest-cleanup audit events.
+`call-access-deleted-ended-disabled-join-contract` now also proves
+same-organization admin denial after deletion plus system-admin deleted
+normal-join denial and deleted personalized link denial.
+`call-access-seed-matrix.spec.js` passed the org-admin deleted direct-join
+denial and deleted personalized-link UI safe-screen case;
 `call-access-lifecycle-stale-links.spec.js` passed the deleted stale-link
 safe-screen case. `call-guest-cleanup-lifecycle-remaining-contract` additionally
 deletes a call with a pending lobby guest, an admitted temporary guest, and an
