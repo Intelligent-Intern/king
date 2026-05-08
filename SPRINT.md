@@ -422,6 +422,9 @@ Tickets:
     - Owner reconnects, bootstraps from replay, and renders the existing
       document state.
     - `npm run test:e2e:call-app-whiteboard` passes.
+    - Merged install-sidebar proof keeps the Marketplace install/sidebar access
+      journey in the same command; latest integrated run passed both Whiteboard
+      E2E specs.
 
 - [x] WCA-05 Backend SQLite-runtime proof
   - Run PDO-backed backend Call App contracts in a SQLite-enabled PHP runtime.
@@ -521,6 +524,11 @@ Tickets:
       runtime/version, app/CDN/API/WS/SFU reachability, marketplace/call-app
       checks, container status, and redacted recent logs without deploys,
       restarts, DB writes, DNS changes, or admin actions.
+    - Merged production-debug proof labels media reconnect, screen-share
+      reconnect exhaustion, stale local media capture discard, audio/video track
+      loss, SFU reconnect, and Call App frame/CSP log slices; dry-run mode now
+      avoids network/SSH and preserves explicit domain overrides over local
+      `.env.local` values.
     - `call-app-csp-postmessage-contract` proves configured Whiteboard/call-app
       iframe hosts are normalized safely, launch/CRDT bridge messages are
       structured-clone safe, and postMessage failure is terminal for the current
@@ -2375,10 +2383,10 @@ browser path and waiting-for-host state.
 # Definition of Done
 
 - [x] E2E test suite is implemented or extended
-- [ ] Playwright or existing E2E framework is configured for CI
+- [x] Playwright or existing E2E framework is configured for CI
 - [ ] CI job runs E2E suite automatically
-- [ ] CI starts all required services
-- [ ] CI starts media/signaling infrastructure if required
+- [x] CI starts all required services
+- [x] CI starts media/signaling infrastructure if required
 - [ ] CI starts `king` containers for multi-participant tests
 - [ ] CI collects traces, screenshots, videos, and logs on failure
 - [x] Test data is deterministic
@@ -2407,3 +2415,11 @@ exercises the public join/session browser path against the deterministic matrix,
 checks temporary guests are not elevated to tenant/platform/system admin, and
 asserts the call-access session payload contains no SDP, ICE, media token, or
 TURN credential material.
+
+Merged CI-smoke proof splits `test:e2e:call-access` from the broader chat/layout
+matrix, keeps the live backend call-access spec plus seed-matrix spec in a
+serial `--workers=1` Playwright script, and runs the compose smoke against
+backend/ws/sfu service-DNS origins. Integrated reruns passed
+`npm run test:e2e:call-access`, `npm run test:e2e:matrix`,
+`npm run test:e2e:release-gate`, and `npm run test:contract:iam-call-access`
+with host-PHP `pdo_sqlite` unavailable.

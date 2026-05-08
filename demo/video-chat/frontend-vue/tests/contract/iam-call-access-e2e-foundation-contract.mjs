@@ -44,6 +44,11 @@ assert.match(
   'package script must include additive deterministic Call Access seed-matrix coverage',
 );
 assert.match(
+  callAccessScript,
+  /--workers=1/,
+  'call-access E2E script must run serially to avoid live backend access-link contention',
+);
+assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
   /iam-call-access-e2e-foundation-contract\.mjs/,
   'package script must expose the IAM Call Access contract gate',
