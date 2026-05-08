@@ -8,6 +8,7 @@ require_once __DIR__ . '/../domain/audit/audit_events.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
 require_once __DIR__ . '/../http/module_calls.php';
 
@@ -487,17 +488,42 @@ try {
     $deleteAccess = videochat_create_call_access_link_for_user($pdo, $deleteCallId, $adminUserId, 'admin', ['link_kind' => 'open'], $tenantId);
     videochat_call_lifecycle_contract_assert((bool) ($deleteAccess['ok'] ?? false), 'open delete access link should be created');
     $deleteAccessId = videochat_call_lifecycle_contract_access_id($deleteAccess);
+    $deletePendingGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle Delete Pending Guest', $tenantId);
+    $deletePendingGuestId = (int) ($deletePendingGuest['id'] ?? 0);
+    $deleteAdmittedGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle Delete Admitted Guest', $tenantId);
+    $deleteAdmittedGuestId = (int) ($deleteAdmittedGuest['id'] ?? 0);
+    videochat_ensure_internal_call_participant($pdo, $deleteCallId, $deletePendingGuestId, (string) ($deletePendingGuest['email'] ?? ''), (string) ($deletePendingGuest['display_name'] ?? ''), 'pending');
+    $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'pending',
+    joined_at = NULL,
+    left_at = NULL
+WHERE call_id = :call_id
+  AND user_id = :user_id
+SQL
+    )->execute([
+        ':call_id' => $deleteCallId,
+        ':user_id' => $deletePendingGuestId,
+    ]);
+    videochat_ensure_internal_call_participant($pdo, $deleteCallId, $deleteAdmittedGuestId, (string) ($deleteAdmittedGuest['email'] ?? ''), (string) ($deleteAdmittedGuest['display_name'] ?? ''), 'allowed');
+    videochat_call_lifecycle_contract_mark_joined($pdo, $deleteCallId, $deleteAdmittedGuestId, 'allowed');
     $deleteSessionId = 'sess_call_lifecycle_delete_guest';
     $deleteSession = videochat_call_lifecycle_contract_issue_session($pdo, $deleteAccessId, $deleteSessionId, ['guest_name' => 'Lifecycle Delete Guest']);
     videochat_call_lifecycle_contract_assert((bool) ($deleteSession['ok'] ?? false), 'delete open guest session should issue');
     $deleteGuestId = (int) (($deleteSession['user'] ?? [])['id'] ?? 0);
     videochat_call_lifecycle_contract_assert($deleteGuestId > 0, 'delete open guest id should be present');
     videochat_call_lifecycle_contract_add_presence($pdo, $deleteCallId, $deleteRoomId, $deleteGuestId, $deleteSessionId, 'delete_guest');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_lobby_waiting_count($pdo, $deleteCallId) >= 1, 'delete setup should have a queued lobby participant');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_link_count($pdo, $deleteCallId) >= 1, 'delete setup should have an open link');
 
     $deleteResult = videochat_delete_call($pdo, $deleteCallId, $adminUserId, 'admin', $tenantId);
     videochat_call_lifecycle_contract_assert((bool) ($deleteResult['ok'] ?? false), 'delete call should succeed');
     $deleteLifecycle = is_array($deleteResult['lifecycle'] ?? null) ? $deleteResult['lifecycle'] : [];
     videochat_call_lifecycle_contract_assert((string) ($deleteLifecycle['transition'] ?? '') === 'deleted', 'delete lifecycle transition mismatch');
+    videochat_call_lifecycle_contract_assert((int) ($deleteLifecycle['invalidated_link_count'] ?? 0) >= 1, 'delete should invalidate open links');
+    videochat_call_lifecycle_contract_assert((int) ($deleteLifecycle['revoked_access_session_count'] ?? 0) >= 1, 'delete should revoke open sessions');
+    videochat_call_lifecycle_contract_assert((int) ($deleteLifecycle['lobby_cleared_count'] ?? 0) >= 3, 'delete should clear lobby and admitted participant state');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count($pdo, 'SELECT COUNT(*) FROM calls WHERE id = :id', [':id' => $deleteCallId]) === 0, 'deleted call row should be gone');
     videochat_call_lifecycle_contract_assert((string) (videochat_resolve_call_access_public($pdo, $deleteAccessId)['reason'] ?? '') === 'not_found', 'deleted call stale link should be safe not-found');
     $deletedOwnerDecision = videochat_decide_call_access_for_user($pdo, $deleteCallId, $adminUserId, 'admin', $tenantId);
@@ -506,13 +532,84 @@ try {
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_session_revoked($pdo, $deleteSessionId), 'delete guest session should be revoked');
     videochat_call_lifecycle_contract_assert_auth_denied($pdo, $deleteSessionId, $deleteCallId);
     videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $deleteGuestId)['status'] ?? '') === 'disabled', 'delete should disable scoped open-link guest');
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $deletePendingGuestId)['status'] ?? '') === 'disabled', 'delete should disable queued temporary guest');
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $deleteAdmittedGuestId)['status'] ?? '') === 'disabled', 'delete should disable admitted temporary guest');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count($pdo, 'SELECT COUNT(*) FROM calls WHERE id = :id', [':id' => $unrelatedCallId]) === 1, 'delete must not remove unrelated call');
     videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $unrelatedGuestId)['status'] ?? '') === 'active', 'delete must not disable unrelated temp guest');
     videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $registeredUserId)['status'] ?? '') === 'active', 'delete must not disable registered user');
     videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_presence_count($pdo, $deleteCallId) === 0, 'delete should clear stored presence');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count(
+        $pdo,
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND invite_state IN ('pending', 'allowed', 'accepted')
+SQL,
+        [':call_id' => $deleteCallId]
+    ) === 0, 'delete should clear lobby and admitted participant states');
     videochat_call_lifecycle_contract_assert_lifecycle_audit($pdo, $tenantId, $deleteCallId, 'call_deleted', 'deleted', 1, 1, 1);
     videochat_call_lifecycle_contract_assert_guest_cleanup_event($pdo, $tenantId, $deleteCallId);
-    videochat_call_lifecycle_contract_assert_no_audit_leak($pdo, $deleteCallId, [$deleteAccessId, $deleteSessionId]);
+    videochat_call_lifecycle_contract_assert_no_audit_leak($pdo, $deleteCallId, [
+        $deleteAccessId,
+        $deleteSessionId,
+        (string) ($deletePendingGuest['email'] ?? ''),
+        (string) ($deleteAdmittedGuest['email'] ?? ''),
+    ]);
+
+    $deletePersonalCreate = videochat_create_call($pdo, $adminUserId, [
+        'title' => 'Lifecycle Delete Personalized Link Call',
+        'access_mode' => 'invite_only',
+        'starts_at' => '2026-10-12T11:00:00Z',
+        'ends_at' => '2026-10-12T12:00:00Z',
+        'internal_participant_user_ids' => [],
+        'external_participants' => [],
+    ], $tenantId);
+    videochat_call_lifecycle_contract_assert((bool) ($deletePersonalCreate['ok'] ?? false), 'delete personalized call should be created');
+    $deletePersonalCall = is_array($deletePersonalCreate['call'] ?? null) ? $deletePersonalCreate['call'] : [];
+    $deletePersonalCallId = (string) ($deletePersonalCall['id'] ?? '');
+    $deletePersonalGuest = videochat_call_lifecycle_contract_create_temp_guest($pdo, 'Lifecycle Delete Personalized Guest', $tenantId);
+    $deletePersonalGuestId = (int) ($deletePersonalGuest['id'] ?? 0);
+    videochat_ensure_internal_call_participant($pdo, $deletePersonalCallId, $deletePersonalGuestId, (string) ($deletePersonalGuest['email'] ?? ''), (string) ($deletePersonalGuest['display_name'] ?? ''), 'allowed');
+    videochat_call_lifecycle_contract_mark_joined($pdo, $deletePersonalCallId, $deletePersonalGuestId, 'allowed');
+    $deletePersonalAccessId = videochat_call_lifecycle_contract_create_personal_link($pdo, $deletePersonalCallId, $adminUserId, $deletePersonalGuestId, $tenantId);
+    $deletePersonalSessionId = 'sess_call_lifecycle_delete_personal_guest';
+    $deletePersonalSession = videochat_call_lifecycle_contract_issue_session($pdo, $deletePersonalAccessId, $deletePersonalSessionId);
+    videochat_call_lifecycle_contract_assert((bool) ($deletePersonalSession['ok'] ?? false), 'delete personalized session should issue');
+
+    $deletePersonalResult = videochat_delete_call($pdo, $deletePersonalCallId, $adminUserId, 'admin', $tenantId);
+    videochat_call_lifecycle_contract_assert((bool) ($deletePersonalResult['ok'] ?? false), 'delete personalized call should succeed');
+    $deletePersonalLifecycle = is_array($deletePersonalResult['lifecycle'] ?? null) ? $deletePersonalResult['lifecycle'] : [];
+    videochat_call_lifecycle_contract_assert((int) ($deletePersonalLifecycle['invalidated_link_count'] ?? 0) >= 1, 'delete personalized should invalidate personal links');
+    videochat_call_lifecycle_contract_assert((int) ($deletePersonalLifecycle['revoked_access_session_count'] ?? 0) >= 1, 'delete personalized should revoke personal sessions');
+    videochat_call_lifecycle_contract_assert((string) (videochat_resolve_call_access_public($pdo, $deletePersonalAccessId)['reason'] ?? '') === 'not_found', 'deleted personalized stale link should be safe not-found');
+    $deletedPersonalLateSession = videochat_call_lifecycle_contract_issue_session(
+        $pdo,
+        $deletePersonalAccessId,
+        'sess_call_lifecycle_deleted_late_personal'
+    );
+    videochat_call_lifecycle_contract_assert(!(bool) ($deletedPersonalLateSession['ok'] ?? true), 'deleted personalized link must not issue a late session');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count($pdo, 'SELECT COUNT(*) FROM sessions WHERE id = :id', [':id' => 'sess_call_lifecycle_deleted_late_personal']) === 0, 'deleted personalized late session must not be stored');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_session_revoked($pdo, $deletePersonalSessionId), 'delete personalized guest session should be revoked');
+    videochat_call_lifecycle_contract_assert_auth_denied($pdo, $deletePersonalSessionId, $deletePersonalCallId);
+    videochat_call_lifecycle_contract_assert((string) (videochat_call_lifecycle_contract_user($pdo, $deletePersonalGuestId)['status'] ?? '') === 'disabled', 'delete personalized should disable linked temporary guest');
+    videochat_call_lifecycle_contract_assert(videochat_call_lifecycle_contract_count(
+        $pdo,
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND invite_state IN ('pending', 'allowed', 'accepted')
+SQL,
+        [':call_id' => $deletePersonalCallId]
+    ) === 0, 'delete personalized should clear admitted participant state');
+    videochat_call_lifecycle_contract_assert_lifecycle_audit($pdo, $tenantId, $deletePersonalCallId, 'call_deleted', 'deleted', 1, 1, 0);
+    videochat_call_lifecycle_contract_assert_guest_cleanup_event($pdo, $tenantId, $deletePersonalCallId);
+    videochat_call_lifecycle_contract_assert_no_audit_leak($pdo, $deletePersonalCallId, [
+        $deletePersonalAccessId,
+        $deletePersonalSessionId,
+        (string) ($deletePersonalGuest['email'] ?? ''),
+    ]);
 
     $endCreate = videochat_create_call($pdo, $adminUserId, [
         'title' => 'Lifecycle End Call',
@@ -534,6 +631,34 @@ try {
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endGuestId, (string) ($endGuest['email'] ?? ''), (string) ($endGuest['display_name'] ?? ''), 'allowed');
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endPendingGuestId, (string) ($endPendingGuest['email'] ?? ''), (string) ($endPendingGuest['display_name'] ?? ''), 'pending');
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endAdmittedGuestId, (string) ($endAdmittedGuest['email'] ?? ''), (string) ($endAdmittedGuest['display_name'] ?? ''), 'allowed');
+    $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = :invite_state,
+    joined_at = NULL,
+    left_at = NULL
+WHERE call_id = :call_id
+  AND user_id = :user_id
+SQL
+    )->execute([
+        ':invite_state' => 'pending',
+        ':call_id' => $endCallId,
+        ':user_id' => $endPendingGuestId,
+    ]);
+    $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = :invite_state,
+    joined_at = NULL,
+    left_at = NULL
+WHERE call_id = :call_id
+  AND user_id = :user_id
+SQL
+    )->execute([
+        ':invite_state' => 'allowed',
+        ':call_id' => $endCallId,
+        ':user_id' => $endAdmittedGuestId,
+    ]);
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $registeredUserId, 'allowed');
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $endGuestId, 'allowed');
     $endRegisteredAccessId = videochat_call_lifecycle_contract_create_personal_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
@@ -573,7 +698,7 @@ try {
     videochat_call_lifecycle_contract_assert((string) ($endedAdmittedParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel admitted lobby participant');
     $endedOwnerDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $adminUserId, 'admin', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedOwnerDecision['allowed'] ?? true), 'ended call should deny owner/admin join');
-    videochat_call_lifecycle_contract_assert((string) ($endedOwnerDecision['reason'] ?? '') === 'call_not_joinable', 'ended owner denial reason mismatch');
+    videochat_call_lifecycle_contract_assert((string) ($endedOwnerDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended owner denial reason mismatch');
     $endedResolvePath = '/api/calls/resolve/' . $endCallId;
     $endedResolveResponse = videochat_handle_call_routes(
         $endedResolvePath,
@@ -599,8 +724,8 @@ try {
     videochat_call_lifecycle_contract_assert(!str_contains((string) ($endedResolveResponse['body'] ?? ''), 'Lifecycle End Call'), 'ended direct resolve must not leak title');
     $endedRegisteredDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $registeredUserId, 'user', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedRegisteredDecision['allowed'] ?? true), 'ended call should deny active participant join');
-    videochat_call_lifecycle_contract_assert((string) ($endedRegisteredDecision['reason'] ?? '') === 'call_not_joinable', 'ended participant denial reason mismatch');
-    $lateEndedAccessId = videochat_call_lifecycle_contract_insert_late_retained_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
+    videochat_call_lifecycle_contract_assert((string) ($endedRegisteredDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended participant denial reason mismatch');
+    $lateEndedAccessId = videochat_call_lifecycle_contract_insert_late_retained_link($pdo, $endCallId, $adminUserId, $unrelatedGuestId, $tenantId);
     $lateEndedResolve = videochat_resolve_call_access_public($pdo, $lateEndedAccessId);
     videochat_call_lifecycle_contract_assert(!(bool) ($lateEndedResolve['ok'] ?? true), 'late retained ended link must not resolve');
     videochat_call_lifecycle_contract_assert((string) ($lateEndedResolve['reason'] ?? '') === 'conflict', 'late retained ended link should expose safe ended-call conflict');

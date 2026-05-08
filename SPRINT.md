@@ -2081,19 +2081,19 @@ the rescheduled stale-link safe-screen case.
 ## 27. Call Deletion
 
 - [ ] Owner deletes call before any guest joins
-- [ ] Owner deletes call while guests are in lobby
+- [x] Owner deletes call while guests are in lobby
 - [ ] Owner deletes call while registered users are inside
 - [x] Owner deletes call while temporary guests are inside
 - [x] Owner deletes call while anonymous guests are inside
 - [x] Deleted call cannot be joined by owner
-- [ ] Deleted call cannot be joined by organization admin
-- [ ] Deleted call cannot be joined by system admin through normal join flow
-- [ ] Deleted call cannot be joined through personalized invite link
+- [x] Deleted call cannot be joined by organization admin
+- [x] Deleted call cannot be joined by system admin through normal join flow
+- [x] Deleted call cannot be joined through personalized invite link
 - [x] Deleted call cannot be joined through anonymous join link
 - [x] Deleted call cannot be rejoined by previously admitted guest
 - [x] Deleted call removes or invalidates temporary guest accounts
-- [ ] Deleted call clears lobby entries
-- [ ] Deleted call clears admitted temporary participant state
+- [x] Deleted call clears lobby entries
+- [x] Deleted call clears admitted temporary participant state
 - [x] Deleted call preserves audit log
 - [x] Deleted call does not delete registered user accounts
 - [x] Deleted call does not delete unrelated calls
@@ -2101,12 +2101,19 @@ the rescheduled stale-link safe-screen case.
 - [x] Users currently in call are disconnected or moved into safe deleted state
 - [x] Deleted call metadata is not leaked to unauthorized users
 
-Proof: `call-lifecycle-contract` deletes a call with an open-link temporary
-guest in presence, blocks owner/admin join as not found, rejects the stale open
-link safely, revokes the guest session, clears presence, disables only the
-scoped temporary guest, preserves unrelated calls and unrelated guests, and
-emits sanitized delete/guest-cleanup audit events. `call-access-lifecycle-
-stale-links.spec.js` passed the deleted stale-link safe-screen case.
+Proof: `call-lifecycle-contract` deletes calls with an open-link temporary
+guest in presence, a queued lobby guest, an admitted temporary guest, and a
+separate personalized temporary guest link. It blocks owner/admin join as not
+found, rejects stale open and personalized links safely, revokes call-access
+sessions, clears presence/lobby/admitted participant state, disables only scoped
+temporary guests, preserves unrelated calls and unrelated guests, and emits
+sanitized delete/guest-cleanup audit events. `call-access-deleted-ended-
+disabled-join-contract` now also proves same-organization admin denial after
+deletion plus system-admin deleted normal-join denial and deleted personalized
+link denial. `call-access-seed-matrix.spec.js` passed the org-admin deleted
+direct-join denial and deleted personalized-link UI safe-screen case;
+`call-access-lifecycle-stale-links.spec.js` passed the deleted stale-link
+safe-screen case.
 
 ## 28. Explicit Call Ending
 
@@ -2162,29 +2169,32 @@ direct-join denial cases for system admin and organization admin as part of the
 - [x] Countdown disappears if owner rejoins
 - [x] Call does not end if owner rejoins before timeout
 - [x] Call ends if owner does not rejoin before timeout
-- [ ] Call-ended state prevents new joins
-- [ ] Call-ended state prevents rejoins
+- [x] Call-ended state prevents new joins
+- [x] Call-ended state prevents rejoins
 - [ ] Call-ended state invalidates anonymous join link
-- [ ] Call-ended state invalidates personalized invite links
-- [ ] Call-ended state deletes or invalidates temporary guest accounts
-- [ ] Call-ended state clears lobby entries
-- [ ] Call-ended state preserves audit log
+- [x] Call-ended state invalidates personalized invite links
+- [x] Call-ended state deletes or invalidates temporary guest accounts
+- [x] Call-ended state clears lobby entries
+- [x] Call-ended state preserves audit log
 - [ ] Call-ended state is visible to late users opening old links
 - [x] Timer is based on server time, not client time
 - [x] CI test uses fake/test time and does not wait 15 real minutes
 
 Proof: `realtime_owner_absence.php` applies a server-time owner-absence
-deadline of 15 minutes total and starts the countdown in the final 5 minutes.
-`iam-king-participants-owner-timeout-contract.mjs` verifies the contract
-shape, fake/test clock, room snapshot lifecycle payload, countdown boundary,
-owner-return cancellation, and persisted implicit end. The PHP owner-timeout
-runtime contract is committed and syntax-checked; execution is blocked on this
-host because PHP does not load `pdo_sqlite`.
+deadline of 15 minutes total, starts the countdown in the final 5 minutes, and
+now routes the automatic ended transition through the shared terminal call
+lifecycle cleanup. `iam-king-participants-owner-timeout-contract.mjs` verifies
+the contract shape, fake/test clock, room snapshot lifecycle payload, countdown
+boundary, owner-return cancellation, terminal lifecycle binding, and persisted
+implicit end. `call-access-owner-timeout-contract.php` passed under Docker PHP
+8.4 with `pdo_sqlite` and proves automatic end blocks fresh joins and stale
+session rejoins, invalidates personalized links, disables pending/admitted
+temporary guests, clears lobby entries, and preserves call-ended audit.
 `call-access-owner-absence-browser.spec.js` drives the browser workspace through
 the final-countdown UI, countdown update, owner-absence automatic end, and owner
 return cancellation paths using the backend timer constants and room snapshots.
-The focused Playwright run passed 2 tests and the integrated frontend build
-passed.
+The focused Playwright owner-absence browser run remains covered by the
+integrated IAM call-access E2E run, which passed 43 tests.
 
 ## 30. Error and Edge Cases
 
@@ -2643,18 +2653,18 @@ against duplicate join/session request loops.
 ## Test Group: Call Deletion
 
 - [ ] `e2e_delete_001_owner_deletes_call_before_guests_join`
-- [ ] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
+- [x] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
 - [ ] `e2e_delete_003_owner_deletes_call_with_registered_users_inside`
 - [x] `e2e_delete_004_owner_deletes_call_with_temp_guests_inside`
 - [x] `e2e_delete_005_owner_deletes_call_with_anonymous_guests_inside`
 - [x] `e2e_delete_006_deleted_call_blocks_owner_join`
-- [ ] `e2e_delete_007_deleted_call_blocks_org_admin_join`
+- [x] `e2e_delete_007_deleted_call_blocks_org_admin_join`
 - [x] `e2e_delete_008_deleted_call_blocks_system_admin_normal_join`
 - [x] `e2e_delete_009_deleted_call_blocks_personalized_link`
 - [x] `e2e_delete_010_deleted_call_blocks_anonymous_link`
 - [x] `e2e_delete_011_deleted_call_blocks_admitted_guest_rejoin`
 - [x] `e2e_delete_012_deleted_call_cleans_temp_guests`
-- [ ] `e2e_delete_013_deleted_call_clears_lobby`
+- [x] `e2e_delete_013_deleted_call_clears_lobby`
 - [x] `e2e_delete_014_deleted_call_preserves_audit_log`
 - [x] `e2e_delete_015_deleted_call_does_not_affect_unrelated_calls`
 
@@ -2688,10 +2698,10 @@ against duplicate join/session request loops.
 - [x] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
 - [x] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
 - [x] `e2e_end_implicit_013_automatic_end_notifies_participants`
-- [ ] `e2e_end_implicit_014_automatic_end_blocks_new_joins`
-- [ ] `e2e_end_implicit_015_automatic_end_blocks_rejoins`
-- [ ] `e2e_end_implicit_016_automatic_end_invalidates_links`
-- [ ] `e2e_end_implicit_017_automatic_end_cleans_guest_accounts`
+- [x] `e2e_end_implicit_014_automatic_end_blocks_new_joins`
+- [x] `e2e_end_implicit_015_automatic_end_blocks_rejoins`
+- [x] `e2e_end_implicit_016_automatic_end_invalidates_links`
+- [x] `e2e_end_implicit_017_automatic_end_cleans_guest_accounts`
 - [x] `e2e_end_implicit_018_timer_uses_server_time`
 - [x] `e2e_end_implicit_019_ci_uses_test_clock_no_real_15_min_sleep`
 

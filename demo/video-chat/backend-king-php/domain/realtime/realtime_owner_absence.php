@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/realtime_call_presence_db.php';
+require_once __DIR__ . '/../calls/call_lifecycle.php';
 
 const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;
 const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;
@@ -54,9 +55,12 @@ function videochat_realtime_owner_absence_fetch_call(PDO $pdo, string $callId, s
         return null;
     }
 
+    $tenantSelect = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+        ? ', tenant_id'
+        : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
-SELECT id, room_id, owner_user_id, status
+        <<<SQL
+SELECT id, room_id, owner_user_id, status{$tenantSelect}
 FROM calls
 WHERE id = :call_id
   AND room_id = :room_id
@@ -77,6 +81,7 @@ SQL
         'room_id' => (string) ($row['room_id'] ?? ''),
         'owner_user_id' => (int) ($row['owner_user_id'] ?? 0),
         'status' => strtolower(trim((string) ($row['status'] ?? ''))),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
     ];
 }
 
@@ -211,6 +216,7 @@ function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, str
         'call_id' => (string) $call['id'],
         'room_id' => (string) $call['room_id'],
         'call_status' => $callStatus,
+        'tenant_id' => is_numeric($call['tenant_id'] ?? null) ? (int) $call['tenant_id'] : null,
         'owner_user_id' => $ownerUserId,
         'owner_present' => $ownerPresent,
         'active_participant_count' => count($activeUserIds),
@@ -331,9 +337,46 @@ SQL
         ];
     }
 
+    $lifecycle = [
+        'ok' => true,
+        'reason' => 'not_applied',
+        'transition' => 'ended',
+        'invalidated_link_count' => 0,
+        'revoked_access_session_count' => 0,
+        'lobby_cleared_count' => 0,
+        'presence_cleared_count' => 0,
+    ];
+    if ($transitioned) {
+        $tenantId = is_numeric($snapshot['tenant_id'] ?? null) ? (int) $snapshot['tenant_id'] : null;
+        $lifecycle = videochat_apply_call_terminal_lifecycle(
+            $pdo,
+            [
+                'id' => (string) ($snapshot['call_id'] ?? $callId),
+                'room_id' => (string) ($snapshot['room_id'] ?? $roomId),
+                'owner_user_id' => is_numeric($snapshot['owner_user_id'] ?? null) ? (int) $snapshot['owner_user_id'] : 0,
+                'tenant_id' => $tenantId,
+                'status' => 'ended',
+            ],
+            'ended',
+            $tenantId,
+            null
+        );
+        if (!(bool) ($lifecycle['ok'] ?? false)) {
+            return [
+                ...$snapshot,
+                'call_status' => 'ended',
+                'transitioned' => true,
+                'status' => 'error',
+                'error' => 'owner_absence_lifecycle_failed',
+                'lifecycle' => $lifecycle,
+            ];
+        }
+    }
+
     return [
         ...$snapshot,
         'call_status' => 'ended',
         'transitioned' => $transitioned,
+        'lifecycle' => $lifecycle,
     ];
 }
