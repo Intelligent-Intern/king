@@ -118,6 +118,19 @@ function videochat_handle_call_routes(
                 }
 
                 $accessReason = (string) ($accessResolution['reason'] ?? 'internal_error');
+                if (in_array($accessReason, ['call_not_joinable', 'conflict'], true)) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'access_id',
+                            'reason' => 'call_not_joinable_from_status',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
                 if ($accessReason === 'expired') {
                     return $jsonResponse(200, [
                         'status' => 'ok',
