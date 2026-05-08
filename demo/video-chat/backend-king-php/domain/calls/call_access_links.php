@@ -385,9 +385,20 @@ function videochat_resolve_call_access_for_user(
     $callId = trim((string) ($accessLink['call_id'] ?? ''));
     $callDecision = videochat_decide_call_access_for_user($pdo, $callId, $authUserId, $authRole, $tenantId);
     if (!(bool) ($callDecision['allowed'] ?? false)) {
+        $decisionReason = (string) ($callDecision['reason'] ?? 'forbidden');
+        if ($decisionReason === 'call_not_joinable_from_status') {
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['call_id' => 'call_not_joinable_from_status'],
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+
         return [
             'ok' => false,
-            'reason' => (string) ($callDecision['reason'] ?? 'forbidden'),
+            'reason' => $decisionReason,
             'errors' => [],
             'access_link' => null,
             'call' => null,

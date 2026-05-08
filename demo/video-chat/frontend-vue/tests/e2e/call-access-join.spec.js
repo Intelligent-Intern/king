@@ -22,6 +22,16 @@ async function createPublicJoinPage(browser, baseURL) {
   return { context, page };
 }
 
+async function expectTextDoesNotContain(locator, values, label) {
+  const text = await locator.innerText();
+  const lowerText = String(text || '').toLowerCase();
+  for (const value of values) {
+    const needle = String(value || '').trim().toLowerCase();
+    if (needle === '') continue;
+    expect(lowerText, `${label} must not contain ${value}`).not.toContain(needle);
+  }
+}
+
 test('personal call-access link starts a call-scoped session and waits for host admission', async ({ browser }) => {
   test.setTimeout(90_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
@@ -141,5 +151,172 @@ test('invalid call-access link renders safe state without foreign call data', as
     await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
   } finally {
     await context.close();
+  }
+});
+
+test('stale deleted ended and inactive-user call links render safe state without foreign data', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const cases = [
+    {
+      label: 'ended call',
+      accessId: '22222222-2222-4222-8222-222222222222',
+      status: 409,
+      code: 'call_access_conflict',
+      privateNeedles: [
+        'Ended Private Strategy Call',
+        'ended-host@example.invalid',
+        'Ended Invitee',
+        'sess_ended_should_not_bind',
+        'ended-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_conflict',
+          message: 'Ended Private Strategy Call cannot be joined by Ended Invitee.',
+        },
+        result: {
+          call: {
+            id: 'ended-private-call-id',
+            title: 'Ended Private Strategy Call',
+            owner: { email: 'ended-host@example.invalid', display_name: 'Ended Host' },
+          },
+          target_user: { display_name: 'Ended Invitee' },
+        },
+      },
+    },
+    {
+      label: 'deleted call',
+      accessId: '33333333-3333-4333-8333-333333333333',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Deleted Private Strategy Call',
+        'deleted-host@example.invalid',
+        'Deleted Invitee',
+        'sess_deleted_should_not_bind',
+        'deleted-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Deleted Private Strategy Call no longer exists.',
+        },
+        result: {
+          call: {
+            id: 'deleted-private-call-id',
+            title: 'Deleted Private Strategy Call',
+            owner: { email: 'deleted-host@example.invalid', display_name: 'Deleted Host' },
+          },
+          target_user: { display_name: 'Deleted Invitee' },
+        },
+      },
+    },
+    {
+      label: 'disabled user',
+      accessId: '44444444-4444-4444-8444-444444444444',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Disabled User Private Call',
+        'disabled-user@example.invalid',
+        'Disabled Target User',
+        'sess_disabled_should_not_bind',
+        'disabled-user-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Disabled User Private Call is unavailable for disabled-user@example.invalid.',
+        },
+        result: {
+          call: {
+            id: 'disabled-user-private-call-id',
+            title: 'Disabled User Private Call',
+          },
+          target_user: {
+            email: 'disabled-user@example.invalid',
+            display_name: 'Disabled Target User',
+          },
+        },
+      },
+    },
+    {
+      label: 'deleted user',
+      accessId: '55555555-5555-4555-8555-555555555555',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Deleted User Private Call',
+        'deleted-user@example.invalid',
+        'Deleted Target User',
+        'sess_deleted_user_should_not_bind',
+        'deleted-user-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Deleted User Private Call is unavailable for deleted-user@example.invalid.',
+        },
+        result: {
+          call: {
+            id: 'deleted-user-private-call-id',
+            title: 'Deleted User Private Call',
+          },
+          target_user: {
+            email: 'deleted-user@example.invalid',
+            display_name: 'Deleted Target User',
+          },
+        },
+      },
+    },
+  ];
+
+  for (const item of cases) {
+    const { context, page } = await createPublicJoinPage(browser, baseURL);
+    let sessionPostCount = 0;
+
+    try {
+      await page.route(`**/api/call-access/${item.accessId}/join`, async (route) => {
+        await route.fulfill({
+          status: item.status,
+          contentType: 'application/json',
+          body: JSON.stringify(item.payload),
+        });
+      });
+
+      await page.route(`**/api/call-access/${item.accessId}/session`, async (route) => {
+        sessionPostCount += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'ok',
+            result: {
+              session: {
+                id: item.privateNeedles.find((value) => String(value).startsWith('sess_')),
+                token: item.privateNeedles.find((value) => String(value).startsWith('sess_')),
+              },
+            },
+          }),
+        });
+      });
+
+      await page.goto(`/join/${item.accessId}`);
+
+      const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+      await expect(joinDialog, item.label).toBeVisible();
+      await expect(joinDialog, item.label).toContainText(/call link is invalid|call access id is invalid/i);
+      await expectTextDoesNotContain(joinDialog, item.privateNeedles, item.label);
+      await expect(joinDialog.getByRole('button', { name: /^Join call$/ }), item.label).toHaveCount(0);
+      expect(sessionPostCount, `${item.label} must not start a session`).toBe(0);
+      expect(page.url()).toContain(`/join/${item.accessId}`);
+      expect(page.url()).not.toContain('/workspace/call');
+    } finally {
+      await context.close();
+    }
   }
 });
