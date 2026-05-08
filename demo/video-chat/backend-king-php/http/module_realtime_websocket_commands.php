@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/module_realtime_gossipmesh_recovery.php';
 require_once __DIR__ . '/module_realtime_media_fanout_guard.php';
+require_once __DIR__ . '/module_realtime_lobby_security.php';
 
 function videochat_realtime_secondary_handled_result(): array
 {
@@ -890,6 +891,11 @@ function videochat_realtime_handle_lobby_websocket_command(
     $lobbyCommandRoomId = videochat_presence_normalize_room_id((string) ($lobbyCommand['room_id'] ?? ''), '');
     if ($lobbyCommandRoomId === '') {
         $lobbyCommandRoomId = videochat_realtime_lobby_room_id_for_connection($presenceConnection);
+    }
+    if (($lobbySecurityResult = videochat_realtime_reject_unauthorized_lobby_moderation_command(
+        $presenceConnection, $lobbyCommand, $lobbyCommandRoomId, $websocket, $openDatabase
+    )) !== null) {
+        return $lobbySecurityResult;
     }
     videochat_realtime_sync_lobby_room_from_database(
         $lobbyState,
