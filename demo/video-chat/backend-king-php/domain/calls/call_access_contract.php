@@ -197,6 +197,68 @@ function videochat_call_access_link_kind(?array $accessLink): string
     return 'personal';
 }
 
+function videochat_call_access_participant_invite_state(PDO $pdo, array $accessLink): string
+{
+    if (videochat_call_access_link_kind($accessLink) !== 'personal') {
+        return '';
+    }
+
+    $callId = trim((string) ($accessLink['call_id'] ?? ''));
+    $linkedUserId = is_numeric($accessLink['participant_user_id'] ?? null)
+        ? (int) $accessLink['participant_user_id']
+        : 0;
+    $participantEmail = videochat_normalize_call_access_email(
+        is_string($accessLink['participant_email'] ?? null) ? (string) $accessLink['participant_email'] : null
+    );
+    if ($callId === '' || ($linkedUserId <= 0 && $participantEmail === '')) {
+        return '';
+    }
+
+    if ($linkedUserId > 0) {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT invite_state
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+ORDER BY CASE WHEN source = 'internal' THEN 0 ELSE 1 END ASC
+LIMIT 1
+SQL
+        );
+        $query->execute([
+            ':call_id' => $callId,
+            ':user_id' => $linkedUserId,
+        ]);
+    } else {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT invite_state
+FROM call_participants
+WHERE call_id = :call_id
+  AND lower(email) = lower(:email)
+ORDER BY CASE WHEN source = 'external' THEN 0 ELSE 1 END ASC
+LIMIT 1
+SQL
+        );
+        $query->execute([
+            ':call_id' => $callId,
+            ':email' => $participantEmail,
+        ]);
+    }
+
+    $row = $query->fetch();
+    if (!is_array($row)) {
+        return '';
+    }
+
+    return strtolower(trim((string) ($row['invite_state'] ?? '')));
+}
+
+function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink): bool
+{
+    return in_array(videochat_call_access_participant_invite_state($pdo, $accessLink), ['cancelled', 'declined'], true);
+}
+
 function videochat_is_call_joinable_status(string $status): bool
 {
     $normalized = strtolower(trim($status));
