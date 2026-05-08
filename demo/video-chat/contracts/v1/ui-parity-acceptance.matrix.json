@@ -94,7 +94,8 @@
       "command": "npm run test:e2e:call-access",
       "paths": [
         "frontend-vue/tests/e2e/call-access-join.spec.js",
-        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js"
+        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
+        "frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js"
       ]
     },
     "frontend:contract:wlvc": {
