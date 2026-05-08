@@ -105,6 +105,8 @@ function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string
     $cancelledAt = gmdate('c');
     $updatedAt = $cancelledAt;
 
+    $guestCleanup = null;
+
     $pdo->beginTransaction();
     try {
         $updateCall = $pdo->prepare(
@@ -142,6 +144,15 @@ SQL
             ':left_at' => $cancelledAt,
             ':call_id' => (string) $existingCall['id'],
         ]);
+
+        $guestCleanup = videochat_invalidate_guest_accounts_for_call(
+            $pdo,
+            (string) $existingCall['id'],
+            is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : $tenantId
+        );
+        if (!(bool) ($guestCleanup['ok'] ?? false)) {
+            throw new RuntimeException('guest_cleanup_failed');
+        }
 
         $pdo->commit();
     } catch (Throwable) {
@@ -222,6 +233,7 @@ SQL
             ],
             'my_participation' => false,
         ],
+        'guest_cleanup' => $guestCleanup,
     ];
 }
 
@@ -236,7 +248,9 @@ SQL
  *     title: string,
  *     owner_user_id: int,
  *     status: string
- *   }
+ *   },
+ *   lifecycle?: array<string, mixed>,
+ *   guest_cleanup?: ?array<string, mixed>
  * }
  */
 function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
@@ -272,6 +286,7 @@ function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string
             'call' => null,
         ];
     }
+    $guestCleanup = is_array($lifecycle['guest_cleanup'] ?? null) ? $lifecycle['guest_cleanup'] : null;
 
     $pdo->beginTransaction();
     try {
@@ -311,6 +326,7 @@ SQL
             'status' => (string) $existingCall['status'],
         ],
         'lifecycle' => $lifecycle,
+        'guest_cleanup' => $guestCleanup,
     ];
 }
 
@@ -320,7 +336,8 @@ SQL
  *   reason: string,
  *   errors: array<string, string>,
  *   call: ?array<string, mixed>,
- *   lifecycle?: array<string, mixed>
+ *   lifecycle?: array<string, mixed>,
+ *   guest_cleanup?: ?array<string, mixed>
  * }
  */
 function videochat_end_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
@@ -415,6 +432,7 @@ SQL
         'errors' => [],
         'call' => is_array($freshCall) ? videochat_build_call_payload($pdo, $freshCall, $authUserId) : null,
         'lifecycle' => $lifecycle,
+        'guest_cleanup' => is_array($lifecycle['guest_cleanup'] ?? null) ? $lifecycle['guest_cleanup'] : null,
     ];
 }
 
