@@ -350,10 +350,12 @@ demo/video-chat/scripts/prod-debug.sh
 
 The prod-debug process is read-only. It inspects public runtime health, domains,
 asset/version endpoints, API/WS/SFU reachability, marketplace and call-app
-reachability, container status, and recent redacted remote logs. It uses
-existing `demo/video-chat/.env.local` values only for production domains and the
-SSH target. `prod-debug.sh` does not deploy, restart, write DB data, change DNS,
-or use admin actions.
+reachability, container status, and recent redacted remote logs. Remote log
+sections are labeled for media reconnect, screen-share reconnect exhaustion,
+stale local media capture discard, audio/video track loss, SFU reconnect, and
+Call App frame/CSP errors. It uses existing `demo/video-chat/.env.local` values
+only for production domains and the SSH target. `prod-debug.sh` does not deploy,
+restart, write DB data, change DNS, or use admin actions.
 
 ## Public Programming Model
 
