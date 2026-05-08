@@ -245,6 +245,33 @@ function videochat_realtime_close_descriptor_for_reason(string $reason): array
     ];
 }
 
+function videochat_realtime_is_transient_auth_backend_reason(string $reason): bool
+{
+    return strtolower(trim($reason)) === 'auth_backend_error';
+}
+
+/**
+ * @return array{retryable: bool, close: bool, close_descriptor: array{close_code: int, close_reason: string, close_category: string}}
+ */
+function videochat_realtime_session_liveness_failure_policy(
+    string $reason,
+    int $consecutiveFailures,
+    int $firstFailureAgeMs,
+    int $graceMs = 5000
+): array {
+    $normalizedReason = strtolower(trim($reason));
+    $isTransient = videochat_realtime_is_transient_auth_backend_reason($normalizedReason);
+    $boundedGraceMs = max(0, $graceMs);
+    $failureCount = max(1, $consecutiveFailures);
+    $failureAgeMs = max(0, $firstFailureAgeMs);
+
+    return [
+        'retryable' => $isTransient,
+        'close' => !$isTransient || ($failureCount > 1 && $failureAgeMs >= $boundedGraceMs),
+        'close_descriptor' => videochat_realtime_close_descriptor_for_reason($normalizedReason),
+    ];
+}
+
 /**
  * @return array<string, mixed>
  */
@@ -263,7 +290,7 @@ function videochat_realtime_session_probe_request(string $sessionId, string $wsP
 }
 
 /**
- * @return array{ok: bool, reason: string}
+ * @return array{ok: bool, reason: string, retryable?: bool}
  */
 function videochat_realtime_validate_session_liveness(
     callable $authenticateRequest,
@@ -278,20 +305,31 @@ function videochat_realtime_validate_session_liveness(
         ];
     }
 
-    $auth = $authenticateRequest(
-        videochat_realtime_session_probe_request($trimmedSessionId, $wsPath),
-        'websocket'
-    );
+    try {
+        $auth = $authenticateRequest(
+            videochat_realtime_session_probe_request($trimmedSessionId, $wsPath),
+            'websocket'
+        );
+    } catch (Throwable) {
+        return [
+            'ok' => false,
+            'reason' => 'auth_backend_error',
+            'retryable' => true,
+        ];
+    }
     if (!is_array($auth)) {
         return [
             'ok' => false,
             'reason' => 'auth_backend_error',
+            'retryable' => true,
         ];
     }
 
+    $reason = (string) ($auth['reason'] ?? 'invalid_session');
     return [
         'ok' => (bool) ($auth['ok'] ?? false),
-        'reason' => (string) ($auth['reason'] ?? 'invalid_session'),
+        'reason' => $reason,
+        'retryable' => (bool) ($auth['retryable'] ?? false) || videochat_realtime_is_transient_auth_backend_reason($reason),
     ];
 }
 

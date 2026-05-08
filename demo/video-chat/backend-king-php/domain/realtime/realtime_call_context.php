@@ -783,6 +783,27 @@ function videochat_realtime_connection_can_join_call_scoped_room(
     return videochat_realtime_connection_can_bypass_admission_for_room($connection, $normalizedRoomId, $openDatabase);
 }
 
+function videochat_realtime_room_resolution_requires_authoritative_backfill(string $roomId, string $callId): bool
+{
+    return videochat_presence_normalize_room_id($roomId, '') !== ''
+        || videochat_realtime_normalize_call_id($callId, '') !== '';
+}
+
+/**
+ * @return array{ok: false, initial_room_id: string, requested_room_id: string, pending_room_id: string, reason: string, retryable: bool}
+ */
+function videochat_realtime_room_resolution_backfill_unavailable(string $reason = 'realtime_backfill_unavailable'): array
+{
+    return [
+        'ok' => false,
+        'initial_room_id' => videochat_realtime_waiting_room_id(),
+        'requested_room_id' => '',
+        'pending_room_id' => '',
+        'reason' => trim($reason) === '' ? 'realtime_backfill_unavailable' : trim($reason),
+        'retryable' => true,
+    ];
+}
+
 /**
  * @return array{initial_room_id: string, requested_room_id: string, pending_room_id: string}
  */
@@ -796,6 +817,10 @@ function videochat_realtime_resolve_connection_rooms(
     $normalizedRequestedCallId = videochat_realtime_normalize_call_id($requestedCallId, '');
     $requestedRoomInput = videochat_presence_normalize_room_id($requestedRoomId, '');
     $tenantId = videochat_realtime_auth_tenant_id($websocketAuth);
+    $requiresAuthoritativeBackfill = videochat_realtime_room_resolution_requires_authoritative_backfill(
+        $requestedRoomInput,
+        $normalizedRequestedCallId
+    );
     try {
         $pdo = $openDatabase();
         $resolvedRoom = videochat_fetch_active_room_context($pdo, $resolvedRequestedRoomId, $tenantId);
@@ -806,6 +831,9 @@ function videochat_realtime_resolve_connection_rooms(
             $resolvedRequestedRoomId = videochat_presence_normalize_room_id((string) $resolvedRoom['id']);
         }
     } catch (Throwable) {
+        if ($requiresAuthoritativeBackfill) {
+            return videochat_realtime_room_resolution_backfill_unavailable();
+        }
         $resolvedRequestedRoomId = 'lobby';
     }
 
@@ -838,10 +866,7 @@ function videochat_realtime_resolve_connection_rooms(
                 $normalizedRequestedCallId = $boundCallId;
             }
         } catch (Throwable) {
-            return [
-                'initial_room_id' => videochat_realtime_waiting_room_id(),
-                'requested_room_id' => '',
-                'pending_room_id' => '',
+            return videochat_realtime_room_resolution_backfill_unavailable('access_session_binding_unavailable') + [
                 'access_session_binding' => 'unavailable',
             ];
         }
@@ -861,12 +886,16 @@ function videochat_realtime_resolve_connection_rooms(
             );
             $canBypassLobby = videochat_realtime_call_context_allows_admission_bypass($context);
         } catch (Throwable) {
+            if ($requiresAuthoritativeBackfill) {
+                return videochat_realtime_room_resolution_backfill_unavailable();
+            }
             $canBypassLobby = false;
         }
     }
 
     if ($canBypassLobby) {
         return [
+            'ok' => true,
             'initial_room_id' => $resolvedRequestedRoomId,
             'requested_room_id' => $resolvedRequestedRoomId,
             'pending_room_id' => '',
@@ -874,6 +903,7 @@ function videochat_realtime_resolve_connection_rooms(
     }
 
     return [
+        'ok' => true,
         'initial_room_id' => videochat_realtime_waiting_room_id(),
         'requested_room_id' => $resolvedRequestedRoomId,
         'pending_room_id' => $resolvedRequestedRoomId,
