@@ -14,10 +14,17 @@ function normalizeRemoteFrameVideoLayer(value) {
   return '';
 }
 
+function normalizeRemoteFrameContinuityCarrier(frame) {
+  const transportPath = String(frame?.transportPath || frame?.transport_path || '').trim().toLowerCase();
+  return transportPath === 'gossip_rtc_datachannel' ? 'gossip' : '';
+}
+
 export function remoteJitterTrackKey(frame) {
   const trackId = String(frame?.trackId || '').trim() || 'default';
   const videoLayer = normalizeRemoteFrameVideoLayer(frame?.videoLayer || frame?.video_layer);
-  return videoLayer !== '' ? `${trackId}:${videoLayer}` : trackId;
+  const carrier = normalizeRemoteFrameContinuityCarrier(frame);
+  const baseKey = videoLayer !== '' ? `${trackId}:${videoLayer}` : trackId;
+  return carrier !== '' ? `${baseKey}:${carrier}` : baseKey;
 }
 
 export function ensureRemoteJitterBufferState(peer, trackKey) {
