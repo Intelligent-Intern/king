@@ -336,6 +336,78 @@ try {
     videochat_call_access_duplicate_review_assert((string) ($flag['call_id'] ?? '') === $callId, 'review flag call id mismatch');
     videochat_call_access_duplicate_review_assert((string) ($flag['access_fingerprint'] ?? '') === videochat_audit_fingerprint($accessId), 'review flag access fingerprint mismatch');
     videochat_call_access_duplicate_review_assert_no_needles((string) ($flag['payload_json'] ?? ''), $secretNeedles, 'review flag payload');
+    $warningModalFlagId = (string) ($flag['public_id'] ?? '');
+    videochat_call_access_duplicate_review_assert($warningModalFlagId !== '', 'warning-modal review flag public id should be present');
+    $warningModalFlagPayload = json_decode((string) ($flag['payload_json'] ?? '{}'), true);
+    videochat_call_access_duplicate_review_assert(is_array($warningModalFlagPayload), 'warning-modal review flag payload should decode');
+    videochat_call_access_duplicate_review_assert((string) ($warningModalFlagPayload['flag'] ?? '') === 'duplicate_personalized_link', 'warning-modal review flag payload flag mismatch');
+    videochat_call_access_duplicate_review_assert((string) ($warningModalFlagPayload['stage'] ?? '') === 'join_opened', 'warning-modal review flag must be created at join-open reach');
+    videochat_call_access_duplicate_review_assert((string) ($warningModalFlagPayload['review_status'] ?? '') === 'manual_review_required', 'warning-modal review flag status payload mismatch');
+    videochat_call_access_duplicate_review_assert((bool) ($warningModalFlagPayload['raw_link_identifier_logged'] ?? true) === false, 'warning-modal review flag must mark raw link omission');
+    videochat_call_access_duplicate_review_assert((bool) ($warningModalFlagPayload['account_email_logged'] ?? true) === false, 'warning-modal review flag must mark email omission');
+    videochat_call_access_duplicate_review_assert((bool) ($warningModalFlagPayload['host_name_logged'] ?? true) === false, 'warning-modal review flag must mark host-name omission');
+    $warningModalAuditQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT payload_json
+FROM videochat_audit_events
+WHERE event_type = 'call_access_duplicate_personalized_link_review'
+  AND actor_user_id = :actor_user_id
+  AND call_id = :call_id
+ORDER BY id DESC
+LIMIT 1
+SQL
+    );
+    $warningModalAuditQuery->execute([
+        ':actor_user_id' => $secondUserId,
+        ':call_id' => $callId,
+    ]);
+    $warningModalAuditPayload = json_decode((string) $warningModalAuditQuery->fetchColumn(), true);
+    $warningModalAuditQuery->closeCursor();
+    videochat_call_access_duplicate_review_assert(is_array($warningModalAuditPayload), 'warning-modal review audit payload should decode');
+    videochat_call_access_duplicate_review_assert((string) ($warningModalAuditPayload['stage'] ?? '') === 'join_opened', 'warning-modal review audit should record join_opened stage');
+    videochat_call_access_duplicate_review_assert((bool) ($warningModalAuditPayload['flag_created'] ?? false), 'warning-modal review audit should record initial flag creation');
+    videochat_call_access_duplicate_review_assert((bool) ($warningModalAuditPayload['raw_link_identifier_logged'] ?? true) === false, 'warning-modal review audit must mark raw link omission');
+
+    $loginSwitchResponse = $callAccessRoute(
+        '/session',
+        'POST',
+        [
+            'Authorization' => 'Bearer sess_duplicate_second',
+            'Content-Type' => 'application/json',
+            'User-Agent' => 'duplicate-same-browser-login-switch',
+        ],
+        json_encode([
+            'verified_user_id' => $targetUserId,
+            'verified_session_id' => 'sess_duplicate_target',
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'sess_duplicate_second_login_switch_should_not_issue'
+    );
+    videochat_call_access_duplicate_review_assert((int) ($loginSwitchResponse['status'] ?? 0) === 409, 'same-browser logout/login switch should fail closed');
+    $loginSwitchPayload = videochat_call_access_duplicate_review_decode($loginSwitchResponse);
+    videochat_call_access_duplicate_review_assert((string) (($loginSwitchPayload['error'] ?? [])['code'] ?? '') === 'call_access_conflict', 'login-switch conflict code mismatch');
+    videochat_call_access_duplicate_review_assert(
+        (string) (((($loginSwitchPayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['auth'] ?? '') === 'session_context_changed',
+        'login-switch conflict should expose only session_context_changed'
+    );
+    videochat_call_access_duplicate_review_assert_no_needles((string) ($loginSwitchResponse['body'] ?? ''), $secretNeedles, 'login-switch duplicate response');
+    $loginSwitchSessionRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_duplicate_second_login_switch_should_not_issue'")->fetchColumn();
+    videochat_call_access_duplicate_review_assert($loginSwitchSessionRows === 0, 'login switch must not persist a second-account session');
+    $loginSwitchParticipantRows = (int) $pdo->query("SELECT COUNT(*) FROM call_participants WHERE call_id = " . $pdo->quote($callId) . " AND user_id = " . $secondUserId)->fetchColumn();
+    videochat_call_access_duplicate_review_assert($loginSwitchParticipantRows === 0, 'login switch must not attach account B as participant');
+    $freshAfterLoginSwitch = videochat_fetch_call_access_link($pdo, $accessId, $defaultTenantId);
+    videochat_call_access_duplicate_review_assert(is_array($freshAfterLoginSwitch), 'login-switch access link should still resolve');
+    videochat_call_access_duplicate_review_assert((int) ($freshAfterLoginSwitch['participant_user_id'] ?? 0) === $targetUserId, 'login switch must not reassign the personalized link');
+
+    $loginSwitchFlags = $pdo->query('SELECT * FROM call_access_review_flags')->fetchAll();
+    videochat_call_access_duplicate_review_assert(count($loginSwitchFlags) === 1, 'login switch should reuse the duplicate review flag');
+    $loginSwitchFlag = $loginSwitchFlags[0];
+    videochat_call_access_duplicate_review_assert((string) ($loginSwitchFlag['public_id'] ?? '') === $warningModalFlagId, 'login-switch review should reuse the warning-modal flag');
+    videochat_call_access_duplicate_review_assert((int) ($loginSwitchFlag['subject_user_id'] ?? 0) === $secondUserId, 'login-switch review subject user mismatch');
+    videochat_call_access_duplicate_review_assert((int) ($loginSwitchFlag['target_user_id'] ?? 0) === $targetUserId, 'login-switch review target user mismatch');
+    videochat_call_access_duplicate_review_assert((int) ($loginSwitchFlag['first_seen_user_id'] ?? 0) === $targetUserId, 'login-switch review should reference account A');
+    videochat_call_access_duplicate_review_assert((string) ($loginSwitchFlag['call_id'] ?? '') === $callId, 'login-switch review call id mismatch');
+    videochat_call_access_duplicate_review_assert((string) ($loginSwitchFlag['access_fingerprint'] ?? '') === videochat_audit_fingerprint($accessId), 'login-switch review access fingerprint mismatch');
+    videochat_call_access_duplicate_review_assert_no_needles((string) ($loginSwitchFlag['payload_json'] ?? ''), $secretNeedles, 'login-switch review flag payload');
 
     $wrongHostOne = $callAccessRoute(
         '/session',
@@ -390,6 +462,15 @@ try {
 
     $reviewFlagCount = (int) $pdo->query('SELECT COUNT(*) FROM call_access_review_flags')->fetchColumn();
     videochat_call_access_duplicate_review_assert($reviewFlagCount === 1, 'repeat duplicate attempts should reuse the same review flag');
+    $reusedFlagQuery = $pdo->prepare('SELECT public_id, payload_json FROM call_access_review_flags WHERE subject_user_id = :subject_user_id LIMIT 1');
+    $reusedFlagQuery->execute([':subject_user_id' => $secondUserId]);
+    $reusedFlag = $reusedFlagQuery->fetch(PDO::FETCH_ASSOC);
+    $reusedFlagQuery->closeCursor();
+    videochat_call_access_duplicate_review_assert(is_array($reusedFlag), 'reused warning-modal review flag should still exist');
+    videochat_call_access_duplicate_review_assert((string) ($reusedFlag['public_id'] ?? '') === $warningModalFlagId, 'host verification must reuse the warning-modal review flag');
+    $reusedFlagPayload = json_decode((string) ($reusedFlag['payload_json'] ?? '{}'), true);
+    videochat_call_access_duplicate_review_assert(is_array($reusedFlagPayload), 'reused review flag payload should decode');
+    videochat_call_access_duplicate_review_assert((string) ($reusedFlagPayload['stage'] ?? '') === 'join_opened', 'reused review flag must preserve the original warning-modal stage');
     $hostAttemptPayload = implode("\n", array_map(
         static fn (array $row): string => json_encode($row, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '',
         $pdo->query('SELECT * FROM call_access_host_verification_attempts')->fetchAll()
@@ -399,7 +480,34 @@ try {
     $issuedRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id LIKE 'sess_duplicate_second_should_not_issue_%'")->fetchColumn();
     videochat_call_access_duplicate_review_assert($issuedRows === 0, 'duplicate denied and rate-limited attempts must not persist sessions');
     $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_duplicate_personalized_link_review'")->fetchColumn();
-    videochat_call_access_duplicate_review_assert($auditCount >= 1, 'duplicate review must be audit-logged');
+    videochat_call_access_duplicate_review_assert($auditCount >= 2, 'duplicate review and login switch must be audit-logged');
+    $loginSwitchAudit = $pdo->prepare(
+        <<<'SQL'
+SELECT payload_json
+FROM videochat_audit_events
+WHERE event_type = 'call_access_duplicate_personalized_link_review'
+  AND actor_user_id = :actor_user_id
+  AND call_id = :call_id
+ORDER BY id ASC
+SQL
+    );
+    $loginSwitchAudit->execute([
+        ':actor_user_id' => $secondUserId,
+        ':call_id' => $callId,
+    ]);
+    $loginSwitchAuditPayload = null;
+    foreach ($loginSwitchAudit->fetchAll(PDO::FETCH_COLUMN) as $payloadJson) {
+        $candidate = json_decode((string) $payloadJson, true);
+        if (is_array($candidate) && (string) ($candidate['stage'] ?? '') === 'session_context_changed') {
+            $loginSwitchAuditPayload = $candidate;
+            break;
+        }
+    }
+    videochat_call_access_duplicate_review_assert(is_array($loginSwitchAuditPayload), 'login-switch duplicate audit payload should decode');
+    videochat_call_access_duplicate_review_assert((string) ($loginSwitchAuditPayload['stage'] ?? '') === 'session_context_changed', 'login-switch duplicate audit stage mismatch');
+    videochat_call_access_duplicate_review_assert((string) ($loginSwitchAuditPayload['review_status'] ?? '') === 'manual_review_required', 'login-switch duplicate audit should be reviewer-understandable');
+    videochat_call_access_duplicate_review_assert((bool) ($loginSwitchAuditPayload['raw_link_identifier_logged'] ?? true) === false, 'login-switch duplicate audit must omit raw link id');
+    videochat_call_access_duplicate_review_assert((bool) ($loginSwitchAuditPayload['account_email_logged'] ?? true) === false, 'login-switch duplicate audit must omit email');
 
     if (function_exists('pcntl_fork')) {
         $parallelStartPath = $databasePath . '.parallel.start';
