@@ -1393,8 +1393,8 @@ the authenticated account authoritative for the issued session.
 - [x] Admission does not apply to other calls
 - [x] Admission does not apply to other organizations
 - [ ] Temporary user admission applies only to same temporary user / link context
-- [ ] Concurrent admission by multiple moderators creates no error state
-- [ ] Concurrent rejection and admission resolves deterministically
+- [x] Concurrent admission by multiple moderators creates no error state
+- [x] Concurrent rejection and admission resolves deterministically
 - [ ] Lobby status updates correctly
 - [ ] Participant is removed from lobby after admission
 - [ ] Participant is removed from lobby after aborting join attempt
@@ -1408,6 +1408,11 @@ that bound room. The same contract requests a secondary call ID with the
 access-bound session and proves it does not enter or queue admission for the
 secondary room. It also creates an open anonymous access session with a guest
 name and proves a distinct guest user plus open call-scoped binding is created.
+`realtime-lobby-concurrency-contract` simulates two backend workers against the
+same call-participant row and proves concurrent `lobby/allow` is idempotent,
+late duplicate admission returns `already_allowed` without mutating state, and
+admit/reject races resolve deterministically with rejection winning and no
+queued or admitted handoff left behind.
 
 ## 12. Rejoin, Leave, Kick
 

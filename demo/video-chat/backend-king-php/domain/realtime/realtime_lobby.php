@@ -392,6 +392,30 @@ function videochat_lobby_apply_command(
     if ($action === 'lobby/allow') {
         $target = $queuedByUser[$targetUserId] ?? null;
         if (!is_array($target)) {
+            if (isset($admittedByUser[$targetUserId]) && is_array($admittedByUser[$targetUserId])) {
+                $sentCount = videochat_lobby_broadcast_room_snapshot(
+                    $lobbyState,
+                    $presenceState,
+                    $roomId,
+                    'already_allowed',
+                    $sender,
+                    $nowMs,
+                    $tenantId
+                );
+
+                return [
+                    'ok' => true,
+                    'error' => '',
+                    'changed' => false,
+                    'sent_count' => $sentCount,
+                    'action' => $action,
+                    'state' => 'already_allowed',
+                    'target_user_id' => $targetUserId,
+                    'room_id' => $roomId,
+                    'affected_user_ids' => [],
+                ];
+            }
+
             return [
                 'ok' => false,
                 'error' => 'target_not_queued',
