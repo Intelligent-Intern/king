@@ -323,7 +323,7 @@ SQL
     $guestParticipantRow = $guestParticipant->fetch();
     videochat_call_access_session_assert(is_array($guestParticipantRow), 'open guest should be inserted as call participant');
     videochat_call_access_session_assert((string) ($guestParticipantRow['source'] ?? '') === 'internal', 'open guest participant source mismatch');
-    videochat_call_access_session_assert((string) ($guestParticipantRow['invite_state'] ?? '') === 'invited', 'open guest participant invite state mismatch');
+    videochat_call_access_session_assert((string) ($guestParticipantRow['invite_state'] ?? '') === 'pending', 'open guest participant invite state mismatch');
 
     $openAuth = videochat_authenticate_request(
         $pdo,

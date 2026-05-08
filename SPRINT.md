@@ -1572,23 +1572,28 @@ proof was validated in `php:8.4-cli` with `pdo_sqlite`; that local image lacks
 - [x] Logged-in user can join if own rights allow it
 - [x] Logged-in user lands in lobby if no direct permission exists
 - [x] Logged-in system admin can join every active call through anonymous link
-- [ ] Logged-in organization admin can join own organization calls through anonymous link
-- [ ] Logged-in organization admin cannot join foreign organization calls through anonymous link
-- [ ] Logged-in guest-list user can join through anonymous link
+- [x] Logged-in organization admin can join own organization calls through anonymous link
+- [x] Logged-in organization admin cannot join foreign organization calls through anonymous link
+- [x] Logged-in guest-list user can join through anonymous link
 - [x] Logged-in user not on guest list lands in lobby through anonymous link
 - [x] Anonymous link does not overwrite account data
-- [ ] Anonymous link does not modify guest list
-- [ ] Anonymous link creates no personalized identity binding
+- [x] Anonymous link does not modify guest list
+- [x] Anonymous link creates no personalized identity binding
 - [x] Invalid anonymous link is rejected
 - [x] Manipulated anonymous link grants no access
 
 Proof: `call-access-seed-matrix.spec.js` covers anonymous open links for a
 logged-in user keeping their own account, avoiding temporary identity creation,
 using only the logged-in account rights, and waiting in lobby without direct
-permission. The same spec covers a logged-out anonymous guest entering the lobby
-with no platform, tenant, lobby-management, or admission rights. `npx playwright
+permission. It now also covers logged-in same-organization admins joining
+through own organization rights, foreign organization admins being kept in
+lobby without direct org-admin rights, and guest-list users joining without
+mutating the guest list or personalizing the open link binding. `npx playwright
 test tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list`
-passed 11 tests. `call-access-anonymous-disabled-link-contract` also proves a
+passed 32 tests. `call-access-anonymous-logged-in-rights-contract` proves the
+same anonymous/open-link org-admin, foreign-org, guest-list, no guest-list
+mutation, and no personalized identity binding semantics against SQLite in
+Docker PHP. `call-access-anonymous-disabled-link-contract` also proves a
 manipulated logged-in anonymous access id is rejected before session issuance
 and a forged anonymous session body cannot bind a foreign call.
 
@@ -2670,9 +2675,9 @@ against duplicate join/session request loops.
 - [ ] `e2e_anon_logged_in_002_temp_account_discarded`
 - [ ] `e2e_anon_logged_in_003_logged_in_rights_used`
 - [ ] `e2e_anon_logged_in_004_system_admin_can_join_active_call`
-- [ ] `e2e_anon_logged_in_005_org_admin_can_join_own_org_call`
-- [ ] `e2e_anon_logged_in_006_org_admin_cannot_join_foreign_org_call`
-- [ ] `e2e_anon_logged_in_007_guest_list_user_can_join`
+- [x] `e2e_anon_logged_in_005_org_admin_can_join_own_org_call`
+- [x] `e2e_anon_logged_in_006_org_admin_cannot_join_foreign_org_call`
+- [x] `e2e_anon_logged_in_007_guest_list_user_can_join`
 - [ ] `e2e_anon_logged_in_008_non_guest_user_lands_in_lobby`
 - [ ] `e2e_anon_logged_in_009_anonymous_link_does_not_overwrite_account`
 - [ ] `e2e_anon_logged_in_010_invalid_anonymous_link_rejected`
