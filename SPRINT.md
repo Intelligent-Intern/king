@@ -48,6 +48,10 @@ Current baseline:
   swallow the participant.
 - Whiteboard Call App is deployed and installed; the Call Apps attach tab is now
   visible for resolved calls and requests a room snapshot after attach.
+- Media reconnect cleanup now has a focused contract proving stale local capture
+  cleanup preserves active camera/audio/screenshare streams and emits
+  reconnect-specific diagnostics instead of looking like an intentional media
+  shutdown.
 
 Contract anchors:
 - `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
@@ -471,6 +475,10 @@ Tickets:
       desktop and mobile, keeping iframe sizing stable.
     - Launch grant capabilities now drive visible no-access/read-only notices
       in the Call App workspace host.
+    - Additional merged proof makes the Call Apps sidebar responsive at narrow
+      widths, shows Default participant access as Blocked/Allowed choices, and
+      exposes labeled Allow/Revoke controls for participant grants:
+      `call-app-sidebar-access-ux-contract`.
     - Exact commands:
       - `npm run test:contract:call-apps`
       - `npm run build`
@@ -495,6 +503,10 @@ Tickets:
       runtime/version, app/CDN/API/WS/SFU reachability, marketplace/call-app
       checks, container status, and redacted recent logs without deploys,
       restarts, DB writes, DNS changes, or admin actions.
+    - `call-app-csp-postmessage-contract` proves configured Whiteboard/call-app
+      iframe hosts are normalized safely, launch/CRDT bridge messages are
+      structured-clone safe, and postMessage failure is terminal for the current
+      launch generation instead of causing retry/reload loops.
     - `WHITEBOARD_CHECK.md` is an unfilled manual acceptance form for owner,
       moderator, participant, guest, revoked participant, reconnect, and export.
     - Exact commands:
