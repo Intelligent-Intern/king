@@ -10,11 +10,14 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-const e2eSpec = read('tests/e2e/call-access-join.spec.js');
+const e2eSpec = [
+  read('tests/e2e/call-access-join.spec.js'),
+  read('tests/e2e/call-access-personalized-identity.spec.js'),
+].join('\n');
 
 assert.match(
   e2eSpec,
-  /strong personalized-link mismatch wrong host denial gives no access and leaks no foreign person data/,
+  /wrong-account strong personalized mismatch denies access without foreign data exposure/,
   'public join E2E must cover strong personalized-link mismatch wrong-host denial',
 );
 assert.match(
@@ -24,7 +27,7 @@ assert.match(
 );
 assert.match(
   e2eSpec,
-  /expectTextDoesNotContain\(joinBody,\s*foreignNeedles,\s*'strong-mismatch join response'\)/,
+  /expectTextDoesNotContain\((?:await joinResponse\.text\(\)|joinBody),\s*foreignNeedles,\s*'strong-mismatch join response'\)/,
   'strong-mismatch E2E must prove the join response has no foreign person data',
 );
 assert.match(
@@ -34,17 +37,17 @@ assert.match(
 );
 assert.match(
   e2eSpec,
-  /expectTextDoesNotContain\(sessionBody,\s*foreignNeedles,\s*'strong-mismatch wrong-host denial response'\)/,
+  /expectTextDoesNotContain\((?:sessionBodyText|sessionBody),\s*foreignNeedles,\s*'strong-mismatch wrong-host denial response'\)/,
   'strong-mismatch E2E must prove the denial response has no foreign person data',
 );
 assert.match(
   e2eSpec,
-  /sessionRequestAuthorization\)\.toBe\(`Bearer \$\{wrongLoggedInSession\.sessionToken\}`\)/,
+  /(?:sessionRequestAuthorization|sessionAuthorization)\)\.toBe\(`Bearer \$\{(?:wrongLoggedInSession|wrongAccount)\.sessionToken\}`\)/,
   'strong-mismatch E2E must prove the current logged-in session is authoritative',
 );
 assert.match(
   e2eSpec,
-  /sessionRequestBody\)\.toEqual\(\{\s*verified_user_id:\s*wrongLoggedInUserId,\s*verified_session_id:\s*wrongLoggedInSession\.sessionId,\s*\}\)/,
+  /(?:sessionRequestBody|sessionBody)\)\.toEqual\(\{\s*verified_user_id:\s*(?:wrongLoggedInUserId|wrongAccount\.userId),\s*verified_session_id:\s*(?:wrongLoggedInSession|wrongAccount)\.sessionId,\s*\}\)/,
   'strong-mismatch E2E must prove verified logged-in context is sent to session issuance',
 );
 assert.match(
@@ -54,12 +57,12 @@ assert.match(
 );
 assert.match(
   e2eSpec,
-  /storedSession\.sessionId\)\.toBe\(wrongLoggedInSession\.sessionId\)[\s\S]*storedSession\.sessionToken\)\.toBe\(wrongLoggedInSession\.sessionToken\)[\s\S]*storedSession\.sessionToken\)\.not\.toBe\(deniedSessionToken\)/,
+  /storedSession\.sessionId\)\.toBe\((?:wrongLoggedInSession|wrongAccount)\.sessionId\)[\s\S]*storedSession\.sessionToken\)\.toBe\((?:wrongLoggedInSession|wrongAccount)\.sessionToken\)[\s\S]*storedSession\.sessionToken\)\.not\.toBe\(deniedSessionToken\)/,
   'strong-mismatch E2E must prove denied responses do not bind a foreign session',
 );
 assert.match(
   e2eSpec,
-  /expect\(joinGetCount\)\.toBe\(1\)[\s\S]*expect\(sessionPostCount\)\.toBe\(1\)/,
+  /expect\(sessionPostCount\)\.toBe\(1\)[\s\S]*expect\(joinGetCount\)\.toBe\(1\)|expect\(joinGetCount\)\.toBe\(1\)[\s\S]*expect\(sessionPostCount\)\.toBe\(1\)/,
   'strong-mismatch E2E must guard against reload or duplicate request loops',
 );
 
