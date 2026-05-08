@@ -218,7 +218,13 @@ function videochat_is_call_joinable_status(string $status): bool
  *   is_guest: bool
  * }|null
  */
-function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, ?string $email = null, ?int $tenantId = null): ?array
+function videochat_fetch_active_user_for_call_access(
+    PDO $pdo,
+    int $userId = 0,
+    ?string $email = null,
+    ?int $tenantId = null,
+    bool $requireTenantMembership = true
+): ?array
 {
     $normalizedEmail = videochat_normalize_call_access_email($email);
     if ($userId <= 0 && $normalizedEmail === '') {
@@ -226,7 +232,7 @@ function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, 
     }
 
     if ($userId > 0) {
-        if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
+        if ($requireTenantMembership && is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
             return null;
         }
         $query = $pdo->prepare(
@@ -251,7 +257,7 @@ SQL
         );
         $query->execute([':id' => $userId]);
     } else {
-        $hasTenantMemberships = is_int($tenantId) && $tenantId > 0
+        $hasTenantMemberships = $requireTenantMembership && is_int($tenantId) && $tenantId > 0
             && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id');
         $tenantJoin = $hasTenantMemberships
             ? 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id'

@@ -87,7 +87,8 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $pdo,
         $linkedUserId,
         $participantEmail === '' ? null : $participantEmail,
-        $tenantId
+        $tenantId,
+        false
     );
 
     $touch = $pdo->prepare(
