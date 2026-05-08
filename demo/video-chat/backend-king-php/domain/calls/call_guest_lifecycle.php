@@ -158,8 +158,13 @@ function videochat_invalidate_guest_accounts_for_call(PDO $pdo, string $callId, 
     }
     $guestSql = implode(', ', $placeholders);
 
+    $startedTransaction = false;
+
     try {
-        $pdo->beginTransaction();
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $startedTransaction = true;
+        }
 
         $revokeParams = $params;
         unset($revokeParams[':updated_at']);
@@ -195,9 +200,11 @@ SQL
         $disable->execute($disableParams);
         $invalidatedGuests = $disable->rowCount();
 
-        $pdo->commit();
+        if ($startedTransaction) {
+            $pdo->commit();
+        }
     } catch (Throwable) {
-        if ($pdo->inTransaction()) {
+        if ($startedTransaction && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
 
