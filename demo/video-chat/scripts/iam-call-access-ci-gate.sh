@@ -88,6 +88,7 @@ STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
+  "tests/contract/call-access-privacy-foreign-data-contract.mjs"
   "tests/contract/call-access-security-manipulation-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
@@ -101,6 +102,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
+  "tests/contract/call-access-privacy-foreign-data-contract.mjs"
   "tests/contract/call-access-security-manipulation-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
@@ -111,6 +113,10 @@ FULL_STATIC_CONTRACTS=(
 )
 
 BLOCKED_STATIC_CONTRACTS=()
+
+HOST_SAFE_BACKEND_CONTRACTS=(
+  "tests/audit-call-access-privacy-minimization-contract.sh"
+)
 
 SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-decision-contract.sh"
@@ -156,6 +162,9 @@ run_static_gate() {
 
   for contract in "${contracts[@]}"; do
     run_step "frontend/static ${contract}" run_node_contract "${contract}"
+  done
+  for contract in "${HOST_SAFE_BACKEND_CONTRACTS[@]}"; do
+    run_step "backend/static ${contract}" run_backend_contract "${contract}"
   done
 }
 

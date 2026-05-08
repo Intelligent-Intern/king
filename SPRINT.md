@@ -2511,12 +2511,12 @@ against duplicate join/session request loops.
 
 ## Test Group: Privacy and Security
 
-- [ ] `e2e_privacy_001_foreign_link_data_not_rendered`
-- [ ] `e2e_privacy_002_foreign_link_data_not_in_api_response`
-- [ ] `e2e_privacy_003_invalid_link_no_personal_data_leak`
-- [ ] `e2e_privacy_004_wrong_host_name_no_personal_data_leak`
-- [ ] `e2e_privacy_005_browser_network_response_no_foreign_data`
-- [ ] `e2e_privacy_006_audit_logs_minimize_sensitive_data`
+- [x] `e2e_privacy_001_foreign_link_data_not_rendered`
+- [x] `e2e_privacy_002_foreign_link_data_not_in_api_response`
+- [x] `e2e_privacy_003_invalid_link_no_personal_data_leak`
+- [x] `e2e_privacy_004_wrong_host_name_no_personal_data_leak`
+- [x] `e2e_privacy_005_browser_network_response_no_foreign_data`
+- [x] `e2e_privacy_006_audit_logs_minimize_sensitive_data`
 - [x] `e2e_security_001_modified_personalized_link_id_rejected`
 - [x] `e2e_security_002_modified_call_id_rejected`
 - [x] `e2e_security_003_forged_user_id_rejected`
@@ -2525,6 +2525,19 @@ against duplicate join/session request loops.
 - [x] `e2e_security_006_csrf_account_update_protected`
 - [ ] `e2e_security_007_session_fixation_prevented`
 - [x] `e2e_security_008_parallel_tabs_no_wrong_merge`
+
+Proof: `call-access-privacy-foreign-data.spec.js` covers the browser
+privacy cases for invalid guessed links and wrong-host strong mismatch:
+foreign title, host, invitee, call-id, and denied-session sentinels are absent
+from rendered dialogs and captured `/api/call-access/{id}/join` plus
+`/session` network bodies; invalid links show no join action, wrong-host
+denials stay on `/join/{id}`, do not enter `/workspace/call`, and keep the
+current logged-in session. `call-access-privacy-foreign-data-contract.mjs`
+pins those E2E assertions to the existing backend privacy contracts.
+`audit-call-access-privacy-minimization-contract.php` runs the real IAM audit
+helpers through a PDO test double and proves raw access/session identifiers,
+host name, invitee data, SDP/ICE/token values, and call title are omitted while
+access/session fingerprints and safe counts remain.
 
 ## Test Group: Email Confirmation
 
