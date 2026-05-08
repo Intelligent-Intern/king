@@ -250,19 +250,26 @@ Tickets:
     backend entitlements/installations.
   - Ensure Whiteboard appears in the Call Apps tab for calls owned by that
     organization after installation.
-  - Proof: production Marketplace read-only probe reported one healthy catalog
-    entry, one enabled installation, one active entitlement, and the seeded
-    call listed Whiteboard as available.
+  - Proof 2026-05-08: `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    demo/video-chat/scripts/prod-whiteboard-org-install-proof.sh` exercises
+    the authenticated `api.kingrt.com` Marketplace catalog/order/install
+    endpoints, persists an enabled Whiteboard organization installation with an
+    active entitlement, creates a temporary call for that organization, verifies
+    Whiteboard in `/call-apps/available`, attaches it through
+    `/call-app-sessions`, reaches `whiteboard.kingrt.com`, and deletes only the
+    temporary proof call.
 
 - [x] BGF-11 sicherstellen, dass whiteboard auch bei kingrt.com einer orga zugefügt werden kann
   - Run the production `kingrt.com` Marketplace journey end to end.
   - Prove that a real organization can add Whiteboard from Marketplace and use
     it inside a call without manual database edits.
   - Record the production proof command/output before closing the sprint.
-  - Proof: production admin Marketplace order/install endpoints were exercised
-    idempotently against `api.kingrt.com`; Whiteboard then appeared in the
-    organization's Call Apps availability response and launched from
-    `whiteboard.kingrt.com`.
+  - Proof 2026-05-08: `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    demo/video-chat/scripts/prod-whiteboard-org-install-proof.sh` is the
+    idempotent production add-to-organization proof; it uses only public
+    authenticated API endpoints, no database edits, then proves Call Apps tab
+    availability, session attach, entitlement-backed access policy, and
+    `whiteboard.kingrt.com` iframe reachability.
 
 ## Sprint: Whiteboard Call App Hardening And Production Integration
 
