@@ -1407,8 +1407,8 @@ Playwright run passed 18 tests.
 
 - [x] Host can invite person through calendar flow
 - [x] Invitee can select appointment in calendar form
-- [ ] Invitee can be registered and logged in
-- [ ] Invitee can be registered and logged out
+- [x] Invitee can be registered and logged in
+- [x] Invitee can be registered and logged out
 - [x] Invitee can be unregistered
 - [x] Temporary account is created for non-logged-in invitee
 - [x] Temporary account contains form data
@@ -1443,6 +1443,16 @@ without mutating the unrelated invitation, rejects a manipulated link and wrong
 authenticated account, and reopens the same valid link without creating another
 temporary account. Local PHP syntax passed; runtime execution is skipped on
 this host because `pdo_sqlite` is unavailable.
+
+Registered invitee final proof: `call-access-registered-logged-out-invitee-contract`
+proves a personalized link bound to a registered user can be opened without an
+active browser session, creates no temporary account, stays call/room-bound to
+that registered user, enters lobby, and resolves into the call after admission.
+`call-access-registered-logged-in-invitee-contract` plus the focused
+`call-access-join.spec.js` browser path prove the active registered session is
+preserved, guest takeover input is ignored, no temporary identity data leaks,
+and host admission moves the invitee into the call room. No duplicate browser
+spec was added in the final proof branch.
 
 ## 5. Personalized Link: User Not Logged In
 
@@ -2838,7 +2848,7 @@ successful transfer path writes the owner-transfer audit event.
 
 - [x] `e2e_invite_001_host_creates_calendar_invitation`
 - [x] `e2e_invite_002_invitee_selects_appointment`
-- [ ] `e2e_invite_003_registered_logged_in_invitee_flow`
+- [x] `e2e_invite_003_registered_logged_in_invitee_flow`
 - [x] `e2e_invite_004_registered_logged_out_invitee_flow`
 - [x] `e2e_invite_005_unregistered_invitee_creates_temp_account`
 - [x] `e2e_invite_006_personalized_link_bound_to_temp_account`
