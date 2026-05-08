@@ -684,6 +684,22 @@
       }
     },
     {
+      "key": "registered_logged_out_personalized_uses_temporary_account",
+      "sprint_groups": ["5", "32"],
+      "link_key": "temporary_personalized",
+      "principal_user_key": "temporary_personalized_guest",
+      "registered_account_user_key": "registered_guest",
+      "expected": {
+        "temporary": true,
+        "uses_authenticated_account": false,
+        "requires_admission": true,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false,
+        "must_not_auto_login_registered_account": true
+      }
+    },
+    {
       "key": "anonymous_temporary_guest_has_no_system_admin_rights",
       "sprint_groups": ["9", "10", "18"],
       "link_key": "alpha_open",
