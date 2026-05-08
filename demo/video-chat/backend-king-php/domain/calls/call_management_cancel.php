@@ -50,7 +50,8 @@ function videochat_validate_cancel_call_payload(array $payload): array
  */
 function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -60,7 +61,7 @@ function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string
         ];
     }
 
-    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'])) {
+    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'], $pdo)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -238,7 +239,8 @@ SQL
  */
 function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
 {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -248,7 +250,7 @@ function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string
         ];
     }
 
-    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'])) {
+    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'], $pdo)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -307,7 +309,7 @@ SQL
  */
 function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
-    if ($authUserId <= 0 || strtolower(trim($authRole)) !== 'admin') {
+    if (!videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
