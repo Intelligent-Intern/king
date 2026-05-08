@@ -16,6 +16,27 @@ import {
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
 
+const safeScreenProtocolNeedles = [
+  'participants',
+  'participant',
+  'sessionToken',
+  'session_token',
+  'access_token',
+  'token_type',
+  'media_token',
+  'turn_credential',
+  'candidate',
+  'sdp',
+  'ice',
+  'call_app',
+  'call-app',
+  'call_apps',
+  'call-app-sessions',
+  'launch_token',
+  'whiteboard',
+  'crdt',
+];
+
 const allowedDirectJoinScenarios = [
   'direct_join_system_admin_without_guest_list',
   'direct_join_system_admin_tenantless_without_organization',
@@ -61,6 +82,39 @@ function escapeRegExp(input) {
 function scenarioTestName(scenarioKey, suffix) {
   const journeyKey = String(getSeedScenario(scenarioKey).journey_key || '').trim();
   return journeyKey === '' ? suffix : `${journeyKey}: ${suffix}`;
+}
+
+function directJoinContentNeedles(call) {
+  const needles = [
+    call.id,
+    call.room_id,
+    call.title,
+    ...(Array.isArray(call.guest_list_user_keys) ? call.guest_list_user_keys : []).flatMap((userKey) => {
+      const user = getSeedUser(userKey);
+      return [user.email, user.display_name];
+    }),
+  ];
+  if (call.owner_user_key) {
+    const owner = getSeedUser(call.owner_user_key);
+    needles.push(owner.email, owner.display_name);
+  }
+  return needles;
+}
+
+function directJoinNetworkNeedles(call) {
+  return [
+    ...directJoinContentNeedles(call),
+    ...safeScreenProtocolNeedles,
+  ];
+}
+
+function expectNoSafeScreenLeakage(text, needles, label) {
+  const normalizedText = String(text || '').toLowerCase();
+  for (const value of needles) {
+    const needle = String(value || '').trim().toLowerCase();
+    if (needle === '') continue;
+    expect(normalizedText, `${label} must not contain ${value}`).not.toContain(needle);
+  }
 }
 
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
@@ -323,9 +377,19 @@ for (const scenarioKey of deniedDirectJoinScenarios) {
       const resolvePayload = await resolveResponse.json();
       expect(resolvePayload?.result?.state).toBe('forbidden');
       expect(resolvePayload?.result?.call ?? null).toBe(null);
+      expectNoSafeScreenLeakage(
+        JSON.stringify(resolvePayload),
+        directJoinNetworkNeedles(call),
+        `${scenarioKey} resolve response`,
+      );
 
       await expect(page).toHaveURL(/\/(user\/dashboard|admin\/calls)(?:[/?#].*)?$/);
       await expect(page.locator('body')).not.toContainText(call.title);
+      expectNoSafeScreenLeakage(
+        await page.locator('body').innerText(),
+        directJoinContentNeedles(call),
+        `${scenarioKey} safe screen`,
+      );
       expect(directJoinDecisions.some((decision) => (
         decision.call_id === call.id
         && decision.allowed === false
@@ -353,9 +417,20 @@ for (const scenarioKey of authDeniedDirectJoinScenarios) {
       await page.goto(`/workspace/call/${call.id}`);
       const authResponse = await authResponsePromise;
       expect(authResponse.status()).toBe(401);
+      const authPayload = await authResponse.json();
+      expectNoSafeScreenLeakage(
+        JSON.stringify(authPayload),
+        directJoinNetworkNeedles(call),
+        `${scenarioKey} auth response`,
+      );
 
       await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
       await expect(page.locator('body')).not.toContainText(call.title);
+      expectNoSafeScreenLeakage(
+        await page.locator('body').innerText(),
+        directJoinContentNeedles(call),
+        `${scenarioKey} login safe screen`,
+      );
       expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
     } finally {
       await context.close();

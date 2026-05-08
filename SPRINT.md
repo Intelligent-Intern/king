@@ -2625,6 +2625,12 @@ pins those E2E assertions to the existing backend privacy contracts.
 helpers through a PDO test double and proves raw access/session identifiers,
 host name, invitee data, SDP/ICE/token values, and call title are omitted while
 access/session fingerprints and safe counts remain.
+Final safe-screen proof: `call-access-safe-screen-final-contract.mjs` pins the
+browser and static contracts that denied, not-found, expired, and direct-join
+safe-screen paths render without call titles, call ids/rooms, owner or guest
+participant data, session/access tokens, SDP/ICE/TURN material, or Call App
+session/launch/CRDT data. The proof is wired into `test:contract:iam-call-access`
+and the IAM CI static gate.
 
 ## Test Group: Email Confirmation
 
