@@ -20,6 +20,7 @@ require_once __DIR__ . '/../domain/realtime/realtime_sfu_gateway.php';
 require_once __DIR__ . '/module_realtime_attachments.php';
 require_once __DIR__ . '/module_realtime_websocket_commands.php';
 require_once __DIR__ . '/module_realtime_websocket_brokers.php';
+require_once __DIR__ . '/module_realtime_websocket_reconnect.php';
 require_once __DIR__ . '/module_realtime_websocket.php';
 
 /**
