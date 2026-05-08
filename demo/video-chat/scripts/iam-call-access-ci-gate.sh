@@ -89,6 +89,7 @@ STATIC_CONTRACTS=(
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
+  "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
@@ -99,6 +100,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
+  "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
@@ -133,6 +135,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/realtime-lobby-concurrency-contract.sh"
   "tests/realtime-lobby-security-contract.sh"
   "tests/realtime-reconnect-backfill-contract.sh"
+  "tests/call-access-owner-timeout-contract.sh"
 )
 
 run_static_gate() {

@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
+import { normalizeOwnerAbsencePayload } from './ownerAbsenceState.js';
 
 export function createCallWorkspaceRoomStateHelpers(context) {
   const {
@@ -48,6 +49,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     lobbyNotificationState,
     lobbyQueue,
     nativePeerConnectionsRef,
+    ownerAbsenceState,
     participantsRaw,
     peerControlStateByUserId,
     pendingAdmissionJoinRoomId,
@@ -391,6 +393,11 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     }
     ensureRoomBuckets(roomId);
     applyViewerContext(payload?.viewer || null);
+    if (ownerAbsenceState) {
+      const lifecycle = payload?.call_lifecycle || payload?.callLifecycle || null;
+      const ownerAbsence = lifecycle?.owner_absence || lifecycle?.ownerAbsence || null;
+      ownerAbsenceState.value = normalizeOwnerAbsencePayload(ownerAbsence);
+    }
 
     const participantsChanged = applyParticipantsSnapshot(payload?.participants);
     if (payload?.layout && typeof payload.layout === 'object') {

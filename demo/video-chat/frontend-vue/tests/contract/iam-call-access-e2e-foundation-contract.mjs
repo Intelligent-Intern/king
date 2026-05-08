@@ -22,6 +22,7 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
+const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
@@ -52,6 +53,11 @@ assert.match(
 );
 assert.match(
   callAccessScript,
+  /tests\/e2e\/call-access-owner-absence-browser\.spec\.js/,
+  'package script must include browser-near owner absence countdown and auto-end coverage',
+);
+assert.match(
+  callAccessScript,
   /--workers=1/,
   'call-access E2E script must run serially to avoid live backend access-link contention',
 );
@@ -64,6 +70,11 @@ assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
   /call-access-duplicate-review-email-contract\.mjs/,
   'IAM Call Access contract gate must include duplicate-review/account-confirmation static proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /iam-king-participants-owner-timeout-contract\.mjs/,
+  'IAM Call Access contract gate must include the owner-absence runtime/browser proof contract',
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
@@ -106,6 +117,10 @@ assert.ok(
   'focused Call Access command must list duplicate-review/account-confirmation E2E coverage',
 );
 assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js'),
+  'focused Call Access command must list the owner absence browser proof spec',
+);
+assert.ok(
   requiredSpecs.has('frontend-vue/tests/e2e/call-access-join.spec.js'),
   'release gate must pin the Call Access join spec as required coverage',
 );
@@ -134,6 +149,21 @@ assert.match(
   mainJourneySmokeSpec,
   /installCallAccessSeedRoutes[\s\S]*installCallAccessFakeRealtime/s,
   'main journey smoke split must compose the deterministic IAM seed routes with fake realtime admission',
+);
+assert.match(
+  ownerAbsenceBrowserSpec,
+  /e2e_journey_024_owner_absence_countdown_then_auto_end[\s\S]*owner_absent_timeout/s,
+  'owner absence browser proof must cover countdown followed by automatic owner-absence end',
+);
+assert.match(
+  ownerAbsenceBrowserSpec,
+  /e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end[\s\S]*owner_present[\s\S]*active/s,
+  'owner absence browser proof must cover owner return cancelling countdown while the call remains active',
+);
+assert.match(
+  ownerAbsenceBrowserSpec,
+  /realtime_owner_absence\.php[\s\S]*VIDEOCHAT_OWNER_ABSENCE_TIMER_MS[\s\S]*VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS/s,
+  'owner absence browser proof must derive timer values from the backend realtime owner-absence contract',
 );
 assert.match(
   mainJourneySmokeSpec,
