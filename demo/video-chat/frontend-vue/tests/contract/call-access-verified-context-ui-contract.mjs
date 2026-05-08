@@ -15,6 +15,7 @@ const callAccessSession = read('src/domain/calls/access/callAccessSession.ts');
 const joinView = read('src/domain/calls/access/JoinView.vue');
 const authSession = read('src/domain/auth/session.ts');
 const callAccessJoinSpec = read('tests/e2e/call-access-join.spec.js');
+const personalizedIdentitySpec = read('tests/e2e/call-access-personalized-identity.spec.js');
 
 assert.match(
   admissionGate,
@@ -71,104 +72,98 @@ assert.doesNotMatch(
 
 assert.match(
   callAccessJoinSpec,
-  /login switch after verified call-access link fails without rebinding or leaking foreign data/,
-  'public join E2E must cover login switch after verified link context',
+  /personal call-access link starts a call-scoped session and waits for host admission/,
+  'live public join E2E must keep the logged-out personalized-link backend path',
 );
 assert.match(
-  callAccessJoinSpec,
-  /sessionRequestAuthorization\)\.toBe\(`Bearer \$\{switchedSession\.sessionToken\}`\)/,
-  'login-switch E2E must prove session issuance uses the current bearer token',
+  personalizedIdentitySpec,
+  /logged-out personalized link starts the linked call session without identity proof/,
+  'personalized identity E2E must cover logged-out personalized links',
 );
 assert.match(
-  callAccessJoinSpec,
-  /sessionRequestBody\)\.toEqual\(\{\s*verified_user_id:\s*2,\s*verified_session_id:\s*verifiedSession\.sessionId,\s*\}\)/,
-  'login-switch E2E must prove the verified user/session snapshot is sent',
+  personalizedIdentitySpec,
+  /expect\(sessionAuthorization\)\.toBe\(''\)[\s\S]*expect\(sessionBody\)\.toBeNull\(\)/,
+  'logged-out personalized E2E must prove no bearer or verified identity proof is sent',
 );
 assert.match(
-  callAccessJoinSpec,
-  /expect\(sessionPayload\?\.error\?\.code\)\.toBe\('call_access_conflict'\)/,
-  'login-switch E2E must require a safe conflict from the route guard',
+  personalizedIdentitySpec,
+  /same-account personalized link sends verified identity proof and adopts only its own session/,
+  'personalized identity E2E must cover same-account personalized links',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
+  /expect\(sessionAuthorization\)\.toBe\(`Bearer \$\{account\.sessionToken\}`\)[\s\S]*expect\(sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*account\.userId,\s*verified_session_id:\s*account\.sessionId,\s*\}\)/,
+  'same-account E2E must prove current bearer and verified user/session proof are sent',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /session switch after verified personalized link fails without rebinding or leaking data/,
+  'personalized identity E2E must cover session switch after verified link context',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /expect\(sessionAuthorization\)\.toBe\(`Bearer \$\{switchedSession\.sessionToken\}`\)[\s\S]*expect\(sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*verifiedSession\.userId,\s*verified_session_id:\s*verifiedSession\.sessionId,\s*\}\)/,
+  'session-switch E2E must prove session issuance uses the current bearer with the original verified snapshot',
+);
+assert.match(
+  personalizedIdentitySpec,
   /not\.toContainText\(foreignTitle\)[\s\S]*not\.toContainText\(foreignEmail\)[\s\S]*not\.toContainText\(rejectedCallAccessToken\)/,
-  'login-switch E2E must prove foreign call/person/session details are not rendered',
+  'session-switch E2E must prove foreign call/person/session details are not rendered',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /storedSession\.sessionId\)\.toBe\(switchedSession\.sessionId\)[\s\S]*storedSession\.sessionToken\)\.toBe\(switchedSession\.sessionToken\)[\s\S]*storedSession\.sessionToken\)\.not\.toBe\(rejectedCallAccessToken\)/,
-  'login-switch E2E must prove the failed call-access response does not bind a new session',
+  'session-switch E2E must prove the failed response does not bind a new session',
 );
 assert.match(
-  callAccessJoinSpec,
-  /expect\(joinGetCount\)\.toBe\(1\)[\s\S]*expect\(sessionPostCount\)\.toBe\(1\)/,
-  'login-switch E2E must guard against reload or duplicate session POST loops',
+  personalizedIdentitySpec,
+  /logout after verified personalized link fails closed before session issuance/,
+  'personalized identity E2E must cover logout after verified link context',
 );
 assert.match(
-  callAccessJoinSpec,
-  /logout during verified call-access link context fails closed without leaking or joining/,
-  'public join E2E must cover logout after verified link context',
-);
-assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /const \{ logoutSession, sessionState \} = await import\('\/src\/domain\/auth\/session\.ts'\);[\s\S]*await logoutSession\(\)/,
   'logout E2E must exercise the real browser logout/session-clear path',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /expect\(sessionPostCount\)\.toBe\(0\)/,
   'logout E2E must prove no call-access session request is issued after verified context is logged out',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /expect\(page\.url\(\)\)\.not\.toContain\('\/workspace\/call'\)/,
   'logout E2E must prove the browser does not enter the workspace',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /logout denial must not render \$\{value\}/,
   'logout E2E must prove foreign call/invite/host/session data is not rendered',
 );
 assert.match(
-  callAccessJoinSpec,
+  personalizedIdentitySpec,
   /storedSession\.sessionToken \|\| ''\)\.toBe\(''\)[\s\S]*JSON\.stringify\(storedSession\)\)\.not\.toContain\(rejectedSessionToken\)/,
   'logout E2E must prove no foreign call-access session is adopted',
 );
-
 assert.match(
-  callAccessJoinSpec,
-  /same personalized link in parallel contexts keeps account sessions isolated/,
-  'public join E2E must cover parallel use of one personalized link by two different logged-in accounts',
+  personalizedIdentitySpec,
+  /wrong-account strong personalized mismatch denies access without foreign data exposure/,
+  'personalized identity E2E must cover wrong-account strong mismatch',
 );
 assert.match(
-  callAccessJoinSpec,
-  /createPublicJoinPage\(browser, baseURL\)[\s\S]*createPublicJoinPage\(browser, baseURL\)[\s\S]*Promise\.all\(\[[\s\S]*page\.goto\(`\/join\/\$\{accessId\}`\)[\s\S]*page\.goto\(`\/join\/\$\{accessId\}`\)/,
-  'parallel-account E2E must use separate browser contexts opening the same personalized link concurrently',
+  personalizedIdentitySpec,
+  /expect\(sessionPayload\?\.error\?\.code\)\.toBe\('call_access_forbidden'\)[\s\S]*expect\(sessionPayload\?\.error\?\.details\?\.mismatch\)\.toBe\('strong_personalized_link'\)/,
+  'wrong-account E2E must require a strong-mismatch denial',
 );
 assert.match(
-  callAccessJoinSpec,
-  /requests\.a\.sessionAuthorization\)\.toBe\(`Bearer \$\{accountA\.sessionToken\}`\)[\s\S]*requests\.b\.sessionAuthorization\)\.toBe\(`Bearer \$\{accountB\.sessionToken\}`\)/,
-  'parallel-account E2E must prove each session POST uses its own current bearer token',
+  personalizedIdentitySpec,
+  /dialog denial must not render \$\{value\}/,
+  'wrong-account E2E must prove foreign details are not rendered',
 );
 assert.match(
-  callAccessJoinSpec,
-  /requests\.a\.sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*accountA\.userId,\s*verified_session_id:\s*accountA\.sessionId,\s*\}\)[\s\S]*requests\.b\.sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*accountB\.userId,\s*verified_session_id:\s*accountB\.sessionId,\s*\}\)/,
-  'parallel-account E2E must prove verified link contexts are not crossed between accounts',
-);
-assert.match(
-  callAccessJoinSpec,
-  /storedA\.sessionToken\)\.toBe\(accountA\.issuedCallAccessToken\)[\s\S]*storedB\.sessionToken\)\.toBe\(accountB\.sessionToken\)[\s\S]*storedB\.sessionToken\)\.not\.toBe\(accountA\.issuedCallAccessToken\)[\s\S]*storedB\.sessionToken\)\.not\.toBe\(accountB\.rejectedCallAccessToken\)/,
-  'parallel-account E2E must prove localStorage/session state remains isolated after mixed success and conflict responses',
-);
-assert.match(
-  callAccessJoinSpec,
-  /dialogB[\s\S]*not\.toContainText\('Foreign Linked Call Title'\)[\s\S]*foreignNeedlesForB[\s\S]*not\.toContainText\(value\)/,
-  'parallel-account E2E must prove the rejected second account sees no foreign UI data',
-);
-assert.match(
-  callAccessJoinSpec,
-  /requests\.a\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.b\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.a\.sessionPostCount\)\.toBe\(1\)[\s\S]*requests\.b\.sessionPostCount\)\.toBe\(1\)/,
-  'parallel-account E2E must guard against reload loops or duplicate session POSTs in either context',
+  personalizedIdentitySpec,
+  /storedSession\.sessionId\)\.toBe\(wrongAccount\.sessionId\)[\s\S]*storedSession\.sessionToken\)\.not\.toBe\(deniedSessionToken\)/,
+  'wrong-account E2E must prove the denied response does not bind a new session',
 );
 
 console.log('[call-access-verified-context-ui-contract] PASS');
