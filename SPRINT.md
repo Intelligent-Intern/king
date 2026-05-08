@@ -1660,7 +1660,7 @@ Docker SQLite run passed.
 - [ ] Organization admin can rejoin after leaving
 - [ ] Guest-list user can rejoin after leaving
 - [ ] Rejoin after guest-list removal is denied or routed to lobby
-- [ ] Rejoin after admin-role removal uses updated permissions
+- [x] Rejoin after admin-role removal uses updated permissions
 - [ ] Rejoin after owner transfer uses updated permissions
 
 Proof: `call-access-rejoin-kick-membership.spec.js` covers network reconnect
@@ -1781,8 +1781,11 @@ foreign session adoption.
 `call-access-active-permission-change-contract` proves active-call permissions
 are revalidated from current backend state: guest-list removal routes stale
 guest sessions back to renewed approval, organization-admin downgrade removes
-stale moderation and direct call binding, and owner transfer revalidates old and
-new owner rights without trusting stale connection fields. The Docker PHP 8.4
+stale moderation and direct call binding, reconnect/backfill snapshots do not
+restore stale moderator/admin rights or leak Call App sessions from the stale
+requested call, Direct Join remains fail-closed after downgrade, and Call App
+routes deny the stale org-admin context. Owner transfer revalidates old and new
+owner rights without trusting stale connection fields. The Docker PHP 8.4
 runtime proof passed with `pdo_sqlite`; host PHP reports the same proof as
 skipped because the local extension is unavailable.
 `call-access-security-manipulation-contract` and
