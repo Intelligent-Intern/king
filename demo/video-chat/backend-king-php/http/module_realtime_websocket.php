@@ -30,7 +30,9 @@ function videochat_realtime_reset_waiting_connection_invite(
         $lobbyState,
         $openDatabase,
         $pendingRoomId,
-        videochat_realtime_connection_call_id($connection)
+        videochat_realtime_connection_call_id($connection),
+        null,
+        videochat_realtime_connection_tenant_id($connection)
     );
     if ($broadcastSnapshot) {
         videochat_lobby_broadcast_room_snapshot(
@@ -634,7 +636,11 @@ function videochat_handle_realtime_websocket_route(
                     $targetRoomId = videochat_presence_normalize_room_id((string) ($presenceCommand['room_id'] ?? ''));
                     try {
                         $pdo = $openDatabase();
-                        $targetRoom = videochat_fetch_active_room_context($pdo, $targetRoomId);
+                        $targetRoom = videochat_fetch_active_room_context(
+                            $pdo,
+                            $targetRoomId,
+                            videochat_realtime_connection_tenant_id($presenceConnection)
+                        );
                     } catch (Throwable) {
                         $targetRoom = null;
                     }
@@ -675,7 +681,9 @@ function videochat_handle_realtime_websocket_route(
                             $lobbyState,
                             $openDatabase,
                             $targetRoomId,
-                            videochat_realtime_connection_call_id($presenceConnection)
+                            videochat_realtime_connection_call_id($presenceConnection),
+                            null,
+                            videochat_realtime_connection_tenant_id($presenceConnection)
                         );
                         $isAdmitted = videochat_lobby_is_user_admitted_for_room(
                             $lobbyState,
@@ -712,6 +720,29 @@ function videochat_handle_realtime_websocket_route(
                                 'details' => [
                                     'room_id' => $targetRoomId,
                                     'pending_room_id' => $pendingRoomId,
+                                ],
+                                'time' => gmdate('c'),
+                            ]
+                        );
+                        continue;
+                    }
+
+                    if (
+                        !$pendingGateActive
+                        && !videochat_realtime_connection_can_join_call_scoped_room(
+                            $presenceConnection,
+                            $targetRoomId,
+                            $openDatabase
+                        )
+                    ) {
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'system/error',
+                                'code' => 'room_join_call_scope_forbidden',
+                                'message' => 'Requested room is outside the active call scope.',
+                                'details' => [
+                                    'room_id' => $targetRoomId,
                                 ],
                                 'time' => gmdate('c'),
                             ]

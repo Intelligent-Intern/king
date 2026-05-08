@@ -895,7 +895,9 @@ function videochat_realtime_handle_lobby_websocket_command(
         $lobbyState,
         $openDatabase,
         $lobbyCommandRoomId,
-        videochat_realtime_connection_call_id($presenceConnection)
+        videochat_realtime_connection_call_id($presenceConnection),
+        null,
+        videochat_realtime_connection_tenant_id($presenceConnection)
     );
 
     $lobbyResult = videochat_lobby_apply_command($lobbyState, $presenceState, $presenceConnection, $lobbyCommand);
@@ -947,7 +949,9 @@ function videochat_realtime_apply_successful_lobby_command(
             $lobbyState,
             $openDatabase,
             $lobbyResultRoomId,
-            videochat_realtime_connection_call_id($presenceConnection)
+            videochat_realtime_connection_call_id($presenceConnection),
+            null,
+            videochat_realtime_connection_tenant_id($presenceConnection)
         );
         videochat_lobby_broadcast_room_snapshot(
             $lobbyState,
@@ -964,7 +968,9 @@ function videochat_realtime_apply_successful_lobby_command(
             $lobbyState,
             $openDatabase,
             $lobbyResultRoomId,
-            videochat_realtime_connection_call_id($presenceConnection)
+            videochat_realtime_connection_call_id($presenceConnection),
+            null,
+            videochat_realtime_connection_tenant_id($presenceConnection)
         );
     }
 
@@ -1001,7 +1007,14 @@ function videochat_realtime_apply_lobby_remove_result(
             ['pending', 'allowed', 'accepted']
         );
     }
-    videochat_realtime_sync_lobby_room_from_database($lobbyState, $openDatabase, $lobbyResultRoomId, $removedCallId);
+    videochat_realtime_sync_lobby_room_from_database(
+        $lobbyState,
+        $openDatabase,
+        $lobbyResultRoomId,
+        $removedCallId,
+        null,
+        videochat_realtime_connection_tenant_id($presenceConnection)
+    );
 }
 
 function videochat_realtime_apply_lobby_admission_result(
@@ -1033,7 +1046,14 @@ function videochat_realtime_apply_lobby_admission_result(
             );
         }
     }
-    videochat_realtime_sync_lobby_room_from_database($lobbyState, $openDatabase, $admittedRoomId, $admittedCallId);
+    videochat_realtime_sync_lobby_room_from_database(
+        $lobbyState,
+        $openDatabase,
+        $admittedRoomId,
+        $admittedCallId,
+        null,
+        videochat_realtime_connection_tenant_id($presenceConnection)
+    );
     videochat_realtime_send_lobby_snapshot_to_users($presenceState, $lobbyState, $admittedRoomId, $admittedUserIds, 'admitted', null);
 }
 
