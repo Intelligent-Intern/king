@@ -58,17 +58,6 @@ export class BackgroundFilterController {
       return this.buildApplyResult(this.currentHandle, { stale: false });
     }
 
-    if (previousHandle) {
-      if (this.currentHandle === previousHandle) {
-        this.currentHandle = null;
-      }
-      try {
-        previousHandle.dispose();
-      } catch {
-        // best-effort cleanup; never break call flow.
-      }
-    }
-
     const handle = await createBackgroundFilterStream(sourceStream, options);
     if (revision !== this.revision) {
       try {
@@ -85,9 +74,39 @@ export class BackgroundFilterController {
       };
     }
 
+    const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);
+    if (shouldAwaitReadyHandoff && typeof handle.ready?.then === 'function') {
+      try {
+        await handle.ready;
+      } catch {
+        // Keep the previous stream only until the new stream has had its bounded readiness chance.
+      }
+      if (revision !== this.revision) {
+        try {
+          handle.dispose();
+        } catch {
+          // ignore stale dispose errors
+        }
+        return {
+          stream: sourceStream,
+          active: false,
+          reason: 'off',
+          backend: 'none',
+          stale: true,
+        };
+      }
+    }
+
     this.currentHandle = handle;
     this.attachHandlePipelineListener(handle);
     this.notifyListeners();
+    if (previousHandle && previousHandle !== handle) {
+      try {
+        previousHandle.dispose();
+      } catch {
+        // best-effort cleanup; never break call flow.
+      }
+    }
     return this.buildApplyResult(handle, { stale: false });
   }
 

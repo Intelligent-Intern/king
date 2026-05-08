@@ -9,6 +9,7 @@ const frontendRoot = path.resolve(__dirname, '../..');
 const repoVideoChatRoot = path.resolve(frontendRoot, '..');
 const tasksVisionVendorDir = path.join(frontendRoot, 'public/cdn/vendor/mediapipe/tasks-vision');
 const modelVendorDir = path.join(frontendRoot, 'public/cdn/vendor/mediapipe/models');
+const sinetVendorDir = path.join(frontendRoot, 'public/cdn/vendor/sinet');
 const wasmDir = path.join(frontendRoot, 'public/wasm');
 
 function readUtf8(file) {
@@ -53,10 +54,40 @@ try {
   assert.ok(!imageSegmenterWorker.includes("from '@mediapipe/tasks-vision'"), 'Image segmenter worker must not leave a bare package import for production');
   assert.ok(!imageSegmenterWorker.includes('/node_modules/@mediapipe/tasks-vision'), 'Image segmenter worker must not load node_modules at runtime');
   assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite'), 'Image segmenter worker must use the vendored multiclass model path');
+  assert.ok(imageSegmenterWorker.includes('function cacheBustUrl'), 'Image segmenter worker must cache-bust model and wasm probes');
+  assert.ok(imageSegmenterWorker.includes("fetch(cacheBustUrl(resolvedModel), { cache: 'no-store' })"), 'Image segmenter worker must bypass cached missing-model responses during initialization');
   assert.ok(!imageSegmenterWorker.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'Image segmenter worker must not use the legacy SelfieSegmentation assets');
 
+  const sinetBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendSinetWasm.js'));
+  const maskPostprocess = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/maskPostprocess.js'));
+  assertNoJsdelivrAssetSource(sinetBackend, 'SINet WASM backend');
+  assert.ok(sinetBackend.includes("import('onnxruntime-web/wasm')"), 'SINet backend must import the ONNX Runtime WASM build');
+  assert.ok(sinetBackend.includes("executionProviders: ['wasm']"), 'SINet backend must force the WASM execution provider');
+  assert.ok(sinetBackend.includes('wasm.proxy = false'), 'SINet backend must avoid ORT worker proxy mode for deterministic init');
+  assert.ok(sinetBackend.includes('wasm.numThreads = 1'), 'SINet backend must use single-threaded WASM by default');
+  assert.ok(sinetBackend.includes('/cdn/vendor/sinet/'), 'SINet backend must load vendored SINet assets');
+  assert.ok(sinetBackend.includes('externalData: [{ path: SINET_EXTERNAL_WEIGHTS_PATH, data: weights }]'), 'SINet backend must mount external ONNX weights');
+  assert.ok(sinetBackend.includes("kind: 'sinet_wasm'"), 'SINet backend must expose its backend kind');
+  assert.ok(sinetBackend.includes('matteMaskValues'), 'SINet backend must return value masks for the shared compositor');
+  assert.ok(sinetBackend.includes('function binaryForegroundAlpha(value, threshold = 0)'), 'SINet fallback must classify raw mask output without sigmoid');
+  assert.ok(sinetBackend.includes('alpha[i] = binaryForegroundAlpha(fg, bg);'), 'SINet fallback must use foreground-vs-background argmax for two-channel outputs');
+  assert.ok(sinetBackend.includes('const threshold = probabilityLike ? 0.5 : 0;'), 'SINet fallback must threshold single-channel masks without sigmoid');
+  assert.ok(!sinetBackend.includes('Math.exp(bg - max)'), 'SINet fallback must not softmax background and foreground logits');
+  assert.ok(!sinetBackend.includes('fgExp / Math.max'), 'SINet fallback must not couple foreground alpha to the background logit');
+  assert.ok(!sinetBackend.includes('foregroundLogitToProbability'), 'SINet fallback must not run raw logits through sigmoid');
+  assert.ok(!sinetBackend.includes('1 / (1 + Math.exp'), 'SINet fallback must not use sigmoid alpha mapping');
+  assert.ok(!sinetBackend.includes('probabilityToAlphaByte'), 'SINet fallback must not map logits as blended probabilities');
+  assert.ok(!sinetBackend.includes('@mediapipe'), 'SINet backend must not depend on MediaPipe');
+  assert.ok(maskPostprocess.includes('function smoothstep(edge0, edge1, value)'), 'Mask postprocess must smooth only the contour transition');
+  assert.ok(maskPostprocess.includes('const edgeLow = 0.5 - contourHalfWidth'), 'Mask postprocess must keep hard background outside the contour band');
+  assert.ok(!maskPostprocess.includes('(raw - 0.5) * contrast + 0.5'), 'Mask postprocess must not raise background alpha through global contrast shaping');
+
   const backgroundStream = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.ts'));
-  assert.ok(backgroundStream.includes("import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';"), 'Background stream must use the shared worker segmenter lease');
+  assert.ok(backgroundStream.includes("import { createSinetWasmSegmentationBackend } from './backendSinetWasm';"), 'Background stream must import the SINet WASM backend');
+  assert.ok(backgroundStream.includes("import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';"), 'Background stream must keep the shared worker segmenter lease as fallback');
+  assert.ok(backgroundStream.indexOf('createSinetWasmSegmentationBackend') < backgroundStream.indexOf('acquireWorkerSegmenterBackendLease({'), 'Background stream must initialize SINet before the MediaPipe worker fallback');
+  assert.ok(backgroundStream.includes("delegate: 'CPU'"), 'MediaPipe fallback must request the CPU delegate');
+  assert.ok(backgroundStream.includes('BACKGROUND_SEGMENTER_INIT_RETRY_MS'), 'Background stream must back off repeated segmenter init failures');
   assert.ok(!backgroundStream.includes('backendMediapipe'), 'Background stream must not import the legacy MediaPipe backend');
   assert.ok(!backgroundStream.includes('backendTfjs'), 'Background stream must not import the legacy TensorFlow backend');
 
@@ -74,6 +105,20 @@ try {
   }
 
   assertFile(path.join(modelVendorDir, 'selfie_multiclass_256x256.tflite'));
+  assertFile(path.join(sinetVendorDir, 'metadata-float.json'));
+  assertFile(path.join(sinetVendorDir, 'sinet-float.onnx'));
+  assertFile(path.join(sinetVendorDir, 'sinet.data'));
+  const sinetMetadata = JSON.parse(readUtf8(path.join(sinetVendorDir, 'metadata-float.json')));
+  assert.equal(sinetMetadata.model_id, 'sinet');
+  assert.equal(sinetMetadata.runtime, 'onnx');
+  assert.deepEqual(
+    sinetMetadata.model_files?.['sinet.onnx']?.outputs?.mask?.shape,
+    [1, 2, 256, 256],
+    'SINet metadata must describe the foreground/background mask output',
+  );
+
+  const packageJson = JSON.parse(readUtf8(path.join(frontendRoot, 'package.json')));
+  assert.ok(packageJson.dependencies?.['onnxruntime-web'], 'frontend package must depend on onnxruntime-web');
   for (const optionalModel of ['deeplab_v3.tflite', 'hair_segmenter.tflite', 'selfie_segmenter.tflite']) {
     assert.ok(!workerBackend.includes(optionalModel), `Worker segmenter must not reference unused optional model ${optionalModel}`);
     assert.ok(!imageSegmenterWorker.includes(optionalModel), `Image segmenter worker must not reference unused optional model ${optionalModel}`);

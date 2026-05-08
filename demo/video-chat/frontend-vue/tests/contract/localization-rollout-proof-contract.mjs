@@ -61,7 +61,9 @@ assert.match(packageJson, /test:contract:localization/, 'package scripts must ex
 assert.match(deploySmoke, /ADMIN_SMOKE_SESSION_TOKEN/, 'deploy smoke must track temporary admin session for cleanup');
 assert.match(deploySmoke, /trap cleanup_admin_session EXIT/, 'deploy smoke must cleanup admin session on early exit');
 assert.match(deploySmoke, /\/api\/auth\/logout/, 'deploy smoke must revoke the temporary admin session');
-assert.match(deploySmoke, /VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en/, 'deploy smoke must default the authenticated locale smoke to English');
+assert.match(deploySmoke, /VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-\}/, 'deploy smoke must not assume a fixed authenticated user locale by default');
+assert.match(deploySmoke, /locale not in supported_locales/, 'deploy smoke must validate authenticated user locale against the supported locale catalog');
+assert.match(deploySmoke, /direction expected ltr\/rtl/, 'deploy smoke must validate authenticated user locale direction');
 assert.match(deploySmoke, /\/api\/auth\/session/, 'deploy smoke must verify authenticated session payload');
 assert.match(deploySmoke, /public_get_json/, 'deploy smoke must report public JSON response bodies on failure');
 assert.match(deploySmoke, /\/api\/localization\/resources\?locale=de&namespaces=common/, 'deploy smoke must verify public localization resources');
@@ -70,7 +72,8 @@ assert.match(deploySmoke, /supported locale missing/, 'deploy smoke must verify 
 assert.match(deploySmoke, /admin session payload localization mismatch/, 'deploy smoke must aggregate authenticated localization payload failures');
 assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deploy smoke must exercise superadmin localization CSV preview');
 assert.match(deploySmoke, /deploy-smoke-preview\.csv/, 'deploy smoke must use a named preview-only CSV payload');
-assert.match(deploySmoke, /superadmin preview verified without commit/, 'deploy smoke must document that CSV proof is preview-only');
+assert.match(deploySmoke, /localization_csv_import_disabled/, 'deploy smoke must prove CSV import is disabled');
+assert.match(deploySmoke, /admin localization CSV preview: disabled with resources replacement verified/, 'deploy smoke must document the disabled CSV replacement path');
 assert.doesNotMatch(deploySmoke, /\/api\/admin\/localization\/imports\/commit/, 'deploy smoke must not commit localization CSV rows');
 assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 

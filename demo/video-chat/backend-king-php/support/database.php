@@ -114,6 +114,16 @@ function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
             'sample_history_json',
             "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
         ],
+        [
+            'workspace_calendars',
+            'color',
+            "ALTER TABLE workspace_calendars ADD COLUMN color TEXT NOT NULL DEFAULT '#1582BF'",
+        ],
+        [
+            'workspace_calendars',
+            'sync_calendar_ids',
+            "ALTER TABLE workspace_calendars ADD COLUMN sync_calendar_ids TEXT NOT NULL DEFAULT '[]'",
+        ],
     ];
 
     foreach ($additiveColumns as [$tableName, $columnName, $sql]) {

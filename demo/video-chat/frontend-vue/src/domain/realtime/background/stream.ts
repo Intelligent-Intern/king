@@ -1,3 +1,4 @@
+import { createSinetWasmSegmentationBackend } from './backendSinetWasm';
 import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';
 import { toNumber } from './math';
 import { createBackgroundPipelineController } from './pipeline/controller';
@@ -10,6 +11,23 @@ import { BACKGROUND_PIPELINE_STAGE_NAMES, BACKGROUND_PIPELINE_STAGE_STATES } fro
 
 const LONG_RAF_FRAME_MS = 300;
 const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;
+const BACKGROUND_SEGMENTER_INIT_RETRY_MS = 60000;
+const BACKGROUND_SEGMENTER_WARN_THROTTLE_MS = 10000;
+
+let sinetSegmenterUnavailableUntil = 0;
+let workerSegmenterUnavailableUntil = 0;
+
+function epochNowMs() {
+  return Date.now();
+}
+
+function formatInitFailure(kind, error) {
+  return `${kind}: ${error?.message || 'init_failed'}`;
+}
+
+function isSegmenterCoolingDown(unavailableUntil) {
+  return unavailableUntil > epochNowMs();
+}
 function resolveProcessingSpec(sourceWidth, sourceHeight, sourceFps, maxProcessWidth, maxProcessFps) {
   const inW = Math.max(1, Math.round(toNumber(sourceWidth, 1280)));
   const inH = Math.max(1, Math.round(toNumber(sourceHeight, 720)));
@@ -120,15 +138,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, width);
   canvas.height = Math.max(1, height);
-  const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
-  if (!ctx) {
-    video.pause();
-    video.srcObject = null;
-    return {
-      stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-      }
-    };
-  }
   const captureStream = canvas.captureStream;
   if (typeof captureStream !== "function") {
     video.pause();
@@ -154,6 +163,10 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   let segmentationBackendInitPromise = null;
   let segmentationBackendLease = null;
   let segmentationBackendKind = 'none';
+  let segmentationBackendInitFailed = false;
+  let segmentationBackendLastFailures = [];
+  let lastSegmentationBackendWarningAt = 0;
+  let nextSegmentationBackendRetryAt = 0;
   let handle = null;
   let resolveReady = () => { };
   let sourceStopReason = '';
@@ -173,14 +186,30 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     width: canvas.width,
     height: canvas.height,
   });
-  const compositorStage = createBackgroundCompositorStage({
-    canvas,
-    ctx,
-    getBackgroundColor: () => runtimeConfig.backgroundColor,
-    getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
-    getBlurPx: () => runtimeConfig.blurPx,
-    video,
-  });
+  let compositorStage = null;
+  try {
+    compositorStage = createBackgroundCompositorStage({
+      canvas,
+      getBackgroundColor: () => runtimeConfig.backgroundColor,
+      getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
+      getBlurPx: () => runtimeConfig.blurPx,
+      preferWebGl: true,
+      video,
+    });
+  } catch {
+    video.pause();
+    video.srcObject = null;
+    for (const track of filteredVideoStream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+      }
+    }
+    return {
+      stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
+      }
+    };
+  }
 
   function syncCanvasToSourceFrame(nextSourceWidth, nextSourceHeight) {
     const nextWidth = Math.max(1, Math.round(toNumber(nextSourceWidth, sourceWidth)));
@@ -205,10 +234,28 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   }
 
   function releaseSegmentationBackend({ keepWarm = true } = {}) {
-    segmentationBackendLease?.release?.({ keepWarm });
+    if (segmentationBackendLease) {
+      segmentationBackendLease.release?.({ keepWarm });
+    } else {
+      segmentationBackend?.dispose?.({ keepWarm });
+    }
     segmentationBackendLease = null;
     segmentationBackend = null;
     segmentationBackendKind = 'none';
+    segmentationBackendInitFailed = false;
+    segmentationBackendLastFailures = [];
+    nextSegmentationBackendRetryAt = 0;
+  }
+
+  function warnSegmentationBackendInitFailure(failures) {
+    const nowMs = epochNowMs();
+    if (nowMs - lastSegmentationBackendWarningAt < BACKGROUND_SEGMENTER_WARN_THROTTLE_MS) return;
+    lastSegmentationBackendWarningAt = nowMs;
+    console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
+      selected: segmentationBackendKind,
+      requested: 'sinet_wasm, worker-segmenter',
+      failures,
+    });
   }
 
   async function ensureSegmentationBackend() {
@@ -216,26 +263,55 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     if (segmentationBackendInitPromise) return segmentationBackendInitPromise;
     const initFailures = [];
     segmentationBackendInitPromise = (async () => {
-      try {
-        segmentationBackendLease = await acquireWorkerSegmenterBackendLease({
-          detectIntervalMs: runtimeConfig.detectIntervalMs,
-          ownerId: `background-filter-${performance.now().toFixed(3)}`,
-        });
-        segmentationBackend = segmentationBackendLease.backend;
-        if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
-          releaseSegmentationBackend({ keepWarm: true });
+      segmentationBackendInitFailed = false;
+      segmentationBackendLastFailures = [];
+      nextSegmentationBackendRetryAt = 0;
+      if (!isSegmenterCoolingDown(sinetSegmenterUnavailableUntil)) {
+        try {
+          segmentationBackend = await createSinetWasmSegmentationBackend({
+            detectIntervalMs: runtimeConfig.detectIntervalMs,
+          });
+          if (!segmentationBackend) {
+            throw new Error('SINet backend unavailable');
+          }
+          if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
+            releaseSegmentationBackend({ keepWarm: false });
+          }
+        } catch (error) {
+          initFailures.push(formatInitFailure('sinet_wasm', error));
+          sinetSegmenterUnavailableUntil = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;
+          segmentationBackend = null;
         }
-      } catch (error) {
-        initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
-        segmentationBackend = null;
+      } else {
+        initFailures.push('sinet_wasm: cooling_down');
+      }
+      if (!segmentationBackend && !disposed && runtimeConfig.mode !== 'off' && runtimeConfig.sourceActive) {
+        if (!isSegmenterCoolingDown(workerSegmenterUnavailableUntil)) {
+          try {
+            segmentationBackendLease = await acquireWorkerSegmenterBackendLease({
+              delegate: 'CPU',
+              detectIntervalMs: runtimeConfig.detectIntervalMs,
+              ownerId: `background-filter-${performance.now().toFixed(3)}`,
+            });
+            segmentationBackend = segmentationBackendLease.backend;
+            if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
+              releaseSegmentationBackend({ keepWarm: true });
+            }
+          } catch (error) {
+            initFailures.push(formatInitFailure('worker-segmenter', error));
+            workerSegmenterUnavailableUntil = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;
+            segmentationBackend = null;
+          }
+        } else {
+          initFailures.push('worker-segmenter: cooling_down');
+        }
       }
       segmentationBackendKind = segmentationBackend?.kind || 'none';
       if (segmentationBackendKind === 'none' && initFailures.length > 0) {
-        console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
-          selected: segmentationBackendKind,
-          requested: 'worker-segmenter',
-          failures: initFailures,
-        });
+        segmentationBackendInitFailed = true;
+        segmentationBackendLastFailures = initFailures.slice();
+        nextSegmentationBackendRetryAt = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;
+        warnSegmentationBackendInitFailure(initFailures);
       }
       return segmentationBackend;
     })().finally(() => {
@@ -250,17 +326,22 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       if (handle) handle.backend = segmentationBackendKind;
     }).catch((error) => {
       segmentationBackendKind = 'none';
+      segmentationBackendInitFailed = true;
+      segmentationBackendLastFailures = [error?.message || 'init_failed'];
+      nextSegmentationBackendRetryAt = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;
       if (handle) handle.backend = 'none';
-      console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
-        selected: segmentationBackendKind,
-        requested: 'worker-segmenter',
-        failures: [error?.message || 'init_failed'],
-      });
+      warnSegmentationBackendInitFailure(segmentationBackendLastFailures);
     });
   }
 
   function syncPipelineStageStates() {
     if (!pipelineController) return;
+    const segmenterRequested = runtimeConfig.sourceActive && runtimeConfig.mode !== 'off';
+    const segmenterState = segmenterRequested
+      ? (segmentationBackendInitFailed && !segmentationBackendInitPromise
+        ? BACKGROUND_PIPELINE_STAGE_STATES.FAILED
+        : BACKGROUND_PIPELINE_STAGE_STATES.RUNNING)
+      : BACKGROUND_PIPELINE_STAGE_STATES.IDLE;
     pipelineController.updateStage(
       BACKGROUND_PIPELINE_STAGE_NAMES.SOURCE,
       runtimeConfig.sourceActive ? BACKGROUND_PIPELINE_STAGE_STATES.RUNNING : BACKGROUND_PIPELINE_STAGE_STATES.PAUSED,
@@ -268,10 +349,12 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     );
     pipelineController.updateStage(
       BACKGROUND_PIPELINE_STAGE_NAMES.SEGMENTER,
-      runtimeConfig.sourceActive && runtimeConfig.mode !== 'off'
-        ? BACKGROUND_PIPELINE_STAGE_STATES.RUNNING
-        : BACKGROUND_PIPELINE_STAGE_STATES.IDLE,
-      { mode: runtimeConfig.mode },
+      segmenterState,
+      {
+        backend: segmentationBackendKind,
+        failures: segmentationBackendLastFailures,
+        mode: runtimeConfig.mode,
+      },
     );
     pipelineController.updateStage(
       BACKGROUND_PIPELINE_STAGE_NAMES.COMPOSITOR,
@@ -331,6 +414,15 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     syncCanvasToSourceFrame(vw, vh);
     const now = performance.now();
     const effectEnabled = runtimeConfig.mode !== 'off';
+    if (
+      effectEnabled
+      && !segmentationBackend
+      && !segmentationBackendInitPromise
+      && segmentationBackendInitFailed
+      && epochNowMs() >= nextSegmentationBackendRetryAt
+    ) {
+      warmSegmentationBackend();
+    }
     //const canRunSegmentation = effectEnabled && now >= overloadCooldownUntil && Boolean(segmentationBackend);
     const canRunSegmentation = effectEnabled && Boolean(segmentationBackend);
     const segmentationWidth = Math.max(1, Math.round(canvas.width));

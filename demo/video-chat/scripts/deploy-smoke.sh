@@ -403,7 +403,7 @@ assert_admin_infrastructure_payload() {
 }
 
 assert_admin_session_payload() {
-  VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en}" php -r '
+  VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-}" php -r '
     function fail(string $message): void {
         fwrite(STDERR, $message . "\n");
         exit(1);
@@ -425,8 +425,8 @@ assert_admin_session_payload() {
     }
 
     $directionValue = array_key_exists("direction", $user) ? (string) $user["direction"] : "<missing>";
-    if ($expectedLocale === "en" && $directionValue !== "ltr") {
-        $errors[] = "direction expected ltr, got " . $directionValue;
+    if (!in_array($directionValue, ["ltr", "rtl"], true)) {
+        $errors[] = "direction expected ltr/rtl, got " . $directionValue;
     }
 
     $supported = $user["supported_locales"] ?? [];
@@ -435,10 +435,21 @@ assert_admin_session_payload() {
         $supported = [];
     }
     $codes = [];
+    $directionsByCode = [];
     foreach ($supported as $locale) {
         if (is_array($locale) && is_string($locale["code"] ?? null)) {
-            $codes[] = $locale["code"];
+            $code = $locale["code"];
+            $codes[] = $code;
+            if (is_string($locale["direction"] ?? null)) {
+                $directionsByCode[$code] = $locale["direction"];
+            }
         }
+    }
+    if (!in_array($localeValue, $codes, true)) {
+        $errors[] = "locale not in supported_locales: " . $localeValue;
+    }
+    if (isset($directionsByCode[$localeValue]) && $directionValue !== $directionsByCode[$localeValue]) {
+        $errors[] = "direction expected " . $directionsByCode[$localeValue] . ", got " . $directionValue;
     }
     foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
         if (!in_array($requiredLocale, $codes, true)) {
@@ -701,6 +712,7 @@ DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}"
 
 check_https_redirect
 expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
+expect_http_code cdn-mediapipe-tasks-model 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
 

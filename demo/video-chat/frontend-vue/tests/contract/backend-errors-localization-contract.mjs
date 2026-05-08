@@ -40,7 +40,7 @@ try {
     'utf8',
   );
   const marketplaceApiSource = await readFile(
-    path.join(root, 'src/modules/marketplace/pages/adminMarketplaceApi.js'),
+    path.join(root, 'src/modules/marketplace/pages/adminMarketplaceApi.ts'),
     'utf8',
   );
   const usersApiSource = await readFile(

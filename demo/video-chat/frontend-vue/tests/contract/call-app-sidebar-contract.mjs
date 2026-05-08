@@ -12,6 +12,7 @@ async function read(relativePath) {
 const [
   sidebarSource,
   leftSidebarSource,
+  callWorkspaceSource,
   tabsComposableSource,
   shellSource,
   storeSource,
@@ -19,6 +20,7 @@ const [
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue'),
   read('demo/video-chat/frontend-vue/src/layouts/CallWorkspaceLeftSidebar.vue'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
   read('demo/video-chat/frontend-vue/src/layouts/useCallLeftSidebarTabs.js'),
   read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue'),
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
@@ -51,14 +53,38 @@ assert.match(
 
 assert.match(
   tabsComposableSource,
-  /showTabs[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
-  'Call left sidebar tabs must only show once Call Apps are available or active in the call',
+  /showTabs[\s\S]*callAppsCatalogStore\.loading[\s\S]*callAppsCatalogStore\.error[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
+  'Call left sidebar tabs must stay visible while availability is loading, failed, available, or active in the call',
+);
+
+assert.match(
+  shellSource,
+  /callOwnerEditState\.callId[\s\S]*callOwnerEditState\.resolvedCallId[\s\S]*isCallWorkspace\.value \? route\.params\.callRef/s,
+  'Call Apps sidebar must keep a route call reference while owner/moderator context is still resolving',
 );
 
 assert.match(
   leftSidebarSource,
-  /v-if="showTabs"[\s\S]*calls\.workspace\.call_apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="\$emit\('call-app-session-created', \$event\)"/,
+  /v-if="showTabs"[\s\S]*calls\.workspace\.call_apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*:active-session="callAppSidebarActiveSession"[\s\S]*:participants="callAppSidebarParticipants"[\s\S]*@session-created="\$emit\('call-app-session-created', \$event\)"/,
   'CallWorkspaceLeftSidebar must expose Call Apps as a conditional left-sidebar tab and hand active call context to the panel',
+);
+
+assert.match(
+  shellSource,
+  /const callAppSidebarState = reactive\([\s\S]*activeSession:\s*null[\s\S]*participants:\s*\[\][\s\S]*sendSocketFrame:\s*null[\s\S]*requestRoomSnapshot:\s*null/s,
+  'WorkspaceShell must keep active Call App session and participant grant state for the left sidebar',
+);
+
+assert.match(
+  shellSource,
+  /provide\(['"]workspaceSidebarState['"][\s\S]*callLayoutControls:\s*callLayoutSidebarState[\s\S]*callAppControls:\s*callAppSidebarState/s,
+  'WorkspaceShell must provide Call App sidebar controls to the call workspace route',
+);
+
+assert.match(
+  callWorkspaceSource,
+  /function syncCallAppSidebarControls\(\)[\s\S]*controls\.activeSession\s*=\s*activeCallAppSession\.value\s*\|\|\s*null[\s\S]*controls\.participants\s*=\s*Array\.isArray\(snapshotUsersRows\.value\)[\s\S]*controls\.sendSocketFrame\s*=\s*sendSocketFrame[\s\S]*controls\.requestRoomSnapshot\s*=\s*\(\.\.\.args\)\s*=>\s*requestRoomSnapshot\(\.\.\.args\)/s,
+  'CallWorkspaceView must publish the active Call App session and participant rows to the left sidebar controls',
 );
 
 assert.match(
@@ -75,14 +101,20 @@ assert.match(
 
 assert.match(
   sidebarSource,
+  /import CallAppParticipantGrantButton from ['"]\.\/CallAppParticipantGrantButton\.vue['"]/,
+  'Call Apps sidebar must reuse the backend-backed participant grant button',
+);
+
+assert.match(
+  sidebarSource,
   /type="search"[\s\S]*src="\/assets\/orgas\/kingrt\/icons\/send\.png"/,
   'Call Apps sidebar must provide searchable list UI with the standard submit icon',
 );
 
 assert.match(
   sidebarSource,
-  /\.call-apps-search[\s\S]*flex-direction:\s*row-reverse[\s\S]*gap:\s*20px[\s\S]*padding:\s*20px/s,
-  'Call Apps sidebar search must keep the submit icon right-aligned with 20px spacing',
+  /\.call-apps-sidebar[\s\S]*container-type:\s*inline-size[\s\S]*\.call-apps-search[\s\S]*flex-direction:\s*row-reverse[\s\S]*gap:\s*clamp\([\s\S]*padding:\s*clamp\(/s,
+  'Call Apps sidebar search must keep the submit icon right-aligned with responsive spacing',
 );
 
 assert.match(
@@ -93,8 +125,8 @@ assert.match(
 
 assert.match(
   sidebarSource,
-  /\.call-apps-pagination[\s\S]*justify-content:\s*flex-end[\s\S]*gap:\s*20px[\s\S]*padding:\s*20px/s,
-  'Call Apps sidebar pagination must use the standard right-aligned 20px action spacing',
+  /\.call-apps-pagination[\s\S]*justify-content:\s*flex-end[\s\S]*flex-wrap:\s*wrap[\s\S]*gap:\s*clamp\([\s\S]*padding:\s*clamp\(/s,
+  'Call Apps sidebar pagination must use right-aligned responsive action spacing',
 );
 
 assert.match(
@@ -107,6 +139,24 @@ assert.match(
   sidebarSource,
   /data-call-app-attach-flow="inline"[\s\S]*Default participant access[\s\S]*default_app_policy/s,
   'Call Apps attach flow must choose default participant access inline without modal stacking',
+);
+
+assert.match(
+  sidebarSource,
+  /class="call-apps-access"[\s\S]*grantStateLabel\(participant\)[\s\S]*<CallAppParticipantGrantButton[\s\S]*:session="activeSessionForAccess"[\s\S]*:request-room-snapshot="requestRoomSnapshot"[\s\S]*@grant-updated="applyLocalGrantUpdate"/,
+  'Call Apps sidebar must expose active session participant grants inside the left sidebar',
+);
+
+assert.match(
+  sidebarSource,
+  /localGrantOverrides[\s\S]*function applyLocalGrantUpdate\(event\)[\s\S]*localGrantOverrides\.value\s*=\s*\{/s,
+  'Call Apps sidebar must immediately reflect local grant toggles while waiting for snapshot backfill',
+);
+
+assert.match(
+  sidebarSource,
+  /@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto[\s\S]*\.call-apps-detail-grid[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/s,
+  'Call Apps sidebar must adapt list and detail grids at wider container sizes',
 );
 
 assert.match(

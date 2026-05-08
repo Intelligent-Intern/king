@@ -26,6 +26,7 @@ import {
   SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS,
   SfuOutboundWireBudget,
   resolveSfuSendDrainTargetBytes,
+  shouldBypassSfuWireBudgetForRecoveryKeyframe,
   shouldDropProjectedSfuFrameForBufferBudget,
 } from './outboundFrameBudget'
 import {
@@ -795,8 +796,8 @@ export class SFUClient {
   }
 
   private async sendPreparedEncodedFrame(prepared: PreparedSfuOutboundFramePayload, queuedAgeMs = 0): Promise<boolean> {
-    const metrics = this.metricsForPreparedFrame(prepared, { queued_age_ms: queuedAgeMs })
-    const bufferedBeforeSend = this.getWebSocketBufferedAmount()
+    let metrics = this.metricsForPreparedFrame(prepared, { queued_age_ms: queuedAgeMs })
+    let bufferedBeforeSend = this.getWebSocketBufferedAmount()
     if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -845,6 +846,27 @@ export class SFUClient {
     }
 
     const bufferedBudgetBytes = Math.max(0, Number(metrics.budget_max_buffered_bytes || 0))
+    const projectedWirePayloadBytes = Math.max(0, Number(metrics.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0))
+    const drainTargetBufferedBytes = resolveSfuSendDrainTargetBytes(metrics)
+    let drain: SendBufferDrainResult | null = null
+    const waitForProfileSendBufferDrain = async (reason: string): Promise<SendBufferDrainResult> => {
+      if (drain?.ok) return drain
+      drain = await this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)
+      metrics = {
+        ...metrics,
+        send_drain_ms: drain.waitedMs,
+        send_drain_target_buffered_bytes: drain.targetBufferedBytes,
+        send_drain_max_wait_ms: drain.maxWaitMs,
+        send_drain_reason: reason,
+        send_drain_buffered_amount: drain.bufferedAmount,
+      }
+      bufferedBeforeSend = Math.max(0, Number(drain.bufferedAmount || 0))
+      return drain
+    }
+
+    if (bufferedBudgetBytes > 0 && bufferedBeforeSend > bufferedBudgetBytes) {
+      await waitForProfileSendBufferDrain('pre_send_buffer_budget')
+    }
     if (bufferedBudgetBytes > 0 && bufferedBeforeSend > bufferedBudgetBytes) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -867,8 +889,11 @@ export class SFUClient {
       })
       return false
     }
-    const projectedWirePayloadBytes = Math.max(0, Number(metrics.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0))
-    const projectedBufferBudget = shouldDropProjectedSfuFrameForBufferBudget(metrics, bufferedBeforeSend, projectedWirePayloadBytes)
+    let projectedBufferBudget = shouldDropProjectedSfuFrameForBufferBudget(metrics, bufferedBeforeSend, projectedWirePayloadBytes)
+    if (projectedBufferBudget.drop) {
+      await waitForProfileSendBufferDrain('pre_send_projected_buffer_budget')
+      projectedBufferBudget = shouldDropProjectedSfuFrameForBufferBudget(metrics, bufferedBeforeSend, projectedWirePayloadBytes)
+    }
     if (projectedBufferBudget.drop) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -894,32 +919,44 @@ export class SFUClient {
     }
     const wireBudget = this.outboundWireBudget.decide(metrics, projectedWirePayloadBytes)
     if (!wireBudget.ok) {
-      this.reportFrameSendDiagnostic(
-        'sfu_frame_send_aborted',
-        'warning',
-        'SFU frame send dropped an encoded frame because it would exceed the active rolling wire budget.',
-        {
+      if (shouldBypassSfuWireBudgetForRecoveryKeyframe(metrics, wireBudget, bufferedBeforeSend, projectedWirePayloadBytes)) {
+        metrics = {
           ...metrics,
-          buffered_amount: bufferedBeforeSend,
+          wire_budget_recovery_keyframe_bypass: true,
           projected_wire_window_bytes: wireBudget.projectedWindowBytes,
           current_wire_window_bytes: wireBudget.currentWindowBytes,
           budget_max_wire_bytes_per_second: wireBudget.maxWireBytesPerSecond,
           wire_budget_window_ms: wireBudget.windowMs,
           wire_budget_retry_after_ms: wireBudget.retryAfterMs,
-          abort_reason: 'sfu_wire_rate_budget_exceeded',
-        },
-        true,
-      )
-      this.recordSendFailure(prepared, {
-        reason: 'sfu_wire_rate_budget_exceeded',
-        stage: 'browser_websocket_wire_rate_budget',
-        source: 'wire_rate_controller',
-        message: 'Encoded SFU frame would exceed the active rolling wire-byte budget.',
-        transportPath: 'binary_envelope',
-        bufferedAmount: bufferedBeforeSend,
-        retryAfterMs: wireBudget.retryAfterMs,
-      })
-      return false
+        }
+      } else {
+        this.reportFrameSendDiagnostic(
+          'sfu_frame_send_aborted',
+          'warning',
+          'SFU frame send dropped an encoded frame because it would exceed the active rolling wire budget.',
+          {
+            ...metrics,
+            buffered_amount: bufferedBeforeSend,
+            projected_wire_window_bytes: wireBudget.projectedWindowBytes,
+            current_wire_window_bytes: wireBudget.currentWindowBytes,
+            budget_max_wire_bytes_per_second: wireBudget.maxWireBytesPerSecond,
+            wire_budget_window_ms: wireBudget.windowMs,
+            wire_budget_retry_after_ms: wireBudget.retryAfterMs,
+            abort_reason: 'sfu_wire_rate_budget_exceeded',
+          },
+          true,
+        )
+        this.recordSendFailure(prepared, {
+          reason: 'sfu_wire_rate_budget_exceeded',
+          stage: 'browser_websocket_wire_rate_budget',
+          source: 'wire_rate_controller',
+          message: 'Encoded SFU frame would exceed the active rolling wire-byte budget.',
+          transportPath: 'binary_envelope',
+          bufferedAmount: bufferedBeforeSend,
+          retryAfterMs: wireBudget.retryAfterMs,
+        })
+        return false
+      }
     }
 
     this.reportFrameSendPressureIfNeeded({
@@ -927,11 +964,7 @@ export class SFUClient {
       buffered_amount: bufferedBeforeSend,
     })
 
-    const drainTargetBufferedBytes = resolveSfuSendDrainTargetBytes(metrics)
-    const drain = await this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)
-    metrics.send_drain_ms = drain.waitedMs
-    metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
-    metrics.send_drain_max_wait_ms = drain.maxWaitMs
+    drain = await waitForProfileSendBufferDrain(drain === null ? 'pre_send_low_water' : 'pre_send_budget_guard')
     if (!drain.ok) {
       const projectedBufferedAfterDrainTimeoutBytes = Math.max(0, drain.bufferedAmount) + projectedWirePayloadBytes
       const mayContinueWithinProfileBufferBudget = bufferedBudgetBytes <= 0

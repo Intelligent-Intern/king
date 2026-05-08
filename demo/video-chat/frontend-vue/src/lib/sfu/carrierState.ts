@@ -10,8 +10,8 @@
  * - degraded: missed heartbeats but not yet lost.
  * - lost: missed heartbeats or ack quorum failure for the carrier-loss window.
  *
- * Carrier-initiated reconnect is allowed only when state transitions to
- * `lost`.
+ * Reconnect is an ops-lane-only decision. Carrier-initiated reconnect is
+ * allowed only when state transitions to `lost`.
  */
 
 export type CarrierState = 'connected' | 'degraded' | 'lost'

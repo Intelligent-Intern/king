@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-capture-worker-boundary-contract] FAIL: ${message}`);
@@ -47,10 +48,8 @@ try {
   assert.equal(/\bfrom ['"]vue['"]/.test(combinedBoundarySource), false, 'capture worker boundary must not import Vue');
   assert.equal(/CallWorkspace|workspace\/callWorkspace|WorkspaceShell/.test(combinedBoundarySource), false, 'capture worker boundary must not import workspace state');
 
-  const protocolUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerProtocol.ts')).href;
-  const clientUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerClient.ts')).href;
-  const protocol = await import(protocolUrl);
-  const client = await import(clientUrl);
+  const protocol = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherCaptureWorkerProtocol.ts');
+  const client = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherCaptureWorkerClient.ts');
 
   const canvas = { marker: 'canvas' };
   const initMessage = protocol.buildPublisherCaptureWorkerInitMessage({ canvas, generation: 7 });

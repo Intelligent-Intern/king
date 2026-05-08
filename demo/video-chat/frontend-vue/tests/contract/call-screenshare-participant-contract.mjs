@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 import {
   SCREEN_SHARE_TRACK_LABEL,
@@ -10,10 +11,17 @@ import {
   screenShareOwnerOrUserId,
   screenShareUserIdForOwner,
 } from '../../src/domain/realtime/screenShareIdentity.js';
-import { selectCallLayoutParticipants } from '../../src/domain/realtime/layout/strategies.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const server = await createServer({
+  configFile: path.resolve(root, 'vite.config.js'),
+  logLevel: 'error',
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+});
+const { selectCallLayoutParticipants } = await server.ssrLoadModule('/src/domain/realtime/layout/strategies.ts');
+await server.close();
 
 const ownerUserId = 42;
 const screenUserId = screenShareUserIdForOwner(ownerUserId);
@@ -150,17 +158,35 @@ const screenSharePublisher = read('src/domain/realtime/local/screenSharePublishe
 assert.match(screenSharePublisher, /publishTracks\?\.\(\[\{[\s\S]*label: SCREEN_SHARE_TRACK_LABEL/, 'screen publisher announces a screen-share video track');
 assert.match(screenSharePublisher, /publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE/, 'screen publisher tags outbound frames with media source');
 assert.match(screenSharePublisher, /autoSubscribe: false/, 'screen publisher does not subscribe to other call media');
+assert.match(screenSharePublisher, /function screenShareProfileFrom/, 'screen publisher derives a bounded transport profile');
+assert.match(screenSharePublisher, /SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960/, 'screen-share capture width is capped below camera quality mode');
+assert.match(screenSharePublisher, /SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE = 6/, 'screen-share capture FPS is capped below camera quality mode');
+assert.match(screenSharePublisher, /SCREEN_SHARE_ENCODE_INTERVAL_MS = 250/, 'screen-share readback cadence is paced for stable binary transport');
+assert.match(screenSharePublisher, /SCREEN_SHARE_MAX_BUFFERED_BYTES = 1024 \* 1024/, 'screen-share socket buffer budget is below camera quality mode');
+assert.match(screenSharePublisher, /maxWireBytesPerSecond:[\s\S]*SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND/, 'screen-share profile caps wire budget independently from camera quality');
+assert.match(screenSharePublisher, /local_screen_share_capture_constraints_applied/, 'screen-share capture constraints emit diagnostics');
+assert.match(screenSharePublisher, /SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS = 5/, 'screen-share publisher retries transient SFU disconnects instead of ending capture immediately');
+assert.match(
+  screenSharePublisher,
+  /function scheduleScreenSfuReconnect[\s\S]*local_screen_share_sfu_reconnect_scheduled[\s\S]*await waitForScreenSfuConnected\(\);[\s\S]*local_screen_share_sfu_reconnected/s,
+  'screen-share publisher must reconnect the SFU socket and restart publishing without stopping capture',
+);
+assert.doesNotMatch(
+  screenSharePublisher,
+  /if \(!stopRequested && isActive\(\)\) \{\s*void stop\('disconnected'\);/,
+  'screen-share publisher must not stop active capture on a transient SFU disconnect',
+);
 assert.ok(
-  screenSharePublisher.indexOf('nextStream = await acquireScreenShareStream()')
+  screenSharePublisher.indexOf('nextStream = await acquireScreenShareStream(screenShareVideoProfile)')
     < screenSharePublisher.indexOf('Screen sharing needs the SFU media runtime.'),
   'browser screen-share prompt happens before SFU runtime routing validation',
 );
 
-const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
+const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
 assert.match(mediaOrchestration, /startScreenShareParticipant/, 'screen button delegates to participant publisher');
 assert.match(mediaOrchestration, /hasScreenShareParticipantPublisher/, 'screen share participant path bypasses camera replacement');
 
-const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
+const remotePeers = read('src/domain/realtime/sfu/remotePeers.ts');
 assert.match(remotePeers, /resolveScreenSharePeerIdentity/, 'remote peers map screen-share publishers to synthetic participants');
 assert.match(
   remotePeers,
@@ -183,7 +209,7 @@ assert.match(
   'own screen-share track announcements delete accidental decoded loopback peers instead of creating decoders',
 );
 
-const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
 assert.match(mediaStack, /registerLocalScreenSharePeer/, 'local sharer registers their own screen as a visible media participant');
 assert.match(mediaStack, /local_screen_share:\$\{normalizedOwnerUserId\}/, 'local screen-share preview uses a local publisher id');
 assert.match(mediaStack, /localScreenSharePreview: true/, 'local screen-share preview is tagged as local-only UI media');
@@ -199,7 +225,7 @@ assert.match(
 );
 assert.match(mediaStack, /unregisterLocalScreenSharePeer/, 'stopping screen share removes the local screen media participant');
 
-const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
+const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
 assert.match(runtimeHealth, /screenShareOwnerOrUserId/, 'runtime health can recover a real owner id from synthetic screen-share ids');
 assert.match(
   runtimeHealth,
@@ -212,7 +238,7 @@ assert.match(
   'screen-share peers that have already rendered are not treated as frozen camera video when the shared screen is static',
 );
 
-const nativePeerFactory = read('src/domain/realtime/native/peerFactory.js');
+const nativePeerFactory = read('src/domain/realtime/native/peerFactory.ts');
 assert.match(nativePeerFactory, /import \{ isScreenShareUserId \}/, 'native peer factory knows screen-share synthetic ids');
 assert.match(
   nativePeerFactory,
@@ -239,9 +265,9 @@ assert.ok(
 assert.match(screenSharePublisher, /ensureLocalScreenSharePreviewVideo/, 'screen-share publisher creates a local preview node before publishing frames');
 assert.match(screenSharePublisher, /callbacks\.unregisterLocalScreenSharePeer\?\.\(\{ reason \}\);/, 'local screen-share preview unregisters during stop cleanup');
 
-const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
 const callWorkspaceTemplate = read('src/domain/realtime/CallWorkspaceView.template.html');
-const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
+const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
 const screenSharePan = read('src/domain/realtime/workspace/callWorkspace/screenSharePan.js');
 const callWorkspaceStageCss = read('src/domain/realtime/CallWorkspaceStage.css');
 assert.match(participantUi, /function toggleVideoFullscreenForEvent/, 'fullscreen toggle can resolve the concrete media surface from the click event');
@@ -278,7 +304,7 @@ assert.match(screenSharePan, /addEventListener\('pointerdown'[\s\S]*addEventList
 assert.match(screenSharePan, /node\.dataset\.callScreenSharePanEnabled = '1'/, 'screen-share pan marks only enabled screen-share surfaces');
 assert.match(callWorkspaceStageCss, /\[data-call-screen-share-pan-enabled="1"\][\s\S]*object-fit: cover !important/, 'screen-share pan surfaces use a movable cropped fit');
 
-const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const screenShareFrameIdentity = read('src/domain/realtime/sfu/screenShareFrameIdentity.js');
 const decodeStart = frameDecode.indexOf('async function decodeSfuFrameForPeer');
 const publisherUserIdDeclaration = frameDecode.indexOf('const publisherUserId = Number(frame?.publisherUserId || 0);', decodeStart);

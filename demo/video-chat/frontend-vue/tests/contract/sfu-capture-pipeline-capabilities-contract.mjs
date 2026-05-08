@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 function fail(message) {
   throw new Error(`[sfu-capture-pipeline-capabilities-contract] FAIL: ${message}`);
@@ -101,12 +102,18 @@ try {
   requireContains(captureProfileConstraints, 'detectPublisherCapturePipelineCapabilities()', 'local capture diagnostics probe browser capability state');
   requireContains(captureProfileConstraints, 'publisherCaptureCapabilityDiagnosticPayload(captureCapabilities)', 'local capture diagnostics include capability payload');
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/capturePipelineCapabilities.ts')).href;
+  const server = await createServer({
+    configFile: path.resolve(frontendRoot, 'vite.config.js'),
+    logLevel: 'error',
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+  });
   const {
     PUBLISHER_CAPTURE_BACKENDS,
     detectPublisherCapturePipelineCapabilities,
     publisherCaptureCapabilityDiagnosticPayload,
-  } = await import(moduleUrl);
+  } = await server.ssrLoadModule('/src/domain/realtime/local/capturePipelineCapabilities.ts');
+  await server.close();
 
   const full = detectPublisherCapturePipelineCapabilities({
     globalScope: {

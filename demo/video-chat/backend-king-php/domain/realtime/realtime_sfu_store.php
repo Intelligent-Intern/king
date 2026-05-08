@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/realtime_sfu_binary_payload.php';
 require_once __DIR__ . '/realtime_sfu_frame_buffer.php';
 require_once __DIR__ . '/realtime_sfu_iibin.php';
+require_once __DIR__ . '/realtime_sfu_operations_mirror.php';
 require_once __DIR__ . '/realtime_sfu_recovery_requests.php';
 require_once __DIR__ . '/realtime_sfu_subscriber_budget.php';
 
@@ -51,6 +52,22 @@ function videochat_sfu_binary_frame_layout_envelope_version(): int
 function videochat_sfu_binary_continuation_threshold_bytes(): int
 {
     return 65_535;
+}
+
+function videochat_sfu_binary_send_pacing_delay_us(int $wirePayloadBytes, array $sendContext = []): int
+{
+    if ($wirePayloadBytes <= videochat_sfu_binary_continuation_threshold_bytes()) {
+        return 0;
+    }
+
+    $sendPath = strtolower(trim((string) ($sendContext['sfu_send_path'] ?? '')));
+    $continuationCount = max(1, (int) ceil($wirePayloadBytes / videochat_sfu_binary_continuation_threshold_bytes()));
+    $baseDelayUs = $continuationCount * 750;
+    if ($sendPath === 'sqlite_frame_buffer_poll') {
+        $baseDelayUs += 1_500;
+    }
+
+    return min(12_000, max(1_500, $baseDelayUs));
 }
 
 function videochat_sfu_wlvc_js_asset_version(): string
@@ -211,6 +228,7 @@ function videochat_sfu_ensure_column(PDO $pdo, string $tableName, string $column
 
 function videochat_sfu_upsert_publisher(PDO $pdo, string $roomId, string $publisherId, string $userId, string $userName): void
 {
+    $updatedAtMs = videochat_sfu_now_ms();
     $statement = $pdo->prepare(
         <<<'SQL'
 INSERT INTO sfu_publishers(room_id, publisher_id, user_id, user_name, updated_at_ms)
@@ -226,8 +244,9 @@ SQL
         ':publisher_id' => $publisherId,
         ':user_id' => $userId,
         ':user_name' => $userName,
-        ':updated_at_ms' => videochat_sfu_now_ms(),
+        ':updated_at_ms' => $updatedAtMs,
     ]);
+    videochat_sfu_mirror_upsert_publisher($roomId, $publisherId, $userId, $userName, $updatedAtMs);
 }
 
 function videochat_sfu_remove_publisher(PDO $pdo, string $roomId, string $publisherId): void
@@ -238,10 +257,12 @@ function videochat_sfu_remove_publisher(PDO $pdo, string $roomId, string $publis
     $deleteFrames->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
     $deletePublisher = $pdo->prepare('DELETE FROM sfu_publishers WHERE room_id = :room_id AND publisher_id = :publisher_id');
     $deletePublisher->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
+    videochat_sfu_mirror_remove_publisher($roomId, $publisherId);
 }
 
 function videochat_sfu_upsert_track(PDO $pdo, string $roomId, string $publisherId, string $trackId, string $kind, string $label): void
 {
+    $updatedAtMs = videochat_sfu_now_ms();
     $statement = $pdo->prepare(
         <<<'SQL'
 INSERT INTO sfu_tracks(room_id, publisher_id, track_id, kind, label, updated_at_ms)
@@ -258,24 +279,28 @@ SQL
         ':track_id' => $trackId,
         ':kind' => $kind,
         ':label' => $label,
-        ':updated_at_ms' => videochat_sfu_now_ms(),
+        ':updated_at_ms' => $updatedAtMs,
     ]);
+    videochat_sfu_mirror_upsert_track($roomId, $publisherId, $trackId, $kind, $label, $updatedAtMs);
 }
 
 function videochat_sfu_touch_publisher(PDO $pdo, string $roomId, string $publisherId): void
 {
+    $updatedAtMs = videochat_sfu_now_ms();
     $statement = $pdo->prepare(
         'UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id'
     );
     $statement->execute([
         ':room_id' => $roomId,
         ':publisher_id' => $publisherId,
-        ':updated_at_ms' => videochat_sfu_now_ms(),
+        ':updated_at_ms' => $updatedAtMs,
     ]);
+    videochat_sfu_mirror_touch_publisher($roomId, $publisherId, $updatedAtMs);
 }
 
 function videochat_sfu_touch_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
 {
+    $updatedAtMs = videochat_sfu_now_ms();
     $statement = $pdo->prepare(
         'UPDATE sfu_tracks SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id AND track_id = :track_id'
     );
@@ -283,8 +308,9 @@ function videochat_sfu_touch_track(PDO $pdo, string $roomId, string $publisherId
         ':room_id' => $roomId,
         ':publisher_id' => $publisherId,
         ':track_id' => $trackId,
-        ':updated_at_ms' => videochat_sfu_now_ms(),
+        ':updated_at_ms' => $updatedAtMs,
     ]);
+    videochat_sfu_mirror_touch_track($roomId, $publisherId, $trackId, $updatedAtMs);
 }
 
 function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
@@ -293,6 +319,7 @@ function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherI
         'DELETE FROM sfu_tracks WHERE room_id = :room_id AND publisher_id = :publisher_id AND track_id = :track_id'
     );
     $statement->execute([':room_id' => $roomId, ':publisher_id' => $publisherId, ':track_id' => $trackId]);
+    videochat_sfu_mirror_remove_track($roomId, $publisherId, $trackId);
 }
 
 /**
@@ -574,15 +601,20 @@ function videochat_sfu_send_outbound_message(mixed $socket, array $payload, arra
     if ($type === 'sfu/frame') {
         $binaryPayload = videochat_sfu_encode_binary_frame_envelope($payload);
         $wirePayloadBytes = is_string($binaryPayload) ? strlen($binaryPayload) : 0;
+        $pacingDelayUs = videochat_sfu_binary_send_pacing_delay_us($wirePayloadBytes, $sendContext);
         $transportMetrics = [
             'transport_path' => 'binary_required',
             'binary_media_required' => true,
+            'binary_send_pacing_delay_ms' => $pacingDelayUs > 0 ? round($pacingDelayUs / 1000, 3) : 0,
             ...$sendContext,
             ...videochat_sfu_transport_metric_fields($payload, $wirePayloadBytes),
         ];
         if (is_string($binaryPayload) && $binaryPayload !== '') {
             try {
-                if (king_websocket_send($socket, $binaryPayload, true) === true) {
+                if ($pacingDelayUs > 0) {
+                    usleep($pacingDelayUs);
+                }
+                if (@king_websocket_send($socket, $binaryPayload, true) === true) {
                     videochat_sfu_log_runtime_event('sfu_frame_binary_send_sample', $transportMetrics, 3000);
                     return true;
                 }

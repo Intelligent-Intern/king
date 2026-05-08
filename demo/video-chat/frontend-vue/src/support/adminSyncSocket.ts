@@ -14,7 +14,7 @@ const MAX_PENDING_PUBLISHES = 20;
 
 function normalizeTopic(value) {
   const topic = String(value || '').trim().toLowerCase();
-  if (topic === 'calls' || topic === 'users' || topic === 'overview') {
+  if (topic === 'calls' || topic === 'users' || topic === 'overview' || topic === 'calendar') {
     return topic;
   }
   return 'all';

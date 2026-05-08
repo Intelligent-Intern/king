@@ -33,6 +33,7 @@ async function main() {
   const dashboardEnterCall = read('src/domain/calls/dashboard/enterCall.ts');
   const adminEnterCall = read('src/domain/calls/admin/enterCall.ts');
   const workspaceShell = read('src/layouts/WorkspaceShell.vue');
+  const workspaceMicLevelMonitor = read('src/layouts/useWorkspaceMicLevelMonitor.js');
   const mediaPreferences = read('src/domain/realtime/media/preferences.ts');
   const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
   const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
@@ -54,6 +55,9 @@ async function main() {
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'strict')", 'strict local media acquisition enforces capture constraints after browser selection');
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'loose_retry')", 'loose local media retry enforces capture constraints after browser selection');
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'boolean_fallback')", 'boolean getUserMedia fallback still enforces capture constraints after browser selection');
+  requireContains(mediaOrchestration, 'function acquireAudioOnlyLocalMediaStream', 'local media capture keeps microphone audio alive when browser video capture fails');
+  requireContains(mediaOrchestration, 'getUserMedia({ video: false, audio: audioOnlyConstraints })', 'audio-only fallback explicitly avoids the failed video source');
+  requireContains(mediaOrchestration, "eventType: 'local_media_audio_only_fallback_started'", 'audio-only fallback reports diagnostics for live call triage');
   requireContains(captureProfileConstraints, 'sfu_local_capture_constraints_applied', 'capture profile constraints report applied capture settings');
   requireContains(mediaOrchestration, 'buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId)', 'local media constraints request browser echo cancellation for selected microphones');
   requireContains(mediaOrchestration, 'buildOptionalCallAudioCaptureConstraints(wantsAudio)', 'loose local media retry keeps echo cancellation enabled');
@@ -66,7 +70,7 @@ async function main() {
     accessJoinView,
     dashboardEnterCall,
     adminEnterCall,
-    workspaceShell,
+    workspaceShell: `${workspaceShell}\n${workspaceMicLevelMonitor}`,
     mediaPreferences,
   })) {
     requireContains(source, 'buildOptionalCallAudioCaptureConstraints', `${label} uses shared call audio capture constraints`);

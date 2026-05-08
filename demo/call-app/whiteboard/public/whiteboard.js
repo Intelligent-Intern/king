@@ -5,7 +5,7 @@
   const boardHeight = 900;
   const colors = ['#1582bf', '#59c7f2', '#00652f', '#f47221', '#ef4423', '#000010'];
   const presenceThrottleMs = {
-    'cursor.move': 600,
+    'cursor.move': 120,
     'selection.update': 250,
   };
   const canvas = document.getElementById('board');
@@ -30,6 +30,7 @@
   let callId = '';
   let documentId = '';
   let actorId = '';
+  let participantLabel = 'User';
   let grantState = 'denied';
   let capabilities = new Set();
   let activeTool = 'pen';
@@ -52,6 +53,11 @@
 
   function canRead() {
     return grantState === 'allowed' && capabilities.has('call_apps.crdt.read');
+  }
+
+  function displayNameLabel(value, fallback = 'User') {
+    const label = String(value || '').trim() || fallback;
+    return label.slice(0, 48);
   }
 
   function setStatus(message) {
@@ -135,9 +141,15 @@
   }
 
   function applyPresence(payloadType, payload = {}, sourceActorId = actorId) {
-    const withActor = { ...payload, actor_id: sourceActorId };
-    if (payloadType === 'cursor.move') state.cursors.set(sourceActorId, withActor);
-    if (payloadType === 'selection.update') state.selections.set(sourceActorId, withActor);
+    const normalizedActorId = String(sourceActorId || payload.actor_id || '').trim();
+    if (!normalizedActorId) return;
+    const withActor = {
+      ...payload,
+      actor_id: normalizedActorId,
+      label: displayNameLabel(payload.label || payload.display_name, normalizedActorId.slice(5, 11) || 'User'),
+    };
+    if (payloadType === 'cursor.move') state.cursors.set(normalizedActorId, withActor);
+    if (payloadType === 'selection.update') state.selections.set(normalizedActorId, withActor);
     render();
   }
 
@@ -147,11 +159,18 @@
     const throttleMs = Number(presenceThrottleMs[payloadType] || 500);
     if (now - Number(lastPresenceSentAt.get(payloadType) || 0) < throttleMs) return false;
     lastPresenceSentAt.set(payloadType, now);
-    applyPresence(payloadType, payload, actorId);
+    const outgoingPayload = {
+      ...payload,
+      actor_id: actorId,
+      display_name: participantLabel,
+    };
+    if (payloadType === 'cursor.move') outgoingPayload.label = participantLabel;
+    applyPresence(payloadType, outgoingPayload, actorId);
     emit('call_app.presence.publish', {
       request_id: operationId('presence'),
       payload_type: payloadType,
-      payload,
+      actor_id: actorId,
+      payload: outgoingPayload,
     });
     return true;
   }
@@ -292,7 +311,10 @@
   }
 
   function drawCursor(targetCtx, cursor) {
+    const label = displayNameLabel(cursor.label || cursor.display_name);
     targetCtx.save();
+    targetCtx.font = '700 18px Nunito, system-ui, sans-serif';
+    const labelWidth = Math.min(220, targetCtx.measureText(label).width + 20);
     targetCtx.strokeStyle = cursor.color || '#1582bf';
     targetCtx.fillStyle = cursor.color || '#1582bf';
     targetCtx.lineWidth = 3;
@@ -302,8 +324,10 @@
     targetCtx.lineTo(cursor.x + 6, cursor.y + 24);
     targetCtx.closePath();
     targetCtx.fill();
-    targetCtx.font = '700 18px Nunito, system-ui, sans-serif';
-    targetCtx.fillText(String(cursor.label || 'User'), cursor.x + 24, cursor.y + 28);
+    targetCtx.fillStyle = 'rgba(0, 0, 16, 0.78)';
+    targetCtx.fillRect(cursor.x + 22, cursor.y + 8, labelWidth, 28);
+    targetCtx.fillStyle = '#ffffff';
+    targetCtx.fillText(label, cursor.x + 32, cursor.y + 28);
     targetCtx.restore();
   }
 
@@ -555,7 +579,9 @@
       x: point.x,
       y: point.y,
       color: activeColor,
-      label: actorId ? actorId.slice(5, 11) : 'User',
+      actor_id: actorId,
+      display_name: participantLabel,
+      label: participantLabel,
     });
   }
 
@@ -682,6 +708,7 @@
       const context = message.launch_context || {};
       grantState = String(context.grant_state || 'denied');
       actorId = String(context.participant?.actor_id || '');
+      participantLabel = displayNameLabel(context.participant?.display_name, actorId ? actorId.slice(5, 11) : 'User');
       capabilities = new Set(Array.isArray(message.capabilities) ? message.capabilities : []);
       emit('call_app.ready', {
         app_session_id: appSessionId,

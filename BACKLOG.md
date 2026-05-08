@@ -59,12 +59,11 @@ Rules:
 2. [ ] Right-sidebar/forms: roll the shared side-panel form state/submit footer beyond the Governance, Marketplace, and User editor proof surfaces, then close any remaining route-specific close/cancel variants after contract review.
 3. [ ] Governance/User Management: finish breadcrumb/draft-create extraction and broader recursive-flow browser proof; relation navigator, picker table, row sectioning, shared Governance relationship payload normalizer, and User -> Group -> Module -> Permission contracts are now pinned.
 4. [ ] Settings/Profile: extract settings registry and shared section frame; credentials and merged localization/date/time panels are now extracted and contract-pinned.
-5. [ ] Administration/App Configuration: finish background image dropzone/crop queue; email server settings and email texts CRUD controller/table/editor are now extracted and contract-pinned, and object-store upload diagnostics remain contract-pinned.
-6. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-7. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
-8. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
-9. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
-10. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
+5. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
+6. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
+7. [ ] Localization/Admin text: extract the remaining API/state composable and broader save proof; the two-locale editor matrix, locale pair selectors, entry matrix, CSV-free active path, and existing save route wiring are now contract-pinned.
+8. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
+9. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
 
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 

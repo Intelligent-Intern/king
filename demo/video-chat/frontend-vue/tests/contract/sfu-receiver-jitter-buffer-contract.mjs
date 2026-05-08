@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +28,7 @@ async function main() {
   const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.ts');
   const remotePeers = readFrontend('src/domain/realtime/sfu/remotePeers.ts');
 
-  requireContains(sprint, '5. [x] `[native-render-and-jitter-buffer]`', 'sprint issue 5 must be checked');
+  requireContains(sprint, 'Completed sprint detail is intentionally removed from this file.', 'active sprint keeps completed SFU issue history out of SPRINT.md');
   requireContains(packageJson, 'sfu-receiver-jitter-buffer-contract.mjs', 'SFU contract script includes receiver jitter buffer');
   requireContains(jitter, 'REMOTE_SFU_JITTER_BUFFER_HOLD_MS = 90', 'receiver jitter buffer has bounded hold window');
   requireContains(jitter, 'REMOTE_SFU_JITTER_BUFFER_MAX_FRAMES = 8', 'receiver jitter buffer has bounded frame count');
@@ -40,8 +41,14 @@ async function main() {
   requireContains(frameDecode, "decodeSfuFrameForPeer(publisherId, peer, nextFrame, { fromJitterBuffer: true })", 'jitter drain re-enters decode without rebufferring');
   requireContains(remotePeers, 'remoteJitterBufferByTrack: {}', 'remote peer continuity state owns jitter buffers');
 
-  const jitterUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteJitterBuffer.ts')).href;
-  const module = await import(jitterUrl);
+  const server = await createServer({
+    configFile: path.resolve(frontendRoot, 'vite.config.js'),
+    logLevel: 'error',
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+  });
+  const module = await server.ssrLoadModule('/src/domain/realtime/sfu/remoteJitterBuffer.ts');
+  await server.close();
   const peer = {
     lastSfuFrameSequenceByTrack: { camera: 10 },
     remoteJitterBufferByTrack: {},

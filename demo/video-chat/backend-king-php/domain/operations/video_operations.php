@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../realtime/realtime_sfu_gateway.php';
 require_once __DIR__ . '/../realtime/realtime_sfu_store.php';
 
 /**
@@ -23,6 +24,7 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
     videochat_realtime_presence_db_prune($pdo, $nowMs);
 
     $rows = videochat_video_operations_fetch_live_call_rows($pdo, $nowMs);
+    $sfuPublisherCounts = videochat_video_operations_fetch_sfu_publisher_counts($pdo, $nowMs);
     $runningCalls = [];
     $concurrentParticipants = 0;
 
@@ -37,10 +39,15 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
         $ownerEmail = videochat_video_operations_string($row['owner_email'] ?? '');
         $ownerDisplayName = videochat_video_operations_string($row['owner_display_name'] ?? '');
         $host = $ownerDisplayName !== '' ? $ownerDisplayName : $ownerEmail;
+        $roomId = videochat_video_operations_string($row['room_id'] ?? '');
+        $sfuCounts = $sfuPublisherCounts[$roomId] ?? [
+            'publishers' => videochat_video_operations_int($row['sfu_publishers'] ?? 0),
+            'publisher_users' => videochat_video_operations_int($row['sfu_publisher_users'] ?? 0),
+        ];
 
         $runningCalls[] = [
             'id' => videochat_video_operations_string($row['id'] ?? ''),
-            'room_id' => videochat_video_operations_string($row['room_id'] ?? ''),
+            'room_id' => $roomId,
             'title' => videochat_video_operations_string($row['title'] ?? 'Untitled call'),
             'status' => 'live',
             'call_status' => videochat_video_operations_string($row['status'] ?? 'scheduled'),
@@ -56,8 +63,8 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
                 'external' => videochat_video_operations_int($row['live_external'] ?? 0),
             ],
             'sfu' => [
-                'publishers' => videochat_video_operations_int($row['sfu_publishers'] ?? 0),
-                'publisher_users' => videochat_video_operations_int($row['sfu_publisher_users'] ?? 0),
+                'publishers' => videochat_video_operations_int($sfuCounts['publishers'] ?? 0),
+                'publisher_users' => videochat_video_operations_int($sfuCounts['publisher_users'] ?? 0),
             ],
             'assigned_participants' => [
                 'total' => videochat_video_operations_int($row['assigned_total'] ?? 0),
@@ -100,6 +107,107 @@ function videochat_video_operations_sfu_transport_snapshot(PDO $pdo, int $nowMs)
         'frame_kinds' => [],
         'storage' => 'disabled',
     ];
+}
+
+/**
+ * @return array<string, array{publishers: int, publisher_users: int}>
+ */
+function videochat_video_operations_fetch_sfu_publisher_counts(PDO $pdo, int $nowMs): array
+{
+    $freshnessMs = videochat_realtime_presence_db_ttl_ms();
+    $cutoffMs = max(0, $nowMs - $freshnessMs);
+    $publishersByRoom = [];
+    $usersByRoom = [];
+
+    foreach (videochat_video_operations_sfu_databases($pdo) as $sfuPdo) {
+        foreach (videochat_video_operations_fetch_sfu_publisher_rows($sfuPdo, $cutoffMs) as $row) {
+            $roomId = videochat_video_operations_normalize_sfu_room_id(
+                videochat_video_operations_string($row['room_id'] ?? '')
+            );
+            $publisherId = videochat_video_operations_string($row['publisher_id'] ?? '');
+            $userId = videochat_video_operations_string($row['user_id'] ?? '');
+            if ($roomId === '' || $publisherId === '') {
+                continue;
+            }
+            $publishersByRoom[$roomId][$publisherId] = true;
+            if ($userId !== '') {
+                $usersByRoom[$roomId][$userId] = true;
+            }
+        }
+    }
+
+    $roomIds = array_unique(array_merge(array_keys($publishersByRoom), array_keys($usersByRoom)));
+    $counts = [];
+    foreach ($roomIds as $roomId) {
+        $counts[$roomId] = [
+            'publishers' => count($publishersByRoom[$roomId] ?? []),
+            'publisher_users' => count($usersByRoom[$roomId] ?? []),
+        ];
+    }
+    return $counts;
+}
+
+/**
+ * @return array<int, PDO>
+ */
+function videochat_video_operations_sfu_databases(PDO $mainPdo): array
+{
+    $databases = [$mainPdo];
+    $brokerPath = function_exists('videochat_sfu_broker_database_path') ? videochat_sfu_broker_database_path() : '';
+    $mainPath = trim((string) (getenv('VIDEOCHAT_KING_DB_PATH') ?: ''));
+    if ($brokerPath === '' || ($mainPath !== '' && $brokerPath === $mainPath)) {
+        return $databases;
+    }
+    if (!is_file($brokerPath) || !is_readable($brokerPath)) {
+        return $databases;
+    }
+
+    try {
+        $brokerPdo = new PDO('sqlite:' . $brokerPath);
+        $brokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $databases[] = $brokerPdo;
+    } catch (Throwable) {
+        // Operations should keep reporting main realtime presence even when
+        // the SFU broker snapshot is transiently unavailable.
+    }
+
+    return $databases;
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_video_operations_fetch_sfu_publisher_rows(PDO $pdo, int $cutoffMs): array
+{
+    try {
+        videochat_sfu_bootstrap($pdo);
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT room_id, publisher_id, user_id
+FROM sfu_publishers
+WHERE updated_at_ms >= :cutoff_ms
+SQL
+        );
+        $statement->execute([':cutoff_ms' => $cutoffMs]);
+        $rows = $statement instanceof PDOStatement ? $statement->fetchAll(PDO::FETCH_ASSOC) : [];
+        return is_array($rows) ? array_values(array_filter($rows, 'is_array')) : [];
+    } catch (Throwable) {
+        return [];
+    }
+}
+
+function videochat_video_operations_normalize_sfu_room_id(string $roomId): string
+{
+    $normalized = trim($roomId);
+    if ($normalized === '') {
+        return '';
+    }
+    $marker = ':room:';
+    $position = strpos($normalized, $marker);
+    if (str_starts_with($normalized, 'tenant:') && $position !== false) {
+        $normalized = substr($normalized, $position + strlen($marker));
+    }
+    return trim($normalized);
 }
 
 /**

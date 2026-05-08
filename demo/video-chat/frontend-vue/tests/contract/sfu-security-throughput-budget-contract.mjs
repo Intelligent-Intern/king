@@ -2,9 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import { createMediaSecuritySession } from '../../src/domain/realtime/media/security.ts';
-import { measureProtectedSfuFrameBudget } from '../../src/domain/realtime/media/protectedFrameBudget.ts';
+import { createServer } from 'vite';
 
 function fail(message) {
   throw new Error(`[sfu-security-throughput-budget-contract] FAIL: ${message}`);
@@ -23,6 +21,25 @@ function read(relativePath) {
 }
 
 async function main() {
+  const server = await createServer({
+    configFile: path.resolve(frontendRoot, 'vite.config.js'),
+    logLevel: 'error',
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+  });
+  let mediaSecurityModule;
+  let protectedFrameBudgetModule;
+  try {
+    [mediaSecurityModule, protectedFrameBudgetModule] = await Promise.all([
+      server.ssrLoadModule('/src/domain/realtime/media/security.ts'),
+      server.ssrLoadModule('/src/domain/realtime/media/protectedFrameBudget.ts'),
+    ]);
+  } finally {
+    await server.close();
+  }
+  const { createMediaSecuritySession } = mediaSecurityModule;
+  const { measureProtectedSfuFrameBudget } = protectedFrameBudgetModule;
+
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
@@ -35,7 +52,7 @@ async function main() {
   requireContains(protectedBudget, 'protected_envelope_bytes', 'protected envelope byte metric');
   requireContains(protectedBudget, 'protection_overhead_bytes', 'protected overhead byte metric');
   requireContains(protectedBudget, 'protection_overhead_ratio', 'protected overhead ratio metric');
-  requireContains(workspaceConfig, 'maxEncodedBytesPerFrame: 2048 * 1024', 'rescue profile has explicit encoded-byte budget');
+  requireContains(workspaceConfig, 'maxEncodedBytesPerFrame: 1024 * 1024', 'rescue profile has explicit encoded-byte budget');
   requireContains(publisherPipeline, 'measureProtectedSfuFrameBudget({ protectedFrame, plaintextBytes: encodedPayloadBytes, maxPayloadBytes: maxEncodedPayloadBytes })', 'publisher measures protected frame overhead before send');
   requireContains(publisherPipeline, "reason: 'sfu_protected_media_budget_pressure'", 'publisher drops protected frames that exceed the active budget');
   requireContains(runtimeSwitching, "'sfu_protected_media_budget_pressure'", 'protected overhead pressure bypasses downgrade cooldown');

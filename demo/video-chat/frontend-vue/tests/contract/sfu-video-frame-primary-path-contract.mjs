@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-video-frame-primary-path-contract] FAIL: ${message}`);
@@ -71,8 +72,7 @@ try {
 
   requireContains(packageJson, 'sfu-video-frame-primary-path-contract.mjs', 'SFU contract suite includes VideoFrame primary path proof');
 
-  const sourceUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameSource.ts')).href;
-  const sourceModule = await import(sourceUrl);
+  const sourceModule = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherVideoFrameSource.ts');
 
   assert.equal(sourceModule.canUsePublisherVideoFrameSource({
     supportsMediaStreamTrackProcessor: true,

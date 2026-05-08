@@ -40,7 +40,7 @@ function videochat_admin_sync_decode_client_frame(string $frame): array
     }
 
     $topic = strtolower(trim((string) ($decoded['topic'] ?? 'all')));
-    if (!in_array($topic, ['all', 'calls', 'users', 'overview'], true)) {
+    if (!in_array($topic, ['all', 'calls', 'users', 'overview', 'calendar'], true)) {
         $topic = 'all';
     }
 
@@ -83,16 +83,17 @@ function videochat_admin_sync_publish(
     }
 
     $sourceRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
-    if ($sourceRole !== 'admin') {
+    $topic = strtolower(trim((string) ($command['topic'] ?? 'all')));
+    if (!in_array($topic, ['all', 'calls', 'users', 'overview', 'calendar'], true)) {
+        $topic = 'all';
+    }
+
+    $calendarUserPublish = $topic === 'calendar' && in_array($sourceRole, ['admin', 'user'], true);
+    if ($sourceRole !== 'admin' && !$calendarUserPublish) {
         return [
             'ok' => false,
             'error' => 'unauthorized',
         ];
-    }
-
-    $topic = strtolower(trim((string) ($command['topic'] ?? 'all')));
-    if (!in_array($topic, ['all', 'calls', 'users', 'overview'], true)) {
-        $topic = 'all';
     }
 
     $reason = trim((string) ($command['reason'] ?? 'updated'));

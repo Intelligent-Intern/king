@@ -28,7 +28,7 @@ try {
   const store = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   const packageJson = readRepo('demo/video-chat/frontend-vue/package.json');
 
-  requireContains(sprint, '[x] `[sfu-control-data-plane-split]`', 'sprint closes the control/data split issue');
+  requireContains(sprint, 'Completed sprint detail is intentionally removed from this file.', 'active sprint keeps completed SFU issue history out of SPRINT.md');
   requireContains(mediaTransport, 'SFU_CONTROL_TRANSPORT_WEBSOCKET', 'control transport has a named websocket id');
   requireContains(mediaTransport, 'SFU_MEDIA_TRANSPORT_WEBSOCKET_FALLBACK', 'media transport has a named fallback id');
   requireContains(mediaTransport, 'class SfuWebSocketFallbackMediaTransport', 'websocket media fallback is isolated behind a transport class');

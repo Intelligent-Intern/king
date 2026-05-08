@@ -94,6 +94,67 @@ function videochat_call_app_marketplace_row(array $row): array
     ];
 }
 
+function videochat_admin_call_app_catalog_match_value(mixed $value): string
+{
+    return strtolower(trim((string) $value));
+}
+
+function videochat_admin_call_app_catalog_signature(array $row, bool $includeManufacturer = true): string
+{
+    $parts = [
+        videochat_admin_call_app_catalog_match_value($row['name'] ?? ''),
+        videochat_admin_call_app_catalog_match_value($row['category'] ?? ''),
+    ];
+    if ($includeManufacturer) {
+        $parts[] = videochat_admin_call_app_catalog_match_value($row['manufacturer'] ?? '');
+    }
+
+    return implode("\n", $parts);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_admin_call_app_catalog_summary(array $catalogApp): array
+{
+    return [
+        'app_key' => (string) ($catalogApp['app_key'] ?? ''),
+        'version' => (string) ($catalogApp['version'] ?? ''),
+        'name' => (string) ($catalogApp['name'] ?? ''),
+        'category' => (string) ($catalogApp['category'] ?? 'other'),
+        'manufacturer' => (string) ($catalogApp['manufacturer'] ?? ''),
+        'health_status' => (string) ($catalogApp['health_status'] ?? 'unknown'),
+        'metadata_hash' => (string) ($catalogApp['metadata_hash'] ?? ''),
+        'organization' => is_array($catalogApp['organization'] ?? null) ? $catalogApp['organization'] : null,
+    ];
+}
+
+/**
+ * @param array<int, array<string, mixed>> $rows
+ * @param array<int, array<string, mixed>> $catalogApps
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_admin_call_app_attach_catalog_entries(array $rows, array $catalogApps): array
+{
+    $exact = [];
+    $nameCategory = [];
+    foreach ($catalogApps as $catalogApp) {
+        if (!is_array($catalogApp) || trim((string) ($catalogApp['app_key'] ?? '')) === '') {
+            continue;
+        }
+        $exact[videochat_admin_call_app_catalog_signature($catalogApp, true)] = $catalogApp;
+        $nameCategory[videochat_admin_call_app_catalog_signature($catalogApp, false)] = $catalogApp;
+    }
+
+    return array_map(static function (array $row) use ($exact, $nameCategory): array {
+        $match = $exact[videochat_admin_call_app_catalog_signature($row, true)]
+            ?? $nameCategory[videochat_admin_call_app_catalog_signature($row, false)]
+            ?? null;
+        $row['call_app_catalog'] = is_array($match) ? videochat_admin_call_app_catalog_summary($match) : null;
+        return $row;
+    }, $rows);
+}
+
 /**
  * @return array{rows: array<int, array<string, mixed>>, total: int, page_count: int}
  */

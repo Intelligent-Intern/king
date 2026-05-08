@@ -118,12 +118,41 @@
       <p v-if="actionError" class="call-apps-error">{{ actionError }}</p>
       <p v-if="notice" class="call-apps-notice">{{ notice }}</p>
     </section>
+
+    <section v-if="activeSessionForAccess" class="call-apps-access" aria-label="Call App participant access">
+      <div class="call-apps-access-head">
+        <h2>Access</h2>
+        <span>{{ activeSessionName }}</span>
+      </div>
+      <div v-if="callAppAccessParticipants.length > 0" class="call-apps-access-list">
+        <div
+          v-for="participant in callAppAccessParticipants"
+          :key="participant.userId"
+          class="call-apps-access-row"
+        >
+          <span class="call-apps-access-main">
+            <span class="call-apps-access-name">{{ participant.displayName }}</span>
+            <span class="call-apps-access-state">{{ grantStateLabel(participant) }}</span>
+          </span>
+          <CallAppParticipantGrantButton
+            :session="activeSessionForAccess"
+            :row="participant"
+            :can-manage="canManage"
+            :api-request="apiRequest"
+            :send-socket-frame="sendSocketFrame"
+            :request-room-snapshot="requestRoomSnapshot"
+            @grant-updated="applyLocalGrantUpdate"
+          />
+        </div>
+      </div>
+    </section>
   </section>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import CallAppParticipantGrantButton from './CallAppParticipantGrantButton.vue';
 import { useCallAppsCatalog } from './useCallAppsCatalog.js';
 
 const props = defineProps({
@@ -138,6 +167,22 @@ const props = defineProps({
   apiRequest: {
     type: Function,
     required: true,
+  },
+  activeSession: {
+    type: Object,
+    default: null,
+  },
+  participants: {
+    type: Array,
+    default: () => [],
+  },
+  sendSocketFrame: {
+    type: Function,
+    default: () => false,
+  },
+  requestRoomSnapshot: {
+    type: Function,
+    default: () => {},
   },
 });
 
@@ -158,11 +203,41 @@ const defaultPolicy = ref('blocked_by_default');
 const submitting = ref(false);
 const actionError = ref('');
 const notice = ref('');
+const localGrantOverrides = ref({});
 
 const normalizedCallId = computed(() => String(props.callId || '').trim());
 const hasCallContext = computed(() => normalizedCallId.value !== '');
 const pageCount = computed(() => Math.max(1, Number(pagination.value.page_count || 1)));
 const selectedApp = computed(() => availableApps.value.find((app) => app.app_key === selectedAppKey.value) || null);
+const activeSessionForAccess = computed(() => {
+  const session = props.activeSession && typeof props.activeSession === 'object' ? props.activeSession : null;
+  if (!session) return null;
+  const sessionId = String(session.id || '').trim();
+  const status = String(session.status || '').trim().toLowerCase();
+  return sessionId !== '' && status === 'active' ? session : null;
+});
+const activeSessionName = computed(() => {
+  const session = activeSessionForAccess.value;
+  const app = session?.app && typeof session.app === 'object' ? session.app : {};
+  return String(app.name || session?.app_key || 'Call App').trim() || 'Call App';
+});
+const callAppAccessParticipants = computed(() => {
+  const seen = new Set();
+  const rows = [];
+  for (const rawRow of Array.isArray(props.participants) ? props.participants : []) {
+    const row = rawRow && typeof rawRow === 'object' ? rawRow : {};
+    const userId = Number(row.userId || row.user_id || 0);
+    if (!Number.isInteger(userId) || userId <= 0 || seen.has(userId)) continue;
+    seen.add(userId);
+    rows.push({
+      ...row,
+      userId,
+      displayName: String(row.displayName || row.display_name || `User ${userId}`).trim() || `User ${userId}`,
+      isRoomMember: row.isRoomMember !== false && row.is_room_member !== false,
+    });
+  }
+  return rows;
+});
 
 function normalizeDefaultPolicy(value) {
   return value === 'allowed_by_default' ? 'allowed_by_default' : 'blocked_by_default';
@@ -192,6 +267,44 @@ function installationStatusClass(app) {
 
 function healthStatusClass(app) {
   return healthStatusLabel(app).toLowerCase() === 'healthy' ? 'state-healthy' : 'state-unhealthy';
+}
+
+function normalizeGrantState(value) {
+  const state = String(value || '').trim().toLowerCase();
+  return state === 'allowed' || state === 'denied' ? state : '';
+}
+
+function defaultGrantState() {
+  return String(activeSessionForAccess.value?.default_app_policy || '') === 'allowed_by_default' ? 'allowed' : 'denied';
+}
+
+function grantStateForParticipant(participant) {
+  const userId = Number(participant?.userId || participant?.user_id || 0);
+  const sessionId = String(activeSessionForAccess.value?.id || '').trim();
+  const override = normalizeGrantState(localGrantOverrides.value[`${sessionId}:${userId}`]);
+  if (override !== '') return override;
+
+  const grants = Array.isArray(activeSessionForAccess.value?.grants) ? activeSessionForAccess.value.grants : [];
+  const grant = grants.find((row) => (
+    String(row?.subject_type || '') === 'user'
+    && Number(row?.user_id || 0) === userId
+  ));
+  return normalizeGrantState(grant?.grant_state) || defaultGrantState();
+}
+
+function grantStateLabel(participant) {
+  return grantStateForParticipant(participant) === 'allowed' ? 'Allowed' : 'Blocked';
+}
+
+function applyLocalGrantUpdate(event) {
+  const sessionId = String(event?.sessionId || activeSessionForAccess.value?.id || '').trim();
+  const userId = Number(event?.userId || 0);
+  const grantState = normalizeGrantState(event?.grantState);
+  if (sessionId === '' || !Number.isInteger(userId) || userId <= 0 || grantState === '') return;
+  localGrantOverrides.value = {
+    ...localGrantOverrides.value,
+    [`${sessionId}:${userId}`]: grantState,
+  };
 }
 
 function selectApp(app) {
@@ -260,6 +373,13 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  () => String(activeSessionForAccess.value?.id || '').trim(),
+  () => {
+    localGrantOverrides.value = {};
+  },
+);
 </script>
 
 <style scoped>
@@ -271,6 +391,7 @@ watch(
   display: grid;
   gap: 1px;
   align-content: start;
+  container-type: inline-size;
   direction: rtl;
 }
 
@@ -283,8 +404,8 @@ watch(
   flex-direction: row-reverse;
   align-items: center;
   justify-content: flex-start;
-  gap: 20px;
-  padding: 20px;
+  gap: clamp(10px, 4cqi, 20px);
+  padding: clamp(12px, 5cqi, 20px);
   background: var(--bg-surface-strong);
 }
 
@@ -323,9 +444,9 @@ watch(
   background: var(--bg-surface-strong);
   color: var(--text-primary);
   min-height: 82px;
-  padding: 12px 20px;
+  padding: 12px clamp(12px, 5cqi, 20px);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   text-align: left;
@@ -361,7 +482,9 @@ watch(
 
 .call-apps-item-state {
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .call-apps-item-badges {
@@ -399,39 +522,46 @@ watch(
   flex-direction: row;
   justify-content: flex-end;
   align-items: center;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: clamp(10px, 4cqi, 20px);
   background: var(--bg-surface-strong);
-  padding: 20px;
+  padding: clamp(12px, 5cqi, 20px);
 }
 
-.call-apps-detail {
+.call-apps-detail,
+.call-apps-access {
   background: var(--bg-surface-strong);
-  padding: 20px;
+  padding: clamp(12px, 5cqi, 20px);
   display: grid;
-  gap: 20px;
+  gap: clamp(12px, 5cqi, 20px);
 }
 
-.call-apps-detail-head {
+.call-apps-detail-head,
+.call-apps-access-head {
   display: grid;
   gap: 4px;
 }
 
-.call-apps-detail-head h2 {
+.call-apps-detail-head h2,
+.call-apps-access-head h2 {
   margin: 0;
   font-size: 14px;
   line-height: 18px;
   color: var(--text-primary);
 }
 
-.call-apps-detail-head span {
+.call-apps-detail-head span,
+.call-apps-access-head span {
   font-size: 12px;
   color: var(--text-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .call-apps-detail-grid {
   margin: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -474,5 +604,49 @@ watch(
 
 .call-apps-notice {
   color: var(--color-success);
+}
+
+.call-apps-access-list {
+  display: grid;
+  gap: 8px;
+}
+
+.call-apps-access-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-apps-access-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.call-apps-access-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.call-apps-access-state {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@container (min-width: 380px) {
+  .call-apps-list-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .call-apps-detail-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 </style>

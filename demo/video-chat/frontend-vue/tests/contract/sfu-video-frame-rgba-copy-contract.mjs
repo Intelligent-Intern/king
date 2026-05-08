@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-video-frame-rgba-copy-contract] FAIL: ${message}`);
@@ -49,8 +50,7 @@ try {
   requireContains(publisherFrameTrace, 'trace_video_frame_copy_to_rgba_ms', 'publisher trace exposes VideoFrame copyTo timing');
   requireContains(packageJson, 'sfu-video-frame-rgba-copy-contract.mjs', 'SFU contract suite includes VideoFrame RGBA copy proof');
 
-  const copyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.ts')).href;
-  const copyModule = await import(copyUrl);
+  const copyModule = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherVideoFrameCopy.ts');
 
   class FakeImageData {
     constructor(data, width, height) {

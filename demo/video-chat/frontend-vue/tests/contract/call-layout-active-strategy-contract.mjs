@@ -2,13 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
-import {
-  ACTIVE_SPEAKER_MIN_SPEAKING_MS,
-  ACTIVITY_TOP_POOL_MIN_TENURE_MS,
-  ROUND_ROBIN_REFRESH_MS,
-  selectCallLayoutParticipants,
-} from '../../src/domain/realtime/layout/strategies.js';
 import { createParticipantActivityState } from '../../src/domain/realtime/workspace/callWorkspace/participantActivityState.js';
 
 function fail(message) {
@@ -24,9 +19,23 @@ function participants(count) {
   }));
 }
 
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
+const server = await createServer({
+  configFile: path.resolve(root, 'vite.config.js'),
+  logLevel: 'error',
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+});
+const {
+  ACTIVE_SPEAKER_MIN_SPEAKING_MS,
+  ACTIVITY_TOP_POOL_MIN_TENURE_MS,
+  ROUND_ROBIN_REFRESH_MS,
+  selectCallLayoutParticipants,
+} = await server.ssrLoadModule('/src/domain/realtime/layout/strategies.ts');
+await server.close();
+
 try {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-  const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
   const nowMs = 1_777_000_000_000;
 
   {
@@ -187,10 +196,10 @@ try {
   }
 
   {
-    const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
-    const moderationSync = read('src/domain/realtime/workspace/callWorkspace/moderationSync.js');
+    const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
+    const moderationSync = read('src/domain/realtime/workspace/callWorkspace/moderationSync.ts');
     const template = read('src/domain/realtime/CallWorkspaceView.template.html');
-    const togglePinnedMatch = /function togglePinned\(userId\) \{[\s\S]*?\n\}\n\nfunction currentPinnedUserIds/.exec(participantUi);
+    const togglePinnedMatch = /function togglePinned\(userId\) \{[\s\S]*?\n\}\n\nfunction callRoleUpdateEndpoint/.exec(participantUi);
     assert.ok(togglePinnedMatch, 'togglePinned function must exist');
     const togglePinnedBody = togglePinnedMatch[0];
     assert.match(togglePinnedBody, /for \(const key of Object\.keys\(pinnedUsers\)\)/, 'local pin selection must be single-owner for the viewer');

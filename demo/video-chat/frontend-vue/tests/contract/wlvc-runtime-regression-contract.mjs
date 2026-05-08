@@ -140,7 +140,7 @@ try {
   assert.ok(!workspaceConfig.includes('export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS'), 'WLVC quality profiles must not be exported as user-facing select options');
   requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'realtime';", 'production calls start on the stable realtime profile before automatic pressure upshift/downshift');
   requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
-  requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 27;', 'HD baseline captures 27fps camera video after the 10% quality tradeoff');
+  requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 18;', 'HD baseline keeps an explicit camera FPS cap for stable SFU publishing');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p width');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_HEIGHT = 720;', 'HD baseline encodes 720p height');
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES', 'WLVC encode loop has backpressure high-water mark');

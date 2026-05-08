@@ -168,12 +168,12 @@ async function main() {
         },
       },
       {
-        rescue: { captureFrameRate: 9, encodeIntervalMs: 184, frameQuality: 38 },
-        realtime: { captureFrameRate: 13, encodeIntervalMs: 138, frameQuality: 41 },
-        balanced: { captureFrameRate: 16, encodeIntervalMs: 111, frameQuality: 47 },
-        quality: { captureFrameRate: 22, encodeIntervalMs: 92, frameQuality: 54 },
+        rescue: { captureFrameRate: 7, encodeIntervalMs: 250, frameQuality: 32 },
+        realtime: { captureFrameRate: 10, encodeIntervalMs: 200, frameQuality: 35 },
+        balanced: { captureFrameRate: 12, encodeIntervalMs: 166, frameQuality: 38 },
+        quality: { captureFrameRate: 18, encodeIntervalMs: 125, frameQuality: 40 },
       },
-      'SFU profiles must keep visible two-person grid quality above low-resolution rescue blocks',
+      'SFU profiles must keep visible two-person grid quality while avoiding Chrome/SFU burst pressure',
     );
 
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);

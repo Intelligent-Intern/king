@@ -1,6 +1,7 @@
 export const CALL_STATE_SIGNAL_TYPES = Object.freeze([
   'call/control-state',
   'call-app/grants-updated',
+  'call-app/presence',
   'call/gossip-recovery',
   'call/media-quality-pressure',
   'call/moderation-state',
@@ -67,7 +68,6 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
 export const SFU_AUTO_QUALITY_RECOVERY_NEXT = Object.freeze({
   rescue: 'realtime',
   realtime: 'balanced',
-  balanced: 'quality',
 });
 export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;

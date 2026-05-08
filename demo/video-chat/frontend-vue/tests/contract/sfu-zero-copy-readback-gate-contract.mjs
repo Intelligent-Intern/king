@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-zero-copy-readback-gate-contract] FAIL: ${message}`);
@@ -34,8 +35,7 @@ try {
   );
   requireContains(videoFrameCopy, 'resolveVideoFrameCopyFrameSize', 'copy helper can align VideoFrame copy to source dimensions');
 
-  const copyModuleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.ts')).href;
-  const copyModule = await import(copyModuleUrl);
+  const copyModule = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherVideoFrameCopy.ts');
   const frame = {
     displayWidth: 960,
     displayHeight: 540,

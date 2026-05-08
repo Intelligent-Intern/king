@@ -27,6 +27,7 @@ try {
   const helper = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
   const relay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
+  const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
 
   requireContains(helper, 'function videochat_sfu_subscriber_replay_video_send_budget_ms(): int', 'replay send budget helper');
   requireContains(helper, 'function videochat_sfu_subscriber_replay_delta_max_age_ms(): int', 'replay stale delta age helper');
@@ -43,6 +44,9 @@ try {
   requireContains(helper, 'sfu_frame_replay_slow_subscriber_skipped', 'replay slow subscriber skip diagnostic');
   requireContains(helper, 'sfu_frame_replay_slow_subscriber_isolated', 'replay slow subscriber isolation diagnostic');
   requireContains(helper, 'videochat_sfu_subscriber_replay_video_send_budget_ms()', 'replay uses stricter send budget');
+  requireContains(store, 'function videochat_sfu_binary_send_pacing_delay_us', 'binary send pacing helper exists for continuation-sized frames');
+  requireContains(store, 'binary_send_pacing_delay_ms', 'binary send pacing is surfaced in SFU telemetry');
+  requireContains(store, '@king_websocket_send($socket, $binaryPayload, true)', 'transient binary send pressure is handled without emitting PHP notices');
 
   requireContains(relay, 'videochat_sfu_send_replay_frames_to_subscriber(', 'live relay/SQLite replay delegate to budgeted subscriber sender');
   requireContains(relay, "'live_relay_poll'", 'live relay labels replay send path');

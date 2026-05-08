@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-offscreen-canvas-fallback-contract] FAIL: ${message}`);
@@ -71,8 +72,7 @@ try {
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_round_trip_ms', 'trace exposes worker round trip timing');
   requireContains(packageJson, 'sfu-offscreen-canvas-fallback-contract.mjs', 'SFU contract suite includes worker fallback proof');
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerReadback.ts')).href;
-  const workerModule = await import(moduleUrl);
+  const workerModule = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/local/publisherCaptureWorkerReadback.ts');
 
   class FakeImageData {
     constructor(data, width, height) {

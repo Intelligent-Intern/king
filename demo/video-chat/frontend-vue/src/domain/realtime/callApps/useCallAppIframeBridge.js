@@ -15,8 +15,31 @@ function normalizeLaunchResponse(payload) {
   };
 }
 
-function safePostMessagePayload(session, launch) {
+function plainStringList(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => String(entry || '').trim())
+    .filter((entry, index, entries) => entry !== '' && entries.indexOf(entry) === index);
+}
+
+function plainLaunchParticipant(value, displayName = '') {
+  const participant = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const safeDisplayName = String(participant.display_name || participant.displayName || displayName || '').trim();
+  return {
+    subject_type: String(participant.subject_type || '').trim(),
+    actor_id: String(participant.actor_id || '').trim(),
+    display_name: safeDisplayName.slice(0, 80),
+  };
+}
+
+function safePostMessagePayload(session, launch, options = {}) {
   const app = session?.app && typeof session.app === 'object' ? session.app : {};
+  const context = launch.context && typeof launch.context === 'object' ? launch.context : {};
+  const contextApp = context.app && typeof context.app === 'object' ? context.app : {};
+  const capabilities = plainStringList(context.capabilities);
+  const participantDisplayName = options?.participantDisplayName?.value !== undefined
+    ? options.participantDisplayName.value
+    : options?.participantDisplayName;
   return {
     type: 'call_app.launch',
     bridge_protocol: CALL_APP_IFRAME_BRIDGE_PROTOCOL,
@@ -28,23 +51,28 @@ function safePostMessagePayload(session, launch) {
     launch_token: launch.token,
     launch_token_id: launch.tokenId,
     expires_at: launch.expiresAt,
-    capabilities: Array.isArray(launch.context?.capabilities) ? launch.context.capabilities : [],
+    capabilities,
     launch_context: {
       bridge_protocol: CALL_APP_IFRAME_BRIDGE_PROTOCOL,
       iframe_origin_policy: 'sandbox_opaque_origin',
       expected_message_origin: CALL_APP_IFRAME_OPAQUE_ORIGIN,
-      participant: launch.context?.participant || null,
-      grant_state: String(launch.context?.grant_state || '').trim(),
+      participant: plainLaunchParticipant(context.participant, participantDisplayName),
+      grant_state: String(context.grant_state || '').trim(),
       app: {
-        name: String(app.name || launch.context?.app?.name || '').trim(),
-        category: String(app.category || launch.context?.app?.category || '').trim(),
-        crdt_protocol: String(app.crdt_protocol || launch.context?.app?.crdt_protocol || '').trim(),
+        name: String(app.name || contextApp.name || '').trim(),
+        category: String(app.category || contextApp.category || '').trim(),
+        crdt_protocol: String(app.crdt_protocol || contextApp.crdt_protocol || '').trim(),
       },
     },
   };
 }
 
-export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest } = {}) {
+export function createCallAppIframeBridge({
+  activeSession,
+  iframeRef,
+  apiRequest,
+  participantDisplayName,
+} = {}) {
   const launch = ref(null);
   const status = ref('idle');
   const error = ref('');
@@ -73,7 +101,7 @@ export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest
     const session = activeSession?.value || null;
     if (!frameWindow || !session || !launch.value?.token) return false;
 
-    frameWindow.postMessage(safePostMessagePayload(session, launch.value), '*');
+    frameWindow.postMessage(safePostMessagePayload(session, launch.value, { participantDisplayName }), '*');
     status.value = 'launch_sent';
     return true;
   }

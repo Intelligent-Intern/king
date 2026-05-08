@@ -2,20 +2,17 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-import {
-  createMediaSecuritySession,
-  MEDIA_SECURITY_SIGNAL_TYPES,
-  mediaSecurityInternalsForTests,
-} from '../../src/domain/realtime/media/security.ts';
+import { createServer } from 'vite';
 
 function fail(message) {
   throw new Error(`[media-security-frontend-contract] FAIL: ${message}`);
 }
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendRoot = path.resolve(__dirname, '../..');
+
 function read(relPath) {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
   return fs.readFileSync(path.resolve(__dirname, relPath), 'utf8');
 }
 
@@ -36,7 +33,20 @@ function createHybridProvider(label) {
   };
 }
 
+const server = await createServer({
+  configFile: path.resolve(frontendRoot, 'vite.config.js'),
+  logLevel: 'error',
+  server: { middlewareMode: true, hmr: false },
+  appType: 'custom',
+});
+
 try {
+  const {
+    createMediaSecuritySession,
+    MEDIA_SECURITY_SIGNAL_TYPES,
+    mediaSecurityInternalsForTests,
+  } = await server.ssrLoadModule('/src/domain/realtime/media/security.ts');
+
   assert.deepEqual(MEDIA_SECURITY_SIGNAL_TYPES, ['call/media-security-sync-request', 'media-security/hello', 'media-security/sender-key']);
   assert.equal(mediaSecurityInternalsForTests.KEX_SUITE, 'x25519_hkdf_sha256_v1');
   assert.equal(mediaSecurityInternalsForTests.CLASSICAL_KEX_SUITE, 'x25519_hkdf_sha256_v1');
@@ -409,7 +419,12 @@ try {
   const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.ts');
   const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.ts');
   const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const mediaSecurityTargetsSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts');
+  const mediaSecuritySfuPublishGateSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecuritySfuPublishGate.ts');
   const mediaSecurityParticipantSetSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityParticipantSet.ts');
+  const roomStateSource = read('../../src/domain/realtime/workspace/callWorkspace/roomState.ts');
+  const rosterSource = read('../../src/domain/realtime/workspace/roster.ts');
+  const socketLifecycleSource = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const securitySource = read('../../src/domain/realtime/media/security.ts');
   const securityCoreSource = read('../../src/domain/realtime/media/securityCore.ts');
   assert.match(mediaSecurityRuntimeSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'media-security runtime must expose a scheduled participant sync helper');
@@ -417,6 +432,15 @@ try {
   assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');
   assert.match(mediaSecurityRuntimeSource, /function normalizeRemoteMediaSecurityUserId\(userId\)[\s\S]*normalizedUserId === currentUserId\.value[\s\S]*return 0;/m, 'media-security runtime must reject self user ids before they can enter the remote handshake set');
   assert.match(mediaSecurityRuntimeSource, /function remoteMediaSecurityEligibleTargetIds\(\)[\s\S]*mediaSecurityEligibleTargetIds\(\)[\s\S]*normalizeRemoteMediaSecurityUserId\(userId\)/m, 'media-security runtime must normalize connected remote SFU targets through the remote-user guard');
+  assert.match(mediaSecurityRuntimeSource, /hasRealtimeRoomSync,[\s\S]*createMediaSecurityTargetHelpers/m, 'media-security target selection must receive the authoritative room-sync state');
+  assert.match(mediaSecurityTargetsSource, /hasRealtimeRoomSync\?\.value !== true[\s\S]*return \[\];/m, 'media-security targets must wait for a fresh authoritative room snapshot after reconnects');
+  assert.doesNotMatch(socketLifecycleSource, /if \(type === 'system\/welcome'\) \{[\s\S]*refs\.hasRealtimeRoomSync\.value = true;[\s\S]*requestRoomSnapshot\(\);/m, 'system welcome must not unlock media-security targets before the authoritative room snapshot arrives');
+  assert.doesNotMatch(socketLifecycleSource, /sendMediaSecuritySync\(isReconnectOpen\)/, 'websocket reconnects must not force a media-security rekey before the authoritative room snapshot arrives');
+  assert.match(socketLifecycleSource, /void sendMediaSecuritySync\(false\);/, 'websocket reconnects must replay media-security sync without rotating the sender-key epoch for unchanged participants');
+  assert.match(roomStateSource, /const hadRealtimeRoomSync = hasRealtimeRoomSync\.value === true;[\s\S]*hasRealtimeRoomSync\.value = true;[\s\S]*if \(participantsChanged \|\| !hadRealtimeRoomSync\) \{[\s\S]*void syncMediaSecurityWithParticipants\(\);/m, 'fresh room snapshots must restart media-security sync after reconnect even when the participant signature did not change');
+  assert.match(mediaSecurityTargetsSource, /mediaPeerSource === '' \|\| row\?\.hasSnapshotConnection === true/m, 'media-security targets must ignore stale media-only roster supplements that no longer have authoritative room presence');
+  assert.match(roomStateSource, /hasSnapshotConnection: normalized\.hasConnection/m, 'room state must tag authoritative snapshot connections before media peers can supplement the roster');
+  assert.match(rosterSource, /hasSnapshotConnection: false/m, 'media-only roster supplements must be distinguishable from authoritative room-presence participants');
   assert.match(mediaSecurityRuntimeSource, /const targetIds = remoteMediaSecurityEligibleTargetIds\(\);/, 'handshake timeout watchdog must operate on the connected remote SFU target set');
   assert.match(runtimeConfigSource, /MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS = Object\.freeze\(\[1000, 3000, 6000\]\)/, 'handshake retry watchdog must retry after 1s, then 3s, then 6s');
   assert.match(mediaSecurityRuntimeSource, /function mediaSecurityHandshakeRetryTimeoutMsForAttempt\(retryAttempt\)/, 'handshake retry watchdog must derive timeout from retry attempt');
@@ -445,6 +469,7 @@ try {
   assert.doesNotMatch(mediaSecurityRuntimeSource, /if \(type === 'call\/media-security-sync-request'\) \{[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, true\);/m, 'media-security sync requests must not immediately emit sender keys with a potentially stale participant set');
   assert.match(mediaSecurityRuntimeSource, /function requestRemoteMediaSecuritySync\(publisherUserId,[\s\S]*type: 'call\/media-security-sync-request'[\s\S]*target_user_id: normalizedUserId,/m, 'participant-set mismatch recovery must ask the remote publisher to refresh its sender key instead of only rebuilding the local sender key');
   assert.match(mediaSecurityRuntimeSource, /requestRemoteMediaSecuritySync\(normalizedSenderUserId, 'signal_failed_reconnect'/, 'media-security signal failures must send an authoritative remote sync request to the sender');
+  assert.match(mediaSecurityRuntimeSource, /function hintMediaSecuritySync\(reason = 'unspecified'[\s\S]*const targetUserIds = remoteMediaSecurityEligibleTargetIds\(\);[\s\S]*for \(const targetUserId of targetUserIds\) \{[\s\S]*requestRemoteMediaSecuritySync\(targetUserId, 'media_security_sync_hint'/m, 'SFU publish security-gate hints must prompt remote peers to refresh their sender-key handshake, not only retry the local sender key');
   assert.match(mediaSecurityRuntimeSource, /function shouldForceReplyToIncomingMediaSecurityHello\(senderUserId, payloadBody, session\)[\s\S]*incomingMediaSecurityHelloResponseKey\(senderUserId, payloadBody, session\)[\s\S]*state\.mediaSecurityHelloSignalsSent\.add\(key\);/m, 'accepted remote hello responses must be deduped by incoming hello identity to avoid broker replay echo loops');
   assert.match(mediaSecurityRuntimeSource, /const forceReply = shouldForceReplyToIncomingMediaSecurityHello\([\s\S]*normalizedSenderUserId,[\s\S]*payloadBody \|\| \{\},[\s\S]*session,[\s\S]*\);[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, forceReply\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, forceReply\);/m, 'accepted remote hello must force exactly one fresh response per unique hello so reconnecting peers can unwrap sender keys without flooding the broker');
   assert.doesNotMatch(mediaSecurityRuntimeSource, /if \(accepted\) \{[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, true\);/m, 'accepted remote hello must not force-answer every broker replay');
@@ -453,7 +478,12 @@ try {
   assert.match(mediaSecurityRuntimeSource, /const accepted = await session\.handleSenderKeySignal\(normalizedSenderUserId, payloadBody \|\| \{\}\);[\s\S]*if \(!accepted && remoteMediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_pending'\);[\s\S]*\}/m, 'media-security runtime must defer sender-key recovery sync until the sender is present in the current remote participant target set');
   assert.doesNotMatch(mediaSecurityRuntimeSource, /elapsed=\$\{Date\.now\(\) - helloSentAt\}ms — force-retrying Hello/, 'participant sync must not hide the join race behind a multi-second inline Hello retry loop');
   assert.match(mediaSecurityRuntimeSource, /if \(!signal\) \{[\s\S]*const shouldRefreshHello = helloSentAt <= 0 \|\| \(Date\.now\(\) - helloSentAt\) >= 750;[\s\S]*await sendMediaSecurityHello\(normalizedTargetId, true\);/m, 'missing sender-key peer wrapping context must refresh hello quickly instead of waiting for the multi-second watchdog');
+  assert.match(mediaSecurityRuntimeSource, /if \(!signal\) \{[\s\S]*requestRemoteMediaSecuritySync\(normalizedTargetId, 'sender_key_not_ready'/m, 'missing sender-key peer wrapping context must also ask the remote peer to refresh hello/sender-key state');
   assert.match(mediaSecurityRuntimeSource, /eventType: 'media_security_sender_key_not_ready'[\s\S]*refreshed_hello: shouldRefreshHello/m, 'sender-key-not-ready diagnostics must expose whether a fresh hello was sent');
+  assert.match(mediaSecurityRuntimeSource, /from '\.\/mediaSecuritySfuPublishGate'/, 'SFU publish gate must be extracted out of the oversized media-security runtime');
+  assert.match(mediaSecuritySfuPublishGateSource, /return targetUserIds\.every\(\(userId\) => signaledTargetIds\.has\(userId\)\);/, 'SFU publish gate must require sender-key coverage for every current receiver');
+  assert.match(mediaSecuritySfuPublishGateSource, /mediaSecuritySenderKeySentAtBySignalKey\(\)\.set\(signalKey, Date\.now\(\)\);/, 'SFU publish gate must record key signal send time');
+  assert.match(mediaSecuritySfuPublishGateSource, /return sentAtMs > 0 && \(nowMs - sentAtMs\) >= propagationMs;/, 'SFU publish gate must hold frames briefly after sender-key signaling so receivers get the key first');
   assert.match(publisherPipelineSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: outgoingFrame\.codecId[\s\S]*outgoingFrame\.protectedFrame = protectedFrame\.protectedFrame;/m, 'publisher pipeline must protect WLVC frames with explicit codec identity before SFU send');
   assert.match(frameDecodeSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: frame\.codecId/m, 'decode pipeline must decrypt WLVC transport envelopes with codec identity');
   assert.match(frameDecodeSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(securityPublisherUserId\);/m, 'decode pipeline must recover the media-security handshake for the normalized media-security publisher when protected SFU frames arrive before keys');
@@ -487,4 +517,6 @@ try {
     fail(error.message);
   }
   fail('unknown failure');
+} finally {
+  await server.close();
 }

@@ -6,6 +6,27 @@ import {
 } from '../screenShareIdentity.js';
 
 const SCREEN_SHARE_CONNECT_TIMEOUT_MS = 10_000;
+const SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960;
+const SCREEN_SHARE_CAPTURE_MAX_HEIGHT = 540;
+const SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE = 6;
+const SCREEN_SHARE_FRAME_MAX_WIDTH = 960;
+const SCREEN_SHARE_FRAME_MAX_HEIGHT = 540;
+const SCREEN_SHARE_ENCODE_INTERVAL_MS = 250;
+const SCREEN_SHARE_FRAME_QUALITY = 32;
+const SCREEN_SHARE_KEYFRAME_INTERVAL = 24;
+const SCREEN_SHARE_MAX_ENCODED_FRAME_BYTES = 900 * 1024;
+const SCREEN_SHARE_MAX_KEYFRAME_BYTES = 1280 * 1024;
+const SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND = 1200 * 1024;
+const SCREEN_SHARE_MAX_BUFFERED_BYTES = 1024 * 1024;
+const SCREEN_SHARE_MAX_QUEUE_AGE_MS = 220;
+const SCREEN_SHARE_MAX_ENCODE_MS = 70;
+const SCREEN_SHARE_MAX_DRAW_IMAGE_MS = 24;
+const SCREEN_SHARE_MAX_READBACK_MS = 34;
+const SCREEN_SHARE_PAYLOAD_SOFT_LIMIT_RATIO = 0.94;
+const SCREEN_SHARE_MIN_KEYFRAME_RETRY_MS = 1300;
+const SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS = 5;
+const SCREEN_SHARE_RECONNECT_BASE_DELAY_MS = 750;
+const SCREEN_SHARE_RECONNECT_MAX_DELAY_MS = 5000;
 
 function mutableRef(value = null) {
   return { value };
@@ -62,7 +83,183 @@ function screenShareDiagnosticsPayload(refs, extra = {}) {
   };
 }
 
-async function acquireScreenShareStream() {
+function positiveNumber(value, fallback = 0) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
+}
+
+function cappedPositiveNumber(value, fallback, max) {
+  const normalized = positiveNumber(value, fallback);
+  return Math.max(1, Math.min(max, normalized));
+}
+
+function screenShareProfileFrom(baseProfile = {}) {
+  const baseId = String(baseProfile?.id || '').trim().toLowerCase();
+  const profileId = baseId === 'rescue' ? 'rescue' : 'realtime';
+  const captureWidth = cappedPositiveNumber(
+    baseProfile.captureWidth,
+    SCREEN_SHARE_CAPTURE_MAX_WIDTH,
+    SCREEN_SHARE_CAPTURE_MAX_WIDTH,
+  );
+  const captureHeight = cappedPositiveNumber(
+    baseProfile.captureHeight,
+    SCREEN_SHARE_CAPTURE_MAX_HEIGHT,
+    SCREEN_SHARE_CAPTURE_MAX_HEIGHT,
+  );
+  const frameWidth = cappedPositiveNumber(
+    baseProfile.frameWidth || captureWidth,
+    SCREEN_SHARE_FRAME_MAX_WIDTH,
+    SCREEN_SHARE_FRAME_MAX_WIDTH,
+  );
+  const frameHeight = cappedPositiveNumber(
+    baseProfile.frameHeight || captureHeight,
+    SCREEN_SHARE_FRAME_MAX_HEIGHT,
+    SCREEN_SHARE_FRAME_MAX_HEIGHT,
+  );
+  const captureFrameRate = cappedPositiveNumber(
+    baseProfile.captureFrameRate,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+  );
+  const encodeIntervalMs = Math.max(
+    SCREEN_SHARE_ENCODE_INTERVAL_MS,
+    positiveNumber(baseProfile.encodeIntervalMs || baseProfile.readbackIntervalMs, SCREEN_SHARE_ENCODE_INTERVAL_MS),
+  );
+
+  return {
+    ...baseProfile,
+    id: profileId,
+    label: 'Screen share',
+    captureWidth,
+    captureHeight,
+    captureFrameRate,
+    frameWidth,
+    frameHeight,
+    frameQuality: Math.min(
+      SCREEN_SHARE_FRAME_QUALITY,
+      positiveNumber(baseProfile.frameQuality, SCREEN_SHARE_FRAME_QUALITY),
+    ),
+    keyFrameInterval: Math.max(
+      SCREEN_SHARE_KEYFRAME_INTERVAL,
+      positiveNumber(baseProfile.keyFrameInterval, SCREEN_SHARE_KEYFRAME_INTERVAL),
+    ),
+    encodeIntervalMs,
+    readbackIntervalMs: encodeIntervalMs,
+    readbackFrameRate: Number((1000 / encodeIntervalMs).toFixed(3)),
+    maxEncodedBytesPerFrame: Math.min(
+      SCREEN_SHARE_MAX_ENCODED_FRAME_BYTES,
+      positiveNumber(baseProfile.maxEncodedBytesPerFrame, SCREEN_SHARE_MAX_ENCODED_FRAME_BYTES),
+    ),
+    maxKeyframeBytesPerFrame: Math.min(
+      SCREEN_SHARE_MAX_KEYFRAME_BYTES,
+      positiveNumber(baseProfile.maxKeyframeBytesPerFrame, SCREEN_SHARE_MAX_KEYFRAME_BYTES),
+    ),
+    maxWireBytesPerSecond: Math.min(
+      SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND,
+      positiveNumber(baseProfile.maxWireBytesPerSecond, SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND),
+    ),
+    maxEncodeMs: Math.min(
+      SCREEN_SHARE_MAX_ENCODE_MS,
+      positiveNumber(baseProfile.maxEncodeMs, SCREEN_SHARE_MAX_ENCODE_MS),
+    ),
+    maxDrawImageMs: Math.min(
+      SCREEN_SHARE_MAX_DRAW_IMAGE_MS,
+      positiveNumber(baseProfile.maxDrawImageMs, SCREEN_SHARE_MAX_DRAW_IMAGE_MS),
+    ),
+    maxReadbackMs: Math.min(
+      SCREEN_SHARE_MAX_READBACK_MS,
+      positiveNumber(baseProfile.maxReadbackMs, SCREEN_SHARE_MAX_READBACK_MS),
+    ),
+    maxQueueAgeMs: Math.min(
+      SCREEN_SHARE_MAX_QUEUE_AGE_MS,
+      positiveNumber(baseProfile.maxQueueAgeMs, SCREEN_SHARE_MAX_QUEUE_AGE_MS),
+    ),
+    maxBufferedBytes: Math.min(
+      SCREEN_SHARE_MAX_BUFFERED_BYTES,
+      positiveNumber(baseProfile.maxBufferedBytes, SCREEN_SHARE_MAX_BUFFERED_BYTES),
+    ),
+    payloadSoftLimitRatio: Math.min(
+      SCREEN_SHARE_PAYLOAD_SOFT_LIMIT_RATIO,
+      positiveNumber(baseProfile.payloadSoftLimitRatio, SCREEN_SHARE_PAYLOAD_SOFT_LIMIT_RATIO),
+    ),
+    minKeyframeRetryMs: Math.max(
+      SCREEN_SHARE_MIN_KEYFRAME_RETRY_MS,
+      positiveNumber(baseProfile.minKeyframeRetryMs, SCREEN_SHARE_MIN_KEYFRAME_RETRY_MS),
+    ),
+    expectedRecovery: 'hold_screen_share_until_socket_low_water',
+  };
+}
+
+function screenShareDisplayMediaVideoOptions(videoProfile = {}) {
+  const captureFrameRate = cappedPositiveNumber(
+    videoProfile.captureFrameRate,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+  );
+  return {
+    cursor: 'always',
+    frameRate: { ideal: captureFrameRate, max: captureFrameRate },
+  };
+}
+
+function screenShareTrackConstraints(videoProfile = {}) {
+  const captureWidth = cappedPositiveNumber(
+    videoProfile.captureWidth,
+    SCREEN_SHARE_CAPTURE_MAX_WIDTH,
+    SCREEN_SHARE_CAPTURE_MAX_WIDTH,
+  );
+  const captureHeight = cappedPositiveNumber(
+    videoProfile.captureHeight,
+    SCREEN_SHARE_CAPTURE_MAX_HEIGHT,
+    SCREEN_SHARE_CAPTURE_MAX_HEIGHT,
+  );
+  const captureFrameRate = cappedPositiveNumber(
+    videoProfile.captureFrameRate,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+    SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE,
+  );
+  return {
+    width: { ideal: captureWidth, max: captureWidth },
+    height: { ideal: captureHeight, max: captureHeight },
+    frameRate: { ideal: captureFrameRate, max: captureFrameRate },
+  };
+}
+
+async function applyScreenShareTrackConstraints(videoTrack, videoProfile = {}, callbacks = {}) {
+  if (!videoTrack || typeof videoTrack.applyConstraints !== 'function') return false;
+  const constraints = screenShareTrackConstraints(videoProfile);
+  try {
+    await videoTrack.applyConstraints(constraints);
+    callbacks.captureClientDiagnostic?.({
+      category: 'media',
+      level: 'info',
+      eventType: 'local_screen_share_capture_constraints_applied',
+      code: 'local_screen_share_capture_constraints_applied',
+      message: 'Screen sharing capture constraints were capped for stable SFU transport.',
+      payload: {
+        publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+        requested_capture_width: constraints.width.max,
+        requested_capture_height: constraints.height.max,
+        requested_capture_frame_rate: constraints.frameRate.max,
+        outgoing_video_quality_profile: String(videoProfile.id || ''),
+      },
+    });
+    return true;
+  } catch (error) {
+    callbacks.captureClientDiagnosticError?.('local_screen_share_capture_constraints_failed', error, {
+      publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+      requested_capture_width: constraints.width.max,
+      requested_capture_height: constraints.height.max,
+      requested_capture_frame_rate: constraints.frameRate.max,
+      outgoing_video_quality_profile: String(videoProfile.id || ''),
+    }, {
+      code: 'local_screen_share_capture_constraints_failed',
+    });
+    return false;
+  }
+}
+
+async function acquireScreenShareStream(videoProfile = {}) {
   if (!hasGetDisplayMedia()) {
     throw normalizeDisplayMediaError({
       name: 'NotSupportedError',
@@ -73,7 +270,7 @@ async function acquireScreenShareStream() {
   try {
     return await navigator.mediaDevices.getDisplayMedia(buildDisplayMediaOptions({
       audio: false,
-      video: { cursor: 'always' },
+      video: screenShareDisplayMediaVideoOptions(videoProfile),
       selfBrowserSurface: 'exclude',
       surfaceSwitching: 'include',
     }));
@@ -113,6 +310,12 @@ export function createScreenShareParticipantPublisher({
   let endedHandler = null;
   let startStopInFlight = false;
   let stopRequested = false;
+  let reconnectTimer = null;
+  let reconnectInFlight = false;
+  let reconnectAttempts = 0;
+  const currentScreenShareSfuVideoProfile = () => screenShareProfileFrom(
+    callbacks.currentSfuVideoProfile?.() || {},
+  );
 
   const pipeline = createLocalPublisherPipelineHelpers({
     backgroundBaselineCollector: noBackgroundBaselineCollector,
@@ -124,7 +327,7 @@ export function createScreenShareParticipantPublisher({
       applyCallOutputPreferences: callbacks.applyCallOutputPreferences,
       canProtectCurrentSfuTargets: callbacks.canProtectCurrentSfuTargets,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
-      currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
+      currentSfuVideoProfile: currentScreenShareSfuVideoProfile,
       ensureMediaSecuritySession: callbacks.ensureMediaSecuritySession,
       getSfuClientBufferedAmount: () => screenRefs.sfuClientRef.value?.getBufferedAmount?.() || 0,
       handleWlvcEncodeBackpressure: callbacks.handleWlvcEncodeBackpressure,
@@ -196,12 +399,103 @@ export function createScreenShareParticipantPublisher({
     activeVideoTrack.addEventListener('ended', endedHandler, { once: true });
   }
 
+  function clearReconnectTimer() {
+    if (reconnectTimer === null) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function resetReconnectState() {
+    clearReconnectTimer();
+    reconnectInFlight = false;
+    reconnectAttempts = 0;
+  }
+
   function resetScreenRefs() {
     screenRefs.localRawStreamRef.value = null;
     screenRefs.localFilteredStreamRef.value = null;
     screenRefs.localStreamRef.value = null;
     screenRefs.localTracksRef.value = [];
     clearVideoElement(screenRefs.localVideoElement);
+  }
+
+  function reconnectDelayMsForAttempt(attempt) {
+    const exponent = Math.max(0, Number(attempt || 0));
+    return Math.min(
+      SCREEN_SHARE_RECONNECT_MAX_DELAY_MS,
+      SCREEN_SHARE_RECONNECT_BASE_DELAY_MS * Math.max(1, 2 ** exponent),
+    );
+  }
+
+  function scheduleScreenSfuReconnect(reason = 'sfu_disconnected') {
+    if (stopRequested || !isActive()) return false;
+    if (reconnectTimer !== null || reconnectInFlight) return true;
+    if (reconnectAttempts >= SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS) {
+      void stop('disconnected');
+      return false;
+    }
+
+    const attempt = reconnectAttempts + 1;
+    reconnectAttempts = attempt;
+    const delayMs = reconnectDelayMsForAttempt(attempt - 1);
+    callbacks.captureClientDiagnostic?.({
+      category: 'media',
+      level: 'warning',
+      eventType: 'local_screen_share_sfu_reconnect_scheduled',
+      code: 'local_screen_share_sfu_reconnect_scheduled',
+      message: 'Screen sharing media routing disconnected; reconnecting the screen publisher without stopping capture.',
+      payload: screenShareDiagnosticsPayload(refs, {
+        reason: String(reason || 'sfu_disconnected'),
+        attempt,
+        max_attempts: SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS,
+        retry_delay_ms: delayMs,
+        publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+      }),
+      immediate: attempt <= 2,
+    });
+
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+      if (stopRequested || !isActive()) return;
+      reconnectInFlight = true;
+      try {
+        await waitForScreenSfuConnected();
+        reconnectAttempts = 0;
+        callbacks.requestWlvcFullFrameKeyframe?.('screen_share_sfu_reconnected', {
+          requested_action: 'force_full_keyframe',
+          request_full_keyframe: true,
+          publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+        });
+        if (activeVideoTrack) {
+          await pipeline.startEncodingPipeline(activeVideoTrack);
+        }
+        callbacks.captureClientDiagnostic?.({
+          category: 'media',
+          level: 'info',
+          eventType: 'local_screen_share_sfu_reconnected',
+          code: 'local_screen_share_sfu_reconnected',
+          message: 'Screen sharing media routing reconnected without stopping capture.',
+          payload: screenShareDiagnosticsPayload(refs, {
+            attempt,
+            publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+          }),
+        });
+      } catch (error) {
+        callbacks.captureClientDiagnosticError?.('local_screen_share_sfu_reconnect_failed', error, screenShareDiagnosticsPayload(refs, {
+          attempt,
+          max_attempts: SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS,
+          publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+        }), {
+          code: 'local_screen_share_sfu_reconnect_failed',
+          immediate: attempt <= 2,
+        });
+        reconnectInFlight = false;
+        scheduleScreenSfuReconnect('reconnect_failed');
+      } finally {
+        reconnectInFlight = false;
+      }
+    }, delayMs);
+    return true;
   }
 
   async function ensureLocalScreenSharePreviewVideo(videoTrack) {
@@ -229,7 +523,8 @@ export function createScreenShareParticipantPublisher({
 
   function buildScreenSfuClient(resolveConnected, rejectConnected) {
     let connected = false;
-    return new refs.SFUClient({
+    let client = null;
+    client = new refs.SFUClient({
       onTracks: () => {},
       onUnpublished: () => {},
       onPublisherLeft: () => {},
@@ -245,6 +540,9 @@ export function createScreenShareParticipantPublisher({
         resolveConnected();
       },
       onDisconnect: () => {
+        if (screenRefs.sfuClientRef.value === client) {
+          screenRefs.sfuClientRef.value = null;
+        }
         if (!connected && !stopRequested) {
           rejectConnected(normalizeDisplayMediaError({
             name: 'NetworkError',
@@ -253,7 +551,7 @@ export function createScreenShareParticipantPublisher({
           return;
         }
         if (!stopRequested && isActive()) {
-          void stop('disconnected');
+          scheduleScreenSfuReconnect('sfu_socket_disconnected');
         }
       },
       onEncodedFrame: () => {},
@@ -273,6 +571,7 @@ export function createScreenShareParticipantPublisher({
         );
       },
     }, { autoSubscribe: false });
+    return client;
   }
 
   async function waitForScreenSfuConnected() {
@@ -280,6 +579,12 @@ export function createScreenShareParticipantPublisher({
     try {
       await new Promise((resolve, reject) => {
         timeoutId = setTimeout(() => {
+          try {
+            screenRefs.sfuClientRef.value?.leave?.();
+          } catch {
+            // timeout cleanup is best effort before the retry path opens a new socket
+          }
+          screenRefs.sfuClientRef.value = null;
           reject(normalizeDisplayMediaError({
             name: 'TimeoutError',
             message: 'Screen sharing media routing timed out.',
@@ -313,9 +618,11 @@ export function createScreenShareParticipantPublisher({
 
     startStopInFlight = true;
     stopRequested = false;
+    resetReconnectState();
     let nextStream = null;
     try {
-      nextStream = await acquireScreenShareStream();
+      const screenShareVideoProfile = currentScreenShareSfuVideoProfile();
+      nextStream = await acquireScreenShareStream(screenShareVideoProfile);
       const videoTrack = nextStream.getVideoTracks()[0] || null;
       if (!videoTrack) {
         throw normalizeDisplayMediaError({
@@ -326,6 +633,12 @@ export function createScreenShareParticipantPublisher({
 
       activeStream = nextStream;
       activeVideoTrack = videoTrack;
+      try {
+        videoTrack.contentHint = 'detail';
+      } catch {
+        // content hints are advisory and not supported uniformly across browsers
+      }
+      await applyScreenShareTrackConstraints(videoTrack, screenShareVideoProfile, callbacks);
       screenRefs.localRawStreamRef.value = nextStream;
       screenRefs.localFilteredStreamRef.value = nextStream;
       screenRefs.localStreamRef.value = nextStream;
@@ -372,6 +685,11 @@ export function createScreenShareParticipantPublisher({
         message: 'Local screen sharing joined the call as a separate media participant.',
         payload: screenShareDiagnosticsPayload(refs, {
           track_id: videoTrack.id,
+          outgoing_video_quality_profile: String(screenShareVideoProfile.id || ''),
+          requested_capture_width: Number(screenShareVideoProfile.captureWidth || 0),
+          requested_capture_height: Number(screenShareVideoProfile.captureHeight || 0),
+          requested_capture_frame_rate: Number(screenShareVideoProfile.captureFrameRate || 0),
+          requested_readback_interval_ms: Number(screenShareVideoProfile.readbackIntervalMs || 0),
           publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
         }),
       });
@@ -391,6 +709,7 @@ export function createScreenShareParticipantPublisher({
 
   async function stop(reason = 'stopped') {
     stopRequested = true;
+    resetReconnectState();
     detachEndedHandler();
     pipeline.stopLocalEncodingPipeline();
     const videoTrackId = String(activeVideoTrack?.id || '');

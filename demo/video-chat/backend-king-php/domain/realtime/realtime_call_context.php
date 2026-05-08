@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/tenant_context.php';
+require_once __DIR__ . '/../calls/call_management_contract.php';
+require_once __DIR__ . '/realtime_connection_contract.php';
+require_once __DIR__ . '/realtime_presence.php';
 
 /**
  * @return array{
@@ -35,6 +38,7 @@ function videochat_realtime_call_role_context_for_room_user(
             <<<SQL
 SELECT
     calls.id,
+    calls.access_mode,
     calls.owner_user_id,
     cp.call_role,
     cp.invite_state,
@@ -54,6 +58,7 @@ WHERE calls.id = :call_id
       OR
       calls.owner_user_id = :user_id
       OR cp.user_id IS NOT NULL
+      OR calls.access_mode = 'free_for_all'
   )
 LIMIT 1
 SQL
@@ -70,17 +75,21 @@ SQL
         $preferredQuery->execute($params);
         $preferredRow = $preferredQuery->fetch();
         if (is_array($preferredRow)) {
+            $isFreeForAll = videochat_normalize_call_access_mode($preferredRow['access_mode'] ?? 'invite_only') === 'free_for_all';
             $callRole = videochat_normalize_call_participant_role((string) ($preferredRow['call_role'] ?? 'participant'));
             if ((int) ($preferredRow['owner_user_id'] ?? 0) === $userId) {
                 $callRole = 'owner';
             }
             $effectiveCallRole = $isAdmin ? 'owner' : $callRole;
+            $inviteState = videochat_realtime_normalize_call_invite_state(
+                $preferredRow['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited')
+            );
 
             return [
                 'call_id' => (string) ($preferredRow['id'] ?? ''),
                 'call_role' => $callRole,
                 'effective_call_role' => $effectiveCallRole,
-                'invite_state' => videochat_realtime_normalize_call_invite_state($preferredRow['invite_state'] ?? 'invited'),
+                'invite_state' => $inviteState,
                 'joined_at' => trim((string) ($preferredRow['joined_at'] ?? '')),
                 'left_at' => trim((string) ($preferredRow['left_at'] ?? '')),
                 'can_moderate' => $isAdmin || in_array($callRole, ['owner', 'moderator'], true),

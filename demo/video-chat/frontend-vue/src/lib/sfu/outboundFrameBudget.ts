@@ -55,6 +55,26 @@ export function shouldDropProjectedSfuFrameForBufferBudget(
   }
 }
 
+export function shouldBypassSfuWireBudgetForRecoveryKeyframe(
+  metrics: Record<string, unknown>,
+  wireBudget: WireBudgetDecision,
+  bufferedBeforeSend: number,
+  projectedWirePayloadBytes: number,
+): boolean {
+  const frameType = String(metrics.frame_type || '').trim().toLowerCase()
+  if (frameType !== 'keyframe') return false
+  const normalizedProjectedWireBytes = normalizedBudgetNumber(projectedWirePayloadBytes)
+  if (normalizedProjectedWireBytes <= 0) return false
+  const bufferedBudgetBytes = normalizedBudgetNumber(metrics.budget_max_buffered_bytes)
+  const projectedBufferedAfterSendBytes = normalizedBudgetNumber(bufferedBeforeSend) + normalizedProjectedWireBytes
+  if (bufferedBudgetBytes > 0 && projectedBufferedAfterSendBytes > bufferedBudgetBytes) return false
+  const keyframeBudgetBytes = normalizedBudgetNumber(metrics.budget_max_keyframe_bytes_per_frame || metrics.max_payload_bytes)
+  if (keyframeBudgetBytes > 0 && normalizedProjectedWireBytes > keyframeBudgetBytes) return false
+  return !wireBudget.ok
+    && normalizedBudgetNumber(wireBudget.maxWireBytesPerSecond) > 0
+    && normalizedBudgetNumber(wireBudget.currentWindowBytes) > 0
+}
+
 export class SfuOutboundWireBudget {
   private samples: WireBudgetSample[] = []
 

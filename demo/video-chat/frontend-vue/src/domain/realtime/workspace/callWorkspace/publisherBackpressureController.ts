@@ -1,6 +1,7 @@
 import {
   SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO,
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
+  SFU_AUTO_QUALITY_RECOVERY_NEXT,
   SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
   SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS,
   SFU_WLVC_MOTION_DELTA_MAX_CADENCE_LEVEL,
@@ -257,6 +258,11 @@ function decisionHasAction(decision, action) {
   return Array.isArray(decision?.actions) && decision.actions.includes(action);
 }
 
+function hasAutomaticRecoveryProfile(profileId) {
+  const normalizedProfileId = String(profileId || '').trim().toLowerCase();
+  return String(SFU_AUTO_QUALITY_RECOVERY_NEXT[normalizedProfileId] || '').trim() !== '';
+}
+
 export function createPublisherBackpressureController({
   callMediaPrefs,
   captureClientDiagnostic,
@@ -432,6 +438,7 @@ export function createPublisherBackpressureController({
 
     if (state.wlvcMotionDeltaCadenceLevel <= 0) {
       resetWlvcPayloadPressureCounters();
+      if (!hasAutomaticRecoveryProfile(callMediaPrefs.outgoingVideoQualityProfile)) return false;
       return qualityRecoveryProbe('sfu_wlvc_motion_delta_recovered', {
         payload_bytes: normalizedNumber(details?.encodedPayloadBytes ?? details?.encoded_payload_bytes),
         payload_soft_limit_bytes: normalizedNumber(details?.payloadSoftLimitBytes ?? details?.payload_soft_limit_bytes),
@@ -472,6 +479,7 @@ export function createPublisherBackpressureController({
       Number(state.sfuAutoQualityRecoveryLastAtMs || 0),
     );
     if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) return false;
+    if (!hasAutomaticRecoveryProfile(callMediaPrefs.outgoingVideoQualityProfile)) return false;
     const probed = qualityRecoveryProbe('sfu_source_readback_recovered', {
       stable_window_ms: SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
       stable_for_ms: stableForMs,

@@ -85,6 +85,7 @@ try {
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const mediaTransport = read('src/lib/sfu/mediaTransport.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
 
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_publishers', 'SFU bootstrap persists publisher metadata');
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_tracks', 'SFU bootstrap persists track metadata');
@@ -154,7 +155,8 @@ try {
   requireContains(mediaTransport, 'socket.send(payload)', 'WebSocket fallback media transport performs the actual binary send');
   requireContains(sfuClient, 'binary_media_required: true', 'client marks binary-required media');
   requireContains(sfuClient, 'direct legacy JSON/base64 fallback has been removed', 'client has no legacy JSON media fallback');
-  requireContains(publisherPipeline, 'const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);', 'publisher pipeline sends frames to live SFU client');
+  requireContains(publisherPipeline, 'dispatchWlvcPublisherFrame({', 'publisher pipeline delegates live SFU send to the focused frame dispatcher');
+  requireContains(publisherFrameDispatch, 'const sent = await sendClient.sendEncodedFrame(frame);', 'publisher frame dispatcher sends frames to live SFU client');
 
   const backendSources = collectSource([
     ...listFiles(backendRealtimeRoot, (filePath) => filePath.endsWith('.php')),

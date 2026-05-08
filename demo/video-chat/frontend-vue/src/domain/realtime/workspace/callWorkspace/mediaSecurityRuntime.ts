@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
 import { mergeMediaSecurityParticipantIds } from './mediaSecurityParticipantSet';
+import { createMediaSecuritySfuPublishGate } from './mediaSecuritySfuPublishGate';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -42,6 +43,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     activeSocketCallId,
     connectedParticipantUsers,
     currentUserId,
+    hasRealtimeRoomSync,
     isNativeWebRtcRuntimePath,
     isSocketOnline,
     isWlvcRuntimePath,
@@ -267,6 +269,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
   } = createMediaSecurityTargetHelpers({
     connectedParticipantUsers,
     currentUserId,
+    hasRealtimeRoomSync,
     isWlvcRuntimePath,
     nativePeerConnectionsRef,
     mediaRuntimeCapabilities,
@@ -311,6 +314,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const nowMs = Date.now();
     if ((nowMs - state.mediaSecuritySyncHintLastAtMs) < 1000) return;
     state.mediaSecuritySyncHintLastAtMs = nowMs;
+    const targetUserIds = remoteMediaSecurityEligibleTargetIds();
 
     captureClientDiagnostic({
       category: 'media',
@@ -320,23 +324,22 @@ export function createCallWorkspaceMediaSecurityRuntime({
       message: 'Media security sync was requested to recover SFU frame delivery.',
       payload: {
         reason: String(reason || 'unspecified'),
-        target_user_ids: remoteMediaSecurityEligibleTargetIds(),
+        target_user_ids: targetUserIds,
         media_runtime_path: mediaRuntimePath.value,
         ...extraPayload,
       },
     });
     void syncMediaSecurityWithParticipants();
+    for (const targetUserId of targetUserIds) {
+      requestRemoteMediaSecuritySync(targetUserId, 'media_security_sync_hint', {
+        local_reason: String(reason || 'unspecified'),
+      });
+    }
   }
 
   function queueMediaSecuritySyncAfterInFlight(forceRekey = false) {
     state.mediaSecuritySyncPending = true;
     state.mediaSecuritySyncPendingForceRekey = Boolean(state.mediaSecuritySyncPendingForceRekey || forceRekey);
-  }
-
-  function canProtectCurrentSfuTargets() {
-    const targetUserIds = remoteMediaSecurityEligibleTargetIds();
-    if (targetUserIds.length <= 0) return true;
-    return currentSfuSenderKeySignaledTargetIds(targetUserIds).length > 0;
   }
 
   function canProtectCurrentNativeTargets(targetUserIds) {
@@ -443,6 +446,22 @@ export function createCallWorkspaceMediaSecurityRuntime({
       ));
   }
 
+  const sfuPublishGate = createMediaSecuritySfuPublishGate({
+    callbacks: {
+      currentSfuSenderKeySignaledTargetIds,
+      ensureMediaSecuritySession,
+      mediaSecuritySenderKeySignalKey,
+      normalizeRemoteMediaSecurityUserId,
+      remoteMediaSecurityEligibleTargetIds,
+    },
+    constants,
+    state,
+  });
+
+  function canProtectCurrentSfuTargets() {
+    return sfuPublishGate.canProtectCurrentSfuTargets();
+  }
+
   function shouldForceRekeyForParticipantSetDelta(delta, requestedForceRekey = false) {
     if (requestedForceRekey) return true;
     return Array.isArray(delta?.removed) && delta.removed.length > 0;
@@ -475,6 +494,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
   function clearMediaSecuritySignalCaches() {
     state.mediaSecurityHelloSignalsSent.clear();
     state.mediaSecuritySenderKeySignalsSent.clear();
+    sfuPublishGate.clearSenderKeySignalTimes();
     state.mediaSecurityHelloSentAtByUserId.clear();
     state.mediaSecurityHandshakeRetryingByUserId.clear();
     state.mediaSecurityHandshakeRetryCountByUserId.clear();
@@ -575,6 +595,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(key);
+        sfuPublishGate.deleteSenderKeySignalTime(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
         requestRoomSnapshot();
         startMediaSecurityHandshakeWatchdog();
@@ -607,6 +628,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
       if (shouldRefreshHello) {
         await sendMediaSecurityHello(normalizedTargetId, true);
       }
+      requestRemoteMediaSecuritySync(normalizedTargetId, 'sender_key_not_ready', {
+        peer_state: String(peer?.state || ''),
+        peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+      });
       if (
         Number.isInteger(normalizedTargetId)
         && normalizedTargetId > 0
@@ -634,6 +659,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     }
     if (sendSocketFrame(signal)) {
       state.mediaSecuritySenderKeySignalsSent.add(key);
+      sfuPublishGate.noteSenderKeySignalSent(key);
       return true;
     }
     captureClientDiagnostic({
@@ -1095,6 +1121,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         }
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        sfuPublishGate.deleteSenderKeySignalTime(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
         state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
         requestRoomSnapshot();
         requestRemoteMediaSecuritySync(normalizedSenderUserId, 'signal_failed_reconnect', {

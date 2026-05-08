@@ -30,7 +30,8 @@ try {
   const throughput = readRepo('documentation/dev/video-chat/sfu-throughput-path.md');
   const packageJson = readRepo('demo/video-chat/frontend-vue/package.json');
 
-  requireContains(sprint, '[x] `[real-media-plane-contract]`', 'sprint closes the real-media-plane contract issue');
+  requireContains(sprint, 'Completed sprint detail is intentionally removed from this file.', 'active sprint keeps completed sprint history out of SPRINT.md');
+  requireContains(architecture, 'This document is the sprint anchor for `real-media-plane-contract`.', 'real-media-plane contract remains anchored in architecture docs');
   requireContains(
     architecture,
     'MediaStreamTrack -> encoder -> packet/datagram media transport -> SFU packet/layer forwarder -> jitter buffer/keyframe/layer recovery -> native renderer',

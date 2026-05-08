@@ -86,6 +86,7 @@ async function main() {
   requireContains(sfuTransport, 'sfuAutoQualityRecoveryLastAtMs', 'SFU transport state throttles automatic quality recovery');
   requireContains(publisherBackpressureController, 'noteWlvcSourceReadbackSuccess', 'publisher controller exposes source-readback success accounting');
   requireContains(publisherBackpressureController, 'sfu_source_readback_recovered', 'publisher controller asks for an up-probe after stable readback');
+  requireContains(publisherBackpressureController, 'hasAutomaticRecoveryProfile', 'publisher controller stops automatic probes at the configured recovery ceiling');
   requireContains(publisherPipeline, 'noteWlvcSourceReadbackSuccess({', 'publisher pipeline reports readback success after a sent frame');
   requireContains(runtimeSwitching, 'probeSfuVideoQualityAfterStableReadback', 'runtime switcher owns automatic upward profile probes');
   requireContains(runtimeSwitching, 'sfu_source_readback_profile_upshift', 'runtime switcher emits backend diagnostics for upward probes');
@@ -185,13 +186,11 @@ async function main() {
 
   const balancedRecoveryState = baseTransportState();
   balancedRecoveryState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
-  const balancedRecoveryProbes = [];
   const balancedRecoveryController = createController(createPublisherBackpressureController, {
     callMediaPrefs: { outgoingVideoQualityProfile: 'balanced' },
     state: balancedRecoveryState,
-    probeSfuVideoQualityAfterStableReadback: (reason, details) => {
-      balancedRecoveryProbes.push({ reason, details });
-      return true;
+    probeSfuVideoQualityAfterStableReadback: () => {
+      throw new Error('automatic recovery must not climb from balanced to quality');
     },
   });
   assert.equal(balancedRecoveryController.noteWlvcSourceReadbackSuccess({
@@ -200,9 +199,8 @@ async function main() {
     readbackMs: 5,
     drawBudgetMs: 10,
     readbackBudgetMs: 10,
-  }), true, 'automatic recovery may probe from balanced to quality');
-  assert.equal(balancedRecoveryProbes.length, 1, 'balanced-to-quality probe is emitted once');
-  assert.equal(balancedRecoveryState.wlvcSourceReadbackStableStartedAtMs, 0, 'balanced recovery clears the recovery window after probing');
+  }), false, 'automatic recovery stops at balanced instead of returning to bursty quality');
+  assert.ok(balancedRecoveryState.wlvcSourceReadbackStableStartedAtMs > 0, 'balanced recovery keeps its stable window without probing');
 
   const fallbackState = baseTransportState();
   fallbackState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
@@ -286,8 +284,8 @@ async function main() {
   );
   await new Promise((resolve) => setTimeout(resolve, 30));
   scheduledHelpers.clearSfuVideoQualityRecoveryProbeTimer();
-  assert.deepEqual(scheduledTransitions, ['balanced', 'quality'], 'scheduled recovery probes climb one tier at a time up to quality');
-  assert.equal(scheduledState.sfuAutomaticQualityTransitionCount, 2, 'scheduled quality probes count the automatic transitions');
+  assert.deepEqual(scheduledTransitions, ['balanced'], 'scheduled recovery probes stop at balanced under automatic control');
+  assert.equal(scheduledState.sfuAutomaticQualityTransitionCount, 1, 'scheduled quality probes count the automatic transitions');
 
     process.stdout.write('[sfu-auto-readback-recovery-contract] PASS\n');
   } finally {

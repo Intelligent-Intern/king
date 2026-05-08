@@ -27,7 +27,10 @@ try {
   assert.ok(mediaOrchestration.includes('backgroundFilterController'), 'local media orchestration must remain the production background pipeline');
   assert.ok(mediaOrchestration.includes('function defaultApplyControlStateToLocalTracks'), 'local media orchestration must keep a local track control fallback');
   assert.ok(mediaOrchestration.includes("track.enabled = controlState.micEnabled !== false"), 'local media fallback must apply microphone state');
-  assert.ok(mediaOrchestration.includes("track.enabled = controlState.cameraEnabled !== false"), 'local media fallback must apply camera state');
+  assert.ok(mediaOrchestration.includes("const isScreenTrack = activeScreenShareTrackId !== ''"), 'local media fallback must distinguish camera video from screen share video');
+  assert.ok(mediaOrchestration.includes('track.enabled = isScreenTrack'), 'local media fallback must keep explicit video track gating');
+  assert.ok(mediaOrchestration.includes('? controlState.screenEnabled !== false'), 'local media fallback must apply screen-share state');
+  assert.ok(mediaOrchestration.includes(': controlState.cameraEnabled !== false'), 'local media fallback must apply camera state');
 
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
   assert.ok(workspaceView.includes("import { BackgroundFilterController } from './background/controller';"), 'workspace must use the production background controller');

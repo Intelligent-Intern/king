@@ -57,6 +57,12 @@ assert.match(
   'grant updates must emit a realtime signal and request snapshot backfill',
 );
 
+assert.match(
+  buttonSource,
+  /defineEmits\(\[['"]grant-updated['"]\]\)[\s\S]*emit\(['"]grant-updated['"][\s\S]*sessionId:\s*sessionId\.value[\s\S]*userId:\s*rowUserId\.value[\s\S]*grantState/s,
+  'grant button must emit local grant updates for sidebar state labels',
+);
+
 assert.doesNotMatch(
   buttonSource,
   /sessionToken|Authorization|localStorage/,

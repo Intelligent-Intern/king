@@ -84,14 +84,7 @@ function videochat_issue_session_for_call_access(
         ];
     }
 
-    $callPermission = videochat_get_call_for_user(
-        $pdo,
-        (string) ($call['id'] ?? ''),
-        $userId,
-        $userRole,
-        $tenantId
-    );
-    if ($linkKind === 'open' && !(bool) ($callPermission['ok'] ?? false)) {
+    if ($linkKind === 'open') {
         videochat_ensure_internal_call_participant(
             $pdo,
             (string) ($call['id'] ?? ''),
@@ -100,14 +93,15 @@ function videochat_issue_session_for_call_access(
             (string) ($targetUser['display_name'] ?? ''),
             'allowed'
         );
-        $callPermission = videochat_get_call_for_user(
-            $pdo,
-            (string) ($call['id'] ?? ''),
-            $userId,
-            $userRole,
-            $tenantId
-        );
     }
+
+    $callPermission = videochat_get_call_for_user(
+        $pdo,
+        (string) ($call['id'] ?? ''),
+        $userId,
+        $userRole,
+        $tenantId
+    );
     if (!(bool) ($callPermission['ok'] ?? false)) {
         return [
             'ok' => false,
@@ -188,7 +182,13 @@ SQL
         }
 
         $touch = $pdo->prepare(
-            <<<'SQL'
+            $linkKind === 'open'
+                ? <<<'SQL'
+UPDATE call_access_links
+SET last_used_at = :last_used_at
+WHERE id = :id
+SQL
+                : <<<'SQL'
 UPDATE call_access_links
 SET last_used_at = :last_used_at,
     consumed_at = CASE
@@ -198,11 +198,14 @@ SET last_used_at = :last_used_at,
 WHERE id = :id
 SQL
         );
-        $touch->execute([
+        $touchParams = [
             ':id' => (string) ($accessLink['id'] ?? ''),
             ':last_used_at' => gmdate('c'),
-            ':consumed_at' => gmdate('c'),
-        ]);
+        ];
+        if ($linkKind !== 'open') {
+            $touchParams[':consumed_at'] = gmdate('c');
+        }
+        $touch->execute($touchParams);
 
         $bindTenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'tenant_id')
             ? ', tenant_id'

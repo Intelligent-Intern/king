@@ -277,6 +277,17 @@ function videochat_handle_marketplace_routes(
             }
 
             $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+            try {
+                videochat_call_app_refresh_catalog($pdo);
+                $catalogApps = videochat_call_app_list_catalog($pdo, '', 'all');
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+                if ($tenantId > 0) {
+                    $catalogApps = videochat_call_app_attach_organization_state($pdo, $tenantId, $catalogApps);
+                }
+                $rows = videochat_admin_call_app_attach_catalog_entries($rows, $catalogApps);
+            } catch (Throwable) {
+                $rows = videochat_admin_call_app_attach_catalog_entries($rows, []);
+            }
             $total = (int) ($listing['total'] ?? 0);
             $pageCount = (int) ($listing['page_count'] ?? 1);
             $page = (int) ($filters['page'] ?? 1);

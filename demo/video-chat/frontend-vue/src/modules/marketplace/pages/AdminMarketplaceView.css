@@ -39,12 +39,12 @@
 
 .marketplace-table th:nth-child(3),
 .marketplace-table td:nth-child(3) {
-  width: 30%;
+  width: 28%;
 }
 
 .marketplace-table th:nth-child(4),
 .marketplace-table td:nth-child(4) {
-  width: 18%;
+  width: 20%;
 }
 
 .marketplace-name {
@@ -62,6 +62,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.marketplace-call-app-state {
+  color: var(--color-cyan-hover);
 }
 
 .marketplace-link {

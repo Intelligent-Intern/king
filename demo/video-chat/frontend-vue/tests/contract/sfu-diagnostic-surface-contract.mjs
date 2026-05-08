@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadViteSsrModule } from './viteSsrLoader.mjs';
 
 function fail(message) {
   throw new Error(`[sfu-diagnostic-surface-contract] FAIL: ${message}`);
@@ -76,7 +77,7 @@ try {
     publisherCaptureDiagnosticSurface,
     publisherDroppedSourceFrameDiagnosticSurface,
     publisherQualityTransitionDiagnosticSurface,
-  } = await import('../../src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.ts');
+  } = await loadViteSsrModule(frontendRoot, '/src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.ts');
 
   assert.deepEqual(publisherCaptureDiagnosticSurface({
     publisher_source_backend: 'video_frame_copy_to_rgba',

@@ -42,6 +42,7 @@ const props = defineProps({
     required: true,
   },
 });
+const emit = defineEmits(['grant-updated']);
 
 const pending = ref(false);
 const localGrantState = ref('');
@@ -124,6 +125,11 @@ async function toggleGrant() {
       },
     });
     localGrantState.value = grantState;
+    emit('grant-updated', {
+      sessionId: sessionId.value,
+      userId: rowUserId.value,
+      grantState,
+    });
     emitGrantRealtimeUpdate(grantState);
   } finally {
     pending.value = false;

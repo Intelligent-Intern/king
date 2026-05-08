@@ -604,6 +604,7 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
         <<<'SQL'
 SELECT
     calls.id,
+    calls.access_mode,
     calls.owner_user_id,
     cp.call_role,
     cp.invite_state,
@@ -619,6 +620,7 @@ WHERE calls.room_id = :room_id
   AND (
       calls.owner_user_id = :user_id
       OR cp.user_id IS NOT NULL
+      OR calls.access_mode = 'free_for_all'
   )
 ORDER BY
     CASE calls.status
@@ -639,16 +641,18 @@ SQL
         return $fallback;
     }
 
+    $isFreeForAll = videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only') === 'free_for_all';
     $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
     if ((int) ($row['owner_user_id'] ?? 0) === $userId) {
         $callRole = 'owner';
     }
+    $inviteState = videochat_normalize_call_invite_state($row['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited'));
 
     return [
         'call_id' => (string) ($row['id'] ?? ''),
         'call_role' => $callRole,
         'effective_call_role' => $callRole,
-        'invite_state' => videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited'),
+        'invite_state' => $inviteState,
         'joined_at' => trim((string) ($row['joined_at'] ?? '')),
         'left_at' => trim((string) ($row['left_at'] ?? '')),
         'can_moderate' => in_array($callRole, ['owner', 'moderator'], true),
@@ -695,7 +699,8 @@ SQL
         ]);
         $isInternalParticipant = $participantCheck->fetchColumn() !== false;
 
-        if (!$isOwner && !$isInternalParticipant) {
+        $isFreeForAll = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only') === 'free_for_all';
+        if (!$isOwner && !$isInternalParticipant && !$isFreeForAll) {
             return [
                 'ok' => false,
                 'reason' => 'forbidden',

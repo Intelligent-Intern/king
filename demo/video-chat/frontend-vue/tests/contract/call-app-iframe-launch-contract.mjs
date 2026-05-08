@@ -15,6 +15,7 @@ const [
   routerSource,
   hostSource,
   bridgeSource,
+  callAppStaticSource,
   templateSource,
   iframeSource,
   iframeRuntimeSource,
@@ -26,6 +27,7 @@ const [
   read('demo/video-chat/backend-king-php/http/router.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
+  read('demo/video-chat/edge/call_app_static.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
@@ -83,6 +85,24 @@ assert.match(
   'iframe host must enforce sandbox and CSP policy',
 );
 
+assert.match(
+  callAppStaticSource,
+  /Content-Security-Policy'[\s\S]*default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:/,
+  'Call App static edge must deliver a CSP at least as strong as the iframe csp attribute',
+);
+
+assert.match(
+  callAppStaticSource,
+  /Allow-CSP-From'[\s\S]*allowedEmbedderOrigin/,
+  'Call App static edge must explicitly accept the iframe Embedded-CSP requirement for the trusted app origin',
+);
+
+assert.match(
+  callAppStaticSource,
+  /frame-ancestors ' \. \$allowedEmbedderOrigin/,
+  'Call App static edge must restrict embedders to the trusted app origin',
+);
+
 assert.doesNotMatch(
   hostSource,
   /allow-same-origin/,
@@ -111,6 +131,24 @@ assert.match(
   bridgeSource,
   /safePostMessagePayload[\s\S]*type:\s*['"]call_app\.launch['"][\s\S]*launch_token[\s\S]*frameWindow\.postMessage\(safePostMessagePayload/s,
   'parent bridge must send the launch token only through the iframe bridge message',
+);
+
+assert.match(
+  bridgeSource,
+  /function plainStringList\(value\)[\s\S]*Array\.isArray\(value\)[\s\S]*entries\.indexOf\(entry\) === index/s,
+  'parent bridge must convert reactive capability arrays into cloneable plain string arrays before postMessage',
+);
+
+assert.match(
+  bridgeSource,
+  /function plainLaunchParticipant\(value,\s*displayName\s*=\s*['"]['"]\)[\s\S]*subject_type:[\s\S]*actor_id:[\s\S]*display_name:/s,
+  'parent bridge must send only a cloneable pseudonymous participant object to the iframe',
+);
+
+assert.doesNotMatch(
+  bridgeSource,
+  /participant:\s*launch\.context\?\.participant|participant:\s*context\.participant/,
+  'parent bridge must not post reactive or raw participant objects into the sandboxed iframe',
 );
 
 assert.doesNotMatch(

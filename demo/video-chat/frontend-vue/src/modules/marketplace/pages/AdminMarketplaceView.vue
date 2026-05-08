@@ -24,6 +24,8 @@
       v-else
       :rows="rows"
       :mutating-app-id="mutatingAppId"
+      :installing-app-id="installingAppId"
+      @install-call-app="installCallApp"
       @edit-app="openEditApp"
       @delete-app="deleteApp"
     />
@@ -132,6 +134,7 @@ const apiRequest = createAdminMarketplaceApi({ router });
 const categoryFilter = ref('all');
 const notice = ref('');
 const mutatingAppId = ref(0);
+const installingAppId = ref(0);
 const sidePanelForm = useAdminSidePanelForm();
 const dialogOpen = sidePanelForm.open;
 const formSaving = sidePanelForm.saving;
@@ -246,6 +249,37 @@ async function deleteApp(app) {
     error.value = err instanceof Error ? err.message : t('marketplace.delete_failed');
   } finally {
     mutatingAppId.value = 0;
+  }
+}
+
+async function installCallApp(app) {
+  const appId = Number(app?.id || 0);
+  const catalog = app && typeof app === 'object' && app.call_app_catalog && typeof app.call_app_catalog === 'object'
+    ? app.call_app_catalog
+    : null;
+  const appKey = String(catalog?.app_key || '').trim();
+  if (appId <= 0 || appKey === '') return;
+
+  const label = String(app?.name || appKey).trim() || appKey;
+  installingAppId.value = appId;
+  error.value = '';
+  try {
+    await apiRequest(`/api/marketplace/call-apps/${encodeURIComponent(appKey)}/orders`, {
+      method: 'POST',
+    });
+    await apiRequest(`/api/marketplace/call-apps/${encodeURIComponent(appKey)}/installations`, {
+      method: 'POST',
+      body: {
+        default_app_policy: 'blocked_by_default',
+        config: {},
+      },
+    });
+    notice.value = `${label} installed and enabled for this organization.`;
+    await loadRows();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : `Could not install ${label} for this organization.`;
+  } finally {
+    installingAppId.value = 0;
   }
 }
 

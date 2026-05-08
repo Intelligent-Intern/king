@@ -46,7 +46,7 @@ try {
   requireContains(gateway, '$dataBinary = videochat_sfu_frame_data_binary($msg);', 'gateway reads raw binary payloads');
   requireContains(gateway, "$outboundFrame['data_binary'] = $dataBinary;", 'direct fanout frame keeps raw binary payload');
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'live relay receives a JSON-safe copy');
-  requireContains(gateway, 'videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)', 'live relay publishes the JSON-safe frame');
+  requireContains(gateway, 'videochat_sfu_live_frame_relay_publish($roomStateKey, (string) $clientId, $relayFrame)', 'live relay publishes the JSON-safe tenant-bound frame');
   requireContains(gateway, 'videochat_sfu_direct_fanout_frame(', 'gateway delegates direct fanout without mutating relay frame');
   requireContains(subscriberBudget, '$frameForSubscriber = $outboundFrame;', 'direct fanout helper preserves the raw outbound frame per subscriber');
   requireContains(subscriberBudget, "videochat_sfu_send_outbound_message($subClient['websocket'], $frameForSubscriber", 'direct fanout sends the raw outbound frame');

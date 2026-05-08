@@ -22,6 +22,8 @@ const [
   lifecycleTestSource,
   sidebarSource,
   catalogStoreSource,
+  adminMarketplaceSource,
+  adminMarketplaceTableSource,
   crdtBridgeSource,
   whiteboardSource,
   whiteboardRuntimeSource,
@@ -30,6 +32,8 @@ const [
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue'),
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
+  read('demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceView.vue'),
+  read('demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceTable.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
@@ -88,6 +92,24 @@ assert.match(
   catalogStoreSource,
   /\/api\/calls\/\$\{encodeURIComponent\(normalizedCallId\)\}\/call-apps\/available/,
   'frontend catalog must load organization-installed Call Apps from the backend availability endpoint',
+);
+
+assert.match(
+  adminMarketplaceSource,
+  /\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/orders[\s\S]*\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/installations/s,
+  'admin marketplace must order and install Call Apps for the active organization from the real marketplace endpoints',
+);
+
+assert.match(
+  adminMarketplaceTableSource,
+  /catalogApp\(app\)[\s\S]*install-call-app[\s\S]*Verify organization installation[\s\S]*Install for organization/s,
+  'admin marketplace table must expose idempotent catalog-backed organization install actions',
+);
+
+assert.doesNotMatch(
+  adminMarketplaceTableSource,
+  /canInstallCallApp[\s\S]*!isInstalled\(app\)/,
+  'organization install action must remain clickable so admins can repair or verify existing Call App installs',
 );
 
 assert.match(
