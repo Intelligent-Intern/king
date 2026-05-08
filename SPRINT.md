@@ -1250,14 +1250,14 @@ Call Access Playwright gate.
 
 ## 2. Call Creation and Owner Rights
 
-- [ ] Registered user with role `User` can create own call
-- [ ] Registered user with role `Admin` can create own call
-- [ ] Call creator becomes call owner
-- [ ] Call creator receives admin rights in own call
+- [x] Registered user with role `User` can create own call
+- [x] Registered user with role `Admin` can create own call
+- [x] Call creator becomes call owner
+- [x] Call creator receives admin rights in own call
 - [x] Owner can add users to guest list
 - [x] Owner can manage guest list
-- [ ] Owner can admit lobby participants
-- [ ] Owner can remove / kick participants
+- [x] Owner can admit lobby participants
+- [x] Owner can remove / kick participants
 - [x] Owner rights can be transferred to another user
 - [x] If organization role `User` transfers owner rights, old owner loses call-admin rights
 - [x] If organization role `Admin` transfers owner rights, old owner keeps admin rights
@@ -1270,13 +1270,21 @@ Call Access Playwright gate.
 - [x] Owner rights cannot be transferred across forbidden organization boundaries
 - [ ] Owner transfer is audit-logged
 
-Proof: `call-owner-transfer-contract.sh`, `call-temporary-moderator-contract.sh`,
-and `iam-owner-transfer-temp-moderator.spec.js` cover owner transfer, exactly
-one current owner, old owner rights loss/retention by organization role, new
-owner rights, forbidden transfer targets, temporary moderator grant/revoke, and
-forged moderator denial. The Playwright owner-transfer/temp-moderator spec
-passed 3 tests; PHP persistence portions were skipped only where local
-`pdo_sqlite` is unavailable.
+Proof: `call-creation-owner-rights-contract.sh` covers registered normal-user
+and admin-user call creation through `POST /api/calls`, persisted creator
+ownership, creator call-admin/moderation rights, owner lobby admission, owner
+kick/removal, and forbidden admit/kick attempts by a non-owner. Validated with
+`php -l demo/video-chat/backend-king-php/tests/call-creation-owner-rights-contract.php`,
+Docker PHP 8.4 running `call-creation-owner-rights-contract.php`,
+`call-owner-moderation-contract.php`, `demo/video-chat/scripts/iam-call-access-ci-gate.sh --static`,
+and `git diff --check`. `call-owner-transfer-contract.sh`,
+`call-temporary-moderator-contract.sh`, and
+`iam-owner-transfer-temp-moderator.spec.js` cover owner transfer, exactly one
+current owner, old owner rights loss/retention by organization role, new owner
+rights, forbidden transfer targets, temporary moderator grant/revoke, and forged
+moderator denial. The Playwright owner-transfer/temp-moderator spec passed 3
+tests; PHP persistence portions were skipped only where local `pdo_sqlite` is
+unavailable.
 
 ## 3. Join Permissions
 
@@ -1926,7 +1934,8 @@ Proof: `call-creation-owner-rights-contract` creates calls through the backend
 `POST /api/calls` route as a registered normal user and as a registered admin,
 then verifies the persisted `calls.owner_user_id`, creator room ownership,
 creator `call_participants.call_role = owner`, owner role contexts,
-`can_moderate`, `can_manage_owner`, and own-call update authority. It does not
+`can_moderate`, `can_manage_owner`, own-call update authority, and creator-owner
+lobby admit/kick authority with non-owner admit/kick denial. It does not
 exercise owner transfer.
 `call-access-admin-prevention-contract` issues a personalized link for a
 normal user and an anonymous/open link while a normal user context is present,
@@ -2471,8 +2480,8 @@ Playwright run passed 26 tests.
 - [x] `e2e_owner_001_normal_user_creates_call_and_becomes_owner`
 - [x] `e2e_owner_002_admin_user_creates_call_and_becomes_owner`
 - [ ] `e2e_owner_003_owner_can_manage_guest_list`
-- [ ] `e2e_owner_004_owner_can_admit_lobby_participant`
-- [ ] `e2e_owner_005_owner_can_kick_participant`
+- [x] `e2e_owner_004_owner_can_admit_lobby_participant`
+- [x] `e2e_owner_005_owner_can_kick_participant`
 - [ ] `e2e_owner_006_normal_user_transfers_owner_and_loses_admin_rights`
 - [ ] `e2e_owner_007_org_admin_transfers_owner_and_keeps_admin_rights`
 - [ ] `e2e_owner_008_new_owner_receives_owner_and_admin_rights`
@@ -2482,10 +2491,12 @@ Playwright run passed 26 tests.
 - [ ] `e2e_owner_012_owner_transfer_audit_logged`
 
 Proof: `call-creation-owner-rights-contract` is the backend/API proof for
-`e2e_owner_001` and `e2e_owner_002`: both registered normal-user and admin-user
-creators create their own call through `/api/calls`, become the persisted owner,
-and receive own-call admin/moderation rights. Owner-transfer scenarios remain
-unchecked for the separate owner-transfer lane.
+`e2e_owner_001`, `e2e_owner_002`, `e2e_owner_004`, and `e2e_owner_005`: both
+registered normal-user and admin-user creators create their own call through
+`/api/calls`, become the persisted owner, receive own-call admin/moderation
+rights, admit a queued lobby participant, and kick an admitted participant while
+a non-owner is denied the same moderation commands. Owner-transfer scenarios
+remain unchecked for the separate owner-transfer lane.
 
 ## Test Group: Direct Join Permissions
 
