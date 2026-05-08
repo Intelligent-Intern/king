@@ -1992,10 +1992,10 @@ path and waiting-for-host state.
 - [x] Invalidated link does not reveal guest account data
 - [x] Invalidated link does not recreate deleted temporary accounts
 - [x] Invalidated link state is enforced server-side
-- [ ] Invalidated link state works across browsers
-- [ ] Invalidated link state works across devices
-- [ ] Invalidated link state works across sessions
-- [ ] Invalidated link state survives application restart during CI
+- [x] Invalidated link state works across browsers
+- [x] Invalidated link state works across devices
+- [x] Invalidated link state works across sessions
+- [x] Invalidated link state survives application restart during CI
 - [x] Rejected invalidated link shows safe invalid-link state
 - [x] Rejected invalidated link does not leak personal data
 - [x] Stale client-side state cannot join with invalidated link
@@ -2006,8 +2006,23 @@ join/session attempts without exposing call, link, or target-user data, and
 rejects stale websocket rejoin through the call-access session binding.
 `call-access-invite-invalidation.spec.js` proves stale browser state renders
 the safe invalid-link state and does not issue a replacement session. Local
-PHP syntax checks passed; SQLite-backed contract execution is blocked on this
-host by missing `pdo_sqlite`.
+PHP syntax checks passed; this host PHP still lacks `pdo_sqlite`, so the
+SQLite-backed proof uses the Docker PHP fallback.
+
+Proof 2026-05-08: `call-access-invalidation-contract` now denies the same
+invalidated personalized link through direct domain calls and HTTP join/session
+routes across distinct browser, device, and fresh-session contexts with separate
+stored auth sessions, user agents, and client IPs; each path proves no
+replacement call-access session is issued or persisted and no private call/link
+data is exposed. The same contract forks a child PHP `--restart-probe` process
+against the same SQLite database after invalidation, proving invalidated link
+state survives an application-process restart in CI. Docker fallback in
+`call-access-invalidation-contract.sh` ran the SQLite proof on this host. The
+Playwright spec `call-access-invite-invalidation.spec.js` adds two isolated
+browser/device contexts with distinct stored sessions and proves both render the
+safe invalid-link state without session issuance, workspace navigation, or
+private data leakage. Static CI wiring is pinned by
+`call-access-link-invalidation-durability-contract`.
 
 ## 25. Guest Account Lifecycle
 
@@ -2604,7 +2619,7 @@ against duplicate join/session request loops.
 - [x] `e2e_invite_invalid_009_invalidated_link_blocks_rejoin_if_required`
 - [x] `e2e_invite_invalid_010_invalidated_link_no_data_leak`
 - [ ] `e2e_invite_invalid_011_invalidated_link_does_not_recreate_temp_account`
-- [ ] `e2e_invite_invalid_012_invalidated_link_survives_app_restart`
+- [x] `e2e_invite_invalid_012_invalidated_link_survives_app_restart`
 
 ## Test Group: Guest Account Lifecycle
 
