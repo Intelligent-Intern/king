@@ -140,11 +140,12 @@ function videochat_iam_rejoin_contract_create_active_call(
     int $ownerUserId,
     array $participantUserIds,
     int $tenantId,
-    string $title
+    string $title,
+    string $accessMode = 'invite_only'
 ): array {
     $created = videochat_create_call($pdo, $ownerUserId, [
         'title' => $title,
-        'access_mode' => 'invite_only',
+        'access_mode' => videochat_normalize_call_access_mode($accessMode),
         'starts_at' => gmdate('c', time() - 60),
         'ends_at' => gmdate('c', time() + 3600),
         'internal_participant_user_ids' => $participantUserIds,
@@ -215,6 +216,57 @@ function videochat_iam_rejoin_contract_issue_user_session(
     return $auth;
 }
 
+function videochat_iam_rejoin_contract_issue_open_guest_session(
+    PDO $pdo,
+    string $callId,
+    int $ownerUserId,
+    int $tenantId,
+    string $sessionId,
+    string $guestName,
+    string $label
+): array {
+    $link = videochat_create_call_access_link_for_user(
+        $pdo,
+        $callId,
+        $ownerUserId,
+        'admin',
+        ['link_kind' => 'open'],
+        $tenantId
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($link['ok'] ?? false), 'open guest access link should be created', $label);
+    $accessId = (string) (($link['access_link'] ?? [])['id'] ?? '');
+    videochat_iam_rejoin_contract_assert($accessId !== '', 'open guest access link id should be present', $label);
+
+    $issued = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        static fn (): string => $sessionId,
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        ['guest_name' => $guestName]
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($issued['ok'] ?? false), 'open guest call-access session should issue', $label);
+    videochat_iam_rejoin_contract_assert((bool) (($issued['user'] ?? [])['is_guest'] ?? false), 'open guest session should use a temporary guest user', $label);
+
+    $auth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($sessionId),
+            'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+        ],
+        'websocket'
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($auth['ok'] ?? false), 'open guest call-access session should authenticate', $label);
+
+    return [
+        'auth' => $auth,
+        'session' => $issued['session'] ?? [],
+        'user' => $issued['user'] ?? [],
+        'access_link' => $issued['access_link'] ?? [],
+        'call' => $issued['call'] ?? [],
+    ];
+}
+
 function videochat_iam_rejoin_contract_connection(
     PDO $pdo,
     array &$presenceState,
@@ -253,6 +305,45 @@ function videochat_iam_rejoin_contract_connection(
     return $connection;
 }
 
+function videochat_iam_rejoin_contract_waiting_connection(
+    PDO $pdo,
+    array &$presenceState,
+    string $roomId,
+    string $callId,
+    int $userId,
+    string $displayName,
+    string $suffix,
+    int $tenantId,
+    string $sessionId
+): array {
+    $connection = videochat_presence_connection_descriptor(
+        [
+            'id' => $userId,
+            'display_name' => $displayName,
+            'role' => 'user',
+            'tenant' => ['id' => $tenantId],
+        ],
+        $sessionId,
+        'conn-' . $suffix,
+        'socket-' . $suffix,
+        videochat_realtime_waiting_room_id()
+    );
+    $connection['tenant_id'] = $tenantId;
+    $connection['requested_room_id'] = $roomId;
+    $connection['pending_room_id'] = $roomId;
+    $connection['requested_call_id'] = $callId;
+    $connection = videochat_realtime_connection_with_call_context($connection, static fn (): PDO => $pdo);
+    $join = videochat_presence_join_room($presenceState, $connection, videochat_realtime_waiting_room_id());
+    $connection = (array) ($join['connection'] ?? $connection);
+    $connection['requested_room_id'] = $roomId;
+    $connection['pending_room_id'] = $roomId;
+    $connection['requested_call_id'] = $callId;
+    $connection = videochat_realtime_connection_with_call_context($connection, static fn (): PDO => $pdo);
+    $presenceState['connections'][(string) ($connection['connection_id'] ?? ('conn-' . $suffix))] = $connection;
+
+    return $connection;
+}
+
 function videochat_iam_rejoin_contract_lobby_command(string $type, string $roomId, int $targetUserId, string $label): array
 {
     $command = videochat_lobby_decode_client_frame(json_encode([
@@ -262,6 +353,53 @@ function videochat_iam_rejoin_contract_lobby_command(string $type, string $roomI
     ], JSON_UNESCAPED_SLASHES));
     videochat_iam_rejoin_contract_assert((bool) ($command['ok'] ?? false), "{$type} should decode", $label);
     return $command;
+}
+
+function videochat_iam_rejoin_contract_apply_lobby_command(
+    array &$lobbyState,
+    array &$presenceState,
+    array $connection,
+    callable $openDatabase,
+    string $type,
+    string $roomId,
+    int $targetUserId,
+    string $label
+): array {
+    $frames = [];
+    $sender = static function (mixed $socket, array $payload) use (&$frames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        $frames[$key] ??= [];
+        $frames[$key][] = $payload;
+        return true;
+    };
+
+    videochat_realtime_sync_lobby_room_from_database(
+        $lobbyState,
+        $openDatabase,
+        $roomId,
+        videochat_realtime_connection_call_id($connection),
+        null,
+        videochat_realtime_connection_tenant_id($connection)
+    );
+    $result = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $connection,
+        videochat_iam_rejoin_contract_lobby_command($type, $roomId, $targetUserId, $label),
+        $sender
+    );
+    if ((bool) ($result['ok'] ?? false)) {
+        videochat_realtime_apply_successful_lobby_command(
+            $result,
+            $lobbyState,
+            $presenceState,
+            $connection,
+            $openDatabase
+        );
+    }
+
+    $result['frames'] = $frames;
+    return $result;
 }
 
 function videochat_iam_rejoin_contract_queue_user(array &$lobbyState, string $roomId, int $userId, string $displayName): void
@@ -327,4 +465,11 @@ function videochat_iam_rejoin_contract_participant_left_at(PDO $pdo, string $cal
     $statement = $pdo->prepare('SELECT left_at FROM call_participants WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
     $statement->execute([':call_id' => $callId, ':user_id' => $userId]);
     return trim((string) ($statement->fetchColumn() ?: ''));
+}
+
+function videochat_iam_rejoin_contract_participant_invite_state(PDO $pdo, string $callId, int $userId): string
+{
+    $statement = $pdo->prepare('SELECT invite_state FROM call_participants WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
+    $statement->execute([':call_id' => $callId, ':user_id' => $userId]);
+    return videochat_realtime_normalize_call_invite_state($statement->fetchColumn() ?: 'invited');
 }

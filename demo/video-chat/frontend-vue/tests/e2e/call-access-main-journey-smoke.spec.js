@@ -111,11 +111,11 @@ function admittedAccessDecision() {
 }
 
 async function installAdmittedWorkspaceRoutes(page, { call, user }) {
-  let admitted = false;
+  let admissionState = 'waiting';
   const callPayload = admittedCallPayload(call, user);
 
   await page.route(`**/api/calls/resolve/${call.id}*`, async (route) => {
-    if (!admitted) {
+    if (admissionState !== 'admitted') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -124,7 +124,7 @@ async function installAdmittedWorkspaceRoutes(page, { call, user }) {
           result: {
             state: 'forbidden',
             resolved_as: 'call_id',
-            reason: 'lobby_admission_required',
+            reason: admissionState === 'kicked' ? 'kicked_requires_renewed_admission' : 'lobby_admission_required',
             access_link: null,
             call: null,
           },
@@ -152,13 +152,18 @@ async function installAdmittedWorkspaceRoutes(page, { call, user }) {
   });
 
   await page.route(`**/api/calls/${call.id}*`, async (route) => {
-    if (!admitted) {
+    if (admissionState !== 'admitted') {
       await route.fulfill({
         status: 403,
         contentType: 'application/json',
         body: JSON.stringify({
           status: 'error',
-          error: { code: 'calls_forbidden', message: 'Lobby admission is required.' },
+          error: {
+            code: 'calls_forbidden',
+            message: admissionState === 'kicked'
+              ? 'Renewed lobby admission is required after kick.'
+              : 'Lobby admission is required.',
+          },
         }),
       });
       return;
@@ -177,7 +182,13 @@ async function installAdmittedWorkspaceRoutes(page, { call, user }) {
 
   return {
     admit() {
-      admitted = true;
+      admissionState = 'admitted';
+    },
+    kick() {
+      admissionState = 'kicked';
+    },
+    state() {
+      return admissionState;
     },
   };
 }
@@ -280,6 +291,73 @@ async function workspaceSecurityProbe(page) {
       snapshotRequests: frames.filter((frame) => frame?.type === 'room/snapshot/request').length,
     };
   });
+}
+
+async function startCallAccessLobbySession(page, { link, call, guestName = '', expectedLinkKind }) {
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const joinResponsePromise = page.waitForResponse((response) => (
+    response.url().includes(`/api/call-access/${accessId}/join`)
+    && response.request().method() === 'GET'
+  ));
+  await page.goto(link.join_path);
+  const joinResponse = await joinResponsePromise;
+  expect(joinResponse.status()).toBe(200);
+  const joinPayload = await joinResponse.json();
+  expect(joinPayload?.result?.link_kind).toBe(expectedLinkKind);
+  expect(joinPayload?.result?.call?.id).toBe(call.id);
+
+  const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+  await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+  await expect(joinDialog).toContainText(call.title);
+  if (guestName !== '') {
+    await joinDialog.getByPlaceholder('Enter your display name').fill(guestName);
+  }
+
+  const sessionResponsePromise = page.waitForResponse((response) => (
+    response.url().includes(`/api/call-access/${accessId}/session`)
+    && response.request().method() === 'POST'
+  ));
+  await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+  const sessionResponse = await sessionResponsePromise;
+  expect(sessionResponse.status()).toBe(200);
+  const sessionPayload = await sessionResponse.json();
+  expect(sessionPayload?.result?.call?.id).toBe(call.id);
+  await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
+  const queuedFrames = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+  expect(queuedFrames.some((frame) => frame?.type === 'lobby/queue/join')).toBe(true);
+
+  return {
+    joinPayload,
+    sessionPayload,
+    storedSession: await readStoredSession(page),
+  };
+}
+
+async function admitCurrentLobbySession(page, workspaceAdmission, { call, user }) {
+  workspaceAdmission.admit();
+  await emitAdmission(page, { call, user });
+  await waitForWorkspace(page, call);
+  const security = await workspaceSecurityProbe(page);
+  expect(security.canModerate).toBe(false);
+  expect(security.viewerCanModerateCall).toBe(false);
+  expect(security.snapshotRequests).toBeGreaterThan(0);
+}
+
+async function expectDirectRejoinRequiresRenewedApproval(page, { call, forbiddenNeedles, label }) {
+  const resolveResponsePromise = page.waitForResponse((response) => (
+    response.url().includes(`/api/calls/resolve/${call.id}`)
+    && response.request().method() === 'GET'
+  ));
+  await page.goto(`/workspace/call/${call.id}?entry=${encodeURIComponent(label)}`);
+  const resolveResponse = await resolveResponsePromise;
+  expect(resolveResponse.status()).toBe(200);
+  const resolvePayload = await resolveResponse.json();
+  expect(resolvePayload?.result?.state).toBe('forbidden');
+  expect(resolvePayload?.result?.reason).toBe('kicked_requires_renewed_admission');
+  expect(resolvePayload?.result?.call ?? null).toBe(null);
+  await expect(page).toHaveURL(/\/(user\/dashboard|admin\/calls)(?:[/?#].*)?$/, { timeout: 20_000 });
+  await expect(page.locator('.workspace-call-view')).toHaveCount(0);
+  expectNoForbiddenNeedles(await page.locator('body').innerText(), forbiddenNeedles, `${label} denial`);
 }
 
 test('e2e_journey_002_registered_logged_out_invitee_uses_temp_account registered logged-out personalized link uses temporary account without account takeover', async ({ browser }) => {
@@ -394,7 +472,6 @@ test('e2e_journey_002_registered_logged_out_invitee_uses_temp_account registered
     await context.close();
   }
 });
-
 test('e2e_journey_003 logged-in own personalized link keeps the account through lobby admission', async ({ browser }) => {
   test.setTimeout(90_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
@@ -576,6 +653,121 @@ test('e2e_journey_010 logged-out anonymous link creates a least-privilege guest,
     expect(rejoinedSecurity.canModerate).toBe(false);
     expect(rejoinedSecurity.viewerCanModerateCall).toBe(false);
     expect(rejoinedSecurity.snapshotRequests).toBeGreaterThan(0);
+    await expect(page.locator('button.tab-lobby')).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test('e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenarioKey = 'anonymous_open_logged_out_creates_temporary_guest_waits_for_host';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const user = getSeedUser(scenario.principal_user_key);
+  const forbiddenNeedles = forbiddenMainJourneyNeedles();
+
+  const { context, page } = await createJourneyPage(browser, baseURL, { scenarioKey });
+  const workspaceAdmission = await installAdmittedWorkspaceRoutes(page, { call, user });
+
+  try {
+    const { sessionPayload, storedSession } = await startCallAccessLobbySession(page, {
+      link,
+      call,
+      guestName: 'Anonymous Kicked Guest',
+      expectedLinkKind: 'open',
+    });
+    expect(sessionPayload?.result?.user?.id).toBe(user.id);
+    expect(sessionPayload?.result?.user?.account_type).toBe('guest');
+    expect(Boolean(sessionPayload?.result?.user?.is_guest)).toBe(true);
+    expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
+
+    await admitCurrentLobbySession(page, workspaceAdmission, { call, user });
+    workspaceAdmission.kick();
+    await expectDirectRejoinRequiresRenewedApproval(page, {
+      call,
+      forbiddenNeedles,
+      label: 'e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin',
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test('e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenarioKey = 'temporary_personalized_guest_has_no_system_admin_rights';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const user = getSeedUser(scenario.principal_user_key);
+  const forbiddenNeedles = forbiddenMainJourneyNeedles();
+
+  const { context, page } = await createJourneyPage(browser, baseURL, { scenarioKey });
+  const workspaceAdmission = await installAdmittedWorkspaceRoutes(page, { call, user });
+
+  try {
+    const { sessionPayload, storedSession } = await startCallAccessLobbySession(page, {
+      link,
+      call,
+      expectedLinkKind: 'personal',
+    });
+    expect(sessionPayload?.result?.user?.id).toBe(user.id);
+    expect(sessionPayload?.result?.user?.account_type).toBe('guest');
+    expect(Boolean(sessionPayload?.result?.user?.is_guest)).toBe(true);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
+
+    await admitCurrentLobbySession(page, workspaceAdmission, { call, user });
+    workspaceAdmission.kick();
+    await expectDirectRejoinRequiresRenewedApproval(page, {
+      call,
+      forbiddenNeedles,
+      label: 'e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin',
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test('e2e_rejoin_005_kick_overrides_previous_admission', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenarioKey = 'temporary_personalized_guest_has_no_system_admin_rights';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const user = getSeedUser(scenario.principal_user_key);
+  const forbiddenNeedles = forbiddenMainJourneyNeedles();
+
+  const { context, page } = await createJourneyPage(browser, baseURL, { scenarioKey });
+  const workspaceAdmission = await installAdmittedWorkspaceRoutes(page, { call, user });
+
+  try {
+    await startCallAccessLobbySession(page, {
+      link,
+      call,
+      expectedLinkKind: 'personal',
+    });
+    await admitCurrentLobbySession(page, workspaceAdmission, { call, user });
+    workspaceAdmission.kick();
+    expect(workspaceAdmission.state()).toBe('kicked');
+    await expectDirectRejoinRequiresRenewedApproval(page, {
+      call,
+      forbiddenNeedles,
+      label: 'e2e_rejoin_005_kick_overrides_previous_admission',
+    });
+
+    workspaceAdmission.admit();
+    await page.goto(`/workspace/call/${call.id}?entry=renewed-after-kick`);
+    await waitForWorkspace(page, call);
+    const renewedSecurity = await workspaceSecurityProbe(page);
+    expect(renewedSecurity.canModerate).toBe(false);
+    expect(renewedSecurity.viewerCanModerateCall).toBe(false);
     await expect(page.locator('button.tab-lobby')).toHaveCount(0);
   } finally {
     await context.close();
