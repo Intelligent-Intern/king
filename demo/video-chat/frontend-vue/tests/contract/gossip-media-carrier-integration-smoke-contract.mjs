@@ -158,8 +158,48 @@ let harness = publisherHarness()
 let result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must publish over Gossip when no SFU send client exists')
 assert(harness.order.join(',') === 'gossip', 'gossip_primary must publish Gossip before optional SFU handling')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_optional_send_unavailable_after_gossip_publish'), 'gossip_primary SFU-unavailable path must be diagnostic, not blocking')
+assert(harness.diagnostics.length === 0, 'gossip_primary must not emit SFU-unavailable noise after a successful Gossip publication')
 assert(gossipPrimaryDispatch.publisherRequiresSfuBeforeEncode() === false, 'gossip_primary must not require SFU before encode')
+
+harness = publisherHarness({
+  publishLocalEncodedFrameToGossip: () => {
+    harness.order.push('gossip')
+    return false
+  },
+})
+result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when both Gossip publication and SFU fallback are unavailable')
+assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_unavailable_after_gossip_publish_failure'), 'gossip_primary must diagnose unavailable SFU fallback after Gossip publication failure')
+
+harness = publisherHarness({
+  currentOpenSfuClient: () => ({
+    sendEncodedFrame: async () => {
+      harness.order.push('sfu')
+      return true
+    },
+  }),
+})
+result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must not mirror a successfully published Gossip frame into SFU')
+assert(result.sfuFallbackSkipped === true, 'gossip_primary must expose that SFU fallback was skipped after successful Gossip publication')
+assert(harness.order.join(',') === 'gossip', 'gossip_primary with an open SFU socket must still avoid SFU send when Gossip publication succeeds')
+
+harness = publisherHarness({
+  publishLocalEncodedFrameToGossip: () => {
+    harness.order.push('gossip')
+    return false
+  },
+  currentOpenSfuClient: () => ({
+    sendEncodedFrame: async () => {
+      harness.order.push('sfu')
+      return true
+    },
+  }),
+})
+result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+assert(result.ok === true && result.gossipPublished === false && result.sfuSent === true, 'gossip_primary must use SFU fallback only after Gossip publication fails')
+assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary fallback must preserve Gossip-first order before SFU fallback')
+assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_after_gossip_primary_publish_failure' && event?.immediate === true), 'gossip_primary SFU fallback must emit an immediate backtrace')
 
 const sfuFirstDispatch = await loadPublisherDispatch('sfu_first')
 harness = publisherHarness()
@@ -210,6 +250,39 @@ const gossipPrimaryGate = rolloutGate.deriveGossipRolloutGateState(unhealthySfu,
 })
 assert(gossipPrimaryGate.active_allowed === true, 'gossip_primary rollout must key active media on healthy Gossip topology even when SFU fallback is unhealthy')
 assert(gossipPrimaryGate.sfu_baseline_required_for_active === false, 'gossip_primary gate must not require SFU baseline')
+
+const twoPeerTopologyOnlyGate = rolloutGate.deriveGossipRolloutGateState({
+  type: 'gossip/telemetry/ack',
+  peer_count: 2,
+  transports: { rtc_datachannel: 2 },
+  rollout_gate: {
+    min_neighbor_count: 1,
+    max_topology_epoch: 1,
+  },
+  sfu_baseline_health: {
+    participant_set_recoveries: 0,
+    participant_set_recovery_in_flight: 0,
+    protected_decrypt_failures: 0,
+    keyframe_requests: 90,
+    stale_target_prunes: 30,
+    encoder_lifecycle_closes: 30,
+    send_backpressure_aborts: 30,
+  },
+  totals: {
+    sent: 0,
+    received: 0,
+    forwarded: 0,
+    dropped: 0,
+    duplicates: 0,
+    ttl_exhausted: 0,
+    late_drops: 0,
+  },
+}, {
+  mode: 'active',
+  mediaCarrierMode: 'gossip_primary',
+})
+assert(twoPeerTopologyOnlyGate.active_allowed === true, 'gossip_primary must allow a normal two-peer assigned topology before media telemetry exists')
+assert(twoPeerTopologyOnlyGate.telemetry_ready === true, 'gossip_primary must not deadlock waiting for telemetry that requires prior media publication')
 
 const sfuFirstGate = rolloutGate.deriveGossipRolloutGateState(unhealthySfu, {
   mode: 'active',
@@ -272,6 +345,13 @@ assert(
     && dataLane.includes("gossipNeighborLifecycle?.closePeer?.(retiredPeerId, 'repair_retired_edge')")
     && dataLane.includes("gossipNeighborLifecycle?.closePeer?.(previousPeerId, 'retired_by_topology')"),
   'neighbor failure, authoritative repair, and retired-edge cleanup must be wired in the workspace data lane',
+)
+assert(
+  dataLane.includes('function gossipPrimaryTopologyReady()')
+    && dataLane.includes('assignedNeighborCount > 0 || controllerNeighborCount > 0')
+    && dataLane.includes('gossip_primary_topology_admission_without_rollout_gate')
+    && dataLane.includes('if (gossipActiveDataLaneAllowed()) return true;'),
+  'gossip_primary data lane must accept frames on assigned topology without waiting for rollout telemetry self-deadlock',
 )
 assert(
   neighborLifecycle.includes('function applyAssignedNeighbors(topologyHint, assignedPeerIds)')

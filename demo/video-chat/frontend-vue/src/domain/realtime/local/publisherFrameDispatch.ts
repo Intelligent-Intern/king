@@ -48,6 +48,7 @@ function diagnoseOptionalSfuSkip({
   trackId,
   mediaRuntimePath,
   failureDetails = null,
+  immediate = false,
 }) {
   safeFunction(captureClientDiagnostic, () => undefined)({
     category: 'media',
@@ -60,7 +61,12 @@ function diagnoseOptionalSfuSkip({
       mediaRuntimePath,
       extra: failureDetails && typeof failureDetails === 'object' ? { sfu_send_failure: failureDetails } : {},
     }),
+    immediate,
   });
+}
+
+function shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished) {
+  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !gossipPublished;
 }
 
 export async function dispatchPublisherFrame({
@@ -89,6 +95,17 @@ export async function dispatchPublisherFrame({
     });
   }
 
+  if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && gossipPublished) {
+    return {
+      ok: true,
+      gossipPublished,
+      sfuSent: false,
+      sfuSendOptional: true,
+      sfuFallbackSkipped: true,
+      postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+    };
+  }
+
   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
   if (!sendClient) {
     if (!sfuOptional) {
@@ -100,10 +117,15 @@ export async function dispatchPublisherFrame({
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
       };
     }
+    const eventType = shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
+      ? 'sfu_fallback_unavailable_after_gossip_publish_failure'
+      : 'sfu_optional_send_unavailable_after_gossip_publish';
     diagnoseOptionalSfuSkip({
       captureClientDiagnostic,
-      eventType: 'sfu_optional_send_unavailable_after_gossip_publish',
-      message: 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
+      eventType,
+      message: shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
+        ? 'SFU fallback is unavailable after Gossip primary publication failed.'
+        : 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
       trackId,
       mediaRuntimePath,
     });
@@ -114,6 +136,22 @@ export async function dispatchPublisherFrame({
       sfuSendOptional: true,
       postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
     };
+  }
+
+  if (gossipFirst && !gossipPublished) {
+    diagnoseOptionalSfuSkip({
+      captureClientDiagnostic,
+      eventType: 'sfu_fallback_after_gossip_primary_publish_failure',
+      message: 'Gossip primary did not publish this frame; SFU fallback is being used to keep live media flowing.',
+      trackId,
+      mediaRuntimePath,
+      failureDetails: {
+        fallback_reason: 'gossip_publish_failed_or_gated',
+        sfu_socket_open: true,
+        gossip_primary_expected: true,
+      },
+      immediate: true,
+    });
   }
 
   const sent = await sendClient.sendEncodedFrame(frame);
