@@ -47,6 +47,8 @@ for (const eventType of [
   'call_access_account_compared',
   'call_access_duplicate_personalized_link_review',
   'call_access_strong_mismatch_denied',
+  'call_access_host_verification_failed',
+  'call_access_host_name_rejected',
   'call_access_host_name_verified',
   'call_access_host_name_verification_failed',
   'call_access_account_update_confirmation_requested',
@@ -98,14 +100,24 @@ assert.match(
   'host verification attempt path must write host-name verification audit events',
 );
 assert.match(
+  auditDomain,
+  /call_access_host_verification_failed[\s\S]*call_access_host_name_verification_failed[\s\S]*call_access_host_name_rejected/s,
+  'host-name failure audit must retain legacy failed/rejected names and canonical host-name verification failure',
+);
+assert.match(
+  auditDomain,
+  /compatibility_event_type' => \$hostNameVerified[\s\S]*\? 'call_access_host_name_verified'[\s\S]*: 'call_access_host_name_rejected'[\s\S]*canonical_event_type' => \$canonicalEventType[\s\S]*legacy_event_types' => \$legacyEventTypes[\s\S]*host_name_logged' => false/s,
+  'host-name verification compatibility payload must keep legacy compatibility, canonical, and alias markers without the submitted host name',
+);
+assert.match(
   backendAuditContract,
   /videochat_iam_rejoin_contract_issue_open_guest_session[\s\S]*temporary_account_created/s,
   'backend audit contract must prove anonymous/open link temporary account creation audit',
 );
 assert.match(
   backendAuditContract,
-  /videochat_call_access_record_host_verification_attempt[\s\S]*correct_host_name[\s\S]*call_access_host_name_verified/s,
-  'backend audit contract must prove successful host-name verification audit',
+  /videochat_call_access_record_host_verification_attempt[\s\S]*correct_host_name[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed/s,
+  'backend audit contract must prove canonical and legacy host-name verification audit names',
 );
 assert.match(
   backendAuditContract,
@@ -195,6 +207,11 @@ assert.match(
 );
 assert.match(
   auditDomain,
+  /call_access_host_verification_succeeded[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*compatibility_event_type' => \$hostNameVerified[\s\S]*\? 'call_access_host_name_verified'[\s\S]*: 'call_access_host_name_rejected'[\s\S]*canonical_event_type' => \$canonicalEventType[\s\S]*legacy_event_types' => \$legacyEventTypes[\s\S]*host_name_logged' => false/s,
+  'host-name verification audit helper must pin canonical and legacy event aliases without logging host names',
+);
+assert.match(
+  auditDomain,
   /host_name_logged' => false[\s\S]*foreign_account_data_logged' => false[\s\S]*raw_link_identifier_logged' => false/s,
   'strong-mismatch audit helper must explicitly pin host, foreign account, and raw link data as omitted',
 );
@@ -233,7 +250,10 @@ assert.ok(auditProbe.expected_event_types.includes('call_created'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_invitation_created'));
 assert.ok(auditProbe.expected_event_types.includes('temporary_account_created'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_account_compared'));
+assert.ok(auditProbe.expected_event_types.includes('call_access_host_verification_failed'));
+assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_rejected'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_verified'));
+assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_verification_failed'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_account_update_confirmation_requested'));
 assert.equal(
   auditProbe.fingerprints.session_id,
