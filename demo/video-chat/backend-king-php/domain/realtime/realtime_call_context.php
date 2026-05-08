@@ -864,11 +864,10 @@ function videochat_realtime_resolve_connection_rooms(
 
                 $resolvedRequestedRoomId = $boundRoomId;
                 $normalizedRequestedCallId = $boundCallId;
+                $tenantId = null;
             }
         } catch (Throwable) {
-            return videochat_realtime_room_resolution_backfill_unavailable('access_session_binding_unavailable') + [
-                'access_session_binding' => 'unavailable',
-            ];
+            return videochat_realtime_room_resolution_backfill_unavailable('access_session_binding_unavailable') + ['access_session_binding' => 'unavailable'];
         }
     }
 
