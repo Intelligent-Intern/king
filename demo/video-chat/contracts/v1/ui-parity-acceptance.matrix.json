@@ -78,6 +78,15 @@
         "frontend-vue/tests/e2e/chat-activity-matrix.spec.js"
       ]
     },
+    "frontend:e2e:lobby-concurrency": {
+      "kind": "npm_script",
+      "working_directory": "frontend-vue",
+      "script": "test:e2e:lobby-concurrency",
+      "command": "npm run test:e2e:lobby-concurrency",
+      "paths": [
+        "frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"
+      ]
+    },
     "frontend:e2e:call-access": {
       "kind": "npm_script",
       "working_directory": "frontend-vue",
@@ -223,6 +232,10 @@
         {
           "command_id": "frontend:e2e:ui-parity",
           "paths": ["frontend-vue/tests/e2e/lobby-admission.spec.js"]
+        },
+        {
+          "command_id": "frontend:e2e:lobby-concurrency",
+          "paths": ["frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"]
         },
         {
           "command_id": "backend:lobby-admission",

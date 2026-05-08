@@ -1424,7 +1424,7 @@ entered, and the active browser session remains unchanged.
 - [ ] Lobby status updates correctly
 - [ ] Participant is removed from lobby after admission
 - [ ] Participant is removed from lobby after aborting join attempt
-- [ ] Participant is not shown twice in lobby
+- [x] Participant is not shown twice in lobby
 - [x] Manipulated lobby-admission request without permission is rejected
 
 Proof: `call-access-session-contract` creates a personal access link, persists
@@ -1439,6 +1439,11 @@ same call-participant row and proves concurrent `lobby/allow` is idempotent,
 late duplicate admission returns `already_allowed` without mutating state, and
 admit/reject races resolve deterministically with rejection winning and no
 queued or admitted handoff left behind.
+`lobby-concurrency-ui.spec.js` drives the browser workspace with duplicate queue
+snapshots, an admitted-plus-stale-queue race snapshot, duplicate room
+participant rows, and final reject-empty state; it proves the lobby badge and
+panel render one queued user, admitted/rejected states leave no stale allow
+controls, and duplicate participant snapshot rows aggregate into one UI row.
 
 ## 12. Rejoin, Leave, Kick
 
