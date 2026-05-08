@@ -145,7 +145,7 @@ test('invalid call-access link renders safe state without foreign call data', as
 
     const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
     await expect(joinDialog).toBeVisible();
-    await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid|current call state|does not exist/i);
+    await expect(joinDialog).toContainText('This call link does not exist.');
     await expect(joinDialog).not.toContainText(foreignTitle);
     await expect(joinDialog).not.toContainText(foreignEmail);
     await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);

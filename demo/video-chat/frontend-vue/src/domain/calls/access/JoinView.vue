@@ -717,8 +717,7 @@ async function loadJoinContext() {
         state.strongMismatchRequired = true;
         return;
       }
-      payload = errorPayload;
-      if (response.status === 403 && isStrongPersonalizedMismatchPayload(payload)) {
+      if (response.status === 403 && isStrongPersonalizedMismatchPayload(errorPayload)) {
         strongMismatchFlow.show();
         return;
       }
