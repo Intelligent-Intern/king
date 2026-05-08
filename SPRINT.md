@@ -1822,21 +1822,35 @@ call room does not imply subscription or moderation rights in another room.
 
 ## 22. Multi-Session, Devices, Browsers
 
-- [ ] Logged-in user opens personalized link in browser A
-- [ ] Same user opens same link in browser B
-- [ ] Same user opens same link on another device
+- [x] Logged-in user opens personalized link in browser A
+- [x] Same user opens same link in browser B
+- [x] Same user opens same link on another device
 - [x] Different user opens same personalized link on another device
-- [ ] Different active session triggers review flag
+- [x] Different active session triggers review flag
 - [ ] Not logged-in user opens same personalized link on another device
 - [ ] Parallel use of same temporary account is handled correctly
-- [ ] Concurrent join attempts create no duplicate participants
+- [x] Concurrent join attempts create no duplicate participants
 - [ ] Logout in one tab affects link verification in another tab correctly
-- [ ] Login switch during warning modal is handled correctly
+- [x] Login switch during warning modal is handled correctly
 - [ ] Email confirmation in another browser updates correct account
-- [ ] Session expiry while waiting in lobby is handled correctly
+- [x] Session expiry while waiting in lobby is handled correctly
 - [x] Session expiry during call creates defined state
-- [ ] Refresh during host-name verification creates defined state
-- [ ] Refresh while email confirmation is pending creates defined state
+- [x] Refresh during host-name verification creates defined state
+- [x] Refresh while email confirmation is pending creates defined state
+
+Proof: `call-access-multi-session-device-safety.spec.js` covers the same user
+opening one personalized link in two isolated browser/device contexts with
+concurrent session requests and separate stored session tokens, a different
+user/device receiving a manual-review duplicate flag without session issuance or
+foreign-data leakage, login switch during host-verification warning failing
+closed, lobby-session expiry clearing stale access without entering the call,
+call-workspace session expiry redirecting to login and clearing storage,
+host-verification refresh refetching safe state without replaying issuance, and
+pending account-update email confirmation staying bound to the current account
+through refresh. The backend session contract also proves same-user device
+joins deduplicate participants while preserving separate call-access sessions.
+The focused Playwright run passed 7 tests; `npm run
+test:contract:iam-call-access` passed with the existing `pdo_sqlite` skips.
 
 Proof: `realtime-reconnect-backfill-contract` proves transient auth backend
 errors remain retryable inside a bounded grace window, revoked sessions still
@@ -2467,16 +2481,16 @@ against duplicate join/session request loops.
 
 ## Test Group: Multi Session and Device
 
-- [ ] `e2e_multi_session_001_same_user_same_link_two_browsers`
-- [ ] `e2e_multi_session_002_same_user_same_link_two_devices`
-- [ ] `e2e_multi_session_003_different_user_same_link_other_device_flags`
-- [ ] `e2e_multi_session_004_concurrent_join_no_duplicate_participants`
-- [ ] `e2e_multi_session_005_login_switch_during_warning_modal_safe`
+- [x] `e2e_multi_session_001_same_user_same_link_two_browsers`
+- [x] `e2e_multi_session_002_same_user_same_link_two_devices`
+- [x] `e2e_multi_session_003_different_user_same_link_other_device_flags`
+- [x] `e2e_multi_session_004_concurrent_join_no_duplicate_participants`
+- [x] `e2e_multi_session_005_login_switch_during_warning_modal_safe`
 - [ ] `e2e_multi_session_006_email_confirmation_other_browser_correct_account`
-- [ ] `e2e_multi_session_007_session_expiry_in_lobby_safe`
-- [ ] `e2e_multi_session_008_session_expiry_in_call_safe`
-- [ ] `e2e_multi_session_009_refresh_during_host_verification_safe`
-- [ ] `e2e_multi_session_010_refresh_during_pending_email_confirmation_safe`
+- [x] `e2e_multi_session_007_session_expiry_in_lobby_safe`
+- [x] `e2e_multi_session_008_session_expiry_in_call_safe`
+- [x] `e2e_multi_session_009_refresh_during_host_verification_safe`
+- [x] `e2e_multi_session_010_refresh_during_pending_email_confirmation_safe`
 
 ## Test Group: Membership Revocation After Invitation
 
