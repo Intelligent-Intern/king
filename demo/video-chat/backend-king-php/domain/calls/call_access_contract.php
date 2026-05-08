@@ -115,28 +115,57 @@ SQL
     ];
 }
 
-function videochat_fetch_call_access_session_binding(PDO $pdo, string $sessionId): ?array
-{
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   is_call_access_session: bool,
+ *   binding: ?array<string, mixed>
+ * }
+ */
+function videochat_validate_call_access_session_binding(
+    PDO $pdo,
+    string $sessionId,
+    ?int $userId = null,
+    ?int $nowUnix = null
+): array {
     $normalizedSessionId = trim($sessionId);
     if ($normalizedSessionId === '') {
-        return null;
+        return [
+            'ok' => false,
+            'reason' => 'missing_session',
+            'is_call_access_session' => false,
+            'binding' => null,
+        ];
     }
 
     try {
         $statement = $pdo->prepare(
             <<<'SQL'
 SELECT
-    session_id,
-    access_id,
-    call_id,
-    room_id,
-    user_id,
-    link_kind,
-    issued_at,
-    expires_at,
-    created_at
+    call_access_sessions.session_id,
+    call_access_sessions.access_id,
+    call_access_sessions.call_id,
+    call_access_sessions.room_id,
+    call_access_sessions.user_id,
+    call_access_sessions.link_kind,
+    call_access_sessions.issued_at,
+    call_access_sessions.expires_at,
+    call_access_sessions.created_at,
+    call_access_links.id AS link_id,
+    call_access_links.call_id AS link_call_id,
+    call_access_links.participant_user_id AS link_participant_user_id,
+    call_access_links.participant_email AS link_participant_email,
+    call_access_links.expires_at AS link_expires_at,
+    calls.id AS resolved_call_id,
+    calls.room_id AS resolved_room_id,
+    calls.status AS resolved_call_status,
+    users.email AS resolved_user_email
 FROM call_access_sessions
-WHERE session_id = :session_id
+LEFT JOIN call_access_links ON call_access_links.id = call_access_sessions.access_id
+LEFT JOIN calls ON calls.id = call_access_sessions.call_id
+LEFT JOIN users ON users.id = call_access_sessions.user_id
+WHERE call_access_sessions.session_id = :session_id
 LIMIT 1
 SQL
         );
@@ -145,16 +174,26 @@ SQL
     } catch (Throwable $error) {
         $message = strtolower($error->getMessage());
         if (str_contains($message, 'no such table') && str_contains($message, 'call_access_sessions')) {
-            return null;
+            return [
+                'ok' => true,
+                'reason' => 'not_applicable',
+                'is_call_access_session' => false,
+                'binding' => null,
+            ];
         }
         throw $error;
     }
 
     if (!is_array($row)) {
-        return null;
+        return [
+            'ok' => true,
+            'reason' => 'not_applicable',
+            'is_call_access_session' => false,
+            'binding' => null,
+        ];
     }
 
-    return [
+    $binding = [
         'session_id' => (string) ($row['session_id'] ?? ''),
         'access_id' => (string) ($row['access_id'] ?? ''),
         'call_id' => (string) ($row['call_id'] ?? ''),
@@ -165,6 +204,109 @@ SQL
         'expires_at' => (string) ($row['expires_at'] ?? ''),
         'created_at' => (string) ($row['created_at'] ?? ''),
     ];
+
+    $fail = static function (string $reason) use ($binding): array {
+        return [
+            'ok' => false,
+            'reason' => $reason,
+            'is_call_access_session' => true,
+            'binding' => $binding,
+        ];
+    };
+
+    $bindingUserId = (int) ($binding['user_id'] ?? 0);
+    if ($userId !== null && $userId > 0 && $bindingUserId !== $userId) {
+        return $fail('call_access_session_user_mismatch');
+    }
+
+    $linkKind = videochat_call_access_link_kind([
+        'participant_user_id' => is_numeric($row['link_participant_user_id'] ?? null)
+            ? (int) $row['link_participant_user_id']
+            : null,
+        'participant_email' => is_string($row['link_participant_email'] ?? null)
+            ? (string) $row['link_participant_email']
+            : null,
+    ]);
+    if (
+        (string) ($binding['session_id'] ?? '') === ''
+        || (string) ($binding['access_id'] ?? '') === ''
+        || (string) ($binding['call_id'] ?? '') === ''
+        || (string) ($binding['room_id'] ?? '') === ''
+        || $bindingUserId <= 0
+    ) {
+        return $fail('call_access_binding_mismatch');
+    }
+    if (!is_string($row['link_id'] ?? null) || trim((string) $row['link_id']) === '') {
+        return $fail('call_access_link_invalidated');
+    }
+    if (!is_string($row['resolved_call_id'] ?? null) || trim((string) $row['resolved_call_id']) === '') {
+        return $fail('call_access_binding_mismatch');
+    }
+    if ((string) ($row['link_call_id'] ?? '') !== (string) ($binding['call_id'] ?? '')) {
+        return $fail('call_access_binding_mismatch');
+    }
+    if ((string) ($row['resolved_call_id'] ?? '') !== (string) ($binding['call_id'] ?? '')) {
+        return $fail('call_access_binding_mismatch');
+    }
+    if ((string) ($row['resolved_room_id'] ?? '') !== (string) ($binding['room_id'] ?? '')) {
+        return $fail('call_access_binding_mismatch');
+    }
+    if (!videochat_is_call_joinable_status((string) ($row['resolved_call_status'] ?? ''))) {
+        return $fail('call_access_call_not_joinable');
+    }
+    if ($linkKind !== (string) ($binding['link_kind'] ?? 'personal')) {
+        return $fail('call_access_binding_mismatch');
+    }
+
+    $currentUnix = $nowUnix ?? time();
+    $bindingExpiresAtUnix = strtotime((string) ($binding['expires_at'] ?? ''));
+    if (!is_int($bindingExpiresAtUnix) || $bindingExpiresAtUnix <= $currentUnix) {
+        return $fail('call_access_session_expired');
+    }
+    $linkExpiresAt = is_string($row['link_expires_at'] ?? null) ? trim((string) $row['link_expires_at']) : '';
+    if ($linkExpiresAt !== '') {
+        $linkExpiresAtUnix = strtotime($linkExpiresAt);
+        if (!is_int($linkExpiresAtUnix) || $linkExpiresAtUnix <= $currentUnix) {
+            return $fail('call_access_link_expired');
+        }
+    }
+
+    $linkParticipantUserId = is_numeric($row['link_participant_user_id'] ?? null)
+        ? (int) $row['link_participant_user_id']
+        : 0;
+    $linkParticipantEmail = videochat_normalize_call_access_email(
+        is_string($row['link_participant_email'] ?? null) ? (string) $row['link_participant_email'] : null
+    );
+    $userEmail = videochat_normalize_call_access_email(
+        is_string($row['resolved_user_email'] ?? null) ? (string) $row['resolved_user_email'] : null
+    );
+    if ($linkKind === 'personal') {
+        if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId) {
+            return $fail('call_access_binding_mismatch');
+        }
+        if ($linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail) {
+            return $fail('call_access_binding_mismatch');
+        }
+    } elseif ($linkParticipantUserId > 0 || $linkParticipantEmail !== '') {
+        return $fail('call_access_binding_mismatch');
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'ok',
+        'is_call_access_session' => true,
+        'binding' => $binding,
+    ];
+}
+
+function videochat_fetch_call_access_session_binding(PDO $pdo, string $sessionId): ?array
+{
+    $validation = videochat_validate_call_access_session_binding($pdo, $sessionId);
+    if (!(bool) ($validation['ok'] ?? false) || !(bool) ($validation['is_call_access_session'] ?? false)) {
+        return null;
+    }
+
+    return is_array($validation['binding'] ?? null) ? $validation['binding'] : null;
 }
 
 function videochat_normalize_call_access_email(?string $email): string
