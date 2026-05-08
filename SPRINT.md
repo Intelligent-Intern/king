@@ -1234,17 +1234,25 @@ client role cache data all resolve from current backend membership state.
 - [ ] Owner can manage guest list
 - [ ] Owner can admit lobby participants
 - [ ] Owner can remove / kick participants
-- [ ] Owner rights can be transferred to another user
-- [ ] If organization role `User` transfers owner rights, old owner loses call-admin rights
-- [ ] If organization role `Admin` transfers owner rights, old owner keeps admin rights
-- [ ] New owner receives owner rights
-- [ ] New owner receives admin rights in call
-- [ ] After owner transfer, there is exactly one current owner
-- [ ] Former owner without admin role can no longer perform owner actions
-- [ ] Organization admin can keep call-admin rights after owner transfer
-- [ ] Owner rights cannot be transferred to a non-existent user
-- [ ] Owner rights cannot be transferred across forbidden organization boundaries
+- [x] Owner rights can be transferred to another user
+- [x] If organization role `User` transfers owner rights, old owner loses call-admin rights
+- [x] If organization role `Admin` transfers owner rights, old owner keeps admin rights
+- [x] New owner receives owner rights
+- [x] New owner receives admin rights in call
+- [x] After owner transfer, there is exactly one current owner
+- [x] Former owner without admin role can no longer perform owner actions
+- [x] Organization admin can keep call-admin rights after owner transfer
+- [x] Owner rights cannot be transferred to a non-existent user
+- [x] Owner rights cannot be transferred across forbidden organization boundaries
 - [ ] Owner transfer is audit-logged
+
+Proof: `call-owner-transfer-contract.sh`, `call-temporary-moderator-contract.sh`,
+and `iam-owner-transfer-temp-moderator.spec.js` cover owner transfer, exactly
+one current owner, old owner rights loss/retention by organization role, new
+owner rights, forbidden transfer targets, temporary moderator grant/revoke, and
+forged moderator denial. The Playwright owner-transfer/temp-moderator spec
+passed 3 tests; PHP persistence portions were skipped only where local
+`pdo_sqlite` is unavailable.
 
 ## 3. Join Permissions
 
@@ -1567,17 +1575,17 @@ contracts were syntax-checked but skipped at runtime because local PHP lacks
 
 ## 13. Temporary Moderators
 
-- [ ] Host can assign temporary moderator if supported
-- [ ] Temporary moderator can admit lobby participants
-- [ ] Temporary moderator can reject lobby participants
-- [ ] Temporary moderator can only moderate assigned call
-- [ ] Temporary moderator cannot perform organization-wide admin actions
-- [ ] Temporary moderator cannot transfer owner rights unless allowed
+- [x] Host can assign temporary moderator if supported
+- [x] Temporary moderator can admit lobby participants
+- [x] Temporary moderator can reject lobby participants
+- [x] Temporary moderator can only moderate assigned call
+- [x] Temporary moderator cannot perform organization-wide admin actions
+- [x] Temporary moderator cannot transfer owner rights unless allowed
 - [ ] Temporary moderator cannot modify guest list outside permissions
 - [ ] Temporary moderator loses rights after moderation ends
 - [ ] Temporary moderator loses rights after call end if configured
-- [ ] Revoked temporary moderator rights take effect immediately
-- [ ] Manipulated temporary-moderator role in client is rejected server-side
+- [x] Revoked temporary moderator rights take effect immediately
+- [x] Manipulated temporary-moderator role in client is rejected server-side
 
 ## 14. Privacy and Data Minimization
 
@@ -1719,7 +1727,7 @@ foreign session adoption.
 - [x] Organization admin can kick participants for own organization calls
 - [x] Organization admin cannot join foreign organization calls through this role
 - [x] Organization admin cannot manage lobby of foreign organization
-- [ ] Organization admin rights remain after owner transfer
+- [x] Organization admin rights remain after owner transfer
 - [ ] Organization admin can transfer owner rights if allowed
 - [ ] Organization admin keeps admin rights when transferring ownership
 - [ ] Revoking organization-admin role affects new joins and admin actions immediately
