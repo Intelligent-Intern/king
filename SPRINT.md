@@ -13,13 +13,138 @@ Rules:
 - Do not grow `CallWorkspaceView.vue` or other oversized files; extract focused
   helpers/components when adding behavior.
 
+## Sprint: Browser-Resilient Background Segmentation Fallback
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Active as of 2026-05-08.
+- This sprint replaces the completed Whiteboard Call App hardening work as the
+  active top-priority sprint.
+- User-facing problem: Chrome/Chromium can break MediaPipe segmentation init by
+  forcing GPU-related internals even when CPU delegation is requested. The
+  current fallback can degrade into a matte that swallows the participant.
+
+Sprint goal:
+- Keep background filters stable across browser ML/GPU regressions with a
+  deterministic fallback ladder: MediaPipe GPU when healthy, MediaPipe CPU when
+  genuinely isolated, SINet/WASM when MediaPipe is unsafe, then a degraded mode
+  that keeps the participant visible instead of blending them into the
+  background.
+- Preserve visual quality: no softmax/sigmoid participant blending, no ghost
+  translucency, no full-person disappearance. Edge treatment must use contour
+  alpha smoothing only.
+- Make browser updates survivable: init failures, GPU service errors, model
+  load failures, and worker crashes must quarantine the failing backend without
+  reload loops, audio loss, or video publication failure.
+
+Current baseline:
+- Production no longer depends on the MediaPipe worker fallback path that hit
+  Chrome GPU initialization failures.
+- SINet/WASM exists as the insulated segmentation backend.
+- WebGL and canvas compositors exist; WebGL may fall back to canvas.
+- The current matte behavior can still over-apply the background and visually
+  swallow the participant.
+- Whiteboard Call App is deployed and installed; the Call Apps attach tab is now
+  visible for resolved calls and requests a room snapshot after attach.
+
+Contract anchors:
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/backendSinetWasm.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/maskPostprocess.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/pipeline/compositorCanvasStage.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/pipeline/compositorWebglStage.js`
+- `demo/video-chat/frontend-vue/tests/standalone/king-background-segmentation-harness.ts`
+- `demo/video-chat/frontend-vue/tests/contract/background-filter-mask-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/background-king-wasm-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/background-sinet-defaults-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/background-segmentation-harness-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/mediapipe-cdn-contract.mjs`
+
+Execution boundary:
+- Preserve Pierre Joye's WebGL/background-removal contribution history and do
+  not rewrite or squash that work.
+- Do not restore a brittle MediaPipe-only path as the only production backend.
+- Do not add softmax, sigmoid, or whole-mask alpha curves that make a person
+  semi-transparent.
+- Do not grow `CallWorkspaceView.vue`; new behavior belongs in focused
+  background backend, compositor, diagnostics, or harness modules.
+- Do not turn background-filter failure into call failure. Camera, audio,
+  screenshare, and reconnect must continue when segmentation is unavailable.
+
+Acceptance criteria:
+- Chrome/Chromium MediaPipe GPU-service init failures do not break calls.
+- If GPU init fails, CPU/SINet/degraded fallback is selected exactly once per
+  cooldown window without reload loops.
+- The participant center remains opaque in the matte harness; only contour
+  pixels receive alpha smoothing.
+- No `Math.exp`, softmax, sigmoid, or equivalent probabilistic blending exists
+  in the production fallback matte path.
+- Background filter failure cannot mute audio, remove the local video track, or
+  stop media publication.
+- Diagnostics name the selected backend, failed backend, browser family, GPU
+  availability, model source, fallback reason, and cooldown state.
+- Production deploy smoke proves call app static assets and background model
+  assets are served from the expected origins.
+
+Tickets:
+- [ ] BGF-01 Browser regression matrix and reproducible failure capture
+  - Capture Chrome Stable/Chromium Ubuntu/Firefox behavior for MediaPipe demo
+    and King production paths.
+  - Record exact browser versions, failing console signatures, backend choice,
+    and whether CPU delegation still touches GPU internals.
+  - Add a contract fixture for the known Chrome GPU-service init failure shape.
+
+- [ ] BGF-02 Backend selection ladder with quarantine
+  - Introduce a backend selector contract for MediaPipe GPU, MediaPipe CPU,
+    SINet/WASM, and degraded mode.
+  - Quarantine a failing backend for a bounded cooldown instead of retrying per
+    frame.
+  - Ensure backend switching is idempotent and cannot trigger reload loops.
+
+- [ ] BGF-03 Matte correctness: hard foreground plus contour smoothing
+  - Remove any remaining softmax/sigmoid-style probability blending from the
+    fallback path.
+  - Treat foreground/background classification as hard membership, then apply
+    alpha only on the contour band.
+  - Add harness checks that the torso/face center stays opaque and background
+    pixels do not leak into the participant.
+
+- [ ] BGF-04 Degraded mode that preserves the person
+  - Define degraded mode as "no synthetic replacement over the participant" when
+    segmentation confidence or backend health is unsafe.
+  - Prefer original camera video with clear diagnostics over a broken matte that
+    hides the participant.
+  - Keep user media tracks alive while the filter is disabled or warming up.
+
+- [ ] BGF-05 Compositor and warmup safety
+  - Make WebGL/canvas compositor warmup deterministic across backend changes.
+  - Avoid stale-mask freeze, blue-screen swallow, and one-frame full-background
+    flashes.
+  - Add pixel-level compositor contracts for warmup, backend switch, and
+    segmentation-unavailable states.
+
+- [ ] BGF-06 Runtime diagnostics and field observability
+  - Emit throttled diagnostics for backend init, fallback transition, quarantine,
+    matte rejection, and degraded mode.
+  - Include enough local context to debug browser regressions without leaking
+    media frames, SDP, ICE, or tokens.
+  - Surface concise state in existing diagnostics channels, not new reload UI.
+
+- [ ] BGF-07 Online proof, deploy, and browser smoke
+  - Run focused background contracts, build, deploy, and production smoke.
+  - Verify a real call in Chrome/Chromium and Firefox with camera, audio,
+    screenshare, reconnect, and background filter transitions.
+  - Record proof commands and results in this sprint before closing.
+
 ## Sprint: Whiteboard Call App Hardening And Production Integration
 
 Branch:
 - `develop/1.0.8-beta`
 
 Status:
-- Active as of 2026-05-07.
+- Completed as of 2026-05-08.
 - Completed Gossip and Call Apps foundation tickets were removed from the active
   sprint.
 - Open non-active Governance, admin UX, and broad refactoring work was moved to
