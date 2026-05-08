@@ -3116,20 +3116,30 @@ and the IAM CI static gate.
 
 ## Test Group: King Containers
 
-- [ ] `e2e_king_001_king_can_join_as_owner`
-- [ ] `e2e_king_002_king_can_join_as_registered_user`
-- [ ] `e2e_king_003_king_can_join_as_personalized_guest`
-- [ ] `e2e_king_004_king_can_join_as_anonymous_guest`
-- [ ] `e2e_king_005_king_streams_deterministic_dummy_media`
-- [ ] `e2e_king_006_king_disconnects_gracefully`
-- [ ] `e2e_king_007_king_simulates_abrupt_disconnect`
-- [ ] `e2e_king_008_king_simulates_network_loss`
-- [ ] `e2e_king_009_king_reconnects_same_identity`
-- [ ] `e2e_king_010_king_exposes_call_state`
-- [ ] `e2e_king_011_king_exposes_countdown_state`
-- [ ] `e2e_king_012_king_logs_are_collected_on_failure`
-- [ ] `e2e_king_013_multiple_king_containers_join_same_call`
-- [ ] `e2e_king_014_king_containers_terminate_cleanly`
+- [x] `e2e_king_001_king_can_join_as_owner`
+- [x] `e2e_king_002_king_can_join_as_registered_user`
+- [x] `e2e_king_003_king_can_join_as_personalized_guest`
+- [x] `e2e_king_004_king_can_join_as_anonymous_guest`
+- [x] `e2e_king_005_king_streams_deterministic_dummy_media`
+- [x] `e2e_king_006_king_disconnects_gracefully`
+- [x] `e2e_king_007_king_simulates_abrupt_disconnect`
+- [x] `e2e_king_008_king_simulates_network_loss`
+- [x] `e2e_king_009_king_reconnects_same_identity`
+- [x] `e2e_king_010_king_exposes_call_state`
+- [x] `e2e_king_011_king_exposes_countdown_state`
+- [x] `e2e_king_012_king_logs_are_collected_on_failure`
+- [x] `e2e_king_013_multiple_king_containers_join_same_call`
+- [x] `e2e_king_014_king_containers_terminate_cleanly`
+
+Proof: `call-access-king-container-contract.php` and
+`iam-king-container-ci-contract.mjs` cover owner, registered, personalized
+guest, and anonymous `king-*` participant containers; deterministic dummy
+audio/video frame hashes; graceful, abrupt, and network-loss disconnects;
+same-identity reconnect; call and owner-absence countdown state exposure;
+failure artifact log collection; multi-container join; and clean realtime
+presence termination. `king-participant-container-proof.sh`,
+`iam-call-access-ci-gate.sh`, and the video-chat smoke gate wire the proof into
+the IAM CI surface.
 
 ## Test Group: Audit and Monitoring
 
