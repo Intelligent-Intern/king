@@ -1643,9 +1643,9 @@ foreign session adoption.
 
 ## 20. Normal User
 
-- [ ] Normal user can create own call
-- [ ] Normal user becomes owner of own call
-- [ ] Normal user has admin rights in own call
+- [x] Normal user can create own call
+- [x] Normal user becomes owner of own call
+- [x] Normal user has admin rights in own call
 - [ ] Normal user can join foreign call only when authorized
 - [x] Normal user can join foreign call when on guest list
 - [x] Normal user cannot join foreign call when not on guest list
@@ -1659,7 +1659,13 @@ foreign session adoption.
 - [x] Normal user cannot receive admin rights through anonymous link
 - [x] Normal user cannot receive admin rights through personalized link
 
-Proof: `call-access-admin-prevention-contract` issues a personalized link for a
+Proof: `call-creation-owner-rights-contract` creates calls through the backend
+`POST /api/calls` route as a registered normal user and as a registered admin,
+then verifies the persisted `calls.owner_user_id`, creator room ownership,
+creator `call_participants.call_role = owner`, owner role contexts,
+`can_moderate`, `can_manage_owner`, and own-call update authority. It does not
+exercise owner transfer.
+`call-access-admin-prevention-contract` issues a personalized link for a
 normal user and an anonymous/open link while a normal user context is present,
 then authenticates the issued sessions and proves role, tenant-admin,
 system-admin, moderator, owner-management, and call-admin checks all remain
@@ -2037,8 +2043,8 @@ identifiers.
 
 ## Test Group: Call Creation and Ownership
 
-- [ ] `e2e_owner_001_normal_user_creates_call_and_becomes_owner`
-- [ ] `e2e_owner_002_admin_user_creates_call_and_becomes_owner`
+- [x] `e2e_owner_001_normal_user_creates_call_and_becomes_owner`
+- [x] `e2e_owner_002_admin_user_creates_call_and_becomes_owner`
 - [ ] `e2e_owner_003_owner_can_manage_guest_list`
 - [ ] `e2e_owner_004_owner_can_admit_lobby_participant`
 - [ ] `e2e_owner_005_owner_can_kick_participant`
@@ -2049,6 +2055,12 @@ identifiers.
 - [ ] `e2e_owner_010_owner_transfer_to_nonexistent_user_rejected`
 - [ ] `e2e_owner_011_owner_transfer_cross_org_rejected_if_forbidden`
 - [ ] `e2e_owner_012_owner_transfer_audit_logged`
+
+Proof: `call-creation-owner-rights-contract` is the backend/API proof for
+`e2e_owner_001` and `e2e_owner_002`: both registered normal-user and admin-user
+creators create their own call through `/api/calls`, become the persisted owner,
+and receive own-call admin/moderation rights. Owner-transfer scenarios remain
+unchecked for the separate owner-transfer lane.
 
 ## Test Group: Direct Join Permissions
 

@@ -151,6 +151,10 @@ SQL
         'rest'
     );
     videochat_call_create_endpoint_assert((bool) ($adminAuth['ok'] ?? false), 'expected valid admin auth context');
+    $adminTenantId = videochat_tenant_id_from_auth_context($adminAuth);
+    if ($adminTenantId > 0) {
+        videochat_tenant_attach_user($pdo, $extraUserId, $adminTenantId);
+    }
 
     $requestTemplate = [
         'uri' => '/api/calls',
