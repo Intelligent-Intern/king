@@ -87,6 +87,7 @@ run_backend_contract() {
 STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
+  "tests/contract/call-access-identity-mismatch-review-flow-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-privacy-foreign-data-contract.mjs"
   "tests/contract/call-access-safe-screen-final-contract.mjs"
@@ -107,6 +108,7 @@ STATIC_CONTRACTS=(
 FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
+  "tests/contract/call-access-identity-mismatch-review-flow-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-privacy-foreign-data-contract.mjs"
   "tests/contract/call-access-safe-screen-final-contract.mjs"
@@ -135,6 +137,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-invalidation-contract.sh"
   "tests/call-access-privacy-contract.sh"
   "tests/call-access-strong-mismatch-privacy-contract.sh"
+  "tests/call-access-identity-mismatch-review-flow-contract.sh"
   "tests/call-access-session-contract.sh"
   "tests/call-access-session-fixation-contract.sh"
   "tests/call-access-session-route-guard-contract.sh"

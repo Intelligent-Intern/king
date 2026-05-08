@@ -25,6 +25,10 @@ function callAccessSessionRequestBody(options: Record<string, any> = {}): Record
   if (guestName !== '') {
     body.guest_name = guestName;
   }
+  const hostName = typeof options?.hostName === 'string' ? options.hostName.trim() : '';
+  if (hostName !== '') {
+    body.host_name = hostName;
+  }
 
   const verifiedContext = callAccessVerifiedContextFromSession(options?.verifiedContext);
   if (verifiedContext) {
@@ -108,6 +112,53 @@ export async function loginWithCallAccess(accessId: unknown, options: Record<str
       ok: false,
       status: 0,
       message: normalizeNetworkErrorMessage(error, 'Call access session request failed.'),
+    };
+  }
+}
+
+export async function requestCallAccessAccountUpdateConfirmation(accessId: unknown, payload: Record<string, unknown> = {}) {
+  const normalizedAccessId = String(accessId || '').trim().toLowerCase();
+  if (!CALL_UUID_PATTERN.test(normalizedAccessId)) {
+    return {
+      ok: false,
+      status: 422,
+      errorCode: 'call_access_validation_failed',
+      message: 'Call access id is invalid.',
+    };
+  }
+
+  try {
+    const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(normalizedAccessId)}/account-update-confirmation`, {
+      method: 'POST',
+      headers: callAccessSessionHeaders(true),
+      body: JSON.stringify(payload && typeof payload === 'object' ? payload : {}),
+    });
+    const resultPayload = await readJsonResponse(response);
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        errorCode: errorCodeFromPayload(resultPayload),
+        message: extractErrorMessage(resultPayload, 'Could not request account update confirmation.'),
+      };
+    }
+    if (!resultPayload || resultPayload.status !== 'ok') {
+      return {
+        ok: false,
+        status: response.status,
+        message: 'Account update confirmation response is invalid.',
+      };
+    }
+
+    return {
+      ok: true,
+      result: resultPayload.result && typeof resultPayload.result === 'object' ? resultPayload.result : {},
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Account update confirmation request failed.'),
     };
   }
 }

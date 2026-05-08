@@ -663,5 +663,25 @@ SQL
         return ['ok' => false, 'reason' => 'attempt_write_failed'];
     }
 
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => videochat_call_access_review_tenant_id($accessLink, $call),
+        'event_type' => $normalizedOutcome === 'correct_host_name'
+            ? 'call_access_host_name_verified'
+            : 'call_access_host_name_rejected',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => null,
+        'call_id' => videochat_call_access_review_call_id($accessLink, $call),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_call_access_review_access_fingerprint($accessLink),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'outcome' => $normalizedOutcome,
+            'host_name_verified' => $normalizedOutcome === 'correct_host_name',
+            'host_name_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+
     return ['ok' => true, 'reason' => 'recorded'];
 }
