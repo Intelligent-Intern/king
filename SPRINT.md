@@ -2627,10 +2627,10 @@ backend paths, event types, live probe expectations, and sensitive-data guards.
 - [ ] Organization admin creates call, transfers ownership, keeps admin rights
 - [x] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
 - [ ] Invited user is removed from organization before opening link, then joins as call-scoped invited guest
-- [ ] Invite link is invalidated before use and cannot be used
+- [x] Invite link is invalidated before use and cannot be used
 - [x] Call is rescheduled and stale link no longer grants stale access
-- [ ] Call is deleted and all temporary access is revoked
-- [ ] Owner explicitly ends call and all participants receive ended state
+- [x] Call is deleted and all temporary access is revoked
+- [x] Owner explicitly ends call and all participants receive ended state
 - [x] Owner disconnects, final 5-minute countdown is shown, owner does not return, call ends automatically
 - [x] Owner disconnects, final 5-minute countdown is shown, owner returns, countdown disappears and call remains active
 
@@ -2645,6 +2645,12 @@ path.
 `e2e_journey_011_system_admin_join_without_invite` and
 `e2e_journey_011b_system_admin_join_tenantless_call_without_org`; the focused
 Playwright run passed 26 tests.
+`call-access-invite-reschedule-delete-end-main-journeys.spec.js` covers the
+terminal main journeys: invalidated personalized links render safe denied state
+without issuing sessions, rescheduled stale links are denied while the fresh
+personalized link uses current least-privilege permissions, deleted calls block
+temporary rejoin and stale links, and explicit owner end delivers an ended
+lifecycle state to multiple participant workspaces.
 
 ---
 
@@ -3113,7 +3119,7 @@ and the IAM CI static gate.
 - [ ] `e2e_journey_017_org_admin_owner_transfer_keeps_admin`
 - [x] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
 - [ ] `e2e_journey_019_removed_org_member_invite_becomes_call_scoped_guest`
-- [ ] `e2e_journey_020_invalidated_invite_link_denied`
+- [x] `e2e_journey_020_invalidated_invite_link_denied`
 - [x] `e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid`
 - [x] `e2e_journey_022_deleted_call_revokes_all_temp_access`
 - [x] `e2e_journey_023_explicit_call_end_revokes_all_join_paths`
