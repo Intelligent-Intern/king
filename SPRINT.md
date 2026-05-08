@@ -1410,7 +1410,7 @@ the authenticated account authoritative for the issued session.
 - [ ] Lobby status updates correctly
 - [ ] Participant is removed from lobby after admission
 - [ ] Participant is removed from lobby after aborting join attempt
-- [ ] Participant is not shown twice in lobby
+- [x] Participant is not shown twice in lobby
 - [x] Manipulated lobby-admission request without permission is rejected
 
 Proof: `call-access-session-contract` creates a personal access link, persists
@@ -1420,6 +1420,11 @@ that bound room. The same contract requests a secondary call ID with the
 access-bound session and proves it does not enter or queue admission for the
 secondary room. It also creates an open anonymous access session with a guest
 name and proves a distinct guest user plus open call-scoped binding is created.
+`lobby-concurrency-ui.spec.js` drives the browser workspace with duplicate queue
+snapshots, an admitted-plus-stale-queue race snapshot, duplicate room
+participant rows, and final reject-empty state; it proves the lobby badge and
+panel render one queued user, admitted/rejected states leave no stale allow
+controls, and duplicate participant snapshot rows aggregate into one UI row.
 
 ## 12. Rejoin, Leave, Kick
 
