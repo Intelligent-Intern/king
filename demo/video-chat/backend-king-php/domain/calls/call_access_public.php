@@ -97,6 +97,18 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
             'target_hint' => ['participant_email' => null],
         ];
     }
+    $timeWindowState = videochat_call_time_window_state($call);
+    if ($timeWindowState !== 'ok') {
+        return [
+            'ok' => false,
+            'reason' => 'conflict',
+            'errors' => ['call_id' => $timeWindowState === 'not_started' ? 'call_not_started' : 'call_expired'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
 
     $linkKind = videochat_call_access_link_kind($accessLink);
     $linkedUserId = is_numeric($accessLink['participant_user_id'] ?? null)

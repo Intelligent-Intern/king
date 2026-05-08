@@ -148,6 +148,37 @@ function videochat_calendar_invitation_flow_core_access_snapshot(array $access):
     ];
 }
 
+function videochat_calendar_invitation_flow_assert_stale_link_closed(PDO $pdo, string $accessId, array $needles, string $context): void
+{
+    $resolution = videochat_resolve_call_access_public($pdo, $accessId);
+    videochat_calendar_invitation_flow_assert(!(bool) ($resolution['ok'] ?? true), "{$context} should not resolve");
+    videochat_calendar_invitation_flow_assert((string) ($resolution['reason'] ?? '') === 'not_found', "{$context} should fail closed as not_found");
+    videochat_calendar_invitation_flow_assert(($resolution['access_link'] ?? null) === null, "{$context} must not expose access link");
+    videochat_calendar_invitation_flow_assert(($resolution['call'] ?? null) === null, "{$context} must not expose call");
+    videochat_calendar_invitation_flow_assert(($resolution['target_user'] ?? null) === null, "{$context} must not expose target user");
+
+    $issuedSessionId = 'sess_calendar_invite_stale_' . substr(str_replace('-', '', $accessId), 0, 12);
+    $session = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        static fn (): string => $issuedSessionId,
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'calendar-invitation-flow-contract']
+    );
+    videochat_calendar_invitation_flow_assert(!(bool) ($session['ok'] ?? true), "{$context} should not issue a session");
+    videochat_calendar_invitation_flow_assert((string) ($session['reason'] ?? '') === 'not_found', "{$context} session should fail closed as not_found");
+    videochat_calendar_invitation_flow_assert(($session['session'] ?? null) === null, "{$context} must not expose session data");
+    videochat_calendar_invitation_flow_assert(videochat_calendar_invitation_flow_session_user_id($pdo, $issuedSessionId) === 0, "{$context} must not persist session");
+
+    $encoded = json_encode([$resolution, $session], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_calendar_invitation_flow_assert(is_string($encoded), "{$context} should encode");
+    foreach ($needles as $needle) {
+        $text = trim((string) $needle);
+        if ($text !== '') {
+            videochat_calendar_invitation_flow_assert(!str_contains($encoded, $text), "{$context} leaked {$text}");
+        }
+    }
+}
+
 try {
     videochat_calendar_invitation_flow_static_contract();
 
@@ -390,6 +421,29 @@ SQL
     $secondBookingAfterChange = videochat_calendar_invitation_flow_fetch_booking($pdo, $secondAccessId);
     videochat_calendar_invitation_flow_assert($secondAccessAfterChange === $secondAccessBeforeChange, 'moving one appointment must not modify unrelated personalized invitation link');
     videochat_calendar_invitation_flow_assert($secondBookingAfterChange === $secondBookingBeforeChange, 'moving one appointment must not modify unrelated booking form data');
+
+    $pdo->prepare("UPDATE appointment_bookings SET status = 'cancelled', updated_at = :updated_at WHERE access_id = :access_id")->execute([
+        ':updated_at' => gmdate('c'),
+        ':access_id' => $secondAccessId,
+    ]);
+    videochat_calendar_invitation_flow_assert_stale_link_closed(
+        $pdo,
+        $secondAccessId,
+        [$secondAccessId, $secondCallId, $secondEmail, 'Grace Hopper'],
+        'cancelled calendar appointment link'
+    );
+
+    $pdo->prepare('UPDATE appointment_bookings SET call_id = :call_id, updated_at = :updated_at WHERE access_id = :access_id')->execute([
+        ':call_id' => $secondCallId,
+        ':updated_at' => gmdate('c'),
+        ':access_id' => $firstAccessId,
+    ]);
+    videochat_calendar_invitation_flow_assert_stale_link_closed(
+        $pdo,
+        $firstAccessId,
+        [$firstAccessId, $firstCallId, $secondCallId, $firstEmail, 'Ada Lovelace'],
+        'personalized link bound to another appointment call'
+    );
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-calendar-invitation-flow-contract] PASS\n");

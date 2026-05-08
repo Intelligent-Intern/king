@@ -83,6 +83,20 @@ function videochat_handle_call_routes(
                         'time' => gmdate('c'),
                     ]);
                 }
+                $timeWindowState = videochat_call_time_window_state($resolvedCall);
+                if ($timeWindowState !== 'ok') {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'call_id',
+                            'reason' => $timeWindowState === 'not_started' ? 'call_not_started' : 'call_expired',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
 
                 return $jsonResponse(200, [
                     'status' => 'ok',
