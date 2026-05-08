@@ -1955,15 +1955,26 @@ response expose the configured expiry, expired confirmations update no account
 data and remain unconsumed, multiple pending confirmations resolve independently
 by default, a configured newer change supersedes the older pending confirmation,
 replay/consume races resolve as deterministic conflicts, and no raw call-access
-id, host, link-target, confirmation token, recipient email, or session data leaks
-into email, storage, audit rows, or responses. The `/account-update-confirmation`
-route now shows a confirmed success state only after the backend returns
-`state=confirmed`. Proof commands passed: `php -l` for the helper and contract,
-`node tests/contract/call-access-duplicate-review-email-contract.mjs`, Docker
-PHP 8.4 `call-access-email-confirmation-contract.php`,
-`npm run test:contract:iam-call-access`, and `git diff --check`. Host PHP still
-skips SQLite runtime proof because `pdo_sqlite` is unavailable. `npm run build`
-could not run in this leaf because local `vite` is not installed.
+id, host, link-target, pending account data, recipient email, or session data
+leaks into email, storage, audit rows, or responses. The confirmation token is
+limited to the secure confirmation URL. The `/account-update-confirmation` route
+now shows a confirmed success state only after the backend returns
+`state=confirmed`.
+Additional email-safe dispatch proof: `call-access-email-safe-texts-dispatch-audit-contract.mjs`
+pins that confirmation email text uses only the current-recipient greeting,
+secure confirmation URL, and expiry metadata. Docker PHP 8.4
+`call-access-email-confirmation-contract.php` proves queued outbox dispatch,
+mail-dispatch failure rejection, no confirmable pending payload after dispatch
+failure, unchanged account data on dispatch failure, and audit coverage for
+dispatch success/failure, confirmation success/failure, and explicit
+`call_access_account_data_changed`.
+Proof commands passed: `php -l` for the helper and contract, `node
+tests/contract/call-access-duplicate-review-email-contract.mjs`, `node
+tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs`, Docker
+PHP 8.4 `call-access-email-confirmation-contract.php`, `npm run
+test:contract:iam-call-access`, and `git diff --check`. Host PHP still skips
+SQLite runtime proof because `pdo_sqlite` is unavailable. `npm run build` could
+not run in this leaf because local `vite` is not installed.
 
 ## 17. Guest List
 
@@ -2538,7 +2549,7 @@ integrated frontend build passed.
 - [ ] Leading / trailing spaces in names do not cause false strong mismatch
 - [ ] Empty inputs in update form are validated
 - [ ] Invalid email configuration causes no data leaks
-- [ ] Mail sending failure leaves account unchanged
+- [x] Mail sending failure leaves account unchanged
 - [ ] Database error during join leads to safe abort
 - [ ] Network error during join leads to repeatable state
 - [ ] Timeout during lobby admission leads to consistent state
@@ -2566,6 +2577,10 @@ expired active time windows, missing organization, missing host, cancelled
 appointment links, same-host appointment/call binding mismatches, and
 capitalization/special-character/spaced/ambiguous/changed host-name attempts with
 no call, invitee, host, link, or session leakage.
+Additional proof: Docker PHP 8.4 `call-access-email-confirmation-contract.php`
+forces an unqueueable account-update confirmation outbox path and proves the
+request fails as `email_delivery_failed`, leaves account data unchanged, and
+does not leave a confirmable pending payload.
 
 ## 31. Audit and Monitoring
 
@@ -2627,6 +2642,12 @@ link-account comparison for strong mismatch and matched sessions, successful
 host-name verification, and account-update request audit events. Docker PHP 8.4
 runtime proof passed, and `iam-call-access-audit-events-contract.mjs` pins the
 backend paths, event types, live probe expectations, and sensitive-data guards.
+Account-update email audit proof is now completed by
+`call-access-email-safe-texts-dispatch-audit-contract.mjs` plus Docker PHP 8.4
+`call-access-email-confirmation-contract.php`, covering email dispatch success,
+email dispatch failure, confirmation success, confirmation failure, and the
+separate `call_access_account_data_changed` event without raw link, token,
+recipient email, host, or foreign account data.
 
 ## 32. End-to-End Main Paths
 
