@@ -6,6 +6,7 @@ import {
   createInvitedCallViaApi,
   createPersonalAccessJoinPath,
   installMediaDeviceShim,
+  userCredentials,
 } from './helpers/nativeAudioTransferHarness.js';
 
 const sessionStorageKey = 'ii_videocall_v1_session';
@@ -104,6 +105,151 @@ test('personal call-access link starts a call-scoped session and waits for host 
     await Promise.allSettled([
       adminContext.close(),
       publicContext.close(),
+    ]);
+  }
+});
+
+test('registered logged-in invitee opens personalized link without temporary identity takeover', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const participantUserId = 2;
+  const callTitle = `E2E Registered Invitee ${Date.now()}`;
+  const temporaryNeedles = ['guest+', 'Temporary Link Guest', 'temporary_call_account'];
+
+  const { context: adminContext, storedSession: adminSession } = await createAuthenticatedPage(
+    browser,
+    baseURL,
+    adminCredentials,
+  );
+  const {
+    context: inviteeContext,
+    page,
+    storedSession: inviteeSession,
+  } = await createAuthenticatedPage(browser, baseURL, userCredentials);
+
+  let sessionAuthorization = '';
+  let sessionBody = null;
+
+  try {
+    const callId = await createInvitedCallViaApi({
+      sessionToken: adminSession.sessionToken,
+      title: callTitle,
+      participantUserId,
+    });
+    const joinPath = await createPersonalAccessJoinPath({
+      callId,
+      sessionToken: adminSession.sessionToken,
+      participantUserId,
+    });
+    const accessId = accessIdFromJoinPath(joinPath);
+    expect(accessId, 'join path must contain the backend-issued access id').not.toBe('');
+    expect(inviteeSession.userId).toBe(participantUserId);
+
+    page.on('request', (request) => {
+      if (
+        request.url().includes(`/api/call-access/${accessId}/session`)
+        && request.method() === 'POST'
+      ) {
+        sessionAuthorization = request.headers().authorization || '';
+        const rawBody = request.postData();
+        if (rawBody) {
+          try {
+            sessionBody = JSON.parse(rawBody);
+          } catch {
+            sessionBody = rawBody;
+          }
+        }
+      }
+    });
+
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(joinPath);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    const joinBody = await joinResponse.text();
+    for (const value of temporaryNeedles) {
+      expect(joinBody, `join response must not contain ${value}`).not.toContain(value);
+    }
+    const joinPayload = JSON.parse(joinBody);
+    expect(joinPayload?.status).toBe('ok');
+    expect(joinPayload?.result?.link_kind).toBe('personal');
+    expect(joinPayload?.result?.target_user?.id).toBe(participantUserId);
+    expect(joinPayload?.result?.call?.id).toBe(callId);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(callTitle);
+    await expect(joinDialog).toContainText('Personalized link');
+    for (const value of temporaryNeedles) {
+      await expect(joinDialog, `join dialog must not render ${value}`).not.toContainText(value);
+    }
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionBodyText = await sessionResponse.text();
+    for (const value of temporaryNeedles) {
+      expect(sessionBodyText, `session response must not contain ${value}`).not.toContain(value);
+    }
+    const sessionPayload = JSON.parse(sessionBodyText);
+    expect(sessionPayload?.status).toBe('ok');
+    expect(sessionPayload?.result?.user?.id).toBe(participantUserId);
+    expect(sessionPayload?.result?.user?.email).toBe(inviteeSession.email);
+    expect(sessionPayload?.result?.user?.account_type).toBe('account');
+    expect(sessionPayload?.result?.user?.is_guest).toBe(false);
+    expect(sessionPayload?.result?.call?.id).toBe(callId);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+
+    expect(sessionAuthorization).toBe(`Bearer ${inviteeSession.sessionToken}`);
+    expect(sessionBody).toEqual({
+      verified_user_id: inviteeSession.userId,
+      verified_session_id: inviteeSession.sessionId,
+    });
+
+    await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
+    await expect(joinDialog).not.toContainText(/This call link is not available|cannot be used/i);
+    expect(page.url()).toContain(`/join/${accessId}`);
+    expect(page.url()).not.toContain('/workspace/call');
+
+    const activeSessionState = await page.evaluate(async () => {
+      const { sessionState } = await import('/src/domain/auth/session.ts');
+      return {
+        userId: sessionState.userId,
+        email: sessionState.email,
+        accountType: sessionState.accountType,
+        isGuest: sessionState.isGuest,
+        sessionId: sessionState.sessionId,
+        sessionToken: sessionState.sessionToken,
+      };
+    });
+    expect(activeSessionState.userId).toBe(participantUserId);
+    expect(activeSessionState.email).toBe(inviteeSession.email);
+    expect(activeSessionState.accountType).toBe('account');
+    expect(activeSessionState.isGuest).toBe(false);
+    expect(activeSessionState.sessionId).toBe(sessionPayload?.result?.session?.id);
+    expect(activeSessionState.sessionToken).toBe(sessionPayload?.result?.session?.token);
+
+    const storedSession = await page.evaluate((key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '{}');
+      } catch {
+        return {};
+      }
+    }, sessionStorageKey);
+    expect(storedSession.sessionId).toBe(sessionPayload?.result?.session?.id);
+    expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
+    expect(JSON.stringify(storedSession)).not.toContain('guest+');
+  } finally {
+    await Promise.allSettled([
+      adminContext.close(),
+      inviteeContext.close(),
     ]);
   }
 });
