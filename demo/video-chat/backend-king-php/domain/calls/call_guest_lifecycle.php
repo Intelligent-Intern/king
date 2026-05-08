@@ -74,7 +74,7 @@ SQL
 /**
  * @return array{ok: bool, reason: string, audit_event: array<string, mixed>|null}
  */
-function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, ?int $tenantId, array $result): array
+function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, ?int $tenantId, array $result, array $context = []): array
 {
     $normalizedCallId = trim($callId);
     if ($normalizedCallId === '') {
@@ -85,6 +85,15 @@ function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, 
         static fn (mixed $value): int => is_numeric($value) ? (int) $value : 0,
         (array) ($result['guest_user_ids'] ?? [])
     ), static fn (int $value): bool => $value > 0));
+    $cleanupScope = strtolower(trim((string) ($context['cleanup_scope'] ?? 'call')));
+    if (!in_array($cleanupScope, ['call', 'invitation'], true)) {
+        $cleanupScope = 'call';
+    }
+    $accessId = trim((string) ($context['access_id'] ?? ''));
+    $extraPayload = [];
+    if ($accessId !== '') {
+        $extraPayload['access_fingerprint'] = videochat_audit_fingerprint($accessId);
+    }
 
     $audit = videochat_audit_record_event($pdo, [
         'tenant_id' => $tenantId,
@@ -94,7 +103,7 @@ function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, 
         'resource_id' => $normalizedCallId,
         'resource_fingerprint' => videochat_audit_fingerprint($normalizedCallId),
         'payload' => [
-            'cleanup_scope' => 'call',
+            'cleanup_scope' => $cleanupScope,
             'cleanup_result' => (string) ($result['reason'] ?? 'unknown'),
             'guest_user_count' => count($guestUserIds),
             'invalidated_guest_count' => max(0, (int) ($result['invalidated_guests'] ?? 0)),
@@ -104,6 +113,7 @@ function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, 
             'raw_guest_identifiers_logged' => false,
             'raw_session_identifier_logged' => false,
             'raw_access_identifier_logged' => false,
+            ...$extraPayload,
         ],
     ]);
 
@@ -112,6 +122,146 @@ function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, 
         'reason' => (string) ($audit['reason'] ?? 'audit_write_failed'),
         'audit_event' => is_array($audit['event'] ?? null) ? $audit['event'] : null,
     ];
+}
+
+function videochat_call_guest_lifecycle_is_active_temporary_guest(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0) {
+        return false;
+    }
+
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT 1
+FROM users
+WHERE id = :id
+  AND status = 'active'
+  AND password_hash IS NULL
+  AND lower(email) LIKE 'guest+%@videochat.local'
+LIMIT 1
+SQL
+    );
+    $query->execute([':id' => $userId]);
+
+    return $query->fetchColumn() !== false;
+}
+
+/**
+ * @return array{ok: bool, reason: string, guest_user_ids: array<int, int>, invalidated_guests: int, revoked_sessions: int, audit_events: array<int, array<string, mixed>>}
+ */
+function videochat_invalidate_guest_account_for_invitation(PDO $pdo, array $accessLink, ?int $tenantId = null): array
+{
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $callId = trim((string) ($accessLink['call_id'] ?? ''));
+    $guestUserId = is_numeric($accessLink['participant_user_id'] ?? null)
+        ? (int) $accessLink['participant_user_id']
+        : 0;
+    if ($accessId === '' || $callId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'guest_user_ids' => [],
+            'invalidated_guests' => 0,
+            'revoked_sessions' => 0,
+            'audit_events' => [],
+        ];
+    }
+
+    if ($guestUserId <= 0 || !videochat_call_guest_lifecycle_is_active_temporary_guest($pdo, $guestUserId)) {
+        return [
+            'ok' => true,
+            'reason' => 'no_guest_account',
+            'guest_user_ids' => [],
+            'invalidated_guests' => 0,
+            'revoked_sessions' => 0,
+            'audit_events' => [],
+        ];
+    }
+
+    $now = gmdate('c');
+    $startedTransaction = false;
+
+    try {
+        if (!$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $startedTransaction = true;
+        }
+
+        $revoke = $pdo->prepare(
+            <<<'SQL'
+UPDATE sessions
+SET revoked_at = :revoked_at
+WHERE user_id = :user_id
+  AND (revoked_at IS NULL OR revoked_at = '')
+  AND id IN (
+      SELECT session_id
+      FROM call_access_sessions
+      WHERE access_id = :access_id
+        AND call_id = :call_id
+        AND user_id = :user_id
+  )
+SQL
+        );
+        $revoke->execute([
+            ':revoked_at' => $now,
+            ':user_id' => $guestUserId,
+            ':access_id' => $accessId,
+            ':call_id' => $callId,
+        ]);
+        $revokedSessions = $revoke->rowCount();
+
+        $disable = $pdo->prepare(
+            <<<'SQL'
+UPDATE users
+SET status = 'disabled',
+    updated_at = :updated_at
+WHERE id = :user_id
+  AND status = 'active'
+  AND password_hash IS NULL
+  AND lower(email) LIKE 'guest+%@videochat.local'
+SQL
+        );
+        $disable->execute([
+            ':updated_at' => $now,
+            ':user_id' => $guestUserId,
+        ]);
+        $invalidatedGuests = $disable->rowCount();
+
+        $result = [
+            'ok' => true,
+            'reason' => 'invalidated',
+            'guest_user_ids' => [$guestUserId],
+            'invalidated_guests' => $invalidatedGuests,
+            'revoked_sessions' => $revokedSessions,
+        ];
+        $audit = videochat_audit_record_guest_account_cleanup($pdo, $callId, $tenantId, $result, [
+            'cleanup_scope' => 'invitation',
+            'access_id' => $accessId,
+        ]);
+        $result['audit_events'] = [$audit];
+        if (!(bool) ($audit['ok'] ?? false)) {
+            throw new RuntimeException('guest_cleanup_audit_failed');
+        }
+
+        if ($startedTransaction) {
+            $pdo->commit();
+        }
+
+        return $result;
+    } catch (Throwable) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'guest_user_ids' => [$guestUserId],
+            'invalidated_guests' => 0,
+            'revoked_sessions' => 0,
+            'audit_events' => [],
+        ];
+    }
 }
 
 /**

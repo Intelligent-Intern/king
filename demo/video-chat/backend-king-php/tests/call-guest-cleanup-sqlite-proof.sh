@@ -9,6 +9,9 @@ DOCKER_BIN="${DOCKER_BIN:-docker}"
 DOCKER_IMAGE="${GUEST_CLEANUP_SQLITE_PHP_IMAGE:-php:8.4-cli-trixie}"
 GUEST_CLEANUP_CONTRACTS=(
   call-guest-cleanup-explicit-contract.sh
+  call-guest-cleanup-invitation-delete-contract.sh
+  call-guest-cleanup-restart-contract.sh
+  call-guest-cleanup-lifecycle-remaining-contract.sh
   call-guest-cleanup-call-end-contract.sh
   call-guest-cleanup-call-delete-contract.sh
 )
@@ -42,6 +45,9 @@ run_with_docker() {
       set -euo pipefail
       php -m | grep -i "^pdo_sqlite$"
       tests/call-guest-cleanup-explicit-contract.sh
+      tests/call-guest-cleanup-invitation-delete-contract.sh
+      tests/call-guest-cleanup-restart-contract.sh
+      tests/call-guest-cleanup-lifecycle-remaining-contract.sh
       tests/call-guest-cleanup-call-end-contract.sh
       tests/call-guest-cleanup-call-delete-contract.sh
     '
