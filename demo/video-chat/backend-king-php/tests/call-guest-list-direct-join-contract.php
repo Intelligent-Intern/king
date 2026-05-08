@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 
 function videochat_call_guest_list_direct_join_assert(bool $condition, string $message): void
@@ -45,6 +47,70 @@ function videochat_call_guest_list_direct_join_create_temporary_user(PDO $pdo, P
     $userId = (int) $pdo->lastInsertId();
     videochat_call_guest_list_direct_join_assert($userId > 0, 'created temporary user id should be positive');
     return $userId;
+}
+
+function videochat_call_guest_list_direct_join_fetch_user(PDO $pdo, int $userId): array
+{
+    $query = $pdo->prepare('SELECT id, email, display_name FROM users WHERE id = :id LIMIT 1');
+    $query->execute([':id' => $userId]);
+    $user = $query->fetch(PDO::FETCH_ASSOC);
+    videochat_call_guest_list_direct_join_assert(is_array($user), 'expected user row: ' . $userId);
+    return $user;
+}
+
+function videochat_call_guest_list_direct_join_create_personal_link(
+    PDO $pdo,
+    string $callId,
+    int $tenantId,
+    int $createdByUserId,
+    int $participantUserId,
+    string $participantEmail
+): string {
+    $accessId = videochat_generate_call_access_uuid();
+    $tenantColumn = videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id') ? ', tenant_id' : '';
+    $tenantValue = $tenantColumn !== '' ? ', :tenant_id' : '';
+    $insert = $pdo->prepare(
+        <<<SQL
+INSERT INTO call_access_links(
+    id,
+    call_id,
+    participant_user_id,
+    participant_email,
+    invite_code_id,
+    created_by_user_id,
+    created_at,
+    expires_at,
+    last_used_at,
+    consumed_at{$tenantColumn}
+) VALUES(
+    :id,
+    :call_id,
+    :participant_user_id,
+    :participant_email,
+    NULL,
+    :created_by_user_id,
+    :created_at,
+    :expires_at,
+    NULL,
+    NULL{$tenantValue}
+)
+SQL
+    );
+    $params = [
+        ':id' => $accessId,
+        ':call_id' => $callId,
+        ':participant_user_id' => $participantUserId,
+        ':participant_email' => $participantEmail,
+        ':created_by_user_id' => $createdByUserId,
+        ':created_at' => gmdate('c'),
+        ':expires_at' => gmdate('c', time() + 3600),
+    ];
+    if ($tenantColumn !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $insert->execute($params);
+
+    return $accessId;
 }
 
 function videochat_call_guest_list_direct_join_attach_tenant(PDOStatement $attachTenant, int $tenantId, int $userId): void
@@ -362,6 +428,83 @@ SQL
     videochat_call_guest_list_direct_join_assert((bool) ($temporaryDuplicate['ok'] ?? false), 'duplicate temporary add should merge');
     videochat_call_guest_list_direct_join_assert((string) ($temporaryDuplicate['reason'] ?? '') === 'merged', 'duplicate temporary add reason mismatch');
     videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $temporaryGuestId) === 1, 'duplicate temporary add must not create extra entries');
+
+    $temporaryGuest = videochat_call_guest_list_direct_join_fetch_user($pdo, $temporaryGuestId);
+    $temporaryAccessId = videochat_call_guest_list_direct_join_create_personal_link(
+        $pdo,
+        $ownOrgCallId,
+        $tenantId,
+        $ownerAUserId,
+        $temporaryGuestId,
+        (string) ($temporaryGuest['email'] ?? '')
+    );
+    $temporaryLinkResolution = videochat_resolve_call_access_public($pdo, $temporaryAccessId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryLinkResolution['ok'] ?? false), 'temporary personalized guest-list link should resolve');
+    videochat_call_guest_list_direct_join_assert((int) (($temporaryLinkResolution['target_user'] ?? [])['id'] ?? 0) === $temporaryGuestId, 'temporary personalized link should resolve to bound temporary account');
+    videochat_call_guest_list_direct_join_assert((string) (($temporaryLinkResolution['call'] ?? [])['id'] ?? '') === $ownOrgCallId, 'temporary personalized link should resolve to bound call');
+
+    $manipulatedBodySession = videochat_issue_session_for_call_access(
+        $pdo,
+        $temporaryAccessId,
+        static fn (): string => 'sess_direct_join_temp_manipulated_body',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-guest-list-direct-join-contract'],
+        [
+            'participant_user_id' => $participantBUserId,
+            'target_user_id' => $participantBUserId,
+            'user_id' => $participantBUserId,
+            'call_id' => $foreignOrgCallId,
+            'room_id' => 'forged-room',
+            'role' => 'admin',
+            'guest_name' => 'Forged Identity',
+        ]
+    );
+    videochat_call_guest_list_direct_join_assert((bool) ($manipulatedBodySession['ok'] ?? false), 'unknown body authority fields must not block valid temporary link session');
+    videochat_call_guest_list_direct_join_assert((int) (($manipulatedBodySession['user'] ?? [])['id'] ?? 0) === $temporaryGuestId, 'body fields must not change the temporary link identity');
+    videochat_call_guest_list_direct_join_assert((string) (($manipulatedBodySession['call'] ?? [])['id'] ?? '') === $ownOrgCallId, 'body fields must not change the link call');
+    videochat_call_guest_list_direct_join_assert((int) (($manipulatedBodySession['user'] ?? [])['id'] ?? 0) !== $participantBUserId, 'temporary link must not assume another participant identity');
+    videochat_call_guest_list_direct_join_assert((bool) (($manipulatedBodySession['call'] ?? [])['my_participation'] ?? false), 'temporary guest-list link should retain direct participant visibility');
+
+    $wrongAuthenticatedSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $temporaryAccessId,
+        static fn (): string => 'sess_direct_join_temp_wrong_auth',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-guest-list-direct-join-contract'],
+        [
+            'authenticated_user_id' => $participantBUserId,
+            'authenticated_session_id' => 'sess_participant_b_wrong_auth',
+        ]
+    );
+    videochat_call_guest_list_direct_join_assert(!(bool) ($wrongAuthenticatedSession['ok'] ?? true), 'authenticated different user must not take over temporary personalized link');
+    videochat_call_guest_list_direct_join_assert((string) ($wrongAuthenticatedSession['reason'] ?? '') === 'forbidden', 'wrong authenticated user denial reason mismatch');
+    $wrongAuthSessionRows = $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_direct_join_temp_wrong_auth'");
+    videochat_call_guest_list_direct_join_assert($wrongAuthSessionRows !== false && (int) $wrongAuthSessionRows->fetchColumn() === 0, 'wrong authenticated denial must not persist a session');
+
+    $mutatedAccessId = substr($temporaryAccessId, 0, -1) . (substr($temporaryAccessId, -1) === 'a' ? 'b' : 'a');
+    $mutatedSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $mutatedAccessId,
+        static fn (): string => 'sess_direct_join_temp_mutated_link',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-guest-list-direct-join-contract']
+    );
+    videochat_call_guest_list_direct_join_assert(!(bool) ($mutatedSession['ok'] ?? true), 'mutated temporary personalized link should be rejected');
+    videochat_call_guest_list_direct_join_assert((string) ($mutatedSession['reason'] ?? '') === 'not_found', 'mutated temporary personalized link reason mismatch');
+
+    $pdo->prepare('UPDATE call_participants SET left_at = :left_at WHERE call_id = :call_id AND user_id = :user_id')->execute([
+        ':left_at' => gmdate('c'),
+        ':call_id' => $ownOrgCallId,
+        ':user_id' => $temporaryGuestId,
+    ]);
+    $leftBinding = videochat_validate_call_access_session_binding($pdo, 'sess_direct_join_temp_manipulated_body', $temporaryGuestId);
+    videochat_call_guest_list_direct_join_assert((bool) ($leftBinding['ok'] ?? false), 'temporary guest-list session should remain bound after leaving');
+    videochat_call_guest_list_direct_join_assert((string) ($leftBinding['reason'] ?? '') === 'ok', 'temporary guest-list leave binding reason mismatch');
+    $recognizedReopen = videochat_issue_session_for_call_access(
+        $pdo,
+        $temporaryAccessId,
+        static fn (): string => 'sess_direct_join_temp_reopen_after_leave',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-guest-list-direct-join-contract']
+    );
+    videochat_call_guest_list_direct_join_assert((bool) ($recognizedReopen['ok'] ?? false), 'temporary guest-list link should reopen after leaving');
+    videochat_call_guest_list_direct_join_assert((int) (($recognizedReopen['user'] ?? [])['id'] ?? 0) === $temporaryGuestId, 'reopened temporary link should recognize the same temporary account');
 
     $plainNonGuestDecision = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $participantBUserId, 'user', $tenantId);
     videochat_call_guest_list_direct_join_assert(!(bool) ($plainNonGuestDecision['ok'] ?? true), 'non-guest-list user should not direct join');
