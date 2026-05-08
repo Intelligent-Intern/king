@@ -509,6 +509,11 @@ Tickets:
       iframe hosts are normalized safely, launch/CRDT bridge messages are
       structured-clone safe, and postMessage failure is terminal for the current
       launch generation instead of causing retry/reload loops.
+    - `call-app-frame-csp-headers-contract` and deploy smoke now require
+      Whiteboard frame responses to deliver compatible `Content-Security-Policy`
+      and `Allow-CSP-From` headers for `app.kingrt.com`, without
+      `X-Frame-Options`, nested app domains, or wildcard script/connect/frame
+      policies.
     - `WHITEBOARD_CHECK.md` is an unfilled manual acceptance form for owner,
       moderator, participant, guest, revoked participant, reconnect, and export.
     - Exact commands:
