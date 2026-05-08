@@ -7,6 +7,7 @@ require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/tenancy/tenant_administration.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_iam_rejoin_contract_assert(bool $condition, string $message, string $label): void

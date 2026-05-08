@@ -35,6 +35,14 @@ try {
     $invalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($fixture['access_id'] ?? ''));
     videochat_iam_invitation_invalidation_assert(is_array($invalidatedLink), 'cancelled-call access link row should remain persisted', $label);
     videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'call cancellation should invalidate personalized participant link', $label);
+    videochat_iam_invitation_invalidation_assert_audit_logged(
+        $pdo,
+        $fixture,
+        $label,
+        'call_cancelled',
+        $sessionId,
+        false
+    );
 
     $staleSession = videochat_validate_session_token($pdo, $sessionId);
     videochat_iam_invitation_invalidation_assert(!(bool) ($staleSession['ok'] ?? true), 'stale call-access session must fail after cancellation', $label);
