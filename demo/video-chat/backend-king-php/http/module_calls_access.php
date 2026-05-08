@@ -280,6 +280,117 @@ function videochat_handle_call_access_routes(
         };
     }
 
+    if ($path === '/api/call-access/review-flags') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/call-access/review-flags.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $filters = videochat_request_query_params($request);
+            $result = videochat_call_access_list_review_flags_for_user(
+                $pdo,
+                videochat_call_access_route_user_id($apiAuthContext),
+                (string) (($apiAuthContext['user'] ?? [])['role'] ?? ''),
+                $filters
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_access_review_failed', 'Could not load review flags.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'review_query_failed');
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'call_access_review_forbidden', 'Only system admins can view call access review flags.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            return $errorResponse(500, 'call_access_review_failed', 'Could not load review flags.', [
+                'reason' => $reason,
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'flags' => is_array($result['flags'] ?? null) ? array_values($result['flags']) : [],
+                'total' => (int) ($result['total'] ?? 0),
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/call-access/review-flags/([A-Za-z0-9._:-]{1,120})$#', $path, $reviewFlagMatch) === 1) {
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use PATCH for /api/call-access/review-flags/{id}.', [
+                'allowed_methods' => ['PATCH'],
+            ]);
+        }
+
+        $originCheck = videochat_call_access_state_change_origin_check($request);
+        if (!(bool) ($originCheck['ok'] ?? false)) {
+            return videochat_call_access_csrf_origin_response($originCheck, $errorResponse);
+        }
+        [$payload, $payloadError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'call_access_review_invalid_request_body', 'Review flag payload must be a JSON object.', [
+                'reason' => $payloadError ?? 'invalid_json',
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $result = videochat_call_access_handle_review_flag_for_user(
+                $pdo,
+                (string) ($reviewFlagMatch[1] ?? ''),
+                videochat_call_access_route_user_id($apiAuthContext),
+                (string) (($apiAuthContext['user'] ?? [])['role'] ?? ''),
+                (string) ($payload['status'] ?? ''),
+                [
+                    'note' => (string) ($payload['note'] ?? ''),
+                ]
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_access_review_failed', 'Could not update review flag.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'review_update_failed');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'call_access_review_validation_failed', 'Review flag payload failed validation.', [
+                    'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'call_access_review_not_found', 'Review flag does not exist.', []);
+            }
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'call_access_review_forbidden', 'Only system admins can handle call access review flags.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            return $errorResponse(500, 'call_access_review_failed', 'Could not update review flag.', [
+                'reason' => $reason,
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'flag' => is_array($result['flag'] ?? null) ? $result['flag'] : null,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if (preg_match('#^/api/call-access/([A-Fa-f0-9-]{36})/join$#', $path, $publicAccessMatch) === 1) {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/call-access/{id}/join.', [

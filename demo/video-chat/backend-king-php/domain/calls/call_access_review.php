@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/call_management_query.php';
 
 function videochat_call_access_review_public_id(string $prefix): string
 {
@@ -56,12 +57,21 @@ CREATE TABLE IF NOT EXISTS call_access_review_flags (
     first_seen_user_id INTEGER,
     first_seen_at TEXT,
     payload_json TEXT NOT NULL DEFAULT '{}',
+    handled_by_user_id INTEGER,
+    handled_at TEXT,
+    handler_action TEXT NOT NULL DEFAULT '',
+    handling_note TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 )
 SQL
         );
+        videochat_call_access_review_add_column_if_missing($pdo, 'call_access_review_flags', 'handled_by_user_id', 'ALTER TABLE call_access_review_flags ADD COLUMN handled_by_user_id INTEGER');
+        videochat_call_access_review_add_column_if_missing($pdo, 'call_access_review_flags', 'handled_at', 'ALTER TABLE call_access_review_flags ADD COLUMN handled_at TEXT');
+        videochat_call_access_review_add_column_if_missing($pdo, 'call_access_review_flags', 'handler_action', "ALTER TABLE call_access_review_flags ADD COLUMN handler_action TEXT NOT NULL DEFAULT ''");
+        videochat_call_access_review_add_column_if_missing($pdo, 'call_access_review_flags', 'handling_note', "ALTER TABLE call_access_review_flags ADD COLUMN handling_note TEXT NOT NULL DEFAULT ''");
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_review_flags_call ON call_access_review_flags(call_id, created_at DESC)');
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_review_flags_subject ON call_access_review_flags(subject_user_id, created_at DESC)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_review_flags_status ON call_access_review_flags(status, created_at DESC)');
         $pdo->exec(
             <<<'SQL'
 CREATE UNIQUE INDEX IF NOT EXISTS idx_call_access_review_flags_unique_duplicate
@@ -89,6 +99,74 @@ SQL
     }
 
     return true;
+}
+
+function videochat_call_access_review_column_exists(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $safeTable = preg_replace('/[^A-Za-z0-9_]/', '', $tableName);
+    $safeColumn = strtolower((string) preg_replace('/[^A-Za-z0-9_]/', '', $columnName));
+    if (!is_string($safeTable) || $safeTable === '' || $safeColumn === '') {
+        return false;
+    }
+
+    try {
+        $driver = strtolower((string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME));
+    } catch (Throwable) {
+        $driver = '';
+    }
+
+    try {
+        if ($driver === 'sqlite') {
+            $columns = $pdo->query('PRAGMA table_info(' . $safeTable . ')');
+            foreach ($columns ?: [] as $column) {
+                if (strtolower((string) ($column['name'] ?? '')) === $safeColumn) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT 1
+FROM information_schema.columns
+WHERE table_name = :table_name
+  AND lower(column_name) = :column_name
+LIMIT 1
+SQL
+        );
+        $query->execute([
+            ':table_name' => $safeTable,
+            ':column_name' => $safeColumn,
+        ]);
+
+        return $query->fetchColumn() !== false;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function videochat_call_access_review_add_column_if_missing(
+    PDO $pdo,
+    string $tableName,
+    string $columnName,
+    string $sql
+): void {
+    if (videochat_call_access_review_column_exists($pdo, $tableName, $columnName)) {
+        return;
+    }
+
+    try {
+        $pdo->exec($sql);
+    } catch (Throwable $error) {
+        $message = strtolower($error->getMessage());
+        if (str_contains($message, 'duplicate column') || str_contains($message, 'already exists')) {
+            return;
+        }
+
+        throw $error;
+    }
 }
 
 function videochat_call_access_review_tenant_id(array $accessLink, array $call = []): ?int
@@ -289,6 +367,202 @@ SQL
         'ok' => true,
         'reason' => 'duplicate_personalized_link',
         'flag_created' => $flagCreated,
+        'flag' => $flag,
+    ];
+}
+
+function videochat_call_access_review_normalize_status(string $status, string $fallback = ''): string
+{
+    $normalized = strtolower(trim($status));
+    if (in_array($normalized, ['open', 'resolved', 'dismissed'], true)) {
+        return $normalized;
+    }
+
+    return $fallback;
+}
+
+function videochat_call_access_review_public_flag_payload(array $row): array
+{
+    $payload = [];
+    $decoded = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+    if (is_array($decoded)) {
+        $payload = videochat_audit_sanitize_payload($decoded);
+    }
+
+    return [
+        'id' => (string) ($row['public_id'] ?? ''),
+        'public_id' => (string) ($row['public_id'] ?? ''),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
+        'call_id' => (string) ($row['call_id'] ?? ''),
+        'reason' => (string) ($row['reason'] ?? ''),
+        'status' => videochat_call_access_review_normalize_status((string) ($row['status'] ?? ''), 'open'),
+        'subject_user_id' => is_numeric($row['subject_user_id'] ?? null) ? (int) $row['subject_user_id'] : null,
+        'target_user_id' => is_numeric($row['target_user_id'] ?? null) ? (int) $row['target_user_id'] : null,
+        'first_seen_user_id' => is_numeric($row['first_seen_user_id'] ?? null) ? (int) $row['first_seen_user_id'] : null,
+        'first_seen_at' => is_string($row['first_seen_at'] ?? null) ? (string) $row['first_seen_at'] : null,
+        'handled_by_user_id' => is_numeric($row['handled_by_user_id'] ?? null) ? (int) $row['handled_by_user_id'] : null,
+        'handled_at' => is_string($row['handled_at'] ?? null) ? (string) $row['handled_at'] : null,
+        'handler_action' => (string) ($row['handler_action'] ?? ''),
+        'created_at' => (string) ($row['created_at'] ?? ''),
+        'payload' => is_array($payload) ? $payload : [],
+    ];
+}
+
+function videochat_call_access_list_review_flags_for_user(
+    PDO $pdo,
+    int $authUserId,
+    string $authRole,
+    array $filters = []
+): array {
+    if (!videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
+        return ['ok' => false, 'reason' => 'forbidden', 'flags' => [], 'total' => 0];
+    }
+    if (!videochat_call_access_review_bootstrap($pdo)) {
+        return ['ok' => false, 'reason' => 'review_unavailable', 'flags' => [], 'total' => 0];
+    }
+
+    $where = [];
+    $params = [];
+    $status = videochat_call_access_review_normalize_status((string) ($filters['status'] ?? ''), '');
+    if ($status !== '') {
+        $where[] = 'status = :status';
+        $params[':status'] = $status;
+    }
+    if (is_numeric($filters['tenant_id'] ?? null) && (int) $filters['tenant_id'] > 0) {
+        $where[] = 'tenant_id = :tenant_id';
+        $params[':tenant_id'] = (int) $filters['tenant_id'];
+    }
+    $callId = trim((string) ($filters['call_id'] ?? ''));
+    if ($callId !== '') {
+        $where[] = 'call_id = :call_id';
+        $params[':call_id'] = $callId;
+    }
+
+    $limit = (int) ($filters['limit'] ?? 50);
+    if ($limit <= 0) {
+        $limit = 50;
+    }
+    $limit = min(100, $limit);
+    $whereSql = $where === [] ? '' : 'WHERE ' . implode(' AND ', $where);
+
+    try {
+        $query = $pdo->prepare(
+            <<<SQL
+SELECT *
+FROM call_access_review_flags
+{$whereSql}
+ORDER BY created_at DESC, id DESC
+LIMIT {$limit}
+SQL
+        );
+        $query->execute($params);
+        $rows = $query->fetchAll();
+    } catch (Throwable) {
+        return ['ok' => false, 'reason' => 'review_query_failed', 'flags' => [], 'total' => 0];
+    }
+
+    $flags = [];
+    foreach ($rows as $row) {
+        if (is_array($row)) {
+            $flags[] = videochat_call_access_review_public_flag_payload($row);
+        }
+    }
+
+    return ['ok' => true, 'reason' => 'ok', 'flags' => $flags, 'total' => count($flags)];
+}
+
+function videochat_call_access_handle_review_flag_for_user(
+    PDO $pdo,
+    string $publicId,
+    int $authUserId,
+    string $authRole,
+    string $nextStatus,
+    array $options = []
+): array {
+    $normalizedPublicId = trim($publicId);
+    if ($normalizedPublicId === '' || preg_match('/^[A-Za-z0-9._:-]{1,120}$/', $normalizedPublicId) !== 1) {
+        return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['id' => 'invalid'], 'flag' => null];
+    }
+    $normalizedStatus = videochat_call_access_review_normalize_status($nextStatus, '');
+    if ($normalizedStatus === '') {
+        return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['status' => 'invalid'], 'flag' => null];
+    }
+    if (!videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
+        return ['ok' => false, 'reason' => 'forbidden', 'errors' => [], 'flag' => null];
+    }
+    if (!videochat_call_access_review_bootstrap($pdo)) {
+        return ['ok' => false, 'reason' => 'review_unavailable', 'errors' => [], 'flag' => null];
+    }
+
+    $fetch = $pdo->prepare('SELECT * FROM call_access_review_flags WHERE public_id = :public_id LIMIT 1');
+    $fetch->execute([':public_id' => $normalizedPublicId]);
+    $existing = $fetch->fetch();
+    if (!is_array($existing)) {
+        return ['ok' => false, 'reason' => 'not_found', 'errors' => [], 'flag' => null];
+    }
+
+    $previousStatus = videochat_call_access_review_normalize_status((string) ($existing['status'] ?? ''), 'open');
+    $note = trim((string) ($options['note'] ?? ''));
+    if (strlen($note) > 500) {
+        $note = substr($note, 0, 500);
+    }
+    $handledAt = $normalizedStatus === 'open' ? null : gmdate('c');
+    $handlerAction = $normalizedStatus === 'open' ? 'reopened' : $normalizedStatus;
+    $handledByUserId = $normalizedStatus === 'open' ? null : $authUserId;
+
+    try {
+        $update = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_access_review_flags
+SET status = :status,
+    handled_by_user_id = :handled_by_user_id,
+    handled_at = :handled_at,
+    handler_action = :handler_action,
+    handling_note = :handling_note
+WHERE public_id = :public_id
+SQL
+        );
+        $update->execute([
+            ':status' => $normalizedStatus,
+            ':handled_by_user_id' => $handledByUserId,
+            ':handled_at' => $handledAt,
+            ':handler_action' => $handlerAction,
+            ':handling_note' => $note,
+            ':public_id' => $normalizedPublicId,
+        ]);
+    } catch (Throwable) {
+        return ['ok' => false, 'reason' => 'review_update_failed', 'errors' => [], 'flag' => null];
+    }
+
+    $fetch->execute([':public_id' => $normalizedPublicId]);
+    $updated = $fetch->fetch();
+    $flag = is_array($updated) ? videochat_call_access_review_public_flag_payload($updated) : null;
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($existing['tenant_id'] ?? null) ? (int) $existing['tenant_id'] : null,
+        'event_type' => 'call_access_review_flag_handled',
+        'actor_user_id' => $authUserId,
+        'target_user_id' => is_numeric($existing['target_user_id'] ?? null) ? (int) $existing['target_user_id'] : null,
+        'call_id' => (string) ($existing['call_id'] ?? ''),
+        'resource_type' => 'call_access_review_flag',
+        'resource_id' => $normalizedPublicId,
+        'resource_fingerprint' => videochat_audit_fingerprint($normalizedPublicId),
+        'payload' => [
+            'reason' => (string) ($existing['reason'] ?? ''),
+            'previous_status' => $previousStatus,
+            'next_status' => $normalizedStatus,
+            'handler_action' => $handlerAction,
+            'note_recorded' => $note !== '',
+            'raw_link_identifier_logged' => false,
+            'access_fingerprint_logged' => false,
+            'account_email_logged' => false,
+        ],
+    ]);
+
+    return [
+        'ok' => true,
+        'reason' => 'updated',
+        'errors' => [],
         'flag' => $flag,
     ];
 }

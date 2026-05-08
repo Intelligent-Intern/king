@@ -5,6 +5,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../http/module_calls_access.php';
 
 function videochat_system_admin_call_rights_assert(bool $condition, string $message): void
 {
@@ -101,9 +103,63 @@ SQL
         $userRoleId,
         'participant-pass'
     );
+    $foreignOrgAdminId = videochat_system_admin_call_rights_create_user(
+        $pdo,
+        'system-admin-foreign-org-admin@example.test',
+        'Foreign Organization Admin',
+        $userRoleId,
+        'admin-pass'
+    );
+    $tenantlessOwnerId = videochat_system_admin_call_rights_create_user(
+        $pdo,
+        'system-admin-tenantless-owner@example.test',
+        'Tenantless Call Owner',
+        $userRoleId,
+        'tenantless-owner-pass'
+    );
     videochat_tenant_attach_user($pdo, $foreignOwnerId, $foreignTenantId, 'owner');
     videochat_tenant_attach_user($pdo, $foreignParticipantId, $foreignTenantId, 'member');
     videochat_tenant_attach_user($pdo, $foreignSecondParticipantId, $foreignTenantId, 'member');
+    videochat_tenant_attach_user($pdo, $foreignOrgAdminId, $foreignTenantId, 'member');
+
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO organizations(tenant_id, public_id, name, status, created_at, updated_at)
+VALUES(:tenant_id, :public_id, :name, 'active', :created_at, :updated_at)
+SQL
+    )->execute([
+        ':tenant_id' => $foreignTenantId,
+        ':public_id' => 'org-system-admin-foreign',
+        ':name' => 'System Admin Foreign Org Membership',
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+    $foreignOrganizationId = (int) $pdo->lastInsertId();
+    videochat_system_admin_call_rights_assert($foreignOrganizationId > 0, 'foreign organization should be inserted');
+
+    $foreignOrganizationMembership = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO organization_memberships(tenant_id, organization_id, user_id, membership_role, status, created_at, updated_at)
+VALUES(:tenant_id, :organization_id, :user_id, :membership_role, 'active', :created_at, :updated_at)
+SQL
+    );
+    foreach (
+        [
+            [$foreignOwnerId, 'member'],
+            [$foreignParticipantId, 'member'],
+            [$foreignSecondParticipantId, 'member'],
+            [$foreignOrgAdminId, 'admin'],
+        ] as [$userId, $membershipRole]
+    ) {
+        $foreignOrganizationMembership->execute([
+            ':tenant_id' => $foreignTenantId,
+            ':organization_id' => $foreignOrganizationId,
+            ':user_id' => $userId,
+            ':membership_role' => $membershipRole,
+            ':created_at' => gmdate('c'),
+            ':updated_at' => gmdate('c'),
+        ]);
+    }
 
     $adminForeignMembership = $pdo->prepare(
         'SELECT COUNT(*) FROM tenant_memberships WHERE tenant_id = :tenant_id AND user_id = :user_id AND status = \'active\''
@@ -199,8 +255,57 @@ SQL
     $adminAfterOwnerTransfer = videochat_get_call_for_user($pdo, $callId, $systemAdminId, 'admin', $defaultTenantId);
     videochat_system_admin_call_rights_assert((bool) ($adminAfterOwnerTransfer['ok'] ?? false), 'system admin rights should remain after owner transfer');
 
+    $tenantlessCreated = videochat_create_call($pdo, $tenantlessOwnerId, [
+        'title' => 'Tenantless System Admin Edge Call',
+        'starts_at' => gmdate('c', time() - 300),
+        'ends_at' => gmdate('c', time() + 3600),
+        'internal_participant_user_ids' => [],
+        'external_participants' => [],
+    ], null);
+    videochat_system_admin_call_rights_assert((bool) ($tenantlessCreated['ok'] ?? false), 'tenantless active call should be created when product data contains such calls');
+    $tenantlessCallId = (string) (($tenantlessCreated['call'] ?? [])['id'] ?? '');
+    videochat_system_admin_call_rights_assert($tenantlessCallId !== '', 'tenantless call id should be present');
+    videochat_system_admin_call_rights_assert(
+        array_key_exists('tenant_id', (array) ($tenantlessCreated['call'] ?? [])) && $tenantlessCreated['call']['tenant_id'] === null,
+        'tenantless call should keep null tenant_id'
+    );
+
+    $adminTenantlessParticipantCount = $pdo->prepare('SELECT COUNT(*) FROM call_participants WHERE call_id = :call_id AND user_id = :user_id');
+    $adminTenantlessParticipantCount->execute([
+        ':call_id' => $tenantlessCallId,
+        ':user_id' => $systemAdminId,
+    ]);
+    videochat_system_admin_call_rights_assert((int) $adminTenantlessParticipantCount->fetchColumn() === 0, 'system admin should not need tenantless call participant row');
+
+    $adminTenantlessDecision = videochat_decide_call_access_for_user($pdo, $tenantlessCallId, $systemAdminId, 'admin', $defaultTenantId);
+    videochat_system_admin_call_rights_assert((bool) ($adminTenantlessDecision['allowed'] ?? false), 'system admin should direct join tenantless active call');
+    videochat_system_admin_call_rights_assert((string) ($adminTenantlessDecision['source'] ?? '') === 'system_admin', 'tenantless system admin decision source mismatch');
+    videochat_system_admin_call_rights_assert(array_key_exists('tenant_id', $adminTenantlessDecision) && $adminTenantlessDecision['tenant_id'] === null, 'tenantless system admin decision must preserve null tenant_id');
+    videochat_system_admin_call_rights_assert((bool) ($adminTenantlessDecision['can_administer'] ?? false), 'system admin should administer tenantless active call');
+    videochat_system_admin_call_rights_assert((bool) ($adminTenantlessDecision['can_manage_owner'] ?? false), 'system admin should retain owner-management rights on tenantless call');
+
+    $adminTenantlessFetch = videochat_get_call_for_user($pdo, $tenantlessCallId, $systemAdminId, 'admin', $defaultTenantId);
+    videochat_system_admin_call_rights_assert((bool) ($adminTenantlessFetch['ok'] ?? false), 'system admin should fetch tenantless active call through default tenant context');
+    videochat_system_admin_call_rights_assert(
+        array_key_exists('tenant_id', (array) ($adminTenantlessFetch['call'] ?? [])) && $adminTenantlessFetch['call']['tenant_id'] === null,
+        'system admin tenantless fetch should expose null tenant_id'
+    );
+    videochat_system_admin_call_rights_assert(
+        (bool) (($adminTenantlessFetch['call'] ?? [])['my_participation'] ?? true) === false,
+        'tenantless system admin access should not depend on call participation'
+    );
+
+    $orgAdminTenantlessDecision = videochat_decide_call_access_for_user($pdo, $tenantlessCallId, $foreignOrgAdminId, 'user', $foreignTenantId);
+    videochat_system_admin_call_rights_assert(!(bool) ($orgAdminTenantlessDecision['allowed'] ?? true), 'organization admin must not inherit rights over tenantless calls');
+    videochat_system_admin_call_rights_assert(
+        in_array((string) ($orgAdminTenantlessDecision['reason'] ?? ''), ['forbidden', 'not_found'], true),
+        'tenantless organization-admin denial reason mismatch'
+    );
+
     $forgedRegularFetch = videochat_get_call_for_user($pdo, $callId, $regularUserId, 'admin');
     videochat_system_admin_call_rights_assert(!(bool) ($forgedRegularFetch['ok'] ?? true), 'regular user must not simulate system admin through role string');
+    $forgedTenantlessFetch = videochat_get_call_for_user($pdo, $tenantlessCallId, $regularUserId, 'admin', $defaultTenantId);
+    videochat_system_admin_call_rights_assert(!(bool) ($forgedTenantlessFetch['ok'] ?? true), 'regular user must not simulate system admin for tenantless call');
     videochat_system_admin_call_rights_assert(
         !videochat_user_has_system_admin_call_rights($pdo, $regularUserId, 'admin'),
         'regular user with forged role string should not have system-admin call rights'
@@ -225,6 +330,12 @@ SQL
         (string) ($temporaryFetch['reason'] ?? '') === 'forbidden',
         'temporary account foreign-call denial reason should be forbidden when tenant scope is absent'
     );
+    $temporaryTenantlessDecision = videochat_decide_call_access_for_user($pdo, $tenantlessCallId, $temporaryAdminId, 'admin', $defaultTenantId);
+    videochat_system_admin_call_rights_assert(!(bool) ($temporaryTenantlessDecision['allowed'] ?? true), 'temporary account must not join tenantless call as system admin');
+    videochat_system_admin_call_rights_assert(
+        in_array((string) ($temporaryTenantlessDecision['reason'] ?? ''), ['forbidden', 'not_found'], true),
+        'temporary tenantless denial reason mismatch'
+    );
     $temporaryRoleUpdate = videochat_update_call_participant_role(
         $pdo,
         $callId,
@@ -235,6 +346,152 @@ SQL
     );
     videochat_system_admin_call_rights_assert(!(bool) ($temporaryRoleUpdate['ok'] ?? true), 'temporary account must not manage foreign call as system admin');
     videochat_system_admin_call_rights_assert((string) ($temporaryRoleUpdate['reason'] ?? '') === 'forbidden', 'temporary account manage denial reason mismatch');
+
+    $reviewAccessId = videochat_generate_call_access_uuid();
+    $reviewAccessLink = [
+        'id' => $reviewAccessId,
+        'tenant_id' => $foreignTenantId,
+        'call_id' => $callId,
+        'participant_user_id' => $foreignParticipantId,
+        'participant_email' => 'system-admin-call-participant@example.test',
+    ];
+    $reviewCall = [
+        'id' => $callId,
+        'tenant_id' => $foreignTenantId,
+    ];
+    $reviewLinkedUser = [
+        'id' => $foreignParticipantId,
+        'email' => 'system-admin-call-participant@example.test',
+    ];
+    $reviewRecord = videochat_call_access_record_duplicate_personalized_link_review(
+        $pdo,
+        $reviewAccessLink,
+        $reviewCall,
+        $reviewLinkedUser,
+        $foreignSecondParticipantId,
+        'system_admin_review_contract',
+        ['session_id' => 'sess_system_admin_review_contract']
+    );
+    videochat_system_admin_call_rights_assert((bool) ($reviewRecord['ok'] ?? false), 'duplicate personalized-link review flag should record');
+    videochat_system_admin_call_rights_assert((bool) ($reviewRecord['flag_created'] ?? false), 'review flag should be created for second account');
+    $reviewFlag = is_array($reviewRecord['flag'] ?? null) ? $reviewRecord['flag'] : [];
+    $reviewFlagPublicId = (string) ($reviewFlag['public_id'] ?? '');
+    videochat_system_admin_call_rights_assert($reviewFlagPublicId !== '', 'review flag public id should be available');
+
+    $systemAdminReviewList = videochat_call_access_list_review_flags_for_user($pdo, $systemAdminId, 'admin', [
+        'status' => 'open',
+        'tenant_id' => $foreignTenantId,
+        'limit' => 5,
+    ]);
+    videochat_system_admin_call_rights_assert((bool) ($systemAdminReviewList['ok'] ?? false), 'system admin should list open review flags');
+    videochat_system_admin_call_rights_assert((int) ($systemAdminReviewList['total'] ?? 0) === 1, 'system admin review list should return one open flag');
+    $listedFlag = (array) (($systemAdminReviewList['flags'] ?? [])[0] ?? []);
+    videochat_system_admin_call_rights_assert((string) ($listedFlag['public_id'] ?? '') === $reviewFlagPublicId, 'system admin review list public id mismatch');
+    videochat_system_admin_call_rights_assert(!array_key_exists('access_fingerprint', $listedFlag), 'review list must not expose access fingerprint');
+    videochat_system_admin_call_rights_assert((($listedFlag['payload'] ?? [])['raw_link_identifier_logged'] ?? true) === false, 'review payload must mark raw link id omitted');
+    videochat_system_admin_call_rights_assert((($listedFlag['payload'] ?? [])['account_email_logged'] ?? true) === false, 'review payload must mark account email omitted');
+
+    $regularReviewList = videochat_call_access_list_review_flags_for_user($pdo, $regularUserId, 'admin', ['status' => 'open']);
+    videochat_system_admin_call_rights_assert(!(bool) ($regularReviewList['ok'] ?? true), 'regular user with forged role must not list review flags');
+    videochat_system_admin_call_rights_assert((string) ($regularReviewList['reason'] ?? '') === 'forbidden', 'regular review list denial reason mismatch');
+    $temporaryReviewList = videochat_call_access_list_review_flags_for_user($pdo, $temporaryAdminId, 'admin', ['status' => 'open']);
+    videochat_system_admin_call_rights_assert(!(bool) ($temporaryReviewList['ok'] ?? true), 'temporary admin-shaped account must not list review flags');
+    videochat_system_admin_call_rights_assert((string) ($temporaryReviewList['reason'] ?? '') === 'forbidden', 'temporary review list denial reason mismatch');
+
+    $regularReviewHandle = videochat_call_access_handle_review_flag_for_user($pdo, $reviewFlagPublicId, $regularUserId, 'admin', 'resolved');
+    videochat_system_admin_call_rights_assert(!(bool) ($regularReviewHandle['ok'] ?? true), 'regular user with forged role must not handle review flags');
+    videochat_system_admin_call_rights_assert((string) ($regularReviewHandle['reason'] ?? '') === 'forbidden', 'regular review handle denial reason mismatch');
+
+    $systemAdminReviewHandle = videochat_call_access_handle_review_flag_for_user($pdo, $reviewFlagPublicId, $systemAdminId, 'admin', 'resolved', [
+        'note' => 'reviewed duplicate use',
+    ]);
+    videochat_system_admin_call_rights_assert((bool) ($systemAdminReviewHandle['ok'] ?? false), 'system admin should handle review flag');
+    $handledFlag = (array) ($systemAdminReviewHandle['flag'] ?? []);
+    videochat_system_admin_call_rights_assert((string) ($handledFlag['status'] ?? '') === 'resolved', 'handled review flag status mismatch');
+    videochat_system_admin_call_rights_assert((int) ($handledFlag['handled_by_user_id'] ?? 0) === $systemAdminId, 'handled review flag actor mismatch');
+    videochat_system_admin_call_rights_assert(!array_key_exists('access_fingerprint', $handledFlag), 'handled review flag must not expose access fingerprint');
+
+    $auditReviewHandledCount = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_review_flag_handled'")->fetchColumn();
+    videochat_system_admin_call_rights_assert($auditReviewHandledCount === 1, 'review flag handling should be audit logged once');
+    $auditReviewPayload = (string) $pdo->query("SELECT payload_json FROM videochat_audit_events WHERE event_type = 'call_access_review_flag_handled' LIMIT 1")->fetchColumn();
+    videochat_system_admin_call_rights_assert(!str_contains($auditReviewPayload, $reviewAccessId), 'review handling audit must not expose raw access id');
+    videochat_system_admin_call_rights_assert(!str_contains($auditReviewPayload, 'system-admin-call-participant@example.test'), 'review handling audit must not expose account email');
+
+    $jsonResponse = static fn (int $status, array $payload): array => [
+        'status' => $status,
+        'headers' => ['content-type' => 'application/json'],
+        'body' => json_encode($payload, JSON_UNESCAPED_SLASHES),
+    ];
+    $errorResponse = static fn (int $status, string $code, string $message, array $details = []) => $jsonResponse($status, [
+        'status' => 'error',
+        'error' => ['code' => $code, 'message' => $message, 'details' => $details],
+        'time' => gmdate('c'),
+    ]);
+    $decodeJsonBody = static function (array $request): array {
+        $decoded = json_decode((string) ($request['body'] ?? ''), true);
+        return [is_array($decoded) ? $decoded : null, is_array($decoded) ? null : 'invalid_json'];
+    };
+    $openDatabase = static fn (): PDO => $pdo;
+    $systemAdminAuthContext = [
+        'ok' => true,
+        'session' => ['id' => 'sess_system_admin_review_route'],
+        'user' => ['id' => $systemAdminId, 'role' => 'admin'],
+    ];
+    $regularForgedAuthContext = [
+        'ok' => true,
+        'session' => ['id' => 'sess_regular_review_route'],
+        'user' => ['id' => $regularUserId, 'role' => 'admin'],
+    ];
+
+    $routeListResponse = videochat_handle_call_access_routes(
+        '/api/call-access/review-flags',
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/call-access/review-flags?status=resolved', 'headers' => []],
+        $systemAdminAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_system_admin_call_rights_assert(is_array($routeListResponse), 'review flag list route should return response');
+    videochat_system_admin_call_rights_assert((int) ($routeListResponse['status'] ?? 0) === 200, 'system admin review list route should return 200');
+    $routeListPayload = json_decode((string) ($routeListResponse['body'] ?? ''), true);
+    videochat_system_admin_call_rights_assert((int) (($routeListPayload['result'] ?? [])['total'] ?? 0) === 1, 'system admin review list route should return resolved flag');
+    videochat_system_admin_call_rights_assert(!str_contains((string) ($routeListResponse['body'] ?? ''), 'access_fingerprint'), 'review list route must not expose access fingerprint');
+
+    $routeForbiddenResponse = videochat_handle_call_access_routes(
+        '/api/call-access/review-flags',
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/call-access/review-flags', 'headers' => []],
+        $regularForgedAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_system_admin_call_rights_assert(is_array($routeForbiddenResponse), 'forged review flag list route should return response');
+    videochat_system_admin_call_rights_assert((int) ($routeForbiddenResponse['status'] ?? 0) === 403, 'regular forged admin review list route should be forbidden');
+
+    $routeHandleResponse = videochat_handle_call_access_routes(
+        '/api/call-access/review-flags/' . $reviewFlagPublicId,
+        'PATCH',
+        [
+            'method' => 'PATCH',
+            'uri' => '/api/call-access/review-flags/' . $reviewFlagPublicId,
+            'headers' => [],
+            'body' => json_encode(['status' => 'dismissed', 'note' => 'dismiss through route'], JSON_UNESCAPED_SLASHES),
+        ],
+        $systemAdminAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_system_admin_call_rights_assert(is_array($routeHandleResponse), 'review flag handle route should return response');
+    videochat_system_admin_call_rights_assert((int) ($routeHandleResponse['status'] ?? 0) === 200, 'system admin review handle route should return 200');
+    $routeHandlePayload = json_decode((string) ($routeHandleResponse['body'] ?? ''), true);
+    videochat_system_admin_call_rights_assert((string) (((($routeHandlePayload['result'] ?? [])['flag'] ?? [])['status'] ?? '')) === 'dismissed', 'review handle route should update status');
+    videochat_system_admin_call_rights_assert(!str_contains((string) ($routeHandleResponse['body'] ?? ''), 'access_fingerprint'), 'review handle route must not expose access fingerprint');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[system-admin-call-rights-contract] PASS\n");

@@ -449,6 +449,22 @@
       }
     },
     {
+      "key": "direct_join_system_admin_tenantless_without_organization",
+      "journey_key": "e2e_journey_011b_system_admin_join_tenantless_call_without_org",
+      "sprint_groups": ["18", "32"],
+      "principal_user_key": "system_admin",
+      "call_key": "tenantless_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "system_admin",
+        "guest_list_required": false,
+        "can_manage_lobby": true,
+        "tenant_required": false,
+        "tenant_admin": false,
+        "platform_admin": true
+      }
+    },
+    {
       "key": "direct_join_system_admin_deleted_call_denied",
       "sprint_groups": ["3", "18", "25"],
       "principal_user_key": "system_admin",
