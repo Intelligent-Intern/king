@@ -82,7 +82,8 @@ assert.match(appointmentBookingModalCssSource, /@media \(max-width: 900px\)[\s\S
 assert.match(appointmentBookingModalCssSource, /\.appointment-mobile-day-rail\s*\{[\s\S]*?overflow-x:\s*auto;/, 'mobile public booking day picker must scroll horizontally');
 assert.match(appointmentApiSource, /localizedApiErrorMessage\(payload,\s*fallback\)/, 'public appointment API errors must resolve through stable codes');
 assert.doesNotMatch(appointmentApiSource, /payload\?\.error\?\.message/, 'public appointment API must not display backend English error messages directly');
-assert.match(joinViewSource, /localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must resolve through stable codes');
+assert.match(joinViewSource, /localizedApiErrorMessage\(errorPayload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must resolve through stable codes');
+assert.match(joinViewSource, /const errorPayload = payload && typeof payload === 'object'[\s\S]*localizedApiErrorMessage\(errorPayload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must preserve backend stable codes before localization');
 assert.match(joinViewSource, /localizedApiErrorMessage\(\{ error: \{ code: 'call_access_validation_failed' \} \},\s*t\('public\.join\.access_invalid'\)\)/, 'public join validation fallback must use translation keys');
 assert.match(joinViewSource, /localizedApiErrorMessage\(errorPayload,\s*t\('public\.join\.start_session_failed'\)\)/, 'public join session errors must resolve through stable codes');
 assert.doesNotMatch(joinViewSource, /result\.message/, 'public join session errors must not display pre-localized backend messages directly');
@@ -98,5 +99,10 @@ for (const key of [
 ]) {
   assert.match(fallbackMessagesSource, new RegExp(`'${key}'`), `${key} must have an English fallback`);
 }
+assert.match(
+  englishMessagesSource,
+  /'errors\.api\.call_access_not_found': 'This call link does not exist\.'/,
+  'call_access_not_found must keep stable no-data safe copy for deleted or missing personalized links',
+);
 
 console.log('[public-pages-localization-contract] PASS');
