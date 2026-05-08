@@ -1812,7 +1812,6 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   syncControlStateToPeers,
   syncModerationStateToPeers,
 } = participantUiHelpers);
-
 ({
   currentLayoutMode,
   gridVideoParticipants,
@@ -1826,6 +1825,7 @@ const {
   activityLabelForUser,
   allowAllLobbyUsers,
   allowLobbyUser,
+  removeLobbyUser,
   aloneIdleCountdownLabel,
   attachAloneIdleActivityListeners,
   canSubmitChatMessage,

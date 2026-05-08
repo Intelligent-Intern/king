@@ -907,6 +907,13 @@ function videochat_realtime_handle_lobby_websocket_command(
     );
 
     $lobbyResult = videochat_lobby_apply_command($lobbyState, $presenceState, $presenceConnection, $lobbyCommand);
+    $lobbyResult = videochat_realtime_lobby_remove_result_for_active_call_target(
+        $lobbyResult,
+        $lobbyCommand,
+        $presenceConnection,
+        $lobbyCommandRoomId,
+        $openDatabase
+    );
     if (!(bool) ($lobbyResult['ok'] ?? false)) {
         videochat_presence_send_frame(
             $websocket,
@@ -981,46 +988,19 @@ function videochat_realtime_apply_successful_lobby_command(
     }
 
     if ($lobbyAction === 'lobby/remove') {
-        videochat_realtime_apply_lobby_remove_result($lobbyResult, $lobbyState, $presenceConnection, $openDatabase, $lobbyResultRoomId);
+        videochat_realtime_apply_lobby_remove_result(
+            $lobbyResult,
+            $lobbyState,
+            $presenceState,
+            $presenceConnection,
+            $openDatabase,
+            $lobbyResultRoomId
+        );
     }
 
     if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
         videochat_realtime_apply_lobby_admission_result($lobbyResult, $lobbyState, $presenceState, $presenceConnection, $openDatabase);
     }
-}
-
-function videochat_realtime_apply_lobby_remove_result(
-    array $lobbyResult,
-    array &$lobbyState,
-    array $presenceConnection,
-    callable $openDatabase,
-    string $lobbyResultRoomId
-): void {
-    $removedCallId = videochat_realtime_connection_call_id($presenceConnection);
-    $removedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
-        ? array_values(array_filter(array_map('intval', (array) $lobbyResult['affected_user_ids']), static fn (int $id): bool => $id > 0))
-        : [];
-    if ($removedCallId === '' || $removedUserIds === []) {
-        return;
-    }
-
-    foreach ($removedUserIds as $removedUserId) {
-        videochat_realtime_mark_call_participant_invite_state_by_user_id(
-            $openDatabase,
-            $removedCallId,
-            $removedUserId,
-            'invited',
-            ['pending', 'allowed', 'accepted']
-        );
-    }
-    videochat_realtime_sync_lobby_room_from_database(
-        $lobbyState,
-        $openDatabase,
-        $lobbyResultRoomId,
-        $removedCallId,
-        null,
-        videochat_realtime_connection_tenant_id($presenceConnection)
-    );
 }
 
 function videochat_realtime_apply_lobby_admission_result(

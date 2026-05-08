@@ -378,6 +378,14 @@ function videochat_handle_realtime_websocket_route(
                 $pollNowMs = videochat_lobby_now_ms();
                 if ($pollNowMs >= $nextLobbySnapshotPollMs) {
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    if (videochat_realtime_connection_removed_from_active_call($presenceConnection)) {
+                        videochat_realtime_send_removed_from_call_notice(
+                            $presenceConnection,
+                            videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), ''),
+                            videochat_realtime_connection_call_id($presenceConnection)
+                        );
+                        break;
+                    }
                     $presenceState['connections'][$connectionId] = $presenceConnection;
                     videochat_realtime_send_synced_lobby_snapshot_to_connection_if_changed(
                         $lobbyState,
@@ -392,6 +400,14 @@ function videochat_handle_realtime_websocket_route(
                 }
                 if ($pollNowMs >= $nextRoomSnapshotPollMs) {
                     $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    if (videochat_realtime_connection_removed_from_active_call($presenceConnection)) {
+                        videochat_realtime_send_removed_from_call_notice(
+                            $presenceConnection,
+                            videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), ''),
+                            videochat_realtime_connection_call_id($presenceConnection)
+                        );
+                        break;
+                    }
                     $presenceState['connections'][$connectionId] = $presenceConnection;
                     videochat_realtime_touch_call_presence($openDatabase, $presenceConnection);
                     videochat_realtime_send_room_snapshot_if_changed(
