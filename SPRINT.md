@@ -1258,6 +1258,12 @@ The sprint is complete when:
 - [x] Stale organization role in client cache is ignored
 - [x] Stale organization role in session token is revalidated where required
 
+Proof: `session-logout-contract` drives `POST /api/auth/logout` through the
+King PHP auth-session route, proves the session row receives persisted
+`revoked_at` metadata, clears only the revoked session websocket tracking,
+returns the configured post-logout landing URL, remains idempotent on repeat
+logout, and rejects unauthenticated logout requests.
+
 Proof: `call-access-stale-organization-role-contract` issues a session while a
 user has tenant and organization admin roles, downgrades both roles without
 rotating the token, and proves auth/session payloads, local session cache
