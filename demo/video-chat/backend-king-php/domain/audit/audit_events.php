@@ -476,6 +476,45 @@ function videochat_audit_record_call_access_strong_mismatch(
     ]);
 }
 
+function videochat_audit_record_guest_list_entry_change(
+    PDO $pdo,
+    array $call,
+    int $targetUserId,
+    ?int $actorUserId,
+    string $action,
+    array $context = []
+): array {
+    $normalizedAction = strtolower(trim($action));
+    if (!in_array($normalizedAction, ['added', 'merged', 'restored', 'removed'], true)) {
+        $normalizedAction = 'merged';
+    }
+
+    $callId = trim((string) ($call['id'] ?? ''));
+    $tenantId = is_numeric($call['tenant_id'] ?? null) && (int) $call['tenant_id'] > 0
+        ? (int) $call['tenant_id']
+        : null;
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => 'guest_list_entry_' . $normalizedAction,
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $targetUserId,
+        'call_id' => $callId,
+        'resource_type' => 'call_guest_list_entry',
+        'resource_id' => (string) $targetUserId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId . ':' . $targetUserId),
+        'payload' => [
+            'audit_scope' => 'iam_guest_list',
+            'action' => $normalizedAction,
+            'call_role' => strtolower(trim((string) ($context['call_role'] ?? 'participant'))) ?: 'participant',
+            'invite_state' => strtolower(trim((string) ($context['invite_state'] ?? 'invited'))) ?: 'invited',
+            'had_prior_entry' => (bool) ($context['had_prior_entry'] ?? false),
+            'call_scoped' => true,
+            'raw_guest_identifiers_logged' => false,
+        ],
+    ]);
+}
+
 function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
 {
     if (!videochat_audit_bootstrap($pdo)) {
