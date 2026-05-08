@@ -244,8 +244,8 @@ function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, str
         $absentSinceMs = $effectiveNowMs;
     }
 
-    $countdownStartsAtMs = $absentSinceMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;
-    $endsAtMs = $countdownStartsAtMs + VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;
+    $endsAtMs = $absentSinceMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;
+    $countdownStartsAtMs = max($absentSinceMs, $endsAtMs - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS);
     $countdownStarted = $effectiveNowMs >= $countdownStartsAtMs;
     $status = $countdownStarted ? 'countdown' : 'monitoring';
     if ($effectiveNowMs >= $endsAtMs) {

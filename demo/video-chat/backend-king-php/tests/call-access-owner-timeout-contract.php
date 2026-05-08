@@ -86,7 +86,7 @@ try {
     $ownerLeftMs = $startMs + 60_000;
     videochat_iam_king_participant_leave($pdo, $presenceState, $ownerConnection, $ownerLeftMs);
 
-    $beforeCountdownMs = $ownerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - 1000;
+    $beforeCountdownMs = $ownerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS - 1000;
     videochat_iam_king_participant_touch($pdo, $participantConnection, $beforeCountdownMs);
     $beforeCountdownSnapshot = videochat_iam_king_participant_snapshot($pdo, $presenceState, $participantConnection, $beforeCountdownMs, 'owner_absence_monitoring');
     $beforeCountdown = (array) (($beforeCountdownSnapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
@@ -94,7 +94,7 @@ try {
     videochat_iam_rejoin_contract_assert((bool) ($beforeCountdown['countdown_started'] ?? true) === false, 'countdown must not start before the 15-minute timer', $label);
     videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_call_status($pdo, $callId) === 'active', 'call must stay active before owner absence countdown', $label);
 
-    $countdownStartMs = $ownerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;
+    $countdownStartMs = $ownerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;
     videochat_iam_king_participant_touch($pdo, $participantConnection, $countdownStartMs);
     $countdownSnapshot = videochat_iam_king_participant_snapshot($pdo, $presenceState, $participantConnection, $countdownStartMs, 'owner_absence_countdown');
     $countdown = (array) (($countdownSnapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
@@ -126,7 +126,7 @@ try {
 
     $secondOwnerLeftMs = $ownerReturnMs + 60_000;
     videochat_iam_king_participant_leave($pdo, $presenceState, $ownerReturnConnection, $secondOwnerLeftMs);
-    $deadlineMs = $secondOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS + VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;
+    $deadlineMs = $secondOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;
     videochat_iam_king_participant_touch($pdo, $participantConnection, $deadlineMs);
     $endedSnapshot = videochat_iam_king_participant_snapshot($pdo, $presenceState, $participantConnection, $deadlineMs, 'owner_absence_deadline');
     $ended = (array) (($endedSnapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
