@@ -251,7 +251,10 @@ Status:
 - [x] GSP-03 Join/snapshot/churn topology hints remains closed by
   `gossip-room-state-topology-contract.mjs`.
 - [x] GSP-04 Dedicated bounded neighbor lifecycle remains closed by
-  `gossip-dedicated-neighbor-lifecycle-contract.mjs`.
+  `gossip-dedicated-neighbor-lifecycle-contract.mjs`; production stack-overflow
+  proof `gossip-neighbor-renegotiate-stack-contract.mjs` now pins queued
+  renegotiation as deduped, timer-based, bounded, and cleared on peer close
+  instead of recursively calling `negotiatePeer`.
 - [x] GSP-07 Gossip-native recovery remains closed by
   `gossip-native-recovery-contract.mjs`; backend recovery routing stays ops-only
   with no media fanout.
