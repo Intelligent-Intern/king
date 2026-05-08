@@ -335,6 +335,33 @@ function hostHtml(baseURL) {
                 });
                 audit(alias + ' revoked');
               },
+              injectRemoteCursor(alias, cursor) {
+                postTo(alias, 'call_app.presence.update', {
+                  actor_id: String(cursor.actorId || ''),
+                  payload_type: 'cursor.move',
+                  payload: {
+                    actor_id: String(cursor.actorId || ''),
+                    display_name: String(cursor.label || ''),
+                    label: String(cursor.label || ''),
+                    x: Number(cursor.x || 0),
+                    y: Number(cursor.y || 0),
+                    color: String(cursor.color || '#1582bf'),
+                  },
+                });
+                state.presenceDeliveries.push({
+                  from: String(cursor.label || 'remote'),
+                  to: alias,
+                  actor_id: String(cursor.actorId || ''),
+                  payload_type: 'cursor.move',
+                  label: String(cursor.label || ''),
+                });
+              },
+              leaveRemoteCursor(alias, actorId) {
+                postTo(alias, 'call_app.presence.leave', {
+                  actor_id: String(actorId || ''),
+                });
+                audit('remote cursor left: ' + actorId);
+              },
               reload(alias) {
                 state.ready[alias] = false;
                 const frame = document.getElementById(participants[alias].frameId);
@@ -594,6 +621,35 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
         label: 'Owner',
       }),
     ]));
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveText('Owner');
+  const participantLaunchCountBeforeRemoteCursors = await page.evaluate(() => window.whiteboardHarness.state.launchCount.participant);
+  const participantFrameSrcBeforeRemoteCursors = await page.locator('#participantFrame').evaluate((frame) => frame.src);
+  await page.evaluate(() => {
+    window.whiteboardHarness.injectRemoteCursor('participant', {
+      actorId: 'user_reviewer_e2e',
+      label: 'Reviewer',
+      x: 760,
+      y: 176,
+      color: '#00652f',
+    });
+    window.whiteboardHarness.injectRemoteCursor('participant', {
+      actorId: 'user_facilitator_e2e',
+      label: 'Facilitator',
+      x: 920,
+      y: 226,
+      color: '#f47221',
+    });
+  });
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveCount(3);
+  await expect.poll(() => participantFrame.locator('.remote-cursor-label').allTextContents())
+    .toEqual(['Owner', 'Reviewer', 'Facilitator']);
+  await page.evaluate(() => window.whiteboardHarness.leaveRemoteCursor('participant', 'user_reviewer_e2e'));
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveCount(2);
+  await expect.poll(() => participantFrame.locator('.remote-cursor-label').allTextContents())
+    .toEqual(['Owner', 'Facilitator']);
+  await expect.poll(() => page.evaluate(() => window.whiteboardHarness.state.launchCount.participant))
+    .toBe(participantLaunchCountBeforeRemoteCursors);
+  expect(await page.locator('#participantFrame').evaluate((frame) => frame.src)).toBe(participantFrameSrcBeforeRemoteCursors);
   for (let index = 0; index < 8; index += 1) {
     await page.mouse.move(ownerCanvasBox.x + 350 + index * 12, ownerCanvasBox.y + 120 + index * 4);
   }
@@ -644,6 +700,10 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
   await page.evaluate(() => window.whiteboardHarness.revoke('participant'));
   await expect(participantFrame.locator('#modeBadge')).toHaveText('No access');
   await expect(participantFrame.locator('[data-tool="pen"]')).toBeDisabled();
+  await expect(participantFrame.locator('.remote-cursor-label')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.whiteboardHarness.state.launchCount.participant))
+    .toBe(participantLaunchCountBeforeRemoteCursors);
+  expect(await page.locator('#participantFrame').evaluate((frame) => frame.src)).toBe(participantFrameSrcBeforeRemoteCursors);
   await expect.poll(() => canvasRegionNonWhiteCount(page, 'participant', cursorRegion))
     .toBeLessThanOrEqual(cursorRegionBefore + 12);
   const participantPresenceDeliveriesAfterRevoke = await page.evaluate(() => (

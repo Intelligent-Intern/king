@@ -48,6 +48,18 @@ assert.match(
   'whiteboard runtime must render a fixed-format canvas workspace',
 );
 
+assert.match(
+  whiteboardSource,
+  /id="cursorOverlay" class="cursor-overlay"[\s\S]*\.remote-cursor-label[\s\S]*function syncCursorOverlay[\s\S]*label\.textContent = displayNameLabel\(cursor\.label \|\| cursor\.display_name\)/,
+  'whiteboard runtime must render remote cursor display names in an accessible overlay tied to presence labels',
+);
+
+assert.match(
+  whiteboardSource,
+  /function removePresenceForActor[\s\S]*message\.type === 'call_app\.presence\.leave'/,
+  'whiteboard runtime must support remote presence leave cleanup without iframe reload',
+);
+
 for (const tool of ['select', 'pen', 'highlighter', 'line', 'rect', 'ellipse', 'text', 'sticky', 'delete']) {
   assert.match(
     iframeSource,

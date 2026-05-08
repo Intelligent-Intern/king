@@ -14,12 +14,15 @@ async function read(relativePath) {
   return readFile(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const [bridgeSource, relaySource, whiteboardSource, e2eSource] = await Promise.all([
+const [bridgeSource, relaySource, whiteboardHtml, whiteboardCss, whiteboardRuntime, e2eSource] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
+  read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.css'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/frontend-vue/tests/e2e/call-app-whiteboard.spec.js'),
 ]);
+const whiteboardSource = `${whiteboardHtml}\n${whiteboardCss}\n${whiteboardRuntime}`;
 
 const session = {
   id: 'whiteboard-session-contract',
@@ -90,9 +93,27 @@ assert.match(
 );
 
 assert.match(
+  whiteboardSource,
+  /id="cursorOverlay" class="cursor-overlay"[\s\S]*\.remote-cursor-label[\s\S]*function syncCursorOverlay[\s\S]*label\.textContent = displayNameLabel\(cursor\.label \|\| cursor\.display_name\)[\s\S]*cursorOverlay\.replaceChildren\(\.\.\.labels\)/s,
+  'whiteboard runtime must render authorized remote cursor names into the DOM overlay, not only into canvas pixels',
+);
+
+assert.match(
+  whiteboardSource,
+  /function removePresenceForActor[\s\S]*state\.cursors\.delete\(normalizedActorId\)[\s\S]*state\.selections\.delete\(normalizedActorId\)[\s\S]*message\.type === 'call_app\.presence\.leave'/s,
+  'whiteboard runtime must remove stale remote cursor and selection presence when a remote participant leaves',
+);
+
+assert.match(
   e2eSource,
-  /cursorRegionBefore[\s\S]*cursorRegionWithOwner[\s\S]*toBeGreaterThan[\s\S]*revoke\('participant'\)[\s\S]*cursorRegionAfterRevoke/s,
-  'whiteboard E2E must prove named remote cursor appearance and removal after participant revocation',
+  /injectRemoteCursor\('participant'[\s\S]*label: 'Reviewer'[\s\S]*injectRemoteCursor\('participant'[\s\S]*label: 'Facilitator'[\s\S]*remote-cursor-label'\)\)\.toHaveCount\(3\)[\s\S]*leaveRemoteCursor\('participant', 'user_reviewer_e2e'\)[\s\S]*\['Owner', 'Facilitator'\]/s,
+  'whiteboard E2E must prove multiple named remote cursors render and a remote leave removes only the leaving cursor',
+);
+
+assert.match(
+  e2eSource,
+  /participantLaunchCountBeforeRemoteCursors[\s\S]*launchCount\.participant[\s\S]*participantFrameSrcBeforeRemoteCursors[\s\S]*revoke\('participant'\)[\s\S]*remote-cursor-label'\)\)\.toHaveCount\(0\)[\s\S]*toBe\(participantLaunchCountBeforeRemoteCursors\)[\s\S]*participantFrameSrcBeforeRemoteCursors/s,
+  'whiteboard E2E must prove cursor cleanup after revoke does not reload the iframe',
 );
 
 console.log('[call-app-whiteboard-cursors-access-contract] PASS');
