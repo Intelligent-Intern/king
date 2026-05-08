@@ -50,12 +50,6 @@ function videochat_call_route_ref_matches_access_binding(string $callRef, array 
     return false;
 }
 
-function videochat_call_access_resolved_target_user_id(array $resolveResult): int
-{
-    $targetUser = is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : [];
-    return is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : 0;
-}
-
 /**
  * @return array<int, string>
  */
@@ -454,26 +448,21 @@ function videochat_handle_call_access_routes(
         $linkKind = videochat_call_access_link_kind(
             is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : null
         );
-        $targetUserId = videochat_call_access_resolved_target_user_id($resolveResult);
-        if ($authenticatedJoinUserId > 0 && $linkKind === 'personal' && $targetUserId > 0 && $targetUserId !== $authenticatedJoinUserId) {
-            videochat_call_access_record_duplicate_personalized_link_review(
-                $pdo,
-                is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : [],
-                is_array($resolveResult['call'] ?? null) ? $resolveResult['call'] : [],
-                is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : null,
-                $authenticatedJoinUserId,
-                'join_opened',
-                ['session_id' => videochat_call_access_route_session_id($effectiveJoinAuthContext)]
+        $identityJoinResult = videochat_call_access_public_join_identity_result(
+            $pdo,
+            $resolveResult,
+            $authenticatedJoinUserId,
+            videochat_call_access_route_session_id($effectiveJoinAuthContext)
+        );
+        if (!(bool) ($identityJoinResult['ok'] ?? false)) {
+            return $errorResponse(
+                (int) ($identityJoinResult['status'] ?? 403),
+                (string) ($identityJoinResult['code'] ?? 'call_access_forbidden'),
+                (string) ($identityJoinResult['message'] ?? 'Call access link is not available for your session.'),
+                is_array($identityJoinResult['details'] ?? null) ? $identityJoinResult['details'] : []
             );
-
-            return $errorResponse(403, 'call_access_forbidden', 'Call access link is not available for your session.', [
-                'mismatch' => 'strong_personalized_link',
-                'fields' => [
-                    'auth' => 'not_bound_to_current_user',
-                    'host_name' => 'not_verified',
-                ],
-            ]);
         }
+        $resolveResult = is_array($identityJoinResult['resolve_result'] ?? null) ? $identityJoinResult['resolve_result'] : $resolveResult;
 
         return $jsonResponse(200, [
             'status' => 'ok',
@@ -484,6 +473,7 @@ function videochat_handle_call_access_routes(
                 'call' => $resolveResult['call'] ?? null,
                 'target_user' => $resolveResult['target_user'] ?? null,
                 'target_hint' => $resolveResult['target_hint'] ?? ['participant_email' => null],
+                'identity_mismatch' => $resolveResult['identity_mismatch'] ?? null,
                 'join_path' => '/join/' . strtolower(trim($accessId)),
             ],
             'time' => gmdate('c'),

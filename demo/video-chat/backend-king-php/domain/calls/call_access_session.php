@@ -168,8 +168,14 @@ function videochat_issue_session_for_call_access(
             'call' => null,
         ];
     }
+    $foreignPersonalizedUsesAuthenticatedUser = false;
 
-    if ($linkKind === 'personal' && $verifiedUserId > 0 && $verifiedUserId !== $userId) {
+    if (
+        $linkKind === 'personal'
+        && $verifiedUserId > 0
+        && $verifiedUserId !== $userId
+        && ($authenticatedUserId <= 0 || $authenticatedUserId !== $verifiedUserId)
+    ) {
         videochat_call_access_record_duplicate_personalized_link_review(
             $pdo,
             $accessLink,
@@ -191,17 +197,43 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($linkKind === 'personal' && $authenticatedUserId > 0 && $authenticatedUserId !== $userId) {
-        videochat_call_access_record_duplicate_personalized_link_review(
-            $pdo,
-            $accessLink,
-            $call,
-            $targetUser,
-            $authenticatedUserId,
-            'session_host_verification',
-            ['session_id' => $authenticatedSessionId]
-        );
+        $identityDecision = videochat_call_access_identity_decision_for_authenticated_user($pdo, $targetUser, $authenticatedUserId, $tenantId);
+        if (!(bool) ($identityDecision['ok'] ?? false) || !is_array($identityDecision['current_user'] ?? null)) {
+            return [
+                'ok' => false,
+                'reason' => 'forbidden',
+                'errors' => ['auth' => 'invalid_user_context'],
+                'session' => null,
+                'user' => null,
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
 
-        if ($hostName !== '') {
+        $currentUser = $identityDecision['current_user'];
+        $mismatch = is_array($identityDecision['mismatch'] ?? null) ? $identityDecision['mismatch'] : [];
+        $priorDifferentSession = videochat_call_access_has_prior_different_session(
+            $pdo,
+            (string) ($accessLink['id'] ?? ''),
+            $authenticatedUserId
+        );
+        if ($priorDifferentSession || (bool) ($mismatch['strong'] ?? false)) {
+            videochat_call_access_record_duplicate_personalized_link_review(
+                $pdo,
+                $accessLink,
+                $call,
+                $targetUser,
+                $authenticatedUserId,
+                'session_host_verification',
+                [
+                    'session_id' => $authenticatedSessionId,
+                    'mismatch_state' => (string) ($mismatch['state'] ?? 'unknown'),
+                ]
+            );
+        }
+
+        $hostNameAccepted = false;
+        if (($priorDifferentSession || (bool) ($mismatch['strong'] ?? false)) && $hostName !== '') {
             $hostRate = videochat_call_access_host_verification_rate_limit($pdo, $accessLink, $call, $authenticatedUserId);
             if (!(bool) ($hostRate['ok'] ?? false)) {
                 return [
@@ -214,28 +246,68 @@ function videochat_issue_session_for_call_access(
                     'call' => null,
                 ];
             }
+            $hostNameAccepted = (bool) ($mismatch['strong'] ?? false)
+                && videochat_call_access_host_name_matches_call_owner($hostName, $call)
+                && !$priorDifferentSession;
             videochat_call_access_record_host_verification_attempt(
                 $pdo,
                 $accessLink,
                 $call,
                 $authenticatedUserId,
                 $hostName,
-                'wrong_host_name'
+                $hostNameAccepted ? 'correct_host_name' : 'wrong_host_name'
             );
         }
 
-        return [
-            'ok' => false,
-            'reason' => 'forbidden',
-            'errors' => [
-                'auth' => 'not_bound_to_current_user',
-                'host_name' => $hostName === '' ? 'not_verified' : 'wrong_host_name',
-            ],
-            'session' => null,
-            'user' => null,
-            'access_link' => null,
-            'call' => null,
-        ];
+        if ($priorDifferentSession) {
+            return [
+                'ok' => false,
+                'reason' => 'forbidden',
+                'errors' => [
+                    'auth' => 'not_bound_to_current_user',
+                    'host_name' => $hostName === '' ? 'not_verified' : 'wrong_host_name',
+                ],
+                'session' => null,
+                'user' => null,
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+
+        if ((bool) ($mismatch['strong'] ?? false) && !$hostNameAccepted) {
+            videochat_audit_record_call_access_strong_mismatch(
+                $pdo,
+                $accessLink,
+                $call,
+                $targetUser,
+                $authenticatedUserId,
+                'session_host_verification',
+                [
+                    'session_id' => $authenticatedSessionId,
+                    'denial_reason' => $hostName === '' ? 'host_name_not_verified' : 'wrong_host_name',
+                    'host_name_verified' => false,
+                ]
+            );
+
+            return [
+                'ok' => false,
+                'reason' => 'forbidden',
+                'errors' => [
+                    'auth' => 'not_bound_to_current_user',
+                    'host_name' => $hostName === '' ? 'not_verified' : 'wrong_host_name',
+                ],
+                'session' => null,
+                'user' => null,
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+
+        $targetUser = $currentUser;
+        $userId = (int) ($targetUser['id'] ?? 0);
+        $userRole = (string) ($targetUser['role'] ?? 'user');
+        $foreignPersonalizedUsesAuthenticatedUser = true;
+        videochat_call_access_bind_authenticated_personalized_user($pdo, $call, $targetUser);
     }
 
     if ($linkKind === 'open') {
@@ -439,6 +511,14 @@ SQL
         $tenantId
     );
 
+    $responseAccessLink = is_array($freshLink) ? $freshLink : $accessLink;
+    $responseCall = is_array($freshCall['call'] ?? null) ? $freshCall['call'] : $call;
+    if ($foreignPersonalizedUsesAuthenticatedUser) {
+        $sanitized = videochat_call_access_sanitize_authenticated_personalized_payload($responseAccessLink, $responseCall, $targetUser);
+        $responseAccessLink = $sanitized['access_link'];
+        $responseCall = $sanitized['call'];
+    }
+
     return [
         'ok' => true,
         'reason' => 'issued',
@@ -465,8 +545,8 @@ SQL
             'account_type' => (string) ($targetUser['account_type'] ?? 'account'),
             'is_guest' => (bool) ($targetUser['is_guest'] ?? false),
         ],
-        'access_link' => is_array($freshLink) ? $freshLink : $accessLink,
-        'call' => is_array($freshCall['call'] ?? null) ? $freshCall['call'] : $call,
+        'access_link' => $responseAccessLink,
+        'call' => $responseCall,
     ];
 }
 

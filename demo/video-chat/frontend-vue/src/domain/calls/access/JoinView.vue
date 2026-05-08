@@ -53,9 +53,16 @@
 
               <section class="calls-enter-right calls-enter-right-settings">
                 <div class="call-left-settings">
-                  <CallBackgroundControls i18n-prefix="public.join" :image-title="t('public.join.background_images')" />
+                  <JoinStrongMismatchPanel
+                    v-if="state.strongMismatchRequired"
+                    :state="state"
+                    @verify-host="strongMismatchFlow.verifyHost"
+                    @continue-without-update="strongMismatchFlow.continueWithoutUpdate"
+                    @request-update="strongMismatchFlow.requestUpdate"
+                  />
+                  <CallBackgroundControls v-if="!state.strongMismatchRequired" i18n-prefix="public.join" :image-title="t('public.join.background_images')" />
 
-                  <section class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
                     <div class="call-left-settings-title">{{ t('public.join.mic') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
@@ -98,7 +105,7 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block join-settings-speaker" :aria-label="t('public.join.speaker')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-speaker" :aria-label="t('public.join.speaker')">
                     <div class="call-left-settings-title">{{ t('public.join.speaker') }}</div>
                     <div class="call-left-settings-field">
                       <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
@@ -136,7 +143,7 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block join-settings-camera" :aria-label="t('public.join.camera')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-camera" :aria-label="t('public.join.camera')">
                     <div class="call-left-settings-title">{{ t('public.join.camera') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
@@ -153,7 +160,7 @@
                     </div>
                   </section>
 
-                  <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+                  <div v-if="!state.strongMismatchRequired && callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
                 </div>
               </section>
             </div>
@@ -168,6 +175,7 @@
             </p>
             <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">{{ t('common.cancel') }}</button>
             <button
+              v-if="!state.strongMismatchRequired"
               class="btn btn-cyan"
               type="button"
               :disabled="state.joining || state.waitingForAdmission"
@@ -218,8 +226,10 @@ import {
   callAccessVerifiedContextFromSession,
   safeCallAccessInvalidMessage,
 } from './admissionGate';
-import { loginWithCallAccess } from './callAccessSession';
+import { loginWithCallAccess, requestCallAccessAccountUpdateConfirmation } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
+import JoinStrongMismatchPanel from './JoinStrongMismatchPanel.vue';
+import { callAccessJoinHeaders, createJoinStrongMismatchFlow, isStrongPersonalizedMismatchPayload } from './joinStrongMismatchFlow';
 
 const route = useRoute();
 const router = useRouter();
@@ -255,6 +265,16 @@ const state = reactive({
   previewError: '',
   micLevelPercent: 0,
   verifiedAccessContext: null,
+  strongMismatchRequired: false,
+  hostName: '',
+  verifyingHost: false,
+  hostVerified: false,
+  hostVerificationError: '',
+  accountUpdateDisplayName: '',
+  accountUpdateSending: false,
+  accountUpdatePending: false,
+  accountUpdateError: '',
+  accountUpdateRecipient: '',
 });
 
 const {
@@ -285,6 +305,19 @@ function normalizeCallId(value) {
   return /^[A-Za-z0-9._-]{1,200}$/.test(candidate) ? candidate : '';
 }
 
+const strongMismatchFlow = createJoinStrongMismatchFlow({
+  state,
+  route,
+  sessionState,
+  t,
+  normalizeAccessId,
+  normalizeCallId,
+  normalizeRoomId,
+  loginWithCallAccess,
+  requestCallAccessAccountUpdateConfirmation,
+  startAdmissionWait,
+});
+
 function resetJoinContextDetails() {
   state.callId = '';
   state.roomId = '';
@@ -296,6 +329,7 @@ function resetJoinContextDetails() {
   state.admissionMessage = '';
   state.joinError = '';
   state.verifiedAccessContext = null;
+  strongMismatchFlow.reset();
 }
 
 function showSafeInvalidAccessState() {
@@ -637,9 +671,7 @@ async function loadJoinContext() {
   try {
     const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(accessId)}/join`, {
       method: 'GET',
-      headers: {
-        accept: 'application/json',
-      },
+      headers: callAccessJoinHeaders(sessionState),
     });
     let payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
@@ -647,6 +679,11 @@ async function loadJoinContext() {
       const errorPayload = payload && typeof payload === 'object'
         ? payload
         : { error: { code: 'call_access_validation_failed' } };
+      payload = errorPayload;
+      if (response.status === 403 && isStrongPersonalizedMismatchPayload(payload)) {
+        strongMismatchFlow.show();
+        return;
+      }
       state.contextError = localizedApiErrorMessage(errorPayload, t('public.join.resolve_failed'));
       return;
     }
@@ -678,7 +715,7 @@ function goToLogin() {
 }
 
 async function startSessionAndJoin() {
-  if (state.joining || state.waitingForAdmission || state.loadingContext || state.contextError) return;
+  if (state.joining || state.waitingForAdmission || state.loadingContext || state.contextError || state.strongMismatchRequired) return;
   if (state.linkKind === 'open' && String(state.guestName || '').trim() === '') {
     state.joinError = t('public.join.name_required');
     return;
