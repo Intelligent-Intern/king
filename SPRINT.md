@@ -1380,11 +1380,13 @@ The same seed-matrix proof now also binds main journeys for logged-in anonymous
 own-rights, system-admin direct join, guest-list direct join, and normal
 non-guest denial/lobby policy. The focused journey/direct-join run passed 18
 tests.
-`call-guest-list-direct-join-contract.php` was also run under Docker PHP 8.4
-with `pdo_sqlite` and proves owner add/remove/restore, newly added registered
-and temporary users gaining direct join, removed entries losing direct join,
-duplicate adds merging into one row, call/organization scoping, and audit events
-without raw guest identifiers.
+`call-guest-list-direct-join-contract.php` was also run through
+`call-guest-list-direct-join-contract.sh` under Docker PHP 8.4 with
+`pdo_sqlite`; it loads the runtime RBAC helper used by the call-access path and
+proves owner add/remove/restore, newly added registered and temporary users
+gaining direct join, removed entries losing direct join, duplicate adds merging
+into one row, call/organization scoping, and audit events without raw guest
+identifiers.
 For the two direct-join lifecycle leaves, the concrete backend assertions are
 `registered user should direct join after guest-list add`,
 `registered user should not direct join after guest-list removal`, and
