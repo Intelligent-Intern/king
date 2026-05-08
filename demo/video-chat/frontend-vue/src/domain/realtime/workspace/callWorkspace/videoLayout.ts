@@ -17,11 +17,13 @@ export function createCallWorkspaceVideoLayoutHelpers({
     gridVideoParticipants,
     gridVideoSlotId,
     hasRenderableMediaForParticipant,
+    hasStaticAvatarForUserId = () => false,
     lookupMediaNodeForUserId,
     miniVideoParticipants,
     miniVideoSlotId,
     primaryVideoUserId,
     remotePeerMediaNode,
+    staticAvatarNodeForUserId = () => null,
   } = callbacks;
 
   let deferredVideoLayoutQueued = false;
@@ -50,6 +52,7 @@ export function createCallWorkspaceVideoLayoutHelpers({
 
   function participantHasRenderableMedia(userId) {
     refs.mediaRenderVersion.value;
+    if (hasStaticAvatarForUserId(userId)) return true;
     return hasRenderableMediaForParticipant({
       currentUserId: refs.currentUserId.value,
       localFilteredStream: refs.localFilteredStreamRef.value,
@@ -72,6 +75,10 @@ export function createCallWorkspaceVideoLayoutHelpers({
   }
 
   function mediaNodeForUserId(userId) {
+    if (hasStaticAvatarForUserId(userId)) {
+      const avatarNode = staticAvatarNodeForUserId(userId);
+      if (avatarNode instanceof HTMLElement) return avatarNode;
+    }
     return lookupMediaNodeForUserId({
       currentUserId: refs.currentUserId.value,
       localVideoElement: refs.localVideoElement.value,

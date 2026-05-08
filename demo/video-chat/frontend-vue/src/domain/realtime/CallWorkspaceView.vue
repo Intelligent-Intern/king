@@ -28,6 +28,8 @@ import { attachForegroundReconnectHandlers } from '../../support/foregroundRecon
 import { reportClientDiagnostic } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
+import BackgroundReplacementUnavailableModal from './background/BackgroundReplacementUnavailableModal.vue';
+import { createBackgroundStaticAvatarRenderState } from './background/staticAvatarRender';
 import { evaluateBackgroundFilterGates } from './background/gates';
 import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './media/runtimeTelemetry';
@@ -534,6 +536,7 @@ const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || 
 const activeRoomId = computed(() => normalizeRoomId(serverRoomId.value || desiredRoomId.value));
 const activeSocketCallId = computed(() => normalizeSocketCallId(activeCallId.value || routeCallResolve.callId || ''));
 const currentUserId = computed(() => (Number.isInteger(sessionState.userId) ? sessionState.userId : 0));
+const backgroundStaticAvatarRender = createBackgroundStaticAvatarRenderState({ callMediaPrefs, currentUserId, peerControlStateByUserId });
 const showAdmissionGate = computed(() => {
   const gateRoomId = normalizeOptionalRoomId(admissionGateState.roomId);
   return gateRoomId !== '' && activeRoomId.value !== gateRoomId;
@@ -1041,6 +1044,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     ensureMediaSecuritySession,
     evaluateBackgroundFilterGates,
     hasRenderableMediaForParticipant,
+    hasStaticAvatarForUserId: backgroundStaticAvatarRender.hasStaticAvatarForUserId,
     hintMediaSecuritySync,
     isWlvcRuntimePath: (...args) => isWlvcRuntimePath(...args),
     lookupMediaNodeForUserId,
@@ -1085,6 +1089,8 @@ const mediaStack = createCallWorkspaceMediaStack({
     shouldRecoverMediaSecurityFromFrameError,
     shouldSendTransportOnlySfuFrame,
     shouldSyncNativeLocalTracksBeforeOffer: (...args) => shouldSyncNativeLocalTracksBeforeOffer(...args),
+    staticAvatarNodeForUserId: backgroundStaticAvatarRender.staticAvatarNodeForUserId,
+    syncControlStateToPeers: (...args) => (typeof syncControlStateToPeers === 'function' ? syncControlStateToPeers(...args) : 0),
     stopActivityMonitor: (...args) => stopActivityMonitor(...args),
     stopSfuTrackAnnounceTimer,
     syncNativePeerConnectionsWithRoster: (...args) => syncNativePeerConnectionsWithRoster(...args),
@@ -1672,6 +1678,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   aloneIdlePrompt,
   apiRequest,
   callLayoutState,
+  callMediaPrefs,
   callParticipantRoles,
   canManageOwnerRole,
   canModerate,
@@ -1695,6 +1702,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   isCompactLayoutViewport,
   isCompactMiniStripAbove,
   isSocketOnline,
+  hasStaticAvatarForUserId: backgroundStaticAvatarRender.hasStaticAvatarForUserId,
   isShellMobileViewport,
   layoutModeOptionsFor,
   layoutStrategyOptionsFor,
@@ -1949,9 +1957,7 @@ watch(
   { immediate: true },
 );
 
-onBeforeUnmount(() => {
-  clearCallAppSidebarControls();
-});
+onBeforeUnmount(() => { backgroundStaticAvatarRender.clearStaticAvatarNodes(); clearCallAppSidebarControls(); });
 
 const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   activeCallId,

@@ -21,51 +21,54 @@ function requireMissing(source, needle, label) {
 
 try {
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
-  const backend = readUtf8('src/domain/realtime/background/backendSinetWasm.js');
-  const postprocess = readUtf8('src/domain/realtime/background/maskPostprocess.js');
-  const selector = readUtf8('src/domain/realtime/background/backendSelector.ts');
+  const backend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
+  const worker = readUtf8('src/domain/realtime/background/workers/imageSegmenterWorker.js');
+  const orchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
+  const avatarSignal = readUtf8('src/domain/realtime/background/avatarFallbackSignal.ts');
+  const videoLayout = readUtf8('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
+  const unavailablePrompt = readUtf8('src/domain/realtime/background/unavailablePrompt.ts');
+  const modal = readUtf8('src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue');
+  const messages = readUtf8('src/modules/localization/callWorkspaceMessages.js');
 
-  requireContains(stream, "import { createSinetWasmSegmentationBackend } from './backendSinetWasm';", 'production background stream');
-  requireContains(stream, 'segmentationBackend = await createSinetWasmSegmentationBackend({', 'production backend construction');
-  requireMissing(stream, 'createMediaPipeSegmentationBackend', 'production background stream');
-  requireMissing(stream, 'createTfjsSegmentationBackend', 'production background stream');
+  requireContains(stream, "import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';", 'production background stream');
+  requireContains(stream, 'segmentationBackendLease = await acquireWorkerSegmenterBackendLease({', 'production backend lease');
+  requireContains(stream, 'if (segmentationBackendInitPromise) return segmentationBackendInitPromise;', 'idempotent backend init');
+  requireContains(stream, 'notifySegmentationUnavailable', 'segmentation unavailable notification');
+  requireContains(stream, "mode: hasRenderableMatte ? runtimeConfig.mode : 'off'", 'source-visible warmup/failure mode');
+  requireMissing(stream, 'createSinetWasmSegmentationBackend', 'production stream SINet backend');
+  requireMissing(stream, 'backendSelector', 'production stream backend selector');
 
-  requireContains(backend, "import('onnxruntime-web/wasm')", 'SINet WASM backend runtime');
-  requireContains(backend, 'function configureOrtWasmRuntime', 'SINet WASM runtime guard');
-  requireContains(backend, 'wasm.proxy = false;', 'SINet WASM runtime must not depend on ORT proxy workers');
-  requireContains(backend, 'wasm.numThreads = 1;', 'SINet WASM runtime must not depend on SharedArrayBuffer threading');
-  requireContains(backend, 'const SINET_MODEL_WIDTH = 256;', 'SINet model width');
-  requireContains(backend, 'const SINET_MODEL_HEIGHT = 256;', 'SINet model height');
-  requireContains(backend, 'const SINET_GRAPH_URL = `${VIDEOCHAT_CDN_ORIGIN}${SINET_ASSET_BASE_PATH}sinet-float.onnx`;', 'vendored SINet graph');
-  requireContains(backend, 'const SINET_EXTERNAL_WEIGHTS_URL = `${VIDEOCHAT_CDN_ORIGIN}${SINET_ASSET_BASE_PATH}sinet.data`;', 'vendored SINet weights');
-  requireContains(backend, "externalData: [{ path: SINET_EXTERNAL_WEIGHTS_PATH, data: weights }]", 'explicit SINet external data mount');
-  requireContains(backend, "executionProviders: ['wasm']", 'SINet backend must use local WASM execution');
-  requireContains(backend, 'sinetForegroundAlpha', 'SINet foreground conversion');
-  requireContains(backend, 'probabilityLike', 'SINet foreground conversion must avoid softmaxing probability outputs');
-  requireContains(backend, 'function binaryForegroundAlpha(value, threshold = 0)', 'SINet foreground conversion must use hard foreground classification');
-  requireMissing(backend, 'Math.exp(bg - max)', 'SINet foreground conversion');
-  requireMissing(backend, 'fgExp / Math.max', 'SINet foreground conversion');
-  requireContains(backend, 'shapeForegroundAlpha', 'SINet matte shaping controls');
-  requireContains(backend, "kind: 'sinet_wasm'", 'SINet WASM backend identity');
-  requireContains(postprocess, 'function gaussianAverageAlpha', 'mask local Gaussian averaging');
-  requireContains(postprocess, 'function smoothstep(edge0, edge1, value)', 'mask contour transition');
-  requireContains(postprocess, 'const edgeLow = 0.5 - contourHalfWidth', 'mask contour band');
-  requireMissing(postprocess, '(raw - 0.5) * contrast + 0.5', 'mask global contrast alpha lift');
-  requireContains(postprocess, 'controls?.contrast ?? 0.75', 'mask contrast default');
-  requireContains(postprocess, 'Number(controls?.averageRadius ?? 6)', 'wide default Gaussian radius');
-  requireContains(backend, 'opts.maskContrast ?? 0.75', 'production mask contrast fallback');
-  requireContains(backend, 'opts.averageRadius ?? 6', 'production average radius fallback');
-  requireMissing(postprocess, 'blackPoint', 'mask postprocess');
-  requireMissing(postprocess, 'whitePoint', 'mask postprocess');
-  requireMissing(postprocess, 'threshold ? value : 0', 'mask postprocess');
-  requireMissing(postprocess, 'keepDominantComponents', 'mask postprocess');
-  requireMissing(postprocess, 'fillEnclosedHoles', 'mask postprocess');
-  requireContains(postprocess, 'previousAlpha', 'mask temporal averaging');
-  requireContains(selector, "backend: 'sinet_wasm'", 'backend selector');
-  requireMissing(selector, 'center_mask_fallback', 'backend selector');
-  requireMissing(selector, 'face_detector', 'backend selector');
+  requireContains(backend, 'Worker-based MediaPipe segmentation backend.', 'Pierre worker backend documentation');
+  requireContains(backend, 'SHARED_BACKEND_IDLE_TTL_MS = 60000', 'shared backend warm retention');
+  requireContains(backend, 'acquireWorkerSegmenterBackendLease', 'exclusive backend lease API');
+  requireContains(backend, 'await backend.resetSession?.();', 'lease reset before reuse');
+  requireContains(backend, "kind: 'worker-segmenter'", 'worker backend identity');
+  requireContains(backend, 'queueLatestFrame(frameParams);', 'latest-frame queue under worker pressure');
 
-  console.log('[background-king-wasm-contract] PASS production uses SINet WASM segmentation');
+  requireContains(worker, 'loadModuleFactory(resolvedWasm);', 'MediaPipe wasm factory init');
+  requireContains(worker, 'sanitizeFilesetPaths(await FilesetResolver.forVisionTasks(resolvedWasm))', 'Vite-safe fileset paths');
+  requireContains(worker, 'modelAssetBuffer: new Uint8Array(modelBuffer)', 'local model buffer load');
+  requireContains(worker, 'outputCategoryMask: true', 'category mask output');
+  requireContains(worker, 'outputConfidenceMasks: true', 'confidence mask fallback output');
+  requireMissing(worker, 'cdn.jsdelivr.net', 'worker CDN source');
+  requireMissing(worker, 'unpkg.com', 'worker CDN source');
+
+  requireContains(orchestration, 'onSegmentationUnavailable: (details = {}) => {', 'local media prompt hook');
+  requireContains(orchestration, 'handleBackgroundReplacementUnavailable({', 'prompt handler call');
+  requireContains(unavailablePrompt, 'openBackgroundReplacementUnavailablePrompt({', 'prompt state update');
+  requireContains(unavailablePrompt, "eventType: 'local_background_replacement_unavailable'", 'field diagnostic');
+  requireContains(orchestration, 'createBackgroundFallbackAudioOnlyStream(rawStream)', 'avatar fallback keeps only audio stream');
+  requireContains(orchestration, 'syncBackgroundFallbackControlState(true)', 'avatar fallback sends static state');
+  requireContains(avatarSignal, 'backgroundFallbackControlStateFromPrefs', 'static avatar control-state payload');
+  requireContains(videoLayout, 'staticAvatarNodeForUserId(userId)', 'static avatar tile rendering');
+  requireContains(modal, 'useDefaultAvatar', 'standard avatar action');
+  requireContains(modal, 'handleAvatarFile', 'uploaded avatar action');
+  requireContains(modal, 'sendUnfilteredVideo', 'unfiltered video action');
+  requireContains(modal, 'clearCallBackgroundFallbackVideo();', 'unfiltered choice support');
+  requireContains(messages, 'calls.workspace.background_unavailable_title', 'modal localization title');
+  requireContains(messages, 'calls.workspace.background_send_unfiltered', 'unfiltered localization');
+
+  console.log('[background-king-wasm-contract] PASS production uses Pierre worker pipeline with explicit user alternative');
 } catch (error) {
   console.error(`[background-king-wasm-contract] FAIL: ${error.message}`);
   process.exit(1);

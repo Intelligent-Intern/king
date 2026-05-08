@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,6 +11,10 @@ function readUtf8(relativePath) {
   return fs.readFileSync(path.join(frontendRoot, relativePath), 'utf8');
 }
 
+function exists(relativePath) {
+  return fs.existsSync(path.join(frontendRoot, relativePath));
+}
+
 function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `${label} missing: ${needle}`);
 }
@@ -20,122 +23,71 @@ function requireMissing(source, needle, label) {
   assert.equal(source.includes(needle), false, `${label} must not contain: ${needle}`);
 }
 
-function countContourBand(alpha, width, height) {
-  let transparentBackground = 0;
-  let contourAlpha = 0;
-  let opaqueCenter = 0;
-  let leakedInterior = 0;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const value = alpha[y * width + x] ?? 0;
-      const inCenter = x >= 72 && x <= 87 && y >= 72 && y <= 87;
-      const outsidePerson = x < 24 || x > 135 || y < 24 || y > 135;
-      if (outsidePerson && value === 0) transparentBackground += 1;
-      if (inCenter && value === 255) opaqueCenter += 1;
-      if (inCenter && value > 0 && value < 255) leakedInterior += 1;
-      if (!outsidePerson && !inCenter && value > 0 && value < 255) contourAlpha += 1;
-    }
-  }
-  return { transparentBackground, contourAlpha, opaqueCenter, leakedInterior };
-}
-
-async function assertContourOnlyAlpha(frontendRoot) {
-  const { shapeForegroundAlpha } = await import(pathToFileURL(path.join(
-    frontendRoot,
-    'src/domain/realtime/background/maskPostprocess.js',
-  )).href);
-  const width = 160;
-  const height = 160;
-  const binaryPerson = new Uint8ClampedArray(width * height);
-  for (let y = 24; y <= 135; y += 1) {
-    for (let x = 24; x <= 135; x += 1) {
-      binaryPerson[y * width + x] = 255;
-    }
-  }
-
-  const shaped = shapeForegroundAlpha(binaryPerson, width, height, {
-    averageRadius: 0,
-    contrast: 1,
-    gamma: 1,
-    temporalFall: 1,
-    temporalRise: 1,
-  });
-  const counts = countContourBand(shaped, width, height);
-
-  assert.ok(counts.opaqueCenter >= 200, 'synthetic torso/face center must remain opaque');
-  assert.ok(counts.transparentBackground >= 13000, 'background pixels must stay transparent');
-  assert.ok(counts.contourAlpha > 0, 'contour band must receive the only smoothed alpha');
-  assert.equal(counts.leakedInterior, 0, 'interior foreground must not receive partial alpha');
-}
-
 try {
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
-  const maskPostprocess = readUtf8('src/domain/realtime/background/maskPostprocess.js');
-  const compositorStage = readUtf8('src/domain/realtime/background/pipeline/compositorStage.js');
-  const compositorShared = readUtf8('src/domain/realtime/background/pipeline/compositorShared.js');
-  const compositorCanvas = readUtf8('src/domain/realtime/background/pipeline/compositorCanvasStage.js');
-  const compositorWebgl = readUtf8('src/domain/realtime/background/pipeline/compositorWebglStage.js');
-  const controller = readUtf8('src/domain/realtime/background/controller.ts');
-  const segmenter = readUtf8('src/domain/realtime/background/pipeline/segmenterStage.js');
-  const sinetBackend = readUtf8('src/domain/realtime/background/backendSinetWasm.js');
+  const compositor = readUtf8('src/domain/realtime/background/pipeline/compositorStage.js');
+  const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
+  const worker = readUtf8('src/domain/realtime/background/workers/imageSegmenterWorker.js');
+  const orchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
+  const avatarFallback = readUtf8('src/domain/realtime/background/avatarFallbackSignal.ts');
+  const staticAvatarRender = readUtf8('src/domain/realtime/background/staticAvatarRender.ts');
+  const unavailablePrompt = readUtf8('src/domain/realtime/background/unavailablePrompt.ts');
+  const preferences = readUtf8('src/domain/realtime/media/preferences.ts');
+  const modal = readUtf8('src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue');
+  const participantUi = readUtf8('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
+  const videoLayout = readUtf8('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
+  const workspace = readUtf8('src/domain/realtime/CallWorkspaceView.vue');
+  const template = readUtf8('src/domain/realtime/CallWorkspaceView.template.html');
 
-  requireContains(maskPostprocess, 'const DEFAULT_INNER_CONTRACT_PX = 16;', 'background filter contour contraction');
-  requireContains(maskPostprocess, 'const DEFAULT_INNER_FEATHER_PX = 24;', 'background filter contour feather');
-  requireContains(maskPostprocess, 'function smoothstep(edge0, edge1, value)', 'background filter contour-only smoothing');
-  requireContains(maskPostprocess, 'const edgeLow = 0.5 - contourHalfWidth', 'background filter contour low edge');
-  requireContains(maskPostprocess, 'function sampleInnerFeatherRamp(progress) {', 'background filter stepped feather ramp');
-  requireContains(maskPostprocess, 'function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {', 'shared contour shaping helper');
-  requireContains(maskPostprocess, 'const inside = sampleInnerFeatherRamp(t);', 'stepped feather ramp application');
-  requireMissing(maskPostprocess, '(raw - 0.5) * contrast + 0.5', 'mask global contrast alpha lift');
-  requireMissing(maskPostprocess, '1 / (1 + Math.exp', 'mask sigmoid fallback blending');
-  requireMissing(maskPostprocess, 'softmax', 'mask softmax fallback blending');
+  assert.equal(exists('src/domain/realtime/background/backendSinetWasm.js'), false, 'production SINet backend must not be revived');
+  assert.equal(exists('src/domain/realtime/background/backendSelector.ts'), false, 'production SINet selector must not be revived');
+  assert.equal(exists('src/domain/realtime/background/maskPostprocess.js'), false, 'deleted SINet matte postprocess must not be revived');
 
-  requireContains(compositorShared, 'buildInnerDistanceFeatherAlpha(sourceAlpha, sourceWidth, sourceHeight)', 'bitmap matte contour shaping');
-  requireContains(compositorShared, 'return buildInnerDistanceFeatherMaskValues(mask, width, height);', 'value matte contour shaping');
-  requireMissing(compositorShared, 'function blurMask(', 'secondary contour blur');
-  requireContains(compositorStage, 'createWebGlBackgroundCompositorStage(options)', 'WebGL compositor preference');
-  requireContains(compositorStage, 'createCanvasBackgroundCompositorStage(options)', 'canvas compositor fallback');
-  requireContains(compositorCanvas, 'getShowSourceUntilMask?.() === true', 'canvas preview warmup source policy');
-  requireContains(compositorCanvas, "drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);", 'canvas degraded mode keeps original source visible');
-  requireContains(compositorCanvas, "ctx.fillStyle = '#061a4a';", 'canvas replacement warmup privacy placeholder');
-  requireMissing(compositorCanvas, 'if (hasMatteMask && !maskUpdated) return;', 'canvas stale-mask frame freeze');
-  requireContains(compositorWebgl, 'float maskAlpha = uHasMask == 1 ? readMask(vUv) : 0.0;', 'WebGL direct shaped alpha mask');
-  requireContains(compositorWebgl, "const warmupPlaceholder = !hasRenderableMask && mode === 'replace' && !showSourceUntilMask;", 'WebGL replacement warmup privacy placeholder');
-  requireContains(compositorWebgl, "mode === 'off' || (!hasRenderableMask && showSourceUntilMask) ? 0 : 1", 'WebGL degraded mode bypasses synthetic replacement');
-  requireMissing(compositorWebgl, 'smoothstep(uMaskLow, uMaskHigh', 'WebGL shader global mask blending');
-  requireMissing(compositorWebgl, 'if (hasMatteMask && !maskUpdated', 'WebGL stale-mask frame freeze');
+  requireContains(stream, "import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';", 'Pierre worker segmenter stream');
+  requireContains(stream, "requested: 'worker-segmenter'", 'worker segmenter diagnostics');
+  requireContains(stream, 'function notifySegmentationUnavailable(reason, failures = [])', 'segmentation unavailable callback');
+  requireContains(stream, "handle.reason = 'segmentation_unavailable';", 'segmentation unavailable handle state');
+  requireContains(stream, "mode: hasRenderableMatte ? runtimeConfig.mode : 'off'", 'source-visible warmup and failure rendering');
+  requireContains(stream, 'for (const audioTrack of sourceStream.getAudioTracks()) out.addTrack(audioTrack);', 'audio track preservation');
+  requireMissing(stream, 'createSinetWasmSegmentationBackend', 'SINet production backend');
+  requireMissing(stream, "requested: 'sinet-wasm'", 'SINet diagnostics');
 
-  requireContains(stream, "import { createSinetWasmSegmentationBackend } from './backendSinetWasm';", 'background stream SINet WASM backend');
-  requireContains(stream, 'const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;', 'background stream bounded ready handoff');
-  requireContains(stream, 'const ready = new Promise((resolve) => {', 'background stream readiness promise');
-  requireContains(stream, 'const readyTimer = setTimeout(', 'background stream readiness timeout');
-  requireContains(stream, 'segmentationBackend = await createSinetWasmSegmentationBackend({', 'background stream lazy SINet acquisition');
-  requireContains(stream, "requested: 'sinet-wasm'", 'background stream SINet diagnostics name');
-  requireContains(stream, 'stream: sourceStream, active: false, reason: "setup_failed", backend: "none"', 'background stream setup failure preserves original stream');
-  requireContains(stream, 'for (const audioTrack of sourceStream.getAudioTracks()) out.addTrack(audioTrack);', 'background stream preserves audio tracks in filtered output');
-  requireContains(stream, 'maskContrast: runtimeConfig.maskContrast,', 'background stream mask contrast controls');
-  requireContains(stream, 'averageRadius: runtimeConfig.averageRadius,', 'background stream Gaussian averaging controls');
-  requireContains(stream, 'temporalRise: runtimeConfig.temporalRise,', 'background stream temporal rise controls');
-  requireContains(stream, 'temporalFall: runtimeConfig.temporalFall,', 'background stream temporal fall controls');
-  requireContains(stream, 'getShowSourceUntilMask: () => runtimeConfig.showSourceUntilMask,', 'background stream preview warmup policy');
-  requireContains(stream, "Object.prototype.hasOwnProperty.call(nextOptions, 'showSourceUntilMask')", 'background stream preserves preview warmup policy on config update');
-  requireMissing(stream, 'acquireWorkerSegmenterBackendLease', 'background stream MediaPipe worker lease');
-  requireMissing(stream, 'backendWorkerSegmenter', 'background stream MediaPipe worker backend');
-  requireMissing(stream, 'backendMediapipe', 'background stream legacy MediaPipe backend import');
-  requireMissing(stream, 'backendTfjs', 'background stream legacy TFJS backend import');
-  requireContains(stream, 'ready,', 'background filter stream handle readiness promise');
-  requireContains(controller, 'await handle.ready;', 'background filter controller ready handoff');
-  requireContains(segmenter, 'latestMaskValues = hasValueMask ? segmentation.matteMaskValues : null;', 'segmenter keeps latest value mask');
-  requireContains(sinetBackend, "executionProviders: ['wasm']", 'SINet backend local WASM execution');
-  requireContains(sinetBackend, 'pendingMaskValues = alphaToFloatMask(alpha);', 'SINet backend value masks');
-  requireContains(sinetBackend, 'function binaryForegroundAlpha(value, threshold = 0)', 'SINet no-softmax foreground classification');
-  requireContains(sinetBackend, 'return Number(value) > Number(threshold) ? 255 : 0;', 'SINet hard foreground membership');
-  requireContains(sinetBackend, 'const threshold = probabilityLike ? 0.5 : 0;', 'SINet single-channel hard threshold');
-  requireContains(sinetBackend, 'alpha[i] = binaryForegroundAlpha(fg, bg);', 'SINet two-channel hard foreground-vs-background decision');
-  requireMissing(sinetBackend, 'Math.exp(bg - max)', 'SINet softmax');
-  requireMissing(sinetBackend, '1 / (1 + Math.exp', 'SINet sigmoid');
+  requireContains(compositor, 'float maskAlpha = uHasMask == 1 ? smoothstep(uMaskLow, uMaskHigh, featherMask(vUv)) : 0.0;', 'contour alpha smoothing');
+  requireContains(compositor, 'gl_FragColor = vec4(mix(background.rgb, frame.rgb, maskAlpha), 1.0);', 'hard foreground/background composite');
+  requireMissing(compositor, 'Math.exp', 'compositor sigmoid or softmax');
+  requireMissing(compositor, 'softmax', 'compositor softmax');
+  requireMissing(compositor, 'sigmoid', 'compositor sigmoid');
 
-  await assertContourOnlyAlpha(frontendRoot);
+  requireContains(workerBackend, "kind: 'worker-segmenter'", 'Pierre worker backend identity');
+  requireContains(workerBackend, "const workerUrl = new URL('./workers/imageSegmenterWorker.js', import.meta.url);", 'worker module boundary');
+  requireContains(worker, 'ImageSegmenter.createFromOptions', 'MediaPipe worker boundary');
+  requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'MediaPipe delegate boundary');
+  requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'MediaPipe category-mask WebGL boundary');
+  requireMissing(worker, 'Math.exp', 'worker softmax/sigmoid fallback');
+  requireMissing(worker, 'softmax', 'worker softmax fallback');
+  requireMissing(worker, 'sigmoid', 'worker sigmoid fallback');
+
+  requireContains(orchestration, 'handleBackgroundReplacementUnavailable({', 'modal prompt trigger');
+  requireContains(unavailablePrompt, 'openBackgroundReplacementUnavailablePrompt({', 'prompt state update');
+  requireContains(unavailablePrompt, "eventType: 'local_background_replacement_unavailable'", 'field diagnostic');
+  requireContains(orchestration, 'createBackgroundFallbackAudioOnlyStream(rawStream)', 'avatar placeholder audio-only local stream');
+  requireContains(orchestration, "backgroundFilterBackend = 'avatar_placeholder'", 'avatar backend state');
+  requireContains(orchestration, 'syncBackgroundFallbackControlState(true)', 'avatar control-state signal');
+  requireContains(avatarFallback, 'for (const audioTrack of sourceStream.getAudioTracks())', 'avatar fallback audio preservation');
+  requireContains(avatarFallback, 'out.addTrack(audioTrack);', 'avatar fallback audio track copy');
+  requireMissing(avatarFallback, 'captureStream', 'avatar fallback video stream');
+  requireContains(staticAvatarRender, "node.dataset.callStaticAvatar = '1';", 'static avatar render node');
+  requireContains(participantUi, 'backgroundFallbackControlStateFromPrefs(callMediaPrefs)', 'control-state includes static avatar mode');
+  requireContains(videoLayout, 'if (hasStaticAvatarForUserId(userId))', 'video layout static avatar route');
+  requireContains(preferences, 'DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL', 'standard avatar fallback');
+  requireContains(preferences, 'backgroundReplacementUnavailablePromptOpen', 'modal visibility state');
+  requireContains(preferences, 'useCallBackgroundFallbackAvatar', 'avatar choice action');
+  requireContains(preferences, 'clearCallBackgroundFallbackVideo', 'unfiltered choice action');
+  requireContains(modal, 'background_use_standard_avatar', 'standard avatar button');
+  requireContains(modal, 'background_upload_avatar', 'upload avatar button');
+  requireContains(modal, 'background_send_unfiltered', 'unfiltered video button');
+  requireContains(workspace, "import BackgroundReplacementUnavailableModal from './background/BackgroundReplacementUnavailableModal.vue';", 'workspace modal import');
+  requireContains(template, '<BackgroundReplacementUnavailableModal :reconfigure-background="reconfigureLocalBackgroundFilterOnly" />', 'workspace modal mount');
 
   console.log('[background-filter-mask-contract] PASS');
 } catch (error) {

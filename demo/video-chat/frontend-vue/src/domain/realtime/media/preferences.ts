@@ -15,6 +15,7 @@ const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
 const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
 const MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS = 250;
 export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
+export const DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL = '/assets/orgas/kingrt/avatar-placeholder.svg';
 
 function clampVolume(value) {
   const numeric = Number(value);
@@ -208,6 +209,11 @@ export const callMediaPrefs = reactive({
   backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
   backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
   backgroundReplacementImageUrl: persistedPrefs?.backgroundReplacementImageUrl || '',
+  backgroundFallbackVideoMode: 'none',
+  backgroundFallbackAvatarImageUrl: '',
+  backgroundReplacementUnavailablePromptOpen: false,
+  backgroundReplacementUnavailableReason: '',
+  backgroundReplacementUnavailableFailures: [],
   backgroundMaxProcessWidth: persistedPrefs?.backgroundMaxProcessWidth ?? 960,
   backgroundMaxProcessFps: persistedPrefs?.backgroundMaxProcessFps ?? 24,
   backgroundFilterActive: false,
@@ -378,7 +384,13 @@ export function setCallMicrophoneVolume(value) {
 }
 
 export function setCallBackgroundFilterMode(mode) {
-  callMediaPrefs.backgroundFilterMode = toBackgroundFilterMode(mode);
+  const nextMode = toBackgroundFilterMode(mode);
+  callMediaPrefs.backgroundFilterMode = nextMode;
+  if (nextMode !== 'off') {
+    callMediaPrefs.backgroundFallbackVideoMode = 'none';
+    callMediaPrefs.backgroundFallbackAvatarImageUrl = '';
+    callMediaPrefs.backgroundReplacementUnavailablePromptOpen = false;
+  }
   persistCallMediaPrefs();
 }
 
@@ -409,6 +421,37 @@ export function setCallBackgroundApplyOutgoing(value) {
 
 export function setCallBackgroundReplacementImageUrl(value) {
   callMediaPrefs.backgroundReplacementImageUrl = toBackgroundReplacementImageUrl(value);
+  persistCallMediaPrefs();
+}
+
+export function openBackgroundReplacementUnavailablePrompt(details = {}) {
+  callMediaPrefs.backgroundReplacementUnavailablePromptOpen = true;
+  callMediaPrefs.backgroundReplacementUnavailableReason = String(details?.reason || 'segmentation_unavailable');
+  callMediaPrefs.backgroundReplacementUnavailableFailures = Array.isArray(details?.failures)
+    ? details.failures.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 5)
+    : [];
+}
+
+export function closeBackgroundReplacementUnavailablePrompt() {
+  callMediaPrefs.backgroundReplacementUnavailablePromptOpen = false;
+}
+
+export function useCallBackgroundFallbackAvatar(imageUrl = DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL) {
+  const avatarUrl = String(imageUrl || '').trim() || DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL;
+  callMediaPrefs.backgroundFallbackVideoMode = 'avatar';
+  callMediaPrefs.backgroundFallbackAvatarImageUrl = avatarUrl;
+  callMediaPrefs.backgroundFilterMode = 'off';
+  callMediaPrefs.backgroundApplyOutgoing = false;
+  closeBackgroundReplacementUnavailablePrompt();
+  persistCallMediaPrefs();
+}
+
+export function clearCallBackgroundFallbackVideo() {
+  callMediaPrefs.backgroundFallbackVideoMode = 'none';
+  callMediaPrefs.backgroundFallbackAvatarImageUrl = '';
+  callMediaPrefs.backgroundFilterMode = 'off';
+  callMediaPrefs.backgroundApplyOutgoing = false;
+  closeBackgroundReplacementUnavailablePrompt();
   persistCallMediaPrefs();
 }
 

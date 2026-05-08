@@ -66,18 +66,22 @@ function assertBackendLadder(fixture) {
   assert.ok(Array.isArray(ladder), 'backend ladder must be an array');
   assert.deepEqual(
     ladder.map((step) => step.backend),
-    ['mediapipe_gpu', 'mediapipe_cpu', 'sinet_wasm', 'degraded_visible_source'],
-    'backend ladder must prefer MediaPipe GPU, isolated MediaPipe CPU, SINet/WASM, then visible-source degraded mode',
+    ['worker_segmenter', 'user_avatar_placeholder', 'unfiltered_video'],
+    'background unavailable path must use Pierre worker, then explicit user choice',
   );
 
-  const [gpu, cpu, sinet, degraded] = ladder;
-  assert.ok(gpu.enabled_when.includes('gpu_available'), 'MediaPipe GPU requires healthy GPU availability');
-  assert.equal(gpu.on_init_failure, 'quarantine_backend_then_try_mediapipe_cpu');
-  assert.ok(cpu.enabled_when.includes('cpu_delegate_isolated_from_gpu'), 'MediaPipe CPU is valid only when isolated from GPU internals');
-  assert.equal(cpu.on_gpu_signature, 'quarantine_backend_then_try_sinet_wasm');
-  assert.ok(sinet.enabled_when.includes('sinet_assets_available'), 'SINet/WASM requires local SINet assets');
-  assert.equal(sinet.on_init_failure, 'quarantine_backend_then_use_degraded_visible_source');
-  assert.deepEqual(degraded.required_behavior, [
+  const [worker, avatar, unfiltered] = ladder;
+  assert.ok(worker.enabled_when.includes('worker_available'), 'MediaPipe must stay scoped to the worker backend');
+  assert.equal(worker.on_init_failure, 'keep_source_visible_then_prompt_user');
+  assert.ok(avatar.enabled_when.includes('user_chooses_standard_or_uploaded_avatar'), 'avatar requires explicit user choice');
+  assert.deepEqual(avatar.required_behavior, [
+    'signal_static_avatar_once',
+    'keep_audio_tracks_live',
+    'do_not_stream_avatar_frames',
+    'do_not_apply_synthetic_background',
+  ]);
+  assert.ok(unfiltered.enabled_when.includes('user_chooses_unfiltered_video'), 'unfiltered video requires explicit user choice');
+  assert.deepEqual(unfiltered.required_behavior, [
     'keep_source_video_visible',
     'keep_audio_tracks_live',
     'keep_published_media_alive',
@@ -105,7 +109,7 @@ function assertDiagnostics(fixture) {
     'gpu_availability',
     'model_source',
     'fallback_reason',
-    'cooldown_state',
+    'user_choice_required',
   ]);
 }
 
@@ -126,26 +130,37 @@ function assertBrowserMatrixSchema(fixture) {
 
 function assertCurrentRuntimeBoundaries(fixture) {
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
-  const selector = readUtf8('src/domain/realtime/background/backendSelector.ts');
+  const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
   const worker = readUtf8('src/domain/realtime/background/workers/imageSegmenterWorker.js');
+  const modal = readUtf8('src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue');
+  const orchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
+  const avatarSignal = readUtf8('src/domain/realtime/background/avatarFallbackSignal.ts');
+  const unavailablePrompt = readUtf8('src/domain/realtime/background/unavailablePrompt.ts');
 
-  assert.equal(fixture.current_runtime_baseline.production_default_backend, 'sinet_wasm');
-  assert.equal(fixture.current_runtime_baseline.mediapipe_not_default, true);
-  assert.equal(fixture.current_runtime_baseline.sinet_cooldown_ms, 60000);
+  assert.equal(fixture.current_runtime_baseline.production_default_backend, 'worker-segmenter');
+  assert.equal(fixture.current_runtime_baseline.mediapipe_is_worker_scoped, true);
+  assert.equal(fixture.current_runtime_baseline.segmentation_unavailable_prompts_user, true);
 
-  requireContains(selector, "backend: 'sinet_wasm'", 'current production backend selector');
-  requireContains(stream, 'const BACKGROUND_SEGMENTER_INIT_RETRY_MS = 60000;', 'current SINet quarantine window');
-  requireContains(stream, 'let sinetSegmenterUnavailableUntil = 0;', 'current SINet quarantine state');
+  requireContains(stream, "import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';", 'current production worker backend');
   requireContains(stream, 'if (segmentationBackendInitPromise) return segmentationBackendInitPromise;', 'current init idempotency');
-  requireContains(stream, 'sinetSegmenterUnavailableUntil = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;', 'current SINet failure cooldown');
-  requireContains(stream, "requested: 'sinet-wasm'", 'current backend diagnostics');
+  requireContains(stream, "requested: 'worker-segmenter'", 'current backend diagnostics');
+  requireContains(stream, 'notifySegmentationUnavailable', 'current unavailable prompt hook');
   requireMissing(stream, 'ImageSegmenter.createFromOptions', 'production stream must not directly instantiate MediaPipe');
   requireMissing(stream, "delegate === 'GPU' ? 'GPU' : 'CPU'", 'production stream must not switch MediaPipe delegates directly');
 
+  requireContains(workerBackend, "kind: 'worker-segmenter'", 'worker backend identity');
   requireContains(worker, 'ImageSegmenter.createFromOptions', 'local MediaPipe worker fixture boundary');
   requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'local MediaPipe delegate boundary');
   requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'local MediaPipe category-mask WebGL boundary');
   requireContains(worker, 'new DrawingUtils(glCtx)', 'local MediaPipe DrawingUtils WebGL boundary');
+  requireContains(modal, 'background_use_standard_avatar', 'standard avatar choice');
+  requireContains(modal, 'background_upload_avatar', 'uploaded avatar choice');
+  requireContains(modal, 'background_send_unfiltered', 'unfiltered video choice');
+  requireContains(orchestration, 'handleBackgroundReplacementUnavailable({', 'unavailable prompt handler');
+  requireContains(orchestration, 'createBackgroundFallbackAudioOnlyStream(rawStream)', 'avatar fallback audio-only stream');
+  requireContains(orchestration, 'syncBackgroundFallbackControlState(true)', 'static avatar signal');
+  requireMissing(avatarSignal, 'captureStream', 'avatar fallback frame streaming');
+  requireContains(unavailablePrompt, "eventType: 'local_background_replacement_unavailable'", 'field diagnostic');
 }
 
 try {

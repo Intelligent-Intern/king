@@ -270,7 +270,8 @@
 }
 
 .video-container :deep(video),
-.video-container :deep(canvas) {
+.video-container :deep(canvas),
+.video-container :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -332,7 +333,8 @@
 }
 
 .workspace-fullscreen-video-slot :deep(video),
-.workspace-fullscreen-video-slot :deep(canvas) {
+.workspace-fullscreen-video-slot :deep(canvas),
+.workspace-fullscreen-video-slot :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -424,7 +426,8 @@
 }
 
 .workspace-grid-video-slot :deep(video),
-.workspace-grid-video-slot :deep(canvas) {
+.workspace-grid-video-slot :deep(canvas),
+.workspace-grid-video-slot :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -733,7 +736,8 @@
 }
 
 .workspace-mini-video-slot :deep(video),
-.workspace-mini-video-slot :deep(canvas) {
+.workspace-mini-video-slot :deep(canvas),
+.workspace-mini-video-slot :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
@@ -749,6 +753,12 @@
   object-position: center center !important;
   image-rendering: auto;
   background: var(--bg-video);
+}
+
+:deep(.workspace-static-avatar-media) {
+  background: var(--bg-video);
+  object-fit: contain !important;
+  object-position: center center !important;
 }
 
 .video-container :deep([data-call-screen-share-pan-enabled="1"]),

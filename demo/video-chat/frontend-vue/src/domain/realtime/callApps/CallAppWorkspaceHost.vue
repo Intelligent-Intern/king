@@ -224,7 +224,8 @@ const accessNoticeLabel = computed(() => {
 }
 
 .call-app-workspace-mini-video-slot :deep(video),
-.call-app-workspace-mini-video-slot :deep(canvas) {
+.call-app-workspace-mini-video-slot :deep(canvas),
+.call-app-workspace-mini-video-slot :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
