@@ -103,6 +103,21 @@ assert.match(
 );
 assert.match(
   mainJourneySmokeSpec,
+  /e2e_journey_002_registered_logged_out_invitee_uses_temp_account/,
+  'main journey smoke split must cover the registered logged-out personalized-link path from SPRINT section 32',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /registered_logged_out_personalized_uses_temporary_account[\s\S]*registered_account_user_key[\s\S]*account_type[\s\S]*guest[\s\S]*not\.toBe\(registeredAccount\.id\)/,
+  'registered logged-out main journey must prove the temporary account is used instead of the existing registered account',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /sessionRequest\.headers\(\)\.authorization[\s\S]*toBe\(''\)[\s\S]*postDataJsonOrNull\(sessionRequest\)[\s\S]*toBeNull\(\)/,
+  'registered logged-out main journey must prove no bearer or verified identity proof is sent',
+);
+assert.match(
+  mainJourneySmokeSpec,
   /e2e_journey_003 logged-in own personalized link keeps the account through lobby admission/,
   'main journey smoke split must cover the logged-in own personalized-link path from SPRINT section 32',
 );
