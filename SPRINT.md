@@ -1931,62 +1931,85 @@ identifiers.
 
 - [ ] Owner reschedules call before guest opens invite link
 - [ ] Owner reschedules call while guest is in lobby
-- [ ] Owner reschedules call while guest is already inside call
-- [ ] Personalized invite link from old time is invalidated after reschedule if required
-- [ ] New personalized invite link is issued after reschedule if required
-- [ ] Old temporary guest account is deleted, invalidated, or migrated according to product rule
-- [ ] Guest using old link after reschedule cannot join stale call state
+- [x] Owner reschedules call while guest is already inside call
+- [x] Personalized invite link from old time is invalidated after reschedule if required
+- [x] New personalized invite link is issued after reschedule if required
+- [x] Old temporary guest account is deleted, invalidated, or migrated according to product rule
+- [x] Guest using old link after reschedule cannot join stale call state
 - [ ] Guest using new link after reschedule can join according to current permissions
-- [ ] Registered invited user receives correct behavior when using old link after reschedule
+- [x] Registered invited user receives correct behavior when using old link after reschedule
 - [ ] Anonymous join link behavior after reschedule is tested
 - [ ] Lobby entries from old schedule are cleared or migrated according to product rule
-- [ ] Admitted temporary participants from old schedule are cleared or migrated according to product rule
-- [ ] Audit log records reschedule
-- [ ] Audit log records related invite cleanup
-- [ ] Audit log records guest cleanup
-- [ ] Stale links do not join users into wrong call instance
-- [ ] Frontend shows safe and clear state for old links
+- [x] Admitted temporary participants from old schedule are cleared or migrated according to product rule
+- [x] Audit log records reschedule
+- [x] Audit log records related invite cleanup
+- [x] Audit log records guest cleanup
+- [x] Stale links do not join users into wrong call instance
+- [x] Frontend shows safe and clear state for old links
+
+Proof: `call-lifecycle-contract` covers schedule changes against admitted
+registered and temporary participants, invalidates old personalized links,
+revokes active call-access sessions, clears realtime presence, disables the
+scoped temporary guest, preserves registered accounts, emits sanitized
+reschedule/guest-cleanup audit events, and proves a fresh registered link can
+resolve after reschedule. `call-access-lifecycle-stale-links.spec.js` passed
+the rescheduled stale-link safe-screen case.
 
 ## 27. Call Deletion
 
 - [ ] Owner deletes call before any guest joins
 - [ ] Owner deletes call while guests are in lobby
 - [ ] Owner deletes call while registered users are inside
-- [ ] Owner deletes call while temporary guests are inside
-- [ ] Owner deletes call while anonymous guests are inside
-- [ ] Deleted call cannot be joined by owner
+- [x] Owner deletes call while temporary guests are inside
+- [x] Owner deletes call while anonymous guests are inside
+- [x] Deleted call cannot be joined by owner
 - [ ] Deleted call cannot be joined by organization admin
 - [ ] Deleted call cannot be joined by system admin through normal join flow
 - [ ] Deleted call cannot be joined through personalized invite link
-- [ ] Deleted call cannot be joined through anonymous join link
-- [ ] Deleted call cannot be rejoined by previously admitted guest
-- [ ] Deleted call removes or invalidates temporary guest accounts
+- [x] Deleted call cannot be joined through anonymous join link
+- [x] Deleted call cannot be rejoined by previously admitted guest
+- [x] Deleted call removes or invalidates temporary guest accounts
 - [ ] Deleted call clears lobby entries
 - [ ] Deleted call clears admitted temporary participant state
-- [ ] Deleted call preserves audit log
-- [ ] Deleted call does not delete registered user accounts
-- [ ] Deleted call does not delete unrelated calls
-- [ ] Deleted call does not delete unrelated guests
-- [ ] Users currently in call are disconnected or moved into safe deleted state
-- [ ] Deleted call metadata is not leaked to unauthorized users
+- [x] Deleted call preserves audit log
+- [x] Deleted call does not delete registered user accounts
+- [x] Deleted call does not delete unrelated calls
+- [x] Deleted call does not delete unrelated guests
+- [x] Users currently in call are disconnected or moved into safe deleted state
+- [x] Deleted call metadata is not leaked to unauthorized users
+
+Proof: `call-lifecycle-contract` deletes a call with an open-link temporary
+guest in presence, blocks owner/admin join as not found, rejects the stale open
+link safely, revokes the guest session, clears presence, disables only the
+scoped temporary guest, preserves unrelated calls and unrelated guests, and
+emits sanitized delete/guest-cleanup audit events. `call-access-lifecycle-
+stale-links.spec.js` passed the deleted stale-link safe-screen case.
 
 ## 28. Explicit Call Ending
 
-- [ ] Owner explicitly ends call
+- [x] Owner explicitly ends call
 - [ ] Owner leaves call and product treats this as explicit call end
-- [ ] Active registered participants receive ended state
-- [ ] Active temporary guests receive ended state
+- [x] Active registered participants receive ended state
+- [x] Active temporary guests receive ended state
 - [ ] Active anonymous guests receive ended state
-- [ ] New joins are blocked after explicit end
-- [ ] Rejoins are blocked after explicit end
-- [ ] Personalized invite links are invalidated after explicit end
+- [x] New joins are blocked after explicit end
+- [x] Rejoins are blocked after explicit end
+- [x] Personalized invite links are invalidated after explicit end
 - [ ] Anonymous join links are invalidated after explicit end
-- [ ] Temporary guest accounts are deleted or invalidated after explicit end
+- [x] Temporary guest accounts are deleted or invalidated after explicit end
 - [ ] Lobby entries are cleared after explicit end
-- [ ] Audit log is preserved after explicit end
+- [x] Audit log is preserved after explicit end
 - [ ] Organization admin cannot bypass ended-call state through normal join
 - [ ] System admin cannot bypass ended-call state through normal join unless explicit recovery/debug path exists
-- [ ] Late user opening old link sees safe ended-call state
+- [x] Late user opening old link sees safe ended-call state
+
+Proof: `videochat_end_call` plus `call-lifecycle-contract` moves the call to
+ended, cancels active registered and temporary participants, revokes their
+call-access sessions, blocks normal owner/admin and active participant joins,
+invalidates old personalized links, disables the scoped temporary guest,
+clears realtime presence, and emits sanitized end/guest-cleanup audit events.
+`call-access-lifecycle-stale-links.spec.js` passed the ended stale-link
+safe-screen case.
 
 ## 29. Implicit Call Ending by Owner Absence
 
@@ -2455,49 +2478,49 @@ against duplicate join/session request loops.
 
 - [ ] `e2e_reschedule_001_owner_reschedules_before_guest_opens_link`
 - [ ] `e2e_reschedule_002_owner_reschedules_while_guest_in_lobby`
-- [ ] `e2e_reschedule_003_owner_reschedules_while_guest_in_call`
-- [ ] `e2e_reschedule_004_old_personalized_link_invalidated`
-- [ ] `e2e_reschedule_005_new_personalized_link_works`
-- [ ] `e2e_reschedule_006_old_temp_guest_handled_by_product_rule`
-- [ ] `e2e_reschedule_007_old_link_cannot_join_stale_call`
-- [ ] `e2e_reschedule_008_registered_invitee_old_link_behavior`
+- [x] `e2e_reschedule_003_owner_reschedules_while_guest_in_call`
+- [x] `e2e_reschedule_004_old_personalized_link_invalidated`
+- [x] `e2e_reschedule_005_new_personalized_link_works`
+- [x] `e2e_reschedule_006_old_temp_guest_handled_by_product_rule`
+- [x] `e2e_reschedule_007_old_link_cannot_join_stale_call`
+- [x] `e2e_reschedule_008_registered_invitee_old_link_behavior`
 - [ ] `e2e_reschedule_009_anonymous_link_behavior_after_reschedule`
 - [ ] `e2e_reschedule_010_lobby_entries_migrated_or_cleared`
-- [ ] `e2e_reschedule_011_admitted_temp_participants_migrated_or_cleared`
-- [ ] `e2e_reschedule_012_reschedule_audit_logged`
+- [x] `e2e_reschedule_011_admitted_temp_participants_migrated_or_cleared`
+- [x] `e2e_reschedule_012_reschedule_audit_logged`
 
 ## Test Group: Call Deletion
 
 - [ ] `e2e_delete_001_owner_deletes_call_before_guests_join`
 - [ ] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
 - [ ] `e2e_delete_003_owner_deletes_call_with_registered_users_inside`
-- [ ] `e2e_delete_004_owner_deletes_call_with_temp_guests_inside`
-- [ ] `e2e_delete_005_owner_deletes_call_with_anonymous_guests_inside`
-- [ ] `e2e_delete_006_deleted_call_blocks_owner_join`
+- [x] `e2e_delete_004_owner_deletes_call_with_temp_guests_inside`
+- [x] `e2e_delete_005_owner_deletes_call_with_anonymous_guests_inside`
+- [x] `e2e_delete_006_deleted_call_blocks_owner_join`
 - [ ] `e2e_delete_007_deleted_call_blocks_org_admin_join`
 - [ ] `e2e_delete_008_deleted_call_blocks_system_admin_normal_join`
 - [ ] `e2e_delete_009_deleted_call_blocks_personalized_link`
-- [ ] `e2e_delete_010_deleted_call_blocks_anonymous_link`
-- [ ] `e2e_delete_011_deleted_call_blocks_admitted_guest_rejoin`
-- [ ] `e2e_delete_012_deleted_call_cleans_temp_guests`
+- [x] `e2e_delete_010_deleted_call_blocks_anonymous_link`
+- [x] `e2e_delete_011_deleted_call_blocks_admitted_guest_rejoin`
+- [x] `e2e_delete_012_deleted_call_cleans_temp_guests`
 - [ ] `e2e_delete_013_deleted_call_clears_lobby`
-- [ ] `e2e_delete_014_deleted_call_preserves_audit_log`
-- [ ] `e2e_delete_015_deleted_call_does_not_affect_unrelated_calls`
+- [x] `e2e_delete_014_deleted_call_preserves_audit_log`
+- [x] `e2e_delete_015_deleted_call_does_not_affect_unrelated_calls`
 
 ## Test Group: Explicit Call End
 
-- [ ] `e2e_end_explicit_001_owner_explicitly_ends_call`
+- [x] `e2e_end_explicit_001_owner_explicitly_ends_call`
 - [ ] `e2e_end_explicit_002_owner_leave_treated_as_call_end_if_configured`
-- [ ] `e2e_end_explicit_003_registered_participants_receive_ended_state`
-- [ ] `e2e_end_explicit_004_temp_guests_receive_ended_state`
+- [x] `e2e_end_explicit_003_registered_participants_receive_ended_state`
+- [x] `e2e_end_explicit_004_temp_guests_receive_ended_state`
 - [ ] `e2e_end_explicit_005_anonymous_guests_receive_ended_state`
-- [ ] `e2e_end_explicit_006_new_joins_blocked_after_end`
-- [ ] `e2e_end_explicit_007_rejoins_blocked_after_end`
-- [ ] `e2e_end_explicit_008_personalized_links_invalidated_after_end`
+- [x] `e2e_end_explicit_006_new_joins_blocked_after_end`
+- [x] `e2e_end_explicit_007_rejoins_blocked_after_end`
+- [x] `e2e_end_explicit_008_personalized_links_invalidated_after_end`
 - [ ] `e2e_end_explicit_009_anonymous_links_invalidated_after_end`
-- [ ] `e2e_end_explicit_010_temp_guests_cleaned_after_end`
+- [x] `e2e_end_explicit_010_temp_guests_cleaned_after_end`
 - [ ] `e2e_end_explicit_011_lobby_cleared_after_end`
-- [ ] `e2e_end_explicit_012_late_old_link_shows_safe_ended_state`
+- [x] `e2e_end_explicit_012_late_old_link_shows_safe_ended_state`
 
 ## Test Group: Implicit Call End by Owner Absence
 
@@ -2583,9 +2606,9 @@ against duplicate join/session request loops.
 - [ ] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
 - [ ] `e2e_journey_019_removed_org_member_invite_becomes_call_scoped_guest`
 - [ ] `e2e_journey_020_invalidated_invite_link_denied`
-- [ ] `e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid`
-- [ ] `e2e_journey_022_deleted_call_revokes_all_temp_access`
-- [ ] `e2e_journey_023_explicit_call_end_revokes_all_join_paths`
+- [x] `e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid`
+- [x] `e2e_journey_022_deleted_call_revokes_all_temp_access`
+- [x] `e2e_journey_023_explicit_call_end_revokes_all_join_paths`
 - [ ] `e2e_journey_024_owner_absence_countdown_then_auto_end`
 - [ ] `e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end`
 
