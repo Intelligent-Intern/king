@@ -1964,9 +1964,9 @@ requests a fresh `room/snapshot/request`.
 - [x] Removed invited user joins only as call-scoped invited guest
 - [x] Removed invited user does not retain organization-member rights
 - [x] Removed invited user does not retain organization-admin rights
-- [ ] Removed invited user cannot join other organization calls
+- [x] Removed invited user cannot join other organization calls
 - [x] Removed invited user cannot access organization resources
-- [ ] Removed invited user cannot manage call unless separately owner/moderator
+- [x] Removed invited user cannot manage call unless separately owner/moderator
 - [x] Removed invited user cannot use stale role data from token/session/cache
 - [x] Removed invited user is blocked if invite was manually invalidated
 - [ ] Removed invited user is blocked if call was deleted
@@ -1995,7 +1995,14 @@ organization-scoped resource grant is lost with organization membership;
 verifies the link still resolves; issues a call-scoped session; authenticates
 through the call-access fallback without recreating membership; proves
 `tenant_admin` stays false and organization resource access stays denied; and
-confirms the admitted user enters only the bound call room. The focused
+confirms the admitted user enters only the bound call room.
+`call-access-invited-user-org-removal-contract` keeps tenant membership while
+removing organization membership after a personalized invite, proves stale
+normal sessions re-read least-privilege tenant state, denies unrelated
+organization-call browse/direct-entry/admin rights, issues a call-scoped
+personal-link session bound only to the invited call, keeps the invitee in lobby
+before admission, and admits them only as a non-moderating participant after
+host approval. The focused
 Playwright spec `call-access-join.spec.js` proves the public join/session browser
 path and waiting-for-host state.
 
@@ -2628,11 +2635,11 @@ access/session fingerprints and safe counts remain.
 
 ## Test Group: Membership Revocation After Invitation
 
-- [ ] `e2e_membership_001_removed_invited_user_can_use_valid_invite_as_call_guest`
-- [ ] `e2e_membership_002_removed_invited_user_no_org_member_rights`
-- [ ] `e2e_membership_003_removed_invited_admin_no_org_admin_rights`
-- [ ] `e2e_membership_004_removed_invited_user_cannot_join_other_org_calls`
-- [ ] `e2e_membership_005_removed_invited_user_cannot_access_org_resources`
+- [x] `e2e_membership_001_removed_invited_user_can_use_valid_invite_as_call_guest`
+- [x] `e2e_membership_002_removed_invited_user_no_org_member_rights`
+- [x] `e2e_membership_003_removed_invited_admin_no_org_admin_rights`
+- [x] `e2e_membership_004_removed_invited_user_cannot_join_other_org_calls`
+- [x] `e2e_membership_005_removed_invited_user_cannot_access_org_resources`
 - [ ] `e2e_membership_006_removed_invited_user_blocked_after_invite_invalidation`
 - [ ] `e2e_membership_007_removed_invited_user_blocked_after_call_deleted`
 - [ ] `e2e_membership_008_removed_invited_user_blocked_after_call_ended`
@@ -2642,7 +2649,7 @@ access/session fingerprints and safe counts remain.
 - [ ] `e2e_membership_012_removed_org_admin_inside_call_loses_admin_controls`
 - [ ] `e2e_membership_013_removed_user_rejoin_allowed_only_while_invite_valid`
 - [ ] `e2e_membership_014_membership_removal_audit_logged`
-- [ ] `e2e_membership_015_stale_role_cache_ignored_after_membership_removal`
+- [x] `e2e_membership_015_stale_role_cache_ignored_after_membership_removal`
 
 ## Test Group: Invite Invalidation
 
@@ -2834,7 +2841,7 @@ access/session fingerprints and safe counts remain.
 - [x] Tests cover implicit owner-absence ending
 - [x] Owner timeout tests do not wait 15 real minutes
 - [ ] Duplicate personalized-link abuse detection is tested
-- [ ] Membership removal after invitation is tested with call-scoped guest access behavior
+- [x] Membership removal after invitation is tested with call-scoped guest access behavior
 - [x] Privacy and data minimization assertions are included
 - [ ] Security manipulation cases are covered
 - [x] Audit-relevant flows are asserted where audit logs exist
