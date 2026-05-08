@@ -234,6 +234,81 @@ function videochat_iam_anonymous_lobby_admit(
     videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $targetUserId, 'allowed', $label);
 }
 
+function videochat_iam_anonymous_lobby_reject(
+    PDO $pdo,
+    callable $openDatabase,
+    array &$presenceState,
+    array &$lobbyState,
+    array $moderatorConnection,
+    string $callId,
+    int $targetUserId,
+    string $label
+): void {
+    videochat_iam_anonymous_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $moderatorConnection,
+        $openDatabase,
+        ['type' => 'lobby/reject', 'room_id' => $callId, 'target_user_id' => $targetUserId],
+        $label
+    );
+    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $targetUserId, 'invited', $label);
+}
+
+function videochat_iam_anonymous_lobby_assert_direct_room(
+    PDO $pdo,
+    callable $openDatabase,
+    string $sessionId,
+    string $callId,
+    string $label
+): void {
+    $auth = videochat_iam_anonymous_lobby_auth($pdo, $sessionId);
+    $resolution = videochat_realtime_resolve_connection_rooms($auth, $callId, $openDatabase, $callId);
+    videochat_iam_anonymous_lobby_assert((bool) ($resolution['ok'] ?? false), "{$label}: room resolution should succeed");
+    videochat_iam_anonymous_lobby_assert((string) ($resolution['initial_room_id'] ?? '') === $callId, "{$label}: should enter the target call room");
+    videochat_iam_anonymous_lobby_assert((string) ($resolution['pending_room_id'] ?? '') === '', "{$label}: should not keep a pending lobby room");
+}
+
+function videochat_iam_anonymous_lobby_assert_visible_snapshot(
+    array $lobbyState,
+    array $moderatorConnection,
+    string $callId,
+    int $targetUserId,
+    string $label
+): void {
+    $snapshot = videochat_lobby_snapshot_payload_for_connection(
+        videochat_lobby_snapshot_payload($lobbyState, $callId, $label),
+        $moderatorConnection
+    );
+    videochat_iam_anonymous_lobby_assert((int) ($snapshot['queue_count'] ?? 0) === 1, "{$label}: moderator should see one waiting participant");
+    videochat_iam_anonymous_lobby_assert(
+        (int) ((($snapshot['queue'] ?? [])[0] ?? [])['user_id'] ?? 0) === $targetUserId,
+        "{$label}: moderator snapshot should expose the waiting participant id"
+    );
+}
+
+function videochat_iam_anonymous_lobby_assert_redacted_controls(
+    array $lobbyState,
+    array $viewerConnection,
+    string $callId,
+    int $otherUserId,
+    string $label
+): void {
+    $snapshot = videochat_lobby_snapshot_payload_for_connection(
+        videochat_lobby_snapshot_payload($lobbyState, $callId, $label),
+        $viewerConnection
+    );
+    $viewerUserId = (int) ($viewerConnection['user_id'] ?? 0);
+    videochat_iam_anonymous_lobby_assert((int) ($snapshot['queue_count'] ?? -1) === 1, "{$label}: unauthorized viewer should see only their own lobby entry");
+    videochat_iam_anonymous_lobby_assert(
+        (int) ((($snapshot['queue'] ?? [])[0] ?? [])['user_id'] ?? 0) === $viewerUserId,
+        "{$label}: unauthorized viewer own lobby row mismatch"
+    );
+    foreach ((array) ($snapshot['queue'] ?? []) as $entry) {
+        videochat_iam_anonymous_lobby_assert((int) ($entry['user_id'] ?? 0) !== $otherUserId, "{$label}: unauthorized snapshot leaked another waiting user");
+    }
+}
+
 try {
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[call-access-anonymous-lobby-contract] SKIP: pdo_sqlite unavailable\n");
@@ -290,11 +365,12 @@ SQL
     videochat_iam_anonymous_lobby_assert($organizationId > 0, 'organization should be created');
 
     $ownerUserId = videochat_iam_anonymous_lobby_create_user($pdo, $userRoleId, 'iam-anon-owner-' . $unique . '@example.test', 'IAM Anonymous Owner');
+    $tempModeratorUserId = videochat_iam_anonymous_lobby_create_user($pdo, $userRoleId, 'iam-anon-temp-mod-' . $unique . '@example.test', 'IAM Anonymous Temp Moderator');
     $orgAdminUserId = videochat_iam_anonymous_lobby_create_user($pdo, $userRoleId, 'iam-anon-org-admin-' . $unique . '@example.test', 'IAM Anonymous Org Admin');
     $systemAdminUserId = videochat_iam_anonymous_lobby_create_user($pdo, $adminRoleId, 'iam-anon-system-admin-' . $unique . '@example.test', 'IAM Anonymous System Admin');
     $accountUserId = videochat_iam_anonymous_lobby_create_user($pdo, $userRoleId, 'iam-anon-account-' . $unique . '@example.test', 'IAM Anonymous Account');
 
-    foreach ([$ownerUserId, $orgAdminUserId, $systemAdminUserId, $accountUserId] as $userId) {
+    foreach ([$ownerUserId, $tempModeratorUserId, $orgAdminUserId, $systemAdminUserId, $accountUserId] as $userId) {
         videochat_tenant_attach_user($pdo, $userId, $tenantId);
     }
     $organizationMembership = $pdo->prepare(
@@ -303,7 +379,7 @@ INSERT INTO organization_memberships(tenant_id, organization_id, user_id, member
 VALUES(:tenant_id, :organization_id, :user_id, :membership_role, 'active', :created_at, :updated_at)
 SQL
     );
-    foreach ([[$ownerUserId, 'member'], [$orgAdminUserId, 'admin']] as [$userId, $role]) {
+    foreach ([[$ownerUserId, 'member'], [$tempModeratorUserId, 'member'], [$orgAdminUserId, 'admin']] as [$userId, $role]) {
         $organizationMembership->execute([
             ':tenant_id' => $tenantId,
             ':organization_id' => $organizationId,
@@ -321,12 +397,23 @@ SQL
         'access_mode' => 'free_for_all',
         'starts_at' => $startsAt,
         'ends_at' => $endsAt,
-        'internal_participant_user_ids' => [],
+        'internal_participant_user_ids' => [$tempModeratorUserId],
         'external_participants' => [],
     ], $tenantId);
     videochat_iam_anonymous_lobby_assert((bool) ($callCreate['ok'] ?? false), 'open call should be created');
     $callId = (string) (($callCreate['call'] ?? [])['id'] ?? '');
     videochat_iam_anonymous_lobby_assert($callId !== '', 'open call id should be non-empty');
+
+    $grantTempModerator = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $tempModeratorUserId,
+        'moderator',
+        $ownerUserId,
+        'user',
+        $tenantId
+    );
+    videochat_iam_anonymous_lobby_assert((bool) ($grantTempModerator['ok'] ?? false), 'owner should grant temporary moderator for lobby proof');
 
     $linkCreate = videochat_create_call_access_link_for_user($pdo, $callId, $ownerUserId, 'user', [
         'link_kind' => 'open',
@@ -377,6 +464,26 @@ SQL
     videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $loggedOutGuestUserId, 'invited', 'logged-out open link default lobby wait');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_open', $callId, 'logged-out open link');
 
+    $tempModeratorGuestSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        videochat_iam_anonymous_lobby_issue_session_id('sess_iam_anon_lobby_guest_temp_mod'),
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-lobby-contract'],
+        ['guest_name' => 'Temp Moderator Admit Guest']
+    );
+    videochat_iam_anonymous_lobby_assert((bool) ($tempModeratorGuestSession['ok'] ?? false), 'temporary-moderator target guest session should issue');
+    $tempModeratorGuestUserId = (int) (($tempModeratorGuestSession['user'] ?? [])['id'] ?? 0);
+
+    $tempModeratorRejectSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        videochat_iam_anonymous_lobby_issue_session_id('sess_iam_anon_lobby_guest_temp_mod_reject'),
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-lobby-contract'],
+        ['guest_name' => 'Temp Moderator Reject Guest']
+    );
+    videochat_iam_anonymous_lobby_assert((bool) ($tempModeratorRejectSession['ok'] ?? false), 'temporary-moderator reject target guest session should issue');
+    $tempModeratorRejectUserId = (int) (($tempModeratorRejectSession['user'] ?? [])['id'] ?? 0);
+
     $orgGuestSession = videochat_issue_session_for_call_access(
         $pdo,
         $accessId,
@@ -387,6 +494,16 @@ SQL
     videochat_iam_anonymous_lobby_assert((bool) ($orgGuestSession['ok'] ?? false), 'org-admin target guest session should issue');
     $orgGuestUserId = (int) (($orgGuestSession['user'] ?? [])['id'] ?? 0);
 
+    $orgRejectGuestSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        videochat_iam_anonymous_lobby_issue_session_id('sess_iam_anon_lobby_guest_org_reject'),
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-lobby-contract'],
+        ['guest_name' => 'Org Admin Reject Guest']
+    );
+    videochat_iam_anonymous_lobby_assert((bool) ($orgRejectGuestSession['ok'] ?? false), 'org-admin reject target guest session should issue');
+    $orgRejectGuestUserId = (int) (($orgRejectGuestSession['user'] ?? [])['id'] ?? 0);
+
     $systemGuestSession = videochat_issue_session_for_call_access(
         $pdo,
         $accessId,
@@ -396,6 +513,16 @@ SQL
     );
     videochat_iam_anonymous_lobby_assert((bool) ($systemGuestSession['ok'] ?? false), 'system-admin target guest session should issue');
     $systemGuestUserId = (int) (($systemGuestSession['user'] ?? [])['id'] ?? 0);
+
+    $systemRejectGuestSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        videochat_iam_anonymous_lobby_issue_session_id('sess_iam_anon_lobby_guest_system_reject'),
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-lobby-contract'],
+        ['guest_name' => 'System Admin Reject Guest']
+    );
+    videochat_iam_anonymous_lobby_assert((bool) ($systemRejectGuestSession['ok'] ?? false), 'system-admin reject target guest session should issue');
+    $systemRejectGuestUserId = (int) (($systemRejectGuestSession['user'] ?? [])['id'] ?? 0);
 
     $rejectGuestSession = videochat_issue_session_for_call_access(
         $pdo,
@@ -408,6 +535,7 @@ SQL
     $rejectGuestUserId = (int) (($rejectGuestSession['user'] ?? [])['id'] ?? 0);
 
     $ownerSessionId = videochat_iam_anonymous_lobby_issue_user_session($pdo, $ownerUserId, 'sess_iam_anon_lobby_owner', $tenantId);
+    $tempModeratorSessionId = videochat_iam_anonymous_lobby_issue_user_session($pdo, $tempModeratorUserId, 'sess_iam_anon_lobby_temp_mod', $tenantId);
     $orgAdminSessionId = videochat_iam_anonymous_lobby_issue_user_session($pdo, $orgAdminUserId, 'sess_iam_anon_lobby_org_admin', $tenantId);
     $systemAdminSessionId = videochat_iam_anonymous_lobby_issue_user_session($pdo, $systemAdminUserId, 'sess_iam_anon_lobby_system_admin', $tenantId);
 
@@ -415,13 +543,26 @@ SQL
     $lobbyState = videochat_lobby_state_init();
 
     $ownerConnection = videochat_iam_anonymous_lobby_connection($presenceState, $pdo, $openDatabase, $ownerSessionId, $callId, 'conn_owner', 'socket_owner');
+    $tempModeratorConnection = videochat_iam_anonymous_lobby_connection($presenceState, $pdo, $openDatabase, $tempModeratorSessionId, $callId, 'conn_temp_mod', 'socket_temp_mod');
     $orgAdminConnection = videochat_iam_anonymous_lobby_connection($presenceState, $pdo, $openDatabase, $orgAdminSessionId, $callId, 'conn_org_admin', 'socket_org_admin');
     $systemAdminConnection = videochat_iam_anonymous_lobby_connection($presenceState, $pdo, $openDatabase, $systemAdminSessionId, $callId, 'conn_system_admin', 'socket_system_admin');
 
     $accountConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_account_open', $callId, 'account_host_admit');
+    videochat_iam_anonymous_lobby_assert_visible_snapshot($lobbyState, $ownerConnection, $callId, (int) ($accountConnection['user_id'] ?? 0), 'host waiting snapshot');
     videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $ownerConnection, $callId, (int) ($accountConnection['user_id'] ?? 0), 'host admission');
+    videochat_iam_anonymous_lobby_assert_direct_room($pdo, $openDatabase, 'sess_iam_anon_lobby_account_open', $callId, 'host admitted logged-in participant');
+
+    $tempModeratorGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_temp_mod', $callId, 'guest_temp_mod_admit');
+    videochat_iam_anonymous_lobby_assert_visible_snapshot($lobbyState, $tempModeratorConnection, $callId, (int) ($tempModeratorGuestConnection['user_id'] ?? 0), 'temporary moderator waiting snapshot');
+    videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $tempModeratorConnection, $callId, (int) ($tempModeratorGuestConnection['user_id'] ?? 0), 'temporary moderator admission');
+    videochat_iam_anonymous_lobby_assert_direct_room($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_temp_mod', $callId, 'temporary moderator admitted anonymous guest');
+
+    $tempModeratorRejectConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_temp_mod_reject', $callId, 'guest_temp_mod_reject');
+    videochat_iam_anonymous_lobby_reject($pdo, $openDatabase, $presenceState, $lobbyState, $tempModeratorConnection, $callId, (int) ($tempModeratorRejectConnection['user_id'] ?? 0), 'temporary moderator rejection');
+    videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_temp_mod_reject', $callId, 'temporary moderator rejected anonymous guest');
 
     $orgGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_org', $callId, 'guest_org_admit');
+    videochat_iam_anonymous_lobby_assert_visible_snapshot($lobbyState, $orgAdminConnection, $callId, (int) ($orgGuestConnection['user_id'] ?? 0), 'organization admin waiting snapshot');
     $orgAllowCommand = videochat_lobby_decode_client_frame(json_encode([
         'type' => 'lobby/allow',
         'room_id' => $callId,
@@ -432,6 +573,11 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) ($orgAuthority['call_role'] ?? '') === 'participant', 'organization admin authority should preserve stored participant role');
     videochat_iam_anonymous_lobby_assert((string) ($orgAuthority['effective_call_role'] ?? '') === 'moderator', 'organization admin authority should be scoped as effective moderator');
     videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $orgAdminConnection, $callId, (int) ($orgGuestConnection['user_id'] ?? 0), 'organization admin admission');
+    videochat_iam_anonymous_lobby_assert_direct_room($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_org', $callId, 'organization admin admitted anonymous guest');
+
+    $orgRejectGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_org_reject', $callId, 'guest_org_reject');
+    videochat_iam_anonymous_lobby_reject($pdo, $openDatabase, $presenceState, $lobbyState, $orgAdminConnection, $callId, (int) ($orgRejectGuestConnection['user_id'] ?? 0), 'organization admin rejection');
+    videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_org_reject', $callId, 'organization admin rejected anonymous guest');
 
     $systemGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_system', $callId, 'guest_system_admit');
     $systemAdminLobbySnapshot = videochat_lobby_snapshot_payload_for_connection(
@@ -453,8 +599,15 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) ($systemAuthority['call_role'] ?? '') === 'participant', 'system admin authority should preserve stored participant role');
     videochat_iam_anonymous_lobby_assert((string) ($systemAuthority['effective_call_role'] ?? '') === 'owner', 'system admin authority should expose owner-equivalent effective role');
     videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $systemAdminConnection, $callId, (int) ($systemGuestConnection['user_id'] ?? 0), 'system admin admission');
+    videochat_iam_anonymous_lobby_assert_direct_room($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_system', $callId, 'system admin admitted anonymous guest');
 
+    $systemRejectGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_system_reject', $callId, 'guest_system_reject');
+    videochat_iam_anonymous_lobby_reject($pdo, $openDatabase, $presenceState, $lobbyState, $systemAdminConnection, $callId, (int) ($systemRejectGuestConnection['user_id'] ?? 0), 'system admin rejection');
+    videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_system_reject', $callId, 'system admin rejected anonymous guest');
+
+    $privacyProbeConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_open', $callId, 'guest_privacy_probe');
     $rejectGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_reject', $callId, 'guest_reject');
+    videochat_iam_anonymous_lobby_assert_redacted_controls($lobbyState, $rejectGuestConnection, $callId, (int) ($privacyProbeConnection['user_id'] ?? 0), 'unauthorized waiting-user lobby controls');
     $selfAllowCommand = videochat_lobby_decode_client_frame(json_encode([
         'type' => 'lobby/allow',
         'room_id' => $callId,
@@ -482,6 +635,7 @@ SQL
         'host rejection'
     );
     videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $rejectGuestUserId, 'invited', 'host rejection should return participant to invited');
+    videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_reject', $callId, 'host rejected anonymous guest');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-anonymous-lobby-contract] PASS\n");
