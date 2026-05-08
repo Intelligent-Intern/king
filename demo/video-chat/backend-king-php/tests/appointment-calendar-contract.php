@@ -17,6 +17,11 @@ function videochat_appointment_contract_assert(bool $condition, string $message)
 }
 
 try {
+    if (!extension_loaded('pdo_sqlite')) {
+        fwrite(STDOUT, "[appointment-calendar-contract] SKIP: pdo_sqlite unavailable\n");
+        exit(0);
+    }
+
     $databasePath = sys_get_temp_dir() . '/videochat-appointment-calendar-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
         @unlink($databasePath);
