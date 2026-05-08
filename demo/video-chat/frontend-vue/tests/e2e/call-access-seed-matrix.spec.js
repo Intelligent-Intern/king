@@ -7,6 +7,7 @@ import {
   directJoinDecisionForSeedUser,
   getSeedAccessLink,
   getSeedCall,
+  getSeedOrganization,
   getSeedScenario,
   getSeedTenant,
   getSeedUser,
@@ -34,6 +35,7 @@ const deniedDirectJoinScenarios = [
   'direct_join_guest_list_not_cross_org',
   'direct_join_normal_non_guest_user_denied',
   'direct_join_normal_user_not_on_guest_list_denied',
+  'direct_join_user_without_organization_denied',
   'direct_join_temporary_guest_not_on_guest_list_denied',
   'direct_join_forged_client_admin_role_denied',
 ];
@@ -68,6 +70,7 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'beta_org_admin',
     'alpha_call_owner',
     'alpha_normal_user',
+    'alpha_tenant_member_without_organization',
     'registered_guest',
     'removed_invited_member',
     'disabled_registered_user',
@@ -85,6 +88,27 @@ test('IAM call-access seed matrix covers required principals without temporary a
   expect(systemAdminScenario.expected.guest_list_required).toBe(false);
   expect(systemAdminScenario.expected.can_manage_lobby).toBe(true);
   expect(systemAdminScenario.expected.platform_admin).toBe(true);
+
+  expect(getSeedOrganization('alpha_org')).toMatchObject({
+    tenant_key: 'alpha',
+    public_id: 'organization-alpha-e2e',
+  });
+  expect(getSeedUser('alpha_normal_user').organization_memberships).toEqual([
+    { organization_key: 'alpha_org', role: 'member' },
+  ]);
+  expect(getSeedUser('alpha_org_admin').organization_memberships).toEqual([
+    { organization_key: 'alpha_org', role: 'admin' },
+  ]);
+
+  const tenantOnlyUser = getSeedUser('alpha_tenant_member_without_organization');
+  expect(tenantOnlyUser.memberships).toEqual([{ tenant_key: 'alpha', role: 'member' }]);
+  expect(tenantOnlyUser.organization_memberships).toEqual([]);
+  expect(directJoinDecisionForSeedUser('alpha_tenant_member_without_organization', 'alpha_active')).toMatchObject({
+    allowed: false,
+    reason: 'not_on_guest_list',
+    source: 'none',
+    can_manage_lobby: false,
+  });
 
   const temporaryGuestListScenario = getSeedScenario('direct_join_temporary_guest_list_user_allowed');
   const temporaryGuestListCall = getSeedCall(temporaryGuestListScenario.call_key);

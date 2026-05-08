@@ -21,11 +21,13 @@ const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
+const coreOrgSessionSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
 const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
+const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
@@ -49,6 +51,11 @@ assert.match(
   callAccessScript,
   /tests\/e2e\/call-access-seed-matrix\.spec\.js/,
   'package script must include additive deterministic Call Access seed-matrix coverage',
+);
+assert.match(
+  callAccessScript,
+  /tests\/e2e\/call-access-core-org-session-journey\.spec\.js/,
+  'package script must include the core organization/account/session journey proof',
 );
 assert.match(
   callAccessScript,
@@ -92,6 +99,11 @@ assert.match(
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
+  /\.\.\/backend-king-php\/tests\/iam-core-org-session-journey-contract\.sh/,
+  'IAM Call Access contract gate must include the backend core organization/account/session proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
   /call-access-email-confirmation-contract\.sh/,
   'IAM Call Access contract gate must include the backend email confirmation proof',
 );
@@ -122,6 +134,10 @@ assert.ok(
   'focused Call Access command must list the deterministic seed-matrix spec',
 );
 assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js'),
+  'focused Call Access command must list the core organization/account/session journey spec',
+);
+assert.ok(
   callAccessPaths.has('frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js'),
   'focused Call Access command must list duplicate-review/account-confirmation E2E coverage',
 );
@@ -147,6 +163,51 @@ assert.match(
   seedMatrixSpec,
   /temporary_personalized_guest[\s\S]*temporary_anonymous_guest[\s\S]*tenant_admin[\s\S]*false/s,
   'seed-matrix spec must prove temporary guests do not receive tenant/system admin rights',
+);
+assert.match(
+  seedMatrixSpec,
+  /alpha_tenant_member_without_organization[\s\S]*organization_memberships[\s\S]*\[\][\s\S]*not_on_guest_list/s,
+  'seed-matrix spec must prove a tenant member without organization receives no organization-based rights',
+);
+assert.match(
+  coreOrgSessionSpec,
+  /e2e_org_001-004[\s\S]*alpha_normal_user[\s\S]*normalUser\.organization_memberships[\s\S]*role: 'member'/,
+  'core organization/session E2E spec must map organization creation, registration, and User role',
+);
+assert.match(
+  coreOrgSessionSpec,
+  /e2e_org_001-004[\s\S]*alpha_org_admin[\s\S]*organizationAdmin\.organization_memberships[\s\S]*role: 'admin'/,
+  'core organization/session E2E spec must map organization Admin role',
+);
+assert.match(
+  coreOrgSessionSpec,
+  /e2e_org_007[\s\S]*session-state[\s\S]*auth_failed/s,
+  'core organization/session E2E spec must prove logged-out browser state has no active account session',
+);
+assert.match(
+  coreOrgSessionSpec,
+  /logged-in account remains the active account[\s\S]*authorization[\s\S]*not\.toBe\(temporaryGuest\.id\)[\s\S]*account_type[\s\S]*account/,
+  'core organization/session E2E spec must prove call links keep the logged-in registered account',
+);
+assert.match(
+  coreOrgSessionSpec,
+  /user without organization cannot receive organization-based call rights[\s\S]*organization_memberships[\s\S]*\[\][\s\S]*not_on_guest_list/s,
+  'core organization/session E2E spec must prove users without organizations receive no org-based rights',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /\/api\/admin\/users[\s\S]*\/api\/governance\/organizations[\s\S]*\/api\/auth\/login[\s\S]*\/api\/auth\/logout/s,
+  'backend core organization/session contract must exercise governance, user registration, login, and logout routes',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /videochat_user_is_organization_admin_for_call[\s\S]*tenant-only user without organization should be forbidden/s,
+  'backend core organization/session contract must prove org-admin rights and no-org denial from server state',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /verified_user_id[\s\S]*verified_session_id[\s\S]*opening a call link must not revoke the logged-in account session/s,
+  'backend core organization/session contract must prove logged-in call-link opening preserves the account session',
 );
 assert.match(
   mainJourneySmokeSpec,
