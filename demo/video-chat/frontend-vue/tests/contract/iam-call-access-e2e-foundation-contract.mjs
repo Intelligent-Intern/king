@@ -26,11 +26,15 @@ const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
+const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
+const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
 const authCache = readText('demo/video-chat/backend-king-php/support/auth_session_cache.php');
 const tenantContext = readText('demo/video-chat/backend-king-php/support/tenant_context.php');
 const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
+const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeCallRoles = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_roles.php');
 
 const scripts = packageJson.scripts || {};
 const callAccessScript = String(scripts['test:e2e:call-access'] || '');
@@ -361,6 +365,46 @@ assert.match(
   backendContract,
   /tenant_admin[\s\S]*false/,
   'backend contract must prove call-scoped fallback does not restore tenant admin rights',
+);
+assert.match(
+  ciGate,
+  /call-access-active-permission-change-contract\.sh/,
+  'IAM Call Access CI gate must include active permission-change backend proof',
+);
+assert.match(
+  activePermissionContract,
+  /videochat_iam_rejoin_contract_set_invite_state\([\s\S]*'cancelled'[\s\S]*videochat_realtime_resolve_connection_rooms\(\$guestAuth/s,
+  'active permission contract must prove guest-list removal affects rejoin room resolution',
+);
+assert.match(
+  activePermissionContract,
+  /videochat_realtime_connection_can_bypass_admission_for_room\(\$staleGuestConnection/s,
+  'active permission contract must prove stale guest connection state cannot bypass admission',
+);
+assert.match(
+  activePermissionContract,
+  /videochat_iam_active_permission_contract_set_organization_role[\s\S]*'member'[\s\S]*videochat_realtime_is_user_moderator_for_room/s,
+  'active permission contract must prove org-admin role downgrade uses current permissions',
+);
+assert.match(
+  activePermissionContract,
+  /videochat_update_call_participant_role\([\s\S]*'owner'[\s\S]*videochat_realtime_connection_with_call_context/s,
+  'active permission contract must prove owner transfer updates realtime permissions',
+);
+assert.match(
+  realtimeCallContext,
+  /require_once __DIR__ \. '\/realtime_call_roles\.php';/,
+  'realtime call context must use the focused current-role resolver',
+);
+assert.match(
+  realtimeCallRoles,
+  /videochat_user_has_system_admin_call_rights[\s\S]*videochat_user_is_organization_admin_for_call/s,
+  'realtime role resolver must derive system and organization admin rights from current backend state',
+);
+assert.doesNotMatch(
+  realtimeCallContext,
+  /connectionInviteState|connectionCallRole/,
+  'admission bypass must not trust cached connection invite or call role after active permission changes',
 );
 assert.match(
   smoke,
