@@ -61,6 +61,12 @@ assert.match(
 
 assert.match(
   launchDomainSource,
+  /function videochat_call_app_mint_launch_token[\s\S]*videochat_call_app_launch_session_availability[\s\S]*function videochat_call_app_validate_launch_token[\s\S]*videochat_call_app_launch_session_availability/s,
+  'launch mint and validation must re-check active organization installation and entitlement state after revocation',
+);
+
+assert.match(
+  launchDomainSource,
   /\$base = \['call_apps\.launch'\][\s\S]*if \(\$grantState !== 'allowed'\)[\s\S]*return array_values/s,
   'denied participants must receive only status launch capability, not CRDT read',
 );
