@@ -15,6 +15,8 @@ function readText(relativePath) {
 
 const scriptPath = 'demo/video-chat/scripts/prod-debug.sh';
 const script = readText(scriptPath);
+const deploySmokePath = 'demo/video-chat/scripts/deploy-smoke.sh';
+const deploySmoke = readText(deploySmokePath);
 const readme = readText('README.md');
 
 assert.match(script, /^#!\/usr\/bin\/env bash/, 'prod-debug must be a bash operator script');
@@ -25,6 +27,14 @@ assert.match(script, /redact_stream\(\)/, 'prod-debug must redact output');
 assert.match(script, /TOKEN\|SECRET\|PASSWORD\|PASS\|KEY\|CREDENTIAL\|COOKIE\|SESSION/, 'prod-debug redaction must cover token/password-like values');
 assert.match(script, /REDACTED_MEDIA_PAYLOAD/, 'prod-debug must redact media payload-like fields before printing logs');
 assert.match(script, /VIDEOCHAT_PROD_DEBUG_DRY_RUN/, 'prod-debug must expose a dry-run path for local proof without network or SSH');
+assert.match(script, /DEPLOY_TURN_DOMAIN/, 'prod-debug must include the TURN service domain in production diagnostics');
+assert.match(script, /assert_domain_contract\(\)/, 'prod-debug must validate the production domain contract before probing');
+assert.match(script, /no nested \.app\.kingrt\.com domains/, 'prod-debug must reject nested app-domain service origins');
+assert.match(
+  script,
+  /app\/api\/ws\/sfu\/cdn\/turn\/registry\/whiteboard rooted at \$\{DEPLOY_DOMAIN\}/,
+  'prod-debug must report the app/api/ws/sfu/cdn/turn/registry/whiteboard domain set',
+);
 
 for (const endpoint of [
   '/api/runtime',
@@ -51,6 +61,11 @@ for (const label of [
   'audio/video track loss',
   'SFU reconnect and websocket transport',
   'Call App frame and CSP errors',
+  'cdn mediapipe model',
+  'cdn tasks vision',
+  'cdn tasks wasm',
+  'background modal icon',
+  'background avatar asset',
 ]) {
   assert.ok(script.includes(label), `prod-debug must include ${label}`);
 }
@@ -82,6 +97,50 @@ const forbiddenPatterns = [
 for (const pattern of forbiddenPatterns) {
   assert.doesNotMatch(script, pattern, `prod-debug must remain read-only; forbidden pattern ${pattern}`);
 }
+
+assert.match(deploySmoke, /^#!\/usr\/bin\/env bash/, 'deploy-smoke must be a bash operator script');
+assert.match(deploySmoke, /assert_domain_contract\(\)/, 'deploy-smoke must validate production domains before smoke probes');
+assert.match(deploySmoke, /expect_dns_resolves\(\)/, 'deploy-smoke must DNS-check production service domains');
+assert.match(
+  deploySmoke,
+  /app:DEPLOY_APP_DOMAIN[\s\S]*api:DEPLOY_API_DOMAIN[\s\S]*ws:DEPLOY_WS_DOMAIN[\s\S]*sfu:DEPLOY_SFU_DOMAIN[\s\S]*turn:DEPLOY_TURN_DOMAIN[\s\S]*cdn:DEPLOY_CDN_DOMAIN[\s\S]*registry:DEPLOY_REGISTRY_DOMAIN[\s\S]*whiteboard:DEPLOY_CALL_APP_DOMAIN/,
+  'deploy-smoke must cover app/api/ws/sfu/cdn/turn/registry/whiteboard domains',
+);
+assert.match(deploySmoke, /no nested \.app\.kingrt\.com domains/, 'deploy-smoke must reject nested app-domain service origins');
+assert.match(
+  deploySmoke,
+  /kingrt\.com[\s\S]*app\.kingrt\.com[\s\S]*api\.kingrt\.com[\s\S]*ws\.kingrt\.com[\s\S]*sfu\.kingrt\.com[\s\S]*turn\.kingrt\.com[\s\S]*cdn\.kingrt\.com[\s\S]*registry\.kingrt\.com[\s\S]*whiteboard\.kingrt\.com/,
+  'deploy-smoke must pin exact production KingRT service domains when the root is kingrt.com',
+);
+
+for (const smokeLabel of [
+  'cdn-mediapipe-tasks-model',
+  'cdn-mediapipe-tasks-vision',
+  'cdn-mediapipe-tasks-wasm-loader',
+  'cdn-mediapipe-wasm-loader',
+  'background-modal-icon',
+  'background-avatar-placeholder',
+  'call-app-whiteboard-host',
+  'call-app-whiteboard-path',
+  'registry-host',
+  'lobby websocket host',
+  'sfu websocket host',
+]) {
+  assert.ok(deploySmoke.includes(smokeLabel), `deploy-smoke must include ${smokeLabel}`);
+}
+
+assert.match(
+  deploySmoke,
+  /BGF-07 proof commands:[^\n]*npm run test:contract:background-filter[^\n]*prod-debug-observability-contract\.mjs[^\n]*npm run build[^\n]*demo\/video-chat\/scripts\/deploy\.sh[^\n]*deploy-smoke\.sh[^\n]*prod-debug\.sh[^\n]*Chrome\/Chromium[^\n]*Firefox[^\n]*background-unavailable modal/,
+  'deploy-smoke must record focused background contract, build, deploy, prod smoke, prod debug, and browser-smoke proof commands',
+);
+
+const deploySmokeWithoutProofLog = deploySmoke.replace(/log "BGF-07 proof commands:[^\n]+"/, '');
+assert.doesNotMatch(
+  deploySmokeWithoutProofLog,
+  /\bdemo\/video-chat\/scripts\/deploy\.sh\b|\bscripts\/deploy\.sh\b/,
+  'deploy-smoke may record the deploy command but must not invoke deploy.sh',
+);
 
 assert.match(
   readme,
