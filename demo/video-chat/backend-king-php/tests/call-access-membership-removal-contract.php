@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../domain/tenancy/tenant_administration.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
@@ -34,12 +35,89 @@ try {
     $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
     $adminUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('admin@intelligent-intern.com') LIMIT 1")->fetchColumn();
     $invitedUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('user@intelligent-intern.com') LIMIT 1")->fetchColumn();
+    $organizationRow = $pdo->query("SELECT id, public_id FROM organizations WHERE tenant_id = {$tenantId} ORDER BY id ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     videochat_call_access_membership_assert($tenantId > 0, 'expected default tenant');
     videochat_call_access_membership_assert($adminUserId > 0, 'expected seeded admin user');
     videochat_call_access_membership_assert($invitedUserId > 0, 'expected seeded invited user');
+    videochat_call_access_membership_assert(is_array($organizationRow), 'expected seeded organization');
+    $organizationId = (int) ($organizationRow['id'] ?? 0);
+    $organizationPublicId = (string) ($organizationRow['public_id'] ?? '');
+    videochat_call_access_membership_assert($organizationId > 0 && $organizationPublicId !== '', 'seeded organization should have id and public id');
     videochat_call_access_membership_assert(
         videochat_tenant_user_is_member($pdo, $invitedUserId, $tenantId),
         'seeded invited user should start as an active tenant member'
+    );
+    $pdo->prepare('UPDATE tenant_memberships SET membership_role = \'admin\', permissions_json = :permissions_json, updated_at = :updated_at WHERE tenant_id = :tenant_id AND user_id = :user_id')->execute([
+        ':permissions_json' => json_encode(['manage_organizations' => true], JSON_THROW_ON_ERROR),
+        ':updated_at' => gmdate('c'),
+        ':tenant_id' => $tenantId,
+        ':user_id' => $invitedUserId,
+    ]);
+    $staleSessionId = 'sess_removed_member_stale_admin_role';
+    $staleSession = videochat_issue_session_for_user(
+        $pdo,
+        $invitedUserId,
+        static fn (): string => $staleSessionId,
+        3600,
+        '127.0.0.1',
+        'call-access-membership-removal-contract',
+        time(),
+        $tenantId
+    );
+    videochat_call_access_membership_assert((bool) ($staleSession['ok'] ?? false), 'active invited user should receive a normal tenant session before removal');
+    $staleAuthBeforeRemoval = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/api/auth/session',
+            'headers' => ['Authorization' => 'Bearer ' . $staleSessionId],
+        ],
+        'http'
+    );
+    videochat_call_access_membership_assert((bool) ($staleAuthBeforeRemoval['ok'] ?? false), 'normal tenant session should authenticate before removal');
+    videochat_call_access_membership_assert(
+        (string) (($staleAuthBeforeRemoval['tenant'] ?? [])['role'] ?? '') === 'admin',
+        'normal tenant session should reflect elevated tenant role before removal'
+    );
+    videochat_call_access_membership_assert(
+        (bool) (((($staleAuthBeforeRemoval['tenant'] ?? [])['permissions'] ?? [])['manage_organizations'] ?? false)) === true,
+        'normal tenant session should expose organization management before removal'
+    );
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO permission_grants(
+    tenant_id,
+    resource_type,
+    resource_id,
+    action,
+    subject_type,
+    organization_id,
+    created_by_user_id,
+    created_at,
+    updated_at
+) VALUES(
+    :tenant_id,
+    'organization',
+    :resource_id,
+    'read',
+    'organization',
+    :organization_id,
+    :created_by_user_id,
+    :created_at,
+    :updated_at
+)
+SQL
+    )->execute([
+        ':tenant_id' => $tenantId,
+        ':resource_id' => $organizationPublicId,
+        ':organization_id' => $organizationId,
+        ':created_by_user_id' => $adminUserId,
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+    videochat_call_access_membership_assert(
+        (bool) (videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $invitedUserId, 'organization', $organizationPublicId, 'read')['ok'] ?? false),
+        'active organization member should receive organization-scoped resource grant before removal'
     );
 
     $createCall = videochat_create_call($pdo, $adminUserId, [
@@ -89,6 +167,39 @@ try {
     videochat_call_access_membership_assert(
         videochat_fetch_active_user_for_call_access($pdo, $invitedUserId, null, $tenantId) === null,
         'default call-access user lookup must still require active tenant membership'
+    );
+    $staleAuthAfterRemoval = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/api/auth/session',
+            'headers' => ['Authorization' => 'Bearer ' . $staleSessionId],
+        ],
+        'http'
+    );
+    videochat_call_access_membership_assert(
+        (bool) ($staleAuthAfterRemoval['ok'] ?? false) === false
+            && (string) ($staleAuthAfterRemoval['reason'] ?? '') === 'tenant_membership_inactive',
+        'removed invited user must not authenticate a stale normal tenant session'
+    );
+    $pdo->prepare('DELETE FROM sessions WHERE id = :session_id')->execute([':session_id' => $staleSessionId]);
+    $cachedStaleAuthAfterRemoval = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/api/auth/session',
+            'headers' => ['Authorization' => 'Bearer ' . $staleSessionId],
+        ],
+        'http'
+    );
+    videochat_call_access_membership_assert(
+        (bool) ($cachedStaleAuthAfterRemoval['ok'] ?? false) === false
+            && (string) ($cachedStaleAuthAfterRemoval['reason'] ?? '') === 'tenant_membership_inactive',
+        'removed invited user must not authenticate through stale locally cached session role data'
+    );
+    videochat_call_access_membership_assert(
+        (bool) (videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $invitedUserId, 'organization', $organizationPublicId, 'read')['ok'] ?? false) === false,
+        'removed invited user must not retain organization resource grant through stale organization membership'
     );
 
     $publicResolution = videochat_resolve_call_access_public($pdo, $accessId);
@@ -143,6 +254,17 @@ SQL
     videochat_call_access_membership_assert(
         !videochat_tenant_user_is_member($pdo, $invitedUserId, $tenantId),
         'call-scoped authentication must not recreate tenant membership'
+    );
+    $organizationResourceDecision = videochat_tenancy_governance_permission_decision(
+        $pdo,
+        $auth,
+        'organizations',
+        'read',
+        $organizationPublicId
+    );
+    videochat_call_access_membership_assert(
+        (bool) ($organizationResourceDecision['ok'] ?? false) === false,
+        'call-scoped fallback must not restore organization resource access after removal'
     );
 
     $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
