@@ -25,6 +25,7 @@ const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-acc
 const tempGuestListDirectSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-temp-guest-list-direct-join.spec.js');
 const coreOrgSessionSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
+const terminalMainJourneysSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js');
 const anonymousDisabledBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js');
 const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
@@ -84,6 +85,11 @@ assert.match(
   callAccessScript,
   /tests\/e2e\/call-access-main-journey-smoke\.spec\.js/,
   'package script must include deterministic main-journey Call Access smoke coverage',
+);
+assert.match(
+  callAccessScript,
+  /tests\/e2e\/call-access-invite-reschedule-delete-end-main-journeys\.spec\.js/,
+  'package script must include terminal invitation/reschedule/delete/end main-journey coverage',
 );
 assert.match(
   callAccessScript,
@@ -188,6 +194,10 @@ assert.ok(
   'focused Call Access command must list the deterministic main-journey smoke spec',
 );
 assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js'),
+  'focused Call Access command must list terminal invitation/reschedule/delete/end main-journey coverage',
+);
+assert.ok(
   callAccessPaths.has('frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js'),
   'focused Call Access command must list the disabled anonymous link E2E spec',
 );
@@ -280,6 +290,33 @@ assert.match(
   mainJourneySmokeSpec,
   /e2e_journey_010 logged-out anonymous link creates a least-privilege guest, admits, leaves, and rejoins/,
   'main journey smoke split must cover the logged-out anonymous lobby/admit/rejoin path from SPRINT section 32',
+);
+for (const namedTest of [
+  'e2e_journey_020_invalidated_invite_link_denied',
+  'e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid',
+  'e2e_journey_022_deleted_call_revokes_all_temp_access',
+  'e2e_journey_023_explicit_call_end_revokes_all_join_paths',
+]) {
+  assert.match(
+    terminalMainJourneysSpec,
+    new RegExp(`test\\('${namedTest}'`),
+    `terminal main-journey spec must include ${namedTest}`,
+  );
+}
+assert.match(
+  terminalMainJourneysSpec,
+  /oldSessionPostCount[\s\S]*toBe\(0\)[\s\S]*startPersonalizedLinkSession[\s\S]*viewerCanModerateCall[\s\S]*toBe\(false\)/s,
+  'reschedule main journey must deny stale links and prove the new link uses current least-privilege permissions',
+);
+assert.match(
+  terminalMainJourneysSpec,
+  /call_deleted[\s\S]*workspace-call-view[\s\S]*toHaveCount\(0\)[\s\S]*deletedSessionPostCount[\s\S]*toBe\(0\)/s,
+  'deleted-call main journey must prove temporary call access cannot rejoin and stale links do not issue sessions',
+);
+assert.match(
+  terminalMainJourneysSpec,
+  /call_lifecycle[\s\S]*status: 'ended'[\s\S]*owner_explicit_end[\s\S]*callStatus\)\.toBe\('ended'\)/s,
+  'explicit-end main journey must prove participants receive an ended lifecycle state',
 );
 for (const namedTest of [
   'e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin',
