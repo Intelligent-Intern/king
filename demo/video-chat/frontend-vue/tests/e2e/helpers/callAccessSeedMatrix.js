@@ -154,12 +154,13 @@ function tenantSnapshotFor(user, call) {
 }
 
 function userPayload(user, tenant = null, overrides = {}) {
+  const status = String(user?.status || 'active').trim().toLowerCase() || 'active';
   return {
     id: user.id,
     email: user.email,
     display_name: overrides.displayName || user.display_name,
     role: user.role,
-    status: 'active',
+    status,
     time_format: '24h',
     date_format: 'dmy_dot',
     theme: 'dark',
@@ -251,6 +252,20 @@ function directJoinDecisionFor(user, call) {
     return {
       allowed: false,
       reason: 'call_not_joinable_from_status',
+      source: 'none',
+      scope: 'none',
+      can_manage_lobby: false,
+      can_admit: false,
+      can_reject: false,
+      can_kick: false,
+    };
+  }
+
+  const userStatus = String(user?.status || 'active').trim().toLowerCase() || 'active';
+  if (userStatus !== 'active') {
+    return {
+      allowed: false,
+      reason: 'user_inactive',
       source: 'none',
       scope: 'none',
       can_manage_lobby: false,
@@ -381,7 +396,7 @@ export function storedSessionForSeedUser(userKey, callKey = 'alpha_active', over
     avatarPath: null,
     timeFormat: '24h',
     theme: 'dark',
-    status: 'active',
+    status: String(user.status || 'active').trim().toLowerCase() || 'active',
     sessionId: seedSessionIdForUser(user),
     sessionToken: seedSessionIdForUser(user),
     expiresAt: '2030-01-01T00:00:00.000Z',
@@ -455,6 +470,10 @@ function seededSessionRecordFromToken(token) {
   for (const user of userIndex.values()) {
     const sessionId = seedSessionIdForUser(user);
     if (sessionId === token) {
+      if (String(user.status || 'active').trim().toLowerCase() !== 'active') {
+        return null;
+      }
+
       const firstCall = [...callIndex.values()].find((call) => call.tenant_key) || [...callIndex.values()][0];
       return {
         session: {

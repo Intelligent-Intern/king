@@ -257,6 +257,19 @@ function videochat_issue_session_for_call_access(
         $tenantId
     );
     if (!(bool) ($callDecision['allowed'] ?? false)) {
+        $decisionReason = (string) ($callDecision['reason'] ?? 'forbidden');
+        if ($decisionReason === 'call_not_joinable_from_status') {
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['call_id' => 'call_not_joinable_from_status'],
+                'session' => null,
+                'user' => null,
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+
         return [
             'ok' => false,
             'reason' => 'forbidden',
