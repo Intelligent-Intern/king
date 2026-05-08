@@ -1497,8 +1497,8 @@ skipped at runtime because local PHP lacks `pdo_sqlite`.
 - [x] Anonymous link does not overwrite account data
 - [ ] Anonymous link does not modify guest list
 - [ ] Anonymous link creates no personalized identity binding
-- [ ] Invalid anonymous link is rejected
-- [ ] Manipulated anonymous link grants no access
+- [x] Invalid anonymous link is rejected
+- [x] Manipulated anonymous link grants no access
 
 Proof: `call-access-seed-matrix.spec.js` covers anonymous open links for a
 logged-in user keeping their own account, avoiding temporary identity creation,
@@ -1506,7 +1506,9 @@ using only the logged-in account rights, and waiting in lobby without direct
 permission. The same spec covers a logged-out anonymous guest entering the lobby
 with no platform, tenant, lobby-management, or admission rights. `npx playwright
 test tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list`
-passed 11 tests.
+passed 11 tests. `call-access-anonymous-disabled-link-contract` also proves a
+manipulated logged-in anonymous access id is rejected before session issuance
+and a forged anonymous session body cannot bind a foreign call.
 
 ## 10. Anonymous Join Link: User Not Logged In
 
@@ -1528,8 +1530,8 @@ passed 11 tests.
 - [ ] Anonymous temporary user cannot gain rights by changing display name
 - [ ] Multiple anonymous users through same link are separate temporary participants
 - [x] Anonymous link does not reveal guest list or account data
-- [ ] Anonymous link can be disabled if supported
-- [ ] Disabled anonymous link allows no lobby entry
+- [x] Anonymous link can be disabled if supported
+- [x] Disabled anonymous link allows no lobby entry
 
 Proof: `call-access-main-journey-smoke.spec.js` covers the logged-out
 anonymous path: the anonymous link creates a least-privilege temporary guest,
@@ -1537,6 +1539,14 @@ keeps the user out of moderation, platform-admin, tenant-admin, and guest-list
 visibility, places the guest in the lobby, admits the guest into the call, then
 allows leave and same-session rejoin without a second approval. The focused
 integrated run also covers kicked anonymous rejoin denial and passed 6 tests.
+`call-access-anonymous-disabled-link-contract` migrates and uses
+`call_access_links.disabled_at`, disables an open anonymous link, and proves
+fresh resolve/session plus HTTP join/session return generic not-found responses
+without creating a temporary guest, call-access session, or lobby participant;
+the focused Docker SQLite run passed. `call-access-anonymous-disabled-link.spec.js`
+covers `e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry`
+with no session POST and no `lobby/queue/join` frame; the focused Playwright run
+passed.
 
 ## 11. Lobby and Admission
 
@@ -1671,7 +1681,7 @@ admission.
 - [ ] Personalized link with modified call ID is rejected
 - [ ] Anonymous link with modified call ID is rejected
 - [x] Expired link is rejected
-- [ ] Disabled link is rejected
+- [x] Disabled link is rejected
 - [x] Deleted temporary account cannot be revived through old link
 - [ ] API request with forged user ID is rejected
 - [x] API request with forged role parameter is rejected
@@ -2435,6 +2445,7 @@ against duplicate join/session request loops.
 - [x] `e2e_anon_logged_out_008_admitted_guest_can_rejoin`
 - [x] `e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin`
 - [ ] `e2e_anon_logged_out_010_multiple_anonymous_guests_are_separate`
+- [x] `e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry`
 
 ## Test Group: Lobby
 
