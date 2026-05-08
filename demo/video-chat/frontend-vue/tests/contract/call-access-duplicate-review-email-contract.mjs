@@ -18,6 +18,7 @@ const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json')
 const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const confirmationAuditHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php');
+const callAccessIdentity = read('demo/video-chat/backend-king-php/domain/calls/call_access_identity.php');
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const callAccessRoutes = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
 const duplicateContract = read('demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php');
@@ -173,6 +174,17 @@ assert.match(
 );
 
 assert.match(
+  callAccessIdentity,
+  /videochat_call_access_record_duplicate_personalized_link_review\([\s\S]*'join_opened'/,
+  'public join must create the duplicate review flag when the foreign account reaches the warning modal',
+);
+assert.match(
+  callAccessIdentity,
+  /'mismatch' => 'strong_personalized_link'[\s\S]*'host_name' => 'not_verified'/,
+  'public join must return only safe warning-modal fields for strong personalized-link mismatch',
+);
+
+assert.match(
   callAccessSession,
   /videochat_call_access_record_duplicate_personalized_link_review\([\s\S]*'session_verified_context'/,
   'session issuance must flag duplicate use from verified context mismatch',
@@ -314,6 +326,16 @@ assert.match(
   duplicateContract,
   /second account open should create exactly one review flag/,
   'backend duplicate contract must cover second-account flag creation',
+);
+assert.match(
+  duplicateContract,
+  /warning-modal review flag must be created at join-open reach[\s\S]*warning-modal review audit should record join_opened stage/,
+  'backend duplicate contract must prove account B reaching the warning modal creates the review flag and audit event',
+);
+assert.match(
+  duplicateContract,
+  /host verification must reuse the warning-modal review flag[\s\S]*reused review flag must preserve the original warning-modal stage/,
+  'backend duplicate contract must prove later host-name attempts reuse the warning-modal review flag',
 );
 assert.match(
   duplicateContract,

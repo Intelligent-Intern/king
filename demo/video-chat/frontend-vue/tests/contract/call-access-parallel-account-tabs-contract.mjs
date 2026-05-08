@@ -20,6 +20,8 @@ const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-parallel-account-tabs.spec.js');
+const deviceBrowserE2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-link-device-browser.spec.js');
+const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-parallel-account-tabs-contract.php');
 const backendWrapper = read('demo/video-chat/backend-king-php/tests/call-access-parallel-account-tabs-contract.sh');
 
@@ -63,6 +65,31 @@ assert.match(
   /duplicate denial must not render \$\{value\}/,
   'parallel duplicate denial must not render foreign account, host, or denied-session details',
 );
+assert.match(
+  deviceBrowserE2eSpec,
+  /duplicate abuse detection works after logout\/login switch in the same browser/,
+  'device/browser duplicate E2E must cover same-browser logout/login switch abuse detection',
+);
+assert.match(
+  deviceBrowserE2eSpec,
+  /logoutSession[\s\S]*duplicate_personalized_link[\s\S]*same_browser_logout_login_switch/,
+  'same-browser switch E2E must exercise the real logout path and require a duplicate review flag',
+);
+assert.match(
+  deviceBrowserE2eSpec,
+  /e2e_duplicate_link_007\/e2e_duplicate_link_008 cross-device and cross-browser duplicate use is review-flagged/,
+  'device/browser duplicate E2E must name the cross-device and cross-browser matrix cases',
+);
+assert.match(
+  deviceBrowserE2eSpec,
+  /King IAM E2E Mobile Device B[\s\S]*cross_device_duplicate[\s\S]*Mozilla\/5\.0 King IAM E2E Firefox Browser C[\s\S]*cross_browser_duplicate/,
+  'device/browser duplicate E2E must drive distinct device and browser contexts',
+);
+assert.match(
+  deviceBrowserE2eSpec,
+  /toHaveLength\(0\)[\s\S]*readRuntimeSession\(device\.page\)[\s\S]*readRuntimeSession\(otherBrowser\.page\)/,
+  'device/browser duplicate E2E must prove denied contexts get no session and keep their own accounts',
+);
 
 assert.match(
   backendContract,
@@ -71,7 +98,7 @@ assert.match(
 );
 assert.match(
   backendContract,
-  /wrong-account parallel session should fail safely with conflict/,
+  /wrong-account parallel session should fail safely with verified-context conflict/,
   'backend contract must reject wrong-account parallel session issuance',
 );
 assert.match(
@@ -94,6 +121,31 @@ assert.match(
   /join_opened[\s\S]*session_verified_context/,
   'backend contract must prove duplicate audit stages for open and session races',
 );
+assert.match(
+  callAccessSession,
+  /function videochat_call_access_record_context_switch_review[\s\S]*videochat_call_access_record_duplicate_personalized_link_review[\s\S]*session_context_changed/,
+  'session issuance must review-flag stale verified browser context before returning early context-switch conflicts',
+);
+assert.match(
+  callAccessSession,
+  /videochat_call_access_record_duplicate_personalized_link_review\([\s\S]*'session_verified_context'/,
+  'session issuance must review-flag duplicate personalized links during verified-context session races',
+);
+assert.match(
+  backendContract,
+  /same-browser logout\/login switch should deny duplicate personalized-link session/,
+  'backend contract must prove same-browser logout/login switch sessions are duplicate-flagged',
+);
+assert.match(
+  backendContract,
+  /cross-device duplicate session should be review-flagged[\s\S]*cross-browser duplicate session should be review-flagged/,
+  'backend contract must prove cross-device and cross-browser duplicate sessions are review-flagged',
+);
+assert.match(
+  backendContract,
+  /same-browser\/device\/browser duplicate sessions must not persist issued sessions[\s\S]*same-browser\/device\/browser duplicate sessions must not reassign personalized link/,
+  'backend contract must prove denied same-browser/device/browser duplicate sessions do not issue sessions or reassign the link',
+);
 
 assert.match(
   backendWrapper,
@@ -104,6 +156,11 @@ assert.match(
   callAccessE2eScript,
   /tests\/e2e\/call-access-parallel-account-tabs\.spec\.js/,
   'focused call-access E2E script must run the parallel account tabs spec',
+);
+assert.match(
+  callAccessE2eScript,
+  /tests\/e2e\/call-access-duplicate-link-device-browser\.spec\.js/,
+  'focused call-access E2E script must run the duplicate link device/browser spec',
 );
 assert.match(
   callAccessContractScript,
@@ -128,6 +185,10 @@ assert.match(
 assert.ok(
   callAccessMatrixPaths.has('frontend-vue/tests/e2e/call-access-parallel-account-tabs.spec.js'),
   'call-access matrix paths must include the parallel account tabs E2E spec',
+);
+assert.ok(
+  callAccessMatrixPaths.has('frontend-vue/tests/e2e/call-access-duplicate-link-device-browser.spec.js'),
+  'call-access matrix paths must include the duplicate link device/browser E2E spec',
 );
 
 console.log('[call-access-parallel-account-tabs-contract] PASS');
