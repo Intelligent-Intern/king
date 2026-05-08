@@ -690,6 +690,12 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         $toClient = '';
         $toUpstream = '';
     };
+    $closeWebSocketUpstream = static function () use (&$upstreamOpen, &$toUpstream): void {
+        // The upstream may close immediately after rejecting a websocket
+        // handshake. Keep any buffered HTTP rejection queued for the client.
+        $upstreamOpen = false;
+        $toUpstream = '';
+    };
 
     while ($clientOpen || $upstreamOpen || $toUpstream !== '' || $toClient !== '') {
         if ((microtime(true) - $lastActivity) > $idleTimeout) {
@@ -754,6 +760,11 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             $chunk = @fread($stream, 16384);
             if ($chunk === false) {
                 if ($isWebSocket) {
+                    if ($stream === $upstreamStream) {
+                        $closeWebSocketUpstream();
+                        $madeProgress = true;
+                        continue;
+                    }
                     $closeWebSocketTunnel();
                     continue;
                 }
@@ -767,6 +778,11 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($chunk === '') {
                 if (feof($stream)) {
                     if ($isWebSocket) {
+                        if ($stream === $upstreamStream) {
+                            $closeWebSocketUpstream();
+                            $madeProgress = true;
+                            continue;
+                        }
                         $closeWebSocketTunnel();
                         $madeProgress = true;
                         continue;
