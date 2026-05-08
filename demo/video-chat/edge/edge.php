@@ -426,7 +426,7 @@ $injectSocialPreview = static function (string $body, array $request) use ($doma
     return str_replace('</head>', "    {$meta}\n  </head>", $body);
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview): void {
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview, $domain): void {
     $path = rawurldecode((string) $request['path']);
     $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
     $isCallAppAsset = str_starts_with($path, '/call-app/');
@@ -480,7 +480,11 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
         $headers['X-KingRT-Asset-Version'] = $assetVersion;
     }
     if ($isCallAppAsset) {
-        $headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'self'";
+        $allowedEmbedderOrigin = videochat_edge_call_app_normalize_origin('https://' . $domain);
+        $headers['Content-Security-Policy'] = videochat_edge_call_app_content_security_policy($allowedEmbedderOrigin);
+        if ($allowedEmbedderOrigin !== '') {
+            $headers['Allow-CSP-From'] = $allowedEmbedderOrigin;
+        }
         $headers['Cross-Origin-Resource-Policy'] = 'same-origin';
     }
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
