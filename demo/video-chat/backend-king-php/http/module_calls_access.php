@@ -2,6 +2,63 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/auth.php';
+
+function videochat_call_access_route_user_id(array $authContext): int
+{
+    return is_numeric($authContext['user']['id'] ?? null) ? (int) $authContext['user']['id'] : 0;
+}
+
+function videochat_call_access_route_session_id(array $authContext): string
+{
+    if (is_string($authContext['session']['id'] ?? null) || is_numeric($authContext['session']['id'] ?? null)) {
+        return trim((string) $authContext['session']['id']);
+    }
+
+    if (is_string($authContext['token'] ?? null) || is_numeric($authContext['token'] ?? null)) {
+        return trim((string) $authContext['token']);
+    }
+
+    return '';
+}
+
+/**
+ * @return array{ok: bool, reason: string, context: array<string, mixed>}
+ */
+function videochat_call_access_session_auth_context(PDO $pdo, array $request, array $apiAuthContext): array
+{
+    if ((bool) ($apiAuthContext['ok'] ?? false) && videochat_call_access_route_user_id($apiAuthContext) > 0) {
+        return [
+            'ok' => true,
+            'reason' => 'provided',
+            'context' => $apiAuthContext,
+        ];
+    }
+
+    if (videochat_extract_session_token($request, 'rest') === '') {
+        return [
+            'ok' => true,
+            'reason' => 'anonymous',
+            'context' => [],
+        ];
+    }
+
+    $authContext = videochat_authenticate_request($pdo, $request, 'rest');
+    if (!(bool) ($authContext['ok'] ?? false)) {
+        return [
+            'ok' => false,
+            'reason' => (string) ($authContext['reason'] ?? 'invalid_session'),
+            'context' => [],
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'authenticated',
+        'context' => $authContext,
+    ];
+}
+
 function videochat_handle_call_access_routes(
     string $path,
     string $method,
@@ -107,10 +164,31 @@ function videochat_handle_call_access_routes(
             if (array_key_exists('guest_name', $payload)) {
                 $sessionOptions['guest_name'] = $payload['guest_name'];
             }
+            if (array_key_exists('verified_user_id', $payload)) {
+                $sessionOptions['verified_user_id'] = $payload['verified_user_id'];
+            }
+            if (array_key_exists('verified_session_id', $payload)) {
+                $sessionOptions['verified_session_id'] = $payload['verified_session_id'];
+            }
         }
 
         try {
             $pdo = $openDatabase();
+            $sessionAuthContext = videochat_call_access_session_auth_context($pdo, $request, $apiAuthContext);
+            if (!(bool) ($sessionAuthContext['ok'] ?? false)) {
+                return $errorResponse(401, 'auth_failed', 'A valid session token is required when session credentials are presented.', [
+                    'reason' => (string) ($sessionAuthContext['reason'] ?? 'invalid_session'),
+                ]);
+            }
+            $effectiveAuthContext = is_array($sessionAuthContext['context'] ?? null) ? $sessionAuthContext['context'] : [];
+            $authenticatedUserId = videochat_call_access_route_user_id($effectiveAuthContext);
+            $authenticatedSessionId = videochat_call_access_route_session_id($effectiveAuthContext);
+            if ($authenticatedUserId > 0) {
+                $sessionOptions['authenticated_user_id'] = $authenticatedUserId;
+            }
+            if ($authenticatedSessionId !== '') {
+                $sessionOptions['authenticated_session_id'] = $authenticatedSessionId;
+            }
             $issueResult = videochat_issue_session_for_call_access(
                 $pdo,
                 $accessId,
