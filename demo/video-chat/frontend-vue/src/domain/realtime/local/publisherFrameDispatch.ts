@@ -95,19 +95,18 @@ export async function dispatchPublisherFrame({
     });
   }
 
-  if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && gossipPublished) {
-    return {
-      ok: true,
-      gossipPublished,
-      sfuSent: false,
-      sfuSendOptional: true,
-      sfuFallbackSkipped: true,
-      postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
-    };
-  }
-
   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
   if (!sendClient) {
+    if (gossipFirst && gossipPublished) {
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: true,
+        sfuMirrorSkipped: true,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+      };
+    }
     if (!sfuOptional) {
       return {
         ok: Boolean(safeFunction(onRequiredSfuUnavailable)()),
