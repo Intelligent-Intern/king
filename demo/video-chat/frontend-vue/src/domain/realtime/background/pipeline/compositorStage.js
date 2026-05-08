@@ -397,6 +397,7 @@ function createCanvasBackgroundCompositorStage({
     const maskTools = createMaskCanvasTools(canvas);
     let backgroundImageCanvas = null;
     let backgroundImageUrl = '';
+    let hasDrawnMask = false;
 
     function setBackgroundImageUrl(url) {
         const nextUrl = String(url || '').trim();
@@ -443,7 +444,7 @@ function createCanvasBackgroundCompositorStage({
         const backgroundColor = String(getBackgroundColor?.() || '').trim();
         setBackgroundImageUrl(getBackgroundImageUrl?.() || '');
         const blurPx = Math.max(1, Math.round(Number(getBlurPx?.() || 3)));
-        const foregroundSource = sourceFrame || video;
+        const foregroundSource = maskUpdated && sourceFrame ? sourceFrame : video;
 
         if (mode === 'off') {
             ctx.save();
@@ -454,15 +455,14 @@ function createCanvasBackgroundCompositorStage({
             return;
         }
 
-        if (hasMatteMask && !maskUpdated) return;
-
         let hasRenderableMask = false;
         if (maskUpdated) {
-            hasRenderableMask = maskBitmap instanceof ImageBitmap
+            hasDrawnMask = maskBitmap instanceof ImageBitmap
                 ? maskTools.drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
                 : maskTools.drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
+            hasRenderableMask = hasDrawnMask;
         } else {
-            hasRenderableMask = Boolean(hasMatteMask);
+            hasRenderableMask = Boolean(hasMatteMask && hasDrawnMask);
         }
 
         maskTools.drawDebugCanvases(foregroundSource);
@@ -495,7 +495,10 @@ function createCanvasBackgroundCompositorStage({
         backend: 'canvas',
         getMatteMaskSnapshot: () => maskTools.getMatteMaskSnapshot(),
         render,
-        reset: () => maskTools.clearMask(),
+        reset: () => {
+            hasDrawnMask = false;
+            maskTools.clearMask();
+        },
         setBackgroundImageUrl,
     };
 }
@@ -697,9 +700,7 @@ function createWebGlBackgroundCompositorStage({
         const backgroundColor = String(getBackgroundColor?.() || '').trim();
         setBackgroundImageUrl(getBackgroundImageUrl?.() || '');
         const blurPx = Math.max(1, Math.round(Number(getBlurPx?.() || 3)));
-        const foregroundSource = sourceFrame || video;
-
-        if (hasMatteMask && !maskUpdated && mode !== 'off') return;
+        const foregroundSource = maskUpdated && sourceFrame ? sourceFrame : video;
 
         if (maskUpdated) {
             uploadMask({ maskBitmap, maskHeight, maskValues, maskWidth });
