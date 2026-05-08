@@ -18,6 +18,14 @@ const ownerAbsence = read('backend-king-php/domain/realtime/realtime_owner_absen
 const roomSnapshot = read('backend-king-php/domain/realtime/realtime_room_snapshot.php');
 const kingParticipantsHelper = read('backend-king-php/tests/call-access-king-participants-helper.php');
 const ownerTimeoutContract = read('backend-king-php/tests/call-access-owner-timeout-contract.php');
+const ownerAbsenceUiState = read('frontend-vue/src/domain/realtime/workspace/callWorkspace/ownerAbsenceState.js');
+const ownerAbsenceBanner = read('frontend-vue/src/domain/realtime/OwnerAbsenceCountdownBanner.vue');
+const callWorkspaceTemplate = read('frontend-vue/src/domain/realtime/CallWorkspaceView.template.html');
+const callWorkspaceView = read('frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
+const roomState = read('frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts');
+const seedMatrixHelper = read('frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
+const browserSpec = read('frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
+const packageJson = read('frontend-vue/package.json');
 
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;', '15-minute owner absence timer');
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;', '5-minute owner absence countdown');
@@ -57,5 +65,25 @@ requireContains(ownerTimeoutContract, "($ownerReturn['status'] ?? '') === 'owner
 requireContains(ownerTimeoutContract, "videochat_iam_owner_timeout_left_at($pdo, $callId, $ownerUserId) === ''", 'owner left marker cancellation assertion');
 requireContains(ownerTimeoutContract, "($ended['status'] ?? '') === 'ended'", 'implicit end assertion');
 requireContains(ownerTimeoutContract, "videochat_iam_owner_timeout_call_status($pdo, $callId) === 'ended'", 'persisted ended assertion');
+
+requireContains(ownerAbsenceUiState, 'normalizeOwnerAbsencePayload', 'frontend owner-absence payload normalizer');
+requireContains(ownerAbsenceUiState, "state.status === 'countdown' && state.countdownStarted", 'frontend countdown visibility rule');
+requireContains(ownerAbsenceUiState, "state.status === 'ended'", 'frontend ended visibility rule');
+requireContains(ownerAbsenceUiState, 'formatOwnerAbsenceCountdown', 'frontend countdown formatter');
+requireContains(ownerAbsenceBanner, 'data-testid="owner-absence-countdown"', 'browser-visible owner absence banner');
+requireContains(ownerAbsenceBanner, "calls.workspace.owner_absence_countdown", 'localized countdown message');
+requireContains(ownerAbsenceBanner, "calls.workspace.owner_absence_ended", 'localized ended message');
+requireContains(callWorkspaceTemplate, '<OwnerAbsenceCountdownBanner :owner-absence="ownerAbsenceState" />', 'workspace owner-absence banner mounting');
+requireContains(callWorkspaceView, 'const ownerAbsenceState = ref(null);', 'workspace owner-absence state ref');
+requireContains(roomState, 'ownerAbsenceState.value = normalizeOwnerAbsencePayload(ownerAbsence);', 'room snapshot owner-absence state application');
+requireContains(seedMatrixHelper, 'call_lifecycle', 'fake realtime snapshot lifecycle payload');
+requireContains(seedMatrixHelper, 'owner_absence: ownerAbsencePayload(ownerAbsenceOverrides)', 'fake realtime owner absence shape');
+requireContains(seedMatrixHelper, 'window.__iamCallAccessEmitRoomSnapshot', 'browser test realtime snapshot emitter');
+requireContains(browserSpec, 'realtime_owner_absence.php', 'browser spec reads backend owner-absence contract constants');
+requireContains(browserSpec, 'e2e_journey_024_owner_absence_countdown_then_auto_end', 'browser auto-end journey proof');
+requireContains(browserSpec, 'e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end', 'browser owner-return journey proof');
+requireContains(browserSpec, "owner_absent_timeout", 'browser spec asserts owner absence end reason');
+requireContains(browserSpec, "countdown_remaining_ms: ownerAbsenceContract.countdownMs - 60_000", 'browser spec asserts countdown update');
+requireContains(packageJson, 'tests/e2e/call-access-owner-absence-browser.spec.js', 'focused call-access command includes owner-absence browser proof');
 
 process.stdout.write('[iam-king-participants-owner-timeout-contract] PASS\n');

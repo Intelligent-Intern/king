@@ -8,6 +8,7 @@
     <section v-if="workspaceNotice" class="workspace-call-banner ok">
       {{ workspaceNotice }}
     </section>
+    <OwnerAbsenceCountdownBanner :owner-absence="ownerAbsenceState" />
     <section v-if="aloneIdlePrompt.visible" class="workspace-idle-toast" role="alert">
       <span class="workspace-idle-toast-text">
         {{ t('calls.workspace.idle_prompt', { countdown: aloneIdleCountdownLabel }) }}
