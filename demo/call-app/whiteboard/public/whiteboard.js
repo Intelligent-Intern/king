@@ -78,6 +78,9 @@
     }
     if (!canRead()) {
       clearInterval(pollTimer);
+      state.cursors.clear();
+      state.selections.clear();
+      render();
     }
   }
 
@@ -146,6 +149,7 @@
   }
 
   function applyPresence(payloadType, payload = {}, sourceActorId = actorId) {
+    if (!canRead()) return;
     const normalizedActorId = String(sourceActorId || payload.actor_id || '').trim();
     if (!normalizedActorId) return;
     const withActor = {
