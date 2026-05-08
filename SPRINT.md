@@ -2234,23 +2234,23 @@ invalidated.
 ## 29. Implicit Call Ending by Owner Absence
 
 - [x] Owner loses connection
-- [ ] Owner closes browser tab
-- [ ] Owner browser crashes or context is killed
-- [ ] Owner network is disconnected
+- [x] Owner closes browser tab
+- [x] Owner browser crashes or context is killed
+- [x] Owner network is disconnected
 - [x] Owner is absent for less than 10 minutes equivalent
 - [x] Owner is absent for 10 minutes equivalent
 - [x] Owner is absent for 15 minutes equivalent
-- [ ] Owner rejoins before final 5-minute countdown starts
+- [x] Owner rejoins before final 5-minute countdown starts
 - [x] Owner rejoins during final 5-minute countdown
 - [x] Owner does not rejoin before timer expires
 - [x] Call ends automatically after 15 minutes owner absence equivalent
-- [ ] Participants are notified when owner absence timer starts if applicable
+- [x] Participants are notified when owner absence timer starts if applicable
 - [x] Participants see visible countdown during last 5 minutes
 - [x] Countdown starts when 5 minutes remain
 - [x] Countdown shows correct remaining time
 - [x] Countdown updates correctly over time
-- [ ] Countdown survives participant refresh
-- [ ] Countdown is synchronized across participants
+- [x] Countdown survives participant refresh
+- [x] Countdown is synchronized across participants
 - [x] Countdown does not reveal admin-only data
 - [x] Countdown disappears if owner rejoins
 - [x] Call does not end if owner rejoins before timeout
@@ -2281,6 +2281,17 @@ the final-countdown UI, countdown update, owner-absence automatic end, and owner
 return cancellation paths using the backend timer constants and room snapshots.
 The focused Playwright owner-absence browser run remains covered by the
 integrated IAM call-access E2E run, which passed 43 tests.
+Additional realtime-sync proof: `realtime_call_presence_db.php` now retains
+stale presence rows long enough for the owner-absence window, and
+`realtime_owner_absence.php` materializes stale owner heartbeat expiry into the
+owner participant `left_at` server timestamp. The focused
+`call-access-owner-timeout-contract.php` Docker PHP 8.4 run passed and now proves
+owner tab close, browser/context crash, network disconnect countdown,
+pre-countdown owner rejoin cancellation, participant refresh during countdown,
+cross-participant countdown synchronization, and the existing live-region
+participant notification banner. `iam-king-participants-owner-timeout-contract.mjs`,
+`realtime-presence-contract.php`, `php -l`, `node --check`, and `git diff --check`
+also passed for this leaf.
 
 ## 30. Error and Edge Cases
 
@@ -2809,15 +2820,15 @@ access/session fingerprints and safe counts remain.
 ## Test Group: Implicit Call End by Owner Absence
 
 - [x] `e2e_end_implicit_001_owner_disconnect_starts_absence_timer`
-- [ ] `e2e_end_implicit_002_owner_tab_close_starts_absence_timer`
-- [ ] `e2e_end_implicit_003_owner_process_kill_starts_absence_timer`
-- [ ] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
+- [x] `e2e_end_implicit_002_owner_tab_close_starts_absence_timer`
+- [x] `e2e_end_implicit_003_owner_process_kill_starts_absence_timer`
+- [x] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
 - [x] `e2e_end_implicit_005_no_countdown_before_10_min_equivalent`
 - [x] `e2e_end_implicit_006_countdown_visible_at_10_min_equivalent`
 - [x] `e2e_end_implicit_007_countdown_updates_over_time`
-- [ ] `e2e_end_implicit_008_countdown_synchronized_across_participants`
-- [ ] `e2e_end_implicit_009_countdown_survives_participant_refresh`
-- [ ] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
+- [x] `e2e_end_implicit_008_countdown_synchronized_across_participants`
+- [x] `e2e_end_implicit_009_countdown_survives_participant_refresh`
+- [x] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
 - [x] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
 - [x] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
 - [x] `e2e_end_implicit_013_automatic_end_notifies_participants`
