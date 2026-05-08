@@ -466,6 +466,10 @@ Tickets:
       the Whiteboard DOM overlay (`.remote-cursor-label`) as well as the canvas;
       E2E asserts the participant sees `Owner` and that the label is removed
       after grant revocation.
+    - Regression proof renders multiple named remote cursors (`Owner`,
+      `Reviewer`, `Facilitator`), removes only the leaving remote cursor on
+      `call_app.presence.leave`, clears all remote cursor labels on revoke, and
+      asserts the participant iframe launch count and URL do not change.
     - Move undo/redo for shapes, text, and sticky notes uses CRDT update ops.
     - Browser E2E covers duplicate/out-of-order replay injection, throttled
       non-persistent presence, snapshot compaction, revoke, and reconnect.
