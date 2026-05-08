@@ -169,6 +169,41 @@ function videochat_realtime_remove_call_presence(callable $openDatabase, array $
     }
 }
 
+function videochat_realtime_remove_call_presence_for_room_user(
+    callable $openDatabase,
+    string $callId,
+    string $roomId,
+    int $userId
+): int {
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedCallId === '' || $normalizedRoomId === '' || $userId <= 0) {
+        return 0;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        videochat_realtime_presence_db_bootstrap($pdo);
+        $statement = $pdo->prepare(
+            <<<'SQL'
+DELETE FROM realtime_presence_connections
+WHERE call_id = :call_id
+  AND room_id = :room_id
+  AND user_id = :user_id
+SQL
+        );
+        $statement->execute([
+            ':call_id' => $normalizedCallId,
+            ':room_id' => $normalizedRoomId,
+            ':user_id' => $userId,
+        ]);
+
+        return $statement->rowCount();
+    } catch (Throwable) {
+        return 0;
+    }
+}
+
 function videochat_realtime_presence_db_has_room_membership(
     PDO $pdo,
     string $roomId,

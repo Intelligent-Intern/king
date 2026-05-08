@@ -93,6 +93,7 @@ STATIC_CONTRACTS=(
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
+  "tests/contract/iam-active-call-kick-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
 
@@ -105,6 +106,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
+  "tests/contract/iam-active-call-kick-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
 

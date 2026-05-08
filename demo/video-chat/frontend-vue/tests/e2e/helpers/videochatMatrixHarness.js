@@ -562,6 +562,43 @@ export async function installFakeMediaAndRealtime(context, user) {
           }, 0);
           return;
         }
+        if (payload.type === 'lobby/remove' || payload.type === 'lobby/kick') {
+          const targetUserId = Number(payload.target_user_id || payload.targetUserId || 0);
+          const targetIndex = participants.findIndex((participant) => Number(participant?.user?.id || 0) === targetUserId);
+          if (targetIndex < 0) {
+            const error = {
+              type: 'system/error',
+              code: 'lobby_command_failed',
+              message: 'Could not apply lobby command.',
+              details: { error: 'target_not_found', type: payload.type, target_user_id: targetUserId, room_id: roomId },
+              time: new Date().toISOString(),
+            };
+            setTimeout(() => {
+              this.emit(error);
+              dispatchToWorkspace(error);
+            }, 0);
+            return;
+          }
+
+          const [removedParticipant] = participants.splice(targetIndex, 1);
+          const left = {
+            type: 'room/left',
+            room_id: roomId,
+            participant: removedParticipant,
+            participant_count: participants.length,
+            time: new Date().toISOString(),
+          };
+          setTimeout(() => {
+            window.__matrixSocketEvents.push(left);
+            this.emit(left);
+            dispatchToWorkspace(left);
+            const snapshot = snapshotPayload('participant_kicked');
+            window.__matrixSocketEvents.push(snapshot);
+            this.emit(snapshot);
+            dispatchToWorkspace(snapshot);
+          }, 0);
+          return;
+        }
         if (payload.type === 'chat/send') {
           const refs = Array.isArray(payload.attachments) ? payload.attachments : [];
           const attachments = refs
