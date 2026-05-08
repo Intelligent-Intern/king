@@ -152,6 +152,70 @@ SQL
     return $rows;
 }
 
+function videochat_realtime_owner_absence_stale_owner_left_at_ms(
+    PDO $pdo,
+    string $callId,
+    string $roomId,
+    int $ownerUserId,
+    int $nowMs
+): int {
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedCallId === '' || $normalizedRoomId === '' || $ownerUserId <= 0) {
+        return 0;
+    }
+
+    videochat_realtime_presence_db_bootstrap($pdo);
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT MAX(last_seen_at_ms)
+FROM realtime_presence_connections
+WHERE call_id = :call_id
+  AND room_id = :room_id
+  AND user_id = :owner_user_id
+SQL
+    );
+    $statement->execute([
+        ':call_id' => $normalizedCallId,
+        ':room_id' => $normalizedRoomId,
+        ':owner_user_id' => $ownerUserId,
+    ]);
+    $lastSeenMs = (int) ($statement->fetchColumn() ?: 0);
+    if ($lastSeenMs <= 0) {
+        return 0;
+    }
+
+    $leftAtMs = $lastSeenMs + videochat_realtime_presence_db_ttl_ms();
+    return $leftAtMs < $nowMs ? $leftAtMs : 0;
+}
+
+function videochat_realtime_owner_absence_mark_stale_owner_left(
+    PDO $pdo,
+    string $callId,
+    int $ownerUserId,
+    int $leftAtMs
+): void {
+    if ($callId === '' || $ownerUserId <= 0 || $leftAtMs <= 0) {
+        return;
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET left_at = :left_at
+WHERE call_id = :call_id
+  AND user_id = :owner_user_id
+  AND source = 'internal'
+  AND (left_at IS NULL OR left_at = '')
+SQL
+    );
+    $statement->execute([
+        ':left_at' => videochat_realtime_owner_absence_iso_from_ms($leftAtMs),
+        ':call_id' => $callId,
+        ':owner_user_id' => $ownerUserId,
+    ]);
+}
+
 function videochat_realtime_owner_absence_earliest_non_owner_presence_ms(array $presenceRows, int $ownerUserId): int
 {
     $earliestMs = 0;
@@ -194,6 +258,13 @@ function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, str
         ];
     }
 
+    $staleOwnerLeftAtMs = videochat_realtime_owner_absence_stale_owner_left_at_ms(
+        $pdo,
+        (string) $call['id'],
+        (string) $call['room_id'],
+        $ownerUserId,
+        $effectiveNowMs
+    );
     $presenceRows = videochat_realtime_owner_absence_active_presence($pdo, (string) $call['id'], (string) $call['room_id'], $effectiveNowMs);
     $activeUserIds = [];
     $activeNonOwnerUserIds = [];
@@ -241,6 +312,9 @@ function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, str
         ];
     }
 
+    if (!$ownerPresent && $staleOwnerLeftAtMs > 0) {
+        videochat_realtime_owner_absence_mark_stale_owner_left($pdo, (string) $call['id'], $ownerUserId, $staleOwnerLeftAtMs);
+    }
     $ownerParticipant = videochat_realtime_owner_absence_fetch_owner_participant($pdo, (string) $call['id'], $ownerUserId);
     $absentSinceMs = videochat_realtime_owner_absence_ms_from_iso($ownerParticipant['left_at'] ?? '');
     if ($absentSinceMs <= 0) {
