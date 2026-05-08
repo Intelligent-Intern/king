@@ -147,6 +147,19 @@ function videochat_iam_edge_error_matrix_create_personal_link(PDO $pdo, string $
     return $accessId;
 }
 
+function videochat_iam_edge_error_matrix_update_call_state(PDO $pdo, string $callId, string $status, string $startsAt, string $endsAt): void
+{
+    $pdo->prepare(
+        'UPDATE calls SET status = :status, starts_at = :starts_at, ends_at = :ends_at, updated_at = :updated_at WHERE id = :id'
+    )->execute([
+        ':status' => $status,
+        ':starts_at' => $startsAt,
+        ':ends_at' => $endsAt,
+        ':updated_at' => gmdate('c'),
+        ':id' => $callId,
+    ]);
+}
+
 function videochat_iam_edge_error_matrix_join_response(string $accessId, callable $openDatabase): array
 {
     return videochat_handle_call_access_routes(
@@ -177,6 +190,29 @@ function videochat_iam_edge_error_matrix_session_response(string $accessId, call
             return 'sess_edge_error_matrix_must_not_issue';
         }
     ) ?? [];
+}
+
+function videochat_iam_edge_error_matrix_assert_link_rejected(
+    string $accessId,
+    callable $openDatabase,
+    int $joinStatus,
+    string $joinCode,
+    int $sessionStatus,
+    string $sessionCode,
+    array $needles,
+    string $label
+): void {
+    $join = videochat_iam_edge_error_matrix_join_response($accessId, $openDatabase);
+    videochat_iam_edge_error_matrix_assert((int) ($join['status'] ?? 0) === $joinStatus, "{$label} join status mismatch");
+    videochat_iam_edge_error_matrix_assert((string) ((videochat_iam_edge_error_matrix_decode($join)['error'] ?? [])['code'] ?? '') === $joinCode, "{$label} join code mismatch");
+    videochat_iam_edge_error_matrix_assert_omits($join, $needles, "{$label} join");
+
+    $issuerCalls = 0;
+    $session = videochat_iam_edge_error_matrix_session_response($accessId, $openDatabase, $issuerCalls);
+    videochat_iam_edge_error_matrix_assert((int) ($session['status'] ?? 0) === $sessionStatus, "{$label} session status mismatch");
+    videochat_iam_edge_error_matrix_assert((string) ((videochat_iam_edge_error_matrix_decode($session)['error'] ?? [])['code'] ?? '') === $sessionCode, "{$label} session code mismatch");
+    videochat_iam_edge_error_matrix_assert($issuerCalls === 0, "{$label} session issuer must not be called");
+    videochat_iam_edge_error_matrix_assert_omits($session, $needles, "{$label} session");
 }
 
 try {
@@ -227,6 +263,64 @@ try {
     videochat_iam_edge_error_matrix_assert((int) ($missingAccessSession['status'] ?? 0) === 404, 'missing access session should return 404');
     videochat_iam_edge_error_matrix_assert($missingIssuerCalls === 0, 'missing access session issuer must not be called');
 
+    $futureCall = videochat_iam_edge_error_matrix_create_call(
+        $pdo,
+        $adminUserId,
+        $standardUserId,
+        'IAM Not Started Time Limited Secret Call',
+        $tenantId
+    );
+    $futureAccessId = videochat_iam_edge_error_matrix_create_personal_link($pdo, $futureCall['id'], $adminUserId, $standardUserId, $tenantId);
+    videochat_iam_edge_error_matrix_update_call_state(
+        $pdo,
+        $futureCall['id'],
+        'active',
+        gmdate('c', time() + 3600),
+        gmdate('c', time() + 7200)
+    );
+    $futureDecision = videochat_decide_call_access_for_user($pdo, $futureCall['id'], $standardUserId, 'user', $tenantId);
+    videochat_iam_edge_error_matrix_assert(!(bool) ($futureDecision['allowed'] ?? true), 'e2e_edge_004_not_started_time_limited_call must deny decision');
+    videochat_iam_edge_error_matrix_assert((string) ($futureDecision['reason'] ?? '') === 'call_not_started', 'not-started decision reason mismatch');
+    videochat_iam_edge_error_matrix_assert_link_rejected(
+        $futureAccessId,
+        $openDatabase,
+        409,
+        'call_access_conflict',
+        409,
+        'call_access_conflict',
+        [$futureCall['title'], 'user@intelligent-intern.com'],
+        'not-started time-limited call'
+    );
+
+    $expiredCall = videochat_iam_edge_error_matrix_create_call(
+        $pdo,
+        $adminUserId,
+        $standardUserId,
+        'IAM Expired Time Limited Secret Call',
+        $tenantId
+    );
+    $expiredAccessId = videochat_iam_edge_error_matrix_create_personal_link($pdo, $expiredCall['id'], $adminUserId, $standardUserId, $tenantId);
+    videochat_iam_edge_error_matrix_update_call_state(
+        $pdo,
+        $expiredCall['id'],
+        'active',
+        gmdate('c', time() - 7200),
+        gmdate('c', time() - 3600)
+    );
+    $expiredDecision = videochat_decide_call_access_for_user($pdo, $expiredCall['id'], $standardUserId, 'user', $tenantId);
+    videochat_iam_edge_error_matrix_assert(!(bool) ($expiredDecision['allowed'] ?? true), 'e2e_edge_005_expired_time_limited_call must deny decision');
+    videochat_iam_edge_error_matrix_assert((string) ($expiredDecision['reason'] ?? '') === 'call_expired', 'expired decision reason mismatch');
+    videochat_iam_edge_error_matrix_assert_link_rejected(
+        $expiredAccessId,
+        $openDatabase,
+        409,
+        'call_access_conflict',
+        409,
+        'call_access_conflict',
+        [$expiredCall['title'], 'user@intelligent-intern.com'],
+        'expired time-limited call'
+    );
+
     $tenantCall = videochat_iam_edge_error_matrix_create_call(
         $pdo,
         $adminUserId,
@@ -257,6 +351,34 @@ try {
         ':id' => $tenantId,
     ]);
 
+    $missingTenantCall = videochat_iam_edge_error_matrix_create_call(
+        $pdo,
+        $adminUserId,
+        $standardUserId,
+        'IAM Missing Organization Secret Call',
+        $tenantId
+    );
+    $missingTenantAccessId = videochat_iam_edge_error_matrix_create_personal_link($pdo, $missingTenantCall['id'], $adminUserId, $standardUserId, $tenantId);
+    $missingTenantId = 987654321;
+    $pdo->prepare('UPDATE calls SET tenant_id = :tenant_id WHERE id = :id')->execute([
+        ':tenant_id' => $missingTenantId,
+        ':id' => $missingTenantCall['id'],
+    ]);
+    $pdo->prepare('UPDATE call_access_links SET tenant_id = :tenant_id WHERE id = :id')->execute([
+        ':tenant_id' => $missingTenantId,
+        ':id' => $missingTenantAccessId,
+    ]);
+    videochat_iam_edge_error_matrix_assert_link_rejected(
+        $missingTenantAccessId,
+        $openDatabase,
+        404,
+        'call_access_not_found',
+        404,
+        'call_access_not_found',
+        [$missingTenantCall['title'], 'user@intelligent-intern.com'],
+        'missing organization'
+    );
+
     $hostUserId = videochat_iam_edge_error_matrix_create_user($pdo, 'edge-host-disabled@example.test', 'Edge Host Disabled', $tenantId);
     $hostTargetUserId = videochat_iam_edge_error_matrix_create_user($pdo, 'edge-host-target@example.test', 'Edge Host Target', $tenantId);
     $hostCall = videochat_iam_edge_error_matrix_create_call(
@@ -282,6 +404,33 @@ try {
     $hostSession = videochat_iam_edge_error_matrix_session_response($hostAccessId, $openDatabase, $hostIssuerCalls);
     videochat_iam_edge_error_matrix_assert((int) ($hostSession['status'] ?? 0) === 404, 'disabled host session should return 404');
     videochat_iam_edge_error_matrix_assert($hostIssuerCalls === 0, 'disabled host session issuer must not be called');
+
+    $missingHostUserId = videochat_iam_edge_error_matrix_create_user($pdo, 'edge-host-missing@example.test', 'Edge Host Missing', $tenantId);
+    $missingHostTargetId = videochat_iam_edge_error_matrix_create_user($pdo, 'edge-host-missing-target@example.test', 'Edge Host Missing Target', $tenantId);
+    $missingHostCall = videochat_iam_edge_error_matrix_create_call(
+        $pdo,
+        $missingHostUserId,
+        $missingHostTargetId,
+        'IAM Missing Host Secret Call',
+        $tenantId
+    );
+    $missingHostAccessId = videochat_iam_edge_error_matrix_create_personal_link($pdo, $missingHostCall['id'], $missingHostUserId, $missingHostTargetId, $tenantId);
+    $pdo->exec('PRAGMA foreign_keys = OFF');
+    $pdo->prepare('UPDATE calls SET owner_user_id = :owner_user_id WHERE id = :id')->execute([
+        ':owner_user_id' => 876543210,
+        ':id' => $missingHostCall['id'],
+    ]);
+    $pdo->exec('PRAGMA foreign_keys = ON');
+    videochat_iam_edge_error_matrix_assert_link_rejected(
+        $missingHostAccessId,
+        $openDatabase,
+        404,
+        'call_access_not_found',
+        404,
+        'call_access_not_found',
+        [$missingHostCall['title'], 'edge-host-missing@example.test', 'edge-host-missing-target@example.test'],
+        'missing host'
+    );
 
     $guestCreate = videochat_create_guest_user_for_call_access($pdo, 'Edge Deleted Temporary Guest', $tenantId);
     videochat_iam_edge_error_matrix_assert((bool) ($guestCreate['ok'] ?? false), 'temporary guest should be created');
