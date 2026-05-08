@@ -1115,13 +1115,47 @@ export function createCallWorkspaceMediaSecurityRuntime({
     } catch (error) {
       mediaDebugLog('[MediaSecurity] signaling failed', error);
       const errorCode = mediaSecurityErrorCode(error);
+      const shouldRecoverSignalSender = shouldRecoverMediaSecuritySignalSender({
+        hasRealtimeRoomSync: hasRealtimeRoomSync.value,
+        targetUserIds: remoteMediaSecurityTargetIds(),
+        senderUserId: normalizedSenderUserId,
+      });
+      if (
+        type === 'media-security/sender-key'
+        && errorCode === 'participant_set_mismatch'
+        && shouldRecoverSignalSender
+      ) {
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
+        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        sfuPublishGate.deleteSenderKeySignalTime(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        requestRoomSnapshot();
+        requestRemoteMediaSecuritySync(normalizedSenderUserId, 'sender_key_participant_mismatch', {
+          error_code: errorCode,
+          signal_type: type,
+          direction: 'receiver',
+        });
+        await sendMediaSecurityHello(normalizedSenderUserId, true);
+        scheduleMediaSecurityParticipantSync('sender_key_participant_mismatch', false);
+        startMediaSecurityHandshakeWatchdog();
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'media_security_sender_key_participant_mismatch',
+          code: 'media_security_sender_key_participant_mismatch',
+          message: 'Incoming media security sender key was stale for the current participant set; a fresh hello/sync was requested.',
+          payload: {
+            sender_user_id: normalizedSenderUserId,
+            signal_type: type,
+            direction: 'receiver',
+            media_runtime_path: mediaRuntimePath.value,
+            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+          },
+        });
+        return;
+      }
       if (
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
-        && shouldRecoverMediaSecuritySignalSender({
-          hasRealtimeRoomSync: hasRealtimeRoomSync.value,
-          targetUserIds: remoteMediaSecurityTargetIds(),
-          senderUserId: normalizedSenderUserId,
-        })
+        && shouldRecoverSignalSender
       ) {
         const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';
         if (errorCode === 'downgrade_attempt') {
