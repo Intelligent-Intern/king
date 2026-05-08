@@ -2319,15 +2319,15 @@ browser path and waiting-for-host state.
 
 # Definition of Done
 
-- [ ] E2E test suite is implemented or extended
+- [x] E2E test suite is implemented or extended
 - [ ] Playwright or existing E2E framework is configured for CI
 - [ ] CI job runs E2E suite automatically
 - [ ] CI starts all required services
 - [ ] CI starts media/signaling infrastructure if required
 - [ ] CI starts `king` containers for multi-participant tests
 - [ ] CI collects traces, screenshots, videos, and logs on failure
-- [ ] Test data is deterministic
-- [ ] Test data is isolated per test or safely reset
+- [x] Test data is deterministic
+- [x] Test data is isolated per test or safely reset
 - [ ] Tests cover all critical IAM and call-access flows
 - [ ] Tests cover invitation invalidation
 - [ ] Tests cover guest account cleanup
@@ -2338,9 +2338,17 @@ browser path and waiting-for-host state.
 - [ ] Owner timeout tests do not wait 15 real minutes
 - [ ] Duplicate personalized-link abuse detection is tested
 - [ ] Membership removal after invitation is tested with call-scoped guest access behavior
-- [ ] Privacy and data minimization assertions are included
+- [x] Privacy and data minimization assertions are included
 - [ ] Security manipulation cases are covered
 - [ ] Audit-relevant flows are asserted where audit logs exist
-- [ ] Test names are stable and mapped to the checklist
+- [x] Test names are stable and mapped to the checklist
 - [ ] Documentation explains how to run tests locally
 - [ ] Documentation explains how to run tests in CI
+
+Proof: `iam-call-access-seeding.matrix.json` adds deterministic IAM/call-access
+E2E seed principals, calls, access links, and scenario IDs without replacing the
+live backend `call-access-join.spec.js`. `call-access-seed-matrix.spec.js`
+exercises the public join/session browser path against the deterministic matrix,
+checks temporary guests are not elevated to tenant/platform/system admin, and
+asserts the call-access session payload contains no SDP, ICE, media token, or
+TURN credential material.
