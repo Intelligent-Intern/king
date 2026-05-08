@@ -46,6 +46,11 @@ assert.match(
 );
 assert.match(
   callAccessScript,
+  /tests\/e2e\/call-access-duplicate-review-email\.spec\.js/,
+  'package script must include duplicate-review and account-confirmation E2E coverage',
+);
+assert.match(
+  callAccessScript,
   /--workers=1/,
   'call-access E2E script must run serially to avoid live backend access-link contention',
 );
@@ -56,8 +61,18 @@ assert.match(
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
+  /call-access-duplicate-review-email-contract\.mjs/,
+  'IAM Call Access contract gate must include duplicate-review/account-confirmation static proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
   /\.\.\/backend-king-php\/tests\/call-access-membership-removal-contract\.sh/,
   'IAM Call Access contract gate must include the backend membership-removal proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /call-access-email-confirmation-contract\.sh/,
+  'IAM Call Access contract gate must include the backend email confirmation proof',
 );
 assert.doesNotMatch(
   matrixScript,
@@ -84,6 +99,10 @@ assert.ok(
 assert.ok(
   callAccessPaths.has('frontend-vue/tests/e2e/call-access-seed-matrix.spec.js'),
   'focused Call Access command must list the deterministic seed-matrix spec',
+);
+assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js'),
+  'focused Call Access command must list duplicate-review/account-confirmation E2E coverage',
 );
 assert.ok(
   requiredSpecs.has('frontend-vue/tests/e2e/call-access-join.spec.js'),
