@@ -56,8 +56,9 @@ assert(
   'optional SFU failure must return success based on Gossip publication',
 )
 assert(
-  /VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary && gossipPublished[\s\S]*sfuFallbackSkipped:\s*true/.test(helper),
-  'gossip_primary must skip optional SFU fallback after successful Gossip publication',
+  /gossipFirst && gossipPublished[\s\S]*sfuMirrorSkipped:\s*true/.test(helper)
+    && /const sent = await sendClient\.sendEncodedFrame\(frame\)/.test(helper),
+  'gossip_primary must publish Gossip first and mirror to SFU when an open SFU client is available',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline)

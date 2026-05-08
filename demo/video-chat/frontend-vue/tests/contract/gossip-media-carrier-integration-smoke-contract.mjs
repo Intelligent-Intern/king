@@ -180,9 +180,9 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must not mirror a successfully published Gossip frame into SFU')
-assert(result.sfuFallbackSkipped === true, 'gossip_primary must expose that SFU fallback was skipped after successful Gossip publication')
-assert(harness.order.join(',') === 'gossip', 'gossip_primary with an open SFU socket must still avoid SFU send when Gossip publication succeeds')
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === true, 'gossip_primary must mirror a successfully published Gossip frame into SFU when the SFU socket is open')
+assert(result.sfuSendOptional === true, 'gossip_primary SFU mirroring must stay optional')
+assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary with an open SFU socket must publish Gossip first and then mirror to SFU')
 
 harness = publisherHarness({
   publishLocalEncodedFrameToGossip: () => {
