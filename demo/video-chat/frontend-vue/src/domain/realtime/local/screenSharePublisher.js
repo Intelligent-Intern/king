@@ -431,6 +431,21 @@ export function createScreenShareParticipantPublisher({
     if (stopRequested || !isActive()) return false;
     if (reconnectTimer !== null || reconnectInFlight) return true;
     if (reconnectAttempts >= SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS) {
+      callbacks.captureClientDiagnostic?.({
+        category: 'media',
+        level: 'error',
+        eventType: 'local_screen_share_sfu_reconnect_exhausted',
+        code: 'local_screen_share_sfu_reconnect_exhausted',
+        message: 'Screen sharing media routing exhausted reconnect attempts; only the screen-share capture will be cleaned up.',
+        payload: screenShareDiagnosticsPayload(refs, {
+          reason: String(reason || 'sfu_disconnected'),
+          attempts: reconnectAttempts,
+          max_attempts: SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS,
+          cleanup_scope: 'screen_share_capture_only',
+          publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
+        }),
+        immediate: true,
+      });
       void stop('disconnected');
       return false;
     }
@@ -709,6 +724,7 @@ export function createScreenShareParticipantPublisher({
 
   async function stop(reason = 'stopped') {
     stopRequested = true;
+    const stoppedAfterReconnectAttempts = reconnectAttempts;
     resetReconnectState();
     detachEndedHandler();
     pipeline.stopLocalEncodingPipeline();
@@ -743,6 +759,8 @@ export function createScreenShareParticipantPublisher({
         message: 'Local screen sharing left the call media roster.',
         payload: screenShareDiagnosticsPayload(refs, {
           reason: String(reason || 'stopped'),
+          cleanup_scope: 'screen_share_capture_only',
+          reconnect_attempts: stoppedAfterReconnectAttempts,
           publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE,
         }),
       });
