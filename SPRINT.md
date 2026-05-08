@@ -504,6 +504,10 @@ Tickets:
       the Call Apps sidebar, default participant access selection, backend
       participant grant mutation, and narrow-sidebar responsiveness without
       manual database edits.
+    - The same browser proof now runs the real Whiteboard iframe beside the
+      host/sidebar controls, renders the `Owner` remote cursor label, toggles a
+      sidebar participant grant, and asserts the cursor label, iframe URL, and
+      Whiteboard launch count remain unchanged.
     - Exact commands:
       - `npm run test:contract:call-apps`
       - `npm run build`
