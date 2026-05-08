@@ -20,8 +20,8 @@ function videochat_issue_session_for_call_access(
             'errors' => is_array($resolve['errors'] ?? null) ? $resolve['errors'] : [],
             'session' => null,
             'user' => null,
-            'access_link' => is_array($resolve['access_link'] ?? null) ? $resolve['access_link'] : null,
-            'call' => is_array($resolve['call'] ?? null) ? $resolve['call'] : null,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -35,8 +35,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['access_link' => 'access_link_or_call_not_found'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -52,8 +52,8 @@ function videochat_issue_session_for_call_access(
                 'errors' => is_array($guestCreate['errors'] ?? null) ? $guestCreate['errors'] : ['guest_name' => 'required_guest_name'],
                 'session' => null,
                 'user' => null,
-                'access_link' => $accessLink,
-                'call' => $call,
+                'access_link' => null,
+                'call' => null,
             ];
         }
         $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
@@ -66,8 +66,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['target_user' => 'not_found_or_inactive'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -80,8 +80,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['target_user' => 'invalid_target_user'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -110,8 +110,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['target_user' => 'not_allowed_for_call'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -130,8 +130,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['session' => 'session_id_generation_failed'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -155,8 +155,8 @@ function videochat_issue_session_for_call_access(
             'errors' => ['call' => 'missing_call_room_binding'],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
 
@@ -245,8 +245,8 @@ SQL
             'errors' => [],
             'session' => null,
             'user' => null,
-            'access_link' => $accessLink,
-            'call' => $call,
+            'access_link' => null,
+            'call' => null,
         ];
     }
     if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
