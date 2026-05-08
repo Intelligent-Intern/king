@@ -719,6 +719,20 @@ SQL
         <<<'SQL'
 INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
 VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', :invite_state, NULL, NULL)
+ON CONFLICT(call_id, email) DO UPDATE SET
+    user_id = excluded.user_id,
+    display_name = excluded.display_name,
+    source = 'internal',
+    call_role = CASE
+        WHEN call_participants.call_role = 'owner' THEN 'owner'
+        ELSE call_participants.call_role
+    END,
+    invite_state = CASE
+        WHEN excluded.invite_state = 'allowed' THEN 'allowed'
+        WHEN call_participants.invite_state IN ('declined', 'cancelled') THEN 'invited'
+        ELSE call_participants.invite_state
+    END,
+    left_at = NULL
 SQL
     );
     $insert->execute([
