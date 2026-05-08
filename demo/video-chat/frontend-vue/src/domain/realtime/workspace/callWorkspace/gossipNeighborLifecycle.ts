@@ -11,6 +11,8 @@ const LEGACY_GOSSIP_WEBRTC_SIGNAL_KINDS = Object.freeze([
   'gossip_webrtc_answer',
   'gossip_webrtc_ice',
 ]);
+const GOSSIP_NEIGHBOR_RENEGOTIATE_DELAY_MS = 25;
+const GOSSIP_NEIGHBOR_RENEGOTIATE_MAX_ATTEMPTS = 8;
 
 function safePeerId(value) {
   return String(value || '').trim();
@@ -93,6 +95,8 @@ export function createGossipNeighborLifecycle({
       pendingIce: [],
       negotiating: false,
       needsRenegotiate: false,
+      queuedRenegotiateAttempts: 0,
+      queuedRenegotiateTimer: null,
     };
     peers.set(normalizedPeerId, peer);
 
@@ -160,6 +164,45 @@ export function createGossipNeighborLifecycle({
     return peer;
   }
 
+  function clearQueuedRenegotiate(peer) {
+    if (!peer?.queuedRenegotiateTimer) return;
+    clearTimeout(peer.queuedRenegotiateTimer);
+    peer.queuedRenegotiateTimer = null;
+  }
+
+  function scheduleQueuedRenegotiate(peer, reason = 'queued_renegotiate') {
+    if (!peer?.pc || peer.pc.signalingState === 'closed') return false;
+    if (peer.queuedRenegotiateTimer) return true;
+
+    peer.queuedRenegotiateAttempts = Math.max(0, Number(peer.queuedRenegotiateAttempts || 0)) + 1;
+    if (peer.queuedRenegotiateAttempts > GOSSIP_NEIGHBOR_RENEGOTIATE_MAX_ATTEMPTS) {
+      peer.needsRenegotiate = false;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_neighbor_renegotiate_quarantined',
+        code: 'gossip_neighbor_renegotiate_quarantined',
+        message: 'Dedicated Gossip neighbor renegotiation was quarantined after repeated queued attempts.',
+        payload: {
+          peer_id: safePeerId(peer.peerId),
+          reason: String(reason || 'queued_renegotiate'),
+          attempt_count: peer.queuedRenegotiateAttempts,
+          signaling_state: String(peer.pc?.signalingState || ''),
+          topology_epoch: topologyEpoch,
+        },
+      });
+      return false;
+    }
+
+    peer.queuedRenegotiateTimer = setTimeout(() => {
+      peer.queuedRenegotiateTimer = null;
+      if (peers.get(safePeerId(peer.peerId)) !== peer) return;
+      if (!peer.pc || peer.pc.signalingState === 'closed') return;
+      void negotiatePeer(peer, reason);
+    }, GOSSIP_NEIGHBOR_RENEGOTIATE_DELAY_MS);
+    return true;
+  }
+
   async function negotiatePeer(peer, reason) {
     if (!peer?.pc || peer.negotiating) {
       if (peer) peer.needsRenegotiate = true;
@@ -176,7 +219,7 @@ export function createGossipNeighborLifecycle({
       await peer.pc.setLocalDescription(offer);
       const local = peer.pc.localDescription;
       if (!local?.sdp) return false;
-      return sendSocketFrame({
+      const sent = sendSocketFrame({
         type: 'call/offer',
         target_user_id: Number(peer.peerId),
         payload: {
@@ -193,6 +236,8 @@ export function createGossipNeighborLifecycle({
           },
         },
       });
+      if (sent) peer.queuedRenegotiateAttempts = 0;
+      return sent;
     } catch (error) {
       captureClientDiagnostic({
         category: 'media',
@@ -211,7 +256,7 @@ export function createGossipNeighborLifecycle({
       peer.negotiating = false;
       if (peer.needsRenegotiate) {
         peer.needsRenegotiate = false;
-        void negotiatePeer(peer, 'queued_renegotiate');
+        scheduleQueuedRenegotiate(peer, 'queued_renegotiate');
       }
     }
   }
@@ -291,6 +336,7 @@ export function createGossipNeighborLifecycle({
     if (!peer?.pc || !remote || remote.type !== 'answer') return;
     try {
       await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
+      peer.queuedRenegotiateAttempts = 0;
       await flushPendingIce(peer);
     } catch {}
   }
@@ -357,6 +403,7 @@ export function createGossipNeighborLifecycle({
     const peer = peers.get(normalizedPeerId);
     if (!peer) return false;
     peers.delete(normalizedPeerId);
+    clearQueuedRenegotiate(peer);
     try {
       peer.pc?.close?.();
     } catch {}
