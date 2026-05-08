@@ -132,7 +132,7 @@ async function installSocketInstrumentation(context) {
   });
 }
 
-async function installMediaDeviceShim(context, {
+export async function installMediaDeviceShim(context, {
   audioFrequency = 440,
   videoWidth = 320,
   videoHeight = 240,
