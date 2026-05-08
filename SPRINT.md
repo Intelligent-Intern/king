@@ -1901,16 +1901,16 @@ false.
 
 ## 21. Cross-Organization Cases
 
-- [ ] User from organization A opens personalized link for organization A call
-- [ ] User from organization A opens personalized link for organization B call
-- [ ] User from organization A opens anonymous link for organization B call
+- [x] User from organization A opens personalized link for organization A call
+- [x] User from organization A opens personalized link for organization B call
+- [x] User from organization A opens anonymous link for organization B call
 - [x] Organization admin from organization A opens link to organization A call
 - [x] Organization admin from organization A opens link to organization B call
 - [x] Organization admin from organization A receives no org-admin rights in organization B call
-- [ ] User with accounts in multiple organizations is checked in correct call context
+- [x] User with accounts in multiple organizations is checked in correct call context
 - [x] Changing active organization in frontend does not change server-side call permission
 - [x] Guest-list entry in organization A does not apply to organization B
-- [ ] Temporary account from organization A invitation receives no rights in organization B
+- [x] Temporary account from organization A invitation receives no rights in organization B
 - [x] Owner rights of organization A call do not apply to organization B call
 - [x] Review flags are assigned to correct organization / call
 
@@ -1923,6 +1923,20 @@ not mint foreign call permissions, owner and guest-list rights do not cross org
 boundaries, and duplicate personalized-link review flags stay bound to the
 target organization and call. The integrated seed-matrix browser run passed 19
 tests.
+`call-access-cross-org-contract.php` now proves organization A personalized
+links for organization A calls, explicit organization B personalized links for
+organization A users as call-scoped participant access, foreign personalized
+link mismatch denial without session persistence, organization B anonymous
+links for logged-in organization A users without tenant-membership or admin
+rights, multi-organization account checks against the linked call tenant instead
+of browser active organization, and organization A temporary invite accounts
+receiving no organization B call/admin/direct-join rights. Browser proof:
+`call-access-cross-org-foreign-join.spec.js` covers linked-call tenant binding,
+foreign anonymous link account scoping, and foreign personalized mismatch
+privacy/session safety. Proof commands passed: Docker PHP 8.4
+`call-access-cross-org-contract.sh`; `npm run test:ci:iam-call-access:static`;
+`npx playwright test tests/e2e/call-access-cross-org-foreign-join.spec.js
+--workers=1 --reporter=list`.
 
 ## 22. Multi-Session, Devices, Browsers
 
