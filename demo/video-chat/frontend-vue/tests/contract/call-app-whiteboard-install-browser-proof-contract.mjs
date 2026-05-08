@@ -76,6 +76,24 @@ assert.match(
   'browser proof must assert installed app availability and usable access control state transitions',
 );
 
+assert.match(
+  e2eSource,
+  /readWhiteboardAssets[\s\S]*whiteboardFrame[\s\S]*call_app\.launch[\s\S]*call_app\.crdt\.bootstrap\.response[\s\S]*call_app\.crdt\.ops\.response/s,
+  'browser proof must run the real Whiteboard iframe beside the sidebar host instead of using a placeholder',
+);
+
+assert.match(
+  e2eSource,
+  /showRemoteCursor\('Owner'\)[\s\S]*remote-cursor-label'\)\)\.toHaveText\('Owner'\)[\s\S]*call-apps-access-row\[data-user-id="2"\][\s\S]*remote-cursor-label'\)\)\.toHaveText\('Owner'\)/s,
+  'browser proof must show Whiteboard cursor labels do not collide with sidebar participant grant controls',
+);
+
+assert.match(
+  e2eSource,
+  /launchCountBeforeGrantToggle[\s\S]*frameSrcBeforeGrantToggle[\s\S]*whiteboardLaunchCount[\s\S]*toBe\(launchCountBeforeGrantToggle\)[\s\S]*whiteboardFrameSrc[\s\S]*frameSrcBeforeGrantToggle/s,
+  'browser proof must prove sidebar access control updates do not reload the Call App iframe',
+);
+
 assert.doesNotMatch(
   e2eSource,
   /sqlite|PDO|INSERT\s+INTO|videochat_bootstrap|manual\s+DB/i,
