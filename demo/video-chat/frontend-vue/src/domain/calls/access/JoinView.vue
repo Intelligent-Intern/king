@@ -186,7 +186,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../../components/AppSelect.vue';
-import { loginWithCallAccess, sessionState } from '../../auth/session';
+import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
   buildWebSocketUrl,
@@ -215,8 +215,10 @@ import {
 } from '../../realtime/media/preferences';
 import {
   CALL_UUID_PATTERN,
+  callAccessVerifiedContextFromSession,
   safeCallAccessInvalidMessage,
 } from './admissionGate';
+import { loginWithCallAccess } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
 
 const route = useRoute();
@@ -252,6 +254,7 @@ const state = reactive({
   previewReady: false,
   previewError: '',
   micLevelPercent: 0,
+  verifiedAccessContext: null,
 });
 
 const {
@@ -292,6 +295,7 @@ function resetJoinContextDetails() {
   state.waitingForAdmission = false;
   state.admissionMessage = '';
   state.joinError = '';
+  state.verifiedAccessContext = null;
 }
 
 function showSafeInvalidAccessState() {
@@ -651,6 +655,7 @@ async function loadJoinContext() {
     state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
     const linkKind = String(payload?.result?.link_kind || '').trim().toLowerCase();
     state.linkKind = linkKind === 'open' ? 'open' : 'personal';
+    state.verifiedAccessContext = callAccessVerifiedContextFromSession(sessionState);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
@@ -683,6 +688,7 @@ async function startSessionAndJoin() {
   const accessId = normalizeAccessId(route.params.accessId);
   const result = await loginWithCallAccess(accessId, {
     guestName: state.linkKind === 'open' ? state.guestName : '',
+    verifiedContext: state.verifiedAccessContext,
   });
   if (!result.ok) {
     state.joining = false;
