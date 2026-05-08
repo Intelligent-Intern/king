@@ -60,6 +60,8 @@ try {
 
     $standardEmail = (string) $pdo->query("SELECT email FROM users WHERE id = {$standardUserId} LIMIT 1")->fetchColumn();
     $standardName = (string) $pdo->query("SELECT display_name FROM users WHERE id = {$standardUserId} LIMIT 1")->fetchColumn();
+    $adminBefore = $pdo->query("SELECT email, display_name, password_hash, status FROM users WHERE id = {$adminUserId} LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_session_route_guard_assert(is_array($adminBefore), 'expected seeded admin user profile');
 
     $insertSession = $pdo->prepare(
         <<<'SQL'
@@ -272,6 +274,7 @@ SQL
     videochat_call_access_session_route_guard_assert($openAccessId !== '', 'open access id should be present');
 
     $guestCountBeforeOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
+    $guestAuditCountBeforeOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'temporary_account_created'")->fetchColumn();
     $openLoggedIn = $callSessionRoute(
         $openAccessId,
         ['Authorization' => 'Bearer sess_route_guard_admin', 'User-Agent' => 'route-guard-open', 'Content-Type' => 'application/json'],
@@ -287,6 +290,55 @@ SQL
     videochat_call_access_session_route_guard_assert((string) ($openUser['account_type'] ?? '') === 'account', 'logged-in open link should keep account type');
     $guestCountAfterOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     videochat_call_access_session_route_guard_assert($guestCountAfterOpenJoin === $guestCountBeforeOpenJoin, 'logged-in open link must not create a temporary guest identity');
+    $guestAuditCountAfterOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'temporary_account_created'")->fetchColumn();
+    videochat_call_access_session_route_guard_assert($guestAuditCountAfterOpenJoin === $guestAuditCountBeforeOpenJoin, 'logged-in open link must not audit a temporary account creation');
+    $ignoredGuestRows = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE display_name = 'Route Guard Guest'")->fetchColumn();
+    videochat_call_access_session_route_guard_assert($ignoredGuestRows === 0, 'logged-in open link must not persist the ignored guest name as a temporary account');
+    $adminAfter = $pdo->query("SELECT email, display_name, password_hash, status FROM users WHERE id = {$adminUserId} LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_session_route_guard_assert(is_array($adminAfter), 'admin user should still exist after logged-in open link');
+    foreach (['email', 'display_name', 'password_hash', 'status'] as $field) {
+        videochat_call_access_session_route_guard_assert((string) ($adminAfter[$field] ?? '') === (string) ($adminBefore[$field] ?? ''), "logged-in open link must not overwrite admin {$field}");
+    }
+    $openSessionBinding = $pdo->prepare(
+        <<<'SQL'
+SELECT user_id, link_kind
+FROM call_access_sessions
+WHERE session_id = :session_id
+LIMIT 1
+SQL
+    );
+    $openSessionBinding->execute([':session_id' => 'sess_route_guard_open_guest']);
+    $openSessionBindingRow = $openSessionBinding->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_session_route_guard_assert(is_array($openSessionBindingRow), 'logged-in open link should persist one account call-access session');
+    videochat_call_access_session_route_guard_assert((int) ($openSessionBindingRow['user_id'] ?? 0) === $adminUserId, 'logged-in open link session must bind the authenticated account');
+    videochat_call_access_session_route_guard_assert((string) ($openSessionBindingRow['link_kind'] ?? '') === 'open', 'logged-in open link session kind mismatch');
+    $guestBindings = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_access_sessions
+INNER JOIN users ON users.id = call_access_sessions.user_id
+WHERE call_access_sessions.call_id = :call_id
+  AND lower(users.email) LIKE 'guest+%@videochat.local'
+SQL
+    );
+    $guestBindings->execute([':call_id' => $openCallId]);
+    videochat_call_access_session_route_guard_assert((int) $guestBindings->fetchColumn() === 0, 'logged-in open link must not bind any temporary guest session');
+    $guestParticipants = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+INNER JOIN users ON users.id = call_participants.user_id
+WHERE call_participants.call_id = :call_id
+  AND lower(users.email) LIKE 'guest+%@videochat.local'
+SQL
+    );
+    $guestParticipants->execute([':call_id' => $openCallId]);
+    videochat_call_access_session_route_guard_assert((int) $guestParticipants->fetchColumn() === 0, 'logged-in open link must not persist a temporary guest participant');
+    $accountParticipant = $pdo->prepare(
+        'SELECT invite_state FROM call_participants WHERE call_id = :call_id AND user_id = :user_id LIMIT 1'
+    );
+    $accountParticipant->execute([':call_id' => $openCallId, ':user_id' => $adminUserId]);
+    videochat_call_access_session_route_guard_assert(trim((string) ($accountParticipant->fetchColumn() ?: '')) !== '', 'logged-in open link should persist the account participant without guest merge');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-session-route-guard-contract] PASS\n");

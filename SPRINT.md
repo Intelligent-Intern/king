@@ -1828,8 +1828,8 @@ lacks `pdo_sqlite`.
 - [x] Wrong host name reveals no personal data
 - [x] Account data is updated only after email confirmation
 - [x] Email confirmation goes only to logged-in account
-- [ ] Temporary account data is not persisted unnecessarily
-- [ ] Temporary accounts are removed when logged-in user uses anonymous link
+- [x] Temporary account data is not persisted unnecessarily
+- [x] Temporary accounts are removed when logged-in user uses anonymous link
 - [x] Temporary accounts are not merged with wrong registered account
 - [x] Audit logs contain only necessary personal data
 - [x] Frontend state contains no foreign link data
@@ -1840,6 +1840,13 @@ lacks `pdo_sqlite`.
 - [x] Host-name verification does not allow host enumeration
 - [x] Rate limits protect sensitive verification paths
 - [x] Privacy-relevant actions are logged
+
+Proof: `call-access-session-route-guard-contract.php` now drives a logged-in
+anonymous/open link while a guest name is present, then proves no `guest+...`
+temporary user row is added, no `temporary_account_created` audit event is
+written, the ignored guest name is not persisted, the call-access session and
+call participant are bound to the authenticated registered account, and that
+account's email, display name, password hash, and status are unchanged.
 
 ## 15. Security and Manipulation Cases
 
@@ -2349,7 +2356,7 @@ safe-screen case.
 
 ## 27. Call Deletion
 
-- [ ] Owner deletes call before any guest joins
+- [x] Owner deletes call before any guest joins
 - [x] Owner deletes call while guests are in lobby
 - [x] Owner deletes call while registered users are inside
 - [x] Owner deletes call while temporary guests are inside
@@ -2385,7 +2392,11 @@ direct-join denial and deleted personalized-link UI safe-screen case;
 safe-screen case. `call-guest-cleanup-lifecycle-remaining-contract` additionally
 deletes a call with a pending lobby guest, an admitted temporary guest, and an
 active registered participant, proving guest cleanup, registered account
-preservation, access-link removal, and lobby/participant state clearing.
+preservation, access-link removal, and lobby/participant state clearing. The
+same contract now deletes a call after a temporary personalized guest account
+and link exist but before any guest has a session or joined state, proving the
+unjoined guest is disabled, stale link reuse is denied, registered users are
+preserved, and sanitized guest-cleanup audit records zero revoked sessions.
 
 ## 28. Explicit Call Ending
 
@@ -2627,7 +2638,7 @@ backend paths, event types, live probe expectations, and sensitive-data guards.
 - [x] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
 - [x] Registered logged-in user opens personalized link with strong mismatch, enters correct host name, re-enters data, confirms email, account is updated
 - [x] Same personalized link is opened by second logged-in account and review flag is created
-- [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
+- [x] Logged-in user opens anonymous link and joins as logged-in user with own rights
 - [x] Not logged-in user opens anonymous link, temporary account is created, user lands in lobby, is admitted, can rejoin
 - [x] System admin joins foreign active call without invitation
 - [x] Organization admin joins own organization active call without invitation
@@ -2662,6 +2673,11 @@ without issuing sessions, rescheduled stale links are denied while the fresh
 personalized link uses current least-privilege permissions, deleted calls block
 temporary rejoin and stale links, and explicit owner end delivers an ended
 lifecycle state to multiple participant workspaces.
+`call-access-session-route-guard-contract.php` pins the logged-in anonymous
+link path to the authenticated account without temporary-account persistence or
+profile overwrite, and `call-guest-cleanup-lifecycle-remaining-contract.php`
+now covers delete-before-join temporary access revocation with sanitized
+cleanup audit.
 
 ---
 
@@ -2800,15 +2816,15 @@ against duplicate join/session request loops.
 
 ## Test Group: Anonymous Link Logged In
 
-- [ ] `e2e_anon_logged_in_001_logged_in_user_uses_own_account`
-- [ ] `e2e_anon_logged_in_002_temp_account_discarded`
-- [ ] `e2e_anon_logged_in_003_logged_in_rights_used`
+- [x] `e2e_anon_logged_in_001_logged_in_user_uses_own_account`
+- [x] `e2e_anon_logged_in_002_temp_account_discarded`
+- [x] `e2e_anon_logged_in_003_logged_in_rights_used`
 - [ ] `e2e_anon_logged_in_004_system_admin_can_join_active_call`
 - [ ] `e2e_anon_logged_in_005_org_admin_can_join_own_org_call`
 - [ ] `e2e_anon_logged_in_006_org_admin_cannot_join_foreign_org_call`
 - [ ] `e2e_anon_logged_in_007_guest_list_user_can_join`
 - [ ] `e2e_anon_logged_in_008_non_guest_user_lands_in_lobby`
-- [ ] `e2e_anon_logged_in_009_anonymous_link_does_not_overwrite_account`
+- [x] `e2e_anon_logged_in_009_anonymous_link_does_not_overwrite_account`
 - [ ] `e2e_anon_logged_in_010_invalid_anonymous_link_rejected`
 
 ## Test Group: Anonymous Link Logged Out
@@ -3016,7 +3032,7 @@ and the IAM CI static gate.
 
 ## Test Group: Call Deletion
 
-- [ ] `e2e_delete_001_owner_deletes_call_before_guests_join`
+- [x] `e2e_delete_001_owner_deletes_call_before_guests_join`
 - [x] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
 - [x] `e2e_delete_003_owner_deletes_call_with_registered_users_inside`
 - [x] `e2e_delete_004_owner_deletes_call_with_temp_guests_inside`
@@ -3154,7 +3170,7 @@ and the IAM CI static gate.
 - [ ] Tests cover invitation invalidation
 - [x] Tests cover guest account cleanup
 - [x] Tests cover call rescheduling
-- [ ] Tests cover call deletion
+- [x] Tests cover call deletion
 - [ ] Tests cover explicit call ending
 - [x] Tests cover implicit owner-absence ending
 - [x] Owner timeout tests do not wait 15 real minutes
