@@ -2,9 +2,63 @@
 
 declare(strict_types=1);
 
+function videochat_edge_call_app_normalize_origin(string $origin): string
+{
+    $trimmed = trim($origin);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    $parts = parse_url($trimmed);
+    if (!is_array($parts)) {
+        return '';
+    }
+
+    $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+    $host = strtolower((string) ($parts['host'] ?? ''));
+    if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+        return '';
+    }
+    if (preg_match('/^[a-z0-9.-]+$|^\[[a-f0-9:.]+\]$/i', $host) !== 1) {
+        return '';
+    }
+
+    $origin = $scheme . '://' . $host;
+    $port = isset($parts['port']) ? (int) $parts['port'] : 0;
+    if ($port > 0 && !(($scheme === 'https' && $port === 443) || ($scheme === 'http' && $port === 80))) {
+        $origin .= ':' . $port;
+    }
+
+    return $origin;
+}
+
+function videochat_edge_call_app_frame_ancestor(string $allowedEmbedderOrigin): string
+{
+    $normalized = videochat_edge_call_app_normalize_origin($allowedEmbedderOrigin);
+    return $normalized !== '' ? $normalized : "'none'";
+}
+
+function videochat_edge_call_app_content_security_policy(string $allowedEmbedderOrigin): string
+{
+    $frameAncestor = videochat_edge_call_app_frame_ancestor($allowedEmbedderOrigin);
+    return implode('; ', [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "connect-src 'self'",
+        "img-src 'self' data: blob:",
+        "font-src 'self'",
+        "base-uri 'none'",
+        "object-src 'none'",
+        "frame-src 'none'",
+        "form-action 'self'",
+        'frame-ancestors ' . $frameAncestor,
+    ]);
+}
+
 function videochat_edge_serve_call_app_static($client, array $request, string $callAppRoot, callable $writeResponse, callable $contentType, string $assetVersion, string $allowedEmbedderOrigin = ''): void
 {
-    $allowedEmbedderOrigin = trim($allowedEmbedderOrigin);
+    $allowedEmbedderOrigin = videochat_edge_call_app_normalize_origin($allowedEmbedderOrigin);
     $corsHeaders = [
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
@@ -56,8 +110,7 @@ function videochat_edge_serve_call_app_static($client, array $request, string $c
         'X-Content-Type-Options' => 'nosniff',
     ] + $corsHeaders;
     if ($isHtmlEntrypoint) {
-        $headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:"
-            . ($allowedEmbedderOrigin !== '' ? '; frame-ancestors ' . $allowedEmbedderOrigin : '');
+        $headers['Content-Security-Policy'] = videochat_edge_call_app_content_security_policy($allowedEmbedderOrigin);
         if ($allowedEmbedderOrigin !== '') {
             $headers['Allow-CSP-From'] = $allowedEmbedderOrigin;
         }

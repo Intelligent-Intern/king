@@ -95,7 +95,7 @@ assert.match(
 
 assert.match(
   callAppStaticSource,
-  /Content-Security-Policy'[\s\S]*default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:/,
+  /function videochat_edge_call_app_content_security_policy[\s\S]*"default-src 'self'"[\s\S]*"script-src 'self' 'unsafe-inline'"[\s\S]*"style-src 'self' 'unsafe-inline'"[\s\S]*"connect-src 'self'"[\s\S]*"img-src 'self' data: blob:"[\s\S]*Content-Security-Policy'\] = videochat_edge_call_app_content_security_policy/s,
   'Call App static edge must deliver a CSP at least as strong as the iframe csp attribute',
 );
 
@@ -107,7 +107,7 @@ assert.match(
 
 assert.match(
   callAppStaticSource,
-  /frame-ancestors ' \. \$allowedEmbedderOrigin/,
+  /function videochat_edge_call_app_content_security_policy[\s\S]*'frame-ancestors ' \. \$frameAncestor/,
   'Call App static edge must restrict embedders to the trusted app origin',
 );
 
@@ -125,7 +125,7 @@ assert.doesNotMatch(
 
 assert.match(
   edgeSource,
-  /\$isCallAppAsset = str_starts_with\(\$path, '\/call-app\/'\)[\s\S]*Content-Security-Policy[\s\S]*frame-ancestors 'self'/,
+  /\$isCallAppAsset = str_starts_with\(\$path, '\/call-app\/'\)[\s\S]*videochat_edge_call_app_content_security_policy/,
   'edge must enforce Call App CSP on the served response instead of iframe csp',
 );
 

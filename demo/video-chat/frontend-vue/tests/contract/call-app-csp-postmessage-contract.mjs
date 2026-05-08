@@ -51,7 +51,7 @@ assert.match(
 
 assert.match(
   callAppStaticSource,
-  /Content-Security-Policy'[\s\S]*connect-src 'self'[\s\S]*img-src 'self' data: blob:[\s\S]*frame-ancestors ' \. \$allowedEmbedderOrigin/s,
+  /function videochat_edge_call_app_content_security_policy[\s\S]*"connect-src 'self'"[\s\S]*"img-src 'self' data: blob:"[\s\S]*'frame-ancestors ' \. \$frameAncestor[\s\S]*Content-Security-Policy'\] = videochat_edge_call_app_content_security_policy/s,
   'Call App static CSP must be compatible with the whiteboard host and allow only the configured app embedder origin',
 );
 

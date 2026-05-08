@@ -82,6 +82,45 @@ expect_http_code() {
   log "${label}: HTTP ${code}"
 }
 
+expect_response_header_contains() {
+  local label="$1" url="$2" header_name="$3" expected_value="$4"
+  local headers code header_value
+  headers="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o /dev/null -D "${headers}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected HTTP 200 while checking ${header_name}, got ${code:-none}"
+  fi
+  header_value="$(awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { sub("^[^:]*:[[:space:]]*", "", $0); gsub("\r", "", $0); print $0; exit }' "${headers}")"
+  if [[ -z "${header_value}" || "${header_value}" != *"${expected_value}"* ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected ${header_name} to contain ${expected_value}"
+  fi
+  rm -f "${headers}"
+  log "${label}: ${header_name} contains ${expected_value}"
+}
+
+expect_response_header_absent() {
+  local label="$1" url="$2" header_name="$3"
+  local headers code
+  headers="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o /dev/null -D "${headers}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected HTTP 200 while checking ${header_name}, got ${code:-none}"
+  fi
+  if awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { found = 1 } END { exit found ? 0 : 1 }' "${headers}"; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: ${header_name} must not be present"
+  fi
+  rm -f "${headers}"
+  log "${label}: ${header_name} absent"
+}
+
 public_get_json() {
   local label="$1" url="$2" output code
   output="$(mktemp)"
@@ -729,6 +768,13 @@ expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
 expect_http_code call-app-whiteboard-host 200 "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
 expect_http_code call-app-whiteboard-path 200 "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
+for call_app_url in "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"; do
+  expect_response_header_contains call-app-frame-ancestor "${call_app_url}" Content-Security-Policy "frame-ancestors https://${DEPLOY_APP_DOMAIN}"
+  expect_response_header_contains call-app-script-csp "${call_app_url}" Content-Security-Policy "script-src 'self'"
+  expect_response_header_contains call-app-connect-csp "${call_app_url}" Content-Security-Policy "connect-src 'self'"
+  expect_response_header_contains call-app-embedded-csp "${call_app_url}" Allow-CSP-From "https://${DEPLOY_APP_DOMAIN}"
+  expect_response_header_absent call-app-x-frame-options "${call_app_url}" X-Frame-Options
+done
 
 health_payload="$(public_get_json "api health" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload
