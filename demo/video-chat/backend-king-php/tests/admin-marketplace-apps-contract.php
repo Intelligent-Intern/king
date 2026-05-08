@@ -26,6 +26,11 @@ function videochat_admin_marketplace_decode(array $response): array
 }
 
 try {
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        fwrite(STDOUT, "[admin-marketplace-apps-contract] SKIP: PDO sqlite driver not available\n");
+        exit(0);
+    }
+
     $databasePath = sys_get_temp_dir() . '/videochat-admin-marketplace-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
         @unlink($databasePath);
@@ -94,7 +99,7 @@ try {
         ],
     ];
 
-    $emptyList = videochat_handle_marketplace_routes(
+    $catalogBackedList = videochat_handle_marketplace_routes(
         '/api/admin/marketplace/apps',
         'GET',
         ['method' => 'GET', 'uri' => '/api/admin/marketplace/apps'],
@@ -104,11 +109,19 @@ try {
         $decodeJsonBody,
         $openDatabase
     );
-    videochat_admin_marketplace_assert(is_array($emptyList), 'empty list response must be an array');
-    videochat_admin_marketplace_assert((int) ($emptyList['status'] ?? 0) === 200, 'empty list status should be 200');
-    $emptyPayload = videochat_admin_marketplace_decode($emptyList);
-    videochat_admin_marketplace_assert((string) ($emptyPayload['status'] ?? '') === 'ok', 'empty list payload status mismatch');
-    videochat_admin_marketplace_assert((int) (($emptyPayload['pagination'] ?? [])['total'] ?? -1) === 0, 'empty list total should be 0');
+    videochat_admin_marketplace_assert(is_array($catalogBackedList), 'catalog-backed list response must be an array');
+    videochat_admin_marketplace_assert((int) ($catalogBackedList['status'] ?? 0) === 200, 'catalog-backed list status should be 200');
+    $catalogBackedPayload = videochat_admin_marketplace_decode($catalogBackedList);
+    videochat_admin_marketplace_assert((string) ($catalogBackedPayload['status'] ?? '') === 'ok', 'catalog-backed list payload status mismatch');
+    videochat_admin_marketplace_assert((int) (($catalogBackedPayload['pagination'] ?? [])['total'] ?? -1) === 1, 'catalog-backed list total should include Whiteboard');
+    $catalogOnlyApp = is_array(($catalogBackedPayload['apps'][0] ?? null)) ? $catalogBackedPayload['apps'][0] : [];
+    videochat_admin_marketplace_assert((bool) ($catalogOnlyApp['catalog_only'] ?? false) === true, 'catalog-backed Whiteboard row must be marked catalog-only');
+    videochat_admin_marketplace_assert((string) (($catalogOnlyApp['call_app_catalog'] ?? [])['app_key'] ?? '') === 'whiteboard', 'catalog-backed list must expose Whiteboard Call App');
+    videochat_admin_marketplace_assert((string) ((($catalogOnlyApp['call_app_catalog'] ?? [])['organization'] ?? [])['status'] ?? '') === 'not_installed', 'catalog-backed Whiteboard should start as not installed');
+    videochat_admin_marketplace_assert(
+        (bool) (((($catalogOnlyApp['call_app_catalog'] ?? [])['organization_actions'] ?? [])['add_to_organization'] ?? [])['available'] ?? false) === true,
+        'catalog-backed Whiteboard must expose an add-to-organization action before install'
+    );
 
     $invalidCreate = videochat_handle_marketplace_routes(
         '/api/admin/marketplace/apps',
