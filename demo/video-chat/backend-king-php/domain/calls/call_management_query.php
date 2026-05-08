@@ -78,14 +78,61 @@ SQL
     ];
 }
 
-function videochat_can_edit_call(string $authRole, int $authUserId, int $ownerUserId): bool
+function videochat_user_has_system_admin_call_rights(PDO $pdo, int $authUserId, string $authRole): bool
 {
-    $role = strtolower(trim($authRole));
-    if ($role === 'admin') {
-        return true;
+    if ($authUserId <= 0 || strtolower(trim($authRole)) !== 'admin') {
+        return false;
     }
 
-    return $authUserId > 0 && $ownerUserId > 0 && $authUserId === $ownerUserId;
+    try {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT users.email, users.password_hash, users.status, roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.id = :user_id
+LIMIT 1
+SQL
+        );
+        $query->execute([':user_id' => $authUserId]);
+        $row = $query->fetch();
+    } catch (Throwable) {
+        return false;
+    }
+    if (!is_array($row)) {
+        return false;
+    }
+
+    $roleSlug = strtolower(trim((string) ($row['role_slug'] ?? '')));
+    $status = strtolower(trim((string) ($row['status'] ?? '')));
+    if ($roleSlug !== 'admin' || $status !== 'active') {
+        return false;
+    }
+
+    $email = strtolower(trim((string) ($row['email'] ?? '')));
+    $passwordHash = is_string($row['password_hash'] ?? null) ? trim((string) $row['password_hash']) : '';
+    if ($passwordHash === '' && str_starts_with($email, 'guest+') && str_ends_with($email, '@videochat.local')) {
+        return false;
+    }
+
+    return true;
+}
+
+function videochat_can_edit_call(string $authRole, int $authUserId, int $ownerUserId, ?PDO $pdo = null): bool
+{
+    $role = strtolower(trim($authRole));
+    $isOwner = $authUserId > 0 && $ownerUserId > 0 && $authUserId === $ownerUserId;
+    if ($isOwner) {
+        return true;
+    }
+    if ($role !== 'admin') {
+        return false;
+    }
+    if ($pdo instanceof PDO) {
+        return videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    }
+
+    return true;
 }
 
 function videochat_user_is_call_moderator(PDO $pdo, string $callId, int $authUserId): bool
@@ -116,7 +163,7 @@ SQL
 
 function videochat_can_administer_call(PDO $pdo, string $callId, string $authRole, int $authUserId, int $ownerUserId): bool
 {
-    if (videochat_can_edit_call($authRole, $authUserId, $ownerUserId)) {
+    if (videochat_can_edit_call($authRole, $authUserId, $ownerUserId, $pdo)) {
         return true;
     }
 
@@ -368,7 +415,8 @@ function videochat_update_call_participant_role(
     string $authRole,
     ?int $tenantId = null
 ): array {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -397,7 +445,7 @@ function videochat_update_call_participant_role(
         ];
     }
 
-    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    $isAdmin = $isSystemAdmin;
     $isOwner = $authUserId > 0 && $authUserId === (int) ($existingCall['owner_user_id'] ?? 0);
     $canAdministerCall = videochat_can_administer_call(
         $pdo,
@@ -670,7 +718,8 @@ SQL
  */
 function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
 {
-    $call = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $call = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($call === null) {
         return [
             'ok' => false,
@@ -680,8 +729,7 @@ function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, 
         ];
     }
 
-    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
-    if (!$isAdmin) {
+    if (!$isSystemAdmin) {
         $isOwner = $authUserId > 0 && $authUserId === (int) ($call['owner_user_id'] ?? 0);
         $participantCheck = $pdo->prepare(
             <<<'SQL'
