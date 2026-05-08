@@ -182,6 +182,10 @@ try {
         'websocket'
     );
     videochat_call_access_session_assert((bool) ($personalAuth['ok'] ?? false), 'personal access session should authenticate for websocket');
+    videochat_call_access_session_assert((int) (($personalAuth['tenant'] ?? [])['id'] ?? 0) > 0, 'personal access session should keep the authenticated user tenant context');
+    $primaryCallRow = videochat_fetch_call_for_update($pdo, $primaryCallId);
+    videochat_call_access_session_assert(is_array($primaryCallRow), 'primary call row should be fetchable');
+    videochat_call_access_session_assert(($primaryCallRow['tenant_id'] ?? null) === null, 'regression setup requires a legacy tenantless call');
 
     $pendingResolution = videochat_realtime_resolve_connection_rooms($personalAuth, $primaryCallId, $openDatabase, $primaryCallId);
     videochat_call_access_session_assert((string) ($pendingResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'invited personal session should start in waiting room');
