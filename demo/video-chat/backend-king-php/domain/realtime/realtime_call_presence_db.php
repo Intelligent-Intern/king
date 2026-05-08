@@ -46,6 +46,11 @@ function videochat_realtime_presence_db_ttl_ms(): int
     return 45_000;
 }
 
+function videochat_realtime_presence_db_retention_ms(): int
+{
+    return 20 * 60 * 1000;
+}
+
 function videochat_realtime_presence_db_bootstrap(PDO $pdo): void
 {
     $pdo->exec(
@@ -73,7 +78,7 @@ function videochat_realtime_presence_db_prune(PDO $pdo, ?int $nowMs = null): voi
     $effectiveNowMs = is_int($nowMs) && $nowMs > 0 ? $nowMs : videochat_realtime_presence_db_now_ms();
     $statement = $pdo->prepare('DELETE FROM realtime_presence_connections WHERE last_seen_at_ms < :cutoff_ms');
     $statement->execute([
-        ':cutoff_ms' => $effectiveNowMs - (videochat_realtime_presence_db_ttl_ms() * 2),
+        ':cutoff_ms' => $effectiveNowMs - max(videochat_realtime_presence_db_ttl_ms() * 2, videochat_realtime_presence_db_retention_ms()),
     ]);
 }
 

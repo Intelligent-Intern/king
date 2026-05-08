@@ -15,6 +15,7 @@ function requireContains(source, needle, label) {
 }
 
 const ownerAbsence = read('backend-king-php/domain/realtime/realtime_owner_absence.php');
+const presenceDb = read('backend-king-php/domain/realtime/realtime_call_presence_db.php');
 const roomSnapshot = read('backend-king-php/domain/realtime/realtime_room_snapshot.php');
 const kingParticipantsHelper = read('backend-king-php/tests/call-access-king-participants-helper.php');
 const ownerTimeoutContract = read('backend-king-php/tests/call-access-owner-timeout-contract.php');
@@ -32,6 +33,9 @@ requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 
 requireContains(ownerAbsence, "require_once __DIR__ . '/../calls/call_lifecycle.php';", 'owner absence terminal lifecycle import');
 requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence snapshot clock');
 requireContains(ownerAbsence, 'function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence transition clock');
+requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_stale_owner_left_at_ms(', 'stale owner presence clock');
+requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_mark_stale_owner_left(', 'stale owner left marker persistence');
+requireContains(ownerAbsence, 'videochat_realtime_owner_absence_mark_stale_owner_left($pdo', 'stale owner absence materializes left_at');
 requireContains(ownerAbsence, "'status' => 'owner_present'", 'owner return cancellation status');
 requireContains(ownerAbsence, "'status' => 'no_participants'", 'no-participant non-ending state');
 requireContains(ownerAbsence, '$endsAtMs = $absentSinceMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;', '15-minute total owner absence deadline');
@@ -41,6 +45,8 @@ requireContains(ownerAbsence, "$status = 'ended';", 'implicit ended state');
 requireContains(ownerAbsence, "SET status = 'ended',", 'persisted implicit call ending');
 requireContains(ownerAbsence, 'videochat_apply_call_terminal_lifecycle(', 'implicit end uses terminal call lifecycle cleanup');
 requireContains(ownerAbsence, "$payload['ended_reason'] = 'owner_absent_timeout';", 'owner absence end reason');
+requireContains(presenceDb, 'function videochat_realtime_presence_db_retention_ms(): int', 'presence retention helper');
+requireContains(presenceDb, '20 * 60 * 1000', 'presence rows retained long enough for owner absence detection');
 
 requireContains(roomSnapshot, "require_once __DIR__ . '/realtime_owner_absence.php';", 'room snapshot owner-absence helper import');
 requireContains(roomSnapshot, 'function videochat_realtime_db_room_participants(callable $openDatabase, array $connection, ?int $nowMs = null): array', 'CI-safe room participant clock');
@@ -58,6 +64,12 @@ requireContains(kingParticipantsHelper, 'videochat_realtime_presence_db_upsert($
 requireContains(kingParticipantsHelper, 'videochat_realtime_remove_call_presence(static fn (): PDO => $pdo, $effectiveConnection);', 'participant leave removes realtime presence');
 
 requireContains(ownerTimeoutContract, 'videochat_iam_king_participant_client(', 'owner-timeout contract uses simulated clients');
+requireContains(ownerTimeoutContract, "'owner_tab_close'", 'owner tab close proof');
+requireContains(ownerTimeoutContract, "'owner_browser_crash'", 'owner browser crash proof');
+requireContains(ownerTimeoutContract, "'owner_network_loss_countdown_a'", 'owner network disconnect synchronized proof');
+requireContains(ownerTimeoutContract, "'participant_refresh_during_countdown'", 'participant refresh countdown proof');
+requireContains(ownerTimeoutContract, "'owner_rejoin_before_countdown'", 'owner rejoin before countdown proof');
+requireContains(ownerTimeoutContract, 'videochat_realtime_presence_db_ttl_ms()', 'stale owner heartbeat TTL proof');
 requireContains(ownerTimeoutContract, 'VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS - 1000', 'before-countdown boundary proof');
 requireContains(ownerTimeoutContract, 'VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;', 'countdown start boundary proof');
 requireContains(ownerTimeoutContract, "($beforeCountdown['status'] ?? '') === 'monitoring'", 'monitoring assertion');
@@ -77,6 +89,8 @@ requireContains(ownerAbsenceUiState, "state.status === 'countdown' && state.coun
 requireContains(ownerAbsenceUiState, "state.status === 'ended'", 'frontend ended visibility rule');
 requireContains(ownerAbsenceUiState, 'formatOwnerAbsenceCountdown', 'frontend countdown formatter');
 requireContains(ownerAbsenceBanner, 'data-testid="owner-absence-countdown"', 'browser-visible owner absence banner');
+requireContains(ownerAbsenceBanner, 'role="status"', 'owner absence participant notification role');
+requireContains(ownerAbsenceBanner, 'aria-live="polite"', 'owner absence participant live-region notification');
 requireContains(ownerAbsenceBanner, "calls.workspace.owner_absence_countdown", 'localized countdown message');
 requireContains(ownerAbsenceBanner, "calls.workspace.owner_absence_ended", 'localized ended message');
 requireContains(callWorkspaceTemplate, '<OwnerAbsenceCountdownBanner :owner-absence="ownerAbsenceState" />', 'workspace owner-absence banner mounting');

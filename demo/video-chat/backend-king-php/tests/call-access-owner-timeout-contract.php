@@ -99,6 +99,77 @@ function videochat_iam_owner_timeout_assert_auth_denied(PDO $pdo, string $sessio
     videochat_iam_rejoin_contract_assert(!(bool) ($auth['ok'] ?? true), 'stale call-access session must not authenticate after owner-timeout end: ' . $sessionId, $label);
 }
 
+function videochat_iam_owner_timeout_prepare_call(
+    PDO $pdo,
+    int $ownerUserId,
+    array $participantUserIds,
+    int $tenantId,
+    string $title,
+    string $label
+): array {
+    $call = videochat_iam_rejoin_contract_create_active_call($pdo, $ownerUserId, $participantUserIds, $tenantId, $title);
+    foreach ($participantUserIds as $participantUserId) {
+        videochat_iam_rejoin_contract_set_invite_state($pdo, $call['call_id'], (int) $participantUserId, 'allowed');
+    }
+
+    return $call;
+}
+
+function videochat_iam_owner_timeout_connect_room(
+    PDO $pdo,
+    array &$presenceState,
+    string $roomId,
+    string $callId,
+    int $ownerUserId,
+    array $participantUserIds,
+    int $tenantId,
+    int $startMs,
+    string $suffix
+): array {
+    $ownerConnection = videochat_iam_king_participant_client(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $callId,
+        $ownerUserId,
+        'IAM Owner',
+        'admin',
+        'owner',
+        $tenantId,
+        $startMs,
+        'owner-' . $suffix
+    );
+    $participantConnections = [];
+    foreach (array_values($participantUserIds) as $index => $participantUserId) {
+        $participantConnections[] = videochat_iam_king_participant_client(
+            $pdo,
+            $presenceState,
+            $roomId,
+            $callId,
+            (int) $participantUserId,
+            'IAM Owner Timeout Participant ' . ($index + 1),
+            'user',
+            'participant',
+            $tenantId,
+            $startMs + 1000 + ($index * 1000),
+            'participant-' . $suffix . '-' . ($index + 1)
+        );
+    }
+
+    return [$ownerConnection, $participantConnections];
+}
+
+function videochat_iam_owner_timeout_owner_absence_from_snapshot(
+    PDO $pdo,
+    array $presenceState,
+    array $viewerConnection,
+    int $nowMs,
+    string $reason
+): array {
+    $snapshot = videochat_iam_king_participant_snapshot($pdo, $presenceState, $viewerConnection, $nowMs, $reason);
+    return (array) (($snapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
+}
+
 function videochat_iam_owner_timeout_create_temp_guest(PDO $pdo, string $name, int $tenantId, string $label): array
 {
     $guest = videochat_create_guest_user_for_call_access($pdo, $name, $tenantId);
@@ -160,6 +231,120 @@ try {
         $tenantId,
         $ids['organization_id']
     );
+    $secondParticipantUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'iam-owner-timeout-second-participant@example.test',
+        'IAM Owner Timeout Second Participant',
+        $tenantId,
+        $ids['organization_id']
+    );
+
+    $tabCloseCall = videochat_iam_owner_timeout_prepare_call($pdo, $ownerUserId, [$participantUserId], $tenantId, 'IAM Owner Tab Close Proof', $label);
+    $tabClosePresence = videochat_presence_state_init();
+    $tabCloseStartMs = 1_778_100_000_000;
+    [$tabCloseOwner, $tabCloseParticipants] = videochat_iam_owner_timeout_connect_room(
+        $pdo,
+        $tabClosePresence,
+        $tabCloseCall['room_id'],
+        $tabCloseCall['call_id'],
+        $ownerUserId,
+        [$participantUserId],
+        $tenantId,
+        $tabCloseStartMs,
+        'tab-close'
+    );
+    $tabCloseLeftMs = $tabCloseStartMs + 60_000;
+    videochat_iam_king_participant_leave($pdo, $tabClosePresence, $tabCloseOwner, $tabCloseLeftMs);
+    videochat_iam_king_participant_touch($pdo, $tabCloseParticipants[0], $tabCloseLeftMs + 1000);
+    $tabCloseAbsence = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $tabClosePresence, $tabCloseParticipants[0], $tabCloseLeftMs + 1000, 'owner_tab_close');
+    videochat_iam_rejoin_contract_assert((string) ($tabCloseAbsence['status'] ?? '') === 'monitoring', 'owner tab close should start owner-absence monitoring', $label);
+    videochat_iam_rejoin_contract_assert((int) ($tabCloseAbsence['absent_since_ms'] ?? 0) === $tabCloseLeftMs, 'owner tab close should use server leave time as absent_since', $label);
+
+    $staleCall = videochat_iam_owner_timeout_prepare_call($pdo, $ownerUserId, [$participantUserId], $tenantId, 'IAM Owner Crash Rejoin Proof', $label);
+    $stalePresence = videochat_presence_state_init();
+    $staleStartMs = 1_778_200_000_000;
+    [, $staleParticipants] = videochat_iam_owner_timeout_connect_room(
+        $pdo,
+        $stalePresence,
+        $staleCall['room_id'],
+        $staleCall['call_id'],
+        $ownerUserId,
+        [$participantUserId],
+        $tenantId,
+        $staleStartMs,
+        'stale-owner'
+    );
+    $staleDetectedMs = $staleStartMs + videochat_realtime_presence_db_ttl_ms() + 1000;
+    videochat_iam_king_participant_touch($pdo, $staleParticipants[0], $staleDetectedMs);
+    $staleAbsence = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $stalePresence, $staleParticipants[0], $staleDetectedMs, 'owner_browser_crash');
+    videochat_iam_rejoin_contract_assert((string) ($staleAbsence['status'] ?? '') === 'monitoring', 'owner browser crash should start owner-absence monitoring from stale presence', $label);
+    videochat_iam_rejoin_contract_assert((int) ($staleAbsence['absent_since_ms'] ?? 0) === $staleStartMs + videochat_realtime_presence_db_ttl_ms(), 'owner browser crash should be based on server heartbeat TTL', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_left_at($pdo, $staleCall['call_id'], $ownerUserId) !== '', 'owner browser crash should materialize left_at for refresh-stable countdowns', $label);
+    $preCountdownOwnerReturnMs = $staleStartMs + videochat_realtime_presence_db_ttl_ms() + 5 * 60 * 1000;
+    videochat_iam_king_participant_client(
+        $pdo,
+        $stalePresence,
+        $staleCall['room_id'],
+        $staleCall['call_id'],
+        $ownerUserId,
+        'IAM Owner',
+        'admin',
+        'owner',
+        $tenantId,
+        $preCountdownOwnerReturnMs,
+        'owner-pre-countdown-return'
+    );
+    videochat_iam_king_participant_touch($pdo, $staleParticipants[0], $preCountdownOwnerReturnMs);
+    $preCountdownReturn = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $stalePresence, $staleParticipants[0], $preCountdownOwnerReturnMs, 'owner_rejoin_before_countdown');
+    videochat_iam_rejoin_contract_assert((string) ($preCountdownReturn['status'] ?? '') === 'owner_present', 'owner rejoin before final countdown should cancel owner absence', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_call_status($pdo, $staleCall['call_id']) === 'active', 'owner rejoin before final countdown should keep call active', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_left_at($pdo, $staleCall['call_id'], $ownerUserId) === '', 'owner rejoin before final countdown should clear stale left_at', $label);
+
+    $syncCall = videochat_iam_owner_timeout_prepare_call($pdo, $ownerUserId, [$participantUserId, $secondParticipantUserId], $tenantId, 'IAM Owner Countdown Sync Proof', $label);
+    $syncPresence = videochat_presence_state_init();
+    $syncStartMs = 1_778_300_000_000;
+    [$syncOwner, $syncParticipants] = videochat_iam_owner_timeout_connect_room(
+        $pdo,
+        $syncPresence,
+        $syncCall['room_id'],
+        $syncCall['call_id'],
+        $ownerUserId,
+        [$participantUserId, $secondParticipantUserId],
+        $tenantId,
+        $syncStartMs,
+        'sync'
+    );
+    $syncOwnerLeftMs = $syncStartMs + 60_000;
+    videochat_iam_king_participant_leave($pdo, $syncPresence, $syncOwner, $syncOwnerLeftMs);
+    $syncCountdownMs = $syncOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS;
+    videochat_iam_king_participant_touch($pdo, $syncParticipants[0], $syncCountdownMs);
+    videochat_iam_king_participant_touch($pdo, $syncParticipants[1], $syncCountdownMs);
+    $syncA = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $syncPresence, $syncParticipants[0], $syncCountdownMs, 'owner_network_loss_countdown_a');
+    $syncB = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $syncPresence, $syncParticipants[1], $syncCountdownMs, 'owner_network_loss_countdown_b');
+    videochat_iam_rejoin_contract_assert((string) ($syncA['status'] ?? '') === 'countdown', 'owner network disconnect should enter countdown for participant A', $label);
+    videochat_iam_rejoin_contract_assert((string) ($syncB['status'] ?? '') === 'countdown', 'owner network disconnect should enter countdown for participant B', $label);
+    videochat_iam_rejoin_contract_assert((int) ($syncA['ends_at_ms'] ?? 0) === (int) ($syncB['ends_at_ms'] ?? -1), 'owner absence countdown must be synchronized across participants', $label);
+    videochat_iam_rejoin_contract_assert((int) ($syncA['countdown_remaining_ms'] ?? 0) === VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS, 'synchronized countdown should start with five minutes remaining', $label);
+    $refreshMs = $syncCountdownMs + 30_000;
+    $refreshedConnection = videochat_iam_king_participant_leave($pdo, $syncPresence, $syncParticipants[0], $refreshMs - 1000);
+    $refreshedConnection = videochat_iam_king_participant_client(
+        $pdo,
+        $syncPresence,
+        $syncCall['room_id'],
+        $syncCall['call_id'],
+        $participantUserId,
+        'IAM Owner Timeout Participant 1',
+        'user',
+        'participant',
+        $tenantId,
+        $refreshMs,
+        'participant-refresh'
+    );
+    videochat_iam_king_participant_touch($pdo, $syncParticipants[1], $refreshMs);
+    $refreshAbsence = videochat_iam_owner_timeout_owner_absence_from_snapshot($pdo, $syncPresence, $refreshedConnection, $refreshMs, 'participant_refresh_during_countdown');
+    videochat_iam_rejoin_contract_assert((string) ($refreshAbsence['status'] ?? '') === 'countdown', 'owner absence countdown should survive participant refresh', $label);
+    videochat_iam_rejoin_contract_assert((int) ($refreshAbsence['absent_since_ms'] ?? 0) === $syncOwnerLeftMs, 'participant refresh should preserve owner absent_since', $label);
+    videochat_iam_rejoin_contract_assert((int) ($refreshAbsence['countdown_remaining_ms'] ?? 0) === VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS - 30_000, 'participant refresh should keep countdown on server time', $label);
 
     $call = videochat_iam_rejoin_contract_create_active_call(
         $pdo,
