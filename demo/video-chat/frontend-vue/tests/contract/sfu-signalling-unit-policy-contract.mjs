@@ -49,13 +49,14 @@ try {
     'websocket read failure close policy',
   );
   requireContains(readFailurePolicy, 'if ($isWebSocket) {', 'read failure policy checks websocket tunnel');
+  requireContains(readFailurePolicy, '$closeWebSocketUpstream();', 'read failure policy keeps buffered upstream rejection flushable');
   requireContains(readFailurePolicy, '$closeWebSocketTunnel();', 'read failure policy closes websocket tunnel');
   requireRegex(
     readFailurePolicy,
-    /if \(\$isWebSocket\) \{\s*\$closeWebSocketTunnel\(\);\s*continue;\s*\}/,
-    'read failure policy immediately closes websocket tunnel',
+    /if \(\$stream === \$upstreamStream\) \{\s*\$closeWebSocketUpstream\(\);\s*\$madeProgress = true;\s*continue;\s*\}/,
+    'read failure policy preserves upstream websocket rejection before closing the client side',
   );
-  requireNotContains(readFailurePolicy, '$stream === $upstreamStream && $toClient !== \'\'', 'read failure policy does not keep upstream half-open for buffered client flush');
+  requireContains(readFailurePolicy, '$closeWebSocketTunnel();', 'read failure policy still closes client-side websocket failures');
   requireNotContains(readFailurePolicy, '$stream === $client && $toUpstream !== \'\'', 'read failure policy does not keep client half-open for buffered upstream flush');
 
   const eofPolicy = extractBetween(
@@ -65,13 +66,14 @@ try {
     'websocket EOF close policy',
   );
   requireContains(eofPolicy, 'if ($isWebSocket) {', 'EOF policy checks websocket tunnel');
+  requireContains(eofPolicy, '$closeWebSocketUpstream();', 'EOF policy keeps buffered upstream rejection flushable');
   requireContains(eofPolicy, '$closeWebSocketTunnel();', 'EOF policy closes websocket tunnel');
   requireRegex(
     eofPolicy,
-    /if \(\$isWebSocket\) \{\s*\$closeWebSocketTunnel\(\);\s*\$madeProgress = true;\s*continue;\s*\}/,
-    'EOF policy immediately closes websocket tunnel',
+    /if \(\$stream === \$upstreamStream\) \{\s*\$closeWebSocketUpstream\(\);\s*\$madeProgress = true;\s*continue;\s*\}/,
+    'EOF policy preserves upstream websocket rejection before closing the client side',
   );
-  requireNotContains(eofPolicy, '$stream === $upstreamStream && $toClient !== \'\'', 'EOF policy does not keep upstream half-open for buffered client flush');
+  requireContains(eofPolicy, '$closeWebSocketTunnel();', 'EOF policy still closes client-side websocket EOF');
   requireNotContains(eofPolicy, '$stream === $client && $toUpstream !== \'\'', 'EOF policy does not keep client half-open for buffered upstream flush');
 
   requireContains(
