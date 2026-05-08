@@ -90,9 +90,15 @@ assert.match(
 );
 
 assert.match(
+  whiteboardSource,
+  /const cursorOverlay = document\.getElementById\('cursorOverlay'\)[\s\S]*function syncCursorOverlay[\s\S]*remote-cursor-label[\s\S]*label\.textContent = displayNameLabel\(cursor\.label \|\| cursor\.display_name\)[\s\S]*cursorOverlay\.replaceChildren\(\.\.\.labels\)/s,
+  'whiteboard runtime must render authorized remote cursor names into the DOM overlay, not only into canvas pixels',
+);
+
+assert.match(
   e2eSource,
-  /cursorRegionBefore[\s\S]*cursorRegionWithOwner[\s\S]*toBeGreaterThan[\s\S]*revoke\('participant'\)[\s\S]*cursorRegionAfterRevoke/s,
-  'whiteboard E2E must prove named remote cursor appearance and removal after participant revocation',
+  /remote-cursor-label'\)\)\.toHaveText\('Owner'\)[\s\S]*revoke\('participant'\)[\s\S]*remote-cursor-label'\)\)\.toHaveCount\(0\)/s,
+  'whiteboard E2E must prove named remote cursor labels appear and are removed after participant revocation',
 );
 
 console.log('[call-app-whiteboard-cursors-access-contract] PASS');

@@ -459,6 +459,10 @@ Tickets:
       named remote cursors visible only for authorized participants, and clears
       cursor/selection state after revocation:
       `call-app-whiteboard-cursors-access-contract`.
+    - Named cursor proof now renders the authorized sender display name into
+      the Whiteboard DOM overlay (`.remote-cursor-label`) as well as the canvas;
+      E2E asserts the participant sees `Owner` and that the label is removed
+      after grant revocation.
     - Move undo/redo for shapes, text, and sticky notes uses CRDT update ops.
     - Browser E2E covers duplicate/out-of-order replay injection, throttled
       non-persistent presence, snapshot compaction, revoke, and reconnect.
