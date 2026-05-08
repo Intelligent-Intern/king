@@ -256,6 +256,22 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
     }
 
     $data = $validation['data'];
+    $participantsNeedUpdate = (bool) $data['has_internal_participants'] || (bool) $data['has_external_participants'];
+    if ($participantsNeedUpdate && !videochat_can_manage_call_guest_list(
+        $pdo,
+        $existingCall,
+        $authRole,
+        $authUserId,
+        $tenantId
+    )) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => ['participants' => 'guest_list_management_requires_owner_or_admin'],
+            'call' => null,
+            'invite_dispatch' => ['global_resend_triggered' => false, 'explicit_action_required' => true],
+        ];
+    }
 
     $nextRoomId = (string) $existingCall['room_id'];
     $nextTitle = (bool) $data['has_title'] ? (string) $data['title'] : (string) $existingCall['title'];
@@ -302,7 +318,6 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
         ];
     }
 
-    $participantsNeedUpdate = (bool) $data['has_internal_participants'] || (bool) $data['has_external_participants'];
     $currentParticipants = videochat_fetch_call_participants($pdo, (string) $existingCall['id']);
     $currentInternalRoleByUserId = [];
     $currentInternalInviteStateByUserId = [];

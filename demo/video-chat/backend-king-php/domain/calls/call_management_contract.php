@@ -60,6 +60,12 @@ function videochat_normalize_call_invite_state(mixed $value, string $fallback = 
     return $fallbackNormalized;
 }
 
+function videochat_call_invite_state_allows_scoped_role(mixed $value): bool
+{
+    $normalized = videochat_normalize_call_invite_state($value, 'invited');
+    return !in_array($normalized, ['declined', 'cancelled'], true);
+}
+
 function videochat_normalize_call_schedule_timezone(mixed $value, string $fallback = 'UTC'): string
 {
     $fallbackTimezone = trim($fallback);
