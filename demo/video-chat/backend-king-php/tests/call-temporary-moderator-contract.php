@@ -30,10 +30,16 @@ function videochat_temp_moderator_contract_source(string $relativePath): string
 
 function videochat_temp_moderator_contract_static_assertions(): void
 {
+    $contractSource = videochat_temp_moderator_contract_source('domain/calls/call_management_contract.php');
     $transferSource = videochat_temp_moderator_contract_source('domain/calls/call_management_owner_transfer.php');
     $querySource = videochat_temp_moderator_contract_source('domain/calls/call_management_query.php');
+    $updateSource = videochat_temp_moderator_contract_source('domain/calls/call_management_update.php');
     $lobbySecuritySource = videochat_temp_moderator_contract_source('http/module_realtime_lobby_security.php');
 
+    videochat_temp_moderator_contract_assert(
+        str_contains($contractSource, 'function videochat_call_invite_state_allows_scoped_role'),
+        'temporary moderator role authority must use shared active invite-state semantics'
+    );
     videochat_temp_moderator_contract_assert(
         str_contains($transferSource, "videochat_normalize_call_participant_role(\$targetRole, '')")
         && str_contains($transferSource, 'SET call_role = :call_role'),
@@ -52,6 +58,17 @@ function videochat_temp_moderator_contract_static_assertions(): void
         && str_contains($lobbySecuritySource, 'videochat_realtime_call_role_context_for_room_user')
         && str_contains($lobbySecuritySource, "error' => 'forbidden'"),
         'realtime lobby moderation must be reauthorized from server-side role context'
+    );
+    videochat_temp_moderator_contract_assert(
+        str_contains($updateSource, 'videochat_can_manage_call_guest_list')
+        && str_contains($updateSource, 'guest_list_management_requires_owner_or_admin'),
+        'guest-list mutations must not be authorized by temporary moderator rights alone'
+    );
+    videochat_temp_moderator_contract_assert(
+        str_contains($querySource, "calls.status")
+        && str_contains($querySource, 'videochat_call_invite_state_allows_scoped_role')
+        && str_contains($lobbySecuritySource, 'videochat_call_invite_state_allows_scoped_role'),
+        'temporary moderator authority must expire for inactive participants and ended calls'
     );
 }
 
@@ -189,6 +206,43 @@ function videochat_temp_moderator_contract_authority(PDO $pdo, string $callId, s
     );
 }
 
+function videochat_temp_moderator_contract_participant_count(PDO $pdo, string $callId, int $userId): int
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    );
+    $query->execute([
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+    ]);
+
+    return (int) $query->fetchColumn();
+}
+
+function videochat_temp_moderator_contract_set_invite_state(PDO $pdo, string $callId, int $userId, string $inviteState): void
+{
+    $update = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = :invite_state
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    );
+    $update->execute([
+        ':invite_state' => $inviteState,
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+    ]);
+}
+
 try {
     videochat_temp_moderator_contract_static_assertions();
 
@@ -254,6 +308,43 @@ try {
     $authorizedAfterGrant = videochat_temp_moderator_contract_authority($pdo, $callId, $roomId, $participantUserId, $tenantId);
     videochat_temp_moderator_contract_assert((bool) ($authorizedAfterGrant['ok'] ?? false), 'server-side moderator grant should authorize lobby controls');
 
+    $guestListUpdateByModerator = videochat_update_call($pdo, $callId, $participantUserId, 'user', [
+        'internal_participant_user_ids' => [$participantUserId, $waitingUserId],
+    ], $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($guestListUpdateByModerator['ok'] ?? true), 'temporary moderator must not mutate guest list');
+    videochat_temp_moderator_contract_assert((string) ($guestListUpdateByModerator['reason'] ?? '') === 'forbidden', 'temporary moderator guest-list denial reason mismatch');
+    videochat_temp_moderator_contract_assert(
+        (string) (($guestListUpdateByModerator['errors'] ?? [])['participants'] ?? '') === 'guest_list_management_requires_owner_or_admin',
+        'temporary moderator guest-list denial field mismatch'
+    );
+    videochat_temp_moderator_contract_assert(
+        videochat_temp_moderator_contract_participant_count($pdo, $callId, $waitingUserId) === 0,
+        'forbidden temporary moderator guest-list update must not add participant rows'
+    );
+
+    $ownerGuestListUpdate = videochat_update_call($pdo, $callId, $ownerUserId, 'user', [
+        'internal_participant_user_ids' => [$participantUserId, $waitingUserId],
+    ], $tenantId);
+    videochat_temp_moderator_contract_assert((bool) ($ownerGuestListUpdate['ok'] ?? false), 'owner should still mutate guest list');
+    videochat_temp_moderator_contract_assert(
+        videochat_temp_moderator_contract_participant_count($pdo, $callId, $waitingUserId) === 1,
+        'owner guest-list update should persist the waiting participant row'
+    );
+
+    videochat_temp_moderator_contract_set_invite_state($pdo, $callId, $participantUserId, 'cancelled');
+    $inactiveModeratorContext = videochat_call_role_context_for_room_user($pdo, $roomId, $participantUserId);
+    videochat_temp_moderator_contract_assert((string) ($inactiveModeratorContext['call_role'] ?? '') === 'moderator', 'inactive moderator role row should remain auditable');
+    videochat_temp_moderator_contract_assert(!(bool) ($inactiveModeratorContext['can_moderate'] ?? true), 'inactive temporary moderator should lose controls');
+    $inactiveModeratorAuthority = videochat_temp_moderator_contract_authority($pdo, $callId, $roomId, $participantUserId, $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($inactiveModeratorAuthority['ok'] ?? true), 'inactive temporary moderator lobby authority must be denied');
+    videochat_temp_moderator_contract_assert((string) ($inactiveModeratorAuthority['error'] ?? '') === 'forbidden', 'inactive moderator denial reason mismatch');
+    $inactiveModeratorUpdate = videochat_update_call($pdo, $callId, $participantUserId, 'user', [
+        'title' => 'Inactive Moderator Update',
+    ], $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($inactiveModeratorUpdate['ok'] ?? true), 'inactive temporary moderator must not edit call settings');
+    videochat_temp_moderator_contract_assert((string) ($inactiveModeratorUpdate['reason'] ?? '') === 'forbidden', 'inactive temporary moderator edit denial mismatch');
+    videochat_temp_moderator_contract_set_invite_state($pdo, $callId, $participantUserId, 'allowed');
+
     $revokeModerator = videochat_update_call_participant_role(
         $pdo,
         $callId,
@@ -280,6 +371,35 @@ try {
     $ownerDemotion = videochat_update_call_participant_role($pdo, $callId, $ownerUserId, 'participant', $ownerUserId, 'user', $tenantId);
     videochat_temp_moderator_contract_assert(!(bool) ($ownerDemotion['ok'] ?? true), 'temporary moderator path must not demote the current owner');
     videochat_temp_moderator_contract_assert((string) (($ownerDemotion['errors'] ?? [])['role'] ?? '') === 'cannot_change_current_owner_role', 'owner demotion error mismatch');
+
+    $terminalCall = videochat_create_call($pdo, $ownerUserId, [
+        'title' => 'Temporary Moderator Ended Call Contract',
+        'starts_at' => '2026-10-12T11:00:00Z',
+        'ends_at' => '2026-10-12T12:00:00Z',
+        'internal_participant_user_ids' => [$participantUserId, $waitingUserId],
+        'external_participants' => [],
+    ], $tenantId);
+    videochat_temp_moderator_contract_assert((bool) ($terminalCall['ok'] ?? false), 'terminal-rights call should be created');
+    $terminalCallId = (string) (($terminalCall['call'] ?? [])['id'] ?? '');
+    $terminalRoomId = (string) (($terminalCall['call'] ?? [])['room_id'] ?? '');
+    videochat_temp_moderator_contract_assert($terminalCallId !== '' && $terminalRoomId !== '', 'terminal-rights call ids should be present');
+
+    $terminalGrant = videochat_update_call_participant_role($pdo, $terminalCallId, $participantUserId, 'moderator', $ownerUserId, 'user', $tenantId);
+    videochat_temp_moderator_contract_assert((bool) ($terminalGrant['ok'] ?? false), 'owner should grant terminal-call moderator');
+    $terminalEnd = videochat_end_call($pdo, $terminalCallId, $ownerUserId, 'user', $tenantId);
+    videochat_temp_moderator_contract_assert((bool) ($terminalEnd['ok'] ?? false), 'owner should end terminal-rights call');
+
+    $endedModeratorAuthority = videochat_temp_moderator_contract_authority($pdo, $terminalCallId, $terminalRoomId, $participantUserId, $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($endedModeratorAuthority['ok'] ?? true), 'temporary moderator must lose lobby authority after call end');
+    videochat_temp_moderator_contract_assert((string) ($endedModeratorAuthority['error'] ?? '') === 'forbidden', 'ended moderator lobby denial reason mismatch');
+    $endedModeratorRoleUpdate = videochat_update_call_participant_role($pdo, $terminalCallId, $waitingUserId, 'moderator', $participantUserId, 'user', $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($endedModeratorRoleUpdate['ok'] ?? true), 'temporary moderator must not change roles after call end');
+    videochat_temp_moderator_contract_assert((string) ($endedModeratorRoleUpdate['reason'] ?? '') === 'forbidden', 'ended moderator role-update denial mismatch');
+    $endedModeratorCallUpdate = videochat_update_call($pdo, $terminalCallId, $participantUserId, 'user', [
+        'title' => 'Ended Moderator Update',
+    ], $tenantId);
+    videochat_temp_moderator_contract_assert(!(bool) ($endedModeratorCallUpdate['ok'] ?? true), 'temporary moderator must not edit ended call');
+    videochat_temp_moderator_contract_assert((string) ($endedModeratorCallUpdate['reason'] ?? '') === 'forbidden', 'ended moderator call-update denial mismatch');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-temporary-moderator-contract] PASS\n");
