@@ -103,6 +103,7 @@ STATIC_CONTRACTS=(
   "tests/contract/iam-lobby-concurrency-remaining-contract.mjs"
   "tests/contract/iam-lobby-management-moderator-rights-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
+  "tests/contract/iam-guest-list-management-audit-proof-contract.mjs"
   "tests/contract/iam-active-call-kick-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
@@ -126,6 +127,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/iam-lobby-concurrency-remaining-contract.mjs"
   "tests/contract/iam-lobby-management-moderator-rights-contract.mjs"
   "tests/contract/iam-call-access-audit-events-contract.mjs"
+  "tests/contract/iam-guest-list-management-audit-proof-contract.mjs"
   "tests/contract/iam-active-call-kick-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )

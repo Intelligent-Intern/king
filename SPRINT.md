@@ -1968,6 +1968,14 @@ could not run in this leaf because local `vite` is not installed.
 - [x] Removing guest-list entry during active call follows product rule
 - [x] Guest-list changes are audit-logged
 
+Proof: `call-guest-list-direct-join-contract.php` covers the Guest List E2E
+matrix by using the real call-access temporary guest helper, owner add/remove
+mutations, registered and temporary direct-join decisions, non-guest denial,
+call/organization scoping, duplicate-entry merging, and scoped sanitized audit
+events for add, merge, remove, and restore. The static Node contract
+`iam-guest-list-management-audit-proof-contract.mjs` pins those backend proofs to
+`e2e_guest_list_001` through `e2e_guest_list_010`.
+
 ## 18. System Admin
 
 - [x] System admin can join call from every organization
@@ -2889,16 +2897,16 @@ and the IAM CI static gate.
 
 ## Test Group: Guest List
 
-- [ ] `e2e_guest_list_001_add_registered_user_to_guest_list`
-- [ ] `e2e_guest_list_002_add_temp_account_to_guest_list`
-- [ ] `e2e_guest_list_003_remove_guest_list_entry`
-- [ ] `e2e_guest_list_004_guest_list_user_direct_join`
-- [ ] `e2e_guest_list_005_non_guest_user_no_direct_join`
-- [ ] `e2e_guest_list_006_temp_guest_list_user_direct_join`
-- [ ] `e2e_guest_list_007_guest_list_call_scoped`
+- [x] `e2e_guest_list_001_add_registered_user_to_guest_list`
+- [x] `e2e_guest_list_002_add_temp_account_to_guest_list`
+- [x] `e2e_guest_list_003_remove_guest_list_entry`
+- [x] `e2e_guest_list_004_guest_list_user_direct_join`
+- [x] `e2e_guest_list_005_non_guest_user_no_direct_join`
+- [x] `e2e_guest_list_006_temp_guest_list_user_direct_join`
+- [x] `e2e_guest_list_007_guest_list_call_scoped`
 - [x] `e2e_guest_list_008_guest_list_cross_org_not_valid`
-- [ ] `e2e_guest_list_009_duplicate_guest_entries_handled`
-- [ ] `e2e_guest_list_010_guest_list_changes_audit_logged`
+- [x] `e2e_guest_list_009_duplicate_guest_entries_handled`
+- [x] `e2e_guest_list_010_guest_list_changes_audit_logged`
 
 ## Test Group: Cross Organization
 
