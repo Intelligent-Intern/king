@@ -87,6 +87,17 @@ function videochat_issue_session_for_call_access(
     $verifiedSessionId = videochat_call_access_session_string_option($options, 'verified_session_id');
     $authenticatedSessionId = videochat_call_access_session_string_option($options, 'authenticated_session_id');
     $hostName = videochat_call_access_session_string_option($options, 'host_name');
+    if (($verifiedUserId > 0 || $verifiedSessionId !== '') && ($authenticatedUserId <= 0 || $authenticatedSessionId === '')) {
+        return [
+            'ok' => false,
+            'reason' => 'conflict',
+            'errors' => ['auth' => 'session_context_changed'],
+            'session' => null,
+            'user' => null,
+            'access_link' => $accessLink,
+            'call' => $call,
+        ];
+    }
     if ($verifiedSessionId !== '' && $authenticatedSessionId !== '' && !hash_equals($verifiedSessionId, $authenticatedSessionId)) {
         return [
             'ok' => false,
