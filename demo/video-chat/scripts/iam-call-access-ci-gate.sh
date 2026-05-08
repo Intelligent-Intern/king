@@ -159,6 +159,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-membership-active-removal-contract.sh"
   "tests/call-access-membership-removal-contract.sh"
   "tests/call-access-invited-user-org-removal-contract.sh"
+  "tests/call-access-membership-stale-invite-rights-contract.sh"
   "tests/call-access-stale-organization-role-contract.sh"
   "tests/audit-call-access-events-contract.sh"
   "tests/call-access-rejoin-kick-contract.sh"
