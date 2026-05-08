@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/call_management_contract.php';
 require_once __DIR__ . '/call_management_query.php';
+require_once __DIR__ . '/../audit/audit_events.php';
 
 /**
  * @return array<int, int>
@@ -136,6 +137,33 @@ SQL
     $query->execute([':call_id' => $callId]);
 
     return (int) $query->fetchColumn();
+}
+
+function videochat_call_owner_transfer_user_role(PDO $pdo, int $userId): string
+{
+    if ($userId <= 0) {
+        return 'user';
+    }
+
+    try {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.id = :user_id
+  AND users.status = 'active'
+LIMIT 1
+SQL
+        );
+        $query->execute([':user_id' => $userId]);
+        $row = $query->fetch();
+    } catch (Throwable) {
+        return 'user';
+    }
+
+    $role = is_array($row) ? strtolower(trim((string) ($row['role_slug'] ?? ''))) : '';
+    return $role !== '' ? $role : 'user';
 }
 
 /**
@@ -279,6 +307,7 @@ SQL
     }
 
     $updatedAt = gmdate('c');
+    $auditEvent = null;
     $pdo->beginTransaction();
     try {
         if ($normalizedTargetRole === 'owner') {
@@ -328,6 +357,35 @@ SQL
             if (videochat_call_owner_transfer_current_owner_count($pdo, (string) ($existingCall['id'] ?? '')) !== 1) {
                 throw new RuntimeException('owner_transfer_invariant_failed');
             }
+
+            $auditTenantId = is_numeric($existingCall['tenant_id'] ?? null)
+                ? (int) $existingCall['tenant_id']
+                : (is_int($tenantId) && $tenantId > 0 ? $tenantId : 0);
+            $previousOwnerRole = videochat_call_owner_transfer_user_role($pdo, $currentOwnerUserId);
+            $oldOwnerAdminPreserved = videochat_can_administer_call(
+                $pdo,
+                (string) ($existingCall['id'] ?? ''),
+                $previousOwnerRole,
+                $currentOwnerUserId,
+                $targetUserId,
+                $auditTenantId > 0 ? $auditTenantId : null
+            );
+            $audit = videochat_audit_record_call_owner_transferred(
+                $pdo,
+                $auditTenantId,
+                (string) ($existingCall['id'] ?? ''),
+                $authUserId,
+                $currentOwnerUserId,
+                $targetUserId,
+                [
+                    'actor_role' => $authRole,
+                    'old_owner_admin_preserved' => $oldOwnerAdminPreserved,
+                ]
+            );
+            if (!(bool) ($audit['ok'] ?? false)) {
+                throw new RuntimeException('owner_transfer_audit_failed');
+            }
+            $auditEvent = is_array($audit['event'] ?? null) ? $audit['event'] : null;
         } else {
             $updateParticipantRole = $pdo->prepare(
                 <<<'SQL'
@@ -383,5 +441,6 @@ SQL
         'reason' => 'updated',
         'errors' => [],
         'call' => videochat_build_call_payload($pdo, $updatedCall, $authUserId),
+        'audit_event' => $auditEvent,
     ];
 }
