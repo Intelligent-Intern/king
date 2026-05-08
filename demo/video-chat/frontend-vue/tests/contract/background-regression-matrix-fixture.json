@@ -3,7 +3,8 @@
   "source_basis": [
     "SPRINT.md BGF-01/BGF-02 local contract text",
     "src/domain/realtime/background/workers/imageSegmenterWorker.js local MediaPipe worker boundary",
-    "src/domain/realtime/background/stream.ts local SINet/WASM cooldown behavior"
+    "src/domain/realtime/background/stream.ts Pierre worker pipeline",
+    "src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue user alternative"
   ],
   "known_failure": {
     "id": "chromium_mediapipe_gpu_service_init_failure",
@@ -66,42 +67,37 @@
     "gpu_availability",
     "model_source",
     "fallback_reason",
-    "cooldown_state"
+    "user_choice_required"
   ],
   "backend_ladder": [
     {
-      "backend": "mediapipe_gpu",
+      "backend": "worker_segmenter",
       "enabled_when": [
-        "mediapipe_enabled",
+        "background_replacement_requested",
         "browser_family_supported",
-        "gpu_available",
-        "not_quarantined"
+        "worker_available",
+        "local_mediapipe_assets_available"
       ],
-      "on_init_failure": "quarantine_backend_then_try_mediapipe_cpu"
+      "on_init_failure": "keep_source_visible_then_prompt_user"
     },
     {
-      "backend": "mediapipe_cpu",
+      "backend": "user_avatar_placeholder",
       "enabled_when": [
-        "mediapipe_enabled",
-        "cpu_delegate_isolated_from_gpu",
-        "not_quarantined"
+        "worker_segmenter_unavailable",
+        "user_chooses_standard_or_uploaded_avatar"
       ],
-      "on_gpu_signature": "quarantine_backend_then_try_sinet_wasm",
-      "on_init_failure": "quarantine_backend_then_try_sinet_wasm"
+      "required_behavior": [
+        "signal_static_avatar_once",
+        "keep_audio_tracks_live",
+        "do_not_stream_avatar_frames",
+        "do_not_apply_synthetic_background"
+      ]
     },
     {
-      "backend": "sinet_wasm",
+      "backend": "unfiltered_video",
       "enabled_when": [
-        "wasm_available",
-        "sinet_assets_available",
-        "not_quarantined"
-      ],
-      "on_init_failure": "quarantine_backend_then_use_degraded_visible_source"
-    },
-    {
-      "backend": "degraded_visible_source",
-      "enabled_when": [
-        "all_segmentation_backends_unavailable"
+        "worker_segmenter_unavailable",
+        "user_chooses_unfiltered_video"
       ],
       "required_behavior": [
         "keep_source_video_visible",
@@ -164,8 +160,8 @@
     }
   ],
   "current_runtime_baseline": {
-    "production_default_backend": "sinet_wasm",
-    "mediapipe_not_default": true,
-    "sinet_cooldown_ms": 60000
+    "production_default_backend": "worker-segmenter",
+    "mediapipe_is_worker_scoped": true,
+    "segmentation_unavailable_prompts_user": true
   }
 }

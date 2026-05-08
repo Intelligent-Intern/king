@@ -5,6 +5,13 @@ import { createCallWorkspaceModerationSync } from './moderationSync';
 import { createVideoFullscreenToggle } from './videoFullscreenToggle';
 import { isScreenShareMediaSource, isScreenShareUserId, screenShareUserIdForOwner } from '../../screenShareIdentity.js';
 import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
+import {
+  BACKGROUND_FALLBACK_AVATAR_MODE,
+  BACKGROUND_FALLBACK_NONE_MODE,
+  backgroundFallbackControlStateFromPrefs,
+  normalizeBackgroundFallbackAvatarUrl,
+  normalizeBackgroundFallbackMode,
+} from '../../background/avatarFallbackSignal';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
@@ -16,6 +23,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     aloneIdlePrompt,
     apiRequest,
     callLayoutState,
+    callMediaPrefs,
     callParticipantRoles,
     canManageOwnerRole,
     canModerate,
@@ -35,6 +43,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     isCompactLayoutViewport,
     isCompactMiniStripAbove,
     isSocketOnline,
+    hasStaticAvatarForUserId = () => false,
     layoutStrategyOptionsFor,
     lobbyActionState,
     lobbyListRef,
@@ -266,6 +275,9 @@ function participantMediaStatus(userId) {
   const normalizedUserId = Number(userId || 0);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) {
     return { show: false, state: 'local', label: '' };
+  }
+  if (hasStaticAvatarForUserId(normalizedUserId)) {
+    return { show: false, state: 'avatar', label: '' };
   }
 
   const hasRenderable = typeof participantHasRenderableMedia === 'function'
@@ -730,15 +742,22 @@ function lobbyRowSnapshot(row) {
   };
 }
 
+function defaultPeerControlState() {
+  return {
+    handRaised: false,
+    cameraEnabled: true,
+    micEnabled: true,
+    screenEnabled: false,
+    backgroundFallbackVideoMode: BACKGROUND_FALLBACK_NONE_MODE,
+    backgroundFallbackAvatarImageUrl: '',
+    videoSubstitution: '',
+  };
+}
+
 function peerControlSnapshot(userId) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
-    return {
-      handRaised: false,
-      cameraEnabled: true,
-      micEnabled: true,
-      screenEnabled: false,
-    };
+    return defaultPeerControlState();
   }
 
   if (normalizedUserId === currentUserId.value) {
@@ -747,16 +766,12 @@ function peerControlSnapshot(userId) {
       cameraEnabled: controlState.cameraEnabled,
       micEnabled: controlState.micEnabled,
       screenEnabled: controlState.screenEnabled,
+      ...backgroundFallbackControlStateFromPrefs(callMediaPrefs),
     };
   }
 
   if (!peerControlStateByUserId[normalizedUserId] || typeof peerControlStateByUserId[normalizedUserId] !== 'object') {
-    peerControlStateByUserId[normalizedUserId] = {
-      handRaised: false,
-      cameraEnabled: true,
-      micEnabled: true,
-      screenEnabled: false,
-    };
+    peerControlStateByUserId[normalizedUserId] = defaultPeerControlState();
   }
 
   return peerControlStateByUserId[normalizedUserId];
@@ -768,6 +783,9 @@ function describePeerControlState(userId) {
   if (state.handRaised) badges.push('hand');
   if (!state.micEnabled) badges.push('mic off');
   if (!state.cameraEnabled) badges.push('cam off');
+  if (normalizeBackgroundFallbackMode(state.backgroundFallbackVideoMode || state.videoSubstitution) === BACKGROUND_FALLBACK_AVATAR_MODE) {
+    badges.push('avatar');
+  }
   if (state.screenEnabled) badges.push('screen');
   return badges.join(' · ');
 }
@@ -1110,12 +1128,7 @@ function updatePeerControlState(userId, patch) {
   if (normalizedUserId === currentUserId.value) return;
 
   if (!peerControlStateByUserId[normalizedUserId] || typeof peerControlStateByUserId[normalizedUserId] !== 'object') {
-    peerControlStateByUserId[normalizedUserId] = {
-      handRaised: false,
-      cameraEnabled: true,
-      micEnabled: true,
-      screenEnabled: false,
-    };
+    peerControlStateByUserId[normalizedUserId] = defaultPeerControlState();
   }
 
   peerControlStateByUserId[normalizedUserId] = {
@@ -1127,12 +1140,7 @@ function updatePeerControlState(userId, patch) {
 function resetPeerControlState(userId) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
-  peerControlStateByUserId[normalizedUserId] = {
-    handRaised: false,
-    cameraEnabled: true,
-    micEnabled: true,
-    screenEnabled: false,
-  };
+  peerControlStateByUserId[normalizedUserId] = defaultPeerControlState();
 }
 
 function applyReactionEvent(payload) {
@@ -1172,11 +1180,20 @@ function applyRemoteControlState(payload, sender) {
   if (kind === 'workspace-control-state') {
     const state = payload && typeof payload.state === 'object' ? payload.state : {};
     const nextScreenEnabled = Boolean(state.screenEnabled);
+    const fallbackMode = normalizeBackgroundFallbackMode(
+      state.backgroundFallbackVideoMode || state.videoSubstitution,
+    );
+    const fallbackAvatarUrl = fallbackMode === BACKGROUND_FALLBACK_AVATAR_MODE
+      ? normalizeBackgroundFallbackAvatarUrl(state.backgroundFallbackAvatarImageUrl)
+      : '';
     updatePeerControlState(senderUserId, {
       handRaised: Boolean(state.handRaised),
       cameraEnabled: state.cameraEnabled !== false,
       micEnabled: state.micEnabled !== false,
       screenEnabled: nextScreenEnabled,
+      backgroundFallbackVideoMode: fallbackMode,
+      backgroundFallbackAvatarImageUrl: fallbackAvatarUrl,
+      videoSubstitution: fallbackMode === BACKGROUND_FALLBACK_AVATAR_MODE ? BACKGROUND_FALLBACK_AVATAR_MODE : '',
     });
     if (nextScreenEnabled) {
       pinScreenShareParticipant(screenShareUserIdForOwner(senderUserId));
@@ -1184,6 +1201,7 @@ function applyRemoteControlState(payload, sender) {
       forgetScreenShareAutoPin(screenShareUserIdForOwner(senderUserId), true);
     }
     refreshUsersDirectoryPresentation();
+    nextTick(() => renderCallVideoLayout());
     return true;
   }
 
@@ -1217,6 +1235,7 @@ function applyRemoteControlState(payload, sender) {
 }
 
 function syncControlStateToPeers() {
+  const backgroundFallbackState = backgroundFallbackControlStateFromPrefs(callMediaPrefs);
   const peerIds = connectedParticipantUsers.value
     .map((row) => row.userId)
     .filter((userId) => (
@@ -1240,6 +1259,7 @@ function syncControlStateToPeers() {
           cameraEnabled: controlState.cameraEnabled,
           micEnabled: controlState.micEnabled,
           screenEnabled: controlState.screenEnabled,
+          ...backgroundFallbackState,
         },
       },
     });

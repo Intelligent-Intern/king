@@ -8,8 +8,11 @@ import {
 } from '../media/speakerOutputRouting';
 import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings } from './sfuCaptureProfileConstraints';
 import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
+import { createBackgroundFallbackAudioOnlyStream } from '../background/avatarFallbackSignal';
+import { handleBackgroundReplacementUnavailable } from '../background/unavailablePrompt';
 import { shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
 import { buildDisplayMediaOptions, hasGetDisplayMedia, normalizeDisplayMediaError } from './screenShareCapture';
+
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -34,6 +37,7 @@ export function createLocalMediaOrchestrationHelpers({
     shouldSyncNativeLocalTracksBeforeOffer,
     syncNativePeerConnectionsWithRoster,
     syncNativePeerLocalTracks,
+    syncControlStateToPeers = () => 0,
     sendNativeOffer,
   } = callbacks;
   const captureDiagnostic = typeof captureClientDiagnostic === 'function' ? captureClientDiagnostic : () => {};
@@ -87,12 +91,26 @@ export function createLocalMediaOrchestrationHelpers({
   const unpublishSfuTracks = typeof localPublisherCallbacks.unpublishSfuTracks === 'function'
     ? localPublisherCallbacks.unpublishSfuTracks
     : () => {};
+  let lastBackgroundFallbackControlStateKey = '';
   let localMediaPermissionRetryAfterMs = 0;
   let screenShareStream = null;
   let screenShareEndedHandler = null;
   let screenShareSwitchInFlight = false;
   let activeScreenShareTrackId = '';
   const hasScreenShareParticipantPublisher = Boolean(startScreenShareParticipant && stopScreenShareParticipant);
+
+  function syncBackgroundFallbackControlState(force = false) {
+    const mode = String(callMediaPrefs.backgroundFallbackVideoMode || 'none').trim().toLowerCase() === 'avatar'
+      ? 'avatar'
+      : 'none';
+    const avatarUrl = mode === 'avatar'
+      ? String(callMediaPrefs.backgroundFallbackAvatarImageUrl || '').trim()
+      : '';
+    const nextKey = `${mode}:${avatarUrl}`;
+    if (!force && nextKey === lastBackgroundFallbackControlStateKey) return;
+    lastBackgroundFallbackControlStateKey = nextKey;
+    syncControlStateToPeers();
+  }
 
   function buildLocalMediaConstraints() {
     const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -840,6 +858,16 @@ export function createLocalMediaOrchestrationHelpers({
       overloadFrameMs: 48,
       overloadConsecutiveFrames: 6,
       statsIntervalMs: 1000,
+      onSegmentationUnavailable: (details = {}) => {
+        handleBackgroundReplacementUnavailable({
+          callMediaPrefs,
+          captureDiagnostic,
+          details,
+          refs,
+          runtimeToken,
+          state,
+        });
+      },
       onOverload: () => {
         if (runtimeToken !== state.backgroundRuntimeToken) return;
         resetBackgroundRuntimeMetrics('overload');
@@ -888,6 +916,17 @@ export function createLocalMediaOrchestrationHelpers({
     backgroundBaselineCollector.reset();
     state.backgroundBaselineCaptured = false;
 
+    if (String(callMediaPrefs.backgroundFallbackVideoMode || 'none') === 'avatar') {
+      backgroundFilterController.dispose();
+      resetBackgroundRuntimeMetrics('avatar_placeholder');
+      callMediaPrefs.backgroundFilterBackend = 'avatar_placeholder';
+      callMediaPrefs.backgroundFilterActive = false;
+      syncBackgroundFallbackControlState(true);
+      return createBackgroundFallbackAudioOnlyStream(rawStream);
+    }
+
+    syncBackgroundFallbackControlState(false);
+
     const options = resolveBackgroundFilterOptions(runtimeToken);
     if (!shouldUseReactiveBackgroundPipeline() && options.mode !== 'blur' && options.mode !== 'replace') {
       resetBackgroundRuntimeMetrics('off');
@@ -902,22 +941,6 @@ export function createLocalMediaOrchestrationHelpers({
       callMediaPrefs.backgroundFilterActive = true;
       callMediaPrefs.backgroundFilterReason = result.reason === 'ok_fallback' ? 'ok_fallback' : 'ok';
       callMediaPrefs.backgroundFilterBackend = String(result.backend || 'none');
-      if (callMediaPrefs.backgroundFilterBackend === 'sinet_unavailable') {
-        captureDiagnostic({
-          category: 'media',
-          level: 'warning',
-          eventType: 'local_background_sinet_unavailable',
-          code: 'sinet_unavailable',
-          message: 'Local background compositor is active, but SINet segmentation did not initialize.',
-          payload: {
-            media_runtime_path: refs.mediaRuntimePathRef.value,
-            background_filter_mode: callMediaPrefs.backgroundFilterMode,
-            background_backdrop_mode: callMediaPrefs.backgroundBackdropMode,
-            background_quality_profile: callMediaPrefs.backgroundQualityProfile,
-          },
-          immediate: true,
-        });
-      }
     } else {
       callMediaPrefs.backgroundFilterActive = false;
       callMediaPrefs.backgroundFilterReason = String(result?.reason || 'setup_failed');

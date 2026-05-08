@@ -16,6 +16,7 @@
         {{ t('calls.workspace.idle_confirm') }}
       </button>
     </section>
+    <BackgroundReplacementUnavailableModal :reconfigure-background="reconfigureLocalBackgroundFilterOnly" />
     <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
       <section
         class="workspace-stage"

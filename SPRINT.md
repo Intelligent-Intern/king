@@ -27,11 +27,13 @@ Status:
   current fallback can degrade into a matte that swallows the participant.
 
 Sprint goal:
-- Keep background filters stable across browser ML/GPU regressions with a
-  deterministic fallback ladder: MediaPipe GPU when healthy, MediaPipe CPU when
-  genuinely isolated, SINet/WASM when MediaPipe is unsafe, then a degraded mode
-  that keeps the participant visible instead of blending them into the
-  background.
+- Keep Pierre Joye's worker/WebGL background pipeline as the production
+  replacement path: if background replacement is possible and the user wants it,
+  apply it.
+- If background replacement is not possible, do not silently degrade the matte
+  or apply synthetic replacement over the person. Keep media alive and ask the
+  user in a modal to choose a standard avatar, upload an avatar, or send
+  unfiltered camera video with background replacement disabled.
 - Preserve visual quality: no softmax/sigmoid participant blending, no ghost
   translucency, no full-person disappearance. Edge treatment must use contour
   alpha smoothing only.
@@ -40,12 +42,13 @@ Sprint goal:
   reload loops, audio loss, or video publication failure.
 
 Current baseline:
-- Production no longer depends on the MediaPipe worker fallback path that hit
-  Chrome GPU initialization failures.
-- SINet/WASM exists as the insulated segmentation backend.
-- WebGL and canvas compositors exist; WebGL may fall back to canvas.
-- The current matte behavior can still over-apply the background and visually
-  swallow the participant.
+- Production uses Pierre's worker-scoped MediaPipe Tasks pipeline with the
+  WebGL compositor contribution preserved.
+- The background-unavailable path is a user choice, not a hidden fallback:
+  standard avatar, uploaded avatar, or unfiltered video. Avatar mode is a
+  static control-state signal plus live audio, not a fake streamed video track.
+- The compositor must render the source frame while the worker has no renderable
+  matte, so a failed or warming segmenter cannot swallow the participant.
 - Whiteboard Call App is deployed and installed; the Call Apps attach tab is now
   visible for resolved calls and requests a room snapshot after attach.
 - Media reconnect cleanup now has a focused contract proving stale local capture
@@ -68,14 +71,13 @@ Current baseline:
 
 Contract anchors:
 - `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
-- `demo/video-chat/frontend-vue/src/domain/realtime/background/backendSinetWasm.js`
-- `demo/video-chat/frontend-vue/src/domain/realtime/background/maskPostprocess.js`
-- `demo/video-chat/frontend-vue/src/domain/realtime/background/pipeline/compositorCanvasStage.js`
-- `demo/video-chat/frontend-vue/src/domain/realtime/background/pipeline/compositorWebglStage.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/backendWorkerSegmenter.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/workers/imageSegmenterWorker.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue`
+- `demo/video-chat/frontend-vue/src/domain/realtime/background/pipeline/compositorStage.js`
 - `demo/video-chat/frontend-vue/tests/standalone/king-background-segmentation-harness.ts`
 - `demo/video-chat/frontend-vue/tests/contract/background-filter-mask-contract.mjs`
 - `demo/video-chat/frontend-vue/tests/contract/background-king-wasm-contract.mjs`
-- `demo/video-chat/frontend-vue/tests/contract/background-sinet-defaults-contract.mjs`
 - `demo/video-chat/frontend-vue/tests/contract/background-segmentation-harness-contract.mjs`
 - `demo/video-chat/frontend-vue/tests/contract/mediapipe-cdn-contract.mjs`
 - `demo/video-chat/deploy.sh`
@@ -90,7 +92,8 @@ Contract anchors:
 Execution boundary:
 - Preserve Pierre Joye's WebGL/background-removal contribution history and do
   not rewrite or squash that work.
-- Do not restore a brittle MediaPipe-only path as the only production backend.
+- Do not replace Pierre's worker pipeline with an unrelated production SINet or
+  "degraded matte" implementation.
 - Do not add softmax, sigmoid, or whole-mask alpha curves that make a person
   semi-transparent.
 - Do not grow `CallWorkspaceView.vue`; new behavior belongs in focused
@@ -100,16 +103,17 @@ Execution boundary:
 
 Acceptance criteria:
 - Chrome/Chromium MediaPipe GPU-service init failures do not break calls.
-- If GPU init fails, CPU/SINet/degraded fallback is selected exactly once per
-  cooldown window without reload loops.
+- If background replacement init fails, the source remains visible and the user
+  gets a modal choice: standard avatar, uploaded avatar, or unfiltered video.
 - The participant center remains opaque in the matte harness; only contour
   pixels receive alpha smoothing.
 - No `Math.exp`, softmax, sigmoid, or equivalent probabilistic blending exists
   in the production fallback matte path.
-- Background filter failure cannot mute audio, remove the local video track, or
-  stop media publication.
+- Background filter failure cannot mute audio or stop media publication.
+  Avatar choice must stop avatar/video frame publication and signal one static
+  image state to peers until another media control-state replaces it.
 - Diagnostics name the selected backend, failed backend, browser family, GPU
-  availability, model source, fallback reason, and cooldown state.
+  availability, model source, fallback reason, and that user choice is required.
 - Production deploy smoke proves call app static assets and background model
   assets are served from the expected origins.
 - Production service domains are rooted at `kingrt.com` only:
@@ -131,12 +135,15 @@ Tickets:
     and whether CPU delegation still touches GPU internals.
   - Add a contract fixture for the known Chrome GPU-service init failure shape.
 
-- [ ] BGF-02 Backend selection ladder with quarantine
-  - Introduce a backend selector contract for MediaPipe GPU, MediaPipe CPU,
-    SINet/WASM, and degraded mode.
-  - Quarantine a failing backend for a bounded cooldown instead of retrying per
-    frame.
+- [x] BGF-02 Backend selection ladder with quarantine
+  - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
+    to the worker boundary.
+  - When worker init fails, render the source frame and open the user-choice
+    modal instead of silently selecting another matte backend.
   - Ensure backend switching is idempotent and cannot trigger reload loops.
+  - Proof: `background-regression-matrix-contract.mjs` and
+    `background-king-wasm-contract.mjs` pin the worker boundary, idempotent init,
+    source-visible unavailable state, and explicit modal alternatives.
 
 - [x] BGF-03 Matte correctness: hard foreground plus contour smoothing
   - Remove any remaining softmax/sigmoid-style probability blending from the
@@ -145,16 +152,23 @@ Tickets:
     alpha only on the contour band.
   - Add harness checks that the torso/face center stays opaque and background
     pixels do not leak into the participant.
-  - Proof: `background-filter-mask-contract.mjs` now pins hard SINet foreground
-    membership, no softmax/sigmoid fallback blending, opaque face/torso center,
-    transparent background, and alpha smoothing only on contour pixels.
+  - Proof: `background-filter-mask-contract.mjs` pins Pierre's worker pipeline,
+    no softmax/sigmoid fallback blending, source-visible warmup/failure
+    rendering, and explicit modal alternatives.
 
-- [ ] BGF-04 Degraded mode that preserves the person
-  - Define degraded mode as "no synthetic replacement over the participant" when
-    segmentation confidence or backend health is unsafe.
-  - Prefer original camera video with clear diagnostics over a broken matte that
-    hides the participant.
+- [x] BGF-04 Background-unavailable user choice
+  - Ask the user to choose standard avatar, uploaded avatar, or unfiltered video
+    when background replacement is unavailable.
+  - Avatar choice signals one static image state to peers and keeps only live
+    audio in the published stream; it must not stream avatar frames or deltas.
+  - Never apply synthetic replacement over the participant without a renderable
+    matte.
   - Keep user media tracks alive while the filter is disabled or warming up.
+  - Proof: `BackgroundReplacementUnavailableModal.vue`,
+    `avatarFallbackSignal.ts`, `staticAvatarRender.ts`,
+    `mediaOrchestration.ts`, and `background-filter-mask-contract.mjs` wire the
+    standard-avatar, uploaded-avatar, and unfiltered-video choices while
+    preserving audio tracks and rendering avatars as static tile media.
 
 - [ ] BGF-05 Compositor and warmup safety
   - Make WebGL/canvas compositor warmup deterministic across backend changes.
@@ -164,8 +178,8 @@ Tickets:
     segmentation-unavailable states.
 
 - [ ] BGF-06 Runtime diagnostics and field observability
-  - Emit throttled diagnostics for backend init, fallback transition, quarantine,
-    matte rejection, and degraded mode.
+  - Emit throttled diagnostics for backend init, unavailable transition, modal
+    choice, and matte rejection.
   - Include enough local context to debug browser regressions without leaking
     media frames, SDP, ICE, or tokens.
   - Surface concise state in existing diagnostics channels, not new reload UI.
