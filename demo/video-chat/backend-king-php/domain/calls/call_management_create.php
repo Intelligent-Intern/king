@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../../support/tenant_migrations.php';
 
 function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload, ?int $tenantId = null): array
@@ -222,67 +223,70 @@ SQL
         ];
     }
 
+    $createdCall = [
+        'id' => $callId,
+        'tenant_id' => $effectiveTenantId,
+        'room_id' => $callRoomId,
+        'title' => (string) $data['title'],
+        'access_mode' => (string) $data['access_mode'],
+        'status' => $initialStatus,
+        'starts_at' => $startsAt,
+        'ends_at' => $endsAt,
+        'schedule' => $schedule,
+        'cancelled_at' => null,
+        'cancel_reason' => null,
+        'cancel_message' => null,
+        'created_at' => $createdAt,
+        'updated_at' => $createdAt,
+        'owner' => [
+            'user_id' => (int) $owner['id'],
+            'email' => $owner['email'],
+            'display_name' => $owner['display_name'],
+        ],
+        'participants' => [
+            'internal' => array_map(
+                static function (array $participant): array {
+                    $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
+                    if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
+                        $callRole = 'participant';
+                    }
+                    return [
+                        'user_id' => (int) $participant['user_id'],
+                        'email' => (string) $participant['email'],
+                        'display_name' => (string) $participant['display_name'],
+                        'call_role' => $callRole,
+                        'invite_state' => (string) $participant['invite_state'],
+                        'is_owner' => (bool) ($participant['is_owner'] ?? false),
+                        'is_moderator' => $callRole === 'moderator',
+                    ];
+                },
+                $internalParticipants
+            ),
+            'external' => array_map(
+                static function (array $participant): array {
+                    return [
+                        'email' => (string) $participant['email'],
+                        'display_name' => (string) $participant['display_name'],
+                        'invite_state' => (string) $participant['invite_state'],
+                    ];
+                },
+                $externalParticipants
+            ),
+            'totals' => [
+                'total' => count($internalParticipants) + count($externalParticipants),
+                'internal' => count($internalParticipants),
+                'external' => count($externalParticipants),
+            ],
+        ],
+        'my_participation' => true,
+    ];
+    videochat_audit_record_call_created($pdo, $createdCall, (int) $owner['id']);
+
     return [
         'ok' => true,
         'reason' => 'created',
         'errors' => [],
-        'call' => [
-            'id' => $callId,
-            'tenant_id' => $effectiveTenantId,
-            'room_id' => $callRoomId,
-            'title' => (string) $data['title'],
-            'access_mode' => (string) $data['access_mode'],
-            'status' => $initialStatus,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'schedule' => $schedule,
-            'cancelled_at' => null,
-            'cancel_reason' => null,
-            'cancel_message' => null,
-            'created_at' => $createdAt,
-            'updated_at' => $createdAt,
-            'owner' => [
-                'user_id' => (int) $owner['id'],
-                'email' => $owner['email'],
-                'display_name' => $owner['display_name'],
-            ],
-            'participants' => [
-                'internal' => array_map(
-                    static function (array $participant): array {
-                        $callRole = strtolower(trim((string) ($participant['call_role'] ?? 'participant')));
-                        if (!in_array($callRole, ['owner', 'moderator', 'participant'], true)) {
-                            $callRole = 'participant';
-                        }
-                        return [
-                            'user_id' => (int) $participant['user_id'],
-                            'email' => (string) $participant['email'],
-                            'display_name' => (string) $participant['display_name'],
-                            'call_role' => $callRole,
-                            'invite_state' => (string) $participant['invite_state'],
-                            'is_owner' => (bool) ($participant['is_owner'] ?? false),
-                            'is_moderator' => $callRole === 'moderator',
-                        ];
-                    },
-                    $internalParticipants
-                ),
-                'external' => array_map(
-                    static function (array $participant): array {
-                        return [
-                            'email' => (string) $participant['email'],
-                            'display_name' => (string) $participant['display_name'],
-                            'invite_state' => (string) $participant['invite_state'],
-                        ];
-                    },
-                    $externalParticipants
-                ),
-                'totals' => [
-                    'total' => count($internalParticipants) + count($externalParticipants),
-                    'internal' => count($internalParticipants),
-                    'external' => count($externalParticipants),
-                ],
-            ],
-            'my_participation' => true,
-        ],
+        'call' => $createdCall,
     ];
 }
 

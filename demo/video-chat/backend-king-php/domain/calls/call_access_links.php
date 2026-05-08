@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
+
 function videochat_create_call_access_link_for_user(
     PDO $pdo,
     string $callId,
@@ -115,6 +117,7 @@ function videochat_create_call_access_link_for_user(
     }
 
     $participantEmail = null;
+    $targetUserForAudit = null;
     if ($isOpenLinkRequest) {
         $participantEmail = null;
     } elseif ($targetUserId > 0) {
@@ -128,6 +131,7 @@ function videochat_create_call_access_link_for_user(
                 'call' => null,
             ];
         }
+        $targetUserForAudit = $targetUser;
         $participantEmail = videochat_normalize_call_access_email((string) ($targetUser['email'] ?? ''));
     } else {
         if ($targetEmail !== '') {
@@ -203,10 +207,12 @@ SQL
         }
 
         $accessId = '';
+        $linkCreated = false;
         if (is_array($existing) && is_string($existing['id'] ?? null)) {
             $accessId = strtolower(trim((string) $existing['id']));
         } else {
             $accessId = videochat_generate_call_access_uuid();
+            $linkCreated = true;
             $tenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id')
                 ? ', tenant_id'
                 : '';
@@ -274,6 +280,15 @@ SQL
         }
 
         $pdo->commit();
+        if ($linkCreated) {
+            videochat_audit_record_call_access_invitation_created(
+                $pdo,
+                $accessLink,
+                $call,
+                $authUserId,
+                $targetUserForAudit
+            );
+        }
 
         return [
             'ok' => true,
