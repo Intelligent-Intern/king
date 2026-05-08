@@ -248,6 +248,10 @@ function videochat_call_app_semantic_dns_service_payload(array $package, array $
     if ($hostname === '') {
         $hostname = 'localhost';
     }
+    $appSpecificHost = videochat_call_app_semantic_dns_app_host($appKey, $options);
+    if ($appSpecificHost !== '') {
+        $hostname = $appSpecificHost;
+    }
     if ($port < 1 || $port > 65535) {
         $port = 443;
     }
@@ -429,17 +433,32 @@ function videochat_call_app_semantic_dns_host_from_url(string $value): string
     return strtolower(trim($host));
 }
 
+function videochat_call_app_semantic_dns_app_host(string $appKey, array $options): string
+{
+    $rootDomain = videochat_call_app_semantic_dns_host_from_url((string) ($options['public_root_domain'] ?? ''));
+    $hostAppKey = strtolower(trim($appKey));
+    $hostAppKey = preg_replace('/[^a-z0-9-]+/', '-', $hostAppKey) ?: '';
+    $hostAppKey = trim($hostAppKey, '-');
+    if ($rootDomain === '' || $hostAppKey === '') {
+        return '';
+    }
+
+    return $hostAppKey . '.' . $rootDomain;
+}
+
 function videochat_call_app_semantic_dns_default_mother_host(string $publicHost): string
 {
     $host = strtolower(trim($publicHost));
     if ($host === '') {
-        return 'mother.localhost';
+        return 'registry.localhost';
     }
-    if (str_starts_with($host, 'apps.')) {
-        return 'mother.' . substr($host, 5);
+    foreach (['apps.', 'whiteboard.'] as $prefix) {
+        if (str_starts_with($host, $prefix)) {
+            return 'registry.' . substr($host, strlen($prefix));
+        }
     }
 
-    return 'mother.' . $host;
+    return 'registry.' . $host;
 }
 
 /**
@@ -458,6 +477,14 @@ function videochat_call_app_semantic_dns_runtime_options_from_env(?array $env = 
             'VIDEOCHAT_CALL_APP_IFRAME_ORIGIN',
         ], $env));
     }
+    $publicRootDomain = videochat_call_app_semantic_dns_host_from_url(videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_PUBLIC_ROOT_DOMAIN',
+        'VIDEOCHAT_DEPLOY_DOMAIN',
+        'VIDEOCHAT_INFRA_PUBLIC_DOMAIN',
+    ], $env));
+    if ($publicHost === '' && $publicRootDomain !== '') {
+        $publicHost = 'whiteboard.' . $publicRootDomain;
+    }
     if ($publicHost === '') {
         $baseHost = videochat_call_app_semantic_dns_host_from_url(videochat_call_app_semantic_dns_first_env([
             'VIDEOCHAT_FRONTEND_ORIGIN',
@@ -465,11 +492,13 @@ function videochat_call_app_semantic_dns_runtime_options_from_env(?array $env = 
             'VIDEOCHAT_DEPLOY_DOMAIN',
             'VIDEOCHAT_V1_PUBLIC_HOST',
         ], $env));
-        $publicHost = $baseHost !== '' ? 'apps.' . $baseHost : 'localhost';
+        $publicHost = $baseHost !== '' ? 'whiteboard.' . $baseHost : 'localhost';
     }
     $publicHost = videochat_call_app_semantic_dns_host_from_url($publicHost) ?: 'localhost';
 
     $motherHost = videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_REGISTRY_HOST',
+        'VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN',
         'VIDEOCHAT_CALL_APP_MOTHERNODE_HOST',
         'VIDEOCHAT_CALL_APP_MOTHERNODE_DOMAIN',
         'VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN',
@@ -492,6 +521,7 @@ function videochat_call_app_semantic_dns_runtime_options_from_env(?array $env = 
 
     return [
         'hostname' => $publicHost,
+        'public_root_domain' => $publicRootDomain,
         'port' => videochat_call_app_semantic_dns_int(
             videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_PUBLIC_PORT', $env),
             443,

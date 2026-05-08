@@ -20,6 +20,7 @@ const [
   edgeDockerfile,
   edgePhp,
   deploy,
+  deploySmoke,
   deployHetzner,
 ] = await Promise.all([
   read('SPRINT.md'),
@@ -32,6 +33,7 @@ const [
   read('demo/video-chat/edge/Dockerfile'),
   read('demo/video-chat/edge/edge.php'),
   read('demo/video-chat/scripts/deploy.sh'),
+  read('demo/video-chat/scripts/deploy-smoke.sh'),
   read('demo/video-chat/scripts/lib/deploy-hetzner.sh'),
 ]);
 
@@ -57,8 +59,11 @@ for (const functionName of [
 
 for (const envKey of [
   'VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN',
+  'VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN',
   'VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN',
   'VIDEOCHAT_CALL_APP_PUBLIC_HOST',
+  'VIDEOCHAT_CALL_APP_PUBLIC_ROOT_DOMAIN',
+  'VIDEOCHAT_CALL_APP_REGISTRY_HOST',
   'VIDEOCHAT_CALL_APP_MOTHERNODE_HOST',
   'VIDEOCHAT_CALL_APP_MCP_ENDPOINT',
   'VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER',
@@ -82,19 +87,19 @@ assert.match(
 
 assert.match(
   semanticDnsTest,
-  /VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN[\s\S]*apps\.kingrt\.test[\s\S]*VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN[\s\S]*mother\.kingrt\.test[\s\S]*videochat_call_app_register_runtime_semantic_dns_catalog/s,
-  'backend contract must prove deploy env parsing and runtime Mothernode registration',
+  /VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN[\s\S]*whiteboard\.kingrt\.test[\s\S]*VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN[\s\S]*registry\.kingrt\.test[\s\S]*videochat_call_app_register_runtime_semantic_dns_catalog/s,
+  'backend contract must prove deploy env parsing and runtime registry registration',
 );
 
 assert.match(workspaceState, /VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*CALL_APP_IFRAME_ORIGIN/s);
 assert.ok(
-  workspaceState.includes("return CALL_APP_IFRAME_ORIGIN !== '' ?"),
+  workspaceState.includes('function callAppOriginForAppKey'),
   'Call App iframe URL must honor the dedicated deployment origin',
 );
 assert.match(
   workspaceState,
-  /`\$\{CALL_APP_IFRAME_ORIGIN\}\$\{path\}` : path/,
-  'Call App iframe URL must prefix the sanitized app path with the deployment origin',
+  /parts\[0\] = hostAppKey[\s\S]*return origin !== '' \? `\$\{origin\}\$\{path\}` : path/s,
+  'Call App iframe URL must resolve whiteboard.kingrt.com and future {app_key}.kingrt.com origins',
 );
 
 assert.match(
@@ -123,20 +128,41 @@ assert.match(
 
 assert.match(
   deploy,
-  /DEPLOY_CALL_APP_DOMAIN[\s\S]*apps\.\$\{DEPLOY_DOMAIN\}[\s\S]*DEPLOY_MOTHERNODE_DOMAIN[\s\S]*mother\.\$\{DEPLOY_DOMAIN\}/,
-  'deploy script must default Call App and Mothernode subdomains from the main domain',
+  /DEPLOY_APP_DOMAIN[\s\S]*app\.\$\{DEPLOY_DOMAIN\}[\s\S]*DEPLOY_CALL_APP_DOMAIN[\s\S]*whiteboard\.\$\{DEPLOY_DOMAIN\}[\s\S]*DEPLOY_REGISTRY_DOMAIN[\s\S]*registry\.\$\{DEPLOY_DOMAIN\}/,
+  'deploy script must split app.kingrt.com from the kingrt.com service root and default Call App/registry subdomains from the root',
 );
 
 assert.match(
   deploy,
-  /CERTBOT_DOMAINS=\([\s\S]*CALL_APP_DOMAIN[\s\S]*MOTHERNODE_DOMAIN[\s\S]*certbot certonly/s,
-  'deploy script must include Call App and Mothernode domains in the certificate SAN set',
+  /CERTBOT_DOMAINS=\([\s\S]*APP_DOMAIN[\s\S]*CALL_APP_DOMAIN[\s\S]*REGISTRY_DOMAIN[\s\S]*certbot certonly/s,
+  'deploy script must include app, Call App, and registry domains in the certificate SAN set',
+);
+
+assert.match(
+  deploySmoke,
+  /DEPLOY_APP_DOMAIN="\$\{VIDEOCHAT_DEPLOY_APP_DOMAIN:-app\.\$\{DEPLOY_DOMAIN\}\}"[\s\S]*expect_http_code https-frontend 200 "https:\/\/\$\{DEPLOY_APP_DOMAIN\}\/"/s,
+  'deploy smoke must probe app.kingrt.com as the frontend when kingrt.com is the service root',
+);
+
+assert.match(
+  deploySmoke,
+  /CALL_APP_DOMAIN=\$\{call_app_q\} REGISTRY_DOMAIN=\$\{registry_q\}[\s\S]*"\$\{CALL_APP_DOMAIN\}" "\$\{REGISTRY_DOMAIN\}"/s,
+  'deploy smoke must verify Call App and registry certificate SANs',
+);
+
+assert.match(
+  deploySmoke,
+  /expect_http_code call-app-whiteboard-host 200 "https:\/\/\$\{DEPLOY_CALL_APP_DOMAIN\}\/public\/index\.html"[\s\S]*expect_http_code call-app-whiteboard-path 200 "https:\/\/\$\{DEPLOY_CALL_APP_DOMAIN\}\/call-app\/whiteboard\/public\/index\.html"/s,
+  'deploy smoke must verify the semantic whiteboard.kingrt.com host and packaged Call App path',
 );
 
 assert.match(
   deployHetzner,
-  /VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN[\s\S]*DEPLOY_CALL_APP_DOMAIN[\s\S]*DEPLOY_MOTHERNODE_DOMAIN/s,
-  'Hetzner deploy helper must persist and provision Call App and Mothernode DNS names',
+  /VIDEOCHAT_DEPLOY_APP_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN[\s\S]*DEPLOY_APP_DOMAIN[\s\S]*DEPLOY_CALL_APP_DOMAIN[\s\S]*DEPLOY_REGISTRY_DOMAIN/s,
+  'Hetzner deploy helper must persist and provision app, Call App, and registry DNS names',
 );
+
+assert.ok(!deploy.includes('cnd.${DEPLOY_DOMAIN}') && !deployHetzner.includes('cnd.${DEPLOY_DOMAIN}'), 'production generation must not provision legacy cnd aliases');
+assert.ok(!deploy.includes('mother.${DEPLOY_DOMAIN}') && !deployHetzner.includes('mother.${DEPLOY_DOMAIN}'), 'production generation must not use mother.kingrt.com as the canonical registry host');
 
 console.log('[call-app-production-deploy-contract] PASS');

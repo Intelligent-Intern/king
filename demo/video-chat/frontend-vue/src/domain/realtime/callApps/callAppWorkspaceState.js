@@ -4,6 +4,33 @@ export const CALL_APP_WORKSPACE_LAYOUT_MODE = 'call_app_workspace';
 export const CALL_APP_WORKSPACE_MINI_LIMIT = 5;
 const CALL_APP_IFRAME_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CALL_APP_ORIGIN || '').trim().replace(/\/+$/, '');
 
+function callAppOriginForAppKey(appKey) {
+  if (CALL_APP_IFRAME_ORIGIN === '') return '';
+  const hostAppKey = String(appKey || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (hostAppKey === '') return CALL_APP_IFRAME_ORIGIN;
+
+  try {
+    const parsed = new URL(CALL_APP_IFRAME_ORIGIN);
+    const parts = parsed.hostname.split('.');
+    if (parts.length >= 3 && ['apps', 'whiteboard'].includes(parts[0])) {
+      parts[0] = hostAppKey;
+      parsed.hostname = parts.join('.');
+      parsed.pathname = '';
+      parsed.search = '';
+      parsed.hash = '';
+      return parsed.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    return CALL_APP_IFRAME_ORIGIN;
+  }
+
+  return CALL_APP_IFRAME_ORIGIN;
+}
+
 function normalizeSession(raw = {}) {
   const session = raw && typeof raw === 'object' ? raw : {};
   const app = session.app && typeof session.app === 'object' ? session.app : {};
@@ -64,7 +91,8 @@ export function callAppWorkspaceIframeUrl(session) {
     .join('/');
   if (appKey === '' || entrypoint === '') return 'about:blank';
   const path = `/call-app/${encodeURIComponent(appKey)}/${entrypoint}`;
-  return CALL_APP_IFRAME_ORIGIN !== '' ? `${CALL_APP_IFRAME_ORIGIN}${path}` : path;
+  const origin = callAppOriginForAppKey(appKey);
+  return origin !== '' ? `${origin}${path}` : path;
 }
 
 export function createCallAppWorkspaceState({
