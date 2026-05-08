@@ -144,12 +144,12 @@ function videochat_user_is_call_moderator(PDO $pdo, string $callId, int $authUse
 
     $roleQuery = $pdo->prepare(
         <<<'SQL'
-SELECT call_role
+SELECT call_participants.call_role, call_participants.invite_state, calls.status
 FROM call_participants
-WHERE call_id = :call_id
-  AND user_id = :user_id
-  AND source = 'internal'
-  AND invite_state NOT IN ('declined', 'cancelled')
+INNER JOIN calls ON calls.id = call_participants.call_id
+WHERE call_participants.call_id = :call_id
+  AND call_participants.user_id = :user_id
+  AND call_participants.source = 'internal'
 LIMIT 1
 SQL
     );
@@ -158,7 +158,19 @@ SQL
         ':user_id' => $authUserId,
     ]);
 
-    $callRole = videochat_normalize_call_participant_role((string) ($roleQuery->fetchColumn() ?: 'participant'));
+    $row = $roleQuery->fetch();
+    if (!is_array($row)) {
+        return false;
+    }
+
+    if (!in_array(strtolower(trim((string) ($row['status'] ?? ''))), ['active', 'scheduled'], true)) {
+        return false;
+    }
+    if (!videochat_call_invite_state_allows_scoped_role($row['invite_state'] ?? 'invited')) {
+        return false;
+    }
+
+    $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
     return $callRole === 'owner' || $callRole === 'moderator';
 }
 
@@ -237,6 +249,20 @@ function videochat_can_administer_call(
     }
 
     return videochat_user_is_organization_admin_for_call($pdo, $callId, $authUserId, $tenantId);
+}
+
+function videochat_can_manage_call_guest_list(
+    PDO $pdo,
+    array $call,
+    string $authRole,
+    int $authUserId,
+    ?int $tenantId = null
+): bool {
+    if (videochat_can_edit_call($authRole, $authUserId, (int) ($call['owner_user_id'] ?? 0), $pdo)) {
+        return true;
+    }
+
+    return videochat_user_is_organization_admin_for_call($pdo, $call, $authUserId, $tenantId);
 }
 
 /**
@@ -505,13 +531,15 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
     $contextFromRow = static function (array $row, bool $isOrganizationAdmin) use ($userId): array {
         $isFreeForAll = videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only') === 'free_for_all';
         $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
-        if ((int) ($row['owner_user_id'] ?? 0) === $userId) {
+        $isCallOwner = (int) ($row['owner_user_id'] ?? 0) === $userId;
+        if ($isCallOwner) {
             $callRole = 'owner';
         }
         $effectiveCallRole = $isOrganizationAdmin && $callRole !== 'owner' ? 'moderator' : $callRole;
         $inviteState = $isOrganizationAdmin
             ? 'allowed'
             : videochat_normalize_call_invite_state($row['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited'));
+        $scopedRoleActive = $isCallOwner || videochat_call_invite_state_allows_scoped_role($inviteState);
 
         return [
             'call_id' => (string) ($row['id'] ?? ''),
@@ -520,8 +548,8 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
             'invite_state' => $inviteState,
             'joined_at' => trim((string) ($row['joined_at'] ?? '')),
             'left_at' => trim((string) ($row['left_at'] ?? '')),
-            'can_moderate' => $isOrganizationAdmin || in_array($callRole, ['owner', 'moderator'], true),
-            'can_manage_owner' => $callRole === 'owner',
+            'can_moderate' => $isOrganizationAdmin || ($scopedRoleActive && in_array($callRole, ['owner', 'moderator'], true)),
+            'can_manage_owner' => $scopedRoleActive && $callRole === 'owner',
         ];
     };
 
