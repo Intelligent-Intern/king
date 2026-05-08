@@ -7,6 +7,11 @@ import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
+const RETRYABLE_RECONNECT_BACKFILL_REASONS = Object.freeze([
+  'access_session_binding_unavailable',
+  'realtime_backfill_unavailable',
+  'websocket_reconnect_backfill_unavailable',
+]);
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/answer',
   'call/ice',
@@ -529,12 +534,33 @@ export function createCallWorkspaceSocketHelpers({
       }
       const transientAuthBackendError = code === 'websocket_auth_temporarily_unavailable'
         || closeReason === 'auth_backend_error';
-      if (transientAuthBackendError) {
+      const transientReconnectBackfillError = code === 'websocket_reconnect_backfill_unavailable'
+        || RETRYABLE_RECONNECT_BACKFILL_REASONS.includes(closeReason);
+      const retryableRealtimeReconnectError = transientAuthBackendError || transientReconnectBackfillError;
+      if (retryableRealtimeReconnectError) {
+        const retryReason = transientAuthBackendError
+          ? 'auth_backend_error'
+          : (closeReason || code || 'websocket_reconnect_retryable_error');
         state.manualSocketClose = false;
         refs.workspaceError.value = '';
         refs.workspaceNotice.value = '';
-        refs.connectionReason.value = 'auth_backend_error';
+        refs.connectionReason.value = retryReason;
         refs.connectionState.value = 'retrying';
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'realtime_websocket_retryable_error',
+          code: code || retryReason,
+          message,
+          payload: {
+            retryable: true,
+            retry_reason: retryReason,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+            details: payload?.details || {},
+          },
+          immediate: true,
+        });
         closeSocketLocal();
         scheduleReconnect();
         return;
@@ -831,6 +857,21 @@ export function createCallWorkspaceSocketHelpers({
       if (originIndex >= orderedSocketOrigins.length) {
         refs.connectionState.value = 'retrying';
         refs.connectionReason.value = 'socket_unreachable';
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'realtime_websocket_retryable_error',
+          code: 'websocket_connect_retry_scheduled',
+          message: 'Realtime websocket connection could not be established; retrying without expiring the session.',
+          payload: {
+            retryable: true,
+            retry_reason: refs.connectionReason.value,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+            origin_count: orderedSocketOrigins.length,
+          },
+          immediate: true,
+        });
         finishConnectInFlight();
         scheduleReconnect();
         return;
@@ -865,6 +906,25 @@ export function createCallWorkspaceSocketHelpers({
       };
       const connectNextOrigin = () => {
         connectWithOriginAt(originIndex + 1);
+      };
+
+      const captureRetryableReconnectClose = (retryReason, closeEvent = null) => {
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'realtime_websocket_retryable_error',
+          code: retryReason || 'websocket_retryable_close',
+          message: 'Realtime websocket closed with a retryable reconnect condition.',
+          payload: {
+            retryable: true,
+            retry_reason: retryReason || 'websocket_retryable_close',
+            close_code: Number(closeEvent?.code || 0),
+            close_reason: String(closeEvent?.reason || '').trim(),
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+          },
+          immediate: true,
+        });
       };
 
       const failOverToNextOrigin = (closeReason = 'failover') => {
@@ -997,9 +1057,19 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
+        const retryableBackfillClose = RETRYABLE_RECONNECT_BACKFILL_REASONS.includes(closeReason);
+        if (retryableBackfillClose) {
+          refs.connectionState.value = 'retrying';
+          refs.connectionReason.value = closeReason;
+          captureRetryableReconnectClose(closeReason, event);
+          finishConnectInFlight();
+          scheduleReconnect();
+          return;
+        }
         if (closeReason === 'auth_backend_error' || event?.code === 1011) {
           refs.connectionState.value = 'retrying';
           refs.connectionReason.value = closeReason || 'socket_internal_error';
+          captureRetryableReconnectClose(closeReason || 'socket_internal_error', event);
           finishConnectInFlight();
           scheduleReconnect();
           return;
