@@ -111,6 +111,24 @@ SQL
         }
 
         $displayName = trim((string) $data['first_name'] . ' ' . (string) $data['last_name']);
+        $bookingEmail = videochat_normalize_call_access_email((string) $data['email']);
+        $guestCreate = videochat_create_guest_user_for_call_access($pdo, $displayName, $tenantId, false);
+        if (!(bool) ($guestCreate['ok'] ?? false) || !is_array($guestCreate['user'] ?? null)) {
+            $pdo->rollBack();
+            return [
+                'ok' => false,
+                'reason' => (string) ($guestCreate['reason'] ?? 'internal_error'),
+                'errors' => is_array($guestCreate['errors'] ?? null) ? $guestCreate['errors'] : [],
+            ];
+        }
+        $temporaryUser = (array) $guestCreate['user'];
+        $temporaryUserId = (int) ($temporaryUser['id'] ?? 0);
+        $temporaryUserEmail = videochat_normalize_call_access_email((string) ($temporaryUser['email'] ?? ''));
+        if ($temporaryUserId <= 0 || $temporaryUserEmail === '' || $bookingEmail === '') {
+            $pdo->rollBack();
+            return ['ok' => false, 'reason' => 'internal_error', 'errors' => ['target_user' => 'invalid_invitee_binding']];
+        }
+
         $callTitle = 'Video call with ' . $displayName;
         $schedule = videochat_build_call_schedule_metadata($startsAt, $endsAt, $block['timezone'] ?? 'UTC', false);
         $status = $startsAtUnix <= time() && time() < $endsAtUnix ? 'active' : 'scheduled';
@@ -186,10 +204,10 @@ SQL
         ]);
         $insertParticipant->execute([
             ':call_id' => $callId,
-            ':user_id' => null,
-            ':email' => (string) $data['email'],
+            ':user_id' => $temporaryUserId,
+            ':email' => $bookingEmail,
             ':display_name' => $displayName,
-            ':source' => 'external',
+            ':source' => 'internal',
             ':call_role' => 'participant',
             ':invite_state' => 'invited',
         ]);
@@ -202,7 +220,7 @@ INSERT INTO call_access_links(
     id, call_id, participant_user_id, participant_email, invite_code_id,
     created_by_user_id, created_at, expires_at, last_used_at, consumed_at{$accessTenantColumn}
 ) VALUES(
-    :id, :call_id, NULL, :participant_email, NULL,
+    :id, :call_id, :participant_user_id, :participant_email, NULL,
     :owner_user_id, :created_at, :expires_at, NULL, NULL{$accessTenantValue}
 )
 SQL
@@ -210,7 +228,8 @@ SQL
         $accessParams = [
             ':id' => $accessId,
             ':call_id' => $callId,
-            ':participant_email' => (string) $data['email'],
+            ':participant_user_id' => $temporaryUserId,
+            ':participant_email' => $bookingEmail,
             ':owner_user_id' => $ownerUserId,
             ':created_at' => $now,
             ':expires_at' => $endsAt,

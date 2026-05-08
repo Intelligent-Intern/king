@@ -295,7 +295,7 @@ SQL
         if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId) {
             return $fail('call_access_binding_mismatch');
         }
-        if ($linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail) {
+        if ($linkParticipantUserId <= 0 && $linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail) {
             return $fail('call_access_binding_mismatch');
         }
     } elseif ($linkParticipantUserId > 0 || $linkParticipantEmail !== '') {
@@ -542,8 +542,12 @@ SQL
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_create_guest_user_for_call_access(PDO $pdo, string $displayName, ?int $tenantId = null): array
-{
+function videochat_create_guest_user_for_call_access(
+    PDO $pdo,
+    string $displayName,
+    ?int $tenantId = null,
+    bool $attachTenantMembership = true
+): array {
     $name = trim($displayName);
     if ($name === '') {
         return [
@@ -613,7 +617,7 @@ SQL
                 ':updated_at' => gmdate('c'),
             ]);
             $createdUserId = (int) $pdo->lastInsertId();
-            if (is_int($tenantId) && $tenantId > 0) {
+            if ($attachTenantMembership && is_int($tenantId) && $tenantId > 0) {
                 videochat_tenant_attach_user($pdo, $createdUserId, $tenantId);
             }
             break;
@@ -639,7 +643,7 @@ SQL
         ];
     }
 
-    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null, $tenantId);
+    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null, $tenantId, $attachTenantMembership);
     if (!is_array($user)) {
         return [
             'ok' => false,
