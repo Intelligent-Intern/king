@@ -46,6 +46,62 @@
       </section>
     </section>
 
+    <section class="gossip-network-card">
+      <header class="gossip-network-head">
+        <div>
+          <h2>{{ t('users.overview.gossip_network_map') }}</h2>
+          <p>
+            {{ t('users.overview.gossip_network_summary', {
+              nodes: gossipNetworkMap.summary.nodeCount,
+              edges: gossipNetworkMap.summary.edgeCount
+            }) }}
+          </p>
+        </div>
+        <span class="tag" :class="gossipNetworkMap.summary.statusTagClass">{{ gossipNetworkMap.summary.statusLabel }}</span>
+      </header>
+
+      <div v-if="gossipNetworkMap.nodes.length > 0" class="gossip-network-layout">
+        <div class="gossip-network-canvas" role="img" :aria-label="t('users.overview.gossip_network_map')">
+          <svg class="gossip-network-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <line
+              v-for="edge in gossipNetworkMap.edges"
+              :key="edge.id"
+              :x1="edge.x1"
+              :y1="edge.y1"
+              :x2="edge.x2"
+              :y2="edge.y2"
+              :class="['gossip-edge', `is-${edge.health}`]"
+            />
+          </svg>
+          <button
+            v-for="node in gossipNetworkMap.nodes"
+            :key="node.id"
+            type="button"
+            :class="[
+              'gossip-node',
+              `is-${node.kind}`,
+              `is-${node.health}`,
+              { selected: gossipNetworkMap.selectedNode?.id === node.id }
+            ]"
+            :style="{ left: `${node.x}%`, top: `${node.y}%` }"
+            :title="node.detail"
+            @click="selectGossipNode(node.id)"
+          >
+            <span>{{ node.label }}</span>
+          </button>
+        </div>
+        <aside class="gossip-network-detail">
+          <strong>{{ gossipNetworkMap.selectedNode?.label || t('users.overview.gossip_no_node_selected') }}</strong>
+          <span>{{ gossipNetworkMap.selectedNode?.detail || t('users.overview.gossip_waiting_for_topology') }}</span>
+          <ul class="gossip-network-analysis" aria-label="Gossip topology analysis">
+            <li v-for="line in gossipNetworkMap.analysis" :key="line">{{ line }}</li>
+          </ul>
+        </aside>
+      </div>
+
+      <p v-else class="infra-inline-state">{{ t('users.overview.gossip_waiting_for_topology') }}</p>
+    </section>
+
     <section class="panel-grid grid-2">
       <article class="card">
         <h2 class="table-title">{{ t('users.overview.server_utilization') }}</h2>

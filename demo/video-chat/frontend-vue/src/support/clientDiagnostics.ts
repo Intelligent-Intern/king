@@ -68,13 +68,13 @@ function sanitizePayload(value, depth = 0) {
     };
   }
   if (Array.isArray(value)) {
-    return value.slice(0, 24).map((entry) => sanitizePayload(entry, depth + 1));
+    return value.slice(0, 48).map((entry) => sanitizePayload(entry, depth + 1));
   }
   if (value && typeof value === 'object') {
     const normalized = {};
     let count = 0;
     for (const [key, entry] of Object.entries(value)) {
-      if (count >= 24) {
+      if (count >= 64) {
         normalized.__truncated__ = true;
         break;
       }
@@ -92,7 +92,7 @@ function normalizePayloadObject(value) {
     ? sanitized
     : { value: sanitized };
   const encoded = JSON.stringify(wrapped);
-  if (utf8Length(encoded) <= 6000) return wrapped;
+  if (utf8Length(encoded) <= 12000) return wrapped;
   return {
     truncated: true,
     preview: normalizeString(encoded, '', 2000),

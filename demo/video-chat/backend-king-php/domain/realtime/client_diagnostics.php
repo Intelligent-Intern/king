@@ -96,7 +96,7 @@ function videochat_client_diagnostics_sanitize_value(mixed $value, int $depth = 
     return videochat_client_diagnostics_truncate_text((string) $value, 400);
 }
 
-function videochat_client_diagnostics_encode_payload(mixed $payload, int $maxBytes = 8192): string
+function videochat_client_diagnostics_encode_payload(mixed $payload, int $maxBytes = 16384): string
 {
     $sanitized = videochat_client_diagnostics_sanitize_value($payload);
     $encoded = json_encode($sanitized, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

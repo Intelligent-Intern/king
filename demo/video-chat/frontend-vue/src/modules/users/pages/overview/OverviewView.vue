@@ -1,13 +1,14 @@
 <template src="./OverviewView.template.html"></template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive } from 'vue';
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
 import { t } from '../../../localization/i18nRuntime.js';
 import { normalizeArray, normalizeNonNegativeInteger } from './helpers';
 import { useOverviewDashboardMetrics } from './useOverviewDashboardMetrics';
+import { useGossipNetworkMap } from './useGossipNetworkMap';
 
 const router = useRouter();
 let infrastructureLoadSeq = 0;
@@ -32,8 +33,12 @@ const operationsState = reactive({
     live_calls: 0,
     concurrent_participants: 0,
   },
+  gossipTelemetry: {},
   runningCalls: [],
+  transport: {},
 });
+
+const selectedGossipNodeId = ref('');
 
 const {
   clusterHealthRows,
@@ -50,6 +55,8 @@ const {
   runningCallsRows,
   serverResourceRows,
 } = useOverviewDashboardMetrics({ infrastructureState, operationsState });
+
+const gossipNetworkMap = useGossipNetworkMap(operationsState, selectedGossipNodeId);
 
 function requestHeaders(includeBody = false) {
   const token = String(sessionState.sessionToken || '').trim();
@@ -133,12 +140,23 @@ async function loadInfrastructure() {
 
 function applyVideoOperationsPayload(payload) {
   const metrics = payload?.metrics && typeof payload.metrics === 'object' ? payload.metrics : {};
+  const telemetry = payload?.gossip_telemetry
+    || payload?.gossipTelemetry
+    || payload?.telemetry?.gossipmesh
+    || payload?.transport?.gossipmesh
+    || {};
   operationsState.metrics = {
     live_calls: normalizeNonNegativeInteger(metrics.live_calls),
     concurrent_participants: normalizeNonNegativeInteger(metrics.concurrent_participants),
   };
+  operationsState.gossipTelemetry = telemetry && typeof telemetry === 'object' ? telemetry : {};
   operationsState.runningCalls = normalizeArray(payload?.running_calls);
+  operationsState.transport = payload?.transport && typeof payload.transport === 'object' ? payload.transport : {};
   operationsState.lastLoadedAt = String(payload?.time || new Date().toISOString());
+}
+
+function selectGossipNode(nodeId) {
+  selectedGossipNodeId.value = String(nodeId || '');
 }
 
 async function loadVideoOperations({ background = false } = {}) {
