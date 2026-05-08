@@ -22,6 +22,12 @@ function videochat_call_access_route_session_id(array $authContext): string
     return '';
 }
 
+function videochat_call_access_resolved_target_user_id(array $resolveResult): int
+{
+    $targetUser = is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : [];
+    return is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : 0;
+}
+
 /**
  * @return array{ok: bool, reason: string, context: array<string, mixed>}
  */
@@ -92,6 +98,7 @@ function videochat_handle_call_access_routes(
         try {
             $pdo = $openDatabase();
             $resolveResult = videochat_resolve_call_access_public($pdo, $accessId);
+            $joinAuthContext = videochat_call_access_session_auth_context($pdo, $request, $apiAuthContext);
         } catch (Throwable) {
             return $errorResponse(500, 'call_access_resolve_failed', 'Could not resolve call access.', [
                 'reason' => 'internal_error',
@@ -127,14 +134,34 @@ function videochat_handle_call_access_routes(
             ]);
         }
 
+        if (!(bool) ($joinAuthContext['ok'] ?? false)) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required when session credentials are presented.', [
+                'reason' => (string) ($joinAuthContext['reason'] ?? 'invalid_session'),
+            ]);
+        }
+
+        $effectiveJoinAuthContext = is_array($joinAuthContext['context'] ?? null) ? $joinAuthContext['context'] : [];
+        $authenticatedJoinUserId = videochat_call_access_route_user_id($effectiveJoinAuthContext);
+        $linkKind = videochat_call_access_link_kind(
+            is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : null
+        );
+        $targetUserId = videochat_call_access_resolved_target_user_id($resolveResult);
+        if ($authenticatedJoinUserId > 0 && $linkKind === 'personal' && $targetUserId > 0 && $targetUserId !== $authenticatedJoinUserId) {
+            return $errorResponse(403, 'call_access_forbidden', 'Call access link is not available for your session.', [
+                'mismatch' => 'strong_personalized_link',
+                'fields' => [
+                    'auth' => 'not_bound_to_current_user',
+                    'host_name' => 'not_verified',
+                ],
+            ]);
+        }
+
         return $jsonResponse(200, [
             'status' => 'ok',
             'result' => [
                 'state' => 'resolved',
                 'access_link' => $resolveResult['access_link'] ?? null,
-                'link_kind' => videochat_call_access_link_kind(
-                    is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : null
-                ),
+                'link_kind' => $linkKind,
                 'call' => $resolveResult['call'] ?? null,
                 'target_user' => $resolveResult['target_user'] ?? null,
                 'target_hint' => $resolveResult['target_hint'] ?? ['participant_email' => null],
@@ -169,6 +196,9 @@ function videochat_handle_call_access_routes(
             }
             if (array_key_exists('verified_session_id', $payload)) {
                 $sessionOptions['verified_session_id'] = $payload['verified_session_id'];
+            }
+            if (array_key_exists('host_name', $payload)) {
+                $sessionOptions['host_name'] = $payload['host_name'];
             }
         }
 

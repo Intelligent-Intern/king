@@ -1292,8 +1292,8 @@ the authenticated account authoritative for the issued session.
 - [ ] Link data of other person is not displayed
 - [ ] Differing link data is not exposed in clear text
 - [ ] Host name is verified server-side
-- [ ] Wrong host name grants no direct access
-- [ ] Wrong host name does not reveal foreign data
+- [x] Wrong host name grants no direct access
+- [x] Wrong host name does not reveal foreign data
 - [ ] Wrong host name may lead to lobby / manual review
 - [ ] Correct host name is accepted
 - [ ] Correct host name shows success confirmation
@@ -1315,7 +1315,15 @@ the authenticated account authoritative for the issued session.
 - [ ] Flow is audit-logged
 - [ ] Host-name brute force is rate-limited
 - [ ] Repeated wrong host names trigger lock / review if configured
-- [ ] Host-name error messages leak no host data
+- [x] Host-name error messages leak no host data
+
+Proof: `call-access-strong-mismatch-privacy-contract` creates a personalized
+link for one invitee, authenticates a strongly different logged-in account, and
+proves the backend `/api/call-access/{id}/join` and `/session` routes return
+only generic mismatch/host-name field errors for unverified or wrong host-name
+attempts. The responses contain no target invitee, host, external participant,
+call title, call id, or denied session id, and no call-access session is
+persisted.
 
 ## 8. Duplicate Personalized Link / Abuse Detection
 
@@ -1470,12 +1478,12 @@ queued or admitted handoff left behind.
 
 ## 14. Privacy and Data Minimization
 
-- [ ] Foreign link data is not shown on strong mismatch
+- [x] Foreign link data is not shown on strong mismatch
 - [ ] Differing data is not shown as comparison list
 - [ ] User must re-enter differing data manually
 - [x] Guessed link reveals no personal data
 - [x] Invalid link reveals no personal data
-- [ ] Wrong host name reveals no personal data
+- [x] Wrong host name reveals no personal data
 - [ ] Account data is updated only after email confirmation
 - [ ] Email confirmation goes only to logged-in account
 - [ ] Temporary account data is not persisted unnecessarily
