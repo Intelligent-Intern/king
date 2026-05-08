@@ -1292,23 +1292,23 @@ data. The focused integrated Playwright run passed 18 tests.
 
 ## 4. Calendar Invitation Flow
 
-- [ ] Host can invite person through calendar flow
-- [ ] Invitee can select appointment in calendar form
+- [x] Host can invite person through calendar flow
+- [x] Invitee can select appointment in calendar form
 - [ ] Invitee can be registered and logged in
 - [ ] Invitee can be registered and logged out
-- [ ] Invitee can be unregistered
-- [ ] Temporary account is created for non-logged-in invitee
-- [ ] Temporary account contains form data
-- [ ] Personalized call link is associated with temporary account
-- [ ] Personalized call link is unique
-- [ ] Personalized call link is not guessable
-- [ ] Personalized call link is server-side bound to temporary account
-- [ ] Calendar appointment is correctly associated with call / host
-- [ ] Multiple invitees receive different personalized links
-- [ ] Appointment change does not modify unrelated invitations
+- [x] Invitee can be unregistered
+- [x] Temporary account is created for non-logged-in invitee
+- [x] Temporary account contains form data
+- [x] Personalized call link is associated with temporary account
+- [x] Personalized call link is unique
+- [x] Personalized call link is not guessable
+- [x] Personalized call link is server-side bound to temporary account
+- [x] Calendar appointment is correctly associated with call / host
+- [x] Multiple invitees receive different personalized links
+- [x] Appointment change does not modify unrelated invitations
 - [x] Invitation cancellation invalidates personalized link
 - [x] Expired personalized link cannot be used if expiry exists
-- [ ] Reopening same personalized link by same valid context behaves consistently
+- [x] Reopening same personalized link by same valid context behaves consistently
 
 Proof: `call-access-invalidation-contract.sh`,
 `call-access-invitation-cancellation-contract.sh`,
@@ -1320,10 +1320,21 @@ invalid-link UI without private invite data. Frontend E2E and static
 contracts passed locally; SQLite-backed PHP runtime execution is blocked on
 this host because PHP does not load `pdo_sqlite`.
 
+Proof: `call-calendar-invitation-flow-contract` statically pins the calendar
+booking implementation and, in SQLite-capable runtimes, creates two public
+appointment bookings, creates call-scoped temporary guest accounts without
+tenant membership, persists form data, binds personalized links to those
+temporary accounts, verifies UUIDv4/non-sequential link ids, proves each
+invitee receives distinct link/account/call records, moves one appointment
+without mutating the unrelated invitation, rejects a manipulated link and wrong
+authenticated account, and reopens the same valid link without creating another
+temporary account. Local PHP syntax passed; runtime execution is skipped on
+this host because `pdo_sqlite` is unavailable.
+
 ## 5. Personalized Link: User Not Logged In
 
 - [x] Not logged-in user opens personalized link
-- [ ] Temporary account from link data is created / used
+- [x] Temporary account from link data is created / used
 - [ ] Temporary account does not automatically log in existing registered account
 - [x] User enters intended flow with temporary account
 - [ ] Temporary account may be on guest list
@@ -1333,11 +1344,11 @@ this host because PHP does not load `pdo_sqlite`.
 - [ ] Temporary account receives no registered account rights
 - [ ] Temporary account cannot administer call unless explicitly permitted
 - [ ] Temporary account cannot assume another identity by changing link parameters
-- [ ] Temporary account remains consistent for same link / call
+- [x] Temporary account remains consistent for same link / call
 - [ ] Temporary account can be recognized after leaving
 - [ ] Temporary account cannot receive organization-wide rights
 - [x] Invalid personalized link is rejected
-- [ ] Manipulated personalized link is rejected
+- [x] Manipulated personalized link is rejected
 - [x] Error state for invalid personalized link leaks no data
 
 Proof: `call-access-personalized-identity.spec.js` covers a logged-out
@@ -1907,7 +1918,7 @@ host by missing `pdo_sqlite`.
 
 ## 25. Guest Account Lifecycle
 
-- [ ] Guest account is created from personalized calendar invitation
+- [x] Guest account is created from personalized calendar invitation
 - [x] Guest account is deleted when call is deleted
 - [ ] Guest account is deleted or invalidated when invitation is deleted
 - [x] Guest account is deleted or invalidated when invite link is manually invalidated
@@ -2085,7 +2096,7 @@ host because PHP does not load `pdo_sqlite`.
 - [x] Registered account was deleted
 - [ ] User email is unconfirmed if relevant
 - [ ] Calendar appointment was cancelled
-- [ ] Calendar appointment was moved
+- [x] Calendar appointment was moved
 - [ ] Personalized link belongs to another appointment of same host
 - [ ] Personalized link belongs to another call of same host
 - [ ] Host name differs in capitalization
@@ -2246,16 +2257,16 @@ unchecked for the separate owner-transfer lane.
 
 ## Test Group: Calendar Invitation
 
-- [ ] `e2e_invite_001_host_creates_calendar_invitation`
-- [ ] `e2e_invite_002_invitee_selects_appointment`
+- [x] `e2e_invite_001_host_creates_calendar_invitation`
+- [x] `e2e_invite_002_invitee_selects_appointment`
 - [ ] `e2e_invite_003_registered_logged_in_invitee_flow`
 - [ ] `e2e_invite_004_registered_logged_out_invitee_flow`
-- [ ] `e2e_invite_005_unregistered_invitee_creates_temp_account`
-- [ ] `e2e_invite_006_personalized_link_bound_to_temp_account`
-- [ ] `e2e_invite_007_multiple_invitees_get_unique_links`
-- [ ] `e2e_invite_008_cancel_invitation_invalidates_link`
-- [ ] `e2e_invite_009_expired_personalized_link_rejected`
-- [ ] `e2e_invite_010_reopen_same_link_same_context_consistent`
+- [x] `e2e_invite_005_unregistered_invitee_creates_temp_account`
+- [x] `e2e_invite_006_personalized_link_bound_to_temp_account`
+- [x] `e2e_invite_007_multiple_invitees_get_unique_links`
+- [x] `e2e_invite_008_cancel_invitation_invalidates_link`
+- [x] `e2e_invite_009_expired_personalized_link_rejected`
+- [x] `e2e_invite_010_reopen_same_link_same_context_consistent`
 
 Proof: `call-access-verified-context-ui-contract` pins the focused Playwright
 case `same personalized link in parallel contexts keeps account sessions
@@ -2268,7 +2279,7 @@ against duplicate join/session request loops.
 
 ## Test Group: Personalized Link Logged Out
 
-- [ ] `e2e_personalized_logged_out_001_temp_account_created_from_link`
+- [x] `e2e_personalized_logged_out_001_temp_account_created_from_link`
 - [ ] `e2e_personalized_logged_out_002_existing_account_not_auto_logged_in`
 - [ ] `e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join`
 - [ ] `e2e_personalized_logged_out_004_temp_guest_not_on_guest_list_lobby`
@@ -2391,7 +2402,7 @@ against duplicate join/session request loops.
 - [ ] `e2e_privacy_004_wrong_host_name_no_personal_data_leak`
 - [ ] `e2e_privacy_005_browser_network_response_no_foreign_data`
 - [ ] `e2e_privacy_006_audit_logs_minimize_sensitive_data`
-- [ ] `e2e_security_001_modified_personalized_link_id_rejected`
+- [x] `e2e_security_001_modified_personalized_link_id_rejected`
 - [ ] `e2e_security_002_modified_call_id_rejected`
 - [ ] `e2e_security_003_forged_user_id_rejected`
 - [ ] `e2e_security_004_forged_role_rejected`
@@ -2486,7 +2497,7 @@ against duplicate join/session request loops.
 
 ## Test Group: Guest Account Lifecycle
 
-- [ ] `e2e_guest_lifecycle_001_temp_guest_created_from_calendar_invite`
+- [x] `e2e_guest_lifecycle_001_temp_guest_created_from_calendar_invite`
 - [x] `e2e_guest_lifecycle_002_temp_guest_deleted_when_call_deleted`
 - [ ] `e2e_guest_lifecycle_003_temp_guest_deleted_when_invitation_deleted`
 - [ ] `e2e_guest_lifecycle_004_temp_guest_invalidated_when_link_invalidated`
