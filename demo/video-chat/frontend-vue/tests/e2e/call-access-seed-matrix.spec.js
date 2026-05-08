@@ -18,6 +18,7 @@ import {
 
 const allowedDirectJoinScenarios = [
   'direct_join_system_admin_without_guest_list',
+  'direct_join_system_admin_tenantless_without_organization',
   'direct_join_org_admin_own_organization_without_guest_list',
   'direct_join_normal_owner_without_guest_list',
   'direct_join_guest_list_user_allowed',
@@ -110,6 +111,18 @@ test('IAM call-access seed matrix covers required principals without temporary a
     can_manage_lobby: false,
   });
 
+  const tenantlessSystemAdminScenario = getSeedScenario('direct_join_system_admin_tenantless_without_organization');
+  expect(getSeedCall(tenantlessSystemAdminScenario.call_key).tenant_key).toBeNull();
+  expect(tenantSnapshotForSeedUser(tenantlessSystemAdminScenario.principal_user_key, tenantlessSystemAdminScenario.call_key)).toBeNull();
+  expect(directJoinDecisionForSeedUser(
+    tenantlessSystemAdminScenario.principal_user_key,
+    tenantlessSystemAdminScenario.call_key,
+  )).toMatchObject({
+    allowed: true,
+    source: 'system_admin',
+    scope: 'system',
+    can_manage_lobby: true,
+  });
   const temporaryGuestListScenario = getSeedScenario('direct_join_temporary_guest_list_user_allowed');
   const temporaryGuestListCall = getSeedCall(temporaryGuestListScenario.call_key);
   expect(temporaryGuestListCall.guest_list_user_keys).toEqual(expect.arrayContaining(['temporary_personalized_guest']));
@@ -175,8 +188,14 @@ test('IAM call-access seed matrix covers required principals without temporary a
     }
     expect(decision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
     const tenant = tenantSnapshotForSeedUser(scenario.principal_user_key, scenario.call_key);
-    expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
-    expect(tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
+    if (scenario.expected.tenant_required === false) {
+      expect(tenant).toBeNull();
+      expect(getSeedUser(scenario.principal_user_key).system_admin === true).toBe(scenario.expected.platform_admin);
+      expect(scenario.expected.tenant_admin).toBe(false);
+    } else {
+      expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
+      expect(tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
+    }
   }
 });
 

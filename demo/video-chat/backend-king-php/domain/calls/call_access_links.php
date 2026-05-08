@@ -405,7 +405,8 @@ function videochat_resolve_call_access_for_user(
         ];
     }
 
-    $callRecord = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $callRecord = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if (!is_array($callRecord)) {
         return [
             'ok' => false,

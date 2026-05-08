@@ -6,6 +6,7 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_iam_anonymous_lobby_assert(bool $condition, string $message): void
@@ -428,10 +429,29 @@ SQL
     ], JSON_UNESCAPED_SLASHES));
     $orgAuthority = videochat_realtime_authorize_lobby_moderation_command($orgAdminConnection, $orgAllowCommand, $callId, $openDatabase);
     videochat_iam_anonymous_lobby_assert((bool) ($orgAuthority['ok'] ?? false), 'organization admin should be authorized to moderate own organization lobby');
-    videochat_iam_anonymous_lobby_assert((string) ($orgAuthority['call_role'] ?? '') === 'moderator', 'organization admin authority should be scoped as moderator');
+    videochat_iam_anonymous_lobby_assert((string) ($orgAuthority['call_role'] ?? '') === 'participant', 'organization admin authority should preserve stored participant role');
+    videochat_iam_anonymous_lobby_assert((string) ($orgAuthority['effective_call_role'] ?? '') === 'moderator', 'organization admin authority should be scoped as effective moderator');
     videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $orgAdminConnection, $callId, (int) ($orgGuestConnection['user_id'] ?? 0), 'organization admin admission');
 
     $systemGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_system', $callId, 'guest_system_admit');
+    $systemAdminLobbySnapshot = videochat_lobby_snapshot_payload_for_connection(
+        videochat_lobby_snapshot_payload($lobbyState, $callId, 'system_admin_waiting_probe'),
+        $systemAdminConnection
+    );
+    videochat_iam_anonymous_lobby_assert((int) ($systemAdminLobbySnapshot['queue_count'] ?? 0) === 1, 'system admin should see the waiting participant in lobby snapshot');
+    videochat_iam_anonymous_lobby_assert(
+        (int) ((($systemAdminLobbySnapshot['queue'] ?? [])[0] ?? [])['user_id'] ?? 0) === $systemGuestUserId,
+        'system admin lobby snapshot should expose the waiting participant id'
+    );
+    $systemAllowCommand = videochat_lobby_decode_client_frame(json_encode([
+        'type' => 'lobby/allow',
+        'room_id' => $callId,
+        'target_user_id' => $systemGuestUserId,
+    ], JSON_UNESCAPED_SLASHES));
+    $systemAuthority = videochat_realtime_authorize_lobby_moderation_command($systemAdminConnection, $systemAllowCommand, $callId, $openDatabase);
+    videochat_iam_anonymous_lobby_assert((bool) ($systemAuthority['ok'] ?? false), 'system admin should be authorized to moderate lobby without guest-list row');
+    videochat_iam_anonymous_lobby_assert((string) ($systemAuthority['call_role'] ?? '') === 'participant', 'system admin authority should preserve stored participant role');
+    videochat_iam_anonymous_lobby_assert((string) ($systemAuthority['effective_call_role'] ?? '') === 'owner', 'system admin authority should expose owner-equivalent effective role');
     videochat_iam_anonymous_lobby_admit($pdo, $openDatabase, $presenceState, $lobbyState, $systemAdminConnection, $callId, (int) ($systemGuestConnection['user_id'] ?? 0), 'system admin admission');
 
     $rejectGuestConnection = videochat_iam_anonymous_lobby_queue($pdo, $openDatabase, $presenceState, $lobbyState, 'sess_iam_anon_lobby_guest_reject', $callId, 'guest_reject');
