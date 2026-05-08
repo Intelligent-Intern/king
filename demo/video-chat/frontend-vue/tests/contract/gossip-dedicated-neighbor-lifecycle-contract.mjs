@@ -61,6 +61,13 @@ assert(
   'queued Gossip neighbor renegotiation must be deduped and bounded instead of recursively calling negotiatePeer from finally',
 )
 assert(
+  /const preSetLocalState = String\(peer\.pc\.signalingState \|\| ''\)\.trim\(\)\.toLowerCase\(\)/.test(lifecycle)
+    && /preSetLocalState !== 'stable'/.test(lifecycle)
+    && /gossip_neighbor_offer_deferred/.test(lifecycle)
+    && /await peer\.pc\.setLocalDescription\(offer\)/.test(lifecycle),
+  'Gossip neighbor offer creation must re-check signaling state before setLocalDescription to avoid have-remote-offer glare',
+)
+assert(
   /function closePeer\(peerId,\s*reason = 'retired'\)[\s\S]*clearQueuedRenegotiate\(peer\)[\s\S]*peer\.pc\?\.close\?\.\(\)/.test(lifecycle),
   'closing a Gossip neighbor must clear pending queued renegotiation timers before closing the peer connection',
 )
