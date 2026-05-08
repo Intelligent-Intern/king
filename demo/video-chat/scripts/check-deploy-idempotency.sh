@@ -40,10 +40,18 @@ for marker in \
   'resolved_ips_for_domain "${target}"' \
   'restore_certbot_stopped_services' \
   'trap restore_certbot_stopped_services EXIT' \
+  'existing_certificate_has_required_sans' \
+  'openssl x509 -checkend 0' \
+  '-noout -ext subjectAltName' \
+  'grep -Fx "DNS:\${required_domain}"' \
+  'certbot_status=0' \
+  'certbot_status=\$?' \
+  'certbot failed, but existing certificate is still valid for all required SANs; continuing deploy.' \
   '--keep-until-expiring' \
   "--exclude 'dist/'" \
   "--exclude 'compat-artifacts/'" \
   "--exclude '.cache/'" \
+  "--exclude 'demo/video-chat/secrets/'" \
   'Removing release artifacts from remote checkout' \
   '--remove-orphans'
 do
