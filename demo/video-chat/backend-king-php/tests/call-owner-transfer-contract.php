@@ -61,6 +61,16 @@ function videochat_owner_transfer_contract_static_assertions(): void
         'owner transfer must enforce exactly one owner inside the transaction'
     );
     videochat_owner_transfer_contract_assert(
+        str_contains($transferSource, "require_once __DIR__ . '/../audit/audit_events.php';")
+        && str_contains($transferSource, 'videochat_audit_record_call_owner_transferred')
+        && str_contains($transferSource, "owner_transfer_audit_failed"),
+        'owner transfer must audit-log successful transfers in the mutation path'
+    );
+    videochat_owner_transfer_contract_assert(
+        str_contains($transferSource, 'function videochat_call_owner_transfer_user_role'),
+        'owner transfer audit must derive previous-owner admin retention from backend user state'
+    );
+    videochat_owner_transfer_contract_assert(
         str_contains($transferSource, '$resultTenantId = $isSystemAdmin'),
         'system-admin transfer must refetch through the real call tenant'
     );
@@ -213,6 +223,23 @@ SQL
     ]);
 }
 
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_owner_transfer_contract_owner_transfer_audits(PDO $pdo, int $tenantId, string $callId): array
+{
+    $events = videochat_audit_fetch_events($pdo, [
+        'tenant_id' => $tenantId,
+        'call_id' => $callId,
+        'limit' => 50,
+    ]);
+
+    return array_values(array_filter(
+        $events,
+        static fn (array $event): bool => (string) ($event['event_type'] ?? '') === 'call_owner_transferred'
+    ));
+}
+
 try {
     videochat_owner_transfer_contract_static_assertions();
 
@@ -257,6 +284,7 @@ try {
 
     $normalTransfer = videochat_update_call_participant_role($pdo, $normalCallId, $normalNewOwnerId, 'owner', $normalOwnerId, 'user', $tenantId);
     videochat_owner_transfer_contract_assert((bool) ($normalTransfer['ok'] ?? false), 'normal owner should transfer ownership');
+    videochat_owner_transfer_contract_assert(is_array($normalTransfer['audit_event'] ?? null), 'normal owner transfer should return audit event');
     videochat_owner_transfer_contract_assert(videochat_call_owner_transfer_current_owner_count($pdo, $normalCallId) === 1, 'normal transfer should leave exactly one owner');
     videochat_owner_transfer_contract_assert((int) (videochat_fetch_call_for_update($pdo, $normalCallId, $tenantId)['owner_user_id'] ?? 0) === $normalNewOwnerId, 'normal transfer should persist new owner');
 
@@ -269,6 +297,18 @@ try {
     videochat_owner_transfer_contract_assert((string) ($newNormalContext['call_role'] ?? '') === 'owner', 'new owner should receive owner role');
     videochat_owner_transfer_contract_assert((bool) ($newNormalContext['can_moderate'] ?? false), 'new owner should receive call-admin rights');
     videochat_owner_transfer_contract_assert((bool) ($newNormalContext['can_manage_owner'] ?? false), 'new owner should receive owner-management rights');
+
+    $normalAuditEvents = videochat_owner_transfer_contract_owner_transfer_audits($pdo, $tenantId, $normalCallId);
+    videochat_owner_transfer_contract_assert(count($normalAuditEvents) === 1, 'normal owner transfer should be audit-logged once');
+    $normalAuditEvent = $normalAuditEvents[0] ?? [];
+    $normalAuditPayload = (array) ($normalAuditEvent['payload'] ?? []);
+    videochat_owner_transfer_contract_assert((int) ($normalAuditEvent['actor_user_id'] ?? 0) === $normalOwnerId, 'normal owner transfer audit actor mismatch');
+    videochat_owner_transfer_contract_assert((int) ($normalAuditEvent['target_user_id'] ?? 0) === $normalNewOwnerId, 'normal owner transfer audit target mismatch');
+    videochat_owner_transfer_contract_assert((string) ($normalAuditEvent['resource_fingerprint'] ?? '') === videochat_audit_fingerprint($normalCallId), 'normal owner transfer audit call fingerprint mismatch');
+    videochat_owner_transfer_contract_assert((int) ($normalAuditPayload['previous_owner_user_id'] ?? 0) === $normalOwnerId, 'normal owner transfer audit previous owner mismatch');
+    videochat_owner_transfer_contract_assert((int) ($normalAuditPayload['new_owner_user_id'] ?? 0) === $normalNewOwnerId, 'normal owner transfer audit new owner mismatch');
+    videochat_owner_transfer_contract_assert((bool) ($normalAuditPayload['old_owner_admin_preserved'] ?? true) === false, 'normal owner transfer audit should record no admin retention');
+    videochat_owner_transfer_contract_assert((bool) ($normalAuditPayload['exactly_one_owner_required'] ?? false), 'normal owner transfer audit should pin one-owner invariant');
 
     $formerOwnerAction = videochat_update_call_participant_role($pdo, $normalCallId, $normalThirdId, 'owner', $normalOwnerId, 'user', $tenantId);
     videochat_owner_transfer_contract_assert(!(bool) ($formerOwnerAction['ok'] ?? true), 'former non-admin owner must not transfer owner again');
@@ -300,12 +340,34 @@ try {
     $orgAdminRoomId = (string) ($orgAdminCall['room_id'] ?? '');
     $orgAdminTransfer = videochat_update_call_participant_role($pdo, $orgAdminCallId, $orgAdminNewOwnerId, 'owner', $orgAdminOwnerId, 'user', $tenantId);
     videochat_owner_transfer_contract_assert((bool) ($orgAdminTransfer['ok'] ?? false), 'organization admin owner should transfer ownership');
+    videochat_owner_transfer_contract_assert(is_array($orgAdminTransfer['audit_event'] ?? null), 'organization admin owner transfer should return audit event');
+    videochat_owner_transfer_contract_assert(videochat_call_owner_transfer_current_owner_count($pdo, $orgAdminCallId) === 1, 'organization admin transfer should leave exactly one owner');
+    videochat_owner_transfer_contract_assert((int) (videochat_fetch_call_for_update($pdo, $orgAdminCallId, $tenantId)['owner_user_id'] ?? 0) === $orgAdminNewOwnerId, 'organization admin transfer should persist new owner');
 
     $oldOrgAdminContext = videochat_call_role_context_for_room_user($pdo, $orgAdminRoomId, $orgAdminOwnerId);
     videochat_owner_transfer_contract_assert((string) ($oldOrgAdminContext['call_role'] ?? '') === 'participant', 'old org admin owner row should be demoted');
     videochat_owner_transfer_contract_assert((string) ($oldOrgAdminContext['effective_call_role'] ?? '') === 'moderator', 'old org admin should keep effective moderator role');
     videochat_owner_transfer_contract_assert((bool) ($oldOrgAdminContext['can_moderate'] ?? false), 'old org admin should retain call-admin rights');
     videochat_owner_transfer_contract_assert(!(bool) ($oldOrgAdminContext['can_manage_owner'] ?? true), 'old org admin should not retain owner-management rights');
+
+    $newOrgAdminOwnerContext = videochat_call_role_context_for_room_user($pdo, $orgAdminRoomId, $orgAdminNewOwnerId);
+    videochat_owner_transfer_contract_assert((string) ($newOrgAdminOwnerContext['call_role'] ?? '') === 'owner', 'org admin transfer target should receive owner role');
+    videochat_owner_transfer_contract_assert((bool) ($newOrgAdminOwnerContext['can_moderate'] ?? false), 'org admin transfer target should receive call-admin rights');
+    videochat_owner_transfer_contract_assert((bool) ($newOrgAdminOwnerContext['can_manage_owner'] ?? false), 'org admin transfer target should receive owner-management rights');
+
+    $orgAdminAuditEvents = videochat_owner_transfer_contract_owner_transfer_audits($pdo, $tenantId, $orgAdminCallId);
+    videochat_owner_transfer_contract_assert(count($orgAdminAuditEvents) === 1, 'organization admin owner transfer should be audit-logged once');
+    $orgAdminAuditEvent = $orgAdminAuditEvents[0] ?? [];
+    $orgAdminAuditPayload = (array) ($orgAdminAuditEvent['payload'] ?? []);
+    videochat_owner_transfer_contract_assert((int) ($orgAdminAuditEvent['tenant_id'] ?? 0) === $tenantId, 'organization admin transfer audit tenant mismatch');
+    videochat_owner_transfer_contract_assert((int) ($orgAdminAuditEvent['actor_user_id'] ?? 0) === $orgAdminOwnerId, 'organization admin transfer audit actor mismatch');
+    videochat_owner_transfer_contract_assert((int) ($orgAdminAuditEvent['target_user_id'] ?? 0) === $orgAdminNewOwnerId, 'organization admin transfer audit target mismatch');
+    videochat_owner_transfer_contract_assert((string) ($orgAdminAuditEvent['call_id'] ?? '') === $orgAdminCallId, 'organization admin transfer audit call mismatch');
+    videochat_owner_transfer_contract_assert((string) ($orgAdminAuditEvent['resource_fingerprint'] ?? '') === videochat_audit_fingerprint($orgAdminCallId), 'organization admin transfer audit call fingerprint mismatch');
+    videochat_owner_transfer_contract_assert((int) ($orgAdminAuditPayload['previous_owner_user_id'] ?? 0) === $orgAdminOwnerId, 'organization admin transfer audit previous owner mismatch');
+    videochat_owner_transfer_contract_assert((int) ($orgAdminAuditPayload['new_owner_user_id'] ?? 0) === $orgAdminNewOwnerId, 'organization admin transfer audit new owner mismatch');
+    videochat_owner_transfer_contract_assert((bool) ($orgAdminAuditPayload['old_owner_admin_preserved'] ?? false), 'organization admin transfer audit should record admin retention');
+    videochat_owner_transfer_contract_assert((bool) ($orgAdminAuditPayload['exactly_one_owner_required'] ?? false), 'organization admin transfer audit should pin one-owner invariant');
 
     $orgAdminModeration = videochat_update_call_participant_role($pdo, $orgAdminCallId, $orgAdminManagedId, 'moderator', $orgAdminOwnerId, 'user', $tenantId);
     videochat_owner_transfer_contract_assert((bool) ($orgAdminModeration['ok'] ?? false), 'demoted org admin should still perform call-admin role changes');
@@ -326,12 +388,19 @@ try {
         'Cross Org Owner Transfer Contract'
     );
     $crossOrgCallId = (string) ($crossOrgCall['id'] ?? '');
+    $manipulatedCrossOrgCall = $crossOrgCall;
+    $manipulatedCrossOrgCall['organization_id'] = $orgBetaId;
+    $manipulatedBoundary = videochat_call_owner_transfer_target_boundary_check($pdo, $manipulatedCrossOrgCall, $crossOrgOwnerId, $crossOrgTargetId, $tenantId);
+    videochat_owner_transfer_contract_assert(!(bool) ($manipulatedBoundary['ok'] ?? true), 'manipulated organization id must not expand owner-transfer rights');
+    videochat_owner_transfer_contract_assert((string) (($manipulatedBoundary['errors'] ?? [])['target_user_id'] ?? '') === 'forbidden_organization_boundary', 'manipulated organization id error mismatch');
+
     $crossOrgTransfer = videochat_update_call_participant_role($pdo, $crossOrgCallId, $crossOrgTargetId, 'owner', $crossOrgOwnerId, 'user', $tenantId);
     videochat_owner_transfer_contract_assert(!(bool) ($crossOrgTransfer['ok'] ?? true), 'cross-organization owner transfer must fail');
     videochat_owner_transfer_contract_assert((string) ($crossOrgTransfer['reason'] ?? '') === 'forbidden', 'cross-organization transfer should be forbidden');
     videochat_owner_transfer_contract_assert((string) (($crossOrgTransfer['errors'] ?? [])['target_user_id'] ?? '') === 'forbidden_organization_boundary', 'cross-organization error mismatch');
     videochat_owner_transfer_contract_assert(videochat_call_owner_transfer_current_owner_count($pdo, $crossOrgCallId) === 1, 'failed cross-org transfer must keep one owner');
     videochat_owner_transfer_contract_assert((int) (videochat_fetch_call_for_update($pdo, $crossOrgCallId, $tenantId)['owner_user_id'] ?? 0) === $crossOrgOwnerId, 'failed cross-org transfer must keep old owner');
+    videochat_owner_transfer_contract_assert(count(videochat_owner_transfer_contract_owner_transfer_audits($pdo, $tenantId, $crossOrgCallId)) === 0, 'failed cross-org transfer must not be audit-logged as a transfer');
 
     $tenantlessTargetId = videochat_owner_transfer_contract_create_user($pdo, 'owner-transfer-tenantless@example.test', 'Tenantless Target');
     $tenantBoundaryCall = videochat_owner_transfer_contract_create_call(
