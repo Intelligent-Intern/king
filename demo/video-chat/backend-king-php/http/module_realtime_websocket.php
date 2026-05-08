@@ -2,51 +2,6 @@
 
 declare(strict_types=1);
 
-function videochat_realtime_reset_waiting_connection_invite(
-    callable $openDatabase,
-    array &$lobbyState,
-    array $presenceState,
-    array $connection,
-    string $reason,
-    bool $broadcastSnapshot
-): bool {
-    $currentRoomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
-    $pendingRoomId = videochat_presence_normalize_room_id((string) ($connection['pending_room_id'] ?? ''), '');
-    if ($currentRoomId !== videochat_realtime_waiting_room_id() || $pendingRoomId === '') {
-        return false;
-    }
-
-    $updated = videochat_realtime_mark_call_participant_invite_state(
-        $openDatabase,
-        $connection,
-        'invited',
-        ['pending']
-    );
-    if (!$updated) {
-        return false;
-    }
-
-    videochat_realtime_sync_lobby_room_from_database(
-        $lobbyState,
-        $openDatabase,
-        $pendingRoomId,
-        videochat_realtime_connection_call_id($connection)
-    );
-    if ($broadcastSnapshot) {
-        videochat_lobby_broadcast_room_snapshot(
-            $lobbyState,
-            $presenceState,
-            $pendingRoomId,
-            trim($reason) === '' ? 'presence_left' : trim($reason),
-            null,
-            null,
-            is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null
-        );
-    }
-
-    return true;
-}
-
 function videochat_handle_realtime_websocket_route(
     string $path,
     array $request,
@@ -73,9 +28,15 @@ function videochat_handle_realtime_websocket_route(
             );
         }
 
-        $websocketAuth = $authenticateRequest($request, 'websocket');
+        $websocketAuth = videochat_realtime_authenticate_websocket_request($request, $authenticateRequest);
         if (!(bool) ($websocketAuth['ok'] ?? false)) {
-            return $authFailureResponse('websocket', (string) ($websocketAuth['reason'] ?? 'invalid_session'));
+            $authFailureReason = (string) ($websocketAuth['reason'] ?? 'invalid_session');
+            $authRetryResponse = videochat_realtime_websocket_auth_retry_response($websocketAuth, $errorResponse);
+            if ($authRetryResponse !== null) {
+                return $authRetryResponse;
+            }
+
+            return $authFailureResponse('websocket', $authFailureReason);
         }
         $websocketRbacDecision = videochat_authorize_role_for_path((array) ($websocketAuth['user'] ?? []), $path, $wsPath);
         if (!(bool) ($websocketRbacDecision['ok'] ?? false)) {
@@ -90,36 +51,11 @@ function videochat_handle_realtime_websocket_route(
                 ? trim((string) $websocketAuth['session']['id'])
                 : '';
         }
-        $signalingBrokerAttachedAtMs = videochat_signaling_broker_now_ms();
-
-        $session = $request['session'] ?? null;
-        $streamId = (int) ($request['stream_id'] ?? 0);
-        $websocket = king_server_upgrade_to_websocket($session, $streamId);
-        if ($websocket === false) {
-            return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
-        }
 
         $requestedRoomId = '';
         $requestedCallId = '';
         $queryParams = videochat_request_query_params($request);
         $clientAssetVersion = videochat_realtime_client_asset_version_from_query($queryParams);
-        $disconnectStaleAssetClient = static function () use ($websocket, $clientAssetVersion): bool {
-            return videochat_realtime_disconnect_stale_asset_client(
-                $websocket,
-                $clientAssetVersion,
-                static function (array $frame) use ($websocket): void {
-                    videochat_presence_send_frame($websocket, $frame);
-                },
-                'ws'
-            );
-        };
-        if ($disconnectStaleAssetClient()) {
-            return [
-                'status' => 101,
-                'headers' => [],
-                'body' => '',
-            ];
-        }
         if (is_string($queryParams['room'] ?? null)) {
             $requestedRoomId = (string) $queryParams['room'];
         }
@@ -134,6 +70,10 @@ function videochat_handle_realtime_websocket_route(
             $openDatabase,
             $requestedCallId
         );
+        $backfillRetryResponse = videochat_realtime_websocket_backfill_retry_response($roomResolution, $errorResponse);
+        if ($backfillRetryResponse !== null) {
+            return $backfillRetryResponse;
+        }
         $initialRoomId = videochat_presence_normalize_room_id((string) ($roomResolution['initial_room_id'] ?? 'lobby'));
         $resolvedRequestedRoomId = videochat_presence_normalize_room_id(
             (string) ($roomResolution['requested_room_id'] ?? $initialRoomId)
@@ -142,6 +82,26 @@ function videochat_handle_realtime_websocket_route(
             (string) ($roomResolution['pending_room_id'] ?? ''),
             ''
         );
+
+        $signalingBrokerAttachedAtMs = videochat_signaling_broker_now_ms();
+        $session = $request['session'] ?? null;
+        $streamId = (int) ($request['stream_id'] ?? 0);
+        $websocket = king_server_upgrade_to_websocket($session, $streamId);
+        if ($websocket === false) {
+            return $errorResponse(400, 'websocket_upgrade_failed', 'Could not upgrade request to websocket.');
+        }
+
+        $disconnectStaleAssetClient = static fn (): bool => videochat_realtime_websocket_disconnect_stale_asset_client(
+            $websocket,
+            $clientAssetVersion
+        );
+        if ($disconnectStaleAssetClient()) {
+            return [
+                'status' => 101,
+                'headers' => [],
+                'body' => '',
+            ];
+        }
 
         $connectionId = videochat_register_active_websocket(
             $activeWebsocketsBySession,
@@ -385,6 +345,9 @@ function videochat_handle_realtime_websocket_route(
             $signalingBrokerDatabase = null;
         }
 
+        $transientSessionLivenessFailures = 0;
+        $transientSessionLivenessStartedAtMs = 0;
+        $transientSessionLivenessGraceMs = 5000;
         try {
             while (true) {
                 if ($disconnectStaleAssetClient()) {
@@ -397,40 +360,20 @@ function videochat_handle_realtime_websocket_route(
                     $wsPath
                 );
                 if (!(bool) ($sessionLiveness['ok'] ?? false)) {
-                    $sessionLivenessReason = (string) ($sessionLiveness['reason'] ?? 'invalid_session');
-                    $sessionCloseDescriptor = videochat_realtime_close_descriptor_for_reason(
-                        $sessionLivenessReason
-                    );
-                    $transientAuthBackendError = strtolower(trim($sessionLivenessReason)) === 'auth_backend_error';
-                    videochat_presence_send_frame(
+                    $livenessAction = videochat_realtime_handle_session_liveness_failure(
                         $websocket,
-                        [
-                            'type' => 'system/error',
-                            'code' => $transientAuthBackendError
-                                ? 'websocket_auth_temporarily_unavailable'
-                                : 'websocket_session_invalidated',
-                            'message' => $transientAuthBackendError
-                                ? 'Session validation is temporarily unavailable for realtime commands.'
-                                : 'Session is no longer valid for realtime commands.',
-                            'details' => [
-                                'reason' => $sessionLivenessReason,
-                                'close' => $sessionCloseDescriptor,
-                            ],
-                            'time' => gmdate('c'),
-                        ]
+                        $sessionLiveness,
+                        $transientSessionLivenessFailures,
+                        $transientSessionLivenessStartedAtMs,
+                        $transientSessionLivenessGraceMs
                     );
-
-                    try {
-                        king_client_websocket_close(
-                            $websocket,
-                            (int) ($sessionCloseDescriptor['close_code'] ?? 1008),
-                            (string) ($sessionCloseDescriptor['close_reason'] ?? 'session_invalidated')
-                        );
-                    } catch (Throwable) {
-                        // Best-effort close; detach/cleanup runs in finally.
+                    if ($livenessAction === 'continue') {
+                        continue;
                     }
                     break;
                 }
+                $transientSessionLivenessFailures = 0;
+                $transientSessionLivenessStartedAtMs = 0;
 
                 $pollNowMs = videochat_lobby_now_ms();
                 if ($pollNowMs >= $nextLobbySnapshotPollMs) {

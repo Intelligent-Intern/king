@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/tenant_context.php';
 require_once __DIR__ . '/../calls/call_management_contract.php';
+require_once __DIR__ . '/../calls/invite_code_contract.php';
 require_once __DIR__ . '/realtime_connection_contract.php';
 require_once __DIR__ . '/realtime_presence.php';
 
@@ -30,6 +31,9 @@ function videochat_realtime_call_role_context_for_room_user(
     $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
     $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    $callsHaveAccessMode = videochat_tenant_table_has_column($pdo, 'calls', 'access_mode');
+    $accessModeSelect = $callsHaveAccessMode ? 'calls.access_mode' : "'invite_only' AS access_mode";
+    $freeForAllPredicate = $callsHaveAccessMode ? "      OR calls.access_mode = 'free_for_all'\n" : '';
     if ($normalizedPreferredCallId !== '' && $normalizedRoomId !== '' && $userId > 0) {
         $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
             ? '  AND calls.tenant_id = :tenant_id'
@@ -38,7 +42,7 @@ function videochat_realtime_call_role_context_for_room_user(
             <<<SQL
 SELECT
     calls.id,
-    calls.access_mode,
+    {$accessModeSelect},
     calls.owner_user_id,
     cp.call_role,
     cp.invite_state,
@@ -58,7 +62,7 @@ WHERE calls.id = :call_id
       OR
       calls.owner_user_id = :user_id
       OR cp.user_id IS NOT NULL
-      OR calls.access_mode = 'free_for_all'
+{$freeForAllPredicate}
   )
 LIMIT 1
 SQL
@@ -92,6 +96,65 @@ SQL
                 'invite_state' => $inviteState,
                 'joined_at' => trim((string) ($preferredRow['joined_at'] ?? '')),
                 'left_at' => trim((string) ($preferredRow['left_at'] ?? '')),
+                'can_moderate' => $isAdmin || in_array($callRole, ['owner', 'moderator'], true),
+                'can_manage_owner' => $isAdmin || $callRole === 'owner',
+            ];
+        }
+    }
+
+    if (!$callsHaveAccessMode && $normalizedRoomId !== '' && $userId > 0) {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT
+    calls.id,
+    'invite_only' AS access_mode,
+    calls.owner_user_id,
+    cp.call_role,
+    cp.invite_state,
+    cp.joined_at,
+    cp.left_at
+FROM calls
+LEFT JOIN call_participants cp
+    ON cp.call_id = calls.id
+   AND cp.user_id = :user_id
+   AND cp.source = 'internal'
+WHERE calls.room_id = :room_id
+  AND calls.status IN ('active', 'scheduled')
+  AND (
+      CAST(:is_admin AS INTEGER) = 1
+      OR calls.owner_user_id = :user_id
+      OR cp.user_id IS NOT NULL
+  )
+ORDER BY
+    CASE calls.status
+        WHEN 'active' THEN 0
+        ELSE 1
+    END ASC,
+    calls.starts_at ASC,
+    calls.created_at ASC
+LIMIT 1
+SQL
+        );
+        $query->execute([
+            ':room_id' => $normalizedRoomId,
+            ':user_id' => $userId,
+            ':is_admin' => $isAdmin ? 1 : 0,
+        ]);
+        $row = $query->fetch();
+        if (is_array($row)) {
+            $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
+            if ((int) ($row['owner_user_id'] ?? 0) === $userId) {
+                $callRole = 'owner';
+            }
+            $effectiveCallRole = $isAdmin ? 'owner' : $callRole;
+
+            return [
+                'call_id' => (string) ($row['id'] ?? ''),
+                'call_role' => $callRole,
+                'effective_call_role' => $effectiveCallRole,
+                'invite_state' => videochat_realtime_normalize_call_invite_state($row['invite_state'] ?? 'invited'),
+                'joined_at' => trim((string) ($row['joined_at'] ?? '')),
+                'left_at' => trim((string) ($row['left_at'] ?? '')),
                 'can_moderate' => $isAdmin || in_array($callRole, ['owner', 'moderator'], true),
                 'can_manage_owner' => $isAdmin || $callRole === 'owner',
             ];
@@ -592,6 +655,27 @@ function videochat_realtime_connection_can_bypass_admission_for_room(
     return videochat_realtime_call_context_allows_admission_bypass($context);
 }
 
+function videochat_realtime_room_resolution_requires_authoritative_backfill(string $roomId, string $callId): bool
+{
+    return videochat_presence_normalize_room_id($roomId, '') !== ''
+        || videochat_realtime_normalize_call_id($callId, '') !== '';
+}
+
+/**
+ * @return array{ok: false, initial_room_id: string, requested_room_id: string, pending_room_id: string, reason: string, retryable: bool}
+ */
+function videochat_realtime_room_resolution_backfill_unavailable(string $reason = 'realtime_backfill_unavailable'): array
+{
+    return [
+        'ok' => false,
+        'initial_room_id' => videochat_realtime_waiting_room_id(),
+        'requested_room_id' => '',
+        'pending_room_id' => '',
+        'reason' => trim($reason) === '' ? 'realtime_backfill_unavailable' : trim($reason),
+        'retryable' => true,
+    ];
+}
+
 /**
  * @return array{initial_room_id: string, requested_room_id: string, pending_room_id: string}
  */
@@ -604,6 +688,10 @@ function videochat_realtime_resolve_connection_rooms(
     $resolvedRequestedRoomId = videochat_presence_normalize_room_id($requestedRoomId);
     $normalizedRequestedCallId = videochat_realtime_normalize_call_id($requestedCallId, '');
     $requestedRoomInput = videochat_presence_normalize_room_id($requestedRoomId, '');
+    $requiresAuthoritativeBackfill = videochat_realtime_room_resolution_requires_authoritative_backfill(
+        $requestedRoomInput,
+        $normalizedRequestedCallId
+    );
     try {
         $pdo = $openDatabase();
         $resolvedRoom = videochat_fetch_active_room_context($pdo, $resolvedRequestedRoomId);
@@ -614,6 +702,9 @@ function videochat_realtime_resolve_connection_rooms(
             $resolvedRequestedRoomId = videochat_presence_normalize_room_id((string) $resolvedRoom['id']);
         }
     } catch (Throwable) {
+        if ($requiresAuthoritativeBackfill) {
+            return videochat_realtime_room_resolution_backfill_unavailable();
+        }
         $resolvedRequestedRoomId = 'lobby';
     }
 
@@ -646,10 +737,7 @@ function videochat_realtime_resolve_connection_rooms(
                 $normalizedRequestedCallId = $boundCallId;
             }
         } catch (Throwable) {
-            return [
-                'initial_room_id' => videochat_realtime_waiting_room_id(),
-                'requested_room_id' => '',
-                'pending_room_id' => '',
+            return videochat_realtime_room_resolution_backfill_unavailable('access_session_binding_unavailable') + [
                 'access_session_binding' => 'unavailable',
             ];
         }
@@ -667,12 +755,16 @@ function videochat_realtime_resolve_connection_rooms(
             );
             $canBypassLobby = videochat_realtime_call_context_allows_admission_bypass($context);
         } catch (Throwable) {
+            if ($requiresAuthoritativeBackfill) {
+                return videochat_realtime_room_resolution_backfill_unavailable();
+            }
             $canBypassLobby = false;
         }
     }
 
     if ($canBypassLobby) {
         return [
+            'ok' => true,
             'initial_room_id' => $resolvedRequestedRoomId,
             'requested_room_id' => $resolvedRequestedRoomId,
             'pending_room_id' => '',
@@ -680,6 +772,7 @@ function videochat_realtime_resolve_connection_rooms(
     }
 
     return [
+        'ok' => true,
         'initial_room_id' => videochat_realtime_waiting_room_id(),
         'requested_room_id' => $resolvedRequestedRoomId,
         'pending_room_id' => $resolvedRequestedRoomId,
