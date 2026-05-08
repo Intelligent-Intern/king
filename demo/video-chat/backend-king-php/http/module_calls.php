@@ -676,6 +676,7 @@ function videochat_handle_call_routes(
                 'result' => [
                     'state' => 'deleted',
                     'call' => $deleteResult['call'] ?? null,
+                    'lifecycle' => $deleteResult['lifecycle'] ?? null,
                 ],
                 'time' => gmdate('c'),
             ]);
@@ -735,6 +736,7 @@ function videochat_handle_call_routes(
                     'global_resend_triggered' => false,
                     'explicit_action_required' => true,
                 ],
+                'lifecycle' => $updateResult['lifecycle'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);
