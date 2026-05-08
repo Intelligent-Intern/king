@@ -121,13 +121,16 @@ Tickets:
     frame.
   - Ensure backend switching is idempotent and cannot trigger reload loops.
 
-- [ ] BGF-03 Matte correctness: hard foreground plus contour smoothing
+- [x] BGF-03 Matte correctness: hard foreground plus contour smoothing
   - Remove any remaining softmax/sigmoid-style probability blending from the
     fallback path.
   - Treat foreground/background classification as hard membership, then apply
     alpha only on the contour band.
   - Add harness checks that the torso/face center stays opaque and background
     pixels do not leak into the participant.
+  - Proof: `background-filter-mask-contract.mjs` now pins hard SINet foreground
+    membership, no softmax/sigmoid fallback blending, opaque face/torso center,
+    transparent background, and alpha smoothing only on contour pixels.
 
 - [ ] BGF-04 Degraded mode that preserves the person
   - Define degraded mode as "no synthetic replacement over the participant" when
