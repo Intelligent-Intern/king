@@ -165,8 +165,9 @@ assert_public_localization_payload() {
 
 check_https_redirect() {
   local headers code location
+  local frontend_domain="${DEPLOY_APP_DOMAIN:-${DEPLOY_DOMAIN}}"
   headers="$(mktemp)"
-  code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o /dev/null -w '%{http_code}' "http://${DEPLOY_DOMAIN}/" || true)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o /dev/null -w '%{http_code}' "http://${frontend_domain}/" || true)"
   case "${code}" in
     301|308) ;;
     *)
@@ -178,7 +179,7 @@ check_https_redirect() {
 
   location="$(awk 'tolower($1) == "location:" {print $2; exit}' "${headers}" | tr -d '\r')"
   rm -f "${headers}"
-  [[ "${location}" == "https://${DEPLOY_DOMAIN}/"* ]] || fail "http redirect location mismatch: ${location:-missing}"
+  [[ "${location}" == "https://${frontend_domain}/"* ]] || fail "http redirect location mismatch: ${location:-missing}"
   log "http redirect: ${code} -> ${location}"
 }
 
@@ -239,23 +240,27 @@ verify_remote_certbot_hook() {
   [[ -n "${DEPLOY_HOST}" ]] || fail "VIDEOCHAT_DEPLOY_HOST is required for certbot renewal-hook smoke"
   require_cmd ssh
 
-  local ssh_dest sudo_value domain_q api_q ws_q sfu_q turn_q cdn_q
+  local ssh_dest sudo_value domain_q app_q api_q ws_q sfu_q turn_q cdn_q call_app_q registry_q mothernode_q
   ssh_dest="${DEPLOY_USER}@${DEPLOY_HOST}"
   sudo_value=""
   [[ "${DEPLOY_USER}" != "root" ]] && sudo_value="sudo"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
+  app_q="$(shell_quote "${DEPLOY_APP_DOMAIN}")"
   api_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
   ws_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  registry_q="$(shell_quote "${DEPLOY_REGISTRY_DOMAIN}")"
+  mothernode_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
 
   local ssh_args=(-p "${DEPLOY_SSH_PORT}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
   if [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]]; then
     ssh_args+=(-i "${VIDEOCHAT_DEPLOY_SSH_KEY}")
   fi
 
-  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} CDN_DOMAIN=${cdn_q} bash -s" <<'REMOTE'
+  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} APP_DOMAIN=${app_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} CDN_DOMAIN=${cdn_q} CALL_APP_DOMAIN=${call_app_q} REGISTRY_DOMAIN=${registry_q} MOTHERNODE_DOMAIN=${mothernode_q} bash -s" <<'REMOTE'
 set -euo pipefail
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/king-videochat-restart.sh
 ${SUDO} test -x "${HOOK}"
@@ -263,9 +268,12 @@ ${SUDO} grep -Fq 'docker compose' "${HOOK}"
 ${SUDO} grep -Fq 'restart || true' "${HOOK}"
 cert_output="$(${SUDO} certbot certificates -d "${DOMAIN}" 2>&1)"
 printf '%s\n' "${cert_output}" | grep -Fq "Certificate Name: ${DOMAIN}"
-for expected in "${DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}" "${CDN_DOMAIN}"; do
+for expected in "${DOMAIN}" "${APP_DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}" "${CDN_DOMAIN}" "${CALL_APP_DOMAIN}" "${REGISTRY_DOMAIN}"; do
   printf '%s\n' "${cert_output}" | grep -Fq "${expected}"
 done
+if [ -n "${MOTHERNODE_DOMAIN}" ] && [ "${MOTHERNODE_DOMAIN}" != "${REGISTRY_DOMAIN}" ]; then
+  printf '%s\n' "${cert_output}" | grep -Fq "${MOTHERNODE_DOMAIN}"
+fi
 REMOTE
 
   log "certbot renewal hook and certificate SANs verified on ${ssh_dest}"
@@ -704,17 +712,23 @@ DEPLOY_DOMAIN="${VIDEOCHAT_DEPLOY_DOMAIN:-${VIDEOCHAT_V1_PUBLIC_HOST:-}}"
 DEPLOY_USER="${VIDEOCHAT_DEPLOY_USER:-root}"
 DEPLOY_SSH_PORT="${VIDEOCHAT_DEPLOY_SSH_PORT:-22}"
 DEPLOY_HOST="${VIDEOCHAT_DEPLOY_HOST:-}"
+DEPLOY_APP_DOMAIN="${VIDEOCHAT_DEPLOY_APP_DOMAIN:-app.${DEPLOY_DOMAIN}}"
 DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
 DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
 DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
 DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
 DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}"
+DEPLOY_CALL_APP_DOMAIN="${VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN:-whiteboard.${DEPLOY_DOMAIN}}"
+DEPLOY_REGISTRY_DOMAIN="${VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN:-${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-registry.${DEPLOY_DOMAIN}}}"
+DEPLOY_MOTHERNODE_DOMAIN="${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-${DEPLOY_REGISTRY_DOMAIN}}"
 
 check_https_redirect
-expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
+expect_http_code https-frontend 200 "https://${DEPLOY_APP_DOMAIN}/"
 expect_http_code cdn-mediapipe-tasks-model 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
+expect_http_code call-app-whiteboard-host 200 "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
+expect_http_code call-app-whiteboard-path 200 "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
 
 health_payload="$(public_get_json "api health" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload

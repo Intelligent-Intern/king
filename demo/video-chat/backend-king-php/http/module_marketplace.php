@@ -63,6 +63,10 @@ function videochat_handle_marketplace_routes(
                 (string) ($queryParams['query'] ?? ''),
                 (string) ($queryParams['category'] ?? 'all')
             );
+            $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+            if ($tenantId > 0) {
+                $apps = videochat_call_app_attach_organization_state($pdo, $tenantId, $apps);
+            }
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_catalog_discovery_failed', 'Could not discover Call Apps.', [
                 'reason' => 'internal_error',
@@ -94,6 +98,10 @@ function videochat_handle_marketplace_routes(
             $pdo = $openDatabase();
             $refresh = videochat_call_app_refresh_catalog($pdo);
             $entry = videochat_call_app_fetch_catalog_entry($pdo, $appKey);
+            $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+            if (is_array($entry) && $tenantId > 0) {
+                $entry = videochat_call_app_attach_organization_state($pdo, $tenantId, [$entry])[0] ?? $entry;
+            }
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_catalog_fetch_failed', 'Could not load Call App catalog entry.', [
                 'reason' => 'internal_error',
@@ -263,12 +271,23 @@ function videochat_handle_marketplace_routes(
 
             try {
                 $pdo = $openDatabase();
+                videochat_call_app_refresh_catalog($pdo);
+                $catalogApps = videochat_call_app_list_catalog(
+                    $pdo,
+                    (string) ($filters['query'] ?? ''),
+                    (string) ($filters['category'] ?? 'all')
+                );
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+                if ($tenantId > 0) {
+                    $catalogApps = videochat_call_app_attach_organization_state($pdo, $tenantId, $catalogApps);
+                }
                 $listing = videochat_admin_list_call_apps(
                     $pdo,
                     (string) ($filters['query'] ?? ''),
                     (int) ($filters['page'] ?? 1),
                     (int) ($filters['page_size'] ?? 10),
-                    (string) ($filters['category'] ?? 'all')
+                    (string) ($filters['category'] ?? 'all'),
+                    $catalogApps
                 );
             } catch (Throwable) {
                 return $errorResponse(500, 'marketplace_call_app_list_failed', 'Could not load marketplace apps.', [
@@ -277,17 +296,6 @@ function videochat_handle_marketplace_routes(
             }
 
             $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
-            try {
-                videochat_call_app_refresh_catalog($pdo);
-                $catalogApps = videochat_call_app_list_catalog($pdo, '', 'all');
-                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
-                if ($tenantId > 0) {
-                    $catalogApps = videochat_call_app_attach_organization_state($pdo, $tenantId, $catalogApps);
-                }
-                $rows = videochat_admin_call_app_attach_catalog_entries($rows, $catalogApps);
-            } catch (Throwable) {
-                $rows = videochat_admin_call_app_attach_catalog_entries($rows, []);
-            }
             $total = (int) ($listing['total'] ?? 0);
             $pageCount = (int) ($listing['page_count'] ?? 1);
             $page = (int) ($filters['page'] ?? 1);

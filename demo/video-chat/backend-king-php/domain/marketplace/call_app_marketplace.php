@@ -126,6 +126,32 @@ function videochat_admin_call_app_catalog_summary(array $catalogApp): array
         'health_status' => (string) ($catalogApp['health_status'] ?? 'unknown'),
         'metadata_hash' => (string) ($catalogApp['metadata_hash'] ?? ''),
         'organization' => is_array($catalogApp['organization'] ?? null) ? $catalogApp['organization'] : null,
+        'organization_actions' => is_array($catalogApp['organization_actions'] ?? null) ? $catalogApp['organization_actions'] : null,
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_admin_call_app_catalog_marketplace_row(array $catalogApp): array
+{
+    $listing = is_array($catalogApp['listing'] ?? null) ? $catalogApp['listing'] : [];
+    $appKey = trim((string) ($catalogApp['app_key'] ?? ''));
+    $name = trim((string) ($catalogApp['name'] ?? ($listing['name'] ?? $appKey)));
+
+    return [
+        'id' => 0,
+        'catalog_key' => $appKey,
+        'source' => 'call_app_catalog',
+        'catalog_only' => true,
+        'name' => $name === '' ? $appKey : $name,
+        'manufacturer' => trim((string) ($catalogApp['manufacturer'] ?? '')),
+        'website' => trim((string) ($listing['website'] ?? '')),
+        'category' => videochat_normalize_call_app_category($catalogApp['category'] ?? ($listing['category'] ?? 'other')),
+        'description' => trim((string) ($catalogApp['description'] ?? ($listing['summary'] ?? ''))),
+        'created_at' => trim((string) ($catalogApp['verified_at'] ?? '')),
+        'updated_at' => trim((string) ($catalogApp['updated_at'] ?? '')),
+        'call_app_catalog' => videochat_admin_call_app_catalog_summary($catalogApp),
     ];
 }
 
@@ -146,19 +172,36 @@ function videochat_admin_call_app_attach_catalog_entries(array $rows, array $cat
         $nameCategory[videochat_admin_call_app_catalog_signature($catalogApp, false)] = $catalogApp;
     }
 
-    return array_map(static function (array $row) use ($exact, $nameCategory): array {
+    $matchedCatalogKeys = [];
+    $attachedRows = array_map(static function (array $row) use ($exact, $nameCategory, &$matchedCatalogKeys): array {
         $match = $exact[videochat_admin_call_app_catalog_signature($row, true)]
             ?? $nameCategory[videochat_admin_call_app_catalog_signature($row, false)]
             ?? null;
+        if (is_array($match)) {
+            $matchedCatalogKeys[(string) ($match['app_key'] ?? '') . ':' . (string) ($match['version'] ?? '')] = true;
+        }
         $row['call_app_catalog'] = is_array($match) ? videochat_admin_call_app_catalog_summary($match) : null;
         return $row;
     }, $rows);
+
+    foreach ($catalogApps as $catalogApp) {
+        if (!is_array($catalogApp) || trim((string) ($catalogApp['app_key'] ?? '')) === '') {
+            continue;
+        }
+        $catalogKey = (string) ($catalogApp['app_key'] ?? '') . ':' . (string) ($catalogApp['version'] ?? '');
+        if (isset($matchedCatalogKeys[$catalogKey])) {
+            continue;
+        }
+        $attachedRows[] = videochat_admin_call_app_catalog_marketplace_row($catalogApp);
+    }
+
+    return $attachedRows;
 }
 
 /**
  * @return array{rows: array<int, array<string, mixed>>, total: int, page_count: int}
  */
-function videochat_admin_list_call_apps(PDO $pdo, string $query, int $page, int $pageSize, string $category): array
+function videochat_admin_list_call_apps(PDO $pdo, string $query, int $page, int $pageSize, string $category, array $catalogApps = []): array
 {
     $where = [];
     $params = [];
@@ -179,35 +222,49 @@ function videochat_admin_list_call_apps(PDO $pdo, string $query, int $page, int 
         $params[':search'] = '%' . strtolower($search) . '%';
     }
 
+    $boundedPageSize = max(1, min(100, $pageSize));
     $whereSql = $where === [] ? '' : ('WHERE ' . implode(' AND ', $where));
-    $countQuery = $pdo->prepare('SELECT COUNT(*) FROM call_apps ' . $whereSql);
-    $countQuery->execute($params);
-    $total = (int) $countQuery->fetchColumn();
-
-    $pageCount = max((int) ceil($total / max($pageSize, 1)), 1);
-    $currentPage = min(max($page, 1), $pageCount);
-    $offset = ($currentPage - 1) * $pageSize;
 
     $listQuery = $pdo->prepare(
         'SELECT id, name, manufacturer, website, category, description, created_at, updated_at
          FROM call_apps '
         . $whereSql
-        . ' ORDER BY lower(name) ASC, lower(manufacturer) ASC, id ASC LIMIT :limit OFFSET :offset'
+        . ' ORDER BY lower(name) ASC, lower(manufacturer) ASC, id ASC'
     );
     foreach ($params as $key => $value) {
         $listQuery->bindValue($key, $value, PDO::PARAM_STR);
     }
-    $listQuery->bindValue(':limit', $pageSize, PDO::PARAM_INT);
-    $listQuery->bindValue(':offset', $offset, PDO::PARAM_INT);
     $listQuery->execute();
 
     $rows = $listQuery->fetchAll(PDO::FETCH_ASSOC);
     if (!is_array($rows)) {
         $rows = [];
     }
+    $combinedRows = videochat_admin_call_app_attach_catalog_entries(
+        array_map(static fn (array $row): array => videochat_call_app_marketplace_row($row), $rows),
+        $catalogApps
+    );
+    usort($combinedRows, static function (array $left, array $right): int {
+        $leftName = videochat_admin_call_app_catalog_match_value($left['name'] ?? '');
+        $rightName = videochat_admin_call_app_catalog_match_value($right['name'] ?? '');
+        if ($leftName !== $rightName) {
+            return $leftName <=> $rightName;
+        }
+        $leftManufacturer = videochat_admin_call_app_catalog_match_value($left['manufacturer'] ?? '');
+        $rightManufacturer = videochat_admin_call_app_catalog_match_value($right['manufacturer'] ?? '');
+        if ($leftManufacturer !== $rightManufacturer) {
+            return $leftManufacturer <=> $rightManufacturer;
+        }
+        return ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+    });
+
+    $total = count($combinedRows);
+    $pageCount = max((int) ceil($total / $boundedPageSize), 1);
+    $currentPage = min(max($page, 1), $pageCount);
+    $offset = ($currentPage - 1) * $boundedPageSize;
 
     return [
-        'rows' => array_map(static fn (array $row): array => videochat_call_app_marketplace_row($row), $rows),
+        'rows' => array_slice($combinedRows, $offset, $boundedPageSize),
         'total' => $total,
         'page_count' => $pageCount,
     ];

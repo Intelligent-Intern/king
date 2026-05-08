@@ -27,7 +27,7 @@ function loadBackendOrigin(runtimeEnv = {}, windowValue = undefined) {
   return new Function(
     'runtimeEnv',
     'window',
-    `${source}; return { resolveBackendOrigin, resolveBackendOriginCandidates };`,
+    `${source}; return { resolveBackendOrigin, resolveBackendWebSocketOrigin, resolveBackendSfuOrigin, resolveBackendOriginCandidates };`,
   )(runtimeEnv, windowValue);
 }
 
@@ -40,8 +40,18 @@ try {
   });
   assert.equal(
     productionBackend.resolveBackendOrigin(),
-    'https://api.app.kingrt.com',
-    'production app host must use the public API origin, not the frontend origin',
+    'https://api.kingrt.com',
+    'production app host must use the service-root API origin, not derive API from app.kingrt.com',
+  );
+  assert.equal(
+    productionBackend.resolveBackendWebSocketOrigin(),
+    'https://ws.kingrt.com',
+    'production app host must use the service-root WS origin, not derive WS from app.kingrt.com',
+  );
+  assert.equal(
+    productionBackend.resolveBackendSfuOrigin(),
+    'https://sfu.kingrt.com',
+    'production app host must use the service-root SFU origin, not derive SFU from app.kingrt.com',
   );
 
   const explicitBackend = loadBackendOrigin({ VITE_VIDEOCHAT_BACKEND_ORIGIN: 'https://custom-api.example.test' }, {
@@ -70,8 +80,16 @@ try {
 
   const deployScript = readVideoChat('scripts/deploy.sh');
   assert.ok(
+    deployScript.includes('DEPLOY_APP_DOMAIN="${DEPLOY_APP_DOMAIN:-app.${DEPLOY_DOMAIN}}"'),
+    'deploy config must split the frontend app domain from the service base/root domain',
+  );
+  assert.ok(
     deployScript.includes('VIDEOCHAT_V1_BACKEND_ORIGIN=https://\\${API_DOMAIN}'),
     'generated production env must build the frontend against the API domain',
+  );
+  assert.ok(
+    !deployScript.includes('api.${APP_DOMAIN}') && !deployScript.includes('api.${DEPLOY_APP_DOMAIN}'),
+    'generated service origins must not derive API from the frontend app domain',
   );
   assert.ok(
     deployScript.includes('set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\\${API_DOMAIN}"'),
