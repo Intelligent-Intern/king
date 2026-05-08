@@ -1627,7 +1627,7 @@ gate wiring.
 - [ ] Rejoin does not work as another user with same temporary context if account binding is violated
 - [x] Kicked temporary user cannot directly rejoin
 - [x] Kicked temporary user lands back in lobby or is blocked
-- [ ] Kicked logged-in user cannot immediately reenter through same link if kick overrides access
+- [x] Kicked logged-in user cannot immediately reenter through same link if kick overrides access
 - [x] Kick state overrides previous admission
 - [x] Kick state is stored server-side
 - [ ] Kick state is scoped to affected call if intended
@@ -1644,15 +1644,18 @@ Proof: `call-access-rejoin-kick-membership.spec.js` covers network reconnect
 backfill without a leave frame, explicit hangup followed by same-session rejoin
 with a fresh snapshot, and stale lobby kick controls remaining hidden. `npx
 playwright test tests/e2e/call-access-rejoin-kick-membership.spec.js
---workers=1 --reporter=list` passed 3 tests; PHP SQLite membership/kick
-contracts were syntax-checked but skipped at runtime because local PHP lacks
-`pdo_sqlite`. `call-access-main-journey-smoke.spec.js` also proves the admitted
+--workers=1 --reporter=list` passed 4 tests, including
+`e2e_security_009_kick_during_active_call_removes_user`; PHP SQLite
+membership/kick contracts were syntax-checked, and
+`call-access-rejoin-kick-contract.sh` passed in `php:8.5-cli-trixie` with
+`pdo_sqlite`. Host PHP still skipped SQLite-backed contracts because local PHP
+lacks `pdo_sqlite`. `call-access-main-journey-smoke.spec.js` also proves the admitted
 anonymous temporary user can leave, reopen the same call, and rejoin without a
 second approval in the full lobby-to-call journey. The backend
 `call-access-rejoin-kick-contract.php` and the same browser spec now prove
-kicked temporary guests cannot directly rejoin, are routed back to renewed
-approval/blocked state, and that the persisted kick state overrides previous
-admission.
+kicked temporary guests and active logged-in participants cannot directly
+rejoin, are routed back to renewed approval/blocked state, and that the
+persisted kick state overrides previous admission.
 
 ## 13. Temporary Moderators
 
@@ -1726,7 +1729,7 @@ lacks `pdo_sqlite`.
 - [x] Permission changes during active call are applied correctly
 - [x] Owner transfer during active call is applied correctly
 - [x] Guest-list change during active call is applied correctly
-- [ ] Kick during active call removes user
+- [x] Kick during active call removes user
 - [x] Deleted call cannot be entered
 - [x] Ended call cannot be entered
 
@@ -2529,6 +2532,7 @@ against duplicate join/session request loops.
 - [x] `e2e_rejoin_007_rejoin_after_guest_list_removal_blocked_or_lobby`
 - [x] `e2e_rejoin_008_rejoin_after_admin_role_removed_uses_new_permissions`
 - [ ] `e2e_rejoin_009_rejoin_after_owner_transfer_uses_new_permissions`
+- [x] `e2e_rejoin_010_kicked_logged_in_user_cannot_direct_rejoin`
 
 ## Test Group: Temporary Moderators
 
@@ -2556,6 +2560,7 @@ against duplicate join/session request loops.
 - [x] `e2e_security_006_csrf_account_update_protected`
 - [ ] `e2e_security_007_session_fixation_prevented`
 - [x] `e2e_security_008_parallel_tabs_no_wrong_merge`
+- [x] `e2e_security_009_kick_during_active_call_removes_user`
 
 Proof: `call-access-privacy-foreign-data.spec.js` covers the browser
 privacy cases for invalid guessed links and wrong-host strong mismatch:

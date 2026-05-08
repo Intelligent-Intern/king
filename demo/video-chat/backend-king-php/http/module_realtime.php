@@ -18,6 +18,7 @@ require_once __DIR__ . '/../domain/realtime/realtime_sfu_store.php';
 require_once __DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php';
 require_once __DIR__ . '/../domain/realtime/realtime_sfu_gateway.php';
 require_once __DIR__ . '/module_realtime_attachments.php';
+require_once __DIR__ . '/module_realtime_active_call_kick.php';
 require_once __DIR__ . '/module_realtime_websocket_commands.php';
 require_once __DIR__ . '/module_realtime_websocket_brokers.php';
 require_once __DIR__ . '/module_realtime_websocket_reconnect.php';

@@ -168,3 +168,44 @@ test('participant browser never exposes stale lobby kick controls', async ({ bro
     await Promise.allSettled([user.context.close()]);
   }
 });
+
+test('e2e_security_009_kick_during_active_call_removes_user', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspaceWithRealtimeSocket(admin.page);
+    const activeUserRow = admin.page.locator('.panel-users .user-row', { hasText: matrixUsers.user.displayName });
+    await expect(activeUserRow).toBeVisible({ timeout: 10_000 });
+    const removeActiveUserButton = activeUserRow.locator('button[title="Remove user"]');
+    await expect(removeActiveUserButton).toBeEnabled();
+
+    await removeActiveUserButton.click();
+    await admin.page.waitForFunction((targetUserId) => {
+      const frames = Array.isArray(window.__matrixSocketFrames) ? window.__matrixSocketFrames : [];
+      const participants = Array.isArray(window.__matrixParticipants) ? window.__matrixParticipants : [];
+      return frames.some((frame) => frame?.type === 'lobby/remove' && Number(frame?.target_user_id || 0) === targetUserId)
+        && !participants.some((participant) => Number(participant?.user?.id || 0) === targetUserId);
+    }, matrixUsers.user.id, { timeout: 10_000 });
+
+    await expect(activeUserRow).toHaveCount(0);
+    const kickProbe = await admin.page.evaluate((targetUserId) => {
+      const frames = Array.isArray(window.__matrixSocketFrames) ? window.__matrixSocketFrames : [];
+      const events = Array.isArray(window.__matrixSocketEvents) ? window.__matrixSocketEvents : [];
+      return {
+        removeCommandCount: frames.filter((frame) => frame?.type === 'lobby/remove' && Number(frame?.target_user_id || 0) === targetUserId).length,
+        kickedSnapshotCount: events.filter((event) => event?.type === 'room/snapshot' && event?.reason === 'participant_kicked').length,
+        remainingTargetRows: (Array.isArray(window.__matrixParticipants) ? window.__matrixParticipants : [])
+          .filter((participant) => Number(participant?.user?.id || 0) === targetUserId).length,
+      };
+    }, matrixUsers.user.id);
+    expect(kickProbe).toEqual({
+      removeCommandCount: 1,
+      kickedSnapshotCount: 1,
+      remainingTargetRows: 0,
+    });
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
+  }
+});

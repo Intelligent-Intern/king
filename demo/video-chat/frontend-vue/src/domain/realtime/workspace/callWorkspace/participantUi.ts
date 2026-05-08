@@ -726,6 +726,7 @@ function userRowSnapshot(row) {
     roomConnectionCount: Number(participant?.connections || 0),
     inLobby: Boolean(lobbyEntry),
     lobbyStatus: lobbyEntry ? String(lobbyEntry.status || 'queued') : '',
+    canRemoveUser: Boolean(canModerate.value && row.userId !== currentUserId.value && mappedCallRole !== 'owner' && (lobbyEntry || isRoomMember)),
     canRemoveFromLobby: Boolean(lobbyEntry) && canModerate.value,
     canAllowFromLobby: Boolean(lobbyEntry && lobbyEntry.status === 'queued' && canModerate.value),
     feedback,

@@ -19,6 +19,13 @@ try {
         $tenantId,
         $ids['organization_id']
     );
+    $activeKickUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'iam-active-kick-target@example.test',
+        'IAM Active Kick Target',
+        $tenantId,
+        $ids['organization_id']
+    );
     $waitingUserId = videochat_iam_rejoin_contract_seed_user(
         $pdo,
         'iam-kick-waiting@example.test',
@@ -30,13 +37,14 @@ try {
     $call = videochat_iam_rejoin_contract_create_active_call(
         $pdo,
         $ownerUserId,
-        [$participantUserId],
+        [$participantUserId, $activeKickUserId],
         $tenantId,
         'IAM Leave Rejoin Kick Contract'
     );
     $callId = $call['call_id'];
     $roomId = $call['room_id'];
     videochat_iam_rejoin_contract_set_invite_state($pdo, $callId, $participantUserId, 'allowed');
+    videochat_iam_rejoin_contract_set_invite_state($pdo, $callId, $activeKickUserId, 'allowed');
 
     $participantAuth = videochat_iam_rejoin_contract_issue_user_session(
         $pdo,
@@ -88,7 +96,7 @@ try {
     videochat_presence_remove_connection($presenceState, (string) ($participantConnection['connection_id'] ?? ''), $sender);
     videochat_realtime_remove_call_presence($openDatabase, $participantConnection);
     videochat_realtime_mark_call_participant_left($openDatabase, $participantConnection, $presenceState);
-    $sentCount = videochat_realtime_broadcast_room_snapshot($presenceState, $roomId, $openDatabase, 'participant_left', (string) ($participantConnection['connection_id'] ?? ''), $sender);
+    $sentCount = videochat_realtime_broadcast_room_snapshot($presenceState, $roomId, $openDatabase, 'participant_left', (string) ($participantConnection['connection_id'] ?? ''), $sender, $tenantId);
     videochat_iam_rejoin_contract_assert($sentCount === 1, 'leave should broadcast one room snapshot to remaining owner', $label);
     videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_left_at($pdo, $callId, $participantUserId) !== '', 'leave should mark participant left_at in DB', $label);
 
@@ -121,6 +129,66 @@ try {
 
     $networkReconnectResolution = videochat_realtime_resolve_connection_rooms($participantAuth, $roomId, $openDatabase, $callId);
     videochat_iam_rejoin_contract_assert((string) ($networkReconnectResolution['initial_room_id'] ?? '') === $roomId, 'network reconnect should resolve back to the active room', $label);
+
+    $activeKickCase = 'e2e_security_009_kick_during_active_call_removes_user';
+    $loggedInKickRejoinCase = 'e2e_rejoin_010_kicked_logged_in_user_cannot_direct_rejoin';
+    $activeKickAuth = videochat_iam_rejoin_contract_issue_user_session(
+        $pdo,
+        $activeKickUserId,
+        $tenantId,
+        'sess_iam_active_kick_target',
+        $label
+    );
+    $activeKickConnection = videochat_iam_rejoin_contract_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $callId,
+        $activeKickUserId,
+        'IAM Active Kick Target',
+        'user',
+        'active-kick-target',
+        $tenantId,
+        true,
+        'sess_iam_active_kick_target'
+    );
+    videochat_iam_rejoin_contract_assert((string) ($activeKickConnection['active_call_id'] ?? '') === $callId, "{$activeKickCase}: target should start inside active call", $label);
+    $preKickSnapshot = videochat_realtime_room_snapshot_payload($presenceState, $ownerConnection, $openDatabase, 'before_active_kick');
+    videochat_iam_rejoin_contract_assert((int) ($preKickSnapshot['participant_count'] ?? 0) === 3, "{$activeKickCase}: owner snapshot should include active target before kick", $label);
+
+    $activeKick = videochat_iam_rejoin_contract_apply_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        $openDatabase,
+        'lobby/remove',
+        $roomId,
+        $activeKickUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($activeKick['ok'] ?? false), "{$activeKickCase}: owner should remove active participant", $label);
+    videochat_iam_rejoin_contract_assert(
+        in_array($activeKickUserId, array_map('intval', (array) ($activeKick['active_target_user_ids'] ?? [])), true),
+        "{$activeKickCase}: active target should be named for active-call removal",
+        $label
+    );
+    videochat_iam_rejoin_contract_assert(
+        !videochat_lobby_user_present_in_room($presenceState, $roomId, $activeKickUserId, null, $tenantId),
+        "{$activeKickCase}: active target should be removed from live presence",
+        $label
+    );
+    videochat_iam_rejoin_contract_assert(
+        !videochat_realtime_presence_db_has_room_membership($pdo, $roomId, $callId, $activeKickUserId),
+        "{$activeKickCase}: active target should be removed from persistent presence",
+        $label
+    );
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_left_at($pdo, $callId, $activeKickUserId) !== '', "{$activeKickCase}: active target should persist left_at", $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $activeKickUserId) === 'invited', "{$activeKickCase}: kick should reset direct admission", $label);
+    $postKickSnapshot = videochat_realtime_room_snapshot_payload($presenceState, $ownerConnection, $openDatabase, 'after_active_kick');
+    videochat_iam_rejoin_contract_assert((int) ($postKickSnapshot['participant_count'] ?? 0) === 2, "{$activeKickCase}: target should disappear from room snapshot", $label);
+    $activeKickRejoinResolution = videochat_realtime_resolve_connection_rooms($activeKickAuth, $roomId, $openDatabase, $callId);
+    videochat_iam_rejoin_contract_assert((string) ($activeKickRejoinResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), "{$loggedInKickRejoinCase}: kicked user must not directly rejoin", $label);
+    videochat_iam_rejoin_contract_assert((string) ($activeKickRejoinResolution['pending_room_id'] ?? '') === $roomId, "{$loggedInKickRejoinCase}: kicked user should require renewed approval", $label);
 
     videochat_iam_rejoin_contract_admit_user($lobbyState, $roomId, $waitingUserId, 'IAM Kick Waiting');
     $participantKick = videochat_lobby_apply_command(
