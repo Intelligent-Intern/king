@@ -244,6 +244,15 @@ export async function installMatrixApiRoutes(context, user) {
       return;
     }
 
+    if (url.pathname === '/api/user/client-diagnostics' && request.method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        headers: { ...corsHeaders(), 'content-type': 'application/json; charset=utf-8' },
+        json: { status: 'ok', result: { accepted: true } },
+      });
+      return;
+    }
+
     if (url.pathname === `/api/calls/resolve/${matrixCallRef}`) {
       await route.fulfill({
         status: 200,
@@ -385,6 +394,10 @@ export async function installFakeMediaAndRealtime(context, user) {
 
     window.__matrixSocketFrames = [];
     window.__matrixSocketEvents = [];
+    window.__matrixSocketLifecycle = [];
+    window.__matrixSocketConnectFailures = [];
+    window.__matrixFetchCalls = [];
+    window.__matrixPageLifecycleEvents = [];
     window.__matrixAttachmentStore = {};
     window.__matrixLastChatMessage = null;
     window.__matrixSockets = [];
@@ -405,9 +418,10 @@ export async function installFakeMediaAndRealtime(context, user) {
 
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
-      const response = await nativeFetch(...args);
       const url = String(args[0]?.url || args[0] || '');
-      const method = String(args[1]?.method || 'GET').toUpperCase();
+      const method = String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
+      window.__matrixFetchCalls.push({ url, method, time: Date.now() });
+      const response = await nativeFetch(...args);
       if (method === 'POST' && url.includes('/chat/attachments')) {
         try {
           const payload = await response.clone().json();
@@ -419,6 +433,13 @@ export async function installFakeMediaAndRealtime(context, user) {
       }
       return response;
     };
+
+    window.addEventListener('beforeunload', () => {
+      window.__matrixPageLifecycleEvents.push({ type: 'beforeunload', time: Date.now() });
+    });
+    window.addEventListener('pagehide', () => {
+      window.__matrixPageLifecycleEvents.push({ type: 'pagehide', time: Date.now() });
+    });
 
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
@@ -475,8 +496,22 @@ export async function installFakeMediaAndRealtime(context, user) {
         this.readyState = FakeWebSocket.CONNECTING;
         this[listenersSymbol] = {};
         window.__matrixSockets.push(this);
+        window.__matrixSocketLifecycle.push({ type: 'construct', url, time: Date.now() });
+        const connectFailure = window.__matrixSocketConnectFailures.shift();
+        if (connectFailure) {
+          setTimeout(() => {
+            if (this.readyState !== FakeWebSocket.CONNECTING) return;
+            this.readyState = FakeWebSocket.CLOSED;
+            const code = Number(connectFailure.code || 1011);
+            const reason = String(connectFailure.reason || 'websocket_reconnect_backfill_unavailable');
+            window.__matrixSocketLifecycle.push({ type: 'connect-failure', code, reason, url: this.url, time: Date.now() });
+            this.dispatch('close', { code, reason });
+          }, Math.max(0, Number(connectFailure.delayMs || 0)));
+          return;
+        }
         setTimeout(() => {
           this.readyState = FakeWebSocket.OPEN;
+          window.__matrixSocketLifecycle.push({ type: 'open', url: this.url, time: Date.now() });
           this.dispatch('open', {});
           const welcome = {
             type: 'system/welcome',
@@ -634,11 +669,37 @@ export async function installFakeMediaAndRealtime(context, user) {
       close(code = 1000, reason = 'test_close') {
         if (this.readyState === FakeWebSocket.CLOSED) return;
         this.readyState = FakeWebSocket.CLOSED;
+        window.__matrixSocketLifecycle.push({ type: 'close', code, reason, url: this.url, time: Date.now() });
         this.dispatch('close', { code, reason });
       }
     }
 
     window.__matrixEmit = dispatchToOpenSockets;
+    window.__matrixEmitToLatestSocket = (payload) => {
+      const openSocket = [...window.__matrixSockets]
+        .reverse()
+        .find((socket) => socket.readyState === FakeWebSocket.OPEN && String(socket.url || '').includes('/ws?'));
+      if (!openSocket) return false;
+      openSocket.emit(payload);
+      return true;
+    };
+    window.__matrixEmitRetryableAuthError = () => window.__matrixEmitToLatestSocket({
+      type: 'system/error',
+      code: 'websocket_auth_temporarily_unavailable',
+      message: 'Session validation is temporarily unavailable for realtime commands.',
+      details: {
+        reason: 'auth_backend_error',
+        retryable: true,
+        close: { close_code: 1011, close_reason: 'auth_backend_error' },
+      },
+      time: new Date().toISOString(),
+    });
+    window.__matrixQueueSocketConnectFailure = (failure = {}) => {
+      const reason = String(failure.reason || 'websocket_reconnect_backfill_unavailable');
+      const code = Number(failure.code || 1011);
+      window.__matrixSocketConnectFailures.push({ code, reason, delayMs: Number(failure.delayMs || 0) });
+      return window.__matrixSocketConnectFailures.length;
+    };
     window.__matrixForceSocketClose = (code = 1006, reason = 'network_drop') => {
       const openSocket = [...window.__matrixSockets]
         .reverse()
