@@ -1404,8 +1404,8 @@ the authenticated account authoritative for the issued session.
 - [ ] User can decline update
 - [ ] Declining update leaves logged-in account unchanged
 - [ ] Declining update continues with logged-in account
-- [ ] User can request account update
-- [ ] User must re-enter differing values manually
+- [x] User can request account update
+- [x] User must re-enter differing values manually
 - [x] System does not show differing link values
 - [x] System does not show data from guessed / foreign link
 - [x] Email confirmation is sent to logged-in account email
@@ -1434,18 +1434,22 @@ only generic mismatch/host-name field errors for unverified or wrong host-name
 attempts. The responses contain no target invitee, host, external participant,
 call title, call id, or denied session id, and no call-access session is
 persisted.
+`call-access-duplicate-review-email.spec.js` covers the account-update request
+path by requiring manually re-entered values, sending confirmation only to the
+logged-in account, refusing updates before confirmation, and confirming only
+the re-entered fields without adopting the link-target session.
 
 ## 8. Duplicate Personalized Link / Abuse Detection
 
-- [ ] Personalized link is first opened by account A
-- [ ] Same personalized link is reopened by account A
-- [ ] Reuse by same account does not create false foreign-account flag
+- [x] Personalized link is first opened by account A
+- [x] Same personalized link is reopened by account A
+- [x] Reuse by same account does not create false foreign-account flag
 - [x] Same personalized link is later opened by account B
 - [x] Use of same personalized link by different logged-in account is detected
 - [x] Account B is flagged for review
 - [ ] Account A may appear as affected reference in audit log
-- [ ] Flag is created even if account B provides correct host name
-- [ ] Flag is created even if account B does not enter the call
+- [x] Flag is created even if account B provides correct host name
+- [x] Flag is created even if account B does not enter the call
 - [ ] Flag is created when account B reaches warning modal if policy requires it
 - [ ] Concurrent use of same personalized link by two accounts is detected
 - [ ] Race condition on parallel link open creates no inconsistent assignment
@@ -1463,7 +1467,7 @@ review flags, safe review payloads, logged-in account preservation,
 host-verification rate limiting, account-bound confirmation tokens, manual
 re-entry, no pre-confirmation update, and no session rebinding. `npx playwright
 test tests/e2e/call-access-duplicate-review-email.spec.js --workers=1
---reporter=list` passed 2 tests; PHP SQLite wrappers were syntax-checked but
+--reporter=list` passed 3 tests; PHP SQLite wrappers were syntax-checked but
 skipped at runtime because local PHP lacks `pdo_sqlite`.
 
 ## 9. Anonymous Join Link: User Logged In
@@ -1644,7 +1648,7 @@ second approval in the full lobby-to-call journey.
 - [x] Error messages contain no foreign link data
 - [ ] Email texts contain no foreign link data unless explicitly safe and necessary
 - [ ] Host-name verification does not allow host enumeration
-- [ ] Rate limits protect sensitive verification paths
+- [x] Rate limits protect sensitive verification paths
 - [x] Privacy-relevant actions are logged
 
 ## 15. Security and Manipulation Cases
@@ -1662,9 +1666,9 @@ second approval in the full lobby-to-call journey.
 - [x] Owner transfer request without owner/admin right is rejected
 - [x] Lobby admission request without moderator right is rejected
 - [x] Kick request without moderator right is rejected
-- [ ] Account-data update request without email confirmation is rejected
-- [ ] Replay of old email confirmation link is prevented
-- [ ] Email confirmation link is one-time use
+- [x] Account-data update request without email confirmation is rejected
+- [x] Replay of old email confirmation link is prevented
+- [x] Email confirmation link is one-time use
 - [ ] Email confirmation link is time-limited
 - [ ] CSRF protection works for account-data change
 - [x] Session fixation during link opening is prevented
@@ -1700,25 +1704,34 @@ foreign session adoption.
 
 ## 16. Email Confirmation for Account Data Update
 
-- [ ] Email is triggered only after explicit update request
-- [ ] Email is sent to logged-in account
-- [ ] Email is not sent to temporary account
+- [x] Email is triggered only after explicit update request
+- [x] Email is sent to logged-in account
+- [x] Email is not sent to temporary account
 - [ ] Email contains secure confirmation link
-- [ ] Confirmation link is account-bound
-- [ ] Confirmation link cannot be used by another logged-in account
+- [x] Confirmation link is account-bound
+- [x] Confirmation link cannot be used by another logged-in account
 - [ ] Confirmation link is time-limited
-- [ ] Confirmation link is one-time use
-- [ ] Without confirmation, account data remains unchanged
-- [ ] After confirmation, only re-entered data is updated
+- [x] Confirmation link is one-time use
+- [x] Without confirmation, account data remains unchanged
+- [x] After confirmation, only re-entered data is updated
 - [ ] Confirmation success state is shown
 - [ ] Expired confirmation link updates no data
-- [ ] Already used confirmation link updates no data again
+- [x] Already used confirmation link updates no data again
 - [ ] Confirmation is audit-logged
-- [ ] Failed confirmation shows no sensitive data
-- [ ] While confirmation is pending, user can continue with original account
+- [x] Failed confirmation shows no sensitive data
+- [x] While confirmation is pending, user can continue with original account
 - [ ] Multiple pending confirmations are handled correctly
 - [ ] Newer change invalidates older confirmation if configured
 - [ ] Race condition between two confirmations resolves deterministically
+
+Proof: `call-access-duplicate-review-email.spec.js` covers account-update
+confirmation request, logged-in-account-only delivery, account-bound
+confirmation, wrong-account denial, cross-browser same-account confirmation,
+replay denial, rate limiting, no update before confirmation, manually re-entered
+field updates, pending-state continuity, and safe failed-confirmation payloads.
+The backend `call-access-email-confirmation-contract.php` is wired into the IAM
+contract gate; runtime execution is skipped locally because `pdo_sqlite` is not
+available.
 
 ## 17. Guest List
 
@@ -2215,7 +2228,7 @@ temporary account removal plus reschedule/delete/end audit records.
 - [ ] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
 - [ ] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
 - [ ] Registered logged-in user opens personalized link with strong mismatch, enters correct host name, re-enters data, confirms email, account is updated
-- [ ] Same personalized link is opened by second logged-in account and review flag is created
+- [x] Same personalized link is opened by second logged-in account and review flag is created
 - [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
 - [x] Not logged-in user opens anonymous link, temporary account is created, user lands in lobby, is admitted, can rejoin
 - [ ] System admin joins foreign active call without invitation
@@ -2349,26 +2362,26 @@ against duplicate join/session request loops.
 - [ ] `e2e_strong_mismatch_007_wrong_host_name_no_data_leak`
 - [ ] `e2e_strong_mismatch_008_correct_host_name_accepted`
 - [ ] `e2e_strong_mismatch_009_decline_account_update_keeps_account_unchanged`
-- [ ] `e2e_strong_mismatch_010_update_requires_manual_reentry`
-- [ ] `e2e_strong_mismatch_011_confirmation_email_sent_to_logged_in_account`
-- [ ] `e2e_strong_mismatch_012_email_not_sent_to_temp_account`
-- [ ] `e2e_strong_mismatch_013_no_update_without_email_confirmation`
-- [ ] `e2e_strong_mismatch_014_confirmed_update_changes_only_confirmed_fields`
-- [ ] `e2e_strong_mismatch_015_rate_limit_host_name_attempts`
+- [x] `e2e_strong_mismatch_010_update_requires_manual_reentry`
+- [x] `e2e_strong_mismatch_011_confirmation_email_sent_to_logged_in_account`
+- [x] `e2e_strong_mismatch_012_email_not_sent_to_temp_account`
+- [x] `e2e_strong_mismatch_013_no_update_without_email_confirmation`
+- [x] `e2e_strong_mismatch_014_confirmed_update_changes_only_confirmed_fields`
+- [x] `e2e_strong_mismatch_015_rate_limit_host_name_attempts`
 - [ ] `e2e_strong_mismatch_016_audit_logged`
 
 ## Test Group: Duplicate Personalized Link
 
-- [ ] `e2e_duplicate_link_001_same_account_reuses_link_no_flag`
-- [ ] `e2e_duplicate_link_002_second_account_uses_link_flag_created`
-- [ ] `e2e_duplicate_link_003_second_account_flag_even_without_join`
-- [ ] `e2e_duplicate_link_004_second_account_flag_even_with_correct_host_name`
+- [x] `e2e_duplicate_link_001_same_account_reuses_link_no_flag`
+- [x] `e2e_duplicate_link_002_second_account_uses_link_flag_created`
+- [x] `e2e_duplicate_link_003_second_account_flag_even_without_join`
+- [x] `e2e_duplicate_link_004_second_account_flag_even_with_correct_host_name`
 - [ ] `e2e_duplicate_link_005_concurrent_two_accounts_same_link_detected`
 - [ ] `e2e_duplicate_link_006_parallel_open_no_inconsistent_assignment`
 - [ ] `e2e_duplicate_link_007_cross_device_duplicate_detected`
 - [ ] `e2e_duplicate_link_008_cross_browser_duplicate_detected`
-- [ ] `e2e_duplicate_link_009_review_flag_contains_required_metadata`
-- [ ] `e2e_duplicate_link_010_review_flag_avoids_sensitive_data`
+- [x] `e2e_duplicate_link_009_review_flag_contains_required_metadata`
+- [x] `e2e_duplicate_link_010_review_flag_avoids_sensitive_data`
 
 ## Test Group: Anonymous Link Logged In
 
@@ -2452,14 +2465,14 @@ against duplicate join/session request loops.
 
 ## Test Group: Email Confirmation
 
-- [ ] `e2e_email_001_update_request_sends_confirmation_email`
-- [ ] `e2e_email_002_email_sent_to_logged_in_account`
-- [ ] `e2e_email_003_email_not_sent_to_temp_account`
-- [ ] `e2e_email_004_confirmation_link_account_bound`
-- [ ] `e2e_email_005_confirmation_link_one_time_use`
+- [x] `e2e_email_001_update_request_sends_confirmation_email`
+- [x] `e2e_email_002_email_sent_to_logged_in_account`
+- [x] `e2e_email_003_email_not_sent_to_temp_account`
+- [x] `e2e_email_004_confirmation_link_account_bound`
+- [x] `e2e_email_005_confirmation_link_one_time_use`
 - [ ] `e2e_email_006_confirmation_link_time_limited`
-- [ ] `e2e_email_007_no_update_without_confirmation`
-- [ ] `e2e_email_008_confirmation_updates_only_reentered_data`
+- [x] `e2e_email_007_no_update_without_confirmation`
+- [x] `e2e_email_008_confirmation_updates_only_reentered_data`
 - [ ] `e2e_email_009_expired_confirmation_link_no_update`
 - [ ] `e2e_email_010_multiple_pending_confirmations_resolved`
 
@@ -2495,7 +2508,7 @@ against duplicate join/session request loops.
 - [x] `e2e_multi_session_003_different_user_same_link_other_device_flags`
 - [x] `e2e_multi_session_004_concurrent_join_no_duplicate_participants`
 - [x] `e2e_multi_session_005_login_switch_during_warning_modal_safe`
-- [ ] `e2e_multi_session_006_email_confirmation_other_browser_correct_account`
+- [x] `e2e_multi_session_006_email_confirmation_other_browser_correct_account`
 - [x] `e2e_multi_session_007_session_expiry_in_lobby_safe`
 - [x] `e2e_multi_session_008_session_expiry_in_call_safe`
 - [x] `e2e_multi_session_009_refresh_during_host_verification_safe`
@@ -2668,7 +2681,7 @@ against duplicate join/session request loops.
 - [ ] `e2e_journey_005_foreign_personalized_link_wrong_host_no_data_leak`
 - [ ] `e2e_journey_006_foreign_personalized_link_correct_host_decline_update`
 - [ ] `e2e_journey_007_foreign_personalized_link_correct_host_update_confirm_email`
-- [ ] `e2e_journey_008_duplicate_personalized_link_review_flag`
+- [x] `e2e_journey_008_duplicate_personalized_link_review_flag`
 - [ ] `e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights`
 - [x] `e2e_journey_010_logged_out_user_anonymous_link_lobby_admit_rejoin`
 - [ ] `e2e_journey_011_system_admin_join_without_invite`
