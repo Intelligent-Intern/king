@@ -109,12 +109,14 @@ persist_wizard_env() {
     VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS
     VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE
     VIDEOCHAT_DEPLOY_REMOTE_LOCALE
+    VIDEOCHAT_DEPLOY_APP_DOMAIN
     VIDEOCHAT_DEPLOY_API_DOMAIN
     VIDEOCHAT_DEPLOY_WS_DOMAIN
     VIDEOCHAT_DEPLOY_SFU_DOMAIN
     VIDEOCHAT_DEPLOY_TURN_DOMAIN
     VIDEOCHAT_DEPLOY_CDN_DOMAIN
     VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN
+    VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN
     VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN
     VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
     VIDEOCHAT_DEPLOY_ADMIN_PASSWORD
@@ -319,7 +321,7 @@ resolved_ips_for_domain() {
 
 wait_for_dns_to_server() {
   local timeout="${VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS:-900}" deadline resolved target target_resolved all_ok
-  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_MOTHERNODE_DOMAIN}")
+  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}")
   if ! command -v getent >/dev/null 2>&1; then
     log "WARN: getent is missing locally; skipping DNS wait"
     return 0
@@ -403,9 +405,8 @@ hcloud_set_dns_a_record() {
 }
 
 hcloud_set_videochat_subdomain_records() {
-  local target seen="" legacy_cdn_domain=""
-  [[ -n "${DEPLOY_DOMAIN:-}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
-  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_MOTHERNODE_DOMAIN}" "${legacy_cdn_domain}"; do
+  local target seen=""
+  for target in "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}"; do
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
       *" ${target} "*) continue ;;
@@ -433,7 +434,7 @@ run_hcloud_dns_step() {
     hcloud_set_dns_a_record || true
     hcloud_set_videochat_subdomain_records
   else
-    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN}, ${DEPLOY_CDN_DOMAIN}, ${DEPLOY_CALL_APP_DOMAIN}, ${DEPLOY_MOTHERNODE_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
+    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_APP_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN}, ${DEPLOY_CDN_DOMAIN}, ${DEPLOY_CALL_APP_DOMAIN}, ${DEPLOY_REGISTRY_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
   fi
 
   wait_for_dns_to_server

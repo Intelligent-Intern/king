@@ -128,6 +128,13 @@ SQL
         isset($row['active_tenant_id']) ? (int) $row['active_tenant_id'] : null
     );
     if ($tenant === null) {
+        $tenant = videochat_tenant_context_for_call_access_session(
+            $pdo,
+            (int) $row['user_id'],
+            $trimmedSessionId
+        );
+    }
+    if ($tenant === null) {
         return [
             'ok' => false,
             'reason' => 'tenant_membership_inactive',
