@@ -1335,18 +1335,18 @@ this host because `pdo_sqlite` is unavailable.
 
 - [x] Not logged-in user opens personalized link
 - [x] Temporary account from link data is created / used
-- [ ] Temporary account does not automatically log in existing registered account
+- [x] Temporary account does not automatically log in existing registered account
 - [x] User enters intended flow with temporary account
 - [ ] Temporary account may be on guest list
 - [ ] Temporary account on guest list can join directly
-- [ ] Temporary account not on guest list lands in lobby
-- [ ] Temporary account cannot see other users’ data
-- [ ] Temporary account receives no registered account rights
-- [ ] Temporary account cannot administer call unless explicitly permitted
+- [x] Temporary account not on guest list lands in lobby
+- [x] Temporary account cannot see other users’ data
+- [x] Temporary account receives no registered account rights
+- [x] Temporary account cannot administer call unless explicitly permitted
 - [ ] Temporary account cannot assume another identity by changing link parameters
 - [x] Temporary account remains consistent for same link / call
 - [ ] Temporary account can be recognized after leaving
-- [ ] Temporary account cannot receive organization-wide rights
+- [x] Temporary account cannot receive organization-wide rights
 - [x] Invalid personalized link is rejected
 - [x] Manipulated personalized link is rejected
 - [x] Error state for invalid personalized link leaks no data
@@ -1356,6 +1356,12 @@ personalized link entering the linked call session without identity proof, plus
 safe failure states that do not expose foreign link data. `npx playwright test
 tests/e2e/call-access-personalized-identity.spec.js --workers=1 --reporter=list`
 passed 5 tests.
+`call-access-main-journey-smoke.spec.js` covers
+`e2e_journey_002_registered_logged_out_invitee_uses_temp_account`: the
+registered-but-logged-out invitee path uses a temporary guest account, does not
+take over the existing registered account, enters lobby/admission flow, and
+does not expose registered account data or grant tenant/lobby/admin rights. The
+focused run passed 3 tests; the integrated seed-matrix run passed 21 tests.
 
 ## 6. Personalized Link: Logged-In User, No / Light Mismatch
 
@@ -2227,7 +2233,7 @@ temporary account removal plus reschedule/delete/end audit records.
 ## 32. End-to-End Main Paths
 
 - [ ] New unregistered guest books appointment through calendar, receives personalized link, opens logged out, lands in lobby, is admitted, joins, leaves, rejoins without approval
-- [ ] Registered but logged-out guest books appointment, opens personalized link logged out, temporary account is used, no automatic account takeover
+- [x] Registered but logged-out guest books appointment, opens personalized link logged out, temporary account is used, no automatic account takeover
 - [x] Registered logged-in guest opens own personalized link with matching data, remains logged in, joins as registered user
 - [ ] Registered logged-in guest opens personalized link with light mismatch, remains logged in, joins after permission check
 - [ ] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
@@ -2317,7 +2323,7 @@ unchecked for the separate owner-transfer lane.
 - [x] `e2e_invite_001_host_creates_calendar_invitation`
 - [x] `e2e_invite_002_invitee_selects_appointment`
 - [ ] `e2e_invite_003_registered_logged_in_invitee_flow`
-- [ ] `e2e_invite_004_registered_logged_out_invitee_flow`
+- [x] `e2e_invite_004_registered_logged_out_invitee_flow`
 - [x] `e2e_invite_005_unregistered_invitee_creates_temp_account`
 - [x] `e2e_invite_006_personalized_link_bound_to_temp_account`
 - [x] `e2e_invite_007_multiple_invitees_get_unique_links`
@@ -2337,11 +2343,11 @@ against duplicate join/session request loops.
 ## Test Group: Personalized Link Logged Out
 
 - [x] `e2e_personalized_logged_out_001_temp_account_created_from_link`
-- [ ] `e2e_personalized_logged_out_002_existing_account_not_auto_logged_in`
+- [x] `e2e_personalized_logged_out_002_existing_account_not_auto_logged_in`
 - [ ] `e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join`
-- [ ] `e2e_personalized_logged_out_004_temp_guest_not_on_guest_list_lobby`
-- [ ] `e2e_personalized_logged_out_005_temp_guest_no_registered_rights`
-- [ ] `e2e_personalized_logged_out_006_temp_guest_no_org_rights`
+- [x] `e2e_personalized_logged_out_004_temp_guest_not_on_guest_list_lobby`
+- [x] `e2e_personalized_logged_out_005_temp_guest_no_registered_rights`
+- [x] `e2e_personalized_logged_out_006_temp_guest_no_org_rights`
 - [ ] `e2e_personalized_logged_out_007_manipulated_link_rejected`
 - [ ] `e2e_personalized_logged_out_008_invalid_link_safe_error`
 
@@ -2680,7 +2686,7 @@ against duplicate join/session request loops.
 ## Test Group: Main E2E Journeys
 
 - [ ] `e2e_journey_001_unregistered_calendar_guest_lobby_admit_join_leave_rejoin`
-- [ ] `e2e_journey_002_registered_logged_out_invitee_uses_temp_account`
+- [x] `e2e_journey_002_registered_logged_out_invitee_uses_temp_account`
 - [x] `e2e_journey_003_registered_logged_in_matching_invitee_joins_as_account`
 - [ ] `e2e_journey_004_registered_logged_in_light_mismatch_joins_after_permission_check`
 - [ ] `e2e_journey_005_foreign_personalized_link_wrong_host_no_data_leak`
