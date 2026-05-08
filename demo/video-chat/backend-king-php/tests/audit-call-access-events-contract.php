@@ -351,6 +351,8 @@ try {
         'call_access_account_compared',
         'call_access_duplicate_personalized_link_review',
         'call_access_strong_mismatch_denied',
+        'call_access_host_verification_failed',
+        'call_access_host_name_rejected',
         'call_access_host_name_verified',
         'call_access_host_name_verification_failed',
         'call_access_account_update_confirmation_requested',
@@ -387,6 +389,16 @@ try {
     $hostVerifiedPayload = (array) (($eventsByType['call_access_host_name_verified'][0] ?? [])['payload'] ?? []);
     videochat_iam_rejoin_contract_assert((string) ($hostVerifiedPayload['outcome'] ?? '') === 'correct_host_name', 'successful host-name audit outcome mismatch', $label);
     videochat_iam_rejoin_contract_assert((bool) ($hostVerifiedPayload['host_name_logged'] ?? true) === false, 'successful host-name audit must not log host name', $label);
+    videochat_iam_rejoin_contract_assert((string) ($hostVerifiedPayload['compatibility_event_type'] ?? '') === 'call_access_host_name_verified', 'successful host-name audit must retain compatibility event marker', $label);
+    videochat_iam_rejoin_contract_assert((string) ($hostVerifiedPayload['canonical_event_type'] ?? '') === 'call_access_host_name_verified', 'successful host-name audit must mark canonical event name', $label);
+    videochat_iam_rejoin_contract_assert(in_array('call_access_host_verification_succeeded', (array) ($hostVerifiedPayload['legacy_event_types'] ?? []), true), 'successful host-name audit must retain legacy success event name', $label);
+    $hostFailedPayload = (array) (($eventsByType['call_access_host_name_verification_failed'][0] ?? [])['payload'] ?? []);
+    videochat_iam_rejoin_contract_assert((string) ($hostFailedPayload['outcome'] ?? '') !== 'correct_host_name', 'failed host-name audit outcome mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($hostFailedPayload['host_name_logged'] ?? true) === false, 'failed host-name audit must not log host name', $label);
+    videochat_iam_rejoin_contract_assert((string) ($hostFailedPayload['compatibility_event_type'] ?? '') === 'call_access_host_name_rejected', 'failed host-name audit must retain compatibility event marker', $label);
+    videochat_iam_rejoin_contract_assert((string) ($hostFailedPayload['canonical_event_type'] ?? '') === 'call_access_host_name_verification_failed', 'failed host-name audit must mark canonical event name', $label);
+    videochat_iam_rejoin_contract_assert(in_array('call_access_host_verification_failed', (array) ($hostFailedPayload['legacy_event_types'] ?? []), true), 'failed host-name audit must retain legacy failed event name', $label);
+    videochat_iam_rejoin_contract_assert(in_array('call_access_host_name_rejected', (array) ($hostFailedPayload['legacy_event_types'] ?? []), true), 'failed host-name audit must retain rejected event name', $label);
     $accountUpdatePayload = (array) (($eventsByType['call_access_account_update_confirmation_requested'][0] ?? [])['payload'] ?? []);
     videochat_iam_rejoin_contract_assert((bool) ($accountUpdatePayload['manual_reentry_required'] ?? false), 'account-update audit should require manual re-entry', $label);
     videochat_iam_rejoin_contract_assert(!videochat_audit_events_contract_payload_has_key($accountUpdatePayload, 'confirmation_token'), 'account-update audit must not log confirmation token', $label);
