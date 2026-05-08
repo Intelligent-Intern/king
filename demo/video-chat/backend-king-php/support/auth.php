@@ -9,6 +9,7 @@ require_once __DIR__ . '/database_core.php';
 require_once __DIR__ . '/tenant_context.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/../domain/users/onboarding_progress.php';
+require_once __DIR__ . '/../domain/calls/call_access_contract.php';
 
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
@@ -113,6 +114,24 @@ SQL
         return [
             'ok' => false,
             'reason' => 'expired_session',
+            'session' => null,
+            'user' => null,
+        ];
+    }
+
+    $callAccessSession = videochat_validate_call_access_session_binding(
+        $pdo,
+        $trimmedSessionId,
+        (int) $row['user_id'],
+        $currentUnix
+    );
+    if (
+        (bool) ($callAccessSession['is_call_access_session'] ?? false)
+        && !(bool) ($callAccessSession['ok'] ?? false)
+    ) {
+        return [
+            'ok' => false,
+            'reason' => (string) ($callAccessSession['reason'] ?? 'call_access_binding_mismatch'),
             'session' => null,
             'user' => null,
         ];
