@@ -52,6 +52,43 @@ assert(
   'gossip_neighbor signaling must be consumed by the dedicated lifecycle, not by native media signaling',
 )
 assert(
+  /function scheduleQueuedRenegotiate\(peer,\s*reason = 'queued_renegotiate'\)/.test(lifecycle)
+    && /queuedRenegotiateTimer/.test(lifecycle)
+    && /GOSSIP_NEIGHBOR_RENEGOTIATE_MAX_ATTEMPTS/.test(lifecycle)
+    && /gossip_neighbor_renegotiate_quarantined/.test(lifecycle)
+    && /scheduleQueuedRenegotiate\(peer,\s*'queued_renegotiate'\)/.test(lifecycle)
+    && !/void negotiatePeer\(peer,\s*'queued_renegotiate'\)/.test(lifecycle),
+  'queued Gossip neighbor renegotiation must be deduped and bounded instead of recursively calling negotiatePeer from finally',
+)
+assert(
+  (
+    /const preSetLocalState = String\(peer\.pc\.signalingState \|\| ''\)\.trim\(\)\.toLowerCase\(\)/.test(lifecycle)
+    || /const preSetLocalState = normalizedSignalingState\(peer\.pc\)/.test(lifecycle)
+  )
+    && /preSetLocalState !== 'stable'/.test(lifecycle)
+    && /shouldDeferOfferSetLocalFailure\(error,\s*peer\.pc\)/.test(lifecycle)
+    && /gossip_neighbor_offer_deferred/.test(lifecycle)
+    && /await peer\.pc\.setLocalDescription\(offer\)/.test(lifecycle),
+  'Gossip neighbor offer creation must defer both pre-set and setLocalDescription have-remote-offer glare',
+)
+assert(
+  /function shouldIgnoreStaleRemoteOfferAnswerFailure\(error,\s*pc\)/.test(lifecycle)
+    && /const postRemoteState = normalizedSignalingState\(peer\.pc\)/.test(lifecycle)
+    && /postRemoteState !== 'have-remote-offer'/.test(lifecycle)
+    && /gossip_neighbor_offer_stale/.test(lifecycle),
+  'remote Gossip offers that become stale while answering must be treated idempotently instead of failing the neighbor link',
+)
+assert(
+  /addEventListener\('signalingstatechange'/.test(lifecycle)
+    && /gossip_neighbor_renegotiate_waiting_stable/.test(lifecycle)
+    && /peer\.queuedRenegotiateAttempts = 0;[\s\S]*scheduleQueuedRenegotiate\(peer,\s*'signaling_stable'\)/.test(lifecycle),
+  'queued Gossip neighbor renegotiation must wait for stable signaling instead of burning the quarantine budget',
+)
+assert(
+  /function closePeer\(peerId,\s*reason = 'retired'\)[\s\S]*clearQueuedRenegotiate\(peer\)[\s\S]*peer\.pc\?\.close\?\.\(\)/.test(lifecycle),
+  'closing a Gossip neighbor must clear pending queued renegotiation timers before closing the peer connection',
+)
+assert(
   /import \{ createGossipNeighborLifecycle \} from '\.\/gossipNeighborLifecycle'/.test(dataLane)
     && /const assignedGossipNeighborIds = new Set\(\)/.test(dataLane)
     && /ensureGossipNeighborLifecycle\(\)\?\.applyAssignedNeighbors\(topologyHint,\s*assignedGossipNeighborIds\)/.test(dataLane)
@@ -73,6 +110,10 @@ assert(
 assert(
   packageJson.includes('gossip-dedicated-neighbor-lifecycle-contract.mjs'),
   'gossip contract suite must include the dedicated neighbor lifecycle contract',
+)
+assert(
+  packageJson.includes('gossip-neighbor-renegotiate-stack-contract.mjs'),
+  'gossip contract suite must include the production stack-overflow renegotiation proof',
 )
 assert(
   /- \[x\] GSP-04 Dedicated bounded neighbor lifecycle/.test(sprint),

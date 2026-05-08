@@ -62,7 +62,10 @@
             <span class="call-apps-status-badge" :class="healthStatusClass(app)">{{ healthStatusLabel(app) }}</span>
           </span>
         </span>
-        <span class="call-apps-item-state">{{ app.app_key }}</span>
+        <span class="call-apps-item-side">
+          <span class="call-apps-item-state">{{ app.app_key }}</span>
+          <span class="call-apps-item-action">{{ selectedAppKey === app.app_key ? 'Selected' : 'Select' }}</span>
+        </span>
       </button>
 
       <div v-if="!loading && availableApps.length === 0" class="call-apps-empty">
@@ -115,13 +118,21 @@
           <dd>{{ healthStatusLabel(selectedApp) }}</dd>
         </div>
       </dl>
-      <label class="call-apps-policy">
-        <span>Default participant access</span>
-        <AppSelect v-model="defaultPolicy" aria-label="Default participant access">
-          <option value="blocked_by_default">Blocked by default</option>
-          <option value="allowed_by_default">Allowed by default</option>
-        </AppSelect>
-      </label>
+      <fieldset class="call-apps-policy">
+        <legend>Default participant access</legend>
+        <div class="call-apps-policy-options">
+          <label class="call-apps-policy-choice" :class="{ active: defaultPolicy === 'blocked_by_default' }">
+            <input v-model="defaultPolicy" type="radio" value="blocked_by_default" />
+            <span>Blocked</span>
+            <small>Grant individually</small>
+          </label>
+          <label class="call-apps-policy-choice" :class="{ active: defaultPolicy === 'allowed_by_default' }">
+            <input v-model="defaultPolicy" type="radio" value="allowed_by_default" />
+            <span>Allowed</span>
+            <small>Participants can open</small>
+          </label>
+        </div>
+      </fieldset>
       <button
         class="btn btn-cyan full"
         type="button"
@@ -141,6 +152,7 @@
       <div class="call-apps-access-head">
         <h2>Access</h2>
         <span>{{ activeSessionName }}</span>
+        <span class="call-apps-access-default">{{ activeSessionDefaultAccessLabel }}</span>
       </div>
       <div v-if="callAppAccessParticipants.length > 0" class="call-apps-access-list">
         <div
@@ -150,7 +162,7 @@
         >
           <span class="call-apps-access-main">
             <span class="call-apps-access-name">{{ participant.displayName }}</span>
-            <span class="call-apps-access-state">{{ grantStateLabel(participant) }}</span>
+            <span class="call-apps-access-state" :class="grantStateClass(participant)">{{ grantStateLabel(participant) }}</span>
           </span>
           <CallAppParticipantGrantButton
             :session="activeSessionForAccess"
@@ -159,9 +171,13 @@
             :api-request="apiRequest"
             :send-socket-frame="sendSocketFrame"
             :request-room-snapshot="requestRoomSnapshot"
+            variant="label"
             @grant-updated="applyLocalGrantUpdate"
           />
         </div>
+      </div>
+      <div v-else class="call-apps-empty">
+        No call participants are available for this Call App session.
       </div>
     </section>
   </section>
@@ -296,6 +312,10 @@ function defaultGrantState() {
   return String(activeSessionForAccess.value?.default_app_policy || '') === 'allowed_by_default' ? 'allowed' : 'denied';
 }
 
+const activeSessionDefaultAccessLabel = computed(() => (
+  defaultGrantState() === 'allowed' ? 'Default: allowed' : 'Default: blocked'
+));
+
 function grantStateForParticipant(participant) {
   const userId = Number(participant?.userId || participant?.user_id || 0);
   const sessionId = String(activeSessionForAccess.value?.id || '').trim();
@@ -312,6 +332,10 @@ function grantStateForParticipant(participant) {
 
 function grantStateLabel(participant) {
   return grantStateForParticipant(participant) === 'allowed' ? 'Allowed' : 'Blocked';
+}
+
+function grantStateClass(participant) {
+  return grantStateForParticipant(participant) === 'allowed' ? 'state-allowed' : 'state-denied';
 }
 
 function applyLocalGrantUpdate(event) {
@@ -420,283 +444,4 @@ watch(
 );
 </script>
 
-<style scoped>
-.call-apps-sidebar {
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0 0 56px;
-  display: grid;
-  gap: 1px;
-  align-content: start;
-  container-type: inline-size;
-  direction: rtl;
-}
-
-.call-apps-sidebar > * {
-  direction: var(--app-content-direction);
-}
-
-.call-apps-search {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  justify-content: flex-start;
-  gap: clamp(10px, 4cqi, 20px);
-  padding: clamp(12px, 5cqi, 20px);
-  background: var(--bg-surface-strong);
-}
-
-.call-apps-search-input {
-  height: 34px;
-  min-width: 0;
-  flex: 1 1 auto;
-  background: var(--border-subtle);
-}
-
-.call-apps-search-submit {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-}
-
-.call-apps-search-submit img {
-  width: 16px;
-  height: 16px;
-  filter: var(--action-icon-filter);
-}
-
-.call-apps-picker {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  background: var(--bg-surface-strong);
-}
-
-.call-apps-picker span {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.call-apps-list {
-  display: grid;
-  gap: 1px;
-  min-height: 0;
-}
-
-.call-apps-list.loading {
-  opacity: 0.7;
-}
-
-.call-apps-list-item {
-  width: 100%;
-  border: 0;
-  background: var(--bg-surface-strong);
-  color: var(--text-primary);
-  min-height: 82px;
-  padding: 12px clamp(12px, 5cqi, 20px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.call-apps-list-item:hover,
-.call-apps-list-item.active {
-  background: var(--color-border);
-}
-
-.call-apps-item-main {
-  min-width: 0;
-  display: grid;
-  gap: 6px;
-}
-
-.call-apps-item-name {
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.call-apps-item-meta,
-.call-apps-item-state,
-.call-apps-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.call-apps-item-state {
-  text-transform: uppercase;
-  letter-spacing: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.call-apps-item-badges {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.call-apps-status-badge {
-  min-height: 20px;
-  padding: 3px 7px;
-  border: 1px solid var(--color-border);
-  background: var(--color-primary-navy);
-  color: var(--color-heading);
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 12px;
-  text-transform: uppercase;
-}
-
-.call-apps-status-badge.state-installed,
-.call-apps-status-badge.state-enabled,
-.call-apps-status-badge.state-healthy {
-  color: var(--color-success);
-}
-
-.call-apps-status-badge.state-disabled,
-.call-apps-status-badge.state-unhealthy {
-  color: var(--color-error);
-}
-
-.call-apps-pagination {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: clamp(10px, 4cqi, 20px);
-  background: var(--bg-surface-strong);
-  padding: clamp(12px, 5cqi, 20px);
-}
-
-.call-apps-detail,
-.call-apps-access {
-  background: var(--bg-surface-strong);
-  padding: clamp(12px, 5cqi, 20px);
-  display: grid;
-  gap: clamp(12px, 5cqi, 20px);
-}
-
-.call-apps-detail-head,
-.call-apps-access-head {
-  display: grid;
-  gap: 4px;
-}
-
-.call-apps-detail-head h2,
-.call-apps-access-head h2 {
-  margin: 0;
-  font-size: 14px;
-  line-height: 18px;
-  color: var(--text-primary);
-}
-
-.call-apps-detail-head span,
-.call-apps-access-head span {
-  font-size: 12px;
-  color: var(--text-muted);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.call-apps-detail-grid {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
-.call-apps-detail-grid div,
-.call-apps-policy {
-  display: grid;
-  gap: 4px;
-}
-
-.call-apps-detail-grid dt,
-.call-apps-policy span {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.call-apps-detail-grid dd {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-primary);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.call-apps-empty,
-.call-apps-error,
-.call-apps-notice {
-  padding: 12px 10px;
-  font-size: 12px;
-  background: var(--bg-surface-strong);
-}
-
-.call-apps-empty {
-  color: var(--text-muted);
-}
-
-.call-apps-error {
-  color: var(--color-error);
-}
-
-.call-apps-notice {
-  color: var(--color-success);
-}
-
-.call-apps-access-list {
-  display: grid;
-  gap: 8px;
-}
-
-.call-apps-access-row {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  align-items: center;
-  gap: 8px;
-}
-
-.call-apps-access-main {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.call-apps-access-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.call-apps-access-state {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-@container (min-width: 380px) {
-  .call-apps-list-item {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .call-apps-detail-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-</style>
+<style scoped src="./CallAppsSidebarPanel.css"></style>

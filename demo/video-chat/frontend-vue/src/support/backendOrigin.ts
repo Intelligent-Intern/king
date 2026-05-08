@@ -51,15 +51,17 @@ function parseBooleanEnv(value, fallback = false) {
 
 const allowInsecureWebSockets = parseBooleanEnv(import.meta.env.VITE_VIDEOCHAT_ALLOW_INSECURE_WS, false);
 
-function resolveProductionBackendOriginForHost(hostname, protocol) {
+function resolveProductionServiceOriginForHost(hostname, protocol, service) {
   const host = String(hostname || '').trim().toLowerCase();
   const scheme = String(protocol || '').trim().toLowerCase() === 'https:' ? 'https' : '';
+  const serviceKey = String(service || '').trim().toLowerCase();
+  if (!['api', 'ws', 'sfu'].includes(serviceKey)) return '';
   if (scheme !== 'https' || host === '') return '';
   if (host === 'app.kingrt.com') {
-    return 'https://api.app.kingrt.com';
+    return `https://${serviceKey}.kingrt.com`;
   }
-  if (host.endsWith('.app.kingrt.com') && !host.startsWith('api.')) {
-    return `https://api.${host}`;
+  if (host.endsWith('.kingrt.com') && !host.startsWith(`${serviceKey}.`)) {
+    return `https://${serviceKey}.kingrt.com`;
   }
   return '';
 }
@@ -85,7 +87,7 @@ function detectDefaultBackendOrigin() {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
     const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
-    const productionOrigin = resolveProductionBackendOriginForHost(host, window.location.protocol);
+    const productionOrigin = resolveProductionServiceOriginForHost(host, window.location.protocol, 'api');
     if (productionOrigin !== '') {
       return productionOrigin;
     }
@@ -107,6 +109,10 @@ function detectDefaultBackendWebSocketOrigin() {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
     const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    const productionOrigin = resolveProductionServiceOriginForHost(host, window.location.protocol, 'ws');
+    if (productionOrigin !== '') {
+      return productionOrigin;
+    }
     return `${protocol}://${host}:${inferredWsPort}`;
   }
 
@@ -131,6 +137,10 @@ function detectDefaultBackendSfuOrigin() {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
     const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    const productionOrigin = resolveProductionServiceOriginForHost(host, window.location.protocol, 'sfu');
+    if (productionOrigin !== '') {
+      return productionOrigin;
+    }
     return `${protocol}://${host}:${inferredSfuPort}`;
   }
 

@@ -134,6 +134,9 @@ function publisherHarness(overrides = {}) {
         order.push('required_sfu_failure')
         return false
       },
+      onOptionalSfuFailure: (failureDetails) => {
+        order.push(`optional_sfu_failure:${String(failureDetails?.reason || '')}`)
+      },
       ...overrides,
     },
   }
@@ -180,9 +183,23 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must not mirror a successfully published Gossip frame into SFU')
-assert(result.sfuFallbackSkipped === true, 'gossip_primary must expose that SFU fallback was skipped after successful Gossip publication')
-assert(harness.order.join(',') === 'gossip', 'gossip_primary with an open SFU socket must still avoid SFU send when Gossip publication succeeds')
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === true, 'gossip_primary must mirror a successfully published Gossip frame into SFU when the SFU socket is open')
+assert(result.sfuSendOptional === true, 'gossip_primary SFU mirroring must stay optional')
+assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary with an open SFU socket must publish Gossip first and then mirror to SFU')
+
+harness = publisherHarness({
+  currentOpenSfuClient: () => ({
+    sendEncodedFrame: async () => {
+      harness.order.push('sfu')
+      return false
+    },
+    getLastSendFailure: () => ({ reason: 'contract_optional_sfu_failure' }),
+  }),
+})
+result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must keep Gossip live when optional SFU mirror send fails')
+assert(harness.order.join(',') === 'gossip,sfu,optional_sfu_failure:contract_optional_sfu_failure', 'gossip_primary optional SFU failure must still notify backpressure after Gossip publication')
+assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_optional_send_failed_after_gossip_publish'), 'gossip_primary optional SFU failure must be diagnosed without blocking Gossip')
 
 harness = publisherHarness({
   publishLocalEncodedFrameToGossip: () => {
@@ -233,7 +250,7 @@ harness = publisherHarness({
 })
 result = await sfuMirrorDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === true && result.sfuSent === false && result.gossipPublished === true, 'sfu_mirror must keep Gossip mirror publication when SFU send fails after encode')
-assert(harness.order.join(',') === 'sfu,gossip', 'sfu_mirror SFU failure must still mirror to Gossip after the failed SFU attempt')
+assert(harness.order.join(',') === 'sfu,gossip,optional_sfu_failure:contract_sfu_failure', 'sfu_mirror SFU failure must still mirror to Gossip and notify backpressure after the failed SFU attempt')
 assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_optional_send_failed_after_gossip_publish'), 'sfu_mirror SFU failure must be diagnostic after Gossip mirror publication')
 
 const unhealthySfu = readyAggregate({

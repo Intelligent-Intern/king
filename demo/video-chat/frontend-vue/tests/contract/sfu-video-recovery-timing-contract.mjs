@@ -101,7 +101,11 @@ try {
   requireContains(frameDecode, 'resizeCanvasPreservingFrame(peer.decodedCanvas, nextWidth, nextHeight);', 'decoder reconfigure does not clear the remote canvas before the next keyframe');
   requireContains(remotePeers, "mediaConnectionState: 'connecting'", 'new SFU peers start in connecting media state');
   requireContains(remotePeers, 'function findSfuRemotePeerEntryByPeer', 'remote peer owner lookup for publisher rollover');
-  requireContains(remotePeers, 'publisherId: normalizedPublisherId', 'publisher alias lookup adopts the current frame publisher id');
+  requireContains(remotePeers, 'publisherId: fallback.publisherId', 'publisher alias lookup keeps the existing track publisher key');
+  requireContains(frameDecode, 'const resolvedPublisherId = normalizeSfuPublisherId(peerLookup?.publisherId || publisherId);', 'frame decode resolves publisher alias before continuity and recovery');
+  requireContains(frameDecode, 'resolved_publisher_id: resolvedPublisherId', 'alias diagnostics expose the canonical publisher key');
+  requireContains(frameDecode, 'frame = { ...frame, publisherId: resolvedPublisherId, publisherIdAlias: publisherId };', 'alias frames are decoded under the existing publisher key');
+  requireContains(frameDecode, 'void decodeSfuFrameForPeer(resolvedPublisherId, peer, frame);', 'remote frame decode uses resolved publisher key for keyframe recovery');
   requireContains(remotePeers, 'function resetSfuRemotePeerMediaContinuity', 'remote peer continuity reset helper');
   requireContains(remotePeers, "'publisher_id_rollover'", 'publisher id rollover resets remote continuity');
   requireContains(remotePeers, "'track_set_rollover'", 'track rollover resets remote continuity');
@@ -111,7 +115,7 @@ try {
   requireContains(remotePeers, 'nextSfuSocketRestartAllowedAtMs: 0', 'remote peer continuity starts without a restart backoff gate');
   requireContains(remotePeers, 'Keep the last visible frame while waiting for the rollover keyframe.', 'rollover preserves the visible remote frame');
   requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
-  requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
+  requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'genuine publisher rollover can still move peer ownership');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
   requireContains(sfuClient, 'private markPublisherFrameReceived(msg: SfuClientMessage', 'SFU client tracks publisher frame freshness');
   requireContains(sfuClient, "if (stringField(msg?.type) !== 'sfu/frame') return", 'publisher frame tracker keys off normalized SFU frame messages');

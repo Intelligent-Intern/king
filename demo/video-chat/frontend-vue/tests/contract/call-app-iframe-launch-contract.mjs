@@ -95,7 +95,7 @@ assert.match(
 
 assert.match(
   callAppStaticSource,
-  /Content-Security-Policy'[\s\S]*default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:/,
+  /function videochat_edge_call_app_content_security_policy[\s\S]*"default-src 'self'"[\s\S]*"script-src 'self' 'unsafe-inline'"[\s\S]*"style-src 'self' 'unsafe-inline'"[\s\S]*"connect-src 'self'"[\s\S]*"img-src 'self' data: blob:"[\s\S]*Content-Security-Policy'\] = videochat_edge_call_app_content_security_policy/s,
   'Call App static edge must deliver a CSP at least as strong as the iframe csp attribute',
 );
 
@@ -107,7 +107,7 @@ assert.match(
 
 assert.match(
   callAppStaticSource,
-  /frame-ancestors ' \. \$allowedEmbedderOrigin/,
+  /function videochat_edge_call_app_content_security_policy[\s\S]*'frame-ancestors ' \. \$frameAncestor/,
   'Call App static edge must restrict embedders to the trusted app origin',
 );
 
@@ -125,7 +125,7 @@ assert.doesNotMatch(
 
 assert.match(
   edgeSource,
-  /\$isCallAppAsset = str_starts_with\(\$path, '\/call-app\/'\)[\s\S]*Content-Security-Policy[\s\S]*frame-ancestors 'self'/,
+  /\$isCallAppAsset = str_starts_with\(\$path, '\/call-app\/'\)[\s\S]*videochat_edge_call_app_content_security_policy/,
   'edge must enforce Call App CSP on the served response instead of iframe csp',
 );
 
@@ -170,19 +170,19 @@ assert.match(
 
 assert.match(
   bridgeSource,
-  /safePostMessagePayload[\s\S]*type:\s*['"]call_app\.launch['"][\s\S]*launch_token[\s\S]*sanitizeCallAppBridgePayload\(safePostMessagePayload\(session, launch\.value,[\s\S]*participantDisplayName/s,
+  /safePostMessagePayload[\s\S]*type:\s*['"]call_app\.launch['"][\s\S]*launch_token[\s\S]*cloneSafeCallAppBridgePayload\([\s\S]*safePostMessagePayload\(session, launch\.value,[\s\S]*participantDisplayName/s,
   'parent bridge must send the launch token only through the sanitized iframe bridge message',
 );
 
 assert.match(
   bridgeSource,
-  /function sanitizeCallAppBridgePayload[\s\S]*Array\.isArray\(value\)[\s\S]*map\(\(item\) => sanitizeCallAppBridgePayload/s,
-  'parent bridge must convert reactive/proxy arrays into cloneable arrays before postMessage',
+  /function rawBridgeValue[\s\S]*isProxy\(value\)[\s\S]*function sanitizeCallAppBridgePayload[\s\S]*Array\.isArray\(value\)[\s\S]*Array\.from\(value, \(item\) => sanitizeCallAppBridgePayload/s,
+  'parent bridge must unwrap reactive/proxy values and convert arrays into cloneable arrays before postMessage',
 );
 
 assert.match(
   bridgeSource,
-  /frameWindow\.postMessage\([\s\S]*sanitizeCallAppBridgePayload\(safePostMessagePayload\(session, launch\.value,[\s\S]*'\*'/s,
+  /frameWindow\.postMessage\([\s\S]*message,[\s\S]*'\*'/s,
   'parent launch bridge must send only sanitized cloneable payloads',
 );
 

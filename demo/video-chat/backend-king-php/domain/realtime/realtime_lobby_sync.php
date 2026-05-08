@@ -91,7 +91,8 @@ function videochat_realtime_sync_lobby_room_from_database(
     callable $openDatabase,
     string $roomId,
     string $preferredCallId = '',
-    ?int $nowUnixMs = null
+    ?int $nowUnixMs = null,
+    ?int $tenantId = null
 ): array {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
     $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
@@ -112,6 +113,10 @@ function videochat_realtime_sync_lobby_room_from_database(
 
         $callWhere = 'WHERE calls.room_id = :room_id AND calls.status IN (\'active\', \'scheduled\')';
         $callParams = [':room_id' => $normalizedRoomId];
+        if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')) {
+            $callWhere .= ' AND calls.tenant_id = :tenant_id';
+            $callParams[':tenant_id'] = $tenantId;
+        }
         if ($normalizedPreferredCallId !== '') {
             $callWhere .= ' AND calls.id = :call_id';
             $callParams[':call_id'] = $normalizedPreferredCallId;
@@ -302,7 +307,8 @@ function videochat_realtime_send_synced_lobby_snapshot_to_connection(
         $openDatabase,
         $roomId,
         videochat_realtime_connection_call_id($connection),
-        $nowUnixMs
+        $nowUnixMs,
+        videochat_realtime_connection_tenant_id($connection)
     );
 
     $payload = videochat_lobby_snapshot_payload($lobbyState, $roomId, $reason, $nowUnixMs);
@@ -332,7 +338,8 @@ function videochat_realtime_send_synced_lobby_snapshot_to_connection_if_changed(
         $openDatabase,
         $roomId,
         videochat_realtime_connection_call_id($connection),
-        $nowUnixMs
+        $nowUnixMs,
+        videochat_realtime_connection_tenant_id($connection)
     );
 
     $payload = videochat_lobby_snapshot_payload($lobbyState, $roomId, $reason, $nowUnixMs);

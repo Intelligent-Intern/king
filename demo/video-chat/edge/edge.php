@@ -8,13 +8,14 @@ $httpHost = getenv('VIDEOCHAT_EDGE_HOST') ?: '0.0.0.0';
 $httpPort = (int) (getenv('VIDEOCHAT_EDGE_HTTP_PORT') ?: '8080');
 $httpsPort = (int) (getenv('VIDEOCHAT_EDGE_HTTPS_PORT') ?: '8443');
 $domain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_DOMAIN') ?: getenv('VIDEOCHAT_V1_PUBLIC_HOST') ?: 'localhost')));
-$apiDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_API_DOMAIN') ?: 'api.' . $domain)));
-$wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.' . $domain)));
-$sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $domain)));
-$turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $domain)));
-$cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $domain)));
-$callAppDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CALL_APP_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN') ?: 'apps.' . $domain)));
-$cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: 'cnd.' . $domain));
+$rootDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_ROOT_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_DOMAIN') ?: $domain)));
+$apiDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_API_DOMAIN') ?: 'api.' . $rootDomain)));
+$wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.' . $rootDomain)));
+$sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $rootDomain)));
+$turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $rootDomain)));
+$cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $rootDomain)));
+$callAppDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CALL_APP_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN') ?: 'whiteboard.' . $rootDomain)));
+$cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: ''));
 $externalDomainInput = trim((string) getenv('VIDEOCHAT_EDGE_EXTERNAL_DOMAINS'));
 $externalDomains = [];
 foreach (preg_split('/\s*,\s*/', $externalDomainInput) ?: [] as $externalDomain) {
@@ -32,6 +33,16 @@ foreach (preg_split('/\s*,\s*/', $cdnAliasInput) ?: [] as $alias) {
     }
 }
 $cdnDomains = array_values(array_unique($cdnDomains));
+$reservedRootSubdomains = array_values(array_unique(array_filter([
+    'app',
+    'api',
+    'ws',
+    'sfu',
+    'cdn',
+    'turn',
+    'registry',
+    'www',
+])));
 $certFile = getenv('VIDEOCHAT_EDGE_CERT_FILE') ?: '/run/certs/live/fullchain.pem';
 $keyFile = getenv('VIDEOCHAT_EDGE_KEY_FILE') ?: '/run/certs/live/privkey.pem';
 $staticRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_STATIC_ROOT') ?: '/app/frontend-dist'), '/');
@@ -145,6 +156,29 @@ $normalizeHost = static function (string $host): string {
 $parseUpstream = static function (string $upstream): array {
     $parts = explode(':', $upstream, 2);
     return [$parts[0] ?: '127.0.0.1', isset($parts[1]) ? (int) $parts[1] : 80];
+};
+
+$callAppKeyForHost = static function (string $host) use ($rootDomain, $callAppDomain, $reservedRootSubdomains): string {
+    $host = strtolower(trim($host));
+    if ($host === '') {
+        return '';
+    }
+    if ($host === $callAppDomain) {
+        $parts = explode('.', $host);
+        return preg_match('/^[a-z0-9][a-z0-9-]*$/', $parts[0] ?? '') === 1 ? (string) $parts[0] : '';
+    }
+    if ($rootDomain === '' || !str_ends_with($host, '.' . $rootDomain)) {
+        return '';
+    }
+
+    $label = substr($host, 0, -1 * (strlen($rootDomain) + 1));
+    if ($label === '' || str_contains($label, '.')) {
+        return '';
+    }
+    if (in_array($label, $reservedRootSubdomains, true)) {
+        return '';
+    }
+    return preg_match('/^[a-z0-9][a-z0-9-]*$/', $label) === 1 ? $label : '';
 };
 
 $readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTimeout, $zeroWriteSleepMicros): array {
@@ -392,7 +426,7 @@ $injectSocialPreview = static function (string $body, array $request) use ($doma
     return str_replace('</head>', "    {$meta}\n  </head>", $body);
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview): void {
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview, $domain): void {
     $path = rawurldecode((string) $request['path']);
     $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
     $isCallAppAsset = str_starts_with($path, '/call-app/');
@@ -446,7 +480,11 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
         $headers['X-KingRT-Asset-Version'] = $assetVersion;
     }
     if ($isCallAppAsset) {
-        $headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'self'";
+        $allowedEmbedderOrigin = videochat_edge_call_app_normalize_origin('https://' . $domain);
+        $headers['Content-Security-Policy'] = videochat_edge_call_app_content_security_policy($allowedEmbedderOrigin);
+        if ($allowedEmbedderOrigin !== '') {
+            $headers['Allow-CSP-From'] = $allowedEmbedderOrigin;
+        }
         $headers['Cross-Origin-Resource-Policy'] = 'same-origin';
     }
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
@@ -982,7 +1020,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $callAppDomain, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream, $callAppKeyForHost): ?string {
     $host = $request['host'];
     $path = $request['path'];
     if ($externalUpstream !== '' && in_array($host, $externalDomains, true)) {
@@ -991,7 +1029,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     if (in_array($host, $cdnDomains, true)) {
         return 'static';
     }
-    if ($host === $callAppDomain || str_starts_with($path, '/call-app/')) {
+    if ($callAppKeyForHost($host) !== '' || str_starts_with($path, '/call-app/')) {
         return 'call_app_static';
     }
     if ($path === '/ws' || $host === $wsDomain) {
@@ -1012,7 +1050,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     return 'static';
 };
 
-$handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot, $assetVersion, $readRequestHead, $parseRequest, $writeResponse, $contentType, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
+$handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot, $assetVersion, $readRequestHead, $parseRequest, $writeResponse, $contentType, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog, $callAppKeyForHost): void {
     stream_set_timeout($client, 10);
     if ($tls) {
         $crypto = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_SERVER);
@@ -1087,6 +1125,14 @@ $handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot,
         return;
     }
     if ($upstream === 'call_app_static') {
+        $callAppKey = $callAppKeyForHost((string) ($request['host'] ?? ''));
+        if ($callAppKey !== '' && !str_starts_with((string) ($request['path'] ?? ''), '/call-app/')) {
+            $path = (string) ($request['path'] ?? '/');
+            if ($path === '/' || $path === '') {
+                $path = '/public/index.html';
+            }
+            $request['path'] = '/call-app/' . rawurlencode($callAppKey) . '/' . ltrim($path, '/');
+        }
         videochat_edge_serve_call_app_static($client, $request, $callAppRoot, $writeResponse, $contentType, $assetVersion, 'https://' . $domain);
         @fclose($client);
         return;

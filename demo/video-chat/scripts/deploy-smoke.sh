@@ -82,6 +82,45 @@ expect_http_code() {
   log "${label}: HTTP ${code}"
 }
 
+expect_response_header_contains() {
+  local label="$1" url="$2" header_name="$3" expected_value="$4"
+  local headers code header_value
+  headers="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o /dev/null -D "${headers}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected HTTP 200 while checking ${header_name}, got ${code:-none}"
+  fi
+  header_value="$(awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { sub("^[^:]*:[[:space:]]*", "", $0); gsub("\r", "", $0); print $0; exit }' "${headers}")"
+  if [[ -z "${header_value}" || "${header_value}" != *"${expected_value}"* ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected ${header_name} to contain ${expected_value}"
+  fi
+  rm -f "${headers}"
+  log "${label}: ${header_name} contains ${expected_value}"
+}
+
+expect_response_header_absent() {
+  local label="$1" url="$2" header_name="$3"
+  local headers code
+  headers="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o /dev/null -D "${headers}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: expected HTTP 200 while checking ${header_name}, got ${code:-none}"
+  fi
+  if awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { found = 1 } END { exit found ? 0 : 1 }' "${headers}"; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}"
+    fail "${label}: ${header_name} must not be present"
+  fi
+  rm -f "${headers}"
+  log "${label}: ${header_name} absent"
+}
+
 public_get_json() {
   local label="$1" url="$2" output code
   output="$(mktemp)"
@@ -96,6 +135,22 @@ public_get_json() {
   cat "${output}"
   rm -f "${output}"
 }
+
+assert_domain_contract() {
+  local nested=".${DEPLOY_APP_DOMAIN}" label var host
+  for label in app:DEPLOY_APP_DOMAIN api:DEPLOY_API_DOMAIN ws:DEPLOY_WS_DOMAIN sfu:DEPLOY_SFU_DOMAIN turn:DEPLOY_TURN_DOMAIN cdn:DEPLOY_CDN_DOMAIN registry:DEPLOY_REGISTRY_DOMAIN whiteboard:DEPLOY_CALL_APP_DOMAIN; do
+    var="${label#*:}"
+    host="${!var}"
+    [[ -n "${host}" ]] || fail "${var} must not be empty"
+    case "${host}" in *"${nested}"|*.app.kingrt.com) fail "${var} must not be nested under app.kingrt.com: ${host}" ;; esac
+  done
+  if [[ "${DEPLOY_DOMAIN}" == "kingrt.com" ]]; then
+    [[ "${DEPLOY_APP_DOMAIN}" == "app.kingrt.com" && "${DEPLOY_API_DOMAIN}" == "api.kingrt.com" && "${DEPLOY_WS_DOMAIN}" == "ws.kingrt.com" && "${DEPLOY_SFU_DOMAIN}" == "sfu.kingrt.com" && "${DEPLOY_TURN_DOMAIN}" == "turn.kingrt.com" && "${DEPLOY_CDN_DOMAIN}" == "cdn.kingrt.com" && "${DEPLOY_REGISTRY_DOMAIN}" == "registry.kingrt.com" && "${DEPLOY_CALL_APP_DOMAIN}" == "whiteboard.kingrt.com" ]] || fail "kingrt.com production domains must use app/api/ws/sfu/turn/cdn/registry/whiteboard kingrt.com hosts"
+  fi
+  log "domain contract: app/api/ws/sfu/cdn/turn/registry/whiteboard rooted at ${DEPLOY_DOMAIN}; no nested .app.kingrt.com domains"
+}
+
+expect_dns_resolves() { local host="$1"; php -r '$host = $argv[1] ?? ""; exit($host !== "" && gethostbynamel($host) !== false ? 0 : 1);' "${host}" || fail "DNS did not resolve ${host}"; log "dns ${host}: resolves"; }
 
 assert_public_health_payload() {
   php -r '
@@ -165,8 +220,9 @@ assert_public_localization_payload() {
 
 check_https_redirect() {
   local headers code location
+  local frontend_domain="${DEPLOY_APP_DOMAIN:-${DEPLOY_DOMAIN}}"
   headers="$(mktemp)"
-  code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o /dev/null -w '%{http_code}' "http://${DEPLOY_DOMAIN}/" || true)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o /dev/null -w '%{http_code}' "http://${frontend_domain}/" || true)"
   case "${code}" in
     301|308) ;;
     *)
@@ -178,7 +234,7 @@ check_https_redirect() {
 
   location="$(awk 'tolower($1) == "location:" {print $2; exit}' "${headers}" | tr -d '\r')"
   rm -f "${headers}"
-  [[ "${location}" == "https://${DEPLOY_DOMAIN}/"* ]] || fail "http redirect location mismatch: ${location:-missing}"
+  [[ "${location}" == "https://${frontend_domain}/"* ]] || fail "http redirect location mismatch: ${location:-missing}"
   log "http redirect: ${code} -> ${location}"
 }
 
@@ -239,23 +295,27 @@ verify_remote_certbot_hook() {
   [[ -n "${DEPLOY_HOST}" ]] || fail "VIDEOCHAT_DEPLOY_HOST is required for certbot renewal-hook smoke"
   require_cmd ssh
 
-  local ssh_dest sudo_value domain_q api_q ws_q sfu_q turn_q cdn_q
+  local ssh_dest sudo_value domain_q app_q api_q ws_q sfu_q turn_q cdn_q call_app_q registry_q mothernode_q
   ssh_dest="${DEPLOY_USER}@${DEPLOY_HOST}"
   sudo_value=""
   [[ "${DEPLOY_USER}" != "root" ]] && sudo_value="sudo"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
+  app_q="$(shell_quote "${DEPLOY_APP_DOMAIN}")"
   api_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
   ws_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  registry_q="$(shell_quote "${DEPLOY_REGISTRY_DOMAIN}")"
+  mothernode_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
 
   local ssh_args=(-p "${DEPLOY_SSH_PORT}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
   if [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]]; then
     ssh_args+=(-i "${VIDEOCHAT_DEPLOY_SSH_KEY}")
   fi
 
-  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} CDN_DOMAIN=${cdn_q} bash -s" <<'REMOTE'
+  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} APP_DOMAIN=${app_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} CDN_DOMAIN=${cdn_q} CALL_APP_DOMAIN=${call_app_q} REGISTRY_DOMAIN=${registry_q} MOTHERNODE_DOMAIN=${mothernode_q} bash -s" <<'REMOTE'
 set -euo pipefail
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/king-videochat-restart.sh
 ${SUDO} test -x "${HOOK}"
@@ -263,9 +323,12 @@ ${SUDO} grep -Fq 'docker compose' "${HOOK}"
 ${SUDO} grep -Fq 'restart || true' "${HOOK}"
 cert_output="$(${SUDO} certbot certificates -d "${DOMAIN}" 2>&1)"
 printf '%s\n' "${cert_output}" | grep -Fq "Certificate Name: ${DOMAIN}"
-for expected in "${DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}" "${CDN_DOMAIN}"; do
+for expected in "${DOMAIN}" "${APP_DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}" "${CDN_DOMAIN}" "${CALL_APP_DOMAIN}" "${REGISTRY_DOMAIN}"; do
   printf '%s\n' "${cert_output}" | grep -Fq "${expected}"
 done
+if [ -n "${MOTHERNODE_DOMAIN}" ] && [ "${MOTHERNODE_DOMAIN}" != "${REGISTRY_DOMAIN}" ]; then
+  printf '%s\n' "${cert_output}" | grep -Fq "${MOTHERNODE_DOMAIN}"
+fi
 REMOTE
 
   log "certbot renewal hook and certificate SANs verified on ${ssh_dest}"
@@ -639,34 +702,6 @@ admin_get_json() {
   fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
 }
 
-admin_post_json() {
-  local label="$1" url="$2" token="$3" payload="$4" output code attempt
-  output="$(mktemp)"
-  for attempt in $(seq 1 30); do
-    code="$(
-      curl -sS --max-time "${TIMEOUT}" \
-        -o "${output}" \
-        -w '%{http_code}' \
-        -X POST \
-        -H "authorization: Bearer ${token}" \
-        -H 'content-type: application/json' \
-        --data "${payload}" \
-        "${url}" || true
-    )"
-    if [[ "${code}" == "200" ]]; then
-      cat "${output}"
-      rm -f "${output}"
-      return 0
-    fi
-    sleep 1
-  done
-
-  printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
-  cat "${output}" >&2 || true
-  rm -f "${output}"
-  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
-}
-
 admin_post_json_expect_status() {
   local label="$1" expected_code="$2" url="$3" token="$4" payload="$5" output code attempt
   output="$(mktemp)"
@@ -704,17 +739,39 @@ DEPLOY_DOMAIN="${VIDEOCHAT_DEPLOY_DOMAIN:-${VIDEOCHAT_V1_PUBLIC_HOST:-}}"
 DEPLOY_USER="${VIDEOCHAT_DEPLOY_USER:-root}"
 DEPLOY_SSH_PORT="${VIDEOCHAT_DEPLOY_SSH_PORT:-22}"
 DEPLOY_HOST="${VIDEOCHAT_DEPLOY_HOST:-}"
+DEPLOY_APP_DOMAIN="${VIDEOCHAT_DEPLOY_APP_DOMAIN:-app.${DEPLOY_DOMAIN}}"
 DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
 DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
 DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
 DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
 DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}"
+DEPLOY_CALL_APP_DOMAIN="${VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN:-whiteboard.${DEPLOY_DOMAIN}}"
+DEPLOY_REGISTRY_DOMAIN="${VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN:-${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-registry.${DEPLOY_DOMAIN}}}"
+DEPLOY_MOTHERNODE_DOMAIN="${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-${DEPLOY_REGISTRY_DOMAIN}}"
+
+assert_domain_contract
+log "BGF-07 proof commands: background contracts=(cd demo/video-chat/frontend-vue && npm run test:contract:background-filter && node tests/contract/prod-debug-observability-contract.mjs); build=(cd demo/video-chat/frontend-vue && npm run build); deploy=demo/video-chat/scripts/deploy.sh (operator-run separately; deploy-smoke does not invoke it); production smoke=VIDEOCHAT_DEPLOY_DOMAIN=${DEPLOY_DOMAIN} demo/video-chat/scripts/deploy-smoke.sh; production debug=VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh; browser smoke=Chrome/Chromium and Firefox real call camera/audio/screenshare/reconnect/background-unavailable modal"
+for domain_host in "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}"; do expect_dns_resolves "${domain_host}"; done
 
 check_https_redirect
-expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
+expect_http_code https-frontend 200 "https://${DEPLOY_APP_DOMAIN}/"
 expect_http_code cdn-mediapipe-tasks-model 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite"
+expect_http_code cdn-mediapipe-tasks-vision 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs"
+expect_http_code cdn-mediapipe-tasks-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/wasm/vision_wasm_internal.js"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
+expect_http_code background-modal-icon 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/icons/solid.png"
+expect_http_code background-avatar-placeholder 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/avatar-placeholder.svg"
+expect_http_code call-app-whiteboard-host 200 "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
+expect_http_code call-app-whiteboard-path 200 "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
+expect_http_code registry-host 200 "https://${DEPLOY_REGISTRY_DOMAIN}/"
+for call_app_url in "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"; do
+  expect_response_header_contains call-app-frame-ancestor "${call_app_url}" Content-Security-Policy "frame-ancestors https://${DEPLOY_APP_DOMAIN}"
+  expect_response_header_contains call-app-script-csp "${call_app_url}" Content-Security-Policy "script-src 'self'"
+  expect_response_header_contains call-app-connect-csp "${call_app_url}" Content-Security-Policy "connect-src 'self'"
+  expect_response_header_contains call-app-embedded-csp "${call_app_url}" Allow-CSP-From "https://${DEPLOY_APP_DOMAIN}"
+  expect_response_header_absent call-app-x-frame-options "${call_app_url}" X-Frame-Options
+done
 
 health_payload="$(public_get_json "api health" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload

@@ -9,6 +9,7 @@ require_once __DIR__ . '/database_core.php';
 require_once __DIR__ . '/tenant_context.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/../domain/users/onboarding_progress.php';
+require_once __DIR__ . '/../domain/calls/call_access_contract.php';
 
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
@@ -118,6 +119,24 @@ SQL
         ];
     }
 
+    $callAccessSession = videochat_validate_call_access_session_binding(
+        $pdo,
+        $trimmedSessionId,
+        (int) $row['user_id'],
+        $currentUnix
+    );
+    if (
+        (bool) ($callAccessSession['is_call_access_session'] ?? false)
+        && !(bool) ($callAccessSession['ok'] ?? false)
+    ) {
+        return [
+            'ok' => false,
+            'reason' => (string) ($callAccessSession['reason'] ?? 'call_access_binding_mismatch'),
+            'session' => null,
+            'user' => null,
+        ];
+    }
+
     $accountType = videochat_user_account_type(
         is_string($row['email'] ?? null) ? (string) $row['email'] : '',
         $row['password_hash'] ?? null
@@ -127,6 +146,13 @@ SQL
         (int) $row['user_id'],
         isset($row['active_tenant_id']) ? (int) $row['active_tenant_id'] : null
     );
+    if ($tenant === null) {
+        $tenant = videochat_tenant_context_for_call_access_session(
+            $pdo,
+            (int) $row['user_id'],
+            $trimmedSessionId
+        );
+    }
     if ($tenant === null) {
         return [
             'ok' => false,

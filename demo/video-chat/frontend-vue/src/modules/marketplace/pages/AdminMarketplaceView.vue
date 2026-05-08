@@ -24,7 +24,7 @@
       v-else
       :rows="rows"
       :mutating-app-id="mutatingAppId"
-      :installing-app-id="installingAppId"
+      :installing-app-key="installingAppKey"
       @install-call-app="installCallApp"
       @edit-app="openEditApp"
       @delete-app="deleteApp"
@@ -134,7 +134,7 @@ const apiRequest = createAdminMarketplaceApi({ router });
 const categoryFilter = ref('all');
 const notice = ref('');
 const mutatingAppId = ref(0);
-const installingAppId = ref(0);
+const installingAppKey = ref('');
 const sidePanelForm = useAdminSidePanelForm();
 const dialogOpen = sidePanelForm.open;
 const formSaving = sidePanelForm.saving;
@@ -253,15 +253,14 @@ async function deleteApp(app) {
 }
 
 async function installCallApp(app) {
-  const appId = Number(app?.id || 0);
   const catalog = app && typeof app === 'object' && app.call_app_catalog && typeof app.call_app_catalog === 'object'
     ? app.call_app_catalog
     : null;
   const appKey = String(catalog?.app_key || '').trim();
-  if (appId <= 0 || appKey === '') return;
+  if (appKey === '') return;
 
   const label = String(app?.name || appKey).trim() || appKey;
-  installingAppId.value = appId;
+  installingAppKey.value = appKey;
   error.value = '';
   try {
     await apiRequest(`/api/marketplace/call-apps/${encodeURIComponent(appKey)}/orders`, {
@@ -274,12 +273,12 @@ async function installCallApp(app) {
         config: {},
       },
     });
-    notice.value = `${label} installed and enabled for this organization.`;
+    notice.value = t('marketplace.call_app_installed', { name: label });
     await loadRows();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : `Could not install ${label} for this organization.`;
+    error.value = err instanceof Error ? err.message : t('marketplace.call_app_install_failed', { name: label });
   } finally {
-    installingAppId.value = 0;
+    installingAppKey.value = '';
   }
 }
 

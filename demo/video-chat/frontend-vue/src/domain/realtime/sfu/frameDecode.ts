@@ -747,7 +747,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame) {
     if (!peer || typeof peer !== 'object') return false;
-    const trackKey = sfuFrameTrackStateKey(frame);
+    const trackKey = remoteJitterTrackKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
     if (!peer.lastSfuFrameSequenceByTrack || typeof peer.lastSfuFrameSequenceByTrack !== 'object') {
       peer.lastSfuFrameSequenceByTrack = {};
@@ -1106,6 +1106,7 @@ export function createSfuFrameDecodeHelpers({
       return;
     }
     let peer = peerLookup?.peer || null;
+    const resolvedPublisherId = normalizeSfuPublisherId(peerLookup?.publisherId || publisherId);
     if (peerLookup?.matchedBy === 'publisher_user_id') {
       captureClientDiagnostic({
         category: 'media',
@@ -1115,12 +1116,15 @@ export function createSfuFrameDecodeHelpers({
         message: 'SFU frame used a publisher id that did not match the known track publisher key, so the client matched by user id.',
         payload: {
           frame_publisher_id: publisherId,
-          resolved_publisher_id: String(peerLookup.publisherId || ''),
+          resolved_publisher_id: resolvedPublisherId,
           publisher_user_id: Number(frame?.publisherUserId || 0),
         },
       });
     }
-    peer = updateSfuRemotePeerUserId(peerLookup?.publisherId || publisherId, peer, frame?.publisherUserId, {
+    if (resolvedPublisherId !== publisherId) {
+      frame = { ...frame, publisherId: resolvedPublisherId, publisherIdAlias: publisherId };
+    }
+    peer = updateSfuRemotePeerUserId(resolvedPublisherId, peer, frame?.publisherUserId, {
       publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '',
     });
     const publisherUserId = Number(frame?.publisherUserId || 0);
@@ -1139,18 +1143,18 @@ export function createSfuFrameDecodeHelpers({
       if (init) {
         void init.then((createdPeer) => {
           const nextPeer = updateSfuRemotePeerUserId(
-            publisherId,
-            createdPeer || remotePeersRef.value.get(publisherId),
+            resolvedPublisherId,
+            createdPeer || remotePeersRef.value.get(resolvedPublisherId) || remotePeersRef.value.get(publisherId),
             frame?.publisherUserId,
             { publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '' }
           );
-          void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+          void decodeSfuFrameForPeer(resolvedPublisherId, nextPeer, frame);
         });
       }
       return;
     }
 
-    void decodeSfuFrameForPeer(publisherId, peer, frame);
+    void decodeSfuFrameForPeer(resolvedPublisherId, peer, frame);
   }
 
   return {

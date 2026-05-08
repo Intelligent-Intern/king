@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/module_marketplace.php';
+require_once __DIR__ . '/../http/module_call_apps.php';
 
 function videochat_call_app_marketplace_entitlement_assert(bool $condition, string $message): void
 {
@@ -50,6 +51,46 @@ try {
     $adminUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('admin@intelligent-intern.com') LIMIT 1")->fetchColumn();
     $regularUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('user@intelligent-intern.com') LIMIT 1")->fetchColumn();
     videochat_call_app_marketplace_entitlement_assert($tenantId > 0 && $adminUserId > 0 && $regularUserId > 0, 'fixture ids missing');
+
+    $callId = 'call_app_marketplace_install_contract_call';
+    $roomId = 'room_call_app_marketplace_install_contract';
+    $now = gmdate('c');
+    $pdo->prepare(
+        <<<'SQL'
+INSERT OR IGNORE INTO rooms(id, tenant_id, name, visibility, status, created_at, updated_at)
+VALUES(:id, :tenant_id, :name, 'private', 'active', :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $roomId,
+        ':tenant_id' => $tenantId,
+        ':name' => 'Call App Marketplace Install Room',
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO calls(
+    id, tenant_id, room_id, title, access_mode, owner_user_id, status,
+    starts_at, ends_at, schedule_timezone, schedule_date,
+    schedule_duration_minutes, schedule_all_day, created_at, updated_at
+) VALUES(
+    :id, :tenant_id, :room_id, :title, 'invite_only', :owner_user_id, 'active',
+    :starts_at, :ends_at, 'UTC', :schedule_date,
+    30, 0, :created_at, :updated_at
+)
+SQL
+    )->execute([
+        ':id' => $callId,
+        ':tenant_id' => $tenantId,
+        ':room_id' => $roomId,
+        ':title' => 'Call App Marketplace Install Contract',
+        ':owner_user_id' => $adminUserId,
+        ':starts_at' => '2026-05-08T10:00:00Z',
+        ':ends_at' => '2026-05-08T10:30:00Z',
+        ':schedule_date' => '2026-05-08',
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [
@@ -107,6 +148,33 @@ try {
         return $response;
     };
 
+    $dispatchCallApps = static function (string $method, string $uri, array $auth) use (
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    ): array {
+        $routePath = (string) (parse_url($uri, PHP_URL_PATH) ?: $uri);
+        $request = [
+            'method' => $method,
+            'uri' => $uri,
+            'path' => $routePath,
+            'body' => '',
+        ];
+        $response = videochat_handle_call_app_routes(
+            $routePath,
+            $method,
+            $request,
+            $auth,
+            $jsonResponse,
+            $errorResponse,
+            $openDatabase,
+            $decodeJsonBody
+        );
+        videochat_call_app_marketplace_entitlement_assert(is_array($response), 'Call App route should return a response for ' . $uri);
+        return $response;
+    };
+
     $catalog = $dispatch('GET', '/api/marketplace/call-apps', $adminAuth);
     $catalogPayload = videochat_call_app_marketplace_entitlement_decode($catalog);
     videochat_call_app_marketplace_entitlement_assert((int) ($catalog['status'] ?? 0) === 200, 'catalog list should return 200');
@@ -116,6 +184,11 @@ try {
     videochat_call_app_marketplace_entitlement_assert(count($whiteboardRows) === 1, 'catalog must include whiteboard exactly once');
     videochat_call_app_marketplace_entitlement_assert((string) ($whiteboardRows[0]['mcp_endpoint'] ?? '') !== '', 'catalog whiteboard must include MCP endpoint');
     videochat_call_app_marketplace_entitlement_assert((string) ($whiteboardRows[0]['metadata_hash'] ?? '') !== '', 'catalog whiteboard must include metadata hash');
+    videochat_call_app_marketplace_entitlement_assert((string) (($whiteboardRows[0]['organization'] ?? [])['status'] ?? '') === 'not_installed', 'catalog whiteboard must start not installed for organization');
+    videochat_call_app_marketplace_entitlement_assert(
+        (bool) (((($whiteboardRows[0]['organization_actions'] ?? [])['add_to_organization'] ?? [])['available'] ?? false)) === true,
+        'catalog whiteboard must expose add-to-organization action before install'
+    );
 
     $catalogCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_catalog_entries WHERE app_key = 'whiteboard'")->fetchColumn();
     videochat_call_app_marketplace_entitlement_assert($catalogCount === 1, 'catalog refresh must persist one whiteboard catalog entry');
@@ -127,6 +200,12 @@ try {
         'single catalog fetch should return 200, got ' . (string) ($single['status'] ?? 0) . ' ' . (string) ($single['body'] ?? '')
     );
     videochat_call_app_marketplace_entitlement_assert((string) (($singlePayload['app'] ?? [])['app_key'] ?? '') === 'whiteboard', 'single catalog app key mismatch');
+    videochat_call_app_marketplace_entitlement_assert((string) ((($singlePayload['app'] ?? [])['organization'] ?? [])['status'] ?? '') === 'not_installed', 'single catalog entry must include organization state');
+
+    $availableBeforeInstall = $dispatchCallApps('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=whiteboard&page=1&page_size=8', $adminAuth);
+    $availableBeforeInstallPayload = videochat_call_app_marketplace_entitlement_decode($availableBeforeInstall);
+    videochat_call_app_marketplace_entitlement_assert((int) ($availableBeforeInstall['status'] ?? 0) === 200, 'pre-install call availability should return 200');
+    videochat_call_app_marketplace_entitlement_assert(((array) (($availableBeforeInstallPayload['result'] ?? [])['apps'] ?? [])) === [], 'pre-install Whiteboard must not appear in call availability');
 
     $forbiddenOrder = $dispatch('POST', '/api/marketplace/call-apps/whiteboard/orders', $userAuth);
     videochat_call_app_marketplace_entitlement_assert((int) ($forbiddenOrder['status'] ?? 0) === 403, 'regular user should not order Call Apps for organization');
@@ -137,6 +216,9 @@ try {
     videochat_call_app_marketplace_entitlement_assert((int) ($crossTenantOrder['status'] ?? 0) === 422, 'client tenant override must fail');
     $crossTenantEntitlementCount = (int) $pdo->query('SELECT COUNT(*) FROM organization_call_app_entitlements')->fetchColumn();
     videochat_call_app_marketplace_entitlement_assert($crossTenantEntitlementCount === 0, 'forbidden tenant override must not create entitlement');
+
+    $installBeforeOrder = $dispatch('POST', '/api/marketplace/call-apps/whiteboard/installations', $adminAuth);
+    videochat_call_app_marketplace_entitlement_assert((int) ($installBeforeOrder['status'] ?? 0) === 409, 'installation without entitlement should fail');
 
     $order = $dispatch('POST', '/api/marketplace/call-apps/whiteboard/orders', $adminAuth);
     $orderPayload = videochat_call_app_marketplace_entitlement_decode($order);
@@ -164,6 +246,21 @@ try {
     videochat_call_app_marketplace_entitlement_assert((string) ($installation['default_app_policy'] ?? '') === 'allowed_by_default', 'installation policy mismatch');
     $installationRows = (int) $pdo->query("SELECT COUNT(*) FROM organization_call_app_installations WHERE tenant_id = {$tenantId} AND app_key = 'whiteboard'")->fetchColumn();
     videochat_call_app_marketplace_entitlement_assert($installationRows === 1, 'installation must persist once for tenant');
+
+    $availableAfterInstall = $dispatchCallApps('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=whiteboard&page=1&page_size=8', $adminAuth);
+    $availableAfterInstallPayload = videochat_call_app_marketplace_entitlement_decode($availableAfterInstall);
+    videochat_call_app_marketplace_entitlement_assert((int) ($availableAfterInstall['status'] ?? 0) === 200, 'post-install call availability should return 200');
+    $availableApps = is_array(($availableAfterInstallPayload['result'] ?? [])['apps'] ?? null) ? ($availableAfterInstallPayload['result'] ?? [])['apps'] : [];
+    videochat_call_app_marketplace_entitlement_assert(count($availableApps) === 1 && (string) ($availableApps[0]['app_key'] ?? '') === 'whiteboard', 'post-install Whiteboard must appear in call availability');
+    videochat_call_app_marketplace_entitlement_assert((string) (($availableApps[0]['installation'] ?? [])['status'] ?? '') === 'enabled', 'post-install call availability must use enabled organization installation');
+
+    $singleAfterInstall = $dispatch('GET', '/api/marketplace/call-apps/whiteboard', $adminAuth);
+    $singleAfterInstallPayload = videochat_call_app_marketplace_entitlement_decode($singleAfterInstall);
+    videochat_call_app_marketplace_entitlement_assert((string) ((($singleAfterInstallPayload['app'] ?? [])['organization'] ?? [])['status'] ?? '') === 'installed', 'single catalog entry must show installed organization state after install');
+    videochat_call_app_marketplace_entitlement_assert(
+        (bool) (((($singleAfterInstallPayload['app'] ?? [])['organization_actions'] ?? [])['verify_installation'] ?? [])['available'] ?? false) === true,
+        'single catalog entry must expose verify installation action after install'
+    );
 
     $disable = $dispatch('PATCH', '/api/marketplace/call-apps/whiteboard/installations/' . rawurlencode($installationId), $adminAuth, [
         'status' => 'disabled',

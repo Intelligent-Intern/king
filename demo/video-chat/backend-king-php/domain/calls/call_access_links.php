@@ -345,6 +345,16 @@ function videochat_resolve_call_access_for_user(
         ];
     }
 
+    if (videochat_call_access_link_is_invalidated($pdo, $accessLink)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'not_found'],
+            'access_link' => null,
+            'call' => null,
+        ];
+    }
+
     $expiresAt = is_string($accessLink['expires_at'] ?? null) ? (string) $accessLink['expires_at'] : '';
     if ($expiresAt !== '') {
         $expiresAtUnix = strtotime($expiresAt);
@@ -373,19 +383,19 @@ function videochat_resolve_call_access_for_user(
     }
 
     $callId = trim((string) ($accessLink['call_id'] ?? ''));
-    $callFetch = videochat_get_call_for_user($pdo, $callId, $authUserId, $authRole, $tenantId);
-    if (!(bool) ($callFetch['ok'] ?? false)) {
+    $callDecision = videochat_decide_call_access_for_user($pdo, $callId, $authUserId, $authRole, $tenantId);
+    if (!(bool) ($callDecision['allowed'] ?? false)) {
         return [
             'ok' => false,
-            'reason' => (string) ($callFetch['reason'] ?? 'forbidden'),
+            'reason' => (string) ($callDecision['reason'] ?? 'forbidden'),
             'errors' => [],
             'access_link' => null,
             'call' => null,
         ];
     }
 
-    $call = is_array($callFetch['call'] ?? null) ? $callFetch['call'] : null;
-    if (!is_array($call)) {
+    $callRecord = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    if (!is_array($callRecord)) {
         return [
             'ok' => false,
             'reason' => 'not_found',
@@ -394,6 +404,7 @@ function videochat_resolve_call_access_for_user(
             'call' => null,
         ];
     }
+    $call = videochat_build_call_payload($pdo, $callRecord, $authUserId);
 
     $touch = $pdo->prepare(
         'UPDATE call_access_links SET last_used_at = :last_used_at WHERE id = :id'

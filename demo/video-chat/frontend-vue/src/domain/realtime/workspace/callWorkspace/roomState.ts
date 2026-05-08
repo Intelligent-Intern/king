@@ -311,9 +311,22 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     }
   }
 
+  function uniqueLobbyEntriesByUser(entries) {
+    const rows = new Map();
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      const normalized = normalizeLobbyEntry(entry);
+      const userId = Number(normalized?.user_id || 0);
+      if (!Number.isInteger(userId) || userId <= 0) continue;
+      rows.set(userId, normalized);
+    }
+
+    return Array.from(rows.values());
+  }
+
   function applyLobbySnapshot(payload) {
     const roomId = normalizeRoomId(payload?.room_id || payload?.roomId || activeRoomId.value);
-    const admittedRows = Array.isArray(payload?.admitted) ? payload.admitted.map(normalizeLobbyEntry) : [];
+    const admittedRows = uniqueLobbyEntriesByUser(payload?.admitted);
+    const admittedUserIds = new Set(admittedRows.map((entry) => Number(entry?.user_id || 0)));
     const admittedCurrentUser = admittedRows.some((entry) => Number(entry?.user_id || 0) === currentUserId.value);
 
     if (roomId !== activeRoomId.value) {
@@ -335,7 +348,8 @@ export function createCallWorkspaceRoomStateHelpers(context) {
         .map((entry) => Number(entry?.user_id || 0))
         .filter((userId) => Number.isInteger(userId) && userId > 0)
     );
-    const nextQueueRows = Array.isArray(payload?.queue) ? payload.queue.map(normalizeLobbyEntry) : [];
+    const nextQueueRows = uniqueLobbyEntriesByUser(payload?.queue)
+      .filter((entry) => !admittedUserIds.has(Number(entry?.user_id || 0)));
     lobbyQueue.value = nextQueueRows;
     lobbyAdmitted.value = admittedRows;
 

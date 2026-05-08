@@ -2,7 +2,7 @@ import { onBeforeUnmount } from 'vue';
 import {
   CALL_APP_IFRAME_BRIDGE_PROTOCOL,
   CALL_APP_IFRAME_OPAQUE_ORIGIN,
-  sanitizeCallAppBridgePayload,
+  cloneSafeCallAppBridgePayload,
 } from './useCallAppIframeBridge.js';
 import {
   callAppDiagnosticElapsedMs,
@@ -13,6 +13,7 @@ import {
 import {
   CALL_APP_PRESENCE_SIGNAL_TYPE,
   CALL_APP_PRESENCE_WINDOW_EVENT,
+  callAppPresenceUserAuthorizedForSession,
   createCallAppPresenceSignalPayload,
   normalizeCallAppPresenceDisplayName,
   normalizeCallAppPresenceParticipantRows,
@@ -24,13 +25,15 @@ import {
 function postToIframe(frameWindow, session, type, payload = {}) {
   if (!frameWindow || !session) return;
   try {
-    frameWindow.postMessage(sanitizeCallAppBridgePayload({
+    const message = cloneSafeCallAppBridgePayload({
       type,
       bridge_protocol: CALL_APP_IFRAME_BRIDGE_PROTOCOL,
       app_session_id: String(session?.id || '').trim(),
       app_key: String(session?.app_key || '').trim(),
       ...payload,
-    }), '*');
+    });
+    if (!message) return;
+    frameWindow.postMessage(message, '*');
   } catch {
     // A bridge message must never break the parent call runtime.
   }
@@ -172,6 +175,7 @@ export function createCallAppCrdtBridge({
     const targetParticipants = normalizeCallAppPresenceParticipantRows(
       unrefValue(participants),
       Number(unrefValue(currentUserId) || 0),
+      session,
     );
     let sentCount = 0;
     for (const participant of targetParticipants) {
@@ -196,16 +200,18 @@ export function createCallAppCrdtBridge({
   function handlePresencePublish(frameWindow, session, message) {
     const payloadType = normalizeCallAppPresencePayloadType(message?.payload_type);
     const displayName = normalizeCallAppPresenceDisplayName(unrefValue(currentUserDisplayName));
+    const senderAuthorized = callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0));
     const payload = normalizeCallAppPresencePayload(payloadType, message?.payload || {}, {
       actorId: message?.actor_id || message?.payload?.actor_id,
       displayName,
     });
-    const sentCount = payloadType !== '' && payload ? sendPresenceToPeers(session, payloadType, payload) : 0;
+    const accepted = senderAuthorized && payloadType !== '' && Boolean(payload);
+    const sentCount = accepted ? sendPresenceToPeers(session, payloadType, payload) : 0;
     postToIframe(frameWindow, session, 'call_app.presence.published', {
       request_id: requestId(message),
       result: {
-        ok: payloadType !== '' && Boolean(payload),
-        state: payloadType !== '' && payload ? 'accepted' : 'ignored',
+        ok: accepted,
+        state: senderAuthorized ? (accepted ? 'accepted' : 'ignored') : 'participant_grant_denied',
         persisted: false,
         payload_type: payloadType,
         sent_count: sentCount,
@@ -217,6 +223,7 @@ export function createCallAppCrdtBridge({
     const frameWindow = iframeRef?.value?.contentWindow || null;
     const session = activeSession?.value || null;
     if (!frameWindow || !session) return;
+    if (!callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0))) return;
     const signal = normalizeRemoteCallAppPresenceSignal(event?.detail?.signal || event?.detail?.payload || {});
     if (!signal) return;
     if (String(signal.app_session_id || '').trim() !== String(session.id || '').trim()) return;

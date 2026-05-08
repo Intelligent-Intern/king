@@ -201,7 +201,8 @@ function videochat_validate_update_call_payload(array $payload): array
  */
 function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -211,13 +212,16 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             'invite_dispatch' => ['global_resend_triggered' => false, 'explicit_action_required' => true],
         ];
     }
+    $callTenantId = is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null;
+    $participantLookupTenantId = $isSystemAdmin && is_int($callTenantId) && $callTenantId > 0 ? $callTenantId : $tenantId;
 
     if (!videochat_can_administer_call(
         $pdo,
         (string) ($existingCall['id'] ?? $callId),
         $authRole,
         $authUserId,
-        (int) $existingCall['owner_user_id']
+        (int) $existingCall['owner_user_id'],
+        $tenantId
     )) {
         return [
             'ok' => false,
@@ -320,7 +324,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             array_map('intval', (array) $data['internal_participant_user_ids']),
             static fn (int $id): bool => $id > 0
         )));
-        $activeInternalUsers = videochat_active_internal_users($pdo, $requestedInternalIds, $tenantId);
+        $activeInternalUsers = videochat_active_internal_users($pdo, $requestedInternalIds, $participantLookupTenantId);
         if (count($activeInternalUsers) !== count($requestedInternalIds)) {
             return [
                 'ok' => false,

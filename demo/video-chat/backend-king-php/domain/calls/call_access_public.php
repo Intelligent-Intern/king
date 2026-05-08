@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
+
 function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
 {
     $normalizedAccessId = videochat_normalize_call_access_id($accessId);
@@ -19,6 +21,18 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
 
     $accessLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId);
     if (!is_array($accessLink)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'not_found'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
+
+    if (videochat_call_access_link_is_invalidated($pdo, $accessLink)) {
         return [
             'ok' => false,
             'reason' => 'not_found',
@@ -66,17 +80,14 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
             'ok' => false,
             'reason' => 'conflict',
             'errors' => ['call_id' => 'call_not_joinable_from_status'],
-            'access_link' => $accessLink,
-            'call' => videochat_build_call_payload($pdo, $call, 0),
+            'access_link' => null,
+            'call' => null,
             'target_user' => null,
-            'target_hint' => [
-                'participant_email' => videochat_normalize_call_access_email(
-                    is_string($accessLink['participant_email'] ?? null) ? (string) $accessLink['participant_email'] : null
-                ) ?: null,
-            ],
+            'target_hint' => ['participant_email' => null],
         ];
     }
 
+    $linkKind = videochat_call_access_link_kind($accessLink);
     $linkedUserId = is_numeric($accessLink['participant_user_id'] ?? null)
         ? (int) $accessLink['participant_user_id']
         : 0;
@@ -87,8 +98,20 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $pdo,
         $linkedUserId,
         $participantEmail === '' ? null : $participantEmail,
-        $tenantId
+        $tenantId,
+        false
     );
+    if ($linkKind === 'personal' && !is_array($targetUser)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'not_found'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
 
     $touch = $pdo->prepare(
         'UPDATE call_access_links SET last_used_at = :last_used_at WHERE id = :id'
@@ -102,6 +125,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
     if (!is_array($freshLink)) {
         $freshLink = $accessLink;
     }
+    videochat_audit_record_call_access_link_open($pdo, $freshLink, $call, $targetUser);
 
     return [
         'ok' => true,

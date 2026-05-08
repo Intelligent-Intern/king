@@ -342,6 +342,33 @@ Operational visibility is a first-class concern:
 - ticket, certificate, and reload lifecycle management
 - autoscaling and cluster integration hooks
 
+For KingRT production call investigations, use:
+
+```bash
+demo/video-chat/scripts/prod-debug.sh
+```
+
+The prod-debug process is read-only. It inspects public runtime health, domains,
+asset/version endpoints, API/WS/SFU reachability, marketplace and call-app
+reachability, Whiteboard Call App CSP/`Allow-CSP-From` frame headers, container
+status, and recent redacted remote logs. Its Call App proof checks both
+`/public/index.html` and `/call-app/whiteboard/public/index.html` on the
+configured Whiteboard host for `https://app.kingrt.com` compatibility, absence
+of `X-Frame-Options`, and absence of nested `*.app.kingrt.com` service origins.
+Remote log sections are labeled for media reconnect, screen-share reconnect
+exhaustion, stale local media capture discard, audio/video track loss, SFU
+reconnect, and Call App frame/CSP errors. It uses existing
+`demo/video-chat/.env.local` values only for production domains and the SSH
+target. `prod-debug.sh` does not deploy, restart, write DB data, change DNS, or
+use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only public
+HTTP/WebSocket/header probes, or `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1` to prove the
+local read-only flow without network or SSH.
+
+Read-only media reconnect, screen-share reconnect exhaustion, stale local media
+capture discard, audio/video track loss, SFU reconnect, and Call App frame/CSP
+checks in prod-debug.sh are non-mutating: prod-debug.sh does not deploy,
+restart, write DB data, change DNS, or use admin actions.
+
 ## Public Programming Model
 
 The core programming model is:

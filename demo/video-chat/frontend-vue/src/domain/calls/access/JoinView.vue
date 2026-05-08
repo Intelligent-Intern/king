@@ -186,7 +186,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../../components/AppSelect.vue';
-import { loginWithCallAccess, sessionState } from '../../auth/session';
+import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
   buildWebSocketUrl,
@@ -213,6 +213,12 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../../realtime/media/preferences';
+import {
+  CALL_UUID_PATTERN,
+  callAccessVerifiedContextFromSession,
+  safeCallAccessInvalidMessage,
+} from './admissionGate';
+import { loginWithCallAccess } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
 
 const route = useRoute();
@@ -248,6 +254,7 @@ const state = reactive({
   previewReady: false,
   previewError: '',
   micLevelPercent: 0,
+  verifiedAccessContext: null,
 });
 
 const {
@@ -276,6 +283,24 @@ function normalizeCallId(value) {
   const candidate = String(value || '').trim();
   if (candidate === '') return '';
   return /^[A-Za-z0-9._-]{1,200}$/.test(candidate) ? candidate : '';
+}
+
+function resetJoinContextDetails() {
+  state.callId = '';
+  state.roomId = '';
+  state.callTitle = '';
+  state.linkKind = 'personal';
+  state.guestName = '';
+  state.joining = false;
+  state.waitingForAdmission = false;
+  state.admissionMessage = '';
+  state.joinError = '';
+  state.verifiedAccessContext = null;
+}
+
+function showSafeInvalidAccessState() {
+  resetJoinContextDetails();
+  state.contextError = safeCallAccessInvalidMessage(t);
 }
 
 function admissionSocketUrlForOrigin(origin) {
@@ -599,18 +624,12 @@ function startAdmissionWait(accessId) {
 async function loadJoinContext() {
   state.loadingContext = true;
   state.contextError = '';
-  state.callId = '';
-  state.roomId = '';
-  state.callTitle = '';
-  state.linkKind = 'personal';
-  state.guestName = '';
-  state.joinError = '';
-  state.waitingForAdmission = false;
-  state.admissionMessage = '';
+  resetJoinContextDetails();
 
   const accessId = normalizeAccessId(route.params.accessId);
-  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accessId)) {
+  if (!CALL_UUID_PATTERN.test(accessId)) {
     state.loadingContext = false;
+    resetJoinContextDetails();
     state.contextError = localizedApiErrorMessage({ error: { code: 'call_access_validation_failed' } }, t('public.join.access_invalid'));
     return;
   }
@@ -622,8 +641,10 @@ async function loadJoinContext() {
         accept: 'application/json',
       },
     });
-    const payload = await response.json().catch(() => null);
+    let payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
+      resetJoinContextDetails();
+      payload = { error: { code: 'call_access_validation_failed' } };
       state.contextError = localizedApiErrorMessage(payload, t('public.join.resolve_failed'));
       return;
     }
@@ -634,12 +655,13 @@ async function loadJoinContext() {
     state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
     const linkKind = String(payload?.result?.link_kind || '').trim().toLowerCase();
     state.linkKind = linkKind === 'open' ? 'open' : 'personal';
+    state.verifiedAccessContext = callAccessVerifiedContextFromSession(sessionState);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
       state.contextError = t('public.join.backend_unreachable', { origin: currentBackendOrigin() });
     } else {
-      state.contextError = message;
+      showSafeInvalidAccessState();
     }
   } finally {
     state.loadingContext = false;
@@ -666,6 +688,7 @@ async function startSessionAndJoin() {
   const accessId = normalizeAccessId(route.params.accessId);
   const result = await loginWithCallAccess(accessId, {
     guestName: state.linkKind === 'open' ? state.guestName : '',
+    verifiedContext: state.verifiedAccessContext,
   });
   if (!result.ok) {
     state.joining = false;

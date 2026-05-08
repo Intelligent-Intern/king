@@ -116,6 +116,57 @@ SQL
     return videochat_tenant_context_from_membership_row($row);
 }
 
+function videochat_tenant_context_for_call_access_session(PDO $pdo, int $userId, string $sessionId): ?array
+{
+    $trimmedSessionId = trim($sessionId);
+    if ($userId <= 0 || $trimmedSessionId === '') {
+        return null;
+    }
+    if (
+        videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id') === false
+        || videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'session_id') === false
+    ) {
+        return null;
+    }
+
+    $sessionTenantSelect = videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'tenant_id')
+        ? 'COALESCE(call_access_sessions.tenant_id, calls.tenant_id)'
+        : 'calls.tenant_id';
+
+    $query = $pdo->prepare(
+        <<<SQL
+SELECT
+    tenants.id AS tenant_id,
+    tenants.public_id,
+    tenants.slug,
+    tenants.label,
+    0 AS membership_id,
+    'member' AS membership_role,
+    '{}' AS permissions_json,
+    'user' AS global_role
+FROM call_access_sessions
+INNER JOIN calls ON calls.id = call_access_sessions.call_id
+INNER JOIN tenants ON tenants.id = {$sessionTenantSelect}
+INNER JOIN users ON users.id = call_access_sessions.user_id
+WHERE call_access_sessions.session_id = :session_id
+  AND call_access_sessions.user_id = :user_id
+  AND calls.status IN ('scheduled', 'active')
+  AND tenants.status = 'active'
+LIMIT 1
+SQL
+    );
+    $query->execute([
+        ':session_id' => $trimmedSessionId,
+        ':user_id' => $userId,
+    ]);
+    $row = $query->fetch();
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return videochat_tenant_context_from_membership_row($row);
+}
+
 function videochat_tenant_context_for_public_id(PDO $pdo, int $userId, string $tenantPublicId): ?array
 {
     $trimmed = strtolower(trim($tenantPublicId));

@@ -13,6 +13,7 @@
   const status = document.getElementById('status');
   const clock = document.getElementById('clock');
   const modeBadge = document.getElementById('modeBadge');
+  const cursorOverlay = document.getElementById('cursorOverlay');
   const widthInput = document.getElementById('width');
   const inlineEditor = document.getElementById('inlineEditor');
   const inlineText = document.getElementById('inlineText');
@@ -78,6 +79,9 @@
     }
     if (!canRead()) {
       clearInterval(pollTimer);
+      state.cursors.clear();
+      state.selections.clear();
+      render();
     }
   }
 
@@ -146,6 +150,7 @@
   }
 
   function applyPresence(payloadType, payload = {}, sourceActorId = actorId) {
+    if (!canRead()) return;
     const normalizedActorId = String(sourceActorId || payload.actor_id || '').trim();
     if (!normalizedActorId) return;
     const withActor = {
@@ -155,6 +160,14 @@
     };
     if (payloadType === 'cursor.move') state.cursors.set(normalizedActorId, withActor);
     if (payloadType === 'selection.update') state.selections.set(normalizedActorId, withActor);
+    render();
+  }
+
+  function removePresenceForActor(sourceActorId = '') {
+    const normalizedActorId = String(sourceActorId || '').trim();
+    if (!normalizedActorId) return;
+    state.cursors.delete(normalizedActorId);
+    state.selections.delete(normalizedActorId);
     render();
   }
 
@@ -224,6 +237,25 @@
 
   function render() {
     renderScene(ctx, true);
+    syncCursorOverlay();
+  }
+
+  function syncCursorOverlay() {
+    if (!cursorOverlay) return;
+    const labels = [];
+    for (const cursor of state.cursors.values()) {
+      if (cursor.actor_id === actorId) continue;
+      const x = Math.max(0, Math.min(boardWidth, Number(cursor.x || 0)));
+      const y = Math.max(0, Math.min(boardHeight, Number(cursor.y || 0)));
+      const label = document.createElement('span');
+      label.className = 'remote-cursor-label';
+      label.textContent = displayNameLabel(cursor.label || cursor.display_name);
+      label.style.left = `${(x / boardWidth) * 100}%`;
+      label.style.top = `${(y / boardHeight) * 100}%`;
+      label.style.borderLeftColor = cursor.color || '#1582bf';
+      labels.push(label);
+    }
+    cursorOverlay.replaceChildren(...labels);
   }
 
   function drawStroke(targetCtx, stroke) {
@@ -742,6 +774,8 @@
       if (message.result?.operation) applyEnvelope(message.result.operation);
     } else if (message.type === 'call_app.presence.update') {
       applyPresence(String(message.payload_type || ''), message.payload || {}, String(message.actor_id || ''));
+    } else if (message.type === 'call_app.presence.leave') {
+      removePresenceForActor(message.actor_id || message.payload?.actor_id || '');
     } else if (message.type === 'call_app.crdt.error') {
       applyAccessState(message);
       const reason = String(message.reason || '').trim();

@@ -26,6 +26,19 @@ run_step() {
   log "OK: ${step}"
 }
 
+should_run_guest_cleanup_sqlite_proof() {
+  case "${VIDEOCHAT_SMOKE_RUN_GUEST_CLEANUP_SQLITE_PROOF:-auto}" in
+    1|true|TRUE|yes|YES)
+      return 0
+      ;;
+    0|false|FALSE|no|NO)
+      return 1
+      ;;
+  esac
+
+  [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" && "${VIDEOCHAT_SMOKE_REQUIRE_COMPOSE:-0}" == "1" ]]
+}
+
 validate_tcp_port() {
   local candidate="${1:-}"
   if [[ ! "${candidate}" =~ ^[0-9]+$ ]]; then
@@ -537,8 +550,47 @@ compose_smoke() {
     }
   '
 
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_BACKEND_CALL_ACCESS_SESSION_CONTRACT:-0}" != "1" ]]; then
+    log "compose backend call-access session contract gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T videochat-backend-v1 sh -lc "\
+      cd \"\${VIDEOCHAT_SMOKE_BACKEND_WORKDIR:-/app}\" && \
+      tests/call-access-session-contract.sh"
+  fi
+
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_CALL_ACCESS_E2E:-0}" != "1" ]]; then
+    local call_access_seed_matrix_json
+    call_access_seed_matrix_json="$(tr -d '\n' < "${ROOT_DIR}/contracts/v1/iam-call-access-seeding.matrix.json")"
+    log "compose frontend Playwright call-access gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T \
+      -e "VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON=${call_access_seed_matrix_json}" \
+      videochat-frontend-v1 sh -lc "\
+      cd \"\${VIDEOCHAT_SMOKE_FRONTEND_WORKDIR:-/app}\" && \
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+      PLAYWRIGHT_FRONTEND_PORT=4174 \
+      VITE_VIDEOCHAT_BACKEND_ORIGIN='http://videochat-backend-v1:18080' \
+      VITE_VIDEOCHAT_BACKEND_PORT='18080' \
+      VITE_VIDEOCHAT_WS_ORIGIN='http://videochat-backend-ws-v1:18080' \
+      VITE_VIDEOCHAT_WS_PORT='18080' \
+      VITE_VIDEOCHAT_SFU_ORIGIN='http://videochat-backend-sfu-v1:18080' \
+      VITE_VIDEOCHAT_SFU_PORT='18080' \
+      VITE_VIDEOCHAT_ALLOW_INSECURE_WS='1' \
+      npm run test:e2e:call-access -- --reporter=list --workers=1"
+  fi
+
   if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_E2E_MATRIX:-0}" != "1" ]]; then
-    log "compose frontend Playwright matrix gate"
+    log "compose frontend Playwright chat/layout matrix gate"
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
     VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
@@ -568,6 +620,11 @@ run_step "deployment baseline: multi-node runtime architecture" bash -lc "'${ROO
 run_step "deployment baseline: ops hardening" bash -lc "'${ROOT_DIR}/scripts/check-ops-hardening.sh'"
 run_step "deployment baseline: production endpoint smoke syntax" bash -lc "bash -n '${ROOT_DIR}/scripts/deploy-smoke.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
+if should_run_guest_cleanup_sqlite_proof; then
+  run_step "backend contract: guest cleanup Docker SQLite proof" bash -lc "'${BACKEND_DIR}/tests/call-guest-cleanup-sqlite-proof.sh'"
+else
+  log "SKIP: guest cleanup Docker SQLite proof not selected; set VIDEOCHAT_SMOKE_RUN_GUEST_CLEANUP_SQLITE_PROOF=1 to run outside required compose-only smoke"
+fi
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then
   log "Compose-only smoke checks passed."
@@ -673,6 +730,7 @@ run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtim
 run_step "backend contract: reaction stream throttle" bash -lc "'${BACKEND_DIR}/tests/realtime-reaction-contract.sh'"
 run_step "backend contract: invite redeem" bash -lc "'${BACKEND_DIR}/tests/invite-code-redeem-contract.sh'"
 run_step "backend contract: call-access session binding" bash -lc "'${BACKEND_DIR}/tests/call-access-session-contract.sh'"
+run_step "backend contract: call-access membership removal" bash -lc "'${BACKEND_DIR}/tests/call-access-membership-removal-contract.sh'"
 run_step "backend contract: call signaling bootstrap" bash -lc "'${BACKEND_DIR}/tests/realtime-signaling-contract.sh'"
 run_step "backend contract: SFU room binding and relay" bash -lc "'${BACKEND_DIR}/tests/realtime-sfu-contract.sh'"
 
@@ -686,6 +744,12 @@ run_step "frontend contract: media security frame path" bash -lc "
   set -euo pipefail
   cd '${FRONTEND_DIR}'
   npm run test:contract:media-security
+"
+
+run_step "frontend contract: media reconnect screenshare release smoke" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:media-reconnect-release-smoke
 "
 
 run_step "frontend contract: MediaPipe CDN assets" bash -lc "

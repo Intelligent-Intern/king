@@ -1,0 +1,278 @@
+{
+  "fixture_version": 1,
+  "source_basis": [
+    "SPRINT.md BGF-01/BGF-02 local contract text",
+    "src/domain/realtime/background/workers/imageSegmenterWorker.js local MediaPipe worker boundary",
+    "src/domain/realtime/background/stream.ts Pierre worker pipeline",
+    "src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue user alternative",
+    "2026-05-08 local Playwright worker-init probes on Chrome Stable, Chromium Ubuntu, and Firefox"
+  ],
+  "capture_environment": {
+    "captured_at": "2026-05-08T19:11:22+02:00",
+    "os": "Linux 6.8.0-110-generic #110-Ubuntu SMP PREEMPT_DYNAMIC Thu Mar 19 15:09:20 UTC 2026 x86_64 GNU/Linux",
+    "probe_url": "http://127.0.0.1:5177/",
+    "playwright_version": "1.59.1",
+    "probe_scope": "worker INIT only; no production SINet or degraded matte code changes"
+  },
+  "known_failure": {
+    "id": "chromium_mediapipe_gpu_service_init_failure",
+    "browser_family": "chromium",
+    "phase": "segmentation_backend_init",
+    "affected_backend": "mediapipe_gpu",
+    "classification": "gpu_service_init_failure",
+    "reproduction": {
+      "browser": "Chrome Stable",
+      "version": "147.0.7727.55",
+      "delegate": "CPU",
+      "launcher_flags": [
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-3d-apis"
+      ],
+      "result": "INIT_ERROR",
+      "cpu_delegate_touches_gpu_internals": true
+    },
+    "shape": {
+      "must_match_groups": [
+        {
+          "id": "mediapipe_segmenter_init",
+          "any": [
+            "MediaPipe",
+            "Tasks-Vision",
+            "ImageSegmenter",
+            "ImageSegmenter.createFromOptions",
+            "FilesetResolver.forVisionTasks",
+            "INIT_ERROR"
+          ]
+        },
+        {
+          "id": "chromium_gpu_service",
+          "any": [
+            "GPU service",
+            "gpu service",
+            "GPU process",
+            "GpuChannel",
+            "ContextResult::kFatalFailure",
+            "Failed to create shared context",
+            "WebGL context lost",
+            "Service \"kGpuService\"",
+            "gl_context_webgl.cc"
+          ]
+        },
+        {
+          "id": "init_failure",
+          "any": [
+            "createFromOptions",
+            "forVisionTasks",
+            "init_failed",
+            "failed to initialize",
+            "initialization failed",
+            "was not provided and cannot be created",
+            "emscripten_webgl_create_context() returned error 0",
+            "StartGraph failed"
+          ]
+        }
+      ],
+      "exact_console_signatures": [
+        "Worker received INIT message with config {type: INIT, delegate: CPU, modelAssetPath: /cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite, wasmPath: /wasm}",
+        "I0508 19:09:30.158000 2136208 gl_context_webgl.cc:91] Couldn't create webGL 2 context.",
+        "W0508 19:09:30.159000 2136208 gl_context_webgl.cc:116] Creating a context with WebGL 2 failed: UNKNOWN: emscripten_webgl_create_context() returned error 0\n=== Source Location Trace: ===\nthird_party/mediapipe/gpu/gl_context_webgl.cc:92",
+        "W0508 19:09:30.159000 2136208 gl_context_webgl.cc:117] Fall back on WebGL 1.",
+        "I0508 19:09:30.160000 2136208 gl_context_webgl.cc:91] Couldn't create webGL 1 context.",
+        "E0508 19:09:30.160000 2136208 gl_graph_runner_internal.cc:260] StartGraph failed: INTERNAL: Service \"kGpuService\", required by node mediapipe_tasks_vision_image_segmenter_imagesegmentergraph__mediapipe.tasks.TensorsToSegmentationCalculator, was not provided and cannot be created: emscripten_webgl_create_context() returned error 0; StartRun failed\n=== Source Location Trace: ===\nthird_party/mediapipe/framework/calculator_graph.cc:737\nthird_party/mediapipe/framework/calculator_graph.cc:768\nthird_party/mediapipe/framework/calculator_graph.cc:637\nresearch/drishti/app/pursuit/wasm/graph_utils.cc:108",
+        "INIT_ERROR: INTERNAL: Service \"kGpuService\", required by node mediapipe_tasks_vision_image_segmenter_imagesegmentergraph__mediapipe.tasks.TensorsToSegmentationCalculator, was not provided and cannot be created: emscripten_webgl_create_context() returned error 0; StartRun failed; StartGraph failed\n=== Source Location Trace: ===\nthird_party/mediapipe/framework/calculator_graph.cc:737\nthird_party/mediapipe/framework/calculator_graph.cc:768\nthird_party/mediapipe/framework/calculator_graph.cc:637\nresearch/drishti/app/pursuit/wasm/graph_utils.cc:108\n"
+      ],
+      "cpu_delegate_gpu_touch_risk": {
+        "delegate": "CPU",
+        "treat_as_unsafe_when_gpu_signature_present": true,
+        "local_worker_signals": [
+          "ImageSegmenter.createFromOptions",
+          "delegate === 'GPU' ? 'GPU' : 'CPU'",
+          "DrawingUtils",
+          "getContext('webgl2')"
+        ],
+        "known_console_signatures": [
+          "Worker received INIT message with config {type: INIT, delegate: CPU, modelAssetPath: /cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite, wasmPath: /wasm}",
+          "I0508 19:07:48.534000 2136208 gl_context.cc:407] GL version: 3.0 (OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium))), renderer: WebKit WebGL",
+          "W0508 19:07:48.536000 2136208 gl_context.cc:1118] OpenGL error checking is disabled"
+        ]
+      }
+    }
+  },
+  "browser_behavior_rows": [
+    {
+      "browser": "Chrome Stable",
+      "version": "147.0.7727.55",
+      "os": "Linux x86_64 via /usr/bin/google-chrome",
+      "selected_backend": "worker_segmenter",
+      "mediapipe_demo_result": {
+        "gpu": "INIT_DONE",
+        "cpu": "INIT_DONE"
+      },
+      "king_production_path": {
+        "selected_backend": "worker_segmenter",
+        "mediapipe_scope": "worker_only",
+        "on_init_failure": "keep_source_visible_then_prompt_user",
+        "uses_sinet_or_degraded_matte": false
+      },
+      "cpu_delegation_touches_gpu_internals": true,
+      "known_failure_capture_id": "chromium_mediapipe_gpu_service_init_failure",
+      "console_signatures": [
+        "Worker received INIT message with config {type: INIT, delegate: CPU, modelAssetPath: /cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite, wasmPath: /wasm}",
+        "I0508 19:07:48.534000 2136208 gl_context.cc:407] GL version: 3.0 (OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium))), renderer: WebKit WebGL",
+        "W0508 19:07:48.536000 2136208 gl_context.cc:1118] OpenGL error checking is disabled",
+        "E0508 19:09:30.160000 2136208 gl_graph_runner_internal.cc:260] StartGraph failed: INTERNAL: Service \"kGpuService\", required by node mediapipe_tasks_vision_image_segmenter_imagesegmentergraph__mediapipe.tasks.TensorsToSegmentationCalculator, was not provided and cannot be created: emscripten_webgl_create_context() returned error 0; StartRun failed\n=== Source Location Trace: ===\nthird_party/mediapipe/framework/calculator_graph.cc:737\nthird_party/mediapipe/framework/calculator_graph.cc:768\nthird_party/mediapipe/framework/calculator_graph.cc:637\nresearch/drishti/app/pursuit/wasm/graph_utils.cc:108"
+      ]
+    },
+    {
+      "browser": "Chromium Ubuntu",
+      "version": "147.0.7727.116 snap",
+      "os": "Linux x86_64 via /snap/bin/chromium",
+      "selected_backend": "worker_segmenter",
+      "mediapipe_demo_result": {
+        "gpu": "INIT_DONE",
+        "cpu": "INIT_DONE"
+      },
+      "king_production_path": {
+        "selected_backend": "worker_segmenter",
+        "mediapipe_scope": "worker_only",
+        "on_init_failure": "keep_source_visible_then_prompt_user",
+        "uses_sinet_or_degraded_matte": false
+      },
+      "cpu_delegation_touches_gpu_internals": true,
+      "known_failure_capture_id": "chromium_mediapipe_gpu_service_init_failure",
+      "console_signatures": [
+        "Worker received INIT message with config {type: INIT, delegate: CPU, modelAssetPath: /cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite, wasmPath: /wasm}",
+        "I0508 19:07:50.104000 2136208 gl_context.cc:407] GL version: 3.0 (OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium))), renderer: WebKit WebGL",
+        "W0508 19:07:50.104999 2136208 gl_context.cc:1118] OpenGL error checking is disabled"
+      ]
+    },
+    {
+      "browser": "Firefox",
+      "version": "148.0.2",
+      "os": "Linux x86_64 via Playwright Firefox; system /usr/bin/firefox reported Mozilla Firefox 150.0.1",
+      "selected_backend": "worker_segmenter",
+      "mediapipe_demo_result": {
+        "gpu": "INIT_DONE",
+        "cpu": "INIT_DONE"
+      },
+      "king_production_path": {
+        "selected_backend": "worker_segmenter",
+        "mediapipe_scope": "worker_only",
+        "on_init_failure": "keep_source_visible_then_prompt_user",
+        "uses_sinet_or_degraded_matte": false
+      },
+      "cpu_delegation_touches_gpu_internals": true,
+      "known_failure_capture_id": null,
+      "console_signatures": [
+        "Worker received INIT message with config JSHandle@object",
+        "I0508 19:11:22.072999 2136208 gl_context.cc:407] GL version: 3.0 (OpenGL ES 3.0 (WebGL 2.0)), renderer: NVIDIA GeForce GTX 980, or similar",
+        "W0508 19:11:22.073999 2136208 gl_context.cc:1118] OpenGL error checking is disabled"
+      ]
+    }
+  ],
+  "diagnostics_required": [
+    "selected_backend",
+    "failed_backend",
+    "browser_family",
+    "gpu_availability",
+    "model_source",
+    "fallback_reason",
+    "user_choice_required"
+  ],
+  "backend_ladder": [
+    {
+      "backend": "worker_segmenter",
+      "enabled_when": [
+        "background_replacement_requested",
+        "browser_family_supported",
+        "worker_available",
+        "local_mediapipe_assets_available"
+      ],
+      "on_init_failure": "keep_source_visible_then_prompt_user"
+    },
+    {
+      "backend": "user_avatar_placeholder",
+      "enabled_when": [
+        "worker_segmenter_unavailable",
+        "user_chooses_standard_or_uploaded_avatar"
+      ],
+      "required_behavior": [
+        "signal_static_avatar_once",
+        "keep_audio_tracks_live",
+        "do_not_stream_avatar_frames",
+        "do_not_apply_synthetic_background"
+      ]
+    },
+    {
+      "backend": "unfiltered_video",
+      "enabled_when": [
+        "worker_segmenter_unavailable",
+        "user_chooses_unfiltered_video"
+      ],
+      "required_behavior": [
+        "keep_source_video_visible",
+        "keep_audio_tracks_live",
+        "keep_published_media_alive",
+        "do_not_apply_synthetic_background_over_person"
+      ]
+    }
+  ],
+  "quarantine": {
+    "cooldown_ms_min": 60000,
+    "scope_keys": [
+      "browser_family",
+      "backend",
+      "delegate",
+      "model_source"
+    ],
+    "idempotency": {
+      "single_transition_per_cooldown_window": true,
+      "do_not_retry_failed_backend_per_frame": true,
+      "do_not_restart_media_tracks": true,
+      "do_not_reload_page_or_call": true,
+      "same_failure_same_window_keeps_selected_fallback": true
+    }
+  },
+  "browser_matrix_required": [
+    {
+      "browser": "Chrome Stable",
+      "required_fields": [
+        "version",
+        "os",
+        "gpu_availability",
+        "mediapipe_gpu_result",
+        "mediapipe_cpu_result",
+        "selected_backend",
+        "console_signatures"
+      ]
+    },
+    {
+      "browser": "Chromium Ubuntu",
+      "required_fields": [
+        "version",
+        "os",
+        "gpu_availability",
+        "mediapipe_gpu_result",
+        "mediapipe_cpu_result",
+        "selected_backend",
+        "console_signatures"
+      ]
+    },
+    {
+      "browser": "Firefox",
+      "required_fields": [
+        "version",
+        "os",
+        "gpu_availability",
+        "selected_backend",
+        "console_signatures"
+      ]
+    }
+  ],
+  "current_runtime_baseline": {
+    "production_default_backend": "worker-segmenter",
+    "mediapipe_is_worker_scoped": true,
+    "segmentation_unavailable_prompts_user": true
+  }
+}

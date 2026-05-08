@@ -37,7 +37,17 @@ function videochat_lobby_decode_client_frame(string $frame): array
         ];
     }
 
-    if (!in_array($type, ['lobby/queue/request', 'lobby/queue/join', 'lobby/queue/cancel', 'lobby/allow', 'lobby/remove', 'lobby/allow_all'], true)) {
+    $supportedTypes = [
+        'lobby/queue/request',
+        'lobby/queue/join',
+        'lobby/queue/cancel',
+        'lobby/allow',
+        'lobby/remove',
+        'lobby/reject',
+        'lobby/kick',
+        'lobby/allow_all',
+    ];
+    if (!in_array($type, $supportedTypes, true)) {
         return [
             'ok' => false,
             'type' => $type,
@@ -62,7 +72,7 @@ function videochat_lobby_decode_client_frame(string $frame): array
         }
     }
 
-    if (!in_array($type, ['lobby/allow', 'lobby/remove'], true)) {
+    if (!in_array($type, ['lobby/allow', 'lobby/remove', 'lobby/reject', 'lobby/kick'], true)) {
         return [
             'ok' => true,
             'type' => $type,
@@ -205,6 +215,9 @@ function videochat_lobby_apply_command(
     $nowMs = videochat_lobby_now_ms($nowUnixMs);
     $nowIso = gmdate('c', (int) floor($nowMs / 1000));
     $action = (string) ($command['type'] ?? '');
+    if (in_array($action, ['lobby/reject', 'lobby/kick'], true)) {
+        $action = 'lobby/remove';
+    }
     $targetUserId = (int) ($command['target_user_id'] ?? 0);
     $queuedByUser = &$lobbyState['rooms'][$roomId]['queued_by_user'];
     $admittedByUser = &$lobbyState['rooms'][$roomId]['admitted_by_user'];
@@ -379,6 +392,30 @@ function videochat_lobby_apply_command(
     if ($action === 'lobby/allow') {
         $target = $queuedByUser[$targetUserId] ?? null;
         if (!is_array($target)) {
+            if (isset($admittedByUser[$targetUserId]) && is_array($admittedByUser[$targetUserId])) {
+                $sentCount = videochat_lobby_broadcast_room_snapshot(
+                    $lobbyState,
+                    $presenceState,
+                    $roomId,
+                    'already_allowed',
+                    $sender,
+                    $nowMs,
+                    $tenantId
+                );
+
+                return [
+                    'ok' => true,
+                    'error' => '',
+                    'changed' => false,
+                    'sent_count' => $sentCount,
+                    'action' => $action,
+                    'state' => 'already_allowed',
+                    'target_user_id' => $targetUserId,
+                    'room_id' => $roomId,
+                    'affected_user_ids' => [],
+                ];
+            }
+
             return [
                 'ok' => false,
                 'error' => 'target_not_queued',
