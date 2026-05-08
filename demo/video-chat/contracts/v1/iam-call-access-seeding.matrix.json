@@ -31,6 +31,22 @@
       "label": "IAM Beta Organization"
     }
   ],
+  "organizations": [
+    {
+      "key": "alpha_org",
+      "tenant_key": "alpha",
+      "id": 7101,
+      "public_id": "organization-alpha-e2e",
+      "label": "IAM Alpha Direct Join Organization"
+    },
+    {
+      "key": "beta_org",
+      "tenant_key": "beta",
+      "id": 7102,
+      "public_id": "organization-beta-e2e",
+      "label": "IAM Beta Direct Join Organization"
+    }
+  ],
   "users": [
     {
       "key": "system_admin",
@@ -45,7 +61,8 @@
       "memberships": [
         { "tenant_key": "alpha", "role": "member" },
         { "tenant_key": "beta", "role": "member" }
-      ]
+      ],
+      "organization_memberships": []
     },
     {
       "key": "alpha_org_admin",
@@ -58,7 +75,10 @@
       "system_admin": false,
       "temporary": false,
       "memberships": [
-        { "tenant_key": "alpha", "role": "admin" }
+        { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "admin" }
       ]
     },
     {
@@ -72,7 +92,10 @@
       "system_admin": false,
       "temporary": false,
       "memberships": [
-        { "tenant_key": "beta", "role": "admin" }
+        { "tenant_key": "beta", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "beta_org", "role": "admin" }
       ]
     },
     {
@@ -87,6 +110,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "member" }
       ]
     },
     {
@@ -101,6 +127,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "member" }
       ]
     },
     {
@@ -113,7 +142,8 @@
       "is_guest": false,
       "system_admin": false,
       "temporary": false,
-      "memberships": []
+      "memberships": [],
+      "organization_memberships": []
     },
     {
       "key": "removed_invited_member",
@@ -126,6 +156,7 @@
       "system_admin": false,
       "temporary": false,
       "memberships": [],
+      "organization_memberships": [],
       "removed_memberships": [
         { "tenant_key": "alpha", "role": "member" }
       ]
@@ -140,7 +171,8 @@
       "is_guest": true,
       "system_admin": false,
       "temporary": true,
-      "memberships": []
+      "memberships": [],
+      "organization_memberships": []
     },
     {
       "key": "temporary_anonymous_guest",
@@ -152,7 +184,8 @@
       "is_guest": true,
       "system_admin": false,
       "temporary": true,
-      "memberships": []
+      "memberships": [],
+      "organization_memberships": []
     }
   ],
   "calls": [
@@ -161,6 +194,7 @@
       "id": "20000000-0000-4000-8000-000000000101",
       "room_id": "iam-alpha-room",
       "tenant_key": "alpha",
+      "organization_key": "alpha_org",
       "title": "IAM Alpha Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -175,6 +209,7 @@
       "id": "20000000-0000-4000-8000-000000000102",
       "room_id": "iam-beta-room",
       "tenant_key": "beta",
+      "organization_key": "beta_org",
       "title": "IAM Beta Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -187,6 +222,7 @@
       "id": "20000000-0000-4000-8000-000000000103",
       "room_id": "iam-tenantless-room",
       "tenant_key": null,
+      "organization_key": null,
       "title": "IAM Tenantless Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -256,6 +292,121 @@
         "can_kick": true,
         "tenant_admin": true,
         "platform_admin": true
+      }
+    },
+    {
+      "key": "direct_join_system_admin_without_guest_list",
+      "sprint_groups": ["3", "18"],
+      "principal_user_key": "system_admin",
+      "call_key": "beta_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "system_admin",
+        "guest_list_required": false,
+        "can_manage_lobby": true,
+        "tenant_admin": true,
+        "platform_admin": true
+      }
+    },
+    {
+      "key": "direct_join_org_admin_own_organization_without_guest_list",
+      "sprint_groups": ["3", "19"],
+      "principal_user_key": "alpha_org_admin",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "organization_admin",
+        "guest_list_required": false,
+        "can_manage_lobby": true,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_org_admin_foreign_organization_denied",
+      "sprint_groups": ["1", "3", "19"],
+      "principal_user_key": "alpha_org_admin",
+      "call_key": "beta_active",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_normal_owner_without_guest_list",
+      "sprint_groups": ["3", "20"],
+      "principal_user_key": "alpha_call_owner",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "owner",
+        "guest_list_required": false,
+        "can_manage_lobby": true,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_guest_list_user_allowed",
+      "sprint_groups": ["3", "17", "20"],
+      "principal_user_key": "registered_guest",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "guest_list",
+        "guest_list_required": false,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_forged_client_admin_role_denied",
+      "sprint_groups": ["3", "21"],
+      "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
+      "client_session_overrides": {
+        "role": "admin",
+        "tenant": {
+          "role": "admin",
+          "permissions": {
+            "platform_admin": true,
+            "tenant_admin": true,
+            "manage_lobby": true
+          }
+        }
+      },
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_forged_session_token_denied",
+      "sprint_groups": ["3", "21"],
+      "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
+      "client_session_overrides": {
+        "role": "admin",
+        "userId": 6101,
+        "sessionId": "sess_iam_seed_forged_system_admin",
+        "sessionToken": "sess_iam_seed_forged_system_admin"
+      },
+      "expected": {
+        "state": "auth_failed",
+        "decision_source": "none",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
       }
     },
     {

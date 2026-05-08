@@ -15,6 +15,43 @@ function videochat_call_guest_list_direct_join_assert(bool $condition, string $m
     exit(1);
 }
 
+function videochat_call_guest_list_direct_join_create_user(PDO $pdo, PDOStatement $insertUser, int $roleId, string $email, string $displayName): int
+{
+    $passwordHash = password_hash('call-guest-list-direct-join-contract', PASSWORD_DEFAULT);
+    videochat_call_guest_list_direct_join_assert(is_string($passwordHash) && $passwordHash !== '', 'password hash should be generated');
+    $insertUser->execute([
+        ':email' => $email,
+        ':display_name' => $displayName,
+        ':password_hash' => $passwordHash,
+        ':role_id' => $roleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $userId = (int) $pdo->lastInsertId();
+    videochat_call_guest_list_direct_join_assert($userId > 0, 'created user id should be positive');
+    return $userId;
+}
+
+function videochat_call_guest_list_direct_join_attach_tenant(PDOStatement $attachTenant, int $tenantId, int $userId): void
+{
+    $attachTenant->execute([
+        ':tenant_id' => $tenantId,
+        ':user_id' => $userId,
+        ':updated_at' => gmdate('c'),
+    ]);
+}
+
+function videochat_call_guest_list_direct_join_attach_organization(PDOStatement $attachOrganization, int $tenantId, int $organizationId, int $userId, string $role): void
+{
+    $attachOrganization->execute([
+        ':tenant_id' => $tenantId,
+        ':organization_id' => $organizationId,
+        ':user_id' => $userId,
+        ':membership_role' => $role,
+        ':updated_at' => gmdate('c'),
+    ]);
+}
+
 try {
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[call-guest-list-direct-join-contract] SKIP: pdo_sqlite unavailable\n");
@@ -38,17 +75,17 @@ try {
     videochat_call_guest_list_direct_join_assert($roleId > 0, 'expected user role');
     $insertUser = $pdo->prepare(
         <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status)
-VALUES(:email, :display_name, NULL, :role_id, 'active')
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
 SQL
     );
-    $insertUser->execute([
-        ':email' => 'not-on-guest-list@intelligent-intern.com',
-        ':display_name' => 'Not On Guest List',
-        ':role_id' => $roleId,
-    ]);
-    $notOnGuestListUserId = (int) $pdo->lastInsertId();
-    videochat_call_guest_list_direct_join_assert($notOnGuestListUserId > 0, 'expected non-guest-list user');
+    $notOnGuestListUserId = videochat_call_guest_list_direct_join_create_user(
+        $pdo,
+        $insertUser,
+        $roleId,
+        'not-on-guest-list@intelligent-intern.com',
+        'Not On Guest List'
+    );
 
     $guestListedCall = videochat_create_call($pdo, $adminUserId, [
         'title' => 'Guest List Direct Join',
@@ -89,6 +126,120 @@ SQL
     videochat_call_guest_list_direct_join_assert(!(bool) ($scopedDecision['ok'] ?? true), 'guest list from one call must not grant direct join to another call');
     videochat_call_guest_list_direct_join_assert((string) ($scopedDecision['reason'] ?? '') === 'not_on_guest_list', 'scoped denial reason mismatch');
     videochat_call_guest_list_direct_join_assert((string) ($scopedDecision['call_id'] ?? '') === $unrelatedCallId, 'scoped denial call id mismatch');
+
+    $systemAdminDecision = videochat_user_can_direct_join_call($pdo, $guestListedCallId, $adminUserId, 'admin');
+    videochat_call_guest_list_direct_join_assert((bool) ($systemAdminDecision['ok'] ?? false), 'system admin should direct join without guest-list entry');
+    videochat_call_guest_list_direct_join_assert((string) ($systemAdminDecision['reason'] ?? '') === 'system_admin', 'system-admin direct join reason mismatch');
+    videochat_call_guest_list_direct_join_assert(($systemAdminDecision['guest_list_entry'] ?? null) === null, 'system-admin direct join must not fabricate a guest-list entry');
+
+    $forgedSystemRoleDecision = videochat_user_can_direct_join_call($pdo, $guestListedCallId, $notOnGuestListUserId, 'admin');
+    videochat_call_guest_list_direct_join_assert(!(bool) ($forgedSystemRoleDecision['ok'] ?? true), 'regular user must not direct join by forging admin role input');
+    videochat_call_guest_list_direct_join_assert((string) ($forgedSystemRoleDecision['reason'] ?? '') === 'not_on_guest_list', 'forged role denial reason mismatch');
+
+    $unique = bin2hex(random_bytes(5));
+    $now = gmdate('c');
+    $createTenant = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO tenants(public_id, slug, label, status, created_at, updated_at)
+VALUES(:public_id, :slug, :label, 'active', :created_at, :updated_at)
+SQL
+    );
+    $createTenant->execute([
+        ':public_id' => 'tenant-direct-join-' . $unique,
+        ':slug' => 'direct-join-' . $unique,
+        ':label' => 'Direct Join ' . $unique,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $tenantId = (int) $pdo->lastInsertId();
+    videochat_call_guest_list_direct_join_assert($tenantId > 0, 'expected direct-join tenant id');
+
+    $createOrganization = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO organizations(tenant_id, public_id, name, status, created_at, updated_at)
+VALUES(:tenant_id, :public_id, :name, 'active', :created_at, :updated_at)
+SQL
+    );
+    $createOrganization->execute([
+        ':tenant_id' => $tenantId,
+        ':public_id' => 'direct-join-a-' . $unique,
+        ':name' => 'Direct Join A',
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $organizationAId = (int) $pdo->lastInsertId();
+    $createOrganization->execute([
+        ':tenant_id' => $tenantId,
+        ':public_id' => 'direct-join-b-' . $unique,
+        ':name' => 'Direct Join B',
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $organizationBId = (int) $pdo->lastInsertId();
+    videochat_call_guest_list_direct_join_assert($organizationAId > 0 && $organizationBId > 0, 'expected organization ids');
+
+    $orgAdminUserId = videochat_call_guest_list_direct_join_create_user($pdo, $insertUser, $roleId, 'direct-join-org-admin-' . $unique . '@example.test', 'Direct Join Org Admin');
+    $ownerAUserId = videochat_call_guest_list_direct_join_create_user($pdo, $insertUser, $roleId, 'direct-join-owner-a-' . $unique . '@example.test', 'Direct Join Owner A');
+    $ownerBUserId = videochat_call_guest_list_direct_join_create_user($pdo, $insertUser, $roleId, 'direct-join-owner-b-' . $unique . '@example.test', 'Direct Join Owner B');
+    $participantAUserId = videochat_call_guest_list_direct_join_create_user($pdo, $insertUser, $roleId, 'direct-join-participant-a-' . $unique . '@example.test', 'Direct Join Participant A');
+    $participantBUserId = videochat_call_guest_list_direct_join_create_user($pdo, $insertUser, $roleId, 'direct-join-participant-b-' . $unique . '@example.test', 'Direct Join Participant B');
+
+    $attachTenant = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO tenant_memberships(tenant_id, user_id, membership_role, status, permissions_json, default_membership, updated_at)
+VALUES(:tenant_id, :user_id, 'member', 'active', '{}', 0, :updated_at)
+SQL
+    );
+    foreach ([$orgAdminUserId, $ownerAUserId, $ownerBUserId, $participantAUserId, $participantBUserId] as $tenantUserId) {
+        videochat_call_guest_list_direct_join_attach_tenant($attachTenant, $tenantId, $tenantUserId);
+    }
+
+    $attachOrganization = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO organization_memberships(tenant_id, organization_id, user_id, membership_role, status, updated_at)
+VALUES(:tenant_id, :organization_id, :user_id, :membership_role, 'active', :updated_at)
+SQL
+    );
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationAId, $orgAdminUserId, 'admin');
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationAId, $ownerAUserId, 'member');
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationAId, $participantAUserId, 'member');
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationBId, $ownerBUserId, 'member');
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationBId, $participantBUserId, 'member');
+
+    $ownOrgCall = videochat_create_call($pdo, $ownerAUserId, [
+        'title' => 'Direct Join Own Organization',
+        'access_mode' => 'invite_only',
+        'starts_at' => gmdate('c', time() - 300),
+        'ends_at' => gmdate('c', time() + 3600),
+        'internal_participant_user_ids' => [$participantAUserId],
+    ], $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($ownOrgCall['ok'] ?? false), 'own organization direct-join call should be created');
+    $ownOrgCallId = (string) (($ownOrgCall['call'] ?? [])['id'] ?? '');
+    videochat_call_guest_list_direct_join_assert($ownOrgCallId !== '', 'own organization call id should be present');
+
+    $foreignOrgCall = videochat_create_call($pdo, $ownerBUserId, [
+        'title' => 'Direct Join Foreign Organization',
+        'access_mode' => 'invite_only',
+        'starts_at' => gmdate('c', time() - 300),
+        'ends_at' => gmdate('c', time() + 3600),
+        'internal_participant_user_ids' => [$participantBUserId],
+    ], $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($foreignOrgCall['ok'] ?? false), 'foreign organization direct-join call should be created');
+    $foreignOrgCallId = (string) (($foreignOrgCall['call'] ?? [])['id'] ?? '');
+    videochat_call_guest_list_direct_join_assert($foreignOrgCallId !== '', 'foreign organization call id should be present');
+
+    $ownerDirectJoin = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($ownerDirectJoin['ok'] ?? false), 'normal owner should direct join own call');
+    videochat_call_guest_list_direct_join_assert((string) ($ownerDirectJoin['reason'] ?? '') === 'owner', 'normal owner direct join reason mismatch');
+
+    $orgAdminOwnDirectJoin = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $orgAdminUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($orgAdminOwnDirectJoin['ok'] ?? false), 'org admin should direct join own organization call without guest-list entry');
+    videochat_call_guest_list_direct_join_assert((string) ($orgAdminOwnDirectJoin['reason'] ?? '') === 'organization_admin', 'org admin own-organization direct join reason mismatch');
+    videochat_call_guest_list_direct_join_assert(($orgAdminOwnDirectJoin['guest_list_entry'] ?? null) === null, 'org admin direct join must not require guest-list entry');
+
+    $orgAdminForeignDirectJoin = videochat_user_can_direct_join_call($pdo, $foreignOrgCallId, $orgAdminUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($orgAdminForeignDirectJoin['ok'] ?? true), 'org admin should not direct join foreign organization call through own-org role');
+    videochat_call_guest_list_direct_join_assert((string) ($orgAdminForeignDirectJoin['reason'] ?? '') === 'not_on_guest_list', 'org admin foreign direct join denial reason mismatch');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-guest-list-direct-join-contract] PASS\n");
