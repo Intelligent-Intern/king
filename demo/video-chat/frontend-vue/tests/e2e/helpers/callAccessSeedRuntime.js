@@ -262,12 +262,18 @@ export async function createCallAccessMatrixPage(browser, baseURL, {
   if (linkKey === '') throw new Error(`Scenario ${scenarioKey} is not bound to a call-access link.`);
 
   const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
-  await installCallAccessSeedRoutes(context);
+  await installCallAccessSeedRoutes(context, { scenarioKey: scenario.key });
   if (String(storedSessionUserKey || '').trim() !== '') {
     await installStoredSeedSession(context, storedSessionUserKey, storedSessionCallKey);
   }
   await installCallAccessMediaDeviceShim(context);
-  await installCallAccessFakeRealtime(context, { linkKey });
+  await installCallAccessFakeRealtime(context, {
+    linkKey,
+    userKey: String(scenario.principal_user_key || '').trim(),
+    requiresAdmission: Object.prototype.hasOwnProperty.call(scenario.expected || {}, 'requires_admission')
+      ? Boolean(scenario.expected.requires_admission)
+      : null,
+  });
   const page = await context.newPage();
   return { context, page, scenario };
 }

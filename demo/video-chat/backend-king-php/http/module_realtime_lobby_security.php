@@ -78,6 +78,19 @@ function videochat_realtime_authorize_lobby_moderation_command(
             $serverRole,
             $tenantId
         );
+        if ($requestedCallId !== '' && videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '') === '') {
+            $roomContext = videochat_realtime_call_role_context_for_room_user(
+                $pdo,
+                $normalizedRoomId,
+                $userId,
+                '',
+                $serverRole,
+                $tenantId
+            );
+            if (videochat_realtime_normalize_call_id((string) ($roomContext['call_id'] ?? ''), '') !== '') {
+                $context = $roomContext;
+            }
+        }
     } catch (Throwable) {
         return [
             'ok' => false,

@@ -31,6 +31,7 @@ const seedRuntimeHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpe
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
+const anonymousLoggedInRightsBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-logged-in-rights-contract.php');
 const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
@@ -124,6 +125,11 @@ assert.match(
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
+  /call-access-anonymous-logged-in-rights-contract\.sh/,
+  'IAM Call Access contract gate must include logged-in anonymous-link org-admin and guest-list rights proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
   /\.\.\/backend-king-php\/tests\/call-access-invited-user-org-removal-contract\.sh/,
   'IAM Call Access contract gate must include the invited-user organization-removal proof',
 );
@@ -202,6 +208,26 @@ assert.match(
   seedMatrixSpec,
   /alpha_tenant_member_without_organization[\s\S]*organization_memberships[\s\S]*\[\][\s\S]*not_on_guest_list/s,
   'seed-matrix spec must prove a tenant member without organization receives no organization-based rights',
+);
+assert.match(
+  seedMatrixSpec,
+  /expectOpenLinkCreatesNoPersonalizedBinding[\s\S]*e2e_anon_logged_in_005[\s\S]*anonymous_open_logged_in_org_admin_own_org_direct/s,
+  'seed-matrix spec must prove own-organization admins can use anonymous links without personalized binding',
+);
+assert.match(
+  seedMatrixSpec,
+  /lobby\/queue\/join[\s\S]*e2e_anon_logged_in_006[\s\S]*anonymous_open_logged_in_org_admin_foreign_org_lobby/s,
+  'seed-matrix spec must prove foreign organization admins cannot direct-join through anonymous links',
+);
+assert.match(
+  seedMatrixSpec,
+  /expectOpenLinkDoesNotModifyGuestList[\s\S]*e2e_anon_logged_in_007[\s\S]*anonymous_open_logged_in_guest_list_user_direct/s,
+  'seed-matrix spec must prove guest-list users can use anonymous links without guest-list mutation',
+);
+assert.match(
+  seedMatrixHelper,
+  /const boundUser = link\.link_kind === 'personal' \? targetUser : null[\s\S]*participant_user_id: boundUser\?\.id \|\| null/s,
+  'seed helper must keep open anonymous link payloads free of personalized participant binding',
 );
 assert.match(
   coreOrgSessionSpec,
@@ -495,6 +521,21 @@ assert.match(
   ciGate,
   /call-access-active-permission-change-contract\.sh/,
   'IAM Call Access CI gate must include active permission-change backend proof',
+);
+assert.match(
+  ciGate,
+  /call-access-anonymous-logged-in-rights-contract\.sh/,
+  'IAM Call Access CI gate must include the logged-in anonymous-link backend proof when SQLite is available',
+);
+assert.match(
+  anonymousLoggedInRightsBackendContract,
+  /own organization admin should enter own org call room[\s\S]*guest-list user should enter through anonymous link[\s\S]*foreign org admin should start in lobby/s,
+  'backend logged-in anonymous-link proof must cover own-org admin, foreign-org denial, and guest-list user paths',
+);
+assert.match(
+  anonymousLoggedInRightsBackendContract,
+  /open link must not gain participant_user_id[\s\S]*open link must not gain participant_email[\s\S]*session binding must remain open-link kind/s,
+  'backend logged-in anonymous-link proof must prove no personalized binding is created',
 );
 assert.match(
   activePermissionContract,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { permissionsFor } from './callAccessSeedPermissions.js';
 
 export const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
 export const sessionStorageKey = 'ii_videocall_v1_session';
@@ -105,27 +106,6 @@ function membershipForOrganization(user, organizationKey) {
     .find((membership) => String(membership?.organization_key || '') === organizationKey) || null;
 }
 
-function permissionsFor(user, membershipRole) {
-  const normalizedRole = String(membershipRole || 'member').trim().toLowerCase();
-  const isTenantAdmin = normalizedRole === 'owner' || normalizedRole === 'admin';
-  const isPlatformAdmin = user?.system_admin === true || String(user?.role || '').trim().toLowerCase() === 'admin';
-  const elevated = isTenantAdmin || isPlatformAdmin;
-  return {
-    platform_admin: isPlatformAdmin,
-    tenant_admin: elevated,
-    manage_users: elevated,
-    manage_organizations: elevated,
-    manage_groups: elevated,
-    manage_permission_grants: elevated,
-    edit_themes: elevated,
-    export_import: elevated,
-    manage_lobby: elevated,
-    admit_participants: elevated,
-    reject_participants: elevated,
-    kick_participants: elevated,
-  };
-}
-
 export function tenantSnapshotForSeedUser(userKey, callKey) {
   const user = requiredRow(userIndex, userKey, 'user');
   const call = requiredRow(callIndex, callKey, 'call');
@@ -197,6 +177,7 @@ function participantPayload(user, callRole = 'participant', inviteState = 'allow
 function callPayload(call, viewerUser = null, inviteState = 'pending', options = {}) {
   const payloadOptions = options && typeof options === 'object' ? options : {};
   const includeViewerIfMissing = payloadOptions.includeViewerIfMissing !== false;
+  const forceMyParticipation = payloadOptions.forceMyParticipation === true;
   const owner = requiredRow(userIndex, call.owner_user_key, 'user');
   const guestUsers = (Array.isArray(call.guest_list_user_keys) ? call.guest_list_user_keys : [])
     .map((key) => requiredRow(userIndex, key, 'user'));
@@ -211,7 +192,7 @@ function callPayload(call, viewerUser = null, inviteState = 'pending', options =
     internal.push(participantPayload(viewerUser, 'participant', inviteState));
   }
   const viewerIsOwner = viewerUser && Number(viewerUser.id) === Number(owner.id);
-  const viewerHasParticipation = Boolean(viewerUser && (viewerHasParticipantRow || includeViewerIfMissing || viewerIsOwner));
+  const viewerHasParticipation = Boolean(viewerUser && (viewerHasParticipantRow || includeViewerIfMissing || viewerIsOwner || forceMyParticipation));
 
   return {
     id: call.id,
@@ -378,14 +359,15 @@ export function directJoinDecisionForSeedUser(userKey, callKey) {
 
 function accessLinkPayload(link, call, targetUser = null) {
   const tenant = tenantForCall(call);
+  const boundUser = link.link_kind === 'personal' ? targetUser : null;
   return {
     id: link.id,
     call_id: call.id,
     room_id: call.room_id,
     tenant_id: tenant?.id || null,
     link_kind: link.link_kind,
-    participant_user_id: targetUser?.id || null,
-    participant_email: targetUser?.email || null,
+    participant_user_id: boundUser?.id || null,
+    participant_email: boundUser?.email || null,
     created_by_user_id: ownerPayload(call).user_id,
     created_at: '2026-05-08T10:00:00.000Z',
     expires_at: '2030-01-01T00:00:00.000Z',
@@ -545,6 +527,9 @@ function resolveAccessLinkById(accessId) {
 export async function installCallAccessSeedRoutes(context, options = {}) {
   const issuedSessions = new Map();
   const routeOptions = options && typeof options === 'object' ? options : {};
+  const activeScenario = String(routeOptions.scenarioKey || '').trim() !== ''
+    ? getSeedScenario(routeOptions.scenarioKey)
+    : null;
   const directJoinDecisions = Array.isArray(routeOptions.directJoinDecisions)
     ? routeOptions.directJoinDecisions
     : null;
@@ -654,6 +639,17 @@ export async function installCallAccessSeedRoutes(context, options = {}) {
       const targetUser = targetUserForAccessLink(link, body, authenticatedRecord?.user || null);
       const tenant = tenantSnapshotFor(targetUser, call);
       const sessionId = callAccessSessionId(link, targetUser);
+      const decision = directJoinDecisionFor(targetUser, call);
+      const openDirectSources = new Set(['system_admin', 'owner', 'organization_admin', 'guest_list']);
+      const scenarioExpected = activeScenario && activeScenario.link_key === link.key
+        ? (activeScenario.expected || {})
+        : {};
+      const requiresAdmission = Object.prototype.hasOwnProperty.call(scenarioExpected, 'requires_admission')
+        ? Boolean(scenarioExpected.requires_admission)
+        : (link.link_kind === 'open'
+          ? !(decision.allowed === true && openDirectSources.has(decision.source))
+          : Boolean(link.requires_admission));
+      const inviteState = requiresAdmission ? 'pending' : 'allowed';
       const session = {
         id: sessionId,
         token: sessionId,
@@ -672,7 +668,10 @@ export async function installCallAccessSeedRoutes(context, options = {}) {
           tenant,
           access_link: accessLinkPayload(link, call, targetUser),
           link_kind: link.link_kind,
-          call: callPayload(call, targetUser, link.requires_admission ? 'pending' : 'allowed'),
+          call: callPayload(call, targetUser, inviteState, {
+            includeViewerIfMissing: link.link_kind !== 'open',
+            forceMyParticipation: link.link_kind === 'open',
+          }),
           join_path: link.join_path,
         },
         time: '2026-05-08T10:00:00.000Z',
