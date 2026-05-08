@@ -136,6 +136,15 @@ SQL
             'guest_list_entry' => $normalizedEntry,
         ];
     }
+    if ($inviteState === 'pending') {
+        return [
+            'ok' => false,
+            'reason' => 'not_on_guest_list',
+            'call_id' => $callId,
+            'room_id' => $roomId,
+            'guest_list_entry' => null,
+        ];
+    }
 
     return [
         'ok' => true,

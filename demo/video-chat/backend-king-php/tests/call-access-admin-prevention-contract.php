@@ -56,7 +56,8 @@ function videochat_call_access_admin_prevention_assert_no_admin(
     string $sessionId,
     string $callId,
     int $userId,
-    bool $expectGuest
+    bool $expectGuest,
+    bool $expectParticipant = true
 ): void {
     $auth = videochat_authenticate_request(
         $pdo,
@@ -79,10 +80,14 @@ function videochat_call_access_admin_prevention_assert_no_admin(
     videochat_call_access_admin_prevention_assert((bool) ($permissions['tenant_admin'] ?? false) === false, "{$label}: tenant_admin must stay false");
 
     $participant = videochat_call_access_admin_prevention_participant($pdo, $callId, $userId);
-    videochat_call_access_admin_prevention_assert(is_array($participant), "{$label}: participant row should exist");
-    videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') === 'participant', "{$label}: call_role must stay participant");
-    videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') !== 'owner', "{$label}: owner role must not be granted");
-    videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') !== 'moderator', "{$label}: moderator role must not be granted");
+    if ($expectParticipant) {
+        videochat_call_access_admin_prevention_assert(is_array($participant), "{$label}: participant row should exist");
+        videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') === 'participant', "{$label}: call_role must stay participant");
+        videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') !== 'owner', "{$label}: owner role must not be granted");
+        videochat_call_access_admin_prevention_assert((string) ($participant['call_role'] ?? '') !== 'moderator', "{$label}: moderator role must not be granted");
+    } else {
+        videochat_call_access_admin_prevention_assert($participant === null, "{$label}: anonymous/open session must not create a participant row before queueing");
+    }
     videochat_call_access_admin_prevention_assert(
         videochat_user_has_system_admin_call_rights($pdo, $userId, (string) ($user['role'] ?? 'user')) === false,
         "{$label}: system-admin rights must not be available"
@@ -208,12 +213,13 @@ try {
         'sess_admin_prevention_open_account',
         $openCallId,
         $standardUserId,
+        false,
         false
     );
     $openParticipant = videochat_call_access_admin_prevention_participant($pdo, $openCallId, $standardUserId);
     videochat_call_access_admin_prevention_assert(
-        is_array($openParticipant) && (string) ($openParticipant['invite_state'] ?? '') === 'invited',
-        'anonymous/open logged-in account should wait for host admission'
+        $openParticipant === null,
+        'anonymous/open logged-in account should wait without a guest-list row before queueing'
     );
     videochat_call_access_admin_prevention_assert(
         videochat_can_administer_call($pdo, $openCallId, 'user', $standardUserId, $adminUserId) === false,
