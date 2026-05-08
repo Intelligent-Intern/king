@@ -159,7 +159,7 @@ function videochat_call_access_account_confirmation_truthy_env(string $name): bo
 }
 
 /**
- * @return array{sent: bool, channel: string}
+ * @return array{sent: bool, queued: bool, channel: string}
  */
 function videochat_send_call_access_account_update_confirmation_mail(
     string $recipientEmail,
@@ -169,7 +169,7 @@ function videochat_send_call_access_account_update_confirmation_mail(
 ): array {
     $to = strtolower(trim($recipientEmail));
     if ($to === '' || filter_var($to, FILTER_VALIDATE_EMAIL) === false || trim($confirmationUrl) === '') {
-        return ['sent' => false, 'channel' => 'none'];
+        return ['sent' => false, 'queued' => false, 'channel' => 'none'];
     }
 
     $displayName = trim($recipientName);
@@ -192,7 +192,7 @@ function videochat_send_call_access_account_update_confirmation_mail(
     if (!$forceOutbox && function_exists('mail')) {
         try {
             if (@mail($to, $subject, $body, $headers)) {
-                return ['sent' => true, 'channel' => 'mail'];
+                return ['sent' => true, 'queued' => true, 'channel' => 'mail'];
             }
         } catch (Throwable) {
             // Fall through to the local outbox so confirmation remains inspectable.
@@ -205,9 +205,9 @@ function videochat_send_call_access_account_update_confirmation_mail(
         @mkdir($outboxDir, 0775, true);
     }
     $entry = '[' . gmdate('c') . "] TO={$to}\nSUBJECT={$subject}\n{$body}\n---\n";
-    @file_put_contents($outboxPath, $entry, FILE_APPEND | LOCK_EX);
+    $queued = @file_put_contents($outboxPath, $entry, FILE_APPEND | LOCK_EX) !== false;
 
-    return ['sent' => false, 'channel' => 'outbox'];
+    return ['sent' => false, 'queued' => $queued, 'channel' => 'outbox'];
 }
 
 function videochat_call_access_account_confirmation_rate_limit(): int
@@ -475,6 +475,25 @@ SQL
         $confirmationUrl,
         $expiresAt
     );
+    if (!videochat_call_access_account_confirmation_delivery_accepted($delivery)) {
+        videochat_call_access_account_confirmation_record_email_dispatch_failed(
+            $pdo,
+            $token,
+            $accessLink,
+            $accessFingerprint,
+            $authenticatedUserId,
+            (string) ($options['session_id'] ?? ''),
+            $delivery
+        );
+        return [
+            'ok' => false,
+            'reason' => 'email_delivery_failed',
+            'errors' => [],
+            'token' => null,
+            'recipient_email' => null,
+            'email_delivery' => $delivery,
+        ];
+    }
 
     if ($supersededPendingCount > 0) {
         videochat_audit_record_event($pdo, [
@@ -507,6 +526,8 @@ SQL
         'session_fingerprint' => videochat_audit_fingerprint((string) ($options['session_id'] ?? '')),
         'payload' => [
             'delivery_channel' => (string) ($delivery['channel'] ?? 'unknown'),
+            'delivery_succeeded' => (bool) ($delivery['sent'] ?? false),
+            'delivery_queued' => (bool) ($delivery['queued'] ?? false),
             'sent_to_logged_in_account' => true,
             'sent_to_link_account' => false,
             'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
@@ -739,6 +760,7 @@ SQL
                 'raw_link_identifier_logged' => false,
             ],
         ]);
+        videochat_call_access_account_confirmation_record_account_data_changed($pdo, $row, $userId, ['display_name']);
 
         return [
             'ok' => true,
