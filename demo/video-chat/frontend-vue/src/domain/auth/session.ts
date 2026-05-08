@@ -18,6 +18,20 @@ import {
 } from './sessionNormalizers';
 import { extractErrorMessage, normalizeNetworkErrorMessage } from './sessionErrors';
 const STORAGE_KEY = 'ii_videocall_v1_session';
+
+function getSessionStorage(): Storage | null {
+  const storage = typeof globalThis === 'undefined' ? null : globalThis.localStorage;
+  if (!storage) return null;
+  if (
+    typeof storage.getItem !== 'function'
+    || typeof storage.setItem !== 'function'
+    || typeof storage.removeItem !== 'function'
+  ) {
+    return null;
+  }
+  return storage;
+}
+
 function errorCodeFromPayload(payload) {
   const code = payload && typeof payload === 'object' ? payload?.error?.code : '';
   return typeof code === 'string' ? code.trim() : '';
@@ -38,7 +52,17 @@ function safeParse(raw) {
     return null;
   }
 }
-const loaded = safeParse(typeof localStorage === 'undefined' ? null : localStorage.getItem(STORAGE_KEY));
+function readStoredSession(): string | null {
+  const storage = getSessionStorage();
+  if (!storage) return null;
+  try {
+    return storage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+const loaded = safeParse(readStoredSession());
 export const sessionState = reactive({
   role: null,
   displayName: '',
@@ -80,19 +104,24 @@ export const sessionState = reactive({
   recovered: loaded?.sessionToken ? false : true,
 });
 function persist() {
-  if (typeof localStorage === 'undefined') return;
-  if (!sessionState.sessionToken) {
-    localStorage.removeItem(STORAGE_KEY);
-    return;
+  const storage = getSessionStorage();
+  if (!storage) return;
+  try {
+    if (!sessionState.sessionToken) {
+      storage.removeItem(STORAGE_KEY);
+      return;
+    }
+    storage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        sessionId: sessionState.sessionId,
+        sessionToken: sessionState.sessionToken,
+        expiresAt: sessionState.expiresAt,
+      }),
+    );
+  } catch {
+    // Ignore unavailable or quota-blocked browser storage.
   }
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      sessionId: sessionState.sessionId,
-      sessionToken: sessionState.sessionToken,
-      expiresAt: sessionState.expiresAt,
-    }),
-  );
 }
 function resetUserFields() {
   sessionState.role = null;

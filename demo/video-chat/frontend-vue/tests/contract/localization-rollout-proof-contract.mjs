@@ -32,13 +32,13 @@ for (const requiredText of [
   'de',
   'ar',
   'sgd',
-  'user_id = 1',
-  'CSV',
+  'resource editor',
   '/api/auth/logout',
   '/api/localization/resources',
   'without tenant context',
   '/api/admin/localization/imports/preview',
-  'without committing imported rows',
+  '/api/admin/localization/resources',
+  'disabled import',
   'temporary smoke session is revoked',
   'default `en`',
   '`ltr` direction',
@@ -68,9 +68,10 @@ assert.match(deploySmoke, /\/api\/localization\/resources\?locale=de&namespaces=
 assert.match(deploySmoke, /public localization payload must not include tenant context/, 'deploy smoke must prove public localization has no tenant context');
 assert.match(deploySmoke, /supported locale missing/, 'deploy smoke must verify seeded rollout locales');
 assert.match(deploySmoke, /admin session payload localization mismatch/, 'deploy smoke must aggregate authenticated localization payload failures');
-assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deploy smoke must exercise superadmin localization CSV preview');
-assert.match(deploySmoke, /deploy-smoke-preview\.csv/, 'deploy smoke must use a named preview-only CSV payload');
-assert.match(deploySmoke, /superadmin preview verified without commit/, 'deploy smoke must document that CSV proof is preview-only');
+assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deploy smoke must verify retired CSV preview compatibility response');
+assert.match(deploySmoke, /localization_csv_import_disabled/, 'deploy smoke must verify retired CSV import routes are explicitly disabled');
+assert.match(deploySmoke, /\/api\/admin\/localization\/resources/, 'deploy smoke must point disabled CSV imports at the resources endpoint');
+assert.match(deploySmoke, /disabled with resources replacement verified/, 'deploy smoke must document the resource-editor replacement');
 assert.doesNotMatch(deploySmoke, /\/api\/admin\/localization\/imports\/commit/, 'deploy smoke must not commit localization CSV rows');
 assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 

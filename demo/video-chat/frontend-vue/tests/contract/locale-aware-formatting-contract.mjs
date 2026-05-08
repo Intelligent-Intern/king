@@ -8,7 +8,7 @@ import {
   formatLocalizedTimestampDisplay,
   formatWeekdayShort,
   normalizeDateTimeLocale,
-} from '../../src/support/dateTimeFormat.js';
+} from '../../src/support/dateTimeFormat.ts';
 import { compareLocalizedStrings } from '../../src/support/localeCollation.js';
 import {
   formatLocalizedListDisplay,
@@ -156,10 +156,10 @@ const routeAccessSource = await readFile(path.join(root, 'src/http/routeAccess.j
 const dashboardSource = await readFile(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.vue'), 'utf8');
 const appointmentConfigSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentConfigPanel.vue'), 'utf8');
 const realtimeSources = await Promise.all([
-  'src/domain/realtime/layout/strategies.js',
-  'src/domain/realtime/workspace/callWorkspace/roomState.js',
-  'src/domain/realtime/workspace/callWorkspace/participantUi.js',
-  'src/domain/realtime/workspace/utils.js',
+  'src/domain/realtime/layout/strategies.ts',
+  'src/domain/realtime/workspace/callWorkspace/roomState.ts',
+  'src/domain/realtime/workspace/callWorkspace/participantUi.ts',
+  'src/domain/realtime/workspace/utils.ts',
 ].map(async (relativePath) => ({
   relativePath,
   source: await readFile(path.join(root, relativePath), 'utf8'),
@@ -177,7 +177,7 @@ for (const { relativePath, source } of realtimeSources) {
   assert.doesNotMatch(source, /Intl\.DateTimeFormat\(['"]en-GB['"]/, `${relativePath} must not pin timestamps to en-GB`);
 }
 assert.match(
-  realtimeSources.find((entry) => entry.relativePath.endsWith('utils.js')).source,
+  realtimeSources.find((entry) => entry.relativePath.endsWith('utils.ts')).source,
   /formatLocalizedTimestampDisplay/,
   'call workspace timestamp display must use the shared localized timestamp formatter',
 );
