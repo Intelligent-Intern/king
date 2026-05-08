@@ -116,6 +116,11 @@ SQL
     videochat_call_access_decision_assert((string) ($removedParticipantDecision['reason'] ?? '') === 'forbidden', 'removed participant denial reason should be forbidden');
     videochat_call_access_decision_assert((string) ($removedParticipantDecision['scope'] ?? '') === 'none', 'removed participant denial should not claim a call scope');
 
+    $removedParticipantForgedAdminDecision = videochat_decide_call_access_for_user($pdo, $inviteOnlyCallId, $standardUserId, 'admin', $tenantId);
+    videochat_call_access_decision_assert(!(bool) ($removedParticipantForgedAdminDecision['allowed'] ?? true), 'removed regular participant must not regain invite-only access through a forged admin role');
+    videochat_call_access_decision_assert((string) ($removedParticipantForgedAdminDecision['source'] ?? '') === 'none', 'forged admin denial source should stay none');
+    videochat_call_access_decision_assert(!(bool) ($removedParticipantForgedAdminDecision['can_administer'] ?? true), 'forged admin denial must not administer');
+
     $resolvedAfterParticipantRemoval = videochat_resolve_call_access_for_user($pdo, $accessId, $standardUserId, 'user', $tenantId);
     videochat_call_access_decision_assert(!(bool) ($resolvedAfterParticipantRemoval['ok'] ?? true), 'personal link should not override call participant removal');
     videochat_call_access_decision_assert((string) ($resolvedAfterParticipantRemoval['reason'] ?? '') === 'forbidden', 'personal link denial after participant removal should be forbidden');
