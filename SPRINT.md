@@ -2500,6 +2500,13 @@ resolution path, and emits sanitized end/guest-cleanup audit events.
 safe-screen case. `call-access-seed-matrix.spec.js` passed the explicit-ended
 direct-join denial cases for system admin and organization admin as part of the
 24-test integrated run.
+2026-05-09 focused backend proof: Docker PHP 8.4 ran
+`call-access-deleted-ended-disabled-join-contract.php`, proving system-admin
+normal direct decision and `/api/calls/resolve/{id}` are blocked for ended and
+deleted calls, deleted calls remain safe `not_found`, ended personalized
+join/session issuance returns conflict without calling the session issuer, and
+no private call title, participant email, or replacement session leaks through
+those normal join responses.
 `call-guest-cleanup-lifecycle-remaining-contract` marks an anonymous open-link
 guest as active, ends the call, and proves the participant receives cancelled
 plus `left_at` state while the temporary account and stale open link are
