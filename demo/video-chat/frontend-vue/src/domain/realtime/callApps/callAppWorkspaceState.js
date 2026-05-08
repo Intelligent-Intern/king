@@ -2,7 +2,22 @@ import { computed, ref } from 'vue';
 
 export const CALL_APP_WORKSPACE_LAYOUT_MODE = 'call_app_workspace';
 export const CALL_APP_WORKSPACE_MINI_LIMIT = 5;
-const CALL_APP_IFRAME_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CALL_APP_ORIGIN || '').trim().replace(/\/+$/, '');
+const CALL_APP_IFRAME_ORIGIN = normalizeConfiguredCallAppOrigin(import.meta.env.VITE_VIDEOCHAT_CALL_APP_ORIGIN);
+
+function normalizeConfiguredCallAppOrigin(value) {
+  const trimmed = String(value || '').trim().replace(/\/+$/, '');
+  if (trimmed === '') return '';
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withScheme);
+    parsed.pathname = '';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
 
 function callAppOriginForAppKey(appKey) {
   if (CALL_APP_IFRAME_ORIGIN === '') return '';
@@ -16,7 +31,7 @@ function callAppOriginForAppKey(appKey) {
   try {
     const parsed = new URL(CALL_APP_IFRAME_ORIGIN);
     const parts = parsed.hostname.split('.');
-    if (parts.length >= 3 && ['apps', 'whiteboard'].includes(parts[0])) {
+    if (parts.length >= 3 && ['app', 'apps', 'whiteboard'].includes(parts[0])) {
       parts[0] = hostAppKey;
       parsed.hostname = parts.join('.');
       parsed.pathname = '';
