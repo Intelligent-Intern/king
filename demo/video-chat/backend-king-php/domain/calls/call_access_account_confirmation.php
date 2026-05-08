@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../../support/auth_request.php';
 require_once __DIR__ . '/../users/user_email_identity.php';
+require_once __DIR__ . '/call_access_account_confirmation_audit.php';
 require_once __DIR__ . '/call_access_contract.php';
 
 function videochat_call_access_account_confirmation_bootstrap(PDO $pdo): bool
@@ -22,12 +23,23 @@ CREATE TABLE IF NOT EXISTS call_access_account_update_confirmations (
     pending_payload_json TEXT NOT NULL DEFAULT '{}',
     expires_at TEXT NOT NULL,
     consumed_at TEXT,
+    superseded_at TEXT,
+    superseded_by_id TEXT,
     created_at TEXT NOT NULL
 )
 SQL
         );
+        foreach ([
+            'superseded_at' => 'ALTER TABLE call_access_account_update_confirmations ADD COLUMN superseded_at TEXT',
+            'superseded_by_id' => 'ALTER TABLE call_access_account_update_confirmations ADD COLUMN superseded_by_id TEXT',
+        ] as $columnName => $alterSql) {
+            if (!videochat_tenant_table_has_column($pdo, 'call_access_account_update_confirmations', $columnName)) {
+                $pdo->exec($alterSql);
+            }
+        }
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_account_confirm_user ON call_access_account_update_confirmations(user_id, created_at DESC)');
         $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_account_confirm_access ON call_access_account_update_confirmations(access_fingerprint, created_at DESC)');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_access_account_confirm_pending ON call_access_account_update_confirmations(user_id, access_fingerprint, consumed_at, superseded_at)');
     } catch (Throwable) {
         return false;
     }
@@ -210,6 +222,16 @@ function videochat_call_access_account_confirmation_rate_window_seconds(): int
     return max(60, min(86_400, $seconds));
 }
 
+function videochat_call_access_account_confirmation_invalidate_older_enabled(array $options = []): bool
+{
+    if (array_key_exists('invalidate_older', $options)) {
+        return (bool) $options['invalidate_older'];
+    }
+
+    return videochat_call_access_account_confirmation_truthy_env('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER')
+        || videochat_call_access_account_confirmation_truthy_env('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_INVALIDATE_OLDER');
+}
+
 function videochat_call_access_account_confirmation_pending_payload(array $manualData): array
 {
     $displayName = trim((string) ($manualData['display_name'] ?? ''));
@@ -369,6 +391,7 @@ function videochat_call_access_request_account_update_confirmation(
     $createdAt = gmdate('c');
     $ttlSeconds = videochat_call_access_account_confirmation_ttl_seconds();
     $expiresAt = gmdate('c', time() + $ttlSeconds);
+    $accessFingerprint = videochat_audit_fingerprint($normalizedAccessId);
     $payloadJson = json_encode($pendingPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($payloadJson) || $payloadJson === '') {
         $payloadJson = '{}';
@@ -376,8 +399,16 @@ function videochat_call_access_request_account_update_confirmation(
     $recipientEmail = strtolower(trim((string) ($user['email'] ?? '')));
     $confirmationUrl = videochat_build_call_access_account_confirmation_url($token, $options);
 
-    $insert = $pdo->prepare(
-        <<<'SQL'
+    $startedTransaction = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTransaction = true;
+    }
+
+    $supersededPendingCount = 0;
+    try {
+        $insert = $pdo->prepare(
+            <<<'SQL'
 INSERT INTO call_access_account_update_confirmations(
     id, tenant_id, call_id, access_fingerprint, user_id, recipient_email_fingerprint,
     pending_payload_json, expires_at, consumed_at, created_at
@@ -386,20 +417,49 @@ INSERT INTO call_access_account_update_confirmations(
     :pending_payload_json, :expires_at, NULL, :created_at
 )
 SQL
-    );
-    try {
+        );
         $insert->execute([
             ':id' => $token,
             ':tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
             ':call_id' => (string) ($accessLink['call_id'] ?? ''),
-            ':access_fingerprint' => videochat_audit_fingerprint($normalizedAccessId),
+            ':access_fingerprint' => $accessFingerprint,
             ':user_id' => $authenticatedUserId,
             ':recipient_email_fingerprint' => videochat_audit_fingerprint($recipientEmail),
             ':pending_payload_json' => $payloadJson,
             ':expires_at' => $expiresAt,
             ':created_at' => $createdAt,
         ]);
+
+        if (videochat_call_access_account_confirmation_invalidate_older_enabled($options)) {
+            $supersede = $pdo->prepare(
+                <<<'SQL'
+UPDATE call_access_account_update_confirmations
+SET superseded_at = :superseded_at,
+    superseded_by_id = :superseded_by_id
+WHERE user_id = :user_id
+  AND access_fingerprint = :access_fingerprint
+  AND id <> :id
+  AND (consumed_at IS NULL OR trim(consumed_at) = '')
+  AND (superseded_at IS NULL OR trim(superseded_at) = '')
+SQL
+            );
+            $supersede->execute([
+                ':superseded_at' => $createdAt,
+                ':superseded_by_id' => $token,
+                ':user_id' => $authenticatedUserId,
+                ':access_fingerprint' => $accessFingerprint,
+                ':id' => $token,
+            ]);
+            $supersededPendingCount = max(0, $supersede->rowCount());
+        }
+
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
     } catch (Throwable) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         return [
             'ok' => false,
             'reason' => 'internal_error',
@@ -416,6 +476,48 @@ SQL
         $expiresAt
     );
 
+    if ($supersededPendingCount > 0) {
+        videochat_audit_record_event($pdo, [
+            'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+            'event_type' => 'call_access_account_update_confirmation_superseded',
+            'actor_user_id' => $authenticatedUserId,
+            'target_user_id' => $authenticatedUserId,
+            'call_id' => (string) ($accessLink['call_id'] ?? ''),
+            'resource_type' => 'call_access_account_update_confirmation',
+            'resource_fingerprint' => $accessFingerprint,
+            'session_fingerprint' => videochat_audit_fingerprint((string) ($options['session_id'] ?? '')),
+            'payload' => [
+                'superseded_pending_count' => $supersededPendingCount,
+                'newer_change_invalidates_older' => true,
+                'confirmation_identifier_logged' => false,
+                'raw_link_identifier_logged' => false,
+                'recipient_email_logged' => false,
+            ],
+        ]);
+    }
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_account_update_confirmation_email_dispatched',
+        'actor_user_id' => $authenticatedUserId,
+        'target_user_id' => $authenticatedUserId,
+        'call_id' => (string) ($accessLink['call_id'] ?? ''),
+        'resource_type' => 'call_access_account_update_confirmation',
+        'resource_fingerprint' => $accessFingerprint,
+        'session_fingerprint' => videochat_audit_fingerprint((string) ($options['session_id'] ?? '')),
+        'payload' => [
+            'delivery_channel' => (string) ($delivery['channel'] ?? 'unknown'),
+            'sent_to_logged_in_account' => true,
+            'sent_to_link_account' => false,
+            'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
+                videochat_call_access_account_confirmation_frontend_origin($options)
+            ),
+            'confirmation_identifier_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'recipient_email_logged' => false,
+        ],
+    ]);
+
     videochat_audit_record_event($pdo, [
         'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
         'event_type' => 'call_access_account_update_confirmation_requested',
@@ -423,7 +525,7 @@ SQL
         'target_user_id' => $authenticatedUserId,
         'call_id' => (string) ($accessLink['call_id'] ?? ''),
         'resource_type' => 'call_access_account_update_confirmation',
-        'resource_fingerprint' => videochat_audit_fingerprint($normalizedAccessId),
+        'resource_fingerprint' => $accessFingerprint,
         'session_fingerprint' => videochat_audit_fingerprint((string) ($options['session_id'] ?? '')),
         'payload' => [
             'manual_reentry_required' => true,
@@ -453,6 +555,7 @@ SQL
         'sent_to_logged_in_account' => true,
         'sent_to_link_account' => false,
         'email_delivery' => $delivery,
+        'superseded_pending_count' => $supersededPendingCount,
     ];
 }
 
@@ -460,6 +563,9 @@ function videochat_call_access_confirm_account_update(PDO $pdo, string $token, i
 {
     $trimmedToken = trim($token);
     if ($trimmedToken === '') {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'validation_failed', [], $authenticatedUserId, [
+            'failure_stage' => 'input',
+        ]);
         return [
             'ok' => false,
             'reason' => 'validation_failed',
@@ -469,6 +575,9 @@ function videochat_call_access_confirm_account_update(PDO $pdo, string $token, i
         ];
     }
     if (!videochat_call_access_account_confirmation_bootstrap($pdo)) {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'confirmation_unavailable', [], $authenticatedUserId, [
+            'failure_stage' => 'bootstrap',
+        ]);
         return [
             'ok' => false,
             'reason' => 'confirmation_unavailable',
@@ -480,7 +589,8 @@ function videochat_call_access_confirm_account_update(PDO $pdo, string $token, i
 
     $query = $pdo->prepare(
         <<<'SQL'
-SELECT id, tenant_id, call_id, access_fingerprint, user_id, pending_payload_json, expires_at, consumed_at
+SELECT id, tenant_id, call_id, access_fingerprint, user_id, pending_payload_json,
+       expires_at, consumed_at, superseded_at, superseded_by_id
 FROM call_access_account_update_confirmations
 WHERE id = :id
 LIMIT 1
@@ -489,6 +599,9 @@ SQL
     $query->execute([':id' => $trimmedToken]);
     $row = $query->fetch();
     if (!is_array($row)) {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'not_found', [], $authenticatedUserId, [
+            'failure_stage' => 'lookup',
+        ]);
         return [
             'ok' => false,
             'reason' => 'not_found',
@@ -500,6 +613,9 @@ SQL
 
     $userId = (int) ($row['user_id'] ?? 0);
     if ($authenticatedUserId > 0 && $authenticatedUserId !== $userId) {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'forbidden', $row, $authenticatedUserId, [
+            'failure_stage' => 'account_binding',
+        ]);
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -511,6 +627,9 @@ SQL
 
     $existingConsumedAt = is_string($row['consumed_at'] ?? null) ? trim((string) $row['consumed_at']) : '';
     if ($existingConsumedAt !== '') {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'conflict', $row, $authenticatedUserId, [
+            'failure_stage' => 'consume',
+        ]);
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -520,8 +639,25 @@ SQL
         ];
     }
 
+    $supersededAt = is_string($row['superseded_at'] ?? null) ? trim((string) $row['superseded_at']) : '';
+    if ($supersededAt !== '') {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'superseded', $row, $authenticatedUserId, [
+            'failure_stage' => 'superseded',
+        ]);
+        return [
+            'ok' => false,
+            'reason' => 'conflict',
+            'errors' => ['token' => 'superseded'],
+            'user' => null,
+            'consumed_at' => null,
+        ];
+    }
+
     $expiresAtUnix = strtotime((string) ($row['expires_at'] ?? ''));
     if (!is_int($expiresAtUnix) || $expiresAtUnix <= time()) {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'expired', $row, $authenticatedUserId, [
+            'failure_stage' => 'ttl',
+        ]);
         return [
             'ok' => false,
             'reason' => 'expired',
@@ -537,6 +673,9 @@ SQL
     }
     $displayName = trim((string) ($pendingPayload['display_name'] ?? ''));
     if ($userId <= 0 || $displayName === '') {
+        videochat_call_access_account_confirmation_record_failure($pdo, 'validation_failed', $row, $authenticatedUserId, [
+            'failure_stage' => 'pending_payload',
+        ]);
         return [
             'ok' => false,
             'reason' => 'validation_failed',
@@ -608,10 +747,25 @@ SQL
             'user' => $user,
             'consumed_at' => $consumedAt,
         ];
-    } catch (Throwable) {
+    } catch (Throwable $error) {
         if ($startedTransaction && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
+        if ($error instanceof RuntimeException && $error->getMessage() === 'confirmation_already_consumed') {
+            videochat_call_access_account_confirmation_record_failure($pdo, 'conflict', $row, $authenticatedUserId, [
+                'failure_stage' => 'consume_race',
+            ]);
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['token' => 'already_consumed'],
+                'user' => null,
+                'consumed_at' => null,
+            ];
+        }
+        videochat_call_access_account_confirmation_record_failure($pdo, 'internal_error', $row, $authenticatedUserId, [
+            'failure_stage' => 'commit',
+        ]);
         return [
             'ok' => false,
             'reason' => 'internal_error',
