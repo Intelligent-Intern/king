@@ -36,6 +36,7 @@ const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const activeRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-active-removal-contract.php');
 const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
+const membershipStaleInviteRightsContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-stale-invite-rights-contract.php');
 const guestListDirectJoinContract = readText('demo/video-chat/backend-king-php/tests/call-guest-list-direct-join-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
@@ -134,6 +135,11 @@ assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
   /\.\.\/backend-king-php\/tests\/call-access-invited-user-org-removal-contract\.sh/,
   'IAM Call Access contract gate must include the invited-user organization-removal proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /\.\.\/backend-king-php\/tests\/call-access-membership-stale-invite-rights-contract\.sh/,
+  'IAM Call Access contract gate must include the stale-invite membership-rights proof',
 );
 assert.doesNotMatch(
   matrixScript,
@@ -570,6 +576,31 @@ assert.match(
   'invited organization-removal contract must prove rejoin is allowed only while the invitation remains valid',
 );
 assert.match(
+  membershipStaleInviteRightsContract,
+  /moved organization member should lose old-organization resource grants[\s\S]*moved member should not use old organization membership[\s\S]*sess_iam_moved_member_call_scoped/s,
+  'membership stale-invite contract must prove moved org members join only through call-scoped invitation',
+);
+assert.match(
+  membershipStaleInviteRightsContract,
+  /org admin should have same-organization call rights before downgrade[\s\S]*downgraded admin should lose org-admin rights for unrelated calls[\s\S]*sess_iam_downgraded_admin_call_scoped/s,
+  'membership stale-invite contract must prove downgraded admins keep explicit invite access without org-admin rights',
+);
+assert.match(
+  membershipStaleInviteRightsContract,
+  /promoted user should receive current org-admin call source[\s\S]*promoted org admin should direct-enter from current organization rights/s,
+  'membership stale-invite contract must prove promoted users receive current org-admin rights while still members',
+);
+assert.match(
+  membershipStaleInviteRightsContract,
+  /forged stale admin role should not restore call administration[\s\S]*IAM Removed Admin Stale Invite Call[\s\S]*sess_iam_removed_stale_admin_call_scoped/s,
+  'membership stale-invite contract must prove stale invite payloads cannot restore removed org-admin rights',
+);
+assert.match(
+  membershipStaleInviteRightsContract,
+  /removed lobby user should keep call-scoped pending room binding[\s\S]*removed lobby user should remain queued through call-scoped invitation/s,
+  'membership stale-invite contract must prove removed lobby users lose org rights but keep call-scoped lobby state',
+);
+assert.match(
   activeRemovalContract,
   /active removed user should remain connected when explicit call-scoped access exists[\s\S]*active removed org admin must lose realtime moderator controls immediately/s,
   'active membership-removal contract must prove active call-scoped participants stay connected while org-admin controls are revoked',
@@ -583,6 +614,11 @@ assert.match(
   ciGate,
   /call-access-invited-user-org-removal-contract\.sh/,
   'IAM Call Access CI gate must run the invited-user organization-removal backend contract when SQLite is available',
+);
+assert.match(
+  ciGate,
+  /call-access-membership-stale-invite-rights-contract\.sh/,
+  'IAM Call Access CI gate must run the stale-invite membership-rights backend contract when SQLite is available',
 );
 assert.match(
   smoke,
