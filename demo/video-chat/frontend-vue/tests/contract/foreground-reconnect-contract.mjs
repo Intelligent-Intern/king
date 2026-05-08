@@ -63,11 +63,11 @@ try {
     'workspace realtime must not group auth_backend_error with policy blocks',
   );
 
-  const realtimeWebsocket = fs.readFileSync(path.join(repoRoot, 'demo/video-chat/backend-king-php/http/module_realtime_websocket.php'), 'utf8');
+  const realtimeWebsocketReconnect = fs.readFileSync(path.join(repoRoot, 'demo/video-chat/backend-king-php/http/module_realtime_websocket_reconnect.php'), 'utf8');
   const router = fs.readFileSync(path.join(repoRoot, 'demo/video-chat/backend-king-php/http/router.php'), 'utf8');
   const authSession = fs.readFileSync(path.join(repoRoot, 'demo/video-chat/backend-king-php/http/module_auth_session.php'), 'utf8');
-  assert.match(realtimeWebsocket, /websocket_auth_temporarily_unavailable/, 'backend websocket liveness must not label transient auth backend errors as invalid sessions');
-  assert.match(realtimeWebsocket, /Session validation is temporarily unavailable for realtime commands\./, 'backend websocket liveness must send a retryable auth backend message');
+  assert.match(realtimeWebsocketReconnect, /websocket_auth_temporarily_unavailable/, 'backend websocket liveness must not label transient auth backend errors as invalid sessions');
+  assert.match(realtimeWebsocketReconnect, /Session validation is temporarily unavailable for realtime commands\./, 'backend websocket liveness must send a retryable auth backend message');
   assert.match(router, /authentication backend error transport=%s exception=%s message=%s/, 'backend router must log swallowed auth backend exceptions');
   assert.match(authSession, /session probe failed exception=%s message=%s/, 'session probe must log swallowed auth backend exceptions');
 
