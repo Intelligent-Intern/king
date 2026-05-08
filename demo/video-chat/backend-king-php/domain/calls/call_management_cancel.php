@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_lifecycle.php';
+
 function videochat_validate_cancel_call_payload(array $payload): array
 {
     $errors = [];
@@ -259,6 +261,18 @@ function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string
         ];
     }
 
+    $callTenantId = is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null;
+    $lifecycleTenantId = is_int($callTenantId) && $callTenantId > 0 ? $callTenantId : $tenantId;
+    $lifecycle = videochat_apply_call_terminal_lifecycle($pdo, $existingCall, 'deleted', $lifecycleTenantId, $authUserId);
+    if (!(bool) ($lifecycle['ok'] ?? false)) {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
     $pdo->beginTransaction();
     try {
         $deleteCall = $pdo->prepare(
@@ -296,6 +310,111 @@ SQL
             'owner_user_id' => (int) $existingCall['owner_user_id'],
             'status' => (string) $existingCall['status'],
         ],
+        'lifecycle' => $lifecycle,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   call: ?array<string, mixed>,
+ *   lifecycle?: array<string, mixed>
+ * }
+ */
+function videochat_end_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
+{
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
+    if ($existingCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'], $pdo)) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $currentStatus = strtolower(trim((string) ($existingCall['status'] ?? '')));
+    if ($currentStatus === 'ended') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['status' => 'already_ended'],
+            'call' => null,
+        ];
+    }
+    if (!in_array($currentStatus, ['scheduled', 'active'], true)) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['status' => 'transition_not_allowed'],
+            'call' => null,
+        ];
+    }
+
+    $endedAt = gmdate('c');
+    $pdo->beginTransaction();
+    try {
+        $update = $pdo->prepare(
+            <<<'SQL'
+UPDATE calls
+SET status = 'ended',
+    updated_at = :updated_at
+WHERE id = :id
+SQL
+        );
+        $update->execute([
+            ':updated_at' => $endedAt,
+            ':id' => (string) $existingCall['id'],
+        ]);
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $endedCall = $existingCall;
+    $endedCall['status'] = 'ended';
+    $endedCall['updated_at'] = $endedAt;
+    $callTenantId = is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null;
+    $lifecycleTenantId = is_int($callTenantId) && $callTenantId > 0 ? $callTenantId : $tenantId;
+    $lifecycle = videochat_apply_call_terminal_lifecycle($pdo, $endedCall, 'ended', $lifecycleTenantId, $authUserId);
+    if (!(bool) ($lifecycle['ok'] ?? false)) {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $freshCall = videochat_fetch_call_for_update($pdo, (string) $existingCall['id'], $isSystemAdmin ? null : $tenantId);
+
+    return [
+        'ok' => true,
+        'reason' => 'ended',
+        'errors' => [],
+        'call' => is_array($freshCall) ? videochat_build_call_payload($pdo, $freshCall, $authUserId) : null,
+        'lifecycle' => $lifecycle,
     ];
 }
 
