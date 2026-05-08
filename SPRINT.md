@@ -1265,7 +1265,7 @@ passed 3 tests; PHP persistence portions were skipped only where local
 - [x] Organization admin can join own organization call without guest-list entry
 - [x] Organization admin cannot join another organization’s call through org-admin rights
 - [x] User can join call when on guest list
-- [ ] User cannot directly join call when not on guest list
+- [x] User cannot directly join call when not on guest list
 - [x] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
 - [x] Deleted / disabled user cannot join
@@ -1282,6 +1282,10 @@ system-admin session token denial. `npx playwright test
 tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
 9 tests; `npm run test:contract:iam-call-access` passed frontend contracts and
 skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
+The same seed-matrix proof now also binds main journeys for logged-in anonymous
+own-rights, system-admin direct join, guest-list direct join, and normal
+non-guest denial/lobby policy. The focused journey/direct-join run passed 18
+tests.
 
 Proof: `call-access-deleted-ended-disabled-join-contract` and the integrated
 Playwright run of `call-access-seed-matrix.spec.js` plus
@@ -1483,9 +1487,9 @@ skipped at runtime because local PHP lacks `pdo_sqlite`.
 - [x] User joins as logged-in user
 - [x] Logged-in user’s rights are used
 - [x] Logged-in user receives no rights from anonymous link
-- [ ] Logged-in user can join if own rights allow it
+- [x] Logged-in user can join if own rights allow it
 - [x] Logged-in user lands in lobby if no direct permission exists
-- [ ] Logged-in system admin can join every active call through anonymous link
+- [x] Logged-in system admin can join every active call through anonymous link
 - [ ] Logged-in organization admin can join own organization calls through anonymous link
 - [ ] Logged-in organization admin cannot join foreign organization calls through anonymous link
 - [ ] Logged-in guest-list user can join through anonymous link
@@ -2310,7 +2314,7 @@ unchecked for the separate owner-transfer lane.
 - [x] `e2e_join_003_org_admin_can_join_own_org_call`
 - [x] `e2e_join_004_org_admin_cannot_join_foreign_org_call`
 - [x] `e2e_join_005_guest_list_user_can_join`
-- [ ] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
+- [x] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
 - [x] `e2e_join_007_owner_can_join_own_call`
 - [x] `e2e_join_008_disabled_user_cannot_join`
 - [ ] `e2e_join_009_removed_guest_list_entry_revokes_join`
@@ -2693,13 +2697,13 @@ against duplicate join/session request loops.
 - [ ] `e2e_journey_006_foreign_personalized_link_correct_host_decline_update`
 - [ ] `e2e_journey_007_foreign_personalized_link_correct_host_update_confirm_email`
 - [x] `e2e_journey_008_duplicate_personalized_link_review_flag`
-- [ ] `e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights`
+- [x] `e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights`
 - [x] `e2e_journey_010_logged_out_user_anonymous_link_lobby_admit_rejoin`
-- [ ] `e2e_journey_011_system_admin_join_without_invite`
+- [x] `e2e_journey_011_system_admin_join_without_invite`
 - [ ] `e2e_journey_012_org_admin_join_own_org_without_invite`
 - [ ] `e2e_journey_013_org_admin_foreign_org_denied`
-- [ ] `e2e_journey_014_normal_guest_list_user_joins_foreign_call`
-- [ ] `e2e_journey_015_normal_non_guest_user_lobby_or_denied`
+- [x] `e2e_journey_014_normal_guest_list_user_joins_foreign_call`
+- [x] `e2e_journey_015_normal_non_guest_user_lobby_or_denied`
 - [ ] `e2e_journey_016_normal_user_owner_transfer_loses_admin`
 - [ ] `e2e_journey_017_org_admin_owner_transfer_keeps_admin`
 - [ ] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
