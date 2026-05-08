@@ -483,6 +483,11 @@ Tickets:
       widths, shows Default participant access as Blocked/Allowed choices, and
       exposes labeled Allow/Revoke controls for participant grants:
       `call-app-sidebar-access-ux-contract`.
+    - `call-app-whiteboard-install-browser-proof-contract` adds a browser proof
+      path for Marketplace order/install, installed Whiteboard availability in
+      the Call Apps sidebar, default participant access selection, backend
+      participant grant mutation, and narrow-sidebar responsiveness without
+      manual database edits.
     - Exact commands:
       - `npm run test:contract:call-apps`
       - `npm run build`
