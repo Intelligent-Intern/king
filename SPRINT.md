@@ -1202,16 +1202,16 @@ The sprint is complete when:
 
 ## 1. Organization, User, Roles, Login States
 
-- [ ] Organization can be created
-- [ ] User can be registered in an organization
-- [ ] User can have organization role `User`
-- [ ] User can have organization role `Admin`
-- [ ] User with role `User` can log in
-- [ ] User with role `Admin` can log in
-- [ ] User can be logged out
-- [ ] Logged-in user remains logged in when opening a call link
-- [ ] Logged-out user has no active account session
-- [ ] User without organization cannot receive organization-based rights
+- [x] Organization can be created
+- [x] User can be registered in an organization
+- [x] User can have organization role `User`
+- [x] User can have organization role `Admin`
+- [x] User with role `User` can log in
+- [x] User with role `Admin` can log in
+- [x] User can be logged out
+- [x] Logged-in user remains logged in when opening a call link
+- [x] Logged-out user has no active account session
+- [x] User without organization cannot receive organization-based rights
 - [x] User from organization A does not receive rights from organization B
 - [x] Organization admin from organization A cannot join organization B calls through org-admin rights
 - [x] Organization role is evaluated server-side
@@ -1223,6 +1223,18 @@ user has tenant and organization admin roles, downgrades both roles without
 rotating the token, and proves auth/session payloads, local session cache
 fallback, call access, call-admin decisions, forged role input, and stale
 client role cache data all resolve from current backend membership state.
+
+Proof: `iam-core-org-session-journey-contract` creates a real organization
+through Governance, registers isolated users through the admin user route,
+persists organization `User`/`Admin` memberships, logs both users in through
+`/api/auth/login`, logs one out through `/api/auth/logout`, proves missing and
+revoked session-state responses expose no active account session, opens an
+anonymous call link while authenticated and proves the original account session
+remains valid, and verifies a tenant member without organization membership
+receives no organization-admin/direct-call rights. Browser proof:
+`call-access-core-org-session-journey.spec.js` plus the seed-matrix no-org
+scenario cover the same organization/account/session journeys in the focused
+Call Access Playwright gate.
 
 ## 2. Call Creation and Owner Rights
 
@@ -2308,13 +2320,13 @@ path.
 
 ## Test Group: Organization and Role Fixtures
 
-- [ ] `e2e_org_001_create_organization`
-- [ ] `e2e_org_002_register_user_in_organization`
-- [ ] `e2e_org_003_assign_user_role_user`
-- [ ] `e2e_org_004_assign_user_role_admin`
-- [ ] `e2e_org_005_login_normal_user`
-- [ ] `e2e_org_006_login_organization_admin`
-- [ ] `e2e_org_007_logged_out_user_has_no_session`
+- [x] `e2e_org_001_create_organization`
+- [x] `e2e_org_002_register_user_in_organization`
+- [x] `e2e_org_003_assign_user_role_user`
+- [x] `e2e_org_004_assign_user_role_admin`
+- [x] `e2e_org_005_login_normal_user`
+- [x] `e2e_org_006_login_organization_admin`
+- [x] `e2e_org_007_logged_out_user_has_no_session`
 - [ ] `e2e_org_008_cross_org_rights_not_leaked`
 - [ ] `e2e_org_009_stale_client_role_ignored`
 - [ ] `e2e_org_010_stale_session_role_revalidated`

@@ -10,6 +10,7 @@
   "test_bindings": {
     "live_backend_playwright_spec": "frontend-vue/tests/e2e/call-access-join.spec.js",
     "seed_matrix_playwright_spec": "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
+    "core_org_session_playwright_spec": "frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js",
     "helper": "frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js",
     "isolated_from_existing_matrix_helpers": [
       "frontend-vue/tests/e2e/helpers/videochatMatrixHarness.js"
@@ -152,6 +153,21 @@
       "organization_memberships": [
         { "organization_key": "alpha_org", "role": "member" }
       ]
+    },
+    {
+      "key": "alpha_tenant_member_without_organization",
+      "id": 6110,
+      "email": "iam-alpha-no-organization@example.test",
+      "display_name": "Alpha Tenant Member Without Organization",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": []
     },
     {
       "key": "registered_guest",
@@ -617,6 +633,22 @@
       "key": "direct_join_normal_user_not_on_guest_list_denied",
       "sprint_groups": ["3", "17", "20"],
       "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "decision_reason": "not_on_guest_list",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_user_without_organization_denied",
+      "journey_key": "e2e_org_011_user_without_organization_no_org_rights",
+      "sprint_groups": ["1", "3", "20"],
+      "principal_user_key": "alpha_tenant_member_without_organization",
       "call_key": "alpha_active",
       "expected": {
         "state": "forbidden",
