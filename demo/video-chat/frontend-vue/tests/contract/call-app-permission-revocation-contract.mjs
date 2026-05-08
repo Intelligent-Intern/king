@@ -43,6 +43,24 @@ assert.match(
 
 assert.match(
   launchDomainSource,
+  /function videochat_call_app_launch_session_availability[\s\S]*organization_call_app_installations[\s\S]*organization_call_app_entitlements[\s\S]*entitlement_not_active[\s\S]*token_stale_after_entitlement_change/s,
+  'launch token mint and reconnect validation must recheck current installation and entitlement state',
+);
+
+assert.match(
+  launchDomainSource,
+  /function videochat_call_app_launch_subject_changed_after[\s\S]*call_app_participant_grants[\s\S]*token_stale_after_grant_change/s,
+  'launch token reconnect validation must reject tokens issued before a later participant grant change',
+);
+
+assert.match(
+  launchDomainSource,
+  /activated_at[\s\S]*token_stale_after_session_reactivation/s,
+  'launch token reconnect validation must reject tokens issued before session reactivation',
+);
+
+assert.match(
+  launchDomainSource,
   /\$base = \['call_apps\.launch'\][\s\S]*if \(\$grantState !== 'allowed'\)[\s\S]*return array_values/s,
   'denied participants must receive only status launch capability, not CRDT read',
 );
@@ -123,6 +141,24 @@ assert.match(
   lifecycleTestSource,
   /denying a participant must revoke their active launch token[\s\S]*revoked participant launch token must fail reconnect validation/s,
   'backend lifecycle contract must prove active token revocation on denied grants',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /launch token validation must fail after entitlement revocation[\s\S]*launch token mint must fail while entitlement is revoked/,
+  'backend lifecycle contract must prove launch tokens cannot reconnect through revoked entitlements',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /status-only launch token must not gain CRDT rights after re-allow reconnect[\s\S]*token_stale_after_grant_change/,
+  'backend lifecycle contract must prove status-only tokens are not upgraded after later grant changes',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /launch token validation must fail while Call App session is inactive[\s\S]*pre-inactivation launch token must not revive after session reactivation[\s\S]*token_stale_after_session_reactivation/,
+  'backend lifecycle contract must prove pre-inactivation launch tokens stay stale after session reactivation',
 );
 
 assert.match(
