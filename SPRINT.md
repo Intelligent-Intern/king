@@ -56,6 +56,15 @@ Current baseline:
   screen-share tracks stay live while retired tracks stop once. The main smoke
   script exposes a deterministic Node-only release gate for these reconnect and
   screenshare contracts without requiring real devices.
+- Realtime websocket reconnect now treats transient auth/backend and call-room
+  backfill failures as retryable instead of silently falling back to lobby or
+  closing as a revoked session. Requested call reconnects receive explicit
+  retryable diagnostics and authoritative room/lobby snapshots once backfill is
+  available.
+- Public call-access join now captures the verified logged-in user/session after
+  link verification and sends that context plus the current bearer token into
+  call-access session issuance, so a later login switch cannot bind the link to
+  a different account.
 
 Contract anchors:
 - `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
@@ -1232,20 +1241,27 @@ The sprint is complete when:
 ## 6. Personalized Link: Logged-In User, No / Light Mismatch
 
 - [ ] Logged-in user opens personalized link
-- [ ] Logged-in account remains active
-- [ ] Temporary link account does not replace active session
+- [x] Logged-in account remains active
+- [x] Temporary link account does not replace active session
 - [ ] Link account is compared with logged-in account
 - [ ] No mismatch does not show warning modal
 - [ ] Light mismatch does not show strong foreign-link warning
-- [ ] Logged-in account is used for call
-- [ ] Temporary account is not set as active session
-- [ ] Permission check uses logged-in account
+- [x] Logged-in account is used for call
+- [x] Temporary account is not set as active session
+- [x] Permission check uses logged-in account
 - [ ] User can join if logged-in account is authorized
 - [ ] User lands in lobby if logged-in account is not directly authorized
 - [ ] Temporary link data does not overwrite account data automatically
 - [ ] Light mismatches are optionally logged
 - [ ] No link data is unnecessarily exposed in frontend
 - [ ] Same logged-in account can reopen same link without duplicate-link flag
+
+Proof: `call-access-verified-context-ui-contract` proves the public join view
+captures a stable verified user/session/token snapshot after link verification,
+sends `verified_user_id`, `verified_session_id`, and the current bearer token to
+call-access session issuance, and fails safely with `call_access_conflict` if
+the verified context remains after local logout. Backend route-guard proof keeps
+the authenticated account authoritative for the issued session.
 
 ## 7. Personalized Link: Logged-In User, Strong Mismatch
 
@@ -1493,6 +1509,10 @@ session validation. `call-access-session-route-guard-contract` proves the real
 `/api/call-access/{id}/session` route passes authenticated and verified
 user/session context into that guard, rejects wrong logged-in accounts and
 session switches safely, and preserves anonymous personalized/open-link issuance.
+`call-access-verified-context-ui-contract` adds the frontend half of that
+contract by proving the browser join flow forwards the verified context and
+current bearer token into session issuance instead of trusting mutable local
+state.
 
 ## 16. Email Confirmation for Account Data Update
 
@@ -1618,9 +1638,15 @@ call room does not imply subscription or moderation rights in another room.
 - [ ] Login switch during warning modal is handled correctly
 - [ ] Email confirmation in another browser updates correct account
 - [ ] Session expiry while waiting in lobby is handled correctly
-- [ ] Session expiry during call creates defined state
+- [x] Session expiry during call creates defined state
 - [ ] Refresh during host-name verification creates defined state
 - [ ] Refresh while email confirmation is pending creates defined state
+
+Proof: `realtime-reconnect-backfill-contract` proves transient auth backend
+errors remain retryable inside a bounded grace window, revoked sessions still
+close as policy violations, requested call reconnect backfill failures return
+retryable 503 diagnostics before websocket upgrade, and successful backfill
+sends authoritative lobby/room snapshots for the call room.
 
 ## 23. Organization Membership Changes After Invitation
 
