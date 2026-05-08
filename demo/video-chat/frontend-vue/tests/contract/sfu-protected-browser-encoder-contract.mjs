@@ -144,7 +144,7 @@ try {
   requireContains(mediaSecuritySfuPublishGate, 'return sentAtMs > 0 && (nowMs - sentAtMs) >= propagationMs;', 'SFU publish gate must hold protected frames until sender-key signals can reach receivers');
   requireContains(mediaSecuritySfuPublishGate, 'currentSfuSenderKeySignalsCoverTargets(targetUserIds)', 'SFU publish gate must require full current-target sender-key coverage before propagation readiness');
   requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))', 'SFU publish gate must use sender-key signal receipts from the current media-security session');
-  requireContains(mediaSecurityRuntime, 'shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey)', 'participant joins must not force a global sender-key cache reset while existing receivers can still decrypt video');
+  requireContains(mediaSecurityRuntime, 'shouldForceMediaSecurityRekeyForParticipantSetDelta(participantDelta, forceRekey)', 'participant joins must not force a sender-key epoch rotation while existing receivers can still decrypt video');
   requireContains(publisherPipeline, "protected_media_fallback: 'transport_only_until_sender_key_ready'", 'RGBA fallback publisher must keep sending frames while sender keys settle');
   requireContains(publisherPipeline, "protected_media_fallback: 'transport_only_after_protect_unavailable'", 'RGBA fallback publisher must keep sending frames after preferred media-security protection is temporarily unavailable');
   requireContains(mediaSecurityTargets, 'return targetUserIds;', 'SFU media-security target set must come from connected remote participants, not delayed publisher discovery');
