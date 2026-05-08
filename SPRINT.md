@@ -2049,21 +2049,25 @@ stale-links.spec.js` passed the deleted stale-link safe-screen case.
 - [x] New joins are blocked after explicit end
 - [x] Rejoins are blocked after explicit end
 - [x] Personalized invite links are invalidated after explicit end
-- [ ] Anonymous join links are invalidated after explicit end
+- [x] Anonymous join links are invalidated after explicit end
 - [x] Temporary guest accounts are deleted or invalidated after explicit end
-- [ ] Lobby entries are cleared after explicit end
+- [x] Lobby entries are cleared after explicit end
 - [x] Audit log is preserved after explicit end
-- [ ] Organization admin cannot bypass ended-call state through normal join
-- [ ] System admin cannot bypass ended-call state through normal join unless explicit recovery/debug path exists
+- [x] Organization admin cannot bypass ended-call state through normal join
+- [x] System admin cannot bypass ended-call state through normal join unless explicit recovery/debug path exists
 - [x] Late user opening old link sees safe ended-call state
 
 Proof: `videochat_end_call` plus `call-lifecycle-contract` moves the call to
 ended, cancels active registered and temporary participants, revokes their
 call-access sessions, blocks normal owner/admin and active participant joins,
 invalidates old personalized links, disables the scoped temporary guest,
-clears realtime presence, and emits sanitized end/guest-cleanup audit events.
+clears realtime presence/lobby entries, invalidates anonymous open links, blocks
+organization-admin and system-admin direct joins through the normal call
+resolution path, and emits sanitized end/guest-cleanup audit events.
 `call-access-lifecycle-stale-links.spec.js` passed the ended stale-link
-safe-screen case.
+safe-screen case. `call-access-seed-matrix.spec.js` passed the explicit-ended
+direct-join denial cases for system admin and organization admin as part of the
+24-test integrated run.
 
 ## 29. Implicit Call Ending by Owner Absence
 
@@ -2588,9 +2592,9 @@ against duplicate join/session request loops.
 - [x] `e2e_end_explicit_006_new_joins_blocked_after_end`
 - [x] `e2e_end_explicit_007_rejoins_blocked_after_end`
 - [x] `e2e_end_explicit_008_personalized_links_invalidated_after_end`
-- [ ] `e2e_end_explicit_009_anonymous_links_invalidated_after_end`
+- [x] `e2e_end_explicit_009_anonymous_links_invalidated_after_end`
 - [x] `e2e_end_explicit_010_temp_guests_cleaned_after_end`
-- [ ] `e2e_end_explicit_011_lobby_cleared_after_end`
+- [x] `e2e_end_explicit_011_lobby_cleared_after_end`
 - [x] `e2e_end_explicit_012_late_old_link_shows_safe_ended_state`
 
 ## Test Group: Implicit Call End by Owner Absence
