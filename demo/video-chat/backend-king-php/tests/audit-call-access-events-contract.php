@@ -283,12 +283,21 @@ try {
         'call_scoped_invitation_preserved' => true,
     ]);
 
+    $inviteInvalidationSessionId = 'sess_audit_events_invite_invalidation_should_not_leak';
+    $inviteInvalidation = videochat_invalidate_call_access_invitation($pdo, $accessId, 'cancelled', $ownerUserId, [
+        'session_id' => $inviteInvalidationSessionId,
+        'invalidation_reason' => 'audit_contract_invite_cancelled',
+    ]);
+    videochat_iam_rejoin_contract_assert((bool) ($inviteInvalidation['ok'] ?? false), 'invite invalidation should write an audit event', $label);
+    videochat_iam_rejoin_contract_assert(videochat_call_access_link_is_invalidated($pdo, $accessLink), 'invite should be invalidated before audit fetch', $label);
+
     $events = videochat_audit_fetch_events($pdo, ['tenant_id' => $tenantId, 'call_id' => $callId, 'limit' => 100]);
     $eventsByType = videochat_audit_events_contract_event_types($events);
     foreach ([
         'call_access_link_opened',
         'call_access_duplicate_personalized_link_review',
         'call_access_strong_mismatch_denied',
+        'call_access_invitation_invalidated',
         'call_participant_joined',
         'call_participant_left',
         'call_participant_rejoined',
@@ -315,6 +324,15 @@ try {
     $membershipPayload = (array) (($eventsByType['membership_removed'][0] ?? [])['payload'] ?? []);
     videochat_iam_rejoin_contract_assert((bool) ($membershipPayload['call_scoped_invitation_preserved'] ?? false), 'membership removal audit should preserve call-scoped invitation marker', $label);
     videochat_iam_rejoin_contract_assert((bool) ($membershipPayload['organization_rights_preserved'] ?? true) === false, 'membership removal audit must not preserve org rights', $label);
+    $inviteInvalidationEvent = $eventsByType['call_access_invitation_invalidated'][0] ?? [];
+    $inviteInvalidationPayload = (array) (($inviteInvalidationEvent['payload'] ?? null) ?: []);
+    videochat_iam_rejoin_contract_assert((string) ($inviteInvalidationEvent['resource_id'] ?? '') === '', 'invite invalidation audit must not persist raw access id', $label);
+    videochat_iam_rejoin_contract_assert((string) ($inviteInvalidationPayload['action'] ?? '') === 'invalidate_invitation', 'invite invalidation audit action mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($inviteInvalidationPayload['invalidation_reason'] ?? '') === 'audit_contract_invite_cancelled', 'invite invalidation audit reason mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($inviteInvalidationPayload['invite_state'] ?? '') === 'cancelled', 'invite invalidation audit state mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($inviteInvalidationPayload['raw_link_identifier_logged'] ?? true) === false, 'invite invalidation audit must not log raw link id', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($inviteInvalidationPayload['raw_credential_identifier_logged'] ?? true) === false, 'invite invalidation audit must not log raw session data', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($inviteInvalidationPayload['raw_guest_identity_logged'] ?? true) === false, 'invite invalidation audit must not log raw guest data', $label);
 
     $encodedEvents = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     videochat_iam_rejoin_contract_assert(is_string($encodedEvents), 'audit events should JSON encode', $label);
@@ -322,6 +340,7 @@ try {
         $accessId,
         $wrongSessionId,
         $deniedSessionId,
+        $inviteInvalidationSessionId,
         $wrongHostName,
     ] as $forbiddenText) {
         videochat_iam_rejoin_contract_assert(!str_contains($encodedEvents, $forbiddenText), 'audit events leaked raw value: ' . $forbiddenText, $label);
@@ -329,6 +348,7 @@ try {
     foreach ([
         videochat_audit_fingerprint($accessId),
         videochat_audit_fingerprint($wrongSessionId),
+        videochat_audit_fingerprint($inviteInvalidationSessionId),
         videochat_audit_fingerprint($callId . ':' . $participantUserId),
     ] as $requiredFingerprint) {
         videochat_iam_rejoin_contract_assert(str_contains($encodedEvents, $requiredFingerprint), 'audit events missing fingerprint: ' . $requiredFingerprint, $label);
