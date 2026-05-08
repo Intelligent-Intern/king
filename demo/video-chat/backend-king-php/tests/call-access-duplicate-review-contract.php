@@ -512,6 +512,10 @@ SQL
     $betaTenantId = videochat_call_access_duplicate_review_create_tenant($pdo, 'review-beta-' . $secret, 'Review Beta ' . $secret);
     $crossOrgAccessId = videochat_generate_call_access_uuid();
     $crossOrgCallId = videochat_generate_call_access_uuid();
+    $crossOrgHostName = 'Cross Org Foreign Review Host ' . $secret;
+    $crossOrgToken = 'tok_cross_org_review_' . $secret;
+    $crossOrgSdp = 'v=0 secret-cross-org-review-sdp-' . $secret;
+    $crossOrgIce = 'candidate:secret-cross-org-review-ice-' . $secret;
     $crossOrgReview = videochat_call_access_record_duplicate_personalized_link_review(
         $pdo,
         [
@@ -528,17 +532,32 @@ SQL
         ['id' => $targetUserId],
         $secondUserId,
         'cross_org_review_assignment',
-        ['session_id' => 'sess_duplicate_cross_org_review']
+        [
+            'session_id' => 'sess_duplicate_cross_org_review',
+            'host_name' => $crossOrgHostName,
+            'token' => $crossOrgToken,
+            'sdp' => $crossOrgSdp,
+            'ice_candidate' => $crossOrgIce,
+        ]
     );
     videochat_call_access_duplicate_review_assert((bool) ($crossOrgReview['ok'] ?? false), 'cross-organization review flag should record');
     videochat_call_access_duplicate_review_assert((bool) ($crossOrgReview['flag_created'] ?? false), 'cross-organization review flag should be created');
     $crossOrgFlag = is_array($crossOrgReview['flag'] ?? null) ? $crossOrgReview['flag'] : [];
     videochat_call_access_duplicate_review_assert((int) ($crossOrgFlag['tenant_id'] ?? 0) === $betaTenantId, 'review flag tenant must follow the call organization');
     videochat_call_access_duplicate_review_assert((string) ($crossOrgFlag['call_id'] ?? '') === $crossOrgCallId, 'review flag call id must follow the call');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgFlag['subject_user_id'] ?? 0) === $secondUserId, 'review flag subject must be the foreign account');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgFlag['target_user_id'] ?? 0) === $targetUserId, 'review flag target must be the linked account');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgFlag['first_seen_user_id'] ?? 0) === $targetUserId, 'review flag should identify the affected linked account reference');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgFlag['access_fingerprint'] ?? '') === videochat_audit_fingerprint($crossOrgAccessId), 'review flag must fingerprint the foreign link');
+    videochat_call_access_duplicate_review_assert_no_needles(
+        (string) ($crossOrgFlag['payload_json'] ?? ''),
+        [$crossOrgAccessId, $crossOrgHostName, $crossOrgToken, $crossOrgSdp, $crossOrgIce, $hostEmail, $targetEmail, $secondEmail],
+        'cross-org review flag payload'
+    );
 
     $crossOrgAudit = $pdo->prepare(
         <<<'SQL'
-SELECT tenant_id, call_id
+SELECT tenant_id, actor_user_id, target_user_id, call_id, resource_id, resource_fingerprint, session_fingerprint, payload_json, created_at
 FROM videochat_audit_events
 WHERE event_type = 'call_access_duplicate_personalized_link_review'
   AND actor_user_id = :actor_user_id
@@ -554,6 +573,31 @@ SQL
     $crossOrgAuditRow = $crossOrgAudit->fetch();
     videochat_call_access_duplicate_review_assert(is_array($crossOrgAuditRow), 'cross-organization review audit event should exist');
     videochat_call_access_duplicate_review_assert((int) ($crossOrgAuditRow['tenant_id'] ?? 0) === $betaTenantId, 'review audit tenant must follow the call organization');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgAuditRow['actor_user_id'] ?? 0) === $secondUserId, 'review audit actor must be the foreign account');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgAuditRow['target_user_id'] ?? 0) === $targetUserId, 'review audit target must be the linked account');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditRow['call_id'] ?? '') === $crossOrgCallId, 'review audit call id must follow the call');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditRow['resource_id'] ?? '') === '', 'review audit must not persist raw access id');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditRow['resource_fingerprint'] ?? '') === videochat_audit_fingerprint($crossOrgAccessId), 'review audit must fingerprint the foreign link');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditRow['session_fingerprint'] ?? '') === videochat_audit_fingerprint('sess_duplicate_cross_org_review'), 'review audit must fingerprint the session id');
+    videochat_call_access_duplicate_review_assert(trim((string) ($crossOrgAuditRow['created_at'] ?? '')) !== '', 'review audit should include a timestamp');
+
+    $crossOrgAuditPayload = json_decode((string) ($crossOrgAuditRow['payload_json'] ?? '{}'), true);
+    videochat_call_access_duplicate_review_assert(is_array($crossOrgAuditPayload), 'review audit payload should decode');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditPayload['flag'] ?? '') === 'duplicate_personalized_link', 'review audit flag mismatch');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgAuditPayload['review_status'] ?? '') === 'manual_review_required', 'review audit should be reviewer-understandable');
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgAuditPayload['flag_created'] ?? false), 'review audit should record flag creation');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgAuditPayload['first_seen_user_id'] ?? 0) === $targetUserId, 'review audit should reference the affected linked account');
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgAuditPayload['raw_link_identifier_logged'] ?? true) === false, 'review audit must mark raw link omission');
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgAuditPayload['account_email_logged'] ?? true) === false, 'review audit must mark email omission');
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgAuditPayload['host_name_logged'] ?? true) === false, 'review audit must mark host-name omission');
+
+    $crossOrgAuditEncoded = json_encode($crossOrgAuditRow, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_access_duplicate_review_assert(is_string($crossOrgAuditEncoded), 'review audit row should encode');
+    videochat_call_access_duplicate_review_assert_no_needles(
+        $crossOrgAuditEncoded,
+        [$crossOrgAccessId, $crossOrgHostName, $crossOrgToken, $crossOrgSdp, $crossOrgIce, $hostEmail, $targetEmail, $secondEmail],
+        'cross-org review audit event'
+    );
 
     fwrite(STDOUT, "[call-access-duplicate-review-contract] PASS\n");
 } catch (Throwable $error) {
