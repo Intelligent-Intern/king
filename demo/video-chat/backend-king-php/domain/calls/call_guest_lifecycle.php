@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
+
 /**
  * @return array<int, int>
  */
@@ -70,7 +72,50 @@ SQL
 }
 
 /**
- * @return array{ok: bool, reason: string, guest_user_ids: array<int, int>, invalidated_guests: int, revoked_sessions: int}
+ * @return array{ok: bool, reason: string, audit_event: array<string, mixed>|null}
+ */
+function videochat_audit_record_guest_account_cleanup(PDO $pdo, string $callId, ?int $tenantId, array $result): array
+{
+    $normalizedCallId = trim($callId);
+    if ($normalizedCallId === '') {
+        return ['ok' => false, 'reason' => 'validation_failed', 'audit_event' => null];
+    }
+
+    $guestUserIds = array_values(array_filter(array_map(
+        static fn (mixed $value): int => is_numeric($value) ? (int) $value : 0,
+        (array) ($result['guest_user_ids'] ?? [])
+    ), static fn (int $value): bool => $value > 0));
+
+    $audit = videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => 'guest_account_cleanup',
+        'call_id' => $normalizedCallId,
+        'resource_type' => 'call_guest_accounts',
+        'resource_id' => $normalizedCallId,
+        'resource_fingerprint' => videochat_audit_fingerprint($normalizedCallId),
+        'payload' => [
+            'cleanup_scope' => 'call',
+            'cleanup_result' => (string) ($result['reason'] ?? 'unknown'),
+            'guest_user_count' => count($guestUserIds),
+            'invalidated_guest_count' => max(0, (int) ($result['invalidated_guests'] ?? 0)),
+            'revoked_session_count' => max(0, (int) ($result['revoked_sessions'] ?? 0)),
+            'had_effect' => ((int) ($result['invalidated_guests'] ?? 0) > 0) || ((int) ($result['revoked_sessions'] ?? 0) > 0),
+            'idempotent_safe' => true,
+            'raw_guest_identifiers_logged' => false,
+            'raw_session_identifier_logged' => false,
+            'raw_access_identifier_logged' => false,
+        ],
+    ]);
+
+    return [
+        'ok' => (bool) ($audit['ok'] ?? false),
+        'reason' => (string) ($audit['reason'] ?? 'audit_write_failed'),
+        'audit_event' => is_array($audit['event'] ?? null) ? $audit['event'] : null,
+    ];
+}
+
+/**
+ * @return array{ok: bool, reason: string, guest_user_ids: array<int, int>, invalidated_guests: int, revoked_sessions: int, audit_events: array<int, array<string, mixed>>}
  */
 function videochat_invalidate_guest_accounts_for_call(PDO $pdo, string $callId, ?int $tenantId = null): array
 {
@@ -82,18 +127,21 @@ function videochat_invalidate_guest_accounts_for_call(PDO $pdo, string $callId, 
             'guest_user_ids' => [],
             'invalidated_guests' => 0,
             'revoked_sessions' => 0,
+            'audit_events' => [],
         ];
     }
 
     $guestUserIds = videochat_call_guest_lifecycle_guest_user_ids_for_call($pdo, $normalizedCallId, $tenantId);
     if ($guestUserIds === []) {
-        return [
+        $result = [
             'ok' => true,
             'reason' => 'no_guest_accounts',
             'guest_user_ids' => [],
             'invalidated_guests' => 0,
             'revoked_sessions' => 0,
         ];
+        $result['audit_events'] = [videochat_audit_record_guest_account_cleanup($pdo, $normalizedCallId, $tenantId, $result)];
+        return $result;
     }
 
     $now = gmdate('c');
@@ -159,14 +207,18 @@ SQL
             'guest_user_ids' => $guestUserIds,
             'invalidated_guests' => 0,
             'revoked_sessions' => 0,
+            'audit_events' => [],
         ];
     }
 
-    return [
+    $result = [
         'ok' => true,
         'reason' => 'invalidated',
         'guest_user_ids' => $guestUserIds,
         'invalidated_guests' => $invalidatedGuests,
         'revoked_sessions' => $revokedSessions,
     ];
+    $result['audit_events'] = [videochat_audit_record_guest_account_cleanup($pdo, $normalizedCallId, $tenantId, $result)];
+
+    return $result;
 }
