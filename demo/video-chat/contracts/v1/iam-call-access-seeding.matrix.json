@@ -408,6 +408,7 @@
     },
     {
       "key": "direct_join_system_admin_without_guest_list",
+      "journey_key": "e2e_journey_011_system_admin_join_without_invite",
       "sprint_groups": ["3", "18"],
       "principal_user_key": "system_admin",
       "call_key": "beta_active",
@@ -570,6 +571,7 @@
     },
     {
       "key": "direct_join_guest_list_user_allowed",
+      "journey_key": "e2e_journey_014_normal_guest_list_user_joins_foreign_call",
       "sprint_groups": ["3", "17", "20"],
       "principal_user_key": "registered_guest",
       "call_key": "alpha_active",
@@ -617,6 +619,21 @@
       "sprint_groups": ["17", "21"],
       "principal_user_key": "registered_guest",
       "call_key": "beta_active",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_normal_non_guest_user_denied",
+      "journey_key": "e2e_journey_015_normal_non_guest_user_lobby_or_denied",
+      "sprint_groups": ["20", "21"],
+      "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
       "expected": {
         "state": "forbidden",
         "decision_source": "none",
@@ -713,6 +730,7 @@
     },
     {
       "key": "anonymous_open_logged_in_uses_own_account_waits_for_host",
+      "journey_key": "e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights",
       "sprint_groups": ["9", "11"],
       "link_key": "alpha_open",
       "principal_user_key": "alpha_normal_user",
