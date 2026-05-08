@@ -45,6 +45,13 @@ function videochat_audit_payload_key_is_sensitive(string $key): bool
         return false;
     }
 
+    if (preg_match(
+        '/(^|[_-])(access[_-]?id|authorization|candidate|cookie|dtls|frame|ice|media|offer|answer|password|rtp|sdp|secret|session([_-]?id)?|srtp|stream|token|track|webrtc)[_-]?(count|total)([_-]|$)/',
+        $normalized
+    ) === 1) {
+        return false;
+    }
+
     return preg_match(
         '/(^|[_-])(access[_-]?id|authorization|candidate|cookie|dtls|frame|ice|media|offer|answer|password|rtp|sdp|secret|session([_-]?id)?|srtp|stream|token|track|webrtc)([_-]|$)/',
         $normalized
