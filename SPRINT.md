@@ -1641,11 +1641,19 @@ admission.
 - [x] Temporary moderator can only moderate assigned call
 - [x] Temporary moderator cannot perform organization-wide admin actions
 - [x] Temporary moderator cannot transfer owner rights unless allowed
-- [ ] Temporary moderator cannot modify guest list outside permissions
-- [ ] Temporary moderator loses rights after moderation ends
-- [ ] Temporary moderator loses rights after call end if configured
+- [x] Temporary moderator cannot modify guest list outside permissions
+- [x] Temporary moderator loses rights after moderation ends
+- [x] Temporary moderator loses rights after call end if configured
 - [x] Revoked temporary moderator rights take effect immediately
 - [x] Manipulated temporary-moderator role in client is rejected server-side
+
+Proof: `call-temporary-moderator-contract.php` and
+`iam-owner-transfer-temp-moderator.spec.js` prove temporary moderator grant,
+admit/reject, assigned-call scoping, no organization-admin actions, no guest-list
+mutation, revocation/inactive-invite/call-end rights loss, and forged client
+role denial. `npm run test:e2e:temp-moderator -- --reporter=list` passed 7
+tests; the backend contract passed with persistence skipped only where host PHP
+lacks `pdo_sqlite`.
 
 ## 14. Privacy and Data Minimization
 
@@ -2478,13 +2486,13 @@ against duplicate join/session request loops.
 
 ## Test Group: Temporary Moderators
 
-- [ ] `e2e_temp_mod_001_host_assigns_temp_moderator`
-- [ ] `e2e_temp_mod_002_temp_moderator_admits_participant`
-- [ ] `e2e_temp_mod_003_temp_moderator_rejects_participant`
-- [ ] `e2e_temp_mod_004_temp_moderator_limited_to_assigned_call`
-- [ ] `e2e_temp_mod_005_temp_moderator_no_org_admin_actions`
-- [ ] `e2e_temp_mod_006_temp_moderator_rights_revoked_immediately`
-- [ ] `e2e_temp_mod_007_client_side_temp_mod_role_forgery_rejected`
+- [x] `e2e_temp_mod_001_host_assigns_temp_moderator`
+- [x] `e2e_temp_mod_002_temp_moderator_admits_participant`
+- [x] `e2e_temp_mod_003_temp_moderator_rejects_participant`
+- [x] `e2e_temp_mod_004_temp_moderator_limited_to_assigned_call`
+- [x] `e2e_temp_mod_005_temp_moderator_no_org_admin_actions`
+- [x] `e2e_temp_mod_006_temp_moderator_rights_revoked_immediately`
+- [x] `e2e_temp_mod_007_client_side_temp_mod_role_forgery_rejected`
 
 ## Test Group: Privacy and Security
 
