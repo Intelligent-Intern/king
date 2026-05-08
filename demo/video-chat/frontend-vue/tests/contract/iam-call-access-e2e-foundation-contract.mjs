@@ -19,6 +19,7 @@ function readJson(relativePath) {
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
+const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const coreOrgSessionSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js');
@@ -31,6 +32,7 @@ const backendContract = readText('demo/video-chat/backend-king-php/tests/call-ac
 const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
 const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
+const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
@@ -119,6 +121,11 @@ assert.match(
   /call-access-anonymous-disabled-link-contract\.sh/,
   'IAM Call Access contract gate must include the disabled anonymous link backend proof',
 );
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /\.\.\/backend-king-php\/tests\/call-access-invited-user-org-removal-contract\.sh/,
+  'IAM Call Access contract gate must include the invited-user organization-removal proof',
+);
 assert.doesNotMatch(
   matrixScript,
   /tests\/e2e\/call-access-join\.spec\.js/,
@@ -129,6 +136,16 @@ const uiParityPaths = new Set(matrix.commands?.['frontend:e2e:ui-parity']?.paths
 const matrixPaths = new Set(matrix.commands?.['frontend:e2e:matrix']?.paths || []);
 const callAccessPaths = new Set(matrix.commands?.['frontend:e2e:call-access']?.paths || []);
 const requiredSpecs = new Set(matrix.release_gate?.required_ui_parity_specs || []);
+const removedInvitedMember = callAccessSeedMatrix.users.find((user) => user?.key === 'removed_invited_member');
+assert.ok(removedInvitedMember, 'call-access seed matrix must include the removed invited member principal');
+assert.deepEqual(removedInvitedMember.memberships || [], [], 'removed invited member must not keep active tenant membership in the deterministic seed');
+assert.deepEqual(removedInvitedMember.organization_memberships || [], [], 'removed invited member must not keep active organization membership in the deterministic seed');
+assert.ok(
+  (removedInvitedMember.removed_organization_memberships || []).some((membership) => (
+    membership?.organization_key === 'alpha_org' && membership?.role === 'admin'
+  )),
+  'removed invited member seed must retain former org-admin metadata for stale-role regression coverage',
+);
 assert.ok(
   uiParityPaths.has('frontend-vue/tests/e2e/call-access-join.spec.js'),
   'UI parity matrix must list the Call Access join spec',
@@ -224,6 +241,11 @@ assert.match(
   coreOrgSessionBackendContract,
   /verified_user_id[\s\S]*verified_session_id[\s\S]*opening a call link must not revoke the logged-in account session/s,
   'backend core organization/session contract must prove logged-in call-link opening preserves the account session',
+);
+assert.match(
+  seedMatrixSpec,
+  /removed_organization_memberships[\s\S]*manage_organizations[\s\S]*false[\s\S]*removedDirectJoin\.allowed\)\.toBe\(false\)/s,
+  'seed-matrix spec must prove removed organization membership does not mint tenant or direct-join rights',
 );
 assert.match(
   mainJourneySmokeSpec,
@@ -497,6 +519,31 @@ assert.doesNotMatch(
   realtimeCallContext,
   /connectionInviteState|connectionCallRole/,
   'admission bypass must not trust cached connection invite or call role after active permission changes',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /videochat_iam_rejoin_contract_disable_organization_membership[\s\S]*organization removal alone must not delete tenant membership/s,
+  'invited organization-removal contract must remove organization membership without deleting tenant membership',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /videochat_issue_session_for_call_access[\s\S]*call-scoped invited session[\s\S]*videochat_fetch_call_access_session_binding/s,
+  'invited organization-removal contract must prove the personal link issues a call-scoped session binding',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /pendingResolution[\s\S]*videochat_realtime_waiting_room_id[\s\S]*allowedResolution[\s\S]*admitted call-scoped invited guest should enter only the invited call room/s,
+  'invited organization-removal contract must prove lobby-before-admission and call-room-after-admission behavior',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /bindingMismatch[\s\S]*access_session_binding[\s\S]*mismatch/s,
+  'invited organization-removal contract must prove the call-scoped session cannot bind an unrelated call',
+);
+assert.match(
+  ciGate,
+  /call-access-invited-user-org-removal-contract\.sh/,
+  'IAM Call Access CI gate must run the invited-user organization-removal backend contract when SQLite is available',
 );
 assert.match(
   smoke,

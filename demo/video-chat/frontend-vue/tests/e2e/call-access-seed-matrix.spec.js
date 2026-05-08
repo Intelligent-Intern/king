@@ -146,6 +146,21 @@ test('IAM call-access seed matrix covers required principals without temporary a
     expect(tenant?.permissions?.tenant_admin ?? false).toBe(false);
   }
 
+  const removedInvitedMember = getSeedUser('removed_invited_member');
+  const removedTenant = tenantSnapshotForSeedUser('removed_invited_member', 'alpha_active');
+  const removedDirectJoin = directJoinDecisionForSeedUser('removed_invited_member', 'alpha_active');
+  expect(removedInvitedMember.memberships || []).toEqual([]);
+  expect(removedInvitedMember.organization_memberships || []).toEqual([]);
+  expect(removedInvitedMember.removed_organization_memberships || []).toEqual(expect.arrayContaining([
+    expect.objectContaining({ organization_key: 'alpha_org', role: 'admin' }),
+  ]));
+  expect(removedTenant?.membership_id ?? 0).toBe(0);
+  expect(removedTenant?.permissions?.platform_admin ?? false).toBe(false);
+  expect(removedTenant?.permissions?.tenant_admin ?? false).toBe(false);
+  expect(removedTenant?.permissions?.manage_organizations ?? false).toBe(false);
+  expect(removedDirectJoin.allowed).toBe(false);
+  expect(removedDirectJoin.source).toBe('none');
+
   for (const scenarioKey of [
     ...allowedDirectJoinScenarios,
     ...deniedDirectJoinScenarios,
@@ -209,7 +224,12 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
     expect(sessionPayload?.status).toBe('ok');
     expect(sessionPayload?.result?.user?.id).toBe(participant.id);
     expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('pending');
+    expect(sessionPayload?.result?.tenant?.membership_id ?? 0).toBe(0);
     expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_organizations ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.admit_participants ?? false).toBe(false);
     expect(JSON.stringify(sessionPayload)).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential)\b/i);
 
     await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
