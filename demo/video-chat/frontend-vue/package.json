@@ -64,7 +64,7 @@
     "test:e2e:public-localization": "playwright test tests/e2e/public-localization.spec.js",
     "test:e2e:localization-smoke": "playwright test tests/e2e/public-localization.spec.js tests/e2e/localization-settings-smoke.spec.js",
     "test:e2e:governance-relations": "playwright test tests/e2e/governance-relation-stack.spec.js",
-    "test:e2e:call-access": "playwright test tests/e2e/call-access-join.spec.js tests/e2e/call-access-privacy-foreign-data.spec.js tests/e2e/call-access-seed-matrix.spec.js tests/e2e/call-access-duplicate-review-email.spec.js tests/e2e/call-access-owner-absence-browser.spec.js tests/e2e/call-access-main-journey-smoke.spec.js tests/e2e/call-access-security-manipulation.spec.js tests/e2e/call-access-anonymous-disabled-link.spec.js --workers=1",
+    "test:e2e:call-access": "playwright test tests/e2e/call-access-join.spec.js tests/e2e/call-access-privacy-foreign-data.spec.js tests/e2e/call-access-seed-matrix.spec.js tests/e2e/call-access-duplicate-review-email.spec.js tests/e2e/call-access-duplicate-race.spec.js tests/e2e/call-access-owner-absence-browser.spec.js tests/e2e/call-access-main-journey-smoke.spec.js tests/e2e/call-access-security-manipulation.spec.js tests/e2e/call-access-anonymous-disabled-link.spec.js --workers=1",
     "test:e2e:temp-moderator": "playwright test tests/e2e/iam-owner-transfer-temp-moderator.spec.js --workers=1",
     "test:e2e:realtime-reconnect-websocket": "playwright test tests/e2e/realtime-reconnect-websocket.spec.js --workers=1",
     "test:e2e:lobby-concurrency": "playwright test tests/e2e/lobby-concurrency-ui.spec.js",

@@ -1466,9 +1466,9 @@ the re-entered fields without adopting the link-target session.
 - [x] Flag is created even if account B provides correct host name
 - [x] Flag is created even if account B does not enter the call
 - [ ] Flag is created when account B reaches warning modal if policy requires it
-- [ ] Concurrent use of same personalized link by two accounts is detected
-- [ ] Race condition on parallel link open creates no inconsistent assignment
-- [ ] Link already used inside call marks later use by other account as suspicious
+- [x] Concurrent use of same personalized link by two accounts is detected
+- [x] Race condition on parallel link open creates no inconsistent assignment
+- [x] Link already used inside call marks later use by other account as suspicious
 - [x] Temporary account cannot be taken over by second registered account without review
 - [x] Review flag contains call, link ID, affected accounts, and timestamps
 - [x] Review flag contains no unnecessary sensitive link data
@@ -1480,10 +1480,17 @@ the re-entered fields without adopting the link-target session.
 Proof: `call-access-duplicate-review-email-contract.mjs` pins duplicate-link
 review flags, safe review payloads, logged-in account preservation,
 host-verification rate limiting, account-bound confirmation tokens, manual
-re-entry, no pre-confirmation update, and no session rebinding. `npx playwright
-test tests/e2e/call-access-duplicate-review-email.spec.js --workers=1
---reporter=list` passed 3 tests; PHP SQLite wrappers were syntax-checked but
-skipped at runtime because local PHP lacks `pdo_sqlite`.
+re-entry, no pre-confirmation update, no session rebinding, and the duplicate
+race E2E coverage. `call-access-duplicate-review-contract.php` now proves a
+real `pcntl` parallel linked-account/foreign-account session race against
+SQLite: the linked account reopens the personal link, the foreign account is
+review-flagged and receives no session, the link assignment remains unchanged,
+and a later foreign use references the first in-call linked account. `npx
+playwright test tests/e2e/call-access-duplicate-review-email.spec.js
+tests/e2e/call-access-duplicate-race.spec.js --workers=1 --reporter=list`
+passed 5 tests; `npm run test:ci:iam-call-access:static` passed. Host PHP still
+lacks `pdo_sqlite`, so host IAM SQLite wrappers skip cleanly; the duplicate PHP
+proof was validated in `php:8.4-cli` with `pdo_sqlite` and `pcntl`.
 
 ## 9. Anonymous Join Link: User Logged In
 
