@@ -1161,7 +1161,7 @@ The sprint is complete when:
 - [ ] Newly added guest-list entry grants direct join access
 - [ ] Permissions are checked server-side
 - [ ] Manipulated client role does not grant access
-- [ ] Manipulated call ID does not grant access to another call
+- [x] Manipulated call ID does not grant access to another call
 
 ## 4. Calendar Invitation Flow
 
@@ -1304,8 +1304,8 @@ The sprint is complete when:
 
 ## 10. Anonymous Join Link: User Not Logged In
 
-- [ ] Not logged-in user opens anonymous join link
-- [ ] Temporary anonymous account is created
+- [x] Not logged-in user opens anonymous join link
+- [x] Temporary anonymous account is created
 - [ ] Temporary anonymous account lands in lobby
 - [ ] Temporary anonymous account receives no registered user rights
 - [ ] Temporary anonymous account receives no organization rights
@@ -1348,7 +1348,7 @@ The sprint is complete when:
 - [ ] Rejected participant cannot enter call
 - [ ] Admitted participant enters call
 - [x] Admission is stored call-scoped
-- [ ] Admission does not apply to other calls
+- [x] Admission does not apply to other calls
 - [ ] Admission does not apply to other organizations
 - [ ] Temporary user admission applies only to same temporary user / link context
 - [ ] Concurrent admission by multiple moderators creates no error state
@@ -1358,6 +1358,14 @@ The sprint is complete when:
 - [ ] Participant is removed from lobby after aborting join attempt
 - [ ] Participant is not shown twice in lobby
 - [x] Manipulated lobby-admission request without permission is rejected
+
+Proof: `call-access-session-contract` creates a personal access link, persists
+the access/session binding with access ID, call ID, room ID, user ID, and link
+kind, proves the session waits for the bound room until allowed, then enters only
+that bound room. The same contract requests a secondary call ID with the
+access-bound session and proves it does not enter or queue admission for the
+secondary room. It also creates an open anonymous access session with a guest
+name and proves a distinct guest user plus open call-scoped binding is created.
 
 ## 12. Rejoin, Leave, Kick
 
