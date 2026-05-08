@@ -23,7 +23,15 @@ const allowedDirectJoinScenarios = [
 
 const deniedDirectJoinScenarios = [
   'direct_join_org_admin_foreign_organization_denied',
+  'direct_join_system_admin_deleted_call_denied',
+  'direct_join_system_admin_ended_call_denied',
   'direct_join_forged_client_admin_role_denied',
+];
+
+const authDeniedDirectJoinScenarios = [
+  'direct_join_forged_session_token_denied',
+  'direct_join_disabled_user_denied',
+  'direct_join_deleted_user_denied',
 ];
 
 function escapeRegExp(input) {
@@ -39,6 +47,8 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'alpha_normal_user',
     'registered_guest',
     'removed_invited_member',
+    'disabled_registered_user',
+    'deleted_registered_user',
     'temporary_personalized_guest',
     'temporary_anonymous_guest',
   ]));
@@ -62,11 +72,15 @@ test('IAM call-access seed matrix covers required principals without temporary a
   for (const scenarioKey of [
     ...allowedDirectJoinScenarios,
     ...deniedDirectJoinScenarios,
+    ...authDeniedDirectJoinScenarios,
   ]) {
     const scenario = getSeedScenario(scenarioKey);
     const decision = directJoinDecisionForSeedUser(scenario.principal_user_key, scenario.call_key);
     expect(decision.source).toBe(scenario.expected.decision_source);
     expect(decision.allowed).toBe(scenario.expected.state === 'resolved');
+    if (scenario.expected.decision_reason) {
+      expect(decision.reason).toBe(scenario.expected.decision_reason);
+    }
     expect(decision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
     const tenant = tenantSnapshotForSeedUser(scenario.principal_user_key, scenario.call_key);
     expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
@@ -207,30 +221,31 @@ for (const scenarioKey of deniedDirectJoinScenarios) {
   });
 }
 
-test('direct workspace join denies a forged system-admin session token before call resolution', async ({ browser }) => {
-  test.setTimeout(60_000);
-  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
-  const scenarioKey = 'direct_join_forged_session_token_denied';
-  const scenario = getSeedScenario(scenarioKey);
-  const call = getSeedCall(scenario.call_key);
-  const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+for (const scenarioKey of authDeniedDirectJoinScenarios) {
+  test(`direct workspace join denies ${scenarioKey} before call resolution`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
 
-  try {
-    const authResponsePromise = page.waitForResponse((response) => (
-      response.url().includes('/api/auth/session-state')
-      && response.request().method() === 'GET'
-    ));
-    await page.goto(`/workspace/call/${call.id}`);
-    const authResponse = await authResponsePromise;
-    expect(authResponse.status()).toBe(401);
+    try {
+      const authResponsePromise = page.waitForResponse((response) => (
+        response.url().includes('/api/auth/session-state')
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const authResponse = await authResponsePromise;
+      expect(authResponse.status()).toBe(401);
 
-    await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
-    await expect(page.locator('body')).not.toContainText(call.title);
-    expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
-  } finally {
-    await context.close();
-  }
-});
+      await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
+      await expect(page.locator('body')).not.toContainText(call.title);
+      expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
+    } finally {
+      await context.close();
+    }
+  });
+}
 
 async function expectOpenLinkWaitsForHost({ browser, scenarioKey, storedSessionUserKey = '', guestName }) {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
