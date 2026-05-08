@@ -21,6 +21,7 @@ export const USERS_OVERVIEW_MESSAGES = Object.freeze({
   'users.overview.gossip_status_healthy': 'healthy',
   'users.overview.gossip_status_observing': 'observing',
   'users.overview.gossip_status_waiting': 'waiting',
+  'users.overview.gossip_topology_analysis': 'Gossip topology analysis',
   'users.overview.gossip_waiting_for_topology': 'Waiting for live gossip topology telemetry.',
   'users.overview.healthy_cluster_nodes': 'Healthy Cluster Nodes',
   'users.overview.host': 'Host',

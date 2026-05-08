@@ -1,6 +1,7 @@
 import { CALL_WORKSPACE_MESSAGES } from './callWorkspaceMessages.js';
 import { CALENDAR_MESSAGES } from './calendarMessages.js';
 import { GOVERNANCE_MESSAGES } from './governanceMessages.js';
+import { INFRASTRUCTURE_MESSAGES } from './infrastructureMessages.js';
 import { PUBLIC_MESSAGES } from './publicMessages.js';
 import { USERS_OVERVIEW_MESSAGES } from './usersOverviewMessages.js';
 
@@ -8,6 +9,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   ...CALL_WORKSPACE_MESSAGES,
   ...CALENDAR_MESSAGES,
   ...GOVERNANCE_MESSAGES,
+  ...INFRASTRUCTURE_MESSAGES,
   ...PUBLIC_MESSAGES,
   ...USERS_OVERVIEW_MESSAGES,
   'common.back': 'Back',
@@ -440,9 +442,6 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'navigation.governance.roles': 'Roles',
   'navigation.governance.users': 'Users',
   'navigation.overview': 'Overview',
-  'infrastructure.mermaid_source': 'Mermaid source',
-  'infrastructure.provider_tabs': 'Infrastructure provider tabs',
-  'infrastructure.title': 'Infrastructure',
   'page.my_video_calls': 'My Video Calls',
   'page.video_call': 'Video Call',
   'page.video_call_management': 'Video Call Management',

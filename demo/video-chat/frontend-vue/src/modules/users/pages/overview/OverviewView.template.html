@@ -101,7 +101,7 @@
         <aside class="gossip-network-detail">
           <strong>{{ gossipNetworkMap.selectedNode?.label || t('users.overview.gossip_no_node_selected') }}</strong>
           <span>{{ gossipNetworkMap.selectedNode?.detail || t('users.overview.gossip_waiting_for_topology') }}</span>
-          <ul class="gossip-network-analysis" aria-label="Gossip topology analysis">
+          <ul class="gossip-network-analysis" :aria-label="t('users.overview.gossip_topology_analysis')">
             <li v-for="line in gossipNetworkMap.analysis" :key="line">{{ line }}</li>
           </ul>
         </aside>
