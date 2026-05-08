@@ -156,7 +156,7 @@ Tickets:
     screenshare, reconnect, and background filter transitions.
   - Record proof commands and results in this sprint before closing.
 
-- [ ] BGF-08 KingRT Domain Contract Cutover
+- [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
     `app.kingrt.com` as the frontend application domain.
   - Serve production services only on `api.kingrt.com`, `ws.kingrt.com`,
@@ -166,8 +166,12 @@ Tickets:
     `api.app.kingrt.com`; do not keep aliases for the cutover.
   - Add a domain-contract test that fails if any generated service domain ends
     in `.app.kingrt.com`.
+  - Proof: `codex/domain-registry-cutover` deployed to production, deploy smoke
+    passed, live frontend bundle scan found no `*.app.kingrt.com` service
+    origins, and authoritative Hetzner DNS no longer serves old nested A
+    records.
 
-- [ ] BGF-09 Call App Hosting and Semantic Registry
+- [x] BGF-09 Call App Hosting and Semantic Registry
   - Host Whiteboard at `whiteboard.kingrt.com` and resolve future Call Apps as
     `{app_key}.kingrt.com`.
   - Reserve service names such as `app`, `api`, `ws`, `sfu`, `cdn`, `turn`,
@@ -176,19 +180,29 @@ Tickets:
     registration, Semantic DNS, and mothernode join announcements.
   - Allow self-hosted Call App manifests to declare a private mothernode that
     is not part of the KingRT network.
+  - Proof: production deploy serves Whiteboard from `whiteboard.kingrt.com`,
+    uses `registry.kingrt.com` for mothernode/registry configuration, and
+    semantic Call App DNS reserves platform service labels.
 
-- [ ] BGF-10 Whiteboard Marketplace Production Proof
+- [x] BGF-10 Whiteboard Marketplace Production Proof
   - Ensure Whiteboard is visible in the production Marketplace.
   - Ensure the add-to-organization/install action is present and persists
     backend entitlements/installations.
   - Ensure Whiteboard appears in the Call Apps tab for calls owned by that
     organization after installation.
+  - Proof: production Marketplace read-only probe reported one healthy catalog
+    entry, one enabled installation, one active entitlement, and the seeded
+    call listed Whiteboard as available.
 
-- [ ] BGF-11 sicherstellen, dass whiteboard auch bei kingrt.com einer orga zugefügt werden kann
+- [x] BGF-11 sicherstellen, dass whiteboard auch bei kingrt.com einer orga zugefügt werden kann
   - Run the production `kingrt.com` Marketplace journey end to end.
   - Prove that a real organization can add Whiteboard from Marketplace and use
     it inside a call without manual database edits.
   - Record the production proof command/output before closing the sprint.
+  - Proof: production admin Marketplace order/install endpoints were exercised
+    idempotently against `api.kingrt.com`; Whiteboard then appeared in the
+    organization's Call Apps availability response and launched from
+    `whiteboard.kingrt.com`.
 
 ## Sprint: Whiteboard Call App Hardening And Production Integration
 
@@ -1551,11 +1565,11 @@ The sprint is complete when:
 
 ## 23. Organization Membership Changes After Invitation
 
-- [ ] Invited registered user is removed from organization before opening personalized invite link
-- [ ] Removed invited user can still open still-valid personalized invite link
-- [ ] Removed invited user joins only as call-scoped invited guest
-- [ ] Removed invited user does not retain organization-member rights
-- [ ] Removed invited user does not retain organization-admin rights
+- [x] Invited registered user is removed from organization before opening personalized invite link
+- [x] Removed invited user can still open still-valid personalized invite link
+- [x] Removed invited user joins only as call-scoped invited guest
+- [x] Removed invited user does not retain organization-member rights
+- [x] Removed invited user does not retain organization-admin rights
 - [ ] Removed invited user cannot join other organization calls
 - [ ] Removed invited user cannot access organization resources
 - [ ] Removed invited user cannot manage call unless separately owner/moderator
@@ -1578,6 +1592,14 @@ The sprint is complete when:
 - [ ] User invited as normal user but later promoted to org admin receives current org-admin rights if still member
 - [ ] Removed org admin cannot use org-admin rights from stale invite payload
 - [ ] Removed user in lobby loses org-based rights but may remain in lobby through call-scoped invitation
+
+Proof: `call-access-membership-removal-contract` removes tenant, organization,
+and group memberships before opening the personalized link; verifies the link
+still resolves; issues a call-scoped session; authenticates through the
+call-access fallback without recreating membership; proves `tenant_admin` stays
+false; and confirms the admitted user enters only the bound call room. The
+focused Playwright spec `call-access-join.spec.js` proves the public join/session
+browser path and waiting-for-host state.
 
 ## 24. Invite Link Invalidation
 
