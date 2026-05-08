@@ -260,6 +260,130 @@ function videochat_audit_record_call_access_link_open(PDO $pdo, array $accessLin
     ]);
 }
 
+function videochat_audit_record_call_created(PDO $pdo, array $call, int $actorUserId, array $context = []): array
+{
+    $callId = trim((string) ($call['id'] ?? ''));
+    $owner = is_array($call['owner'] ?? null) ? $call['owner'] : [];
+    $participants = is_array($call['participants'] ?? null) ? $call['participants'] : [];
+    $totals = is_array($participants['totals'] ?? null) ? $participants['totals'] : [];
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($call['tenant_id'] ?? null) ? (int) $call['tenant_id'] : null,
+        'event_type' => 'call_created',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => is_numeric($owner['user_id'] ?? null) ? (int) $owner['user_id'] : null,
+        'call_id' => $callId,
+        'resource_type' => 'call',
+        'resource_id' => $callId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId),
+        'payload' => [
+            'audit_scope' => 'iam_call_lifecycle',
+            'action' => 'create_call',
+            'access_mode' => strtolower(trim((string) ($call['access_mode'] ?? 'invite_only'))) ?: 'invite_only',
+            'call_status' => strtolower(trim((string) ($call['status'] ?? 'scheduled'))) ?: 'scheduled',
+            'internal_participant_count' => max(0, (int) (($totals['internal'] ?? null) ?: 0)),
+            'external_participant_count' => max(0, (int) (($totals['external'] ?? null) ?: 0)),
+            'title_logged' => false,
+            'raw_guest_identifiers_logged' => false,
+        ] + videochat_audit_sanitize_payload($context),
+    ]);
+}
+
+function videochat_audit_record_call_access_invitation_created(PDO $pdo, array $accessLink, array $call, ?int $actorUserId = null, ?array $targetUser = null, array $context = []): array
+{
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_invitation_created',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'create_invitation',
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'call_status' => strtolower(trim((string) ($call['status'] ?? ''))) ?: 'unknown',
+            'target_user_resolved' => is_array($targetUser),
+            'raw_link_identifier_logged' => false,
+            'raw_guest_identity_logged' => false,
+        ] + videochat_audit_sanitize_payload($context),
+    ]);
+}
+
+function videochat_audit_record_temporary_account_created(PDO $pdo, array $user, ?int $tenantId, array $context = []): array
+{
+    $userId = is_numeric($user['id'] ?? null) ? (int) $user['id'] : 0;
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_int($tenantId) && $tenantId > 0 ? $tenantId : null,
+        'event_type' => 'temporary_account_created',
+        'target_user_id' => $userId > 0 ? $userId : null,
+        'call_id' => trim((string) ($context['call_id'] ?? '')),
+        'resource_type' => 'temporary_call_account',
+        'resource_fingerprint' => videochat_audit_fingerprint('temporary-account:' . $userId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'create_temporary_account',
+            'account_type' => 'guest',
+            'source' => strtolower(trim((string) ($context['source'] ?? 'call_access'))) ?: 'call_access',
+            'tenant_membership_attached' => (bool) ($context['tenant_membership_attached'] ?? false),
+            'raw_guest_identity_logged' => false,
+            'raw_link_identifier_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_access_account_compared(PDO $pdo, array $accessLink, array $call, ?array $targetUser, int $actorUserId, string $outcome, array $context = []): array
+{
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_account_compared',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint((string) ($accessLink['id'] ?? '')),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'compare_link_account_to_session',
+            'comparison_outcome' => strtolower(trim($outcome)) ?: 'unknown',
+            'stage' => strtolower(trim((string) ($context['stage'] ?? 'session_issue'))) ?: 'session_issue',
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'target_user_resolved' => is_array($targetUser),
+            'host_name_verified' => (bool) ($context['host_name_verified'] ?? false),
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+            'foreign_account_data_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_access_host_verification(PDO $pdo, array $accessLink, array $call, int $actorUserId, string $outcome, array $context = []): array
+{
+    $normalized = strtolower(trim($outcome));
+    $eventType = $normalized === 'correct_host_name'
+        ? 'call_access_host_name_verified'
+        : ($normalized === 'rate_limited' ? 'call_access_host_name_verification_rate_limited' : 'call_access_host_name_verification_failed');
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => $eventType,
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint((string) ($accessLink['id'] ?? '')),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'verify_host_name',
+            'outcome' => $normalized ?: 'wrong_host_name',
+            'host_name_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+        ] + videochat_audit_sanitize_payload($context),
+    ]);
+}
+
 function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $accessLink, array $call, array $targetUser, string $sessionId): array
 {
     return videochat_audit_record_event($pdo, [
