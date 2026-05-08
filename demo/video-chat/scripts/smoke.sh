@@ -612,6 +612,11 @@ run_step "backend launcher syntax" bash -lc "bash -n '${BACKEND_DIR}/run-dev.sh'
 run_step "backend php syntax" bash -lc "php -l '${BACKEND_DIR}/public/index.php'"
 run_step "backend server php syntax" bash -lc "php -l '${BACKEND_DIR}/server.php'"
 run_step "frontend launcher syntax" bash -lc "node --check '${FRONTEND_DIR}/scripts/dev-server.mjs'"
+if [[ "${VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE:-0}" != "1" ]]; then
+  run_step "IAM call-access CI-safe contract gate" bash -lc "'${ROOT_DIR}/scripts/iam-call-access-ci-gate.sh' --available"
+else
+  log "SKIP: IAM call-access CI-safe contract gate disabled via VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1"
+fi
 run_step "security policy: demo-scope hardening" bash -lc "'${ROOT_DIR}/scripts/check-security-hardening-policy.sh'"
 run_step "deployment decision: no internal edge pack" bash -lc "'${ROOT_DIR}/scripts/check-edge-deployment-decision.sh'"
 run_step "deployment baseline: optional TURN relay" bash -lc "'${ROOT_DIR}/scripts/check-turn-baseline.sh'"
