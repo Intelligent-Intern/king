@@ -1,0 +1,286 @@
+{
+  "matrix_version": "v1.0.0",
+  "matrix_name": "king-video-chat-iam-call-access-seeding",
+  "release_policy": {
+    "mode": "deterministic_e2e_seed_contract",
+    "tracker": "SPRINT.md",
+    "sprint_scope": "IAM call-access E2E seeding foundation",
+    "notes": "This matrix defines non-production, deterministic seed identities and calls for browser E2E routing. It contains no SDP, media payloads, production tokens, or reusable credentials."
+  },
+  "test_bindings": {
+    "live_backend_playwright_spec": "frontend-vue/tests/e2e/call-access-join.spec.js",
+    "seed_matrix_playwright_spec": "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
+    "helper": "frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js",
+    "isolated_from_existing_matrix_helpers": [
+      "frontend-vue/tests/e2e/helpers/videochatMatrixHarness.js"
+    ]
+  },
+  "tenants": [
+    {
+      "key": "alpha",
+      "id": 5101,
+      "uuid": "tenant-alpha-e2e",
+      "slug": "iam-alpha",
+      "label": "IAM Alpha Organization"
+    },
+    {
+      "key": "beta",
+      "id": 5102,
+      "uuid": "tenant-beta-e2e",
+      "slug": "iam-beta",
+      "label": "IAM Beta Organization"
+    }
+  ],
+  "users": [
+    {
+      "key": "system_admin",
+      "id": 6101,
+      "email": "iam-system-admin@example.test",
+      "display_name": "IAM System Admin",
+      "role": "admin",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": true,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "member" },
+        { "tenant_key": "beta", "role": "member" }
+      ]
+    },
+    {
+      "key": "alpha_org_admin",
+      "id": 6102,
+      "email": "iam-alpha-admin@example.test",
+      "display_name": "Alpha Org Admin",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "admin" }
+      ]
+    },
+    {
+      "key": "beta_org_admin",
+      "id": 6103,
+      "email": "iam-beta-admin@example.test",
+      "display_name": "Beta Org Admin",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "beta", "role": "admin" }
+      ]
+    },
+    {
+      "key": "alpha_call_owner",
+      "id": 6104,
+      "email": "iam-alpha-owner@example.test",
+      "display_name": "Alpha Call Owner",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "member" }
+      ]
+    },
+    {
+      "key": "alpha_normal_user",
+      "id": 6105,
+      "email": "iam-alpha-user@example.test",
+      "display_name": "Alpha Normal User",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "member" }
+      ]
+    },
+    {
+      "key": "registered_guest",
+      "id": 6106,
+      "email": "iam-registered-guest@example.test",
+      "display_name": "Registered Guest",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": []
+    },
+    {
+      "key": "removed_invited_member",
+      "id": 6107,
+      "email": "iam-removed-member@example.test",
+      "display_name": "Removed Invited Member",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [],
+      "removed_memberships": [
+        { "tenant_key": "alpha", "role": "member" }
+      ]
+    },
+    {
+      "key": "temporary_personalized_guest",
+      "id": 6201,
+      "email": "iam-temp-personalized@example.test",
+      "display_name": "Temporary Personalized Guest",
+      "role": "user",
+      "account_type": "guest",
+      "is_guest": true,
+      "system_admin": false,
+      "temporary": true,
+      "memberships": []
+    },
+    {
+      "key": "temporary_anonymous_guest",
+      "id": 6202,
+      "email": "iam-temp-anonymous@example.test",
+      "display_name": "Temporary Anonymous Guest",
+      "role": "user",
+      "account_type": "guest",
+      "is_guest": true,
+      "system_admin": false,
+      "temporary": true,
+      "memberships": []
+    }
+  ],
+  "calls": [
+    {
+      "key": "alpha_active",
+      "id": "20000000-0000-4000-8000-000000000101",
+      "room_id": "iam-alpha-room",
+      "tenant_key": "alpha",
+      "title": "IAM Alpha Access Matrix Call",
+      "status": "active",
+      "starts_at": "2026-05-08T10:00:00.000Z",
+      "ends_at": "2026-05-08T11:00:00.000Z",
+      "owner_user_key": "alpha_call_owner",
+      "guest_list_user_keys": [
+        "registered_guest"
+      ]
+    },
+    {
+      "key": "beta_active",
+      "id": "20000000-0000-4000-8000-000000000102",
+      "room_id": "iam-beta-room",
+      "tenant_key": "beta",
+      "title": "IAM Beta Access Matrix Call",
+      "status": "active",
+      "starts_at": "2026-05-08T10:00:00.000Z",
+      "ends_at": "2026-05-08T11:00:00.000Z",
+      "owner_user_key": "beta_org_admin",
+      "guest_list_user_keys": []
+    },
+    {
+      "key": "tenantless_active",
+      "id": "20000000-0000-4000-8000-000000000103",
+      "room_id": "iam-tenantless-room",
+      "tenant_key": null,
+      "title": "IAM Tenantless Access Matrix Call",
+      "status": "active",
+      "starts_at": "2026-05-08T10:00:00.000Z",
+      "ends_at": "2026-05-08T11:00:00.000Z",
+      "owner_user_key": "system_admin",
+      "guest_list_user_keys": []
+    }
+  ],
+  "access_links": [
+    {
+      "key": "removed_member_personal",
+      "id": "10000000-0000-4000-8000-000000000101",
+      "link_kind": "personal",
+      "call_key": "alpha_active",
+      "target_user_key": "removed_invited_member",
+      "join_path": "/join/10000000-0000-4000-8000-000000000101",
+      "requires_admission": true,
+      "direct_guest_list_entry": false
+    },
+    {
+      "key": "temporary_personalized",
+      "id": "10000000-0000-4000-8000-000000000102",
+      "link_kind": "personal",
+      "call_key": "alpha_active",
+      "target_user_key": "temporary_personalized_guest",
+      "join_path": "/join/10000000-0000-4000-8000-000000000102",
+      "requires_admission": true,
+      "direct_guest_list_entry": false
+    },
+    {
+      "key": "alpha_open",
+      "id": "10000000-0000-4000-8000-000000000103",
+      "link_kind": "open",
+      "call_key": "alpha_active",
+      "target_user_key": null,
+      "anonymous_user_key": "temporary_anonymous_guest",
+      "join_path": "/join/10000000-0000-4000-8000-000000000103",
+      "requires_admission": true,
+      "direct_guest_list_entry": false
+    }
+  ],
+  "scenarios": [
+    {
+      "key": "call_scoped_removed_member_personal_waits_for_host",
+      "sprint_groups": ["23"],
+      "link_key": "removed_member_personal",
+      "principal_user_key": "removed_invited_member",
+      "expected": {
+        "session_kind": "call_scoped",
+        "tenant_role": "member",
+        "tenant_admin": false,
+        "platform_admin": false,
+        "requires_admission": true,
+        "must_not_restore_membership": true
+      }
+    },
+    {
+      "key": "system_admin_join_any_organization_call_without_guest_list",
+      "sprint_groups": ["18"],
+      "principal_user_key": "system_admin",
+      "call_keys": ["alpha_active", "beta_active", "tenantless_active"],
+      "expected": {
+        "guest_list_required": false,
+        "can_manage_lobby": true,
+        "can_admit": true,
+        "can_reject": true,
+        "can_kick": true,
+        "tenant_admin": true,
+        "platform_admin": true
+      }
+    },
+    {
+      "key": "temporary_personalized_guest_has_no_system_admin_rights",
+      "sprint_groups": ["18"],
+      "link_key": "temporary_personalized",
+      "principal_user_key": "temporary_personalized_guest",
+      "expected": {
+        "temporary": true,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "anonymous_temporary_guest_has_no_system_admin_rights",
+      "sprint_groups": ["9", "10", "18"],
+      "link_key": "alpha_open",
+      "principal_user_key": "temporary_anonymous_guest",
+      "expected": {
+        "temporary": true,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    }
+  ]
+}
