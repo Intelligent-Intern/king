@@ -1524,7 +1524,7 @@ passed 11 tests.
 - [x] After admission, anonymous temporary user enters call
 - [x] If admitted anonymous user leaves and was not kicked, they can rejoin
 - [x] Rejoin after admission does not require another approval
-- [ ] If anonymous user was kicked, rejoin requires approval or is blocked
+- [x] If anonymous user was kicked, rejoin requires approval or is blocked
 - [ ] Anonymous temporary user cannot gain rights by changing display name
 - [ ] Multiple anonymous users through same link are separate temporary participants
 - [x] Anonymous link does not reveal guest list or account data
@@ -1536,7 +1536,7 @@ anonymous path: the anonymous link creates a least-privilege temporary guest,
 keeps the user out of moderation, platform-admin, tenant-admin, and guest-list
 visibility, places the guest in the lobby, admits the guest into the call, then
 allows leave and same-session rejoin without a second approval. The focused
-integrated run passed 2 tests.
+integrated run also covers kicked anonymous rejoin denial and passed 6 tests.
 
 ## 11. Lobby and Admission
 
@@ -1599,11 +1599,11 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 - [x] Rejoin works after short network interruption
 - [ ] Rejoin works after closing tab and reopening if session remains
 - [ ] Rejoin does not work as another user with same temporary context if account binding is violated
-- [ ] Kicked temporary user cannot directly rejoin
-- [ ] Kicked temporary user lands back in lobby or is blocked
+- [x] Kicked temporary user cannot directly rejoin
+- [x] Kicked temporary user lands back in lobby or is blocked
 - [ ] Kicked logged-in user cannot immediately reenter through same link if kick overrides access
-- [ ] Kick state overrides previous admission
-- [ ] Kick state is stored server-side
+- [x] Kick state overrides previous admission
+- [x] Kick state is stored server-side
 - [ ] Kick state is scoped to affected call if intended
 - [ ] Kick state is scoped to affected user / temporary account
 - [ ] Registered authorized user can rejoin after leaving
@@ -1622,7 +1622,11 @@ playwright test tests/e2e/call-access-rejoin-kick-membership.spec.js
 contracts were syntax-checked but skipped at runtime because local PHP lacks
 `pdo_sqlite`. `call-access-main-journey-smoke.spec.js` also proves the admitted
 anonymous temporary user can leave, reopen the same call, and rejoin without a
-second approval in the full lobby-to-call journey.
+second approval in the full lobby-to-call journey. The backend
+`call-access-rejoin-kick-contract.php` and the same browser spec now prove
+kicked temporary guests cannot directly rejoin, are routed back to renewed
+approval/blocked state, and that the persisted kick state overrides previous
+admission.
 
 ## 13. Temporary Moderators
 
@@ -2253,7 +2257,7 @@ temporary account removal plus reschedule/delete/end audit records.
 - [x] Normal user without guest-list entry lands in lobby or is denied
 - [ ] User creates own call, becomes owner, transfers ownership, loses call-admin rights
 - [ ] Organization admin creates call, transfers ownership, keeps admin rights
-- [ ] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
+- [x] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
 - [ ] Invited user is removed from organization before opening link, then joins as call-scoped invited guest
 - [ ] Invite link is invalidated before use and cannot be used
 - [ ] Call is rescheduled and stale link no longer grants stale access
@@ -2267,7 +2271,8 @@ Proof: `call-access-main-journey-smoke.spec.js` covers
 `e2e_journey_010_logged_out_user_anonymous_link_lobby_admit_rejoin` in one
 integrated browser run. `npx playwright test
 tests/e2e/call-access-main-journey-smoke.spec.js --workers=1 --reporter=list`
-passed 2 tests.
+passed 6 tests including the temporary-user kick and renewed-approval denial
+path.
 
 ---
 
@@ -2421,7 +2426,7 @@ against duplicate join/session request loops.
 - [ ] `e2e_anon_logged_out_006_admin_can_admit_anonymous_guest`
 - [ ] `e2e_anon_logged_out_007_unauthorized_user_cannot_admit_guest`
 - [x] `e2e_anon_logged_out_008_admitted_guest_can_rejoin`
-- [ ] `e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin`
+- [x] `e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin`
 - [ ] `e2e_anon_logged_out_010_multiple_anonymous_guests_are_separate`
 
 ## Test Group: Lobby
@@ -2444,8 +2449,8 @@ against duplicate join/session request loops.
 - [x] `e2e_rejoin_001_admitted_temp_user_can_rejoin`
 - [ ] `e2e_rejoin_002_rejoin_after_refresh`
 - [ ] `e2e_rejoin_003_rejoin_after_network_interruption`
-- [ ] `e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin`
-- [ ] `e2e_rejoin_005_kick_overrides_previous_admission`
+- [x] `e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin`
+- [x] `e2e_rejoin_005_kick_overrides_previous_admission`
 - [ ] `e2e_rejoin_006_registered_guest_can_rejoin`
 - [ ] `e2e_rejoin_007_rejoin_after_guest_list_removal_blocked_or_lobby`
 - [ ] `e2e_rejoin_008_rejoin_after_admin_role_removed_uses_new_permissions`
@@ -2706,7 +2711,7 @@ against duplicate join/session request loops.
 - [x] `e2e_journey_015_normal_non_guest_user_lobby_or_denied`
 - [ ] `e2e_journey_016_normal_user_owner_transfer_loses_admin`
 - [ ] `e2e_journey_017_org_admin_owner_transfer_keeps_admin`
-- [ ] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
+- [x] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
 - [ ] `e2e_journey_019_removed_org_member_invite_becomes_call_scoped_guest`
 - [ ] `e2e_journey_020_invalidated_invite_link_denied`
 - [x] `e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid`
