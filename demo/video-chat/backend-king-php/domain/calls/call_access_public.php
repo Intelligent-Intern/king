@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
+
 function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
 {
     $normalizedAccessId = videochat_normalize_call_access_id($accessId);
@@ -103,6 +105,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
     if (!is_array($freshLink)) {
         $freshLink = $accessLink;
     }
+    videochat_audit_record_call_access_link_open($pdo, $freshLink, $call, $targetUser);
 
     return [
         'ok' => true,

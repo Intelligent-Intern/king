@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../users/user_settings.php';
 
 function videochat_issue_session_for_call_access(
@@ -247,6 +248,9 @@ SQL
             'access_link' => $accessLink,
             'call' => $call,
         ];
+    }
+    if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
+        videochat_audit_record_call_scoped_access_continued($pdo, $accessLink, $call, $targetUser, $sessionId);
     }
 
     $freshLink = videochat_fetch_call_access_link($pdo, (string) ($accessLink['id'] ?? ''), $tenantId);
