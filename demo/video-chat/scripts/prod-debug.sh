@@ -30,7 +30,10 @@ redact_stream() {
     -e 's/(bearer[[:space:]]+)[A-Za-z0-9._~+\/=-]+/\1[REDACTED]/Ig' \
     -e 's/([A-Za-z_][A-Za-z0-9_]*(TOKEN|SECRET|PASSWORD|PASS|KEY|CREDENTIAL|COOKIE|SESSION)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's/("(token|secret|password|pass|key|credential|cookie|session)[^"]*"[[:space:]]*:[[:space:]]*")[^"]+/\1[REDACTED]/Ig' \
-    -e 's/(([?&][^=&[:space:]]*(token|secret|password|pass|key|credential|cookie|session)[^=&[:space:]]*=))[^&[:space:]]+/\1[REDACTED]/Ig'
+    -e 's/(([?&][^=&[:space:]]*(token|secret|password|pass|key|credential|cookie|session)[^=&[:space:]]*=))[^&[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's/("(media_)?(payload|frame|frame_data|image_data|encoded|binary|bytes)"[[:space:]]*:[[:space:]]*")[^"]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig' \
+    -e 's/(data:(image|video|audio)\/[A-Za-z0-9.+-]+;base64,)[A-Za-z0-9+\/=._~-]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig' \
+    -e 's/([A-Za-z_][A-Za-z0-9_]*(MEDIA_PAYLOAD|FRAME_DATA|IMAGE_DATA|ENCODED_FRAME|BINARY_FRAME)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig'
 }
 
 load_local_env() {
@@ -62,6 +65,10 @@ section() {
 
 http_probe() {
   local label="$1" url="$2" method="${3:-GET}" body code
+  if [[ "${VIDEOCHAT_PROD_DEBUG_DRY_RUN:-0}" == "1" ]]; then
+    printf '%-28s DRY-RUN %s %s\n' "${label}" "${method}" "${url}" | redact_stream
+    return 0
+  fi
   body="$(mktemp)"
   if [[ "${method}" == "HEAD" ]]; then
     code="$(curl -sS -I --max-time "${TIMEOUT}" -o "${body}" -w '%{http_code}' "${url}" || true)"
@@ -78,6 +85,10 @@ http_probe() {
 
 websocket_probe() {
   local label="$1" url="$2" headers body code upgrade curl_url
+  if [[ "${VIDEOCHAT_PROD_DEBUG_DRY_RUN:-0}" == "1" ]]; then
+    printf '%-28s DRY-RUN websocket %s\n' "${label}" "${url}" | redact_stream
+    return 0
+  fi
   curl_url="${url/wss:\/\//https://}"
   headers="$(mktemp)"
   body="$(mktemp)"
@@ -106,6 +117,12 @@ ssh_args() {
 }
 
 remote_readonly_probe() {
+  if [[ "${VIDEOCHAT_PROD_DEBUG_DRY_RUN:-0}" == "1" ]]; then
+    section "Remote Containers And Recent Diagnostics"
+    log "DRY-RUN: remote SSH probes skipped; read-only compose ps/logs would execute when enabled"
+    return 0
+  fi
+
   [[ -n "${DEPLOY_HOST}" ]] || {
     log "remote SSH probes skipped; VIDEOCHAT_DEPLOY_HOST is not set"
     return 0
@@ -130,7 +147,20 @@ redact_stream() {
     -e 's/(bearer[[:space:]]+)[A-Za-z0-9._~+\/=-]+/\1[REDACTED]/Ig' \
     -e 's/([A-Za-z_][A-Za-z0-9_]*(TOKEN|SECRET|PASSWORD|PASS|KEY|CREDENTIAL|COOKIE|SESSION)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's/("(token|secret|password|pass|key|credential|cookie|session)[^"]*"[[:space:]]*:[[:space:]]*")[^"]+/\1[REDACTED]/Ig' \
-    -e 's/(([?&][^=&[:space:]]*(token|secret|password|pass|key|credential|cookie|session)[^=&[:space:]]*=))[^&[:space:]]+/\1[REDACTED]/Ig'
+    -e 's/(([?&][^=&[:space:]]*(token|secret|password|pass|key|credential|cookie|session)[^=&[:space:]]*=))[^&[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's/("(media_)?(payload|frame|frame_data|image_data|encoded|binary|bytes)"[[:space:]]*:[[:space:]]*")[^"]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig' \
+    -e 's/(data:(image|video|audio)\/[A-Za-z0-9.+-]+;base64,)[A-Za-z0-9+\/=._~-]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig' \
+    -e 's/([A-Za-z_][A-Za-z0-9_]*(MEDIA_PAYLOAD|FRAME_DATA|IMAGE_DATA|ENCODED_FRAME|BINARY_FRAME)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig'
+}
+filter_recent_logs() {
+  label="\$1"
+  pattern="\$2"
+  echo
+  echo "# filtered recent logs: \${label}"
+  "\${COMPOSE[@]}" logs --no-color --tail "\${LOG_LINES}" 2>&1 \
+    | grep -Eai "\${pattern}" \
+    | tail -n "\${LOG_LINES}" \
+    | redact_stream || true
 }
 if [ ! -d "\${VIDEOCHAT_DIR}" ]; then
   echo "remote checkout missing: \${VIDEOCHAT_DIR}"
@@ -147,12 +177,13 @@ else
 fi
 echo "# docker compose ps"
 "\${COMPOSE[@]}" ps 2>&1 | redact_stream || true
-echo
-echo "# filtered recent logs: call health, reconnect, media, SFU, call-app diagnostics"
-"\${COMPOSE[@]}" logs --no-color --tail "\${LOG_LINES}" 2>&1 \
-  | grep -Eai 'call|reconnect|media|sfu|websocket|ws|lobby|diagnostic|health|runtime|call[_ -]?app|marketplace|whiteboard|error|warn|fail' \
-  | tail -n "\${LOG_LINES}" \
-  | redact_stream || true
+filter_recent_logs "call health and runtime status" 'call|lobby|diagnostic|health|runtime|room|presence|error|warn|fail'
+filter_recent_logs "media reconnect" 'media[_ -]?reconnect|reconnect.*media|foreground[_ -]?reconnect|local[_ -]?media.*reconnect|stale_local_media_capture_discarded'
+filter_recent_logs "screen-share reconnect exhaustion" 'local_screen_share_sfu_reconnect_exhausted|screen[_ -]?share.*(reconnect|exhaust|stopped|disconnect)|screen_share.*reconnect'
+filter_recent_logs "stale local media capture discard" 'stale_local_media_capture_discarded|local_media_cleanup_preserved_active_track|stale.*local.*media.*discard'
+filter_recent_logs "audio/video track loss" '(audio|video).*(track|capture).*(ended|lost|stop|stopped|mute|failed|error)|track.*(lost|ended|stopped)|getUserMedia|devicechange|NotReadableError|NotAllowedError'
+filter_recent_logs "SFU reconnect and websocket transport" 'sfu.*(reconnect|disconnect|websocket|ws|close|closed|error|fail)|local_screen_share_sfu_reconnect|sfu_reconnect|websocket.*sfu'
+filter_recent_logs "Call App frame and CSP errors" 'call[_ -]?app.*(frame|iframe|csp|postmessage|postMessage|sandbox|origin|launch|error|fail)|Content-Security-Policy|Allow-CSP-From|frame-ancestors|postMessage'
 REMOTE
 }
 

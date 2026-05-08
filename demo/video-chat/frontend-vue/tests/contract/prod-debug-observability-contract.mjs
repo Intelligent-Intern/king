@@ -23,6 +23,8 @@ assert.match(script, /no deploy, restart, DB write, DNS change, or admin action/
 assert.match(script, /LOCAL_ENV_FILE=.*\.env\.local/, 'prod-debug must use existing .env.local as its local source');
 assert.match(script, /redact_stream\(\)/, 'prod-debug must redact output');
 assert.match(script, /TOKEN\|SECRET\|PASSWORD\|PASS\|KEY\|CREDENTIAL\|COOKIE\|SESSION/, 'prod-debug redaction must cover token/password-like values');
+assert.match(script, /REDACTED_MEDIA_PAYLOAD/, 'prod-debug must redact media payload-like fields before printing logs');
+assert.match(script, /VIDEOCHAT_PROD_DEBUG_DRY_RUN/, 'prod-debug must expose a dry-run path for local proof without network or SSH');
 
 for (const endpoint of [
   '/api/runtime',
@@ -38,14 +40,23 @@ for (const label of [
   'marketplace apps',
   'call-app host',
   'filtered recent logs',
+  'media reconnect',
+  'screen-share reconnect exhaustion',
+  'stale local media capture discard',
+  'audio/video track loss',
+  'SFU reconnect and websocket transport',
+  'Call App frame and CSP errors',
 ]) {
   assert.ok(script.includes(label), `prod-debug must include ${label}`);
 }
 
 assert.match(script, /docker compose[\s\S]* ps/, 'remote probe must inspect compose container status');
-assert.match(script, /docker compose[\s\S]* logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
-assert.match(script, /grep -Eai 'call\|reconnect\|media\|sfu/, 'remote log scan must include call health, reconnect, media, and SFU terms');
-assert.match(script, /call\[_ -\]\?app\|marketplace\|whiteboard/, 'remote log scan must include call-app status terms');
+assert.match(script, /\$\{COMPOSE\[@\]\}" logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
+assert.match(script, /filter_recent_logs\(\)/, 'remote log filtering must label each investigation category');
+assert.match(script, /stale_local_media_capture_discarded/, 'remote log scan must include stale local media capture discard diagnostics');
+assert.match(script, /local_screen_share_sfu_reconnect_exhausted/, 'remote log scan must include screen-share SFU reconnect exhaustion diagnostics');
+assert.match(script, /\(audio\|video\).*track/, 'remote log scan must include audio/video track-loss terms');
+assert.match(script, /Content-Security-Policy\|Allow-CSP-From\|frame-ancestors\|postMessage/, 'remote log scan must include Call App frame and CSP diagnostics');
 
 const forbiddenPatterns = [
   /\bcurl\b[^\n]*\s-X\s*(POST|PUT|PATCH|DELETE)\b/i,
@@ -68,7 +79,7 @@ assert.match(
 );
 assert.match(
   readme,
-  /read-only[\s\S]*prod-debug\.sh[\s\S]*does not deploy,\s*restart,\s*write DB data,\s*change DNS,\s*or use admin actions/i,
+  /read-only[\s\S]*media reconnect[\s\S]*screen-share[\s\S]*stale local media capture[\s\S]*audio\/video track loss[\s\S]*SFU reconnect[\s\S]*Call App frame\/CSP[\s\S]*prod-debug\.sh[\s\S]*does not deploy,\s*restart,\s*write DB data,\s*change DNS,\s*or use admin actions/i,
   'README must document prod-debug as read-only and non-mutating',
 );
 
