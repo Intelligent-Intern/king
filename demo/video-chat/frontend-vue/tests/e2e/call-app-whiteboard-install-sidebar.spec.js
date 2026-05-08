@@ -1,6 +1,21 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const CALL_ID = 'call-whiteboard-install-proof';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const whiteboardPublicRoot = path.resolve(__dirname, '../../../../call-app/whiteboard/public');
+const bridgeProtocol = 'king.call_app.iframe.v1';
+
+async function readWhiteboardAssets() {
+  const [html, css, js] = await Promise.all([
+    readFile(path.join(whiteboardPublicRoot, 'index.html'), 'utf8'),
+    readFile(path.join(whiteboardPublicRoot, 'whiteboard.css'), 'utf8'),
+    readFile(path.join(whiteboardPublicRoot, 'whiteboard.js'), 'utf8'),
+  ]);
+  return { html, css, js };
+}
 
 function jsonResponse(payload, status = 200) {
   return {
@@ -13,7 +28,8 @@ function jsonResponse(payload, status = 200) {
   };
 }
 
-function hostHtml() {
+function hostHtml(baseURL) {
+  const whiteboardEntry = `${baseURL.replace(/\/+$/, '')}/__whiteboard_install_sidebar/whiteboard/index.html`;
   return `<!doctype html>
     <html lang="en">
       <head>
@@ -34,6 +50,18 @@ function hostHtml() {
           .marketplace {
             padding: 20px;
             border-right: 1px solid #03275a;
+          }
+          .call-host {
+            display: grid;
+            gap: 10px;
+            margin-top: 18px;
+          }
+          iframe {
+            width: 100%;
+            max-width: 780px;
+            aspect-ratio: 16 / 9;
+            border: 1px solid #03275a;
+            background: #00052d;
           }
           .sidebar {
             min-width: 0;
@@ -161,6 +189,15 @@ function hostHtml() {
             <h1>Marketplace</h1>
             <p id="marketplaceState">Whiteboard is not installed.</p>
             <button id="installWhiteboard" type="button">Install for organization</button>
+            <section class="call-host" aria-label="Whiteboard host">
+              <h2>Whiteboard host</h2>
+              <iframe
+                id="whiteboardFrame"
+                name="whiteboard"
+                title="Whiteboard Call App"
+                sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads"
+                src="${whiteboardEntry}"></iframe>
+            </section>
           </section>
           <section class="sidebar" aria-label="Call Apps">
             <button id="openCallApps" type="button">Call Apps</button>
@@ -170,9 +207,14 @@ function hostHtml() {
         <script>
           (() => {
             const callId = ${JSON.stringify(CALL_ID)};
+            const bridgeProtocol = ${JSON.stringify(bridgeProtocol)};
+            const appSessionId = 'session-whiteboard-install-proof';
+            const documentId = 'document-whiteboard-sidebar-proof';
             const state = {
               installed: false,
               activeSession: null,
+              whiteboardLaunchCount: 0,
+              whiteboardReady: false,
               participants: [
                 { userId: 1, displayName: 'Owner' },
                 { userId: 2, displayName: 'Participant' },
@@ -185,9 +227,27 @@ function hostHtml() {
                 return {
                   installed: state.installed,
                   activeSession: state.activeSession,
+                  whiteboardLaunchCount: state.whiteboardLaunchCount,
+                  whiteboardReady: state.whiteboardReady,
+                  whiteboardFrameSrc: document.getElementById('whiteboardFrame')?.src || '',
                   grants: Object.fromEntries(state.grants),
                   requests: state.requests.slice(),
                 };
+              },
+              launchWhiteboard,
+              showRemoteCursor(label = 'Owner') {
+                postToWhiteboard('call_app.presence.update', {
+                  actor_id: 'user_owner_sidebar_e2e',
+                  payload_type: 'cursor.move',
+                  payload: {
+                    actor_id: 'user_owner_sidebar_e2e',
+                    display_name: label,
+                    label,
+                    x: 640,
+                    y: 190,
+                    color: '#00652f',
+                  },
+                });
               },
             };
 
@@ -210,6 +270,56 @@ function hostHtml() {
 
             function grantStateFor(userId) {
               return state.grants.get(String(userId)) || 'allowed';
+            }
+
+            function whiteboardWindow() {
+              return document.getElementById('whiteboardFrame')?.contentWindow || null;
+            }
+
+            function postToWhiteboard(type, payload = {}) {
+              const target = whiteboardWindow();
+              if (!target) return;
+              target.postMessage({
+                type,
+                bridge_protocol: bridgeProtocol,
+                app_key: 'whiteboard',
+                app_session_id: appSessionId,
+                ...payload,
+              }, '*');
+            }
+
+            function launchWhiteboard() {
+              state.whiteboardLaunchCount += 1;
+              state.whiteboardReady = false;
+              postToWhiteboard('call_app.launch', {
+                call_id: callId,
+                app_version: '0.1.0',
+                document_id: documentId,
+                launch_token: 'launch-sidebar-proof-' + state.whiteboardLaunchCount,
+                launch_token_id: 'launch-sidebar-proof',
+                expires_at: '2030-01-01T00:00:00.000Z',
+                capabilities: [
+                  'call_apps.launch',
+                  'call_apps.crdt.read',
+                  'call_apps.crdt.append',
+                  'call_apps.presence.publish',
+                ],
+                launch_context: {
+                  bridge_protocol: bridgeProtocol,
+                  iframe_origin_policy: 'sandbox_opaque_origin',
+                  expected_message_origin: 'null',
+                  grant_state: 'allowed',
+                  participant: {
+                    actor_id: 'user_sidebar_viewer_e2e',
+                    display_name: 'Sidebar Viewer',
+                  },
+                  app: {
+                    name: 'Whiteboard',
+                    category: 'whiteboard',
+                    crdt_protocol: 'king.call_app.crdt.v1',
+                  },
+                },
+              });
             }
 
             function renderAvailability(apps) {
@@ -300,6 +410,7 @@ function hostHtml() {
                 state.grants.set(String(grant.user_id), grant.grant_state);
               }
               renderAccess();
+              launchWhiteboard();
             }
 
             async function toggleGrant(userId) {
@@ -324,13 +435,58 @@ function hostHtml() {
 
             document.getElementById('installWhiteboard').addEventListener('click', installWhiteboard);
             document.getElementById('openCallApps').addEventListener('click', loadAvailability);
+            document.getElementById('whiteboardFrame').addEventListener('load', () => {
+              state.whiteboardReady = false;
+            });
+            window.addEventListener('message', (event) => {
+              const message = event.data && typeof event.data === 'object' ? event.data : null;
+              if (!message || message.bridge_protocol !== bridgeProtocol || message.app_key !== 'whiteboard') return;
+              if (message.type === 'call_app.ready') {
+                state.whiteboardReady = true;
+                return;
+              }
+              if (message.type === 'call_app.crdt.bootstrap.request') {
+                postToWhiteboard('call_app.crdt.bootstrap.response', {
+                  request_id: String(message.request_id || ''),
+                  result: {
+                    ok: true,
+                    state: 'listed',
+                    grant_state: 'allowed',
+                    document: {
+                      document_id: documentId,
+                      schema_version: 'king.call_app.crdt.v1',
+                      snapshot: {
+                        kind: 'whiteboard.snapshot.v1',
+                        state: { strokes: [], shapes: [], texts: [], notes: [] },
+                      },
+                      snapshot_clock: 0,
+                      compacted_through_clock: 0,
+                      op_count: 0,
+                    },
+                    ops: [],
+                    replay_cursor: { after_clock: 0 },
+                  },
+                });
+                return;
+              }
+              if (message.type === 'call_app.crdt.ops.request') {
+                postToWhiteboard('call_app.crdt.ops.response', {
+                  request_id: String(message.request_id || ''),
+                  result: {
+                    grant_state: 'allowed',
+                    ops: [],
+                    replay_cursor: { after_clock: 0 },
+                  },
+                });
+              }
+            });
           })();
         </script>
       </body>
     </html>`;
 }
 
-async function installRoutes(page) {
+async function installRoutes(page, baseURL, assets) {
   const server = {
     installed: false,
     session: null,
@@ -340,8 +496,38 @@ async function installRoutes(page) {
     await route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/html; charset=utf-8' },
-      body: hostHtml(),
+      body: hostHtml(baseURL),
     });
+  });
+  await page.route('**/__whiteboard_install_sidebar/whiteboard/**', async (route) => {
+    const url = new URL(route.request().url());
+    const pathname = url.pathname;
+    const headers = { 'cache-control': 'no-store' };
+    if (pathname.endsWith('/index.html')) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...headers, 'content-type': 'text/html; charset=utf-8' },
+        body: assets.html,
+      });
+      return;
+    }
+    if (pathname.endsWith('/whiteboard.css')) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...headers, 'content-type': 'text/css; charset=utf-8' },
+        body: assets.css,
+      });
+      return;
+    }
+    if (pathname.endsWith('/whiteboard.js')) {
+      await route.fulfill({
+        status: 200,
+        headers: { ...headers, 'content-type': 'text/javascript; charset=utf-8' },
+        body: assets.js,
+      });
+      return;
+    }
+    await route.fulfill({ status: 404, body: 'missing whiteboard sidebar fixture' });
   });
   await page.route('**/api/**', async (route) => {
     const request = route.request();
@@ -413,8 +599,9 @@ async function installRoutes(page) {
 }
 
 test('Whiteboard install appears in Call Apps sidebar with usable access controls', async ({ page }) => {
-  const server = await installRoutes(page);
+  const assets = await readWhiteboardAssets();
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const server = await installRoutes(page, baseURL, assets);
 
   await page.setViewportSize({ width: 360, height: 760 });
   await page.goto(`${baseURL.replace(/\/+$/, '')}/__whiteboard_install_sidebar/host.html`, { waitUntil: 'domcontentloaded' });
@@ -438,6 +625,13 @@ test('Whiteboard install appears in Call Apps sidebar with usable access control
   await page.locator('input[name="defaultAccess"][value="allowed_by_default"]').check();
   await page.getByRole('button', { name: 'Add to call' }).click();
   await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible();
+  const whiteboardFrame = page.frameLocator('iframe[name="whiteboard"]');
+  await expect(whiteboardFrame.locator('#modeBadge')).toHaveText('Editor');
+  await expect.poll(() => page.evaluate(() => window.whiteboardInstallSidebarProof.state.whiteboardReady)).toBe(true);
+  await page.evaluate(() => window.whiteboardInstallSidebarProof.showRemoteCursor('Owner'));
+  await expect(whiteboardFrame.locator('.remote-cursor-label')).toHaveText('Owner');
+  const launchCountBeforeGrantToggle = await page.evaluate(() => window.whiteboardInstallSidebarProof.state.whiteboardLaunchCount);
+  const frameSrcBeforeGrantToggle = await page.evaluate(() => window.whiteboardInstallSidebarProof.state.whiteboardFrameSrc);
   await expect(page.getByText('Default: allowed')).toBeVisible();
   await expect(page.locator('.call-apps-access-row[data-user-id="1"]')).toContainText('Owner');
   await expect(page.locator('.call-apps-access-row[data-user-id="1"]')).toContainText('Allowed');
@@ -447,6 +641,10 @@ test('Whiteboard install appears in Call Apps sidebar with usable access control
   await page.locator('.call-apps-access-row[data-user-id="2"] .call-apps-grant-action').click();
   await expect(page.locator('.call-apps-access-row[data-user-id="2"]')).toContainText('Blocked');
   await expect(page.locator('.call-apps-access-row[data-user-id="2"]')).toContainText('Allow');
+  await expect(whiteboardFrame.locator('.remote-cursor-label')).toHaveText('Owner');
+  await expect.poll(() => page.evaluate(() => window.whiteboardInstallSidebarProof.state.whiteboardLaunchCount))
+    .toBe(launchCountBeforeGrantToggle);
+  expect(await page.evaluate(() => window.whiteboardInstallSidebarProof.state.whiteboardFrameSrc)).toBe(frameSrcBeforeGrantToggle);
 
   expect(server.requests.map((entry) => `${entry.method} ${entry.pathname}`)).toEqual(expect.arrayContaining([
     'POST /api/marketplace/call-apps/whiteboard/orders',
