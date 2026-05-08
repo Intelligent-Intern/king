@@ -51,7 +51,9 @@ Current baseline:
 - Media reconnect cleanup now has a focused contract proving stale local capture
   cleanup preserves active camera/audio/screenshare streams and emits
   reconnect-specific diagnostics instead of looking like an intentional media
-  shutdown.
+  shutdown. A second browser-oriented smoke runs the real retired-stream cleanup
+  helper in a fake MediaStream sandbox and proves active camera, microphone, and
+  screen-share tracks stay live while retired tracks stop once.
 
 Contract anchors:
 - `demo/video-chat/frontend-vue/src/domain/realtime/background/stream.ts`
