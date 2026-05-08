@@ -53,6 +53,12 @@ assert.match(
 
 assert.match(
   iframeSource,
+  /const message = JSON\.parse\(JSON\.stringify\(\{[\s\S]*window\.parent\.postMessage\(message, parentOrigin\)/,
+  'whiteboard runtime must emit cloneable postMessage payloads only',
+);
+
+assert.match(
+  iframeSource,
   /document\.querySelectorAll\('\[data-tool\], \.swatch, #width'\)[\s\S]*element\.disabled = !canAppend\(\)/,
   'viewer mode must disable drawing controls in the iframe',
 );

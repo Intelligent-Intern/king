@@ -40,7 +40,6 @@
         :data-call-app-entrypoint="iframeEntrypoint"
         :data-call-app-launch-state="launchState.status"
         sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads"
-        csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:"
         referrerpolicy="no-referrer"
         loading="eager"
         @load="handleIframeLoad"

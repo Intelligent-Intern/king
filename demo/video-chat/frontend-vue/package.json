@@ -47,7 +47,7 @@
     "test:contract:native-audio-bridge": "node tests/contract/native-audio-bridge-contract.mjs",
     "test:contract:media-security": "node tests/contract/media-security-contract.mjs",
     "test:contract:mediapipe-cdn": "node tests/contract/mediapipe-cdn-contract.mjs",
-    "test:contract:backend-origin": "node tests/contract/backend-origin-production-contract.mjs",
+    "test:contract:backend-origin": "node tests/contract/backend-origin-production-contract.mjs && node tests/contract/admin-infrastructure-runtime-metrics-contract.mjs",
     "test:contract:realtime-leave-rejoin": "node tests/contract/realtime-leave-rejoin-contract.mjs",
     "test:e2e:release-gate": "node tests/contract/e2e-release-gate-contract.mjs",
     "test:e2e:online-sfu-hd": "node tests/e2e/online-sfu-hd-acceptance.mjs",

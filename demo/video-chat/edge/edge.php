@@ -391,6 +391,7 @@ $injectSocialPreview = static function (string $body, array $request) use ($doma
 $serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview): void {
     $path = rawurldecode((string) $request['path']);
     $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
+    $isCallAppAsset = str_starts_with($path, '/call-app/');
     $corsHeaders = $isCdnAsset
         ? [
             'Access-Control-Allow-Origin' => '*',
@@ -439,6 +440,10 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
     ] + $corsHeaders;
     if ($assetVersion !== '') {
         $headers['X-KingRT-Asset-Version'] = $assetVersion;
+    }
+    if ($isCallAppAsset) {
+        $headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'self'";
+        $headers['Cross-Origin-Resource-Policy'] = 'same-origin';
     }
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
 };

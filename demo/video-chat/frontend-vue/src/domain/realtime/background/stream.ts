@@ -45,6 +45,7 @@ function normalizeBackgroundFilterRuntimeConfig(options = {}) {
     overloadConsecutiveFrames: Math.max(3, Math.min(60, Math.round(toNumber(options.overloadConsecutiveFrames, 12)))),
     overloadFrameMs: Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90))),
     sourceActive: options.sourceActive !== false,
+    showSourceUntilMask: options.showSourceUntilMask === true,
     statsIntervalMs: Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3)))),
     temporalFall: Math.max(0, Math.min(1, toNumber(options.temporalFall, 0.6))),
     temporalRise: Math.max(0, Math.min(1, toNumber(options.temporalRise, 0.7))),
@@ -185,6 +186,8 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     getBackgroundColor: () => runtimeConfig.backgroundColor,
     getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
     getBlurPx: () => runtimeConfig.blurPx,
+    getMattePreset: () => runtimeConfig.mattePreset,
+    getShowSourceUntilMask: () => runtimeConfig.showSourceUntilMask,
     video,
   });
 
@@ -304,6 +307,9 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     const nextConfig = normalizeBackgroundFilterRuntimeConfig(nextOptions);
     if (!Object.prototype.hasOwnProperty.call(nextOptions, 'sourceActive')) {
       nextConfig.sourceActive = runtimeConfig.sourceActive;
+    }
+    if (!Object.prototype.hasOwnProperty.call(nextOptions, 'showSourceUntilMask')) {
+      nextConfig.showSourceUntilMask = runtimeConfig.showSourceUntilMask;
     }
     Object.assign(runtimeConfig, nextConfig);
     const nextSegmentationConfig = [

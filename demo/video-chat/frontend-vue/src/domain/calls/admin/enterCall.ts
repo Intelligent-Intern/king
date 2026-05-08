@@ -126,6 +126,11 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       blurPx,
       mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),
       detectIntervalMs,
+      alphaGamma: 0.8,
+      maskContrast: 0.75,
+      averageRadius: 6,
+      temporalRise: 0.7,
+      temporalFall: 0.6,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
       maskVariant,
@@ -133,6 +138,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       maxProcessWidth: Math.max(320, Math.min(processWidthCap, requestedProcessWidth)),
       maxProcessFps: Math.max(8, Math.min(processFpsCap, requestedProcessFps)),
       autoDisableOnOverload: false,
+      showSourceUntilMask: true,
     };
   }
 

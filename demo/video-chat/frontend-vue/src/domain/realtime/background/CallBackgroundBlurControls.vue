@@ -33,7 +33,7 @@
         title="Blue background"
         @click="applyCallBackgroundPreset('exclusion')"
       >
-        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/background-blue.svg" alt="" />
+        <img class="call-left-blur-icon call-left-solid-background-icon" src="/assets/orgas/kingrt/icons/solid.png" alt="" />
       </button>
     </div>
   </section>

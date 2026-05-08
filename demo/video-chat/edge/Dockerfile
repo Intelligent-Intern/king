@@ -35,6 +35,7 @@ COPY demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/pack
 RUN npm ci
 COPY demo/video-chat/frontend-vue/ ./
 COPY packages/iibin/dist/ /packages/iibin/dist/
+COPY demo/call-app/ /call-app/
 RUN npm run build
 
 FROM php:8.4-cli-trixie
