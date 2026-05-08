@@ -31,6 +31,7 @@ const deniedDirectJoinScenarios = [
   'direct_join_active_org_switch_does_not_grant_foreign_call',
   'direct_join_owner_rights_not_cross_org',
   'direct_join_guest_list_not_cross_org',
+  'direct_join_normal_non_guest_user_denied',
   'direct_join_forged_client_admin_role_denied',
 ];
 
@@ -40,8 +41,20 @@ const authDeniedDirectJoinScenarios = [
   'direct_join_deleted_user_denied',
 ];
 
+const mainJourneyScenarioBindings = [
+  ['e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights', 'anonymous_open_logged_in_uses_own_account_waits_for_host'],
+  ['e2e_journey_011_system_admin_join_without_invite', 'direct_join_system_admin_without_guest_list'],
+  ['e2e_journey_014_normal_guest_list_user_joins_foreign_call', 'direct_join_guest_list_user_allowed'],
+  ['e2e_journey_015_normal_non_guest_user_lobby_or_denied', 'direct_join_normal_non_guest_user_denied'],
+];
+
 function escapeRegExp(input) {
   return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function scenarioTestName(scenarioKey, suffix) {
+  const journeyKey = String(getSeedScenario(scenarioKey).journey_key || '').trim();
+  return journeyKey === '' ? suffix : `${journeyKey}: ${suffix}`;
 }
 
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
@@ -59,6 +72,10 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'temporary_personalized_guest',
     'temporary_anonymous_guest',
   ]));
+
+  for (const [journeyKey, scenarioKey] of mainJourneyScenarioBindings) {
+    expect(getSeedScenario(scenarioKey).journey_key).toBe(journeyKey);
+  }
 
   const systemAdminScenario = getSeedScenario('system_admin_join_any_organization_call_without_guest_list');
   expect(systemAdminScenario.call_keys).toEqual(expect.arrayContaining(['alpha_active', 'beta_active', 'tenantless_active']));
@@ -161,7 +178,7 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
 });
 
 for (const scenarioKey of allowedDirectJoinScenarios) {
-  test(`direct workspace join allows ${scenarioKey} through server-side role evaluation`, async ({ browser }) => {
+  test(scenarioTestName(scenarioKey, `direct workspace join allows ${scenarioKey} through server-side role evaluation`), async ({ browser }) => {
     test.setTimeout(60_000);
     const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
     const scenario = getSeedScenario(scenarioKey);
@@ -196,7 +213,7 @@ for (const scenarioKey of allowedDirectJoinScenarios) {
 }
 
 for (const scenarioKey of deniedDirectJoinScenarios) {
-  test(`direct workspace join denies ${scenarioKey} without leaking call payload`, async ({ browser }) => {
+  test(scenarioTestName(scenarioKey, `direct workspace join denies ${scenarioKey} without leaking call payload`), async ({ browser }) => {
     test.setTimeout(60_000);
     const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
     const scenario = getSeedScenario(scenarioKey);
@@ -421,7 +438,7 @@ async function expectOpenLinkWaitsForHost({ browser, scenarioKey, storedSessionU
   }
 }
 
-test('anonymous open link keeps a logged-in user on their own account and waits for host admission', async ({ browser }) => {
+test('e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights: anonymous open link keeps a logged-in user on their own account and waits for host admission', async ({ browser }) => {
   test.setTimeout(60_000);
   await expectOpenLinkWaitsForHost({
     browser,
