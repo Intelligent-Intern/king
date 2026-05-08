@@ -186,6 +186,54 @@ test('stale deleted ended and inactive-user call links render safe state without
       },
     },
     {
+      label: 'expired link',
+      accessId: '66666666-6666-4666-8666-666666666666',
+      status: 410,
+      code: 'call_access_expired',
+      privateNeedles: [
+        'Expired Private Strategy Call',
+        'expired-host@example.invalid',
+        'Expired Invitee',
+        'sess_expired_should_not_bind',
+        'tok_expired_should_not_bind',
+        'expired-private-call-id',
+        'expired-private-room-id',
+        'expired-owner-offer-sdp',
+        'candidate:expired-private-ice',
+        'turn:expired-private-token',
+        'whiteboard-expired-private',
+        'call-app-expired-private-session',
+        'launch-token-expired-private',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_expired',
+          message: 'Expired Private Strategy Call expired for Expired Invitee.',
+        },
+        result: {
+          call: {
+            id: 'expired-private-call-id',
+            room_id: 'expired-private-room-id',
+            title: 'Expired Private Strategy Call',
+            owner: { email: 'expired-host@example.invalid', display_name: 'Expired Host' },
+          },
+          target_user: { display_name: 'Expired Invitee' },
+          session: { id: 'sess_expired_should_not_bind', token: 'tok_expired_should_not_bind' },
+          signaling: {
+            sdp: 'expired-owner-offer-sdp',
+            ice: ['candidate:expired-private-ice'],
+            turn_credential: 'turn:expired-private-token',
+          },
+          call_apps: [{
+            app_key: 'whiteboard-expired-private',
+            session_id: 'call-app-expired-private-session',
+            launch_token: 'launch-token-expired-private',
+          }],
+        },
+      },
+    },
+    {
       label: 'deleted call',
       accessId: '33333333-3333-4333-8333-333333333333',
       status: 404,
@@ -399,6 +447,14 @@ test('stale deleted ended and inactive-user call links render safe state without
       await expectTextDoesNotContain(joinDialog, item.privateNeedles, item.label);
       await expect(joinDialog.getByRole('button', { name: /^Join call$/ }), item.label).toHaveCount(0);
       expect(sessionPostCount, `${item.label} must not start a session`).toBe(0);
+      const storedSession = await page.evaluate((key) => {
+        try {
+          return JSON.parse(localStorage.getItem(key) || '{}');
+        } catch {
+          return {};
+        }
+      }, sessionStorageKey);
+      expect(JSON.stringify(storedSession), `${item.label} must not store denied session data`).not.toContain('should_not_bind');
       expect(page.url()).toContain(`/join/${item.accessId}`);
       expect(page.url()).not.toContain('/workspace/call');
     } finally {
