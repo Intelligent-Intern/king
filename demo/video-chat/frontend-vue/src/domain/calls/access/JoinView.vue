@@ -644,8 +644,10 @@ async function loadJoinContext() {
     let payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
       resetJoinContextDetails();
-      payload = { error: { code: 'call_access_validation_failed' } };
-      state.contextError = localizedApiErrorMessage(payload, t('public.join.resolve_failed'));
+      const errorPayload = payload && typeof payload === 'object'
+        ? payload
+        : { error: { code: 'call_access_validation_failed' } };
+      state.contextError = localizedApiErrorMessage(errorPayload, t('public.join.resolve_failed'));
       return;
     }
 

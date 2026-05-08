@@ -86,7 +86,7 @@ for (const lifecycleCase of staleLifecycleCases) {
 
       const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
       await expect(joinDialog).toBeVisible();
-      await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid/i);
+      await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid|current call state|does not exist/i);
       await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
 
       const dialogText = await joinDialog.innerText();
