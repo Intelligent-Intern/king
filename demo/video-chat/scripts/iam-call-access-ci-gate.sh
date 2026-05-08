@@ -176,6 +176,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-guest-lifecycle-contract.sh"
   "tests/call-guest-list-direct-join-contract.sh"
   "tests/call-owner-moderation-contract.sh"
+  "tests/call-access-terminal-join-contract.sh"
   "tests/org-admin-call-rights-contract.sh"
   "tests/system-admin-call-rights-contract.php"
   "tests/realtime-call-scope-contract.sh"
