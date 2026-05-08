@@ -1556,15 +1556,13 @@ case in `call-access-personalized-identity.spec.js`: a logged-in wrong account o
 personalized link, the simulated server returns a strong-mismatch wrong-host
 denial, the join/session responses contain no invitee/host/session sentinels,
 the UI renders only the generic forbidden state, no workspace/lobby admission is
-entered, and the active browser session remains unchanged.
-
-Proof: `call-access-strong-mismatch-privacy-contract` creates a personalized
-link for one invitee, authenticates a strongly different logged-in account, and
-proves the backend `/api/call-access/{id}/join` and `/session` routes return
-only generic mismatch/host-name field errors for unverified or wrong host-name
-attempts. The responses contain no target invitee, host, external participant,
-call title, call id, or denied session id, and no call-access session is
-persisted.
+entered, and the active browser session remains unchanged. The same proof
+creates a personalized link for one invitee, authenticates a strongly different
+logged-in account, and proves the backend `/api/call-access/{id}/join` and
+`/session` routes return only generic mismatch/host-name field errors for
+unverified or wrong host-name attempts. The responses contain no target invitee,
+host, external participant, call title, call id, or denied session id, and no
+call-access session is persisted.
 `call-access-duplicate-review-email.spec.js` covers the account-update request
 path by requiring manually re-entered values, sending confirmation only to the
 logged-in account, refusing updates before confirmation, and confirming only
