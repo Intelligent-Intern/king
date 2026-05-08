@@ -1581,8 +1581,8 @@ passed.
 - [ ] Temporary user admission applies only to same temporary user / link context
 - [x] Concurrent admission by multiple moderators creates no error state
 - [x] Concurrent rejection and admission resolves deterministically
-- [ ] Lobby status updates correctly
-- [ ] Participant is removed from lobby after admission
+- [x] Lobby status updates correctly
+- [x] Participant is removed from lobby after admission
 - [ ] Participant is removed from lobby after aborting join attempt
 - [x] Participant is not shown twice in lobby
 - [x] Manipulated lobby-admission request without permission is rejected
@@ -1604,6 +1604,10 @@ snapshots, an admitted-plus-stale-queue race snapshot, duplicate room
 participant rows, and final reject-empty state; it proves the lobby badge and
 panel render one queued user, admitted/rejected states leave no stale allow
 controls, and duplicate participant snapshot rows aggregate into one UI row.
+`iam-lobby-concurrency-remaining-contract.mjs` binds `e2e_lobby_010`,
+`e2e_lobby_011`, and `e2e_lobby_012` to the backend compare-and-set race
+contract plus the focused browser snapshot proof, and pins both package and CI
+gate wiring.
 
 ## 12. Rejoin, Leave, Kick
 
@@ -2479,9 +2483,9 @@ against duplicate join/session request loops.
 - [ ] `e2e_lobby_007_host_rejects_participant`
 - [ ] `e2e_lobby_008_rejected_participant_cannot_enter`
 - [ ] `e2e_lobby_009_admission_is_call_scoped`
-- [ ] `e2e_lobby_010_concurrent_admission_idempotent`
-- [ ] `e2e_lobby_011_concurrent_admit_reject_deterministic`
-- [ ] `e2e_lobby_012_lobby_state_updates_correctly`
+- [x] `e2e_lobby_010_concurrent_admission_idempotent`
+- [x] `e2e_lobby_011_concurrent_admit_reject_deterministic`
+- [x] `e2e_lobby_012_lobby_state_updates_correctly`
 
 ## Test Group: Rejoin and Kick
 
