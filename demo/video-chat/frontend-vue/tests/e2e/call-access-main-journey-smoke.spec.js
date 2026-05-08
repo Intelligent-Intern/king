@@ -44,6 +44,16 @@ function noMediaSecretPayload(value, label) {
   expect(JSON.stringify(value), label).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential|authorization|password|secret)\b/i);
 }
 
+function postDataJsonOrNull(request) {
+  const raw = request.postData();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 function participantRow(user, callRole = 'participant', inviteState = 'allowed') {
   return {
     user_id: user.id,
@@ -271,6 +281,119 @@ async function workspaceSecurityProbe(page) {
     };
   });
 }
+
+test('e2e_journey_002_registered_logged_out_invitee_uses_temp_account registered logged-out personalized link uses temporary account without account takeover', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenarioKey = 'registered_logged_out_personalized_uses_temporary_account';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const temporaryUser = getSeedUser(scenario.principal_user_key);
+  const registeredAccount = getSeedUser(scenario.registered_account_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const forbiddenNeedles = forbiddenMainJourneyNeedles();
+
+  const { context, page } = await createJourneyPage(browser, baseURL, { scenarioKey });
+  const workspaceAdmission = await installAdmittedWorkspaceRoutes(page, { call, user: temporaryUser });
+
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.result?.link_kind).toBe('personal');
+    expect(joinPayload?.result?.target_user?.id).toBe(temporaryUser.id);
+    expect(joinPayload?.result?.target_user?.account_type).toBe('guest');
+    expect(Boolean(joinPayload?.result?.target_user?.is_guest)).toBe(true);
+    expect(joinPayload?.result?.target_user?.id).not.toBe(registeredAccount.id);
+    expect(joinPayload?.result?.call?.id).toBe(call.id);
+    noMediaSecretPayload(joinPayload, 'registered logged-out personalized join payload must not expose media/auth secrets');
+    expectNoForbiddenNeedles(JSON.stringify(joinPayload), forbiddenNeedles, 'registered logged-out personalized join payload');
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(call.title);
+    await expect(joinDialog).toContainText('Personalized link');
+    await expect(joinDialog, 'logged-out personalized dialog must not render the existing registered account email').not.toContainText(registeredAccount.email);
+    await expect(joinDialog, 'logged-out personalized dialog must not render the existing registered account name').not.toContainText(registeredAccount.display_name);
+    for (const needle of forbiddenNeedles) {
+      await expect(joinDialog, `dialog must not render ${needle}`).not.toContainText(needle);
+    }
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionRequest = sessionResponse.request();
+    expect(sessionRequest.headers().authorization || '').toBe('');
+    expect(postDataJsonOrNull(sessionRequest)).toBeNull();
+
+    const sessionPayload = await sessionResponse.json();
+    expect(sessionPayload?.result?.user?.id).toBe(temporaryUser.id);
+    expect(sessionPayload?.result?.user?.id).not.toBe(registeredAccount.id);
+    expect(sessionPayload?.result?.user?.email).toBe(temporaryUser.email);
+    expect(sessionPayload?.result?.user?.email).not.toBe(registeredAccount.email);
+    expect(sessionPayload?.result?.user?.account_type).toBe('guest');
+    expect(Boolean(sessionPayload?.result?.user?.is_guest)).toBe(true);
+    expect(sessionPayload?.result?.user?.role).toBe('user');
+    expect(sessionPayload?.result?.access_link?.participant_user_id).toBe(temporaryUser.id);
+    expect(sessionPayload?.result?.access_link?.participant_user_id).not.toBe(registeredAccount.id);
+    expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.admit_participants ?? false).toBe(false);
+    noMediaSecretPayload(sessionPayload, 'registered logged-out personalized session payload must not expose media/auth secrets');
+    expectNoForbiddenNeedles(JSON.stringify(sessionPayload), forbiddenNeedles, 'registered logged-out personalized session payload');
+
+    const activeSession = await page.evaluate(async () => {
+      const { sessionState } = await import('/src/domain/auth/session.ts');
+      return {
+        userId: sessionState.userId,
+        email: sessionState.email,
+        accountType: sessionState.accountType,
+        isGuest: sessionState.isGuest,
+        sessionId: sessionState.sessionId,
+        sessionToken: sessionState.sessionToken,
+      };
+    });
+    expect(activeSession.userId).toBe(temporaryUser.id);
+    expect(activeSession.email).toBe(temporaryUser.email);
+    expect(activeSession.accountType).toBe('guest');
+    expect(activeSession.isGuest).toBe(true);
+
+    await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
+    const queuedFrames = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+    expect(queuedFrames.some((frame) => frame?.type === 'lobby/queue/join')).toBe(true);
+
+    const storedDuringLobby = await readStoredSession(page);
+    expect(storedDuringLobby.sessionToken).toBe(sessionPayload?.result?.session?.token);
+    expect(storedDuringLobby.sessionId).toBe(sessionPayload?.result?.session?.id);
+    expect(storedDuringLobby.sessionToken).not.toContain(String(registeredAccount.id));
+
+    workspaceAdmission.admit();
+    await emitAdmission(page, { call, user: temporaryUser });
+    await waitForWorkspace(page, call);
+    await expect(page.locator('button.tab-lobby')).toHaveCount(0);
+    await expect(page.locator('button[title="Allow user"]:not([disabled])')).toHaveCount(0);
+
+    const security = await workspaceSecurityProbe(page);
+    expect(security.canModerate).toBe(false);
+    expect(security.viewerCanModerateCall).toBe(false);
+    expect(security.snapshotRequests).toBeGreaterThan(0);
+    const workspaceText = await page.locator('body').innerText();
+    expectNoForbiddenNeedles(workspaceText, forbiddenNeedles, 'registered logged-out personalized workspace');
+  } finally {
+    await context.close();
+  }
+});
 
 test('e2e_journey_003 logged-in own personalized link keeps the account through lobby admission', async ({ browser }) => {
   test.setTimeout(90_000);
