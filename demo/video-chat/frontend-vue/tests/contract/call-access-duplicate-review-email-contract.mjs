@@ -13,6 +13,8 @@ function read(relativePath) {
 }
 
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js');
+const raceE2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-race.spec.js');
+const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
@@ -99,6 +101,46 @@ assert.match(
   e2eSpec,
   /storedSession\.sessionToken\)\.not\.toBe\('sess_confirmation_link_target_e2e'\)/,
   'confirmation E2E must prove the temporary/link target session is not adopted',
+);
+assert.match(
+  packageJson.scripts['test:e2e:call-access'],
+  /call-access-duplicate-race\.spec\.js/,
+  'IAM call-access E2E script must include the duplicate-link race spec',
+);
+assert.match(
+  raceE2eSpec,
+  /security duplicate group detects concurrent personalized-link use by two accounts without inconsistent assignment/,
+  'duplicate race E2E must cover concurrent personalized-link use by two accounts',
+);
+assert.match(
+  raceE2eSpec,
+  /joinRequests\.length >= 2[\s\S]*await bothJoinRequests/,
+  'duplicate race E2E must hold parallel link-open responses until both accounts have requested the same link',
+);
+assert.match(
+  raceE2eSpec,
+  /duplicate_personalized_link[\s\S]*manual_review_required[\s\S]*access_fingerprint:\s*'sha256:duplicate-race-access'/,
+  'duplicate race E2E must require a private duplicate review flag',
+);
+assert.match(
+  raceE2eSpec,
+  /sessionRequests\)\.toHaveLength\(1\)[\s\S]*authorization:\s*`Bearer \$\{linkedAccount\.sessionToken\}`[\s\S]*verified_user_id:\s*linkedAccount\.userId/,
+  'duplicate race E2E must only issue a call session for the linked account during the race',
+);
+assert.match(
+  raceE2eSpec,
+  /security duplicate group marks later foreign use after the linked account is already in the call as suspicious/,
+  'duplicate race E2E must cover later foreign use after the linked account has a call session',
+);
+assert.match(
+  raceE2eSpec,
+  /join_opened_after_active_call_session[\s\S]*active_call_session[\s\S]*foreignSessionPosts\)\.toBe\(0\)/,
+  'after-call duplicate E2E must mark the later foreign use suspicious without session issuance',
+);
+assert.match(
+  raceE2eSpec,
+  /expectBodyOmitsSecrets\(foreignJoinBody,\s*\[accessId,\s*linkedAccount\.email,\s*linkedAccount\.displayName\]/,
+  'duplicate race E2E must prove the review response omits raw link and linked-account data',
 );
 
 assert.match(
@@ -214,6 +256,26 @@ assert.match(
   duplicateContract,
   /duplicate denied and rate-limited attempts must not persist sessions/,
   'backend duplicate contract must prove denied duplicate attempts do not bind sessions',
+);
+assert.match(
+  duplicateContract,
+  /pcntl_fork[\s\S]*linked account parallel reopen should issue[\s\S]*foreign account parallel attempt must not issue/,
+  'backend duplicate contract must run a real parallel linked-account versus foreign-account session issuance race when pcntl is available',
+);
+assert.match(
+  duplicateContract,
+  /parallel race must not reassign the personalized link[\s\S]*parallel foreign account should create a duplicate review flag/,
+  'backend duplicate contract must prove the parallel race leaves the link assignment consistent and review-flagged',
+);
+assert.match(
+  duplicateContract,
+  /review flag should reference the first in-call linked account[\s\S]*review flag should keep first in-call session timestamp/,
+  'backend duplicate contract must prove later foreign use records the already-used in-call reference',
+);
+assert.match(
+  duplicateContract,
+  /parallel duplicate review must be audit-logged/,
+  'backend duplicate contract must audit-log the parallel duplicate review',
 );
 
 assert.match(
