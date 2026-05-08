@@ -423,18 +423,19 @@ test('Whiteboard install appears in Call Apps sidebar with usable access control
   await expect(page.getByText('Whiteboard installed and enabled for this organization.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Call Apps' }).click();
-  await expect(page.getByRole('button', { name: /Whiteboard/ })).toBeVisible();
-  await expect(page.getByText('Installed')).toBeVisible();
-  await expect(page.getByText('Enabled')).toBeVisible();
-  await expect(page.getByText('Healthy')).toBeVisible();
-  await expect(page.getByText('Select')).toBeVisible();
+  const whiteboardRow = page.locator('.call-apps-list-item').filter({ hasText: 'Whiteboard' });
+  await expect(whiteboardRow).toBeVisible();
+  await expect(whiteboardRow.getByText('Installed', { exact: true })).toBeVisible();
+  await expect(whiteboardRow.getByText('Enabled', { exact: true })).toBeVisible();
+  await expect(whiteboardRow.getByText('Healthy', { exact: true })).toBeVisible();
+  await expect(whiteboardRow.getByText('Select', { exact: true })).toBeVisible();
 
   const sidebarNoOverflow = await page.locator('.sidebar').evaluate((element) => element.scrollWidth <= element.clientWidth);
   expect(sidebarNoOverflow).toBe(true);
   const narrowColumns = await page.locator('.call-apps-list-item').evaluate((element) => getComputedStyle(element).gridTemplateColumns);
   expect(narrowColumns.trim().split(/\s+/)).toHaveLength(1);
 
-  await page.getByLabel('Default participant access').getByText('Allowed').click();
+  await page.locator('input[name="defaultAccess"][value="allowed_by_default"]').check();
   await page.getByRole('button', { name: 'Add to call' }).click();
   await expect(page.getByRole('heading', { name: 'Access' })).toBeVisible();
   await expect(page.getByText('Default: allowed')).toBeVisible();

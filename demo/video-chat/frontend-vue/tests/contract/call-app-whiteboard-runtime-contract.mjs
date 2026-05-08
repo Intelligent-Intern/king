@@ -34,6 +34,7 @@ const [
 ]);
 
 const whiteboardSource = `${iframeSource}\n${stylesheetSource}\n${runtimeSource}`;
+const packageJson = JSON.parse(packageJsonSource);
 
 assert.equal(
   manifest.status,
@@ -202,8 +203,8 @@ assert.match(
 );
 
 assert.match(
-  packageJsonSource,
-  /"test:e2e:call-app-whiteboard":\s*"playwright test tests\/e2e\/call-app-whiteboard\.spec\.js"/,
+  packageJson.scripts['test:e2e:call-app-whiteboard'] || '',
+  /^playwright test(?: .*)?tests\/e2e\/call-app-whiteboard\.spec\.js(?: .*)?$/,
   'package scripts must expose the Whiteboard Call App browser E2E proof',
 );
 
