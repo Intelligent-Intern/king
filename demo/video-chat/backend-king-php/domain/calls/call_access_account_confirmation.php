@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/../users/user_email_identity.php';
 require_once __DIR__ . '/call_access_contract.php';
 
 function videochat_call_access_account_confirmation_bootstrap(PDO $pdo): bool

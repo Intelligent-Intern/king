@@ -293,6 +293,7 @@ try {
     videochat_call_access_email_confirmation_assert((string) (($confirmPayload['result'] ?? [])['state'] ?? '') === 'confirmed', 'browser-b confirmation state mismatch');
     videochat_call_access_email_confirmation_assert((int) (((($confirmPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0)) === $currentUserId, 'browser-b confirmation user mismatch');
     videochat_call_access_email_confirmation_assert_no_needles((string) ($confirmResponse['body'] ?? ''), [$linkEmail, $linkName, $hostEmail, $hostName, $accessId, $firstToken], 'browser-b confirmation response');
+    $pdo = $openDatabase();
     $afterConfirmUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($afterConfirmUser['display_name'] ?? '') === $confirmedName, 'confirmed display name mismatch');
     videochat_call_access_email_confirmation_assert((string) ($afterConfirmUser['email'] ?? '') === $currentEmail, 'confirmation must not change email');

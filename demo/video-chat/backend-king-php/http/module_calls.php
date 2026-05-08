@@ -51,6 +51,21 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
+            $accessBinding = videochat_call_route_access_session_binding($pdo, $apiAuthContext);
+            if (is_array($accessBinding) && !videochat_call_route_ref_matches_access_binding($callRef, $accessBinding)) {
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'result' => [
+                        'state' => 'forbidden',
+                        'resolved_as' => 'call_id',
+                        'reason' => 'call_access_session_call_mismatch',
+                        'access_link' => null,
+                        'call' => null,
+                    ],
+                    'time' => gmdate('c'),
+                ]);
+            }
+
             $callResolution = videochat_get_call_for_user($pdo, $callRef, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
             if ((bool) ($callResolution['ok'] ?? false)) {

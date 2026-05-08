@@ -23,10 +23,202 @@ function videochat_call_access_route_session_id(array $authContext): string
     return '';
 }
 
+function videochat_call_route_access_session_binding(PDO $pdo, array $apiAuthContext): ?array
+{
+    $sessionId = videochat_call_access_route_session_id($apiAuthContext);
+    if ($sessionId === '') {
+        return null;
+    }
+
+    return videochat_fetch_call_access_session_binding($pdo, $sessionId);
+}
+
+function videochat_call_route_ref_matches_access_binding(string $callRef, array $binding): bool
+{
+    $normalizedRef = strtolower(trim($callRef));
+    if ($normalizedRef === '') {
+        return false;
+    }
+
+    foreach (['call_id', 'access_id'] as $field) {
+        $value = strtolower(trim((string) ($binding[$field] ?? '')));
+        if ($value !== '' && hash_equals($value, $normalizedRef)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function videochat_call_access_resolved_target_user_id(array $resolveResult): int
 {
     $targetUser = is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : [];
     return is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : 0;
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_call_access_client_authority_fields(array $payload): array
+{
+    $blockedFields = [
+        'access_link',
+        'account_user_id',
+        'authenticated_user_id',
+        'call',
+        'call_id',
+        'is_admin',
+        'is_guest',
+        'org_id',
+        'organization',
+        'organization_id',
+        'participant_user_id',
+        'permissions',
+        'role',
+        'roles',
+        'room_id',
+        'target_user_id',
+        'tenant',
+        'tenant_id',
+        'tenant_permissions',
+        'user_id',
+    ];
+    $blocked = [];
+    foreach ($blockedFields as $field) {
+        if (array_key_exists($field, $payload)) {
+            $blocked[] = $field;
+        }
+    }
+
+    return $blocked;
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_call_access_request_query_authority_fields(array $request): array
+{
+    $query = videochat_request_query_params($request);
+    return videochat_call_access_client_authority_fields($query);
+}
+
+function videochat_call_access_authority_field_response(
+    array $fields,
+    callable $errorResponse
+): array {
+    $details = [];
+    foreach ($fields as $field) {
+        $details[$field] = 'server_authoritative';
+    }
+
+    return $errorResponse(
+        422,
+        'call_access_validation_failed',
+        'Call access requests cannot override server-bound identity or call context.',
+        [
+            'fields' => $details,
+            'reason' => 'client_authority_fields_rejected',
+        ]
+    );
+}
+
+function videochat_call_access_normalize_origin(string $value): string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return '';
+    }
+    if (strtolower($trimmed) === 'null') {
+        return 'null';
+    }
+
+    $parsed = parse_url($trimmed);
+    if (!is_array($parsed)) {
+        return '';
+    }
+    $scheme = strtolower((string) ($parsed['scheme'] ?? ''));
+    $host = strtolower((string) ($parsed['host'] ?? ''));
+    if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
+        return '';
+    }
+    $port = is_numeric($parsed['port'] ?? null) ? ':' . (int) $parsed['port'] : '';
+
+    return $scheme . '://' . $host . $port;
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_call_access_allowed_state_change_origins(array $request): array
+{
+    $allowed = [];
+    $add = static function (string $origin) use (&$allowed): void {
+        $normalized = videochat_call_access_normalize_origin($origin);
+        if ($normalized !== '' && $normalized !== 'null' && !in_array($normalized, $allowed, true)) {
+            $allowed[] = $normalized;
+        }
+    };
+
+    $configured = trim((string) (getenv('VIDEOCHAT_FRONTEND_ORIGIN') ?: ''));
+    if ($configured !== '') {
+        $add($configured);
+    }
+
+    $host = videochat_request_header_value($request, 'host');
+    if ($host !== '') {
+        $proto = strtolower(videochat_request_header_value($request, 'x-forwarded-proto'));
+        if (!in_array($proto, ['http', 'https'], true)) {
+            $proto = 'http';
+        }
+        $add($proto . '://' . $host);
+        $add(($proto === 'https' ? 'http' : 'https') . '://' . $host);
+    }
+
+    $environment = strtolower(trim((string) (getenv('VIDEOCHAT_KING_ENV') ?: 'development')));
+    if ($environment !== 'production') {
+        foreach ([
+            'http://127.0.0.1:4174',
+            'http://localhost:4174',
+            'http://127.0.0.1:5176',
+            'http://localhost:5176',
+        ] as $localOrigin) {
+            $add($localOrigin);
+        }
+    }
+
+    return $allowed;
+}
+
+/**
+ * @return array{ok: bool, reason: string}
+ */
+function videochat_call_access_state_change_origin_check(array $request): array
+{
+    $origin = videochat_request_header_value($request, 'origin');
+    if ($origin === '') {
+        $referer = videochat_request_header_value($request, 'referer');
+        if ($referer === '') {
+            return ['ok' => true, 'reason' => 'no_browser_origin'];
+        }
+        $origin = $referer;
+    }
+
+    $normalizedOrigin = videochat_call_access_normalize_origin($origin);
+    if ($normalizedOrigin === '' || $normalizedOrigin === 'null') {
+        return ['ok' => false, 'reason' => 'invalid_origin'];
+    }
+    if (!in_array($normalizedOrigin, videochat_call_access_allowed_state_change_origins($request), true)) {
+        return ['ok' => false, 'reason' => 'cross_origin_state_change'];
+    }
+
+    return ['ok' => true, 'reason' => 'origin_allowed'];
+}
+
+function videochat_call_access_csrf_origin_response(array $originCheck, callable $errorResponse): array
+{
+    return $errorResponse(403, 'csrf_origin_forbidden', 'Cross-origin account update requests are not allowed.', [
+        'reason' => (string) ($originCheck['reason'] ?? 'cross_origin_state_change'),
+    ]);
 }
 
 /**
@@ -96,6 +288,11 @@ function videochat_handle_call_access_routes(
         }
 
         $accessId = (string) ($publicAccessMatch[1] ?? '');
+        $queryAuthorityFields = videochat_call_access_request_query_authority_fields($request);
+        if ($queryAuthorityFields !== []) {
+            return videochat_call_access_authority_field_response($queryAuthorityFields, $errorResponse);
+        }
+
         try {
             $pdo = $openDatabase();
             $resolveResult = videochat_resolve_call_access_public($pdo, $accessId);
@@ -211,6 +408,16 @@ function videochat_handle_call_access_routes(
             if (array_key_exists('host_name', $payload)) {
                 $sessionOptions['host_name'] = $payload['host_name'];
             }
+
+            $payloadAuthorityFields = videochat_call_access_client_authority_fields($payload);
+            if ($payloadAuthorityFields !== []) {
+                return videochat_call_access_authority_field_response($payloadAuthorityFields, $errorResponse);
+            }
+        }
+
+        $queryAuthorityFields = videochat_call_access_request_query_authority_fields($request);
+        if ($queryAuthorityFields !== []) {
+            return videochat_call_access_authority_field_response($queryAuthorityFields, $errorResponse);
         }
 
         try {
@@ -312,11 +519,24 @@ function videochat_handle_call_access_routes(
             ]);
         }
 
+        $originCheck = videochat_call_access_state_change_origin_check($request);
+        if (!(bool) ($originCheck['ok'] ?? false)) {
+            return videochat_call_access_csrf_origin_response($originCheck, $errorResponse);
+        }
+
         [$payload, $decodeError] = $decodeJsonBody($request);
         if (!is_array($payload)) {
             return $errorResponse(400, 'call_access_invalid_request_body', 'Account update confirmation payload must be a JSON object.', [
                 'reason' => $decodeError,
             ]);
+        }
+        $payloadAuthorityFields = videochat_call_access_client_authority_fields($payload);
+        if ($payloadAuthorityFields !== []) {
+            return videochat_call_access_authority_field_response($payloadAuthorityFields, $errorResponse);
+        }
+        $queryAuthorityFields = videochat_call_access_request_query_authority_fields($request);
+        if ($queryAuthorityFields !== []) {
+            return videochat_call_access_authority_field_response($queryAuthorityFields, $errorResponse);
         }
 
         try {
@@ -398,6 +618,15 @@ function videochat_handle_call_access_routes(
             return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-access/account-update-confirmations/{token}/confirm.', [
                 'allowed_methods' => ['POST'],
             ]);
+        }
+
+        $originCheck = videochat_call_access_state_change_origin_check($request);
+        if (!(bool) ($originCheck['ok'] ?? false)) {
+            return videochat_call_access_csrf_origin_response($originCheck, $errorResponse);
+        }
+        $queryAuthorityFields = videochat_call_access_request_query_authority_fields($request);
+        if ($queryAuthorityFields !== []) {
+            return videochat_call_access_authority_field_response($queryAuthorityFields, $errorResponse);
         }
 
         try {
