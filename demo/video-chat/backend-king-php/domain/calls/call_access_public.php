@@ -66,17 +66,14 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
             'ok' => false,
             'reason' => 'conflict',
             'errors' => ['call_id' => 'call_not_joinable_from_status'],
-            'access_link' => $accessLink,
-            'call' => videochat_build_call_payload($pdo, $call, 0),
+            'access_link' => null,
+            'call' => null,
             'target_user' => null,
-            'target_hint' => [
-                'participant_email' => videochat_normalize_call_access_email(
-                    is_string($accessLink['participant_email'] ?? null) ? (string) $accessLink['participant_email'] : null
-                ) ?: null,
-            ],
+            'target_hint' => ['participant_email' => null],
         ];
     }
 
+    $linkKind = videochat_call_access_link_kind($accessLink);
     $linkedUserId = is_numeric($accessLink['participant_user_id'] ?? null)
         ? (int) $accessLink['participant_user_id']
         : 0;
@@ -90,6 +87,17 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $tenantId,
         false
     );
+    if ($linkKind === 'personal' && !is_array($targetUser)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'not_found'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
 
     $touch = $pdo->prepare(
         'UPDATE call_access_links SET last_used_at = :last_used_at WHERE id = :id'
