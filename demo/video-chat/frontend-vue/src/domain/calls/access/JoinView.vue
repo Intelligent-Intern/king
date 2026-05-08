@@ -213,6 +213,10 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../../realtime/media/preferences';
+import {
+  CALL_UUID_PATTERN,
+  safeCallAccessInvalidMessage,
+} from './admissionGate';
 import { createJoinAccessPreviewController } from './joinPreview';
 
 const route = useRoute();
@@ -276,6 +280,23 @@ function normalizeCallId(value) {
   const candidate = String(value || '').trim();
   if (candidate === '') return '';
   return /^[A-Za-z0-9._-]{1,200}$/.test(candidate) ? candidate : '';
+}
+
+function resetJoinContextDetails() {
+  state.callId = '';
+  state.roomId = '';
+  state.callTitle = '';
+  state.linkKind = 'personal';
+  state.guestName = '';
+  state.joining = false;
+  state.waitingForAdmission = false;
+  state.admissionMessage = '';
+  state.joinError = '';
+}
+
+function showSafeInvalidAccessState() {
+  resetJoinContextDetails();
+  state.contextError = safeCallAccessInvalidMessage(t);
 }
 
 function admissionSocketUrlForOrigin(origin) {
@@ -599,18 +620,12 @@ function startAdmissionWait(accessId) {
 async function loadJoinContext() {
   state.loadingContext = true;
   state.contextError = '';
-  state.callId = '';
-  state.roomId = '';
-  state.callTitle = '';
-  state.linkKind = 'personal';
-  state.guestName = '';
-  state.joinError = '';
-  state.waitingForAdmission = false;
-  state.admissionMessage = '';
+  resetJoinContextDetails();
 
   const accessId = normalizeAccessId(route.params.accessId);
-  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accessId)) {
+  if (!CALL_UUID_PATTERN.test(accessId)) {
     state.loadingContext = false;
+    resetJoinContextDetails();
     state.contextError = localizedApiErrorMessage({ error: { code: 'call_access_validation_failed' } }, t('public.join.access_invalid'));
     return;
   }
@@ -622,8 +637,10 @@ async function loadJoinContext() {
         accept: 'application/json',
       },
     });
-    const payload = await response.json().catch(() => null);
+    let payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
+      resetJoinContextDetails();
+      payload = { error: { code: 'call_access_validation_failed' } };
       state.contextError = localizedApiErrorMessage(payload, t('public.join.resolve_failed'));
       return;
     }
@@ -639,7 +656,7 @@ async function loadJoinContext() {
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
       state.contextError = t('public.join.backend_unreachable', { origin: currentBackendOrigin() });
     } else {
-      state.contextError = message;
+      showSafeInvalidAccessState();
     }
   } finally {
     state.loadingContext = false;
