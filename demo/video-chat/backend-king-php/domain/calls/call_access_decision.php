@@ -62,6 +62,16 @@ function videochat_decide_call_access_for_user(
             $call
         );
     }
+    $timeWindowState = videochat_call_time_window_state($call);
+    if ($timeWindowState !== 'ok') {
+        return videochat_call_access_decision_result(
+            false,
+            $timeWindowState === 'not_started' ? 'call_not_started' : 'call_expired',
+            'none',
+            'none',
+            $call
+        );
+    }
 
     if ($authUserId <= 0 || !is_array(videochat_fetch_active_user_for_call_access($pdo, $authUserId, null, null, false))) {
         return videochat_call_access_decision_result(

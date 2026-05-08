@@ -446,6 +446,10 @@ function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink):
     if (videochat_call_access_link_is_disabled($accessLink)) {
         return true;
     }
+    if (function_exists('videochat_call_access_calendar_link_is_invalidated')
+        && videochat_call_access_calendar_link_is_invalidated($pdo, $accessLink)) {
+        return true;
+    }
 
     return in_array(videochat_call_access_participant_invite_state($pdo, $accessLink), ['cancelled', 'declined'], true);
 }
