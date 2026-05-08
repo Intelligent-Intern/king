@@ -302,6 +302,36 @@ assert.match(
   /parallel duplicate review must be audit-logged/,
   'backend duplicate contract must audit-log the parallel duplicate review',
 );
+assert.match(
+  duplicateContract,
+  /review flag tenant must follow the call organization[\s\S]*review flag call id must follow the call/,
+  'backend duplicate contract must prove review flags are scoped to the call organization and call',
+);
+assert.match(
+  duplicateContract,
+  /review audit tenant must follow the call organization[\s\S]*review audit call id must follow the call/,
+  'backend duplicate contract must prove review audit events are scoped to the call organization and call',
+);
+assert.match(
+  duplicateContract,
+  /review flag subject must be the foreign account[\s\S]*review flag target must be the linked account[\s\S]*review flag should identify the affected linked account reference/,
+  'backend duplicate contract must prove review flags identify foreign and linked accounts without rebinding the link',
+);
+assert.match(
+  duplicateContract,
+  /review audit actor must be the foreign account[\s\S]*review audit target must be the linked account[\s\S]*review audit should reference the affected linked account/,
+  'backend duplicate contract must prove duplicate-link audit entries expose the actor and affected reference',
+);
+assert.match(
+  duplicateContract,
+  /review audit must not persist raw access id[\s\S]*review audit must fingerprint the foreign link[\s\S]*review audit must fingerprint the session id/,
+  'backend duplicate contract must prove review audit uses fingerprints instead of raw link/session identifiers',
+);
+assert.match(
+  duplicateContract,
+  /crossOrgHostName[\s\S]*crossOrgToken[\s\S]*crossOrgSdp[\s\S]*crossOrgIce[\s\S]*cross-org review audit event/,
+  'backend duplicate contract must prove review audit omits host names, tokens, SDP, and ICE data',
+);
 
 assert.match(
   emailContract,

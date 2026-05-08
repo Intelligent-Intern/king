@@ -1474,7 +1474,7 @@ the re-entered fields without adopting the link-target session.
 - [x] Same personalized link is later opened by account B
 - [x] Use of same personalized link by different logged-in account is detected
 - [x] Account B is flagged for review
-- [ ] Account A may appear as affected reference in audit log
+- [x] Account A may appear as affected reference in audit log
 - [x] Flag is created even if account B provides correct host name
 - [x] Flag is created even if account B does not enter the call
 - [ ] Flag is created when account B reaches warning modal if policy requires it
@@ -1484,7 +1484,7 @@ the re-entered fields without adopting the link-target session.
 - [x] Temporary account cannot be taken over by second registered account without review
 - [x] Review flag contains call, link ID, affected accounts, and timestamps
 - [x] Review flag contains no unnecessary sensitive link data
-- [ ] Admin / reviewer can understand the flag
+- [x] Admin / reviewer can understand the flag
 - [ ] Abuse detection works after logout / login switch in same browser
 - [ ] Abuse detection works across devices
 - [ ] Abuse detection works across browsers
@@ -1497,12 +1497,18 @@ race E2E coverage. `call-access-duplicate-review-contract.php` now proves a
 real `pcntl` parallel linked-account/foreign-account session race against
 SQLite: the linked account reopens the personal link, the foreign account is
 review-flagged and receives no session, the link assignment remains unchanged,
-and a later foreign use references the first in-call linked account. `npx
+and a later foreign use references the first in-call linked account. It also
+pins foreign personalized-link review flags and audit events to the call's
+organization/call, records the foreign actor plus linked-account affected
+reference, keeps reviewer status understandable as manual review, and proves
+raw link IDs, host names, session IDs, tokens, SDP, ICE, and account emails are
+omitted in favor of fingerprints. `npx
 playwright test tests/e2e/call-access-duplicate-review-email.spec.js
 tests/e2e/call-access-duplicate-race.spec.js --workers=1 --reporter=list`
 passed 5 tests; `npm run test:ci:iam-call-access:static` passed. Host PHP still
 lacks `pdo_sqlite`, so host IAM SQLite wrappers skip cleanly; the duplicate PHP
-proof was validated in `php:8.4-cli` with `pdo_sqlite` and `pcntl`.
+proof was validated in `php:8.4-cli` with `pdo_sqlite`; that local image lacks
+`pcntl_fork`, so the optional parallel fork subcheck skipped cleanly.
 
 ## 9. Anonymous Join Link: User Logged In
 
@@ -2346,7 +2352,7 @@ passed.
 - [ ] Implicit call end is logged
 - [ ] Owner absence timer start is logged
 - [ ] Owner absence timer cancellation is logged
-- [ ] Audit logs contain time, actor, target, call, and organization
+- [x] Audit logs contain time, actor, target, call, and organization
 - [x] Audit logs contain no unnecessary sensitive link data
 - [x] Security-relevant events are visible in monitoring
 - [ ] Failed E2E test artifacts include relevant logs
@@ -2360,6 +2366,10 @@ before the audit write, fingerprints link/session identifiers, omits raw
 access/session/token/password/SDP/ICE keys, and exposes the live audit probe
 event list for monitoring. Lifecycle and guest-cleanup contracts cover
 temporary account removal plus reschedule/delete/end audit records.
+`call-access-duplicate-review-contract.php` additionally proves duplicate
+foreign personalized-link review audit entries include timestamp, actor, target,
+call, and organization while omitting raw link IDs, host names, session IDs,
+tokens, SDP, ICE, and account emails.
 
 ## 32. End-to-End Main Paths
 
