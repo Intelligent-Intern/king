@@ -290,6 +290,7 @@ export function callAccessAuditProbe({ tenant = null, call = null, accessLink = 
       'call_scoped_access_continued',
       'call_access_duplicate_personalized_link_review',
       'call_access_strong_mismatch_denied',
+      'call_access_invitation_invalidated',
       'call_participant_joined',
       'call_participant_left',
       'call_participant_rejoined',

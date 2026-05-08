@@ -15,10 +15,17 @@ try {
         $label,
         'Call Access Invalidation Secret Title'
     );
-    videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $beforeUse);
+    $beforeUseInvalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $beforeUse);
+    videochat_iam_invitation_invalidation_assert((bool) ($beforeUseInvalidation['ok'] ?? false), 'cancelled invite should be audit-loggable before use', $label);
     $invalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($beforeUse['access_id'] ?? ''));
     videochat_iam_invitation_invalidation_assert(is_array($invalidatedLink), 'invalidated access link row should remain persisted', $label);
     videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'domain should classify cancelled participant invite as invalidated', $label);
+    videochat_iam_invitation_invalidation_assert_audit_logged(
+        $pdo,
+        $beforeUse,
+        $label,
+        'participant_invite_cancelled'
+    );
     videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
         $pdo,
         $beforeUse,

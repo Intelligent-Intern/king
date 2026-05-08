@@ -281,6 +281,51 @@ function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $ac
     ]);
 }
 
+function videochat_audit_record_call_access_invitation_invalidated(
+    PDO $pdo,
+    array $accessLink,
+    array $call = [],
+    ?array $targetUser = null,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    $inviteState = strtolower(trim((string) ($context['invite_state'] ?? 'cancelled')));
+    if (!in_array($inviteState, ['cancelled', 'declined'], true)) {
+        $inviteState = 'cancelled';
+    }
+    $reason = strtolower(trim((string) ($context['invalidation_reason'] ?? 'participant_invite_cancelled')));
+    if ($reason === '' || preg_match('/^[a-z0-9_.:-]{1,120}$/', $reason) !== 1) {
+        $reason = 'participant_invite_cancelled';
+    }
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_invitation_invalidated',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'invalidate_invitation',
+            'invalidation_reason' => $reason,
+            'invite_state' => $inviteState,
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'call_status' => strtolower(trim((string) ($call['status'] ?? ''))) ?: 'unknown',
+            'target_user_resolved' => is_array($targetUser),
+            'had_effect' => (bool) ($context['had_effect'] ?? true),
+            'access_session_count' => max(0, (int) ($context['access_session_count'] ?? 0)),
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+            'raw_guest_identity_logged' => false,
+        ],
+    ]);
+}
+
 function videochat_audit_record_call_participant_presence(
     PDO $pdo,
     string $eventType,

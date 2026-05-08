@@ -90,6 +90,7 @@ STATIC_CONTRACTS=(
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
+  "tests/contract/iam-call-access-audit-events-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
 
@@ -99,6 +100,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-link-privacy-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
+  "tests/contract/iam-call-access-audit-events-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
 
@@ -119,6 +121,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-membership-active-removal-contract.sh"
   "tests/call-access-membership-removal-contract.sh"
   "tests/call-access-stale-organization-role-contract.sh"
+  "tests/audit-call-access-events-contract.sh"
   "tests/call-access-rejoin-kick-contract.sh"
   "tests/call-creation-owner-rights-contract.sh"
   "tests/call-guest-lifecycle-contract.sh"
