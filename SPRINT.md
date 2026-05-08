@@ -1666,7 +1666,7 @@ call room does not imply subscription or moderation rights in another room.
 - [ ] Logged-in user opens personalized link in browser A
 - [ ] Same user opens same link in browser B
 - [ ] Same user opens same link on another device
-- [ ] Different user opens same personalized link on another device
+- [x] Different user opens same personalized link on another device
 - [ ] Different active session triggers review flag
 - [ ] Not logged-in user opens same personalized link on another device
 - [ ] Parallel use of same temporary account is handled correctly
@@ -2045,6 +2045,15 @@ identifiers.
 - [ ] `e2e_invite_008_cancel_invitation_invalidates_link`
 - [ ] `e2e_invite_009_expired_personalized_link_rejected`
 - [ ] `e2e_invite_010_reopen_same_link_same_context_consistent`
+
+Proof: `call-access-verified-context-ui-contract` pins the focused Playwright
+case `same personalized link in parallel contexts keeps account sessions
+isolated` in `call-access-join.spec.js`. It opens the same personalized link in
+two isolated browser contexts with different authenticated sessions, submits the
+session requests in parallel, proves each POST carries its own bearer plus
+verified user/session snapshot, keeps localStorage/session state isolated after
+one success and one conflict, renders no foreign response data, and guards
+against duplicate join/session request loops.
 
 ## Test Group: Personalized Link Logged Out
 
