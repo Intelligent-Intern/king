@@ -689,6 +689,12 @@ run_step "frontend contract: media security frame path" bash -lc "
   npm run test:contract:media-security
 "
 
+run_step "frontend contract: media reconnect screenshare release smoke" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:media-reconnect-release-smoke
+"
+
 run_step "frontend contract: MediaPipe CDN assets" bash -lc "
   set -euo pipefail
   cd '${FRONTEND_DIR}'
