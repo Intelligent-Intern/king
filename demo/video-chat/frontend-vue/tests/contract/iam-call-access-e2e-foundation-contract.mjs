@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +22,7 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
+const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
@@ -104,6 +105,123 @@ assert.match(
   /VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON/,
   'seed-matrix helper must support compose smoke injection when contracts/v1 is outside the frontend container mount',
 );
+
+const liveFixtureModule = await import(pathToFileURL(path.join(
+  repoRoot,
+  'demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js',
+)).href);
+
+assert.equal(
+  liveFixtureModule.iamCallAccessLiveFixtureContractVersion,
+  'iam-call-access-live-fixtures.v1',
+  'live fixture helper must expose a stable foundation contract version',
+);
+for (const scope of [
+  'tenant_probe',
+  'organization',
+  'user',
+  'role',
+  'call',
+  'access_link',
+  'lobby_probe',
+  'session_probe',
+  'audit_probe',
+]) {
+  assert.ok(
+    liveFixtureModule.iamCallAccessFixtureScopes.includes(scope),
+    `live fixture helper must cover ${scope}`,
+  );
+}
+assert.equal(
+  liveFixtureModule.iamFixtureEmail('Alpha User', 'Run 42'),
+  'iam-run-42-user-alpha-user@example.test',
+  'live fixture user emails must be deterministic from run id and key',
+);
+assert.equal(
+  liveFixtureModule.iamFixtureRoomId('Alpha Room', 'Run 42'),
+  'iam-run-42-room-alpha-room',
+  'live fixture room ids must be deterministic from run id and key',
+);
+assert.equal(
+  liveFixtureModule.iamFixtureFingerprint('access-id'),
+  'sha256:539b3ed57456a8c8822ef9152c97e409cdb1626e1731cc2bef9c96c1d82520d4',
+  'audit probes must use the backend audit fingerprint shape',
+);
+const liveFactory = liveFixtureModule.createIamCallAccessFixtureFactory({
+  runId: 'contract',
+  fetchImpl: async () => {
+    throw new Error('contract should not call the network');
+  },
+});
+for (const method of [
+  'login',
+  'tenantProbe',
+  'sessionProbe',
+  'switchTenant',
+  'ensureOrganization',
+  'createRole',
+  'createOrReuseUser',
+  'updateUser',
+  'createCall',
+  'listCalls',
+  'findCallByRoomId',
+  'createOrReuseCall',
+  'deleteCall',
+  'createAccessLink',
+  'resolveAccessLink',
+  'startAccessSession',
+  'lobbyProbe',
+  'auditProbe',
+  'cleanupCreated',
+]) {
+  assert.equal(typeof liveFactory[method], 'function', `live fixture factory must expose ${method}`);
+}
+const lobbyProbe = liveFixtureModule.callAccessLobbyProbe({
+  origin: 'http://127.0.0.1:18080',
+  session: { token: 'sess_contract' },
+  call: { id: 'call-contract', room_id: 'room-contract' },
+  targetUserId: 42,
+});
+assert.equal(lobbyProbe.websocket_url, 'ws://127.0.0.1:18080/ws?room=room-contract&call_id=call-contract&session=sess_contract');
+assert.equal(lobbyProbe.frames.queue_join.type, 'lobby/queue/join');
+assert.equal(lobbyProbe.frames.allow.target_user_id, 42);
+
+const auditProbe = liveFixtureModule.callAccessAuditProbe({
+  tenant: { id: 7 },
+  call: { id: 'call-contract' },
+  accessLink: { id: 'access-contract' },
+  session: { token: 'sess_contract' },
+  targetUser: { id: 42 },
+});
+assert.equal(auditProbe.filters.tenant_id, 7);
+assert.equal(auditProbe.filters.call_id, 'call-contract');
+assert.ok(auditProbe.expected_event_types.includes('call_access_link_opened'));
+assert.ok(auditProbe.forbidden_payload_keys.includes('token'));
+assert.doesNotMatch(
+  liveFixtureHelper,
+  /context\.route|route\.fulfill|FakeWebSocket|installCallAccessSeedRoutes/,
+  'live fixture helper must not be a Playwright route-stub layer',
+);
+assert.doesNotMatch(
+  liveFixtureHelper,
+  /Math\.random|randomUUID|randomBytes|Date\.now/,
+  'live fixture helper must remain deterministic and avoid wall-clock/random ids',
+);
+for (const endpoint of [
+  '/api/auth/login',
+  '/api/auth/session-state',
+  '/api/tenants',
+  '/api/auth/tenant',
+  '/api/governance/organizations',
+  '/api/governance/roles',
+  '/api/admin/users',
+  '/api/calls',
+  '/access-link',
+  '/api/call-access/',
+  '/session',
+]) {
+  assert.ok(liveFixtureHelper.includes(endpoint), `live fixture helper must use ${endpoint}`);
+}
 assert.match(
   backendContract,
   /videochat_tenant_user_is_member\(\$pdo, \$invitedUserId, \$tenantId\)[\s\S]*membership removal/s,
