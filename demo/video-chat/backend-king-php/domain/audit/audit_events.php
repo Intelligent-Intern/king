@@ -281,6 +281,201 @@ function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $ac
     ]);
 }
 
+function videochat_audit_record_call_participant_presence(
+    PDO $pdo,
+    string $eventType,
+    int $tenantId,
+    string $callId,
+    int $targetUserId,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    $normalizedEventType = in_array($eventType, [
+        'call_participant_joined',
+        'call_participant_rejoined',
+        'call_participant_left',
+    ], true) ? $eventType : 'call_participant_joined';
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    $roomId = trim((string) ($context['room_id'] ?? ''));
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => $normalizedEventType,
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $targetUserId,
+        'call_id' => $callId,
+        'resource_type' => 'call_participant',
+        'resource_id' => (string) $targetUserId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId . ':' . $targetUserId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_participant',
+            'action' => str_replace('call_participant_', '', $normalizedEventType),
+            'call_role' => strtolower(trim((string) ($context['call_role'] ?? 'participant'))) ?: 'participant',
+            'room_fingerprint' => $roomId === '' ? '' : videochat_audit_fingerprint($roomId),
+            'presence_reason' => strtolower(trim((string) ($context['reason'] ?? 'manual_proof'))) ?: 'manual_proof',
+            'rejoin' => $normalizedEventType === 'call_participant_rejoined',
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_participant_joined(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $targetUserId,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    return videochat_audit_record_call_participant_presence(
+        $pdo,
+        'call_participant_joined',
+        $tenantId,
+        $callId,
+        $targetUserId,
+        $actorUserId,
+        $context
+    );
+}
+
+function videochat_audit_record_call_participant_rejoined(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $targetUserId,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    return videochat_audit_record_call_participant_presence(
+        $pdo,
+        'call_participant_rejoined',
+        $tenantId,
+        $callId,
+        $targetUserId,
+        $actorUserId,
+        $context
+    );
+}
+
+function videochat_audit_record_call_participant_left(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $targetUserId,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    return videochat_audit_record_call_participant_presence(
+        $pdo,
+        'call_participant_left',
+        $tenantId,
+        $callId,
+        $targetUserId,
+        $actorUserId,
+        $context
+    );
+}
+
+function videochat_audit_record_call_participant_kicked(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $actorUserId,
+    int $targetUserId,
+    array $context = []
+): array {
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    $roomId = trim((string) ($context['room_id'] ?? ''));
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => 'call_participant_kicked',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $targetUserId,
+        'call_id' => $callId,
+        'resource_type' => 'call_participant',
+        'resource_id' => (string) $targetUserId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId . ':' . $targetUserId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_moderation',
+            'action' => 'kick',
+            'lobby_action' => strtolower(trim((string) ($context['lobby_action'] ?? 'lobby/remove'))) ?: 'lobby/remove',
+            'previous_state' => strtolower(trim((string) ($context['previous_state'] ?? 'admitted'))) ?: 'admitted',
+            'room_fingerprint' => $roomId === '' ? '' : videochat_audit_fingerprint($roomId),
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_owner_transferred(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $actorUserId,
+    int $previousOwnerUserId,
+    int $nextOwnerUserId,
+    array $context = []
+): array {
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => 'call_owner_transferred',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $nextOwnerUserId,
+        'call_id' => $callId,
+        'resource_type' => 'call_owner',
+        'resource_id' => $callId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId),
+        'payload' => [
+            'audit_scope' => 'iam_owner_transfer',
+            'previous_owner_user_id' => $previousOwnerUserId,
+            'new_owner_user_id' => $nextOwnerUserId,
+            'actor_role' => strtolower(trim((string) ($context['actor_role'] ?? 'user'))) ?: 'user',
+            'exactly_one_owner_required' => true,
+            'old_owner_admin_preserved' => (bool) ($context['old_owner_admin_preserved'] ?? false),
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_access_strong_mismatch(
+    PDO $pdo,
+    array $accessLink,
+    array $call,
+    ?array $targetUser,
+    int $actorUserId,
+    string $stage,
+    array $context = []
+): array {
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+    $targetUserId = is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null;
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_strong_mismatch_denied',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $targetUserId,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'mismatch' => 'strong_personalized_link',
+            'stage' => strtolower(trim($stage)) ?: 'unknown',
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'denial_reason' => strtolower(trim((string) ($context['denial_reason'] ?? 'not_bound_to_current_user'))) ?: 'not_bound_to_current_user',
+            'host_name_verified' => (bool) ($context['host_name_verified'] ?? false),
+            'host_name_logged' => false,
+            'foreign_account_data_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+        ],
+    ]);
+}
+
 function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
 {
     if (!videochat_audit_bootstrap($pdo)) {
