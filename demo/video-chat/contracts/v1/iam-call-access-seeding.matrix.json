@@ -420,6 +420,17 @@
       "join_path": "/join/10000000-0000-4000-8000-000000000104",
       "requires_admission": true,
       "direct_guest_list_entry": false
+    },
+    {
+      "key": "alpha_deleted_personalized",
+      "id": "10000000-0000-4000-8000-000000000106",
+      "link_kind": "personal",
+      "call_key": "alpha_deleted",
+      "target_user_key": "registered_guest",
+      "join_path": "/join/10000000-0000-4000-8000-000000000106",
+      "requires_admission": false,
+      "direct_guest_list_entry": false,
+      "invalidated_by_call_state": true
     }
   ],
   "scenarios": [
@@ -499,6 +510,21 @@
       }
     },
     {
+      "key": "direct_join_org_admin_deleted_call_denied",
+      "sprint_groups": ["3", "19", "25"],
+      "principal_user_key": "alpha_org_admin",
+      "call_key": "alpha_deleted",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "decision_reason": "call_not_joinable_from_status",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
       "key": "direct_join_system_admin_ended_call_denied",
       "sprint_groups": ["3", "18", "26"],
       "principal_user_key": "system_admin",
@@ -555,6 +581,18 @@
         "can_manage_lobby": false,
         "tenant_admin": false,
         "platform_admin": false
+      }
+    },
+    {
+      "key": "deleted_personalized_link_denied",
+      "sprint_groups": ["25"],
+      "link_key": "alpha_deleted_personalized",
+      "principal_user_key": "registered_guest",
+      "expected": {
+        "state": "not_found",
+        "link_kind": "personal",
+        "must_not_issue_session": true,
+        "must_not_leak_call": true
       }
     },
     {

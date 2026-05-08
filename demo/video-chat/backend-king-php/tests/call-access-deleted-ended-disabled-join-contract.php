@@ -132,6 +132,28 @@ SQL
     return $userId;
 }
 
+function videochat_iam_deleted_ended_disabled_join_attach_organization(
+    PDO $pdo,
+    int $tenantId,
+    int $organizationId,
+    int $userId,
+    string $role
+): void {
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO organization_memberships(tenant_id, organization_id, user_id, membership_role, status, created_at, updated_at)
+VALUES(:tenant_id, :organization_id, :user_id, :membership_role, 'active', :created_at, :updated_at)
+SQL
+    )->execute([
+        ':tenant_id' => $tenantId,
+        ':organization_id' => $organizationId,
+        ':user_id' => $userId,
+        ':membership_role' => strtolower(trim($role)) === 'admin' ? 'admin' : 'member',
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+}
+
 function videochat_iam_deleted_ended_disabled_join_create_call(PDO $pdo, int $ownerUserId, array $participantUserIds, string $title, int $tenantId): array
 {
     $result = videochat_create_call($pdo, $ownerUserId, [
@@ -186,6 +208,15 @@ try {
     $jsonResponse = 'videochat_iam_deleted_ended_disabled_join_json_response';
     $errorResponse = 'videochat_iam_deleted_ended_disabled_join_error_response';
     $decodeJsonBody = 'videochat_iam_deleted_ended_disabled_join_decode_json_body';
+
+    $organizationId = (int) $pdo->query("SELECT id FROM organizations WHERE tenant_id = {$tenantId} ORDER BY id ASC LIMIT 1")->fetchColumn();
+    videochat_iam_deleted_ended_disabled_join_assert($organizationId > 0, 'expected default organization');
+    $orgAdminUserId = videochat_iam_deleted_ended_disabled_join_create_user($pdo, 'deleted-org-admin-join-contract@example.test', 'Deleted Org Admin Join Contract');
+    $orgOwnerUserId = videochat_iam_deleted_ended_disabled_join_create_user($pdo, 'deleted-org-owner-join-contract@example.test', 'Deleted Org Owner Join Contract');
+    videochat_tenant_attach_user($pdo, $orgAdminUserId, $tenantId, 'member');
+    videochat_tenant_attach_user($pdo, $orgOwnerUserId, $tenantId, 'member');
+    videochat_iam_deleted_ended_disabled_join_attach_organization($pdo, $tenantId, $organizationId, $orgAdminUserId, 'admin');
+    videochat_iam_deleted_ended_disabled_join_attach_organization($pdo, $tenantId, $organizationId, $orgOwnerUserId, 'member');
 
     $endedCall = videochat_iam_deleted_ended_disabled_join_create_call(
         $pdo,
@@ -281,6 +312,7 @@ try {
         $openDatabase
     );
     videochat_iam_deleted_ended_disabled_join_assert(is_array($deletedResolve), 'deleted direct resolve response should exist');
+    videochat_iam_deleted_ended_disabled_join_assert((int) ($deletedResolve['status'] ?? 0) === 200, 'deleted direct resolve status should be 200 safe envelope');
     $deletedResolvePayload = videochat_iam_deleted_ended_disabled_join_decode($deletedResolve);
     videochat_iam_deleted_ended_disabled_join_assert((string) (($deletedResolvePayload['result'] ?? [])['state'] ?? '') === 'not_found', 'deleted direct resolve should be safe not_found');
     videochat_iam_deleted_ended_disabled_join_assert(($deletedResolvePayload['result']['call'] ?? null) === null, 'deleted direct resolve must not include call payload');
@@ -299,6 +331,52 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert(is_array($deletedJoin), 'deleted public join response should exist');
     videochat_iam_deleted_ended_disabled_join_assert((int) ($deletedJoin['status'] ?? 0) === 404, 'deleted public join should return not found');
     videochat_iam_deleted_ended_disabled_join_assert_omits($deletedJoin, [$deletedCall['title'], 'user@intelligent-intern.com'], 'deleted public join');
+
+    $orgDeletedCall = videochat_iam_deleted_ended_disabled_join_create_call(
+        $pdo,
+        $orgOwnerUserId,
+        [$standardUserId],
+        'IAM Deleted Organization Admin Secret Contract Call',
+        $tenantId
+    );
+    $orgDeletedAccessId = videochat_iam_deleted_ended_disabled_join_create_personal_link($pdo, $orgDeletedCall['id'], $adminUserId, $standardUserId, $tenantId);
+    $orgAdminBeforeDelete = videochat_decide_call_access_for_user($pdo, $orgDeletedCall['id'], $orgAdminUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert((bool) ($orgAdminBeforeDelete['allowed'] ?? false), 'organization admin should join same-organization call before deletion');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($orgAdminBeforeDelete['source'] ?? '') === 'organization_admin', 'organization admin pre-delete source mismatch');
+    $orgDeleteResult = videochat_delete_call($pdo, $orgDeletedCall['id'], $orgOwnerUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert((bool) ($orgDeleteResult['ok'] ?? false), 'organization-owned call delete should succeed');
+
+    $orgDeletedDecision = videochat_decide_call_access_for_user($pdo, $orgDeletedCall['id'], $orgAdminUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($orgDeletedDecision['allowed'] ?? true), 'organization admin must not get normal deleted-call join access');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($orgDeletedDecision['reason'] ?? '') === 'not_found', 'organization admin deleted-call denial reason mismatch');
+    $orgDeletedResolve = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $orgDeletedCall['id'],
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/calls/resolve/' . $orgDeletedCall['id'], 'headers' => []],
+        videochat_iam_deleted_ended_disabled_join_auth_context($orgAdminUserId, 'user', $tenantId),
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_iam_deleted_ended_disabled_join_assert(is_array($orgDeletedResolve), 'organization admin deleted resolve response should exist');
+    $orgDeletedResolvePayload = videochat_iam_deleted_ended_disabled_join_decode($orgDeletedResolve);
+    videochat_iam_deleted_ended_disabled_join_assert((string) (($orgDeletedResolvePayload['result'] ?? [])['state'] ?? '') === 'not_found', 'organization admin deleted resolve should be safe not_found');
+    videochat_iam_deleted_ended_disabled_join_assert(($orgDeletedResolvePayload['result']['call'] ?? null) === null, 'organization admin deleted resolve must not include call payload');
+    videochat_iam_deleted_ended_disabled_join_assert_omits($orgDeletedResolve, [$orgDeletedCall['title'], 'deleted-org-owner-join-contract@example.test'], 'organization admin deleted resolve');
+    $orgDeletedJoin = videochat_handle_call_access_routes(
+        '/api/call-access/' . $orgDeletedAccessId . '/join',
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/call-access/' . $orgDeletedAccessId . '/join', 'headers' => []],
+        [],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_iam_deleted_ended_disabled_join_assert(is_array($orgDeletedJoin), 'organization deleted personalized join response should exist');
+    videochat_iam_deleted_ended_disabled_join_assert((int) ($orgDeletedJoin['status'] ?? 0) === 404, 'organization deleted personalized join should return not found');
+    videochat_iam_deleted_ended_disabled_join_assert_omits($orgDeletedJoin, [$orgDeletedCall['title'], 'deleted-org-owner-join-contract@example.test', 'user@intelligent-intern.com'], 'organization deleted personalized join');
 
     $disabledCall = videochat_iam_deleted_ended_disabled_join_create_call(
         $pdo,

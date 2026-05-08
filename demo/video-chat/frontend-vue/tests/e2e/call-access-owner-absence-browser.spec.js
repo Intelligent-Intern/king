@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 
 import {
-  createDirectJoinMatrixPage,
   getSeedCall,
   getSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import { createDirectJoinMatrixPage } from './helpers/callAccessSeedRuntime.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
