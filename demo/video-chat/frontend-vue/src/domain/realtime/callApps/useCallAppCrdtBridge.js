@@ -1,5 +1,9 @@
 import { onBeforeUnmount } from 'vue';
-import { CALL_APP_IFRAME_BRIDGE_PROTOCOL, CALL_APP_IFRAME_OPAQUE_ORIGIN } from './useCallAppIframeBridge.js';
+import {
+  CALL_APP_IFRAME_BRIDGE_PROTOCOL,
+  CALL_APP_IFRAME_OPAQUE_ORIGIN,
+  sanitizeCallAppBridgePayload,
+} from './useCallAppIframeBridge.js';
 import {
   callAppDiagnosticElapsedMs,
   callAppDiagnosticNow,
@@ -19,13 +23,17 @@ import {
 
 function postToIframe(frameWindow, session, type, payload = {}) {
   if (!frameWindow || !session) return;
-  frameWindow.postMessage({
-    type,
-    bridge_protocol: CALL_APP_IFRAME_BRIDGE_PROTOCOL,
-    app_session_id: String(session?.id || '').trim(),
-    app_key: String(session?.app_key || '').trim(),
-    ...payload,
-  }, '*');
+  try {
+    frameWindow.postMessage(sanitizeCallAppBridgePayload({
+      type,
+      bridge_protocol: CALL_APP_IFRAME_BRIDGE_PROTOCOL,
+      app_session_id: String(session?.id || '').trim(),
+      app_key: String(session?.app_key || '').trim(),
+      ...payload,
+    }), '*');
+  } catch {
+    // A bridge message must never break the parent call runtime.
+  }
 }
 
 function requestId(message) {

@@ -57,6 +57,30 @@ function videochat_presence_room_key(string $roomId, ?int $tenantId = null): str
     return is_int($tenantId) && $tenantId > 0 ? ('tenant:' . $tenantId . ':room:' . $normalizedRoomId) : $normalizedRoomId;
 }
 
+function videochat_presence_room_key_for_connection(array $connection, ?string $roomId = null): string
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id(
+        $roomId ?? (string) ($connection['room_id'] ?? 'lobby'),
+        ''
+    );
+    if ($normalizedRoomId === '') {
+        return '';
+    }
+
+    $connectionRoomKey = is_string($connection['room_key'] ?? null)
+        ? videochat_presence_normalize_room_storage_key((string) $connection['room_key'], '')
+        : '';
+    if (
+        $connectionRoomKey !== ''
+        && videochat_presence_external_room_id_from_key($connectionRoomKey, '') === $normalizedRoomId
+    ) {
+        return $connectionRoomKey;
+    }
+
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
+    return videochat_presence_room_key($normalizedRoomId, $tenantId);
+}
+
 /**
  * @return array{tenant_id: int, room_id: string, room_key: string}|null
  */

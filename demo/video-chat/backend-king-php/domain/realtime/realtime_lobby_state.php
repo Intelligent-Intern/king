@@ -174,10 +174,11 @@ function videochat_lobby_broadcast_room_snapshot(
     string $roomId,
     string $reason = 'updated',
     ?callable $sender = null,
-    ?int $nowUnixMs = null
+    ?int $nowUnixMs = null,
+    ?int $tenantId = null
 ): int {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
-    $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
+    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return 0;
     }
@@ -207,14 +208,15 @@ function videochat_lobby_user_present_in_room(
     array $presenceState,
     string $roomId,
     int $userId,
-    ?string $excludeConnectionId = null
+    ?string $excludeConnectionId = null,
+    ?int $tenantId = null
 ): bool {
     if ($userId <= 0) {
         return false;
     }
 
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
-    $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
+    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return false;
     }
@@ -334,6 +336,8 @@ function videochat_lobby_queue_connection_for_room(
             'target_user_id' => $userId,
         ];
     }
+    $activeConnection = $presenceState['connections'][$connectionId];
+    $tenantId = is_numeric($activeConnection['tenant_id'] ?? null) ? (int) $activeConnection['tenant_id'] : null;
 
     videochat_lobby_ensure_room_state($lobbyState, $normalizedRoomId);
     $nowMs = videochat_lobby_now_ms($nowUnixMs);
@@ -378,7 +382,8 @@ function videochat_lobby_queue_connection_for_room(
         $normalizedRoomId,
         'queued',
         $sender,
-        $nowMs
+        $nowMs,
+        $tenantId
     );
 
     return [

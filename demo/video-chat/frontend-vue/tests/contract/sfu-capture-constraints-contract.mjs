@@ -66,6 +66,7 @@ async function main() {
   requireContains(audioCaptureConstraints, 'noiseSuppression: true', 'call audio capture requests noise suppression');
   requireContains(audioCaptureConstraints, 'autoGainControl: true', 'call audio capture requests automatic gain control');
   requireContains(audioCaptureConstraints, 'channelCount: { ideal: 1 }', 'call audio capture requests mono voice input');
+  requireContains(workspaceShell, 'useWorkspaceMicLevelMonitor', 'workspace shell delegates mic monitoring to the shared monitor composable');
   for (const [label, source] of Object.entries({
     accessJoinView,
     dashboardEnterCall,

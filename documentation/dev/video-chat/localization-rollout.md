@@ -45,8 +45,9 @@ After deploy:
   translation resources without tenant context.
   The smoke also verifies the authenticated session payload, default `en`
   locale, `ltr` direction, and seeded `en`, `de`, `ar`, and `sgd` locales.
-  It then runs a primary-superadmin localization CSV preview against
-  `/api/admin/localization/imports/preview` without committing imported rows.
+  It then verifies the retired CSV preview path
+  `/api/admin/localization/imports/preview` returns the disabled import
+  response and points operators at `/api/admin/localization/resources`.
 - Log in as an existing user and confirm the default locale is English.
 - Switch a test user to `de`, reload, and confirm Settings and navigation stay
   localized.
@@ -54,9 +55,9 @@ After deploy:
   settings modal, and admin layout direction.
 - Switch a test user to `sgd` as the additional RTL website-source locale and
   repeat the RTL layout smoke.
-- As primary superadmin `user_id = 1`, upload a translation CSV through
-  Administration -> Localization, run preview, confirm row-level validation,
-  then commit only after a clean preview.
+- As an admin, edit translation rows through Administration -> Localization.
+  Save through the resource editor and confirm only changed locale resources are
+  written.
 
 ## Rollback
 
@@ -68,9 +69,9 @@ Because the migrations are additive, the safe rollback is code-first:
   `users.locale` in place during rollback; old code ignores them.
 - Keep existing users on `en` by default; do not mutate passwords, sessions, or
   tenant memberships.
-- If a bad CSV import caused visible copy issues, remove the affected
-  `translation_resources` rows or upload a corrected CSV. Keep
-  `translation_imports` as the audit trail.
+- If a bad resource edit caused visible copy issues, remove the affected
+  `translation_resources` rows or save corrected values through the resource
+  editor. Keep `translation_imports` as the retired import audit table.
 - Drop localization tables or the `users.locale` column only after an explicit
   database backup and a separate maintenance decision. That is not part of the
   normal rollback.

@@ -1,10 +1,10 @@
-export const LOCALIZATION_FALLBACK_GAP_MARKER = 'fallback_allowed_until_csv_import';
+export const LOCALIZATION_FALLBACK_GAP_MARKER = 'fallback_allowed_until_resource_editor';
 
 export const LOCALIZATION_FALLBACK_GAP_POLICY = Object.freeze({
   marker: LOCALIZATION_FALLBACK_GAP_MARKER,
-  owner: 'primary_superadmin_csv_import',
-  source: 'admin_localization_csv_import',
-  rationale: 'Non-English app translations are supplied through the superadmin CSV import path; English resources remain the runtime fallback until a locale bundle is imported.',
+  owner: 'admin_localization_resource_editor',
+  source: 'admin_localization_resources_editor',
+  rationale: 'Non-English app translations are supplied through the admin localization resource editor; English resources remain the runtime fallback until locale resources are completed.',
   locales: Object.freeze([
     'am',
     'ar',
@@ -39,11 +39,13 @@ export const LOCALIZATION_FALLBACK_GAP_POLICY = Object.freeze({
     'appointment_config',
     'appointment_settings',
     'auth',
+    'calendar',
     'calls',
     'chat_archive',
     'common',
     'errors',
     'governance',
+    'infrastructure',
     'localization',
     'marketplace',
     'navigation',

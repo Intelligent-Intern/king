@@ -6,10 +6,12 @@ import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRel
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
+const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/answer',
   'call/ice',
   'call/media-quality-pressure',
+  MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE,
   'call/offer',
 ]);
 
@@ -267,7 +269,7 @@ export function createCallWorkspaceSocketHelpers({
 
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
-    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
+    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'gossip/recovery/request', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
 
     const sender = typeof payload.sender === 'object' ? payload.sender : {};
     const senderUserId = Number(sender.user_id || 0);
@@ -282,6 +284,7 @@ export function createCallWorkspaceSocketHelpers({
     if (handleGossipNeighborSignal(type, senderUserId, payloadBody || {})) return;
 
     const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
+
     const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
     const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
     const isNativeSignal = payloadKind.startsWith('webrtc_')
@@ -301,6 +304,33 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === CALL_APP_PRESENCE_SIGNAL_TYPE) {
       handleCallAppPresenceSignal(payloadBody || {}, sender);
+      return;
+    }
+
+    if (type === MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'media_security_sync_request_received',
+        code: 'media_security_sync_request_received',
+        message: 'A remote receiver requested a media-security resync before video reconnect.',
+        payload: {
+          sender_user_id: senderUserId,
+          requester_user_id: Number(payloadBody?.requester_user_id || senderUserId || 0),
+          source_reason: String(payloadBody?.reason || '').trim(),
+          source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
+          media_runtime_path: refs.mediaRuntimePath.value,
+        },
+        immediate: true,
+      });
+      void sendMediaSecuritySync(true);
+      if (typeof requestWlvcFullFrameKeyframe === 'function') {
+        requestWlvcFullFrameKeyframe('media_security_sync_request_received', {
+          requested_action: 'force_full_keyframe',
+          request_full_keyframe: true,
+          sender_user_id: senderUserId,
+        });
+      }
       return;
     }
 

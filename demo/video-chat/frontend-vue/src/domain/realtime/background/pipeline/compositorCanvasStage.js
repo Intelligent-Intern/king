@@ -15,6 +15,7 @@ export function createCanvasBackgroundCompositorStage({
     getBackgroundColor,
     getBackgroundImageUrl,
     getBlurPx,
+    getShowSourceUntilMask,
     video,
 }) {
     const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
@@ -81,8 +82,6 @@ export function createCanvasBackgroundCompositorStage({
             return;
         }
 
-        if (hasMatteMask && !maskUpdated) return;
-
         let hasRenderableMask = false;
         if (maskUpdated) {
             hasRenderableMask = isImageBitmap(maskBitmap)
@@ -97,8 +96,17 @@ export function createCanvasBackgroundCompositorStage({
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.globalCompositeOperation = 'source-over';
-            ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;
-            drawCoverImage(ctx, video, canvas.width, canvas.height);
+            if (getShowSourceUntilMask?.() === true) {
+                ctx.filter = 'none';
+                drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);
+            } else if (mode === 'replace' && (backgroundColor || backgroundImageUrl)) {
+                ctx.filter = 'none';
+                ctx.fillStyle = '#061a4a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;
+                drawCoverImage(ctx, video, canvas.width, canvas.height);
+            }
             ctx.restore();
             return;
         }

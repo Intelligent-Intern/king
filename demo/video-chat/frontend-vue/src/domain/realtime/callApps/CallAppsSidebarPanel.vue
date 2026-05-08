@@ -26,6 +26,24 @@
       {{ error }}
     </div>
 
+    <label v-if="hasCallContext && availableApps.length > 0" class="call-apps-picker">
+      <span>Call App</span>
+      <AppSelect
+        :model-value="selectedAppKey"
+        aria-label="Select Call App"
+        @update:model-value="selectAppByKey"
+      >
+        <option value="" disabled>Select Call App</option>
+        <option
+          v-for="app in availableApps"
+          :key="`option:${app.app_key}`"
+          :value="app.app_key"
+        >
+          {{ app.name }}
+        </option>
+      </AppSelect>
+    </label>
+
     <div v-if="hasCallContext" class="call-apps-list" :class="{ loading }">
       <button
         v-for="app in availableApps"
@@ -314,6 +332,27 @@ function selectApp(app) {
   notice.value = '';
 }
 
+function selectAppByKey(appKey) {
+  const normalizedAppKey = String(appKey || '').trim();
+  const app = availableApps.value.find((row) => row.app_key === normalizedAppKey) || null;
+  if (!app) {
+    selectedAppKey.value = '';
+    actionError.value = '';
+    notice.value = '';
+    return;
+  }
+  selectApp(app);
+}
+
+function reconcileSelectedAppAfterLoad() {
+  if (selectedAppKey.value !== '' && selectedApp.value) return;
+  if (availableApps.value.length === 1) {
+    selectApp(availableApps.value[0]);
+    return;
+  }
+  selectedAppKey.value = '';
+}
+
 async function loadPage(page = 1) {
   if (!hasCallContext.value) {
     resetCallAppsCatalog();
@@ -328,9 +367,7 @@ async function loadPage(page = 1) {
     pageSize: 8,
   });
 
-  if (selectedAppKey.value !== '' && !selectedApp.value) {
-    selectedAppKey.value = '';
-  }
+  reconcileSelectedAppAfterLoad();
 }
 
 async function submitSearch() {
@@ -426,6 +463,18 @@ watch(
   width: 16px;
   height: 16px;
   filter: var(--action-icon-filter);
+}
+
+.call-apps-picker {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-surface-strong);
+}
+
+.call-apps-picker span {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .call-apps-list {

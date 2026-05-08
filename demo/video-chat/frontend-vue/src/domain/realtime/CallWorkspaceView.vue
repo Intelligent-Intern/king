@@ -651,6 +651,7 @@ function sendSocketFrame(payload) {
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
+  getAssignedGossipNeighborCount,
   handleGossipNeighborSignal,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
@@ -660,6 +661,7 @@ const {
     activeCallId: () => activeCallId.value, activeRoomId: () => activeRoomId.value,
     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
+    defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
     sendSocketFrame,
   },
 });
@@ -1045,6 +1047,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     markParticipantActivity,
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
+    getAssignedGossipNeighborCount,
     normalizeRoomId,
     onLocalScreenShareStateChanged: (active, reason = '') => {
       refreshUsersDirectoryPresentation();

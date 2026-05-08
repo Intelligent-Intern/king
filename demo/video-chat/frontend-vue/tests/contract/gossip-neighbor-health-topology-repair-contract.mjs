@@ -17,7 +17,8 @@ function assert(condition, message) {
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const gossipNeighborLifecycle = read('src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts')
+const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}\n${gossipNeighborLifecycle}`
 const controller = read('src/lib/gossipmesh/gossipController.ts')
 const transport = read('src/lib/gossipmesh/rtcDataChannelTransport.ts')
 
@@ -67,6 +68,12 @@ assert(
 assert(
   /onStateChange:\s*\(peerId,\s*state,\s*(eventType|reason)\)\s*=>\s*\{[\s\S]*if \(\(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
   'RTCDataChannel close/error for an assigned neighbor must trigger a topology repair request',
+)
+assert(
+  /onPeerConnectionState = \(\) => false/.test(gossipNeighborLifecycle)
+    && /onPeerConnectionState\(normalizedPeerId,\s*state,\s*'connectionstatechange'\)/.test(gossipNeighborLifecycle)
+    && /function handleGossipNeighborPeerConnectionState\(peerId,\s*state,\s*eventType\)[\s\S]*carrierState = normalizedState === 'connected'[\s\S]*'lost'[\s\S]*controller\?\.setCarrierState\?\.\(normalizedPeerId,\s*carrierState[\s\S]*requestGossipTopologyRepair\(normalizedPeerId,\s*`gossip_peer_\$\{normalizedState \|\| 'lost'\}`\)/.test(gossipDataLane),
+  'dedicated gossip RTCPeerConnection failed/closed states must mark carrier lost and request topology repair',
 )
 assert(
   /eventType:\s*'gossip_topology_repair_requested'/.test(workspaceGossipSurface)

@@ -76,14 +76,15 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
 
     const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+    const isExclusionBackdrop = backdrop === 'exclusion';
     const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
     const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
-    const blurStepPx = [1, 2, 3, 4, 5];
+    const blurStepPx = [8, 12, 18, 26, 34];
     let blurPx = blurStepPx[baseBlurLevel] ?? 3;
     if (backdrop === 'blur9') {
-      blurPx = Math.round(blurPx * 1.35);
+      blurPx = Math.round(blurPx * 1.55);
     }
-    blurPx = Math.max(1, Math.min(12, blurPx));
+    blurPx = Math.max(1, Math.min(64, blurPx));
 
     let detectIntervalMs = 1;
     if (qualityProfile === 'quality') {
@@ -112,13 +113,24 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       processWidthCap = 640;
       processFpsCap = 12;
     }
+    const backgroundColor = isExclusionBackdrop
+      ? '#061a4a'
+      : (mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '');
 
     return {
       mode,
-      backgroundColor: mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '',
-      backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
+      backgroundColor,
+      backgroundImageUrl: mode === 'replace' && !backgroundColor
+        ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim()
+        : '',
       blurPx,
+      mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),
       detectIntervalMs,
+      alphaGamma: 0.8,
+      maskContrast: 0.75,
+      averageRadius: 6,
+      temporalRise: 0.7,
+      temporalFall: 0.6,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
       maskVariant,
@@ -126,6 +138,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       maxProcessWidth: Math.max(320, Math.min(processWidthCap, requestedProcessWidth)),
       maxProcessFps: Math.max(8, Math.min(processFpsCap, requestedProcessFps)),
       autoDisableOnOverload: false,
+      showSourceUntilMask: true,
     };
   }
 

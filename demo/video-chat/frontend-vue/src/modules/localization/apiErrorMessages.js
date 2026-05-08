@@ -11,6 +11,8 @@ export const API_ERROR_MESSAGE_KEYS = Object.freeze({
   localization_bundle_fetch_failed: 'errors.api.localization_bundle_fetch_failed',
   localization_bundle_list_failed: 'errors.api.localization_bundle_list_failed',
   localization_bundle_not_found: 'errors.api.localization_bundle_not_found',
+  localization_admin_required: 'errors.api.localization_admin_required',
+  localization_csv_import_disabled: 'errors.api.localization_csv_import_disabled',
   localization_import_failed: 'errors.api.localization_import_failed',
   localization_import_fetch_failed: 'errors.api.localization_import_fetch_failed',
   localization_import_invalid_request_body: 'errors.api.localization_import_invalid_request_body',
@@ -19,6 +21,9 @@ export const API_ERROR_MESSAGE_KEYS = Object.freeze({
   localization_import_validation_failed: 'errors.api.localization_import_validation_failed',
   localization_locale_list_failed: 'errors.api.localization_locale_list_failed',
   localization_resources_failed: 'errors.api.localization_resources_failed',
+  localization_resources_invalid_request_body: 'errors.api.localization_resources_invalid_request_body',
+  localization_resources_save_failed: 'errors.api.localization_resources_save_failed',
+  localization_resources_validation_failed: 'errors.api.localization_resources_validation_failed',
   localization_superadmin_required: 'errors.api.localization_superadmin_required',
   method_not_allowed: 'errors.api.method_not_allowed',
   primary_admin_required: 'errors.api.primary_admin_required',
@@ -29,6 +34,7 @@ export const API_ERROR_MESSAGE_KEYS = Object.freeze({
 
 const API_ERROR_SUFFIX_MESSAGE_KEYS = Object.freeze([
   ['_invalid_request_body', 'errors.api.invalid_request_body'],
+  ['_query_invalid', 'errors.api.invalid_request_body'],
   ['_validation_failed', 'errors.api.validation_failed'],
   ['_not_found', 'errors.api.not_found'],
   ['_conflict', 'errors.api.conflict'],

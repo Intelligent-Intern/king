@@ -11,41 +11,43 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-function king_http1_python_reuseport_probe(): bool
-{
-    $candidates = [];
-    $envPython = getenv('PYTHON');
-    if (is_string($envPython) && trim($envPython) !== '') {
-        $candidates[] = trim($envPython);
+if (!function_exists('king_http1_python_reuseport_probe')) {
+    function king_http1_python_reuseport_probe(): bool
+    {
+        $candidates = [];
+        $envPython = getenv('PYTHON');
+        if (is_string($envPython) && trim($envPython) !== '') {
+            $candidates[] = trim($envPython);
+        }
+        $candidates[] = 'python3';
+        $candidates[] = '/usr/bin/python3';
+        $candidates[] = '/usr/local/bin/python3';
+
+        foreach (array_values(array_unique($candidates)) as $candidate) {
+            $process = @proc_open(
+                [$candidate, '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
+                [
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ],
+                $pipes
+            );
+            if (!is_resource($process)) {
+                continue;
+            }
+
+            stream_get_contents($pipes[1]);
+            stream_get_contents($pipes[2]);
+            foreach ($pipes as $pipe) {
+                fclose($pipe);
+            }
+            if (proc_close($process) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
-    $candidates[] = 'python3';
-    $candidates[] = '/usr/bin/python3';
-    $candidates[] = '/usr/local/bin/python3';
-
-    foreach (array_values(array_unique($candidates)) as $candidate) {
-        $process = @proc_open(
-            [$candidate, '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
-            [
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes
-        );
-        if (!is_resource($process)) {
-            continue;
-        }
-
-        stream_get_contents($pipes[1]);
-        stream_get_contents($pipes[2]);
-        foreach ($pipes as $pipe) {
-            fclose($pipe);
-        }
-        if (proc_close($process) === 0) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 if (!king_http1_python_reuseport_probe()) {

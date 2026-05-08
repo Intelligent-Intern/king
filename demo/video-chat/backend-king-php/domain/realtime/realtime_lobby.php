@@ -165,7 +165,10 @@ function videochat_lobby_apply_command(
 
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
     $activeConnection = $presenceState['connections'][$connectionId] ?? null;
-    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $tenantId = is_array($activeConnection) && is_numeric($activeConnection['tenant_id'] ?? null)
+        ? (int) $activeConnection['tenant_id']
+        : (is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null);
+    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($roomId, $tenantId)] ?? null;
     $senderCurrentRoomId = is_array($activeConnection)
         ? videochat_presence_normalize_room_id((string) ($activeConnection['room_id'] ?? 'lobby'))
         : videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
@@ -244,7 +247,8 @@ function videochat_lobby_apply_command(
                 $roomId,
                 'already_queued',
                 $sender,
-                $nowMs
+                $nowMs,
+                $tenantId
             );
             if ($senderCurrentRoomId !== $roomId) {
                 $sentCount += videochat_lobby_send_snapshot_to_connection(
@@ -283,7 +287,8 @@ function videochat_lobby_apply_command(
             $roomId,
             'queued',
             $sender,
-            $nowMs
+            $nowMs,
+            $tenantId
         );
         if ($senderCurrentRoomId !== $roomId) {
             $sentCount += videochat_lobby_send_snapshot_to_connection(
@@ -340,7 +345,8 @@ function videochat_lobby_apply_command(
             $roomId,
             'cancelled',
             $sender,
-            $nowMs
+            $nowMs,
+            $tenantId
         );
         videochat_lobby_prune_empty_room_state($lobbyState, $roomId);
 
@@ -405,7 +411,8 @@ function videochat_lobby_apply_command(
             $roomId,
             'allowed',
             $sender,
-            $nowMs
+            $nowMs,
+            $tenantId
         );
 
         return [
@@ -451,7 +458,8 @@ function videochat_lobby_apply_command(
             $roomId,
             'removed',
             $sender,
-            $nowMs
+            $nowMs,
+            $tenantId
         );
 
         videochat_lobby_prune_empty_room_state($lobbyState, $roomId);
@@ -511,7 +519,8 @@ function videochat_lobby_apply_command(
             $roomId,
             'allow_all',
             $sender,
-            $nowMs
+            $nowMs,
+            $tenantId
         );
 
         return [
@@ -562,6 +571,7 @@ function videochat_lobby_clear_for_connection(
         : $currentRoomId;
     $userId = (int) ($connection['user_id'] ?? 0);
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
     if ($roomId === '' || $userId <= 0) {
         return ['cleared' => false, 'sent_count' => 0, 'room_id' => $roomId, 'affected_user_ids' => []];
     }
@@ -571,7 +581,7 @@ function videochat_lobby_clear_for_connection(
         return ['cleared' => false, 'sent_count' => 0, 'room_id' => $roomId, 'affected_user_ids' => []];
     }
 
-    if (videochat_lobby_user_present_in_room($presenceState, $roomId, $userId, $connectionId)) {
+    if (videochat_lobby_user_present_in_room($presenceState, $roomId, $userId, $connectionId, $tenantId)) {
         return ['cleared' => false, 'sent_count' => 0, 'room_id' => $roomId, 'affected_user_ids' => []];
     }
 
@@ -603,7 +613,8 @@ function videochat_lobby_clear_for_connection(
         $roomId,
         trim($reason) === '' ? 'presence_left' : trim($reason),
         $sender,
-        $nowUnixMs
+        $nowUnixMs,
+        $tenantId
     );
     videochat_lobby_prune_empty_room_state($lobbyState, $roomId);
 

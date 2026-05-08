@@ -71,6 +71,12 @@ assert.match(
 
 assert.match(
   whiteboardSource,
+  /const message = cloneBridgePayload\(\{[\s\S]*window\.parent\.postMessage\(message, parentOrigin\)/,
+  'whiteboard runtime must emit cloneable postMessage payloads only',
+);
+
+assert.match(
+  whiteboardSource,
   /document\.querySelectorAll\('\[data-tool\], \.swatch, #width, #undo, #redo'\)[\s\S]*element\.disabled = !canAppend\(\)/,
   'viewer mode must disable drawing controls in the iframe',
 );

@@ -60,6 +60,7 @@ function toBackgroundBackdropMode(value) {
   if (value === 'image') return 'image';
   if (value === 'green') return 'green';
   if (value === 'blur9') return 'blur9';
+  if (value === 'exclusion') return 'exclusion';
   return 'blur7';
 }
 
@@ -432,6 +433,9 @@ export function isCallBackgroundPresetActive(preset) {
   if (preset === 'strong') {
     return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
   }
+  if (preset === 'exclusion') {
+    return mode === 'blur' && applyOutgoing && backdrop === 'exclusion';
+  }
   return false;
 }
 
@@ -450,7 +454,7 @@ export function applyCallBackgroundPreset(preset) {
     setCallBackgroundApplyOutgoing(true);
     return;
   }
-  if (preset !== 'light' && preset !== 'strong') {
+  if (preset !== 'light' && preset !== 'strong' && preset !== 'exclusion') {
     setCallBackgroundFilterMode('off');
     setCallBackgroundApplyOutgoing(false);
     return;
@@ -464,6 +468,13 @@ export function applyCallBackgroundPreset(preset) {
 
   setCallBackgroundFilterMode('blur');
   setCallBackgroundApplyOutgoing(true);
+
+  if (preset === 'exclusion') {
+    setCallBackgroundBackdropMode('exclusion');
+    setCallBackgroundQualityProfile('quality');
+    setCallBackgroundBlurStrength(2);
+    return;
+  }
 
   if (preset === 'strong') {
     setCallBackgroundBackdropMode('blur9');

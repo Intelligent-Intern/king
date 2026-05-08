@@ -32,13 +32,13 @@ for (const requiredText of [
   'de',
   'ar',
   'sgd',
-  'user_id = 1',
-  'CSV',
+  'resource editor',
   '/api/auth/logout',
   '/api/localization/resources',
   'without tenant context',
   '/api/admin/localization/imports/preview',
-  'without committing imported rows',
+  '/api/admin/localization/resources',
+  'disabled import',
   'temporary smoke session is revoked',
   'default `en`',
   '`ltr` direction',
@@ -74,6 +74,8 @@ assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deplo
 assert.match(deploySmoke, /deploy-smoke-preview\.csv/, 'deploy smoke must use a named preview-only CSV payload');
 assert.match(deploySmoke, /localization_csv_import_disabled/, 'deploy smoke must prove CSV import is disabled');
 assert.match(deploySmoke, /admin localization CSV preview: disabled with resources replacement verified/, 'deploy smoke must document the disabled CSV replacement path');
+assert.match(deploySmoke, /\/api\/admin\/localization\/resources/, 'deploy smoke must point disabled CSV imports at the resources endpoint');
+assert.match(deploySmoke, /disabled with resources replacement verified/, 'deploy smoke must document the resource-editor replacement');
 assert.doesNotMatch(deploySmoke, /\/api\/admin\/localization\/imports\/commit/, 'deploy smoke must not commit localization CSV rows');
 assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 

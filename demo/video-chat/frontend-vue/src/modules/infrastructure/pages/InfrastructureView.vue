@@ -43,14 +43,14 @@ import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import { t } from '../../localization/i18nRuntime.js';
 import {
   DEFAULT_INFRASTRUCTURE_PROVIDER,
-  INFRASTRUCTURE_PROVIDERS,
+  translateInfrastructureProviders,
 } from '../infrastructureDocs.js';
 
-const providers = INFRASTRUCTURE_PROVIDERS;
+const providers = computed(() => translateInfrastructureProviders(t));
 const activeProviderKey = ref(DEFAULT_INFRASTRUCTURE_PROVIDER);
 
 const activeProvider = computed(() => (
-  providers.find((provider) => provider.key === activeProviderKey.value) || providers[0]
+  providers.value.find((provider) => provider.key === activeProviderKey.value) || providers.value[0]
 ));
 
 const markdown = createMarkdownRenderer();
@@ -61,9 +61,10 @@ function selectProvider(key) {
 }
 
 function focusAdjacentProvider(direction) {
-  const currentIndex = providers.findIndex((provider) => provider.key === activeProviderKey.value);
-  const nextIndex = (currentIndex + direction + providers.length) % providers.length;
-  activeProviderKey.value = providers[nextIndex].key;
+  const providerList = providers.value;
+  const currentIndex = providerList.findIndex((provider) => provider.key === activeProviderKey.value);
+  const nextIndex = (currentIndex + direction + providerList.length) % providerList.length;
+  activeProviderKey.value = providerList[nextIndex].key;
 }
 
 function createMarkdownRenderer() {
@@ -265,7 +266,7 @@ function renderEdgeList(edges, nodes) {
 
 function parseMermaidNode(rawValue) {
   const value = String(rawValue || '').trim();
-  const id = (value.match(/^([A-Za-z0-9_*]+)/)?.[1] || value).replace(/^\[\*\]$/, 'Start');
+  const id = (value.match(/^([A-Za-z0-9_*]+)/)?.[1] || value).replace(/^\[\*\]$/, t('infrastructure.diagram_start'));
   const labelMatch = value.match(/\[\((.*?)\)\]|\[\s*(.*?)\s*\]|\(\((.*?)\)\)|\((.*?)\)/);
   const label = labelMatch?.slice(1).find((entry) => entry !== undefined && entry !== '') || id;
   return { id, label };

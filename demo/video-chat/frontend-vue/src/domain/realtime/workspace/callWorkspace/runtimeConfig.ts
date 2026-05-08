@@ -4,6 +4,7 @@ export const CALL_STATE_SIGNAL_TYPES = Object.freeze([
   'call-app/presence',
   'call/gossip-recovery',
   'call/media-quality-pressure',
+  'call/media-security-sync-request',
   'call/moderation-state',
 ]);
 

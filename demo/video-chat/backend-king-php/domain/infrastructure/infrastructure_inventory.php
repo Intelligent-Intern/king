@@ -364,6 +364,15 @@ function videochat_infra_hcloud_inventory(array $deployment): array
     $servers = is_array($response['payload']['servers'] ?? null) ? $response['payload']['servers'] : [];
     $nodes = [];
     $services = [];
+    $localServerName = videochat_infra_env(
+        'VIDEOCHAT_INFRA_LOCAL_NODE_NAME',
+        videochat_infra_env('VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME', gethostname() ?: '')
+    );
+    $localPublicIpv4 = videochat_infra_env(
+        'VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP',
+        videochat_infra_env('VIDEOCHAT_DEPLOY_PUBLIC_IP', videochat_infra_env('VIDEOCHAT_DEPLOY_HOST'))
+    );
+    $localResourceUsage = videochat_infra_local_resource_usage();
     foreach ($servers as $server) {
         if (!is_array($server)) {
             continue;
@@ -379,12 +388,19 @@ function videochat_infra_hcloud_inventory(array $deployment): array
             $publicIpv4 = (string) ($server['public_net']['ipv4']['ip'] ?? '');
         }
         $labels = is_array($server['labels'] ?? null) ? $server['labels'] : [];
-        $nodes[] = videochat_infra_node_row($id, $name, 'hetzner', $roles, $status, (string) ($location['name'] ?? ''), $publicIpv4, [
+        $resources = [
             'type' => (string) ($serverType['name'] ?? ''),
             'cpu' => (int) ($serverType['cores'] ?? 0),
             'memory_gb' => (float) ($serverType['memory'] ?? 0),
             'disk_gb' => (int) ($serverType['disk'] ?? 0),
-        ], $labels);
+        ];
+        if (
+            ($localServerName !== '' && hash_equals($localServerName, $name))
+            || ($localPublicIpv4 !== '' && $publicIpv4 !== '' && hash_equals($localPublicIpv4, $publicIpv4))
+        ) {
+            $resources = array_merge($resources, $localResourceUsage);
+        }
+        $nodes[] = videochat_infra_node_row($id, $name, 'hetzner', $roles, $status, (string) ($location['name'] ?? ''), $publicIpv4, $resources, $labels);
         array_push($services, ...videochat_infra_default_services_for_node($id, $deployment, $roles, $status));
     }
 

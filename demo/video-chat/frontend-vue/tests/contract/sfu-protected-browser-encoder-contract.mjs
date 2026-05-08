@@ -111,7 +111,7 @@ try {
   requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig)', 'browser publisher must select a supported thumbnail WebCodecs config variant');
   requireContains(browserPublisher, "eventType: 'sfu_browser_encoder_capabilities_unavailable'", 'browser publisher must persist missing WebCodecs capabilities to backend diagnostics before fallback');
   requireContains(browserPublisher, "level: 'warning'", 'browser publisher WebCodecs fallback diagnostics must be stored server-side instead of disappearing as info-only events');
-  requireContains(browserPublisher, "eventType: 'sfu_publish_waiting_for_media_security'", 'browser publisher must persist media-security gate waits to backend diagnostics');
+  requireContains(browserPublisher, "eventType: 'sfu_publish_transport_only_until_media_security'", 'browser publisher must persist transport-only media-security fallback diagnostics');
   requireContains(browserPublisher, 'forceNextSecurityKeyframe = true', 'browser publisher must force a keyframe after media-security gates close');
   requireContains(browserPublisher, 'remoteKeyframeRequestPending(timestamp)', 'browser publisher must honor receiver-requested full-keyframe recovery state');
   requireContains(browserPublisher, "eventType: 'sfu_browser_keyframe_required_delta_dropped'", 'browser publisher must not send a delta when a reconnect/recovery keyframe is required');
@@ -135,8 +135,8 @@ try {
     publisherPipeline.indexOf('maybeStartProtectedBrowserVideoEncoderPublisher({') < publisherPipeline.indexOf('createPublisherSourceReadbackController({'),
     'browser encoder path must be attempted before RGBA/WLVC source readback',
   );
-  requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_waiting_for_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
-  requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'RGBA fallback publisher must resync keys while the publish security gate is closed');
+  requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_transport_only_until_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
+  requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_transport_only'", 'RGBA fallback publisher must resync keys while the publish security gate is settling');
   requireContains(publisherPipeline, "protect_frame_unavailable_waiting_for_security", 'RGBA fallback publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
   requireContains(mediaSecurityRuntime, "from './mediaSecuritySfuPublishGate'", 'media-security runtime must keep SFU publish gate logic extracted');
   requireContains(mediaSecuritySfuPublishGate, 'return targetUserIds.every((userId) => signaledTargetIds.has(userId));', 'SFU publish gate must wait until the current sender key was signaled to every current receiver');
@@ -145,11 +145,8 @@ try {
   requireContains(mediaSecuritySfuPublishGate, 'currentSfuSenderKeySignalsCoverTargets(targetUserIds)', 'SFU publish gate must require full current-target sender-key coverage before propagation readiness');
   requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))', 'SFU publish gate must use sender-key signal receipts from the current media-security session');
   requireContains(mediaSecurityRuntime, 'shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey)', 'participant joins must not force a global sender-key cache reset while existing receivers can still decrypt video');
-  assert.equal(
-    publisherPipeline.includes('sending transport-only frame'),
-    false,
-    'RGBA fallback publisher must not continue a transport-only fallback when protected media is enabled',
-  );
+  requireContains(publisherPipeline, "protected_media_fallback: 'transport_only_until_sender_key_ready'", 'RGBA fallback publisher must keep sending frames while sender keys settle');
+  requireContains(publisherPipeline, "protected_media_fallback: 'transport_only_after_protect_unavailable'", 'RGBA fallback publisher must keep sending frames after preferred media-security protection is temporarily unavailable');
   requireContains(mediaSecurityTargets, 'return targetUserIds;', 'SFU media-security target set must come from connected remote participants, not delayed publisher discovery');
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'browser encoder diagnostics are wired to backend telemetry');
 

@@ -1,13 +1,14 @@
 <template src="./OverviewView.template.html"></template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
 import { t } from '../../../localization/i18nRuntime.js';
 import { normalizeArray, normalizeNonNegativeInteger } from './helpers';
 import { useOverviewDashboardMetrics } from './useOverviewDashboardMetrics';
+import { useGossipNetworkMaps } from './useGossipNetworkMap';
 
 const router = useRouter();
 let infrastructureLoadSeq = 0;
@@ -32,8 +33,13 @@ const operationsState = reactive({
     live_calls: 0,
     concurrent_participants: 0,
   },
+  gossipTelemetry: {},
   runningCalls: [],
+  transport: {},
 });
+
+const selectedGossipCallKey = ref('');
+const selectedGossipNodeIdsByCall = reactive({});
 
 const {
   clusterHealthRows,
@@ -50,6 +56,39 @@ const {
   runningCallsRows,
   serverResourceRows,
 } = useOverviewDashboardMetrics({ infrastructureState, operationsState });
+
+const gossipNetworkMaps = useGossipNetworkMaps(operationsState, selectedGossipNodeIdsByCall);
+const emptyGossipNetworkMap = {
+  callKey: '',
+  callId: '',
+  roomId: '',
+  title: '',
+  lifecycle: 'idle',
+  nodes: [],
+  edges: [],
+  analysis: [],
+  selectedNode: null,
+  summary: {
+    nodeCount: 0,
+    edgeCount: 0,
+    healthyCount: 0,
+    degradedCount: 0,
+    statusLabel: t('users.overview.gossip_status_waiting'),
+    statusTagClass: 'warn',
+  },
+};
+const gossipCallOptions = computed(() => (
+  gossipNetworkMaps.value.map((map) => ({
+    value: map.callKey,
+    label: map.title || map.callId || map.roomId || t('users.overview.untitled_call'),
+  }))
+));
+const selectedGossipNetworkMap = computed(() => (
+  gossipNetworkMaps.value.find((map) => map.callKey === selectedGossipCallKey.value)
+  || gossipNetworkMaps.value[0]
+  || null
+));
+const gossipNetworkMap = computed(() => selectedGossipNetworkMap.value || emptyGossipNetworkMap);
 
 function requestHeaders(includeBody = false) {
   const token = String(sessionState.sessionToken || '').trim();
@@ -133,12 +172,36 @@ async function loadInfrastructure() {
 
 function applyVideoOperationsPayload(payload) {
   const metrics = payload?.metrics && typeof payload.metrics === 'object' ? payload.metrics : {};
+  const telemetry = payload?.gossip_telemetry
+    || payload?.gossipTelemetry
+    || payload?.telemetry?.gossipmesh
+    || payload?.transport?.gossipmesh
+    || {};
   operationsState.metrics = {
     live_calls: normalizeNonNegativeInteger(metrics.live_calls),
     concurrent_participants: normalizeNonNegativeInteger(metrics.concurrent_participants),
   };
+  operationsState.gossipTelemetry = telemetry && typeof telemetry === 'object' ? telemetry : {};
   operationsState.runningCalls = normalizeArray(payload?.running_calls);
+  operationsState.transport = payload?.transport && typeof payload.transport === 'object' ? payload.transport : {};
   operationsState.lastLoadedAt = String(payload?.time || new Date().toISOString());
+  reconcileSelectedGossipCall();
+}
+
+function reconcileSelectedGossipCall() {
+  const liveKeys = new Set(gossipNetworkMaps.value.map((map) => map.callKey));
+  if (!liveKeys.has(selectedGossipCallKey.value)) {
+    selectedGossipCallKey.value = gossipNetworkMaps.value[0]?.callKey || '';
+  }
+  for (const key of Object.keys(selectedGossipNodeIdsByCall)) {
+    if (!liveKeys.has(key)) delete selectedGossipNodeIdsByCall[key];
+  }
+}
+
+function selectGossipNode(nodeId) {
+  const callKey = gossipNetworkMap.value.callKey;
+  if (callKey === '') return;
+  selectedGossipNodeIdsByCall[callKey] = String(nodeId || '');
 }
 
 async function loadVideoOperations({ background = false } = {}) {

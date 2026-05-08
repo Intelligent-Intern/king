@@ -31,6 +31,8 @@ function videochat_workspace_background_file_response(
         ]);
     }
 
+    videochat_workspace_seed_background_copy_asset($storageRoot, $decoded);
+
     $dir = rtrim($storageRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'backgrounds';
     $path = $dir . DIRECTORY_SEPARATOR . $decoded;
     $realDir = realpath($dir);
@@ -470,6 +472,169 @@ function videochat_workspace_background_object_store_put(string $objectKey, stri
     } finally {
         fclose($stream);
     }
+}
+
+function videochat_workspace_background_seed_directory(): string
+{
+    return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'support' . DIRECTORY_SEPARATOR . 'workspace_background_seed';
+}
+
+function videochat_workspace_background_seed_manifest(): array
+{
+    static $manifest = null;
+
+    if (is_array($manifest)) {
+        return $manifest;
+    }
+
+    $path = videochat_workspace_background_seed_directory() . DIRECTORY_SEPARATOR . 'manifest.json';
+    $json = is_file($path) ? file_get_contents($path) : false;
+    if (!is_string($json) || trim($json) === '') {
+        $manifest = [];
+        return $manifest;
+    }
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) {
+        $manifest = [];
+        return $manifest;
+    }
+
+    $backgrounds = $decoded['backgrounds'] ?? [];
+    $manifest = is_array($backgrounds) ? array_values(array_filter($backgrounds, 'is_array')) : [];
+    return $manifest;
+}
+
+function videochat_workspace_seed_background_filename(mixed $value): string
+{
+    $filename = basename(trim((string) $value));
+    if (preg_match('/^background(?:-original)?-[a-f0-9]{16}\.(png|jpg|webp)$/', $filename) !== 1) {
+        return '';
+    }
+
+    return $filename;
+}
+
+function videochat_workspace_seed_background_copy_asset(string $storageRoot, string $filename): bool
+{
+    $safeFilename = videochat_workspace_seed_background_filename($filename);
+    if ($safeFilename === '') {
+        return false;
+    }
+
+    $seedDir = videochat_workspace_background_seed_directory();
+    $source = $seedDir . DIRECTORY_SEPARATOR . $safeFilename;
+    $realSeedDir = realpath($seedDir);
+    $realSource = realpath($source);
+    if (
+        !is_string($realSeedDir)
+        || !is_string($realSource)
+        || !is_file($realSource)
+        || !str_starts_with($realSource, $realSeedDir . DIRECTORY_SEPARATOR)
+    ) {
+        return false;
+    }
+
+    $targetDir = rtrim($storageRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'backgrounds';
+    if (!is_dir($targetDir) && !mkdir($targetDir, 0775, true) && !is_dir($targetDir)) {
+        return false;
+    }
+
+    $target = $targetDir . DIRECTORY_SEPARATOR . $safeFilename;
+    $sourceSize = filesize($realSource);
+    $targetSize = is_file($target) ? filesize($target) : false;
+    if ($sourceSize !== false && $targetSize !== false && (int) $sourceSize === (int) $targetSize) {
+        return true;
+    }
+
+    return copy($realSource, $target);
+}
+
+function videochat_workspace_seed_background_images(PDO $pdo, int $tenantId, string $storageRoot): array
+{
+    $entries = videochat_workspace_background_seed_manifest();
+    if ($entries === []) {
+        return [
+            'seeded' => 0,
+            'skipped' => 0,
+        ];
+    }
+
+    $query = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO workspace_background_images(id, tenant_id, label, file_path, original_file_path, mime_type, file_size, status, created_at, updated_at)
+VALUES(:id, :tenant_id, :label, :file_path, :original_file_path, :mime_type, :file_size, 'active', :created_at, :updated_at)
+ON CONFLICT(tenant_id, file_path) DO UPDATE SET
+  label = excluded.label,
+  original_file_path = excluded.original_file_path,
+  mime_type = excluded.mime_type,
+  file_size = excluded.file_size,
+  status = 'active',
+  updated_at = excluded.updated_at
+SQL
+    );
+
+    $seeded = 0;
+    $skipped = 0;
+    foreach ($entries as $entry) {
+        $filename = videochat_workspace_seed_background_filename($entry['file'] ?? '');
+        if ($filename === '' || !videochat_workspace_seed_background_copy_asset($storageRoot, $filename)) {
+            $skipped++;
+            continue;
+        }
+
+        $originalFilename = videochat_workspace_seed_background_filename($entry['original_file'] ?? '');
+        $originalPath = '';
+        if ($originalFilename !== '' && videochat_workspace_seed_background_copy_asset($storageRoot, $originalFilename)) {
+            $originalPath = '/api/workspace/background-images/' . rawurlencode($originalFilename);
+        }
+
+        $label = videochat_appointment_clean_text($entry['label'] ?? '', 120);
+        if ($label === '') {
+            $label = 'Background image';
+        }
+        $mimeType = videochat_appointment_clean_text($entry['mime_type'] ?? '', 80);
+        if (!in_array($mimeType, ['image/png', 'image/jpeg', 'image/webp'], true)) {
+            $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            $mimeType = match ($extension) {
+                'jpg' => 'image/jpeg',
+                'webp' => 'image/webp',
+                default => 'image/png',
+            };
+        }
+
+        $createdAt = videochat_appointment_clean_text($entry['created_at'] ?? '', 40);
+        $updatedAt = videochat_appointment_clean_text($entry['updated_at'] ?? '', 40);
+        if ($createdAt === '') {
+            $createdAt = gmdate('c');
+        }
+        if ($updatedAt === '') {
+            $updatedAt = $createdAt;
+        }
+
+        $seedId = videochat_workspace_normalize_template_key($entry['id'] ?? '', $filename);
+        if ($seedId === '') {
+            $seedId = 'seed-background-' . substr(hash('sha256', $filename), 0, 24);
+        }
+
+        $query->execute([
+            ':id' => 'tenant-' . $tenantId . '-' . $seedId,
+            ':tenant_id' => $tenantId,
+            ':label' => $label,
+            ':file_path' => '/api/workspace/background-images/' . rawurlencode($filename),
+            ':original_file_path' => $originalPath,
+            ':mime_type' => $mimeType,
+            ':file_size' => (int) ($entry['file_size'] ?? 0),
+            ':created_at' => $createdAt,
+            ':updated_at' => $updatedAt,
+        ]);
+        $seeded++;
+    }
+
+    return [
+        'seeded' => $seeded,
+        'skipped' => $skipped,
+    ];
 }
 
 function videochat_workspace_list_background_images(PDO $pdo, int $tenantId, string $query, int $page, int $pageSize): array

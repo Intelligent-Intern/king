@@ -332,7 +332,7 @@
 
 .call-left-blur-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -365,6 +365,10 @@
   object-fit: contain;
   display: block;
   filter: brightness(0) invert(1);
+}
+
+.call-left-solid-background-icon {
+  filter: none;
 }
 
 .call-left-settings-error {

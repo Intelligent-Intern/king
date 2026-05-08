@@ -43,10 +43,12 @@ try {
     putenv('VIDEOCHAT_KING_DB_PATH=/tmp/video-chat-main.sqlite');
     putenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH');
     $gatewaySource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
+    $storeSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
     $moduleRealtimeSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
     $iibinSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_iibin.php');
     $sessionProtocolSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php');
     videochat_realtime_sfu_assert(is_string($gatewaySource), 'SFU gateway source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($storeSource), 'SFU store source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($moduleRealtimeSource), 'Realtime module source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($iibinSource), 'SFU IIBIN helper source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($sessionProtocolSource), 'SFU session protocol source should be readable for static contract checks');
@@ -92,8 +94,9 @@ try {
     videochat_realtime_sfu_assert(
         str_contains($gatewaySource, 'videochat_sfu_iibin_control_frame_has_magic($frame)')
         && str_contains($gatewaySource, "case 'sfu/iibin-control':")
+        && str_contains($storeSource, "'sfu/iibin-control'")
         && str_contains($gatewaySource, "'binary_continuation_state' => (string)"),
-        'SFU gateway must route native IIBIN control/metadata frames and diagnostics'
+        'SFU gateway must route native IIBIN control/metadata frames and diagnostics without rejecting the decoded command'
     );
     videochat_realtime_sfu_assert(
         strpos($gatewaySource, '$acceptFrameChunk') === false
@@ -548,6 +551,22 @@ try {
     );
     videochat_realtime_sfu_assert(!(bool) ($chunkedTransportCommand['ok'] ?? true), 'JSON SFU media chunks must be rejected in binary-required mode');
     videochat_realtime_sfu_assert((string) ($chunkedTransportCommand['error'] ?? '') === 'binary_media_required', 'JSON SFU media chunk rejection reason mismatch');
+    $iibinControlCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/iibin-control',
+            'room_id' => 'room-alpha',
+            'diagnostic_code' => 'sfu_frame_transport_sample',
+            'diagnostic_level' => 'info',
+            'transport_path' => 'binary_envelope',
+            'payload_bytes' => 1024,
+            'wire_payload_bytes' => 1100,
+            'queue_pressure_bytes' => 0,
+            'binary_continuation_state' => 'single_binary_message_no_continuation_expected',
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($iibinControlCommand['ok'] ?? false), 'decoded SFU IIBIN control diagnostics must not be rejected as unsupported commands');
+    videochat_realtime_sfu_assert((string) ($iibinControlCommand['type'] ?? '') === 'sfu/iibin-control', 'decoded SFU IIBIN control command type mismatch');
     $chunkedOutboundTransport = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',

@@ -1,9 +1,12 @@
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
 const frontendRoot = fileURLToPath(new URL('./', import.meta.url));
+const callAppRoot = fileURLToPath(new URL('../../call-app/', import.meta.url));
 
 const parseAllowedHosts = (value) => {
   if (!value) {
@@ -134,6 +137,100 @@ const wasmStaticCompatibilityPlugin = () => {
   };
 };
 
+const callAppContentType = (filePath) => {
+  switch (path.extname(filePath).toLowerCase()) {
+    case '.html':
+      return 'text/html; charset=utf-8';
+    case '.js':
+    case '.mjs':
+      return 'text/javascript; charset=utf-8';
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
+};
+
+const walkFiles = (root, prefix = '') => {
+  if (!fs.existsSync(root)) return [];
+  const entries = fs.readdirSync(root, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relativePath = path.posix.join(prefix, entry.name);
+    const absolutePath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(absolutePath, relativePath));
+    } else if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+};
+
+const resolveCallAppStaticPath = (requestPath) => {
+  if (!requestPath.startsWith('/call-app/')) return '';
+  const cleanParts = requestPath
+    .slice('/call-app/'.length)
+    .split('/')
+    .map((part) => decodeURIComponent(part).trim())
+    .filter((part) => part !== '' && part !== '.' && part !== '..');
+  if (cleanParts.length < 2) return '';
+  const candidate = path.resolve(callAppRoot, ...cleanParts);
+  const root = path.resolve(callAppRoot);
+  if (candidate !== root && candidate.startsWith(`${root}${path.sep}`)) {
+    return candidate;
+  }
+  return '';
+};
+
+const serveCallAppStatic = (req, res, next) => {
+  const parsed = new URL(req.url || '/', 'http://kingrt.local');
+  const filePath = resolveCallAppStaticPath(parsed.pathname);
+  if (!filePath) {
+    next();
+    return;
+  }
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    res.statusCode = 404;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Not Found\n');
+    return;
+  }
+  res.statusCode = 200;
+  res.setHeader('Content-Type', callAppContentType(filePath));
+  res.end(fs.readFileSync(filePath));
+};
+
+const callAppStaticPlugin = () => ({
+  name: 'kingrt-call-app-static',
+  configureServer(server) {
+    server.middlewares.use(serveCallAppStatic);
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use(serveCallAppStatic);
+  },
+  generateBundle() {
+    for (const relativePath of walkFiles(callAppRoot)) {
+      this.emitFile({
+        type: 'asset',
+        fileName: `call-app/${relativePath}`,
+        source: fs.readFileSync(path.join(callAppRoot, relativePath)),
+      });
+    }
+  },
+});
+
 const allowedHosts = parseAllowedHosts(process.env.VIDEOCHAT_VUE_ALLOWED_HOSTS || '');
 const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
 const callWorkspaceChunkForId = (id) => {
@@ -168,6 +265,7 @@ const callWorkspaceChunkForId = (id) => {
 export default defineConfig({
   plugins: [assetVersionPlugin(),
   wasmStaticCompatibilityPlugin(),
+  callAppStaticPlugin(),
   vue()],
   optimizeDeps: {
     exclude: [
