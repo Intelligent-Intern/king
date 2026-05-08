@@ -2176,22 +2176,22 @@ invalidated.
 
 - [x] Owner loses connection
 - [ ] Owner closes browser tab
-- [ ] Owner browser crashes or context is killed
-- [ ] Owner network is disconnected
+- [x] Owner browser crashes or context is killed
+- [x] Owner network is disconnected
 - [x] Owner is absent for less than 10 minutes equivalent
 - [x] Owner is absent for 10 minutes equivalent
 - [x] Owner is absent for 15 minutes equivalent
-- [ ] Owner rejoins before final 5-minute countdown starts
+- [x] Owner rejoins before final 5-minute countdown starts
 - [x] Owner rejoins during final 5-minute countdown
 - [x] Owner does not rejoin before timer expires
 - [x] Call ends automatically after 15 minutes owner absence equivalent
-- [ ] Participants are notified when owner absence timer starts if applicable
+- [x] Participants are notified when owner absence timer starts if applicable
 - [x] Participants see visible countdown during last 5 minutes
 - [x] Countdown starts when 5 minutes remain
 - [x] Countdown shows correct remaining time
 - [x] Countdown updates correctly over time
-- [ ] Countdown survives participant refresh
-- [ ] Countdown is synchronized across participants
+- [x] Countdown survives participant refresh
+- [x] Countdown is synchronized across participants
 - [x] Countdown does not reveal admin-only data
 - [x] Countdown disappears if owner rejoins
 - [x] Call does not end if owner rejoins before timeout
@@ -2203,7 +2203,7 @@ invalidated.
 - [ ] Call-ended state deletes or invalidates temporary guest accounts
 - [ ] Call-ended state clears lobby entries
 - [ ] Call-ended state preserves audit log
-- [ ] Call-ended state is visible to late users opening old links
+- [x] Call-ended state is visible to late users opening old links
 - [x] Timer is based on server time, not client time
 - [x] CI test uses fake/test time and does not wait 15 real minutes
 
@@ -2211,14 +2211,17 @@ Proof: `realtime_owner_absence.php` applies a server-time owner-absence
 deadline of 15 minutes total and starts the countdown in the final 5 minutes.
 `iam-king-participants-owner-timeout-contract.mjs` verifies the contract
 shape, fake/test clock, room snapshot lifecycle payload, countdown boundary,
-owner-return cancellation, and persisted implicit end. The PHP owner-timeout
-runtime contract is committed and syntax-checked; execution is blocked on this
-host because PHP does not load `pdo_sqlite`.
+owner-return cancellation, stale-heartbeat network loss, crash/context-killed
+absence modes, and persisted implicit end. The PHP owner-timeout runtime
+contract passes in a Docker PHP 8.4 container with `pdo_sqlite`; the host PHP
+still reports SQLite-backed contracts as blocked because it does not load
+`pdo_sqlite`.
 `call-access-owner-absence-browser.spec.js` drives the browser workspace through
-the final-countdown UI, countdown update, owner-absence automatic end, and owner
-return cancellation paths using the backend timer constants and room snapshots.
-The focused Playwright run passed 2 tests and the integrated frontend build
-passed.
+timer-start notification, final-countdown UI, countdown update, cross-participant
+sync, participant refresh resync, owner-absence automatic end, late old-link
+ended state, and owner return cancellation paths using the backend timer
+constants and room snapshots. The focused Playwright run passed 5 tests and the
+integrated frontend build passed.
 
 ## 30. Error and Edge Cases
 
@@ -2726,14 +2729,14 @@ access/session fingerprints and safe counts remain.
 
 - [x] `e2e_end_implicit_001_owner_disconnect_starts_absence_timer`
 - [ ] `e2e_end_implicit_002_owner_tab_close_starts_absence_timer`
-- [ ] `e2e_end_implicit_003_owner_process_kill_starts_absence_timer`
-- [ ] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
+- [x] `e2e_end_implicit_003_owner_process_kill_starts_absence_timer`
+- [x] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
 - [x] `e2e_end_implicit_005_no_countdown_before_10_min_equivalent`
 - [x] `e2e_end_implicit_006_countdown_visible_at_10_min_equivalent`
 - [x] `e2e_end_implicit_007_countdown_updates_over_time`
-- [ ] `e2e_end_implicit_008_countdown_synchronized_across_participants`
-- [ ] `e2e_end_implicit_009_countdown_survives_participant_refresh`
-- [ ] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
+- [x] `e2e_end_implicit_008_countdown_synchronized_across_participants`
+- [x] `e2e_end_implicit_009_countdown_survives_participant_refresh`
+- [x] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
 - [x] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
 - [x] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
 - [x] `e2e_end_implicit_013_automatic_end_notifies_participants`
