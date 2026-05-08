@@ -2,14 +2,18 @@
   <button
     v-if="hasActiveSession"
     class="icon-mini-btn call-app-grant-btn"
+    :class="[
+      `variant-${variant}`,
+      { allowed: effectiveGrantState === 'allowed', denied: effectiveGrantState === 'denied' },
+    ]"
     type="button"
-    :class="{ allowed: effectiveGrantState === 'allowed', denied: effectiveGrantState === 'denied' }"
     :title="buttonTitle"
     :aria-label="buttonTitle"
     :disabled="!canToggle"
     @click="toggleGrant"
   >
     <img :src="buttonIcon" alt="" />
+    <span v-if="variant === 'label'">{{ buttonLabel }}</span>
   </button>
 </template>
 
@@ -40,6 +44,11 @@ const props = defineProps({
   requestRoomSnapshot: {
     type: Function,
     required: true,
+  },
+  variant: {
+    type: String,
+    default: 'icon',
+    validator: (value) => ['icon', 'label'].includes(value),
   },
 });
 const emit = defineEmits(['grant-updated']);
@@ -80,16 +89,21 @@ const effectiveGrantState = computed(() => {
   return localState === 'allowed' || localState === 'denied' ? localState : storedGrantState.value;
 });
 
+const variant = computed(() => (props.variant === 'label' ? 'label' : 'icon'));
 const nextGrantState = computed(() => (effectiveGrantState.value === 'allowed' ? 'denied' : 'allowed'));
 const buttonIcon = computed(() => (
   effectiveGrantState.value === 'allowed'
-    ? '/assets/orgas/kingrt/icons/add_to_call.png'
-    : '/assets/orgas/kingrt/icons/remove_user.png'
+    ? '/assets/orgas/kingrt/icons/remove_user.png'
+    : '/assets/orgas/kingrt/icons/add_to_call.png'
 ));
+const buttonLabel = computed(() => {
+  if (pending.value) return 'Saving';
+  return effectiveGrantState.value === 'allowed' ? 'Revoke' : 'Allow';
+});
 const buttonTitle = computed(() => (
-  effectiveGrantState.value === 'allowed'
-    ? 'Revoke Call App access'
-    : 'Allow Call App access'
+  !props.canManage
+    ? 'Only the call owner or a moderator can change Call App access'
+    : `${buttonLabel.value} Call App access for ${String(props.row?.displayName || props.row?.display_name || 'participant').trim() || 'participant'}`
 ));
 
 function emitGrantRealtimeUpdate(grantState) {
@@ -145,11 +159,35 @@ watch(
 </script>
 
 <style scoped>
+.call-app-grant-btn {
+  gap: 6px;
+}
+
 .call-app-grant-btn.allowed {
   border-color: var(--color-success);
 }
 
 .call-app-grant-btn.denied {
   border-color: var(--color-warning);
+}
+
+.call-app-grant-btn.variant-label {
+  width: auto;
+  min-width: 86px;
+  height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.call-app-grant-btn.variant-label img {
+  width: 14px;
+  height: 14px;
 }
 </style>
