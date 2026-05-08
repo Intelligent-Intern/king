@@ -617,6 +617,11 @@ if [[ "${VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE:-0}" != "1" ]]; then
 else
   log "SKIP: IAM call-access CI-safe contract gate disabled via VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1"
 fi
+if [[ "${VIDEOCHAT_SMOKE_SKIP_KING_PARTICIPANTS:-0}" != "1" ]]; then
+  run_step "IAM king participant container proof" bash -lc "'${ROOT_DIR}/scripts/king-participant-container-proof.sh'"
+else
+  log "SKIP: IAM king participant container proof disabled via VIDEOCHAT_SMOKE_SKIP_KING_PARTICIPANTS=1"
+fi
 run_step "security policy: demo-scope hardening" bash -lc "'${ROOT_DIR}/scripts/check-security-hardening-policy.sh'"
 run_step "deployment decision: no internal edge pack" bash -lc "'${ROOT_DIR}/scripts/check-edge-deployment-decision.sh'"
 run_step "deployment baseline: optional TURN relay" bash -lc "'${ROOT_DIR}/scripts/check-turn-baseline.sh'"

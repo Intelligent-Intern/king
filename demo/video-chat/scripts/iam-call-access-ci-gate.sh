@@ -97,6 +97,7 @@ STATIC_CONTRACTS=(
   "tests/contract/call-access-cross-org-foreign-join-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/call-access-edge-error-matrix-contract.mjs"
+  "tests/contract/iam-king-container-ci-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-system-admin-edge-cases-contract.mjs"
@@ -120,6 +121,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-cross-org-foreign-join-contract.mjs"
   "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/call-access-edge-error-matrix-contract.mjs"
+  "tests/contract/iam-king-container-ci-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/iam-system-admin-edge-cases-contract.mjs"
@@ -173,6 +175,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/realtime-lobby-concurrency-contract.sh"
   "tests/realtime-lobby-security-contract.sh"
   "tests/realtime-reconnect-backfill-contract.sh"
+  "tests/call-access-king-container-contract.sh"
   "tests/call-access-owner-timeout-contract.sh"
   "tests/call-guest-cleanup-sqlite-proof.sh"
 )
