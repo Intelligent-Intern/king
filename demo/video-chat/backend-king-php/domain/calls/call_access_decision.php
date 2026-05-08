@@ -38,6 +38,16 @@ function videochat_decide_call_access_for_user(
     $normalizedRole = videochat_normalize_role_slug($authRole);
     $isAdmin = $normalizedRole === 'admin';
 
+    if (!videochat_is_call_joinable_status((string) ($call['status'] ?? ''))) {
+        return videochat_call_access_decision_result(
+            false,
+            'call_not_joinable',
+            'none',
+            'none',
+            $call
+        );
+    }
+
     $participant = $authUserId > 0
         ? videochat_fetch_call_access_participant_for_decision($pdo, $normalizedCallId, $authUserId)
         : null;
