@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../domain/realtime/realtime_reaction.php';
+require_once __DIR__ . '/../domain/realtime/realtime_typing.php';
 require_once __DIR__ . '/../http/router.php';
 
 function videochat_rbac_middleware_assert(bool $condition, string $message): void
@@ -38,7 +40,7 @@ function videochat_rbac_middleware_decode_body(array $response): array
 }
 
 /**
- * @return array{admin_user_id: int, moderator_user_id: int, user_user_id: int}
+ * @return array{admin_user_id: int, user_user_id: int}
  */
 function videochat_rbac_middleware_seed_users(PDO $pdo): array
 {
@@ -64,46 +66,8 @@ SQL
     )->fetchColumn();
     videochat_rbac_middleware_assert($userUserId > 0, 'expected seeded user account');
 
-    $moderatorRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'moderator' LIMIT 1")->fetchColumn();
-    videochat_rbac_middleware_assert($moderatorRoleId > 0, 'expected moderator role');
-
-    $existingModeratorId = (int) $pdo->query(
-        <<<'SQL'
-SELECT users.id
-FROM users
-INNER JOIN roles ON roles.id = users.role_id
-WHERE lower(users.email) = lower('moderator@intelligent-intern.com')
-LIMIT 1
-SQL
-    )->fetchColumn();
-    if ($existingModeratorId > 0) {
-        return [
-            'admin_user_id' => $adminUserId,
-            'moderator_user_id' => $existingModeratorId,
-            'user_user_id' => $userUserId,
-        ];
-    }
-
-    $insertModerator = $pdo->prepare(
-        <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
-SQL
-    );
-    $insertModerator->execute([
-        ':email' => 'moderator@intelligent-intern.com',
-        ':display_name' => 'Platform Moderator',
-        ':password_hash' => password_hash('moderator123', PASSWORD_DEFAULT),
-        ':role_id' => $moderatorRoleId,
-        ':updated_at' => gmdate('c'),
-    ]);
-
-    $moderatorUserId = (int) $pdo->lastInsertId();
-    videochat_rbac_middleware_assert($moderatorUserId > 0, 'failed to create moderator user');
-
     return [
         'admin_user_id' => $adminUserId,
-        'moderator_user_id' => $moderatorUserId,
         'user_user_id' => $userUserId,
     ];
 }
@@ -135,7 +99,6 @@ try {
     $users = videochat_rbac_middleware_seed_users($pdo);
 
     videochat_rbac_middleware_seed_session($pdo, 'sess_rbac_admin', (int) $users['admin_user_id']);
-    videochat_rbac_middleware_seed_session($pdo, 'sess_rbac_moderator', (int) $users['moderator_user_id']);
     videochat_rbac_middleware_seed_session($pdo, 'sess_rbac_user', (int) $users['user_user_id']);
 
     $jsonResponse = static function (int $status, array $payload, array $headers = []): array {
@@ -326,20 +289,15 @@ try {
         'workspace administration admin permissions should include theme editor access'
     );
 
-    $moderatorDenied = $dispatch('GET', '/api/admin/ping', 'sess_rbac_moderator');
-    $moderatorDeniedBody = videochat_rbac_middleware_decode_body($moderatorDenied);
-    videochat_rbac_middleware_assert((int) ($moderatorDenied['status'] ?? 0) === 403, 'moderator should be forbidden from admin scope');
-    videochat_rbac_middleware_assert((string) (($moderatorDeniedBody['error']['details'] ?? [])['reason'] ?? '') === 'role_not_allowed', 'moderator/admin deny reason mismatch');
-
-    $moderatorAllowed = $dispatch('GET', '/api/moderation/ping', 'sess_rbac_moderator');
-    $moderatorAllowedBody = videochat_rbac_middleware_decode_body($moderatorAllowed);
-    videochat_rbac_middleware_assert((int) ($moderatorAllowed['status'] ?? 0) === 200, 'moderator should access moderation scope');
-    videochat_rbac_middleware_assert((string) ($moderatorAllowedBody['scope'] ?? '') === 'moderation', 'moderation scope payload mismatch');
-
     $userModerationDenied = $dispatch('GET', '/api/moderation/ping', 'sess_rbac_user');
     $userModerationDeniedBody = videochat_rbac_middleware_decode_body($userModerationDenied);
     videochat_rbac_middleware_assert((int) ($userModerationDenied['status'] ?? 0) === 403, 'user should be forbidden from moderation scope');
     videochat_rbac_middleware_assert((string) (($userModerationDeniedBody['error']['details'] ?? [])['rule_id'] ?? '') === 'rest_moderation_scope', 'user/moderation deny rule_id mismatch');
+
+    $adminModerationAllowed = $dispatch('GET', '/api/moderation/ping', 'sess_rbac_admin');
+    $adminModerationAllowedBody = videochat_rbac_middleware_decode_body($adminModerationAllowed);
+    videochat_rbac_middleware_assert((int) ($adminModerationAllowed['status'] ?? 0) === 200, 'admin should access moderation scope');
+    videochat_rbac_middleware_assert((string) ($adminModerationAllowedBody['scope'] ?? '') === 'moderation', 'moderation scope payload mismatch');
 
     $userAllowed = $dispatch('GET', '/api/user/ping', 'sess_rbac_user');
     $userAllowedBody = videochat_rbac_middleware_decode_body($userAllowed);
