@@ -1,5 +1,12 @@
 export const CALL_UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 
+export function safeCallAccessInvalidMessage(translate: ((key: string) => string) | null = null) {
+  const fallback = 'Call access id is invalid.';
+  if (typeof translate !== 'function') return fallback;
+  const message = String(translate('public.join.access_invalid') || '').trim();
+  return message === '' ? fallback : message;
+}
+
 function normalizeUserId(value) {
   const userId = Number(value);
   return Number.isInteger(userId) && userId > 0 ? userId : 0;
