@@ -79,7 +79,7 @@ WHERE calls.id = :call_id
       CAST(:is_admin AS INTEGER) = 1
       OR
       calls.owner_user_id = :user_id
-      OR cp.user_id IS NOT NULL
+      OR (cp.user_id IS NOT NULL AND cp.invite_state NOT IN ('declined', 'cancelled'))
 {$freeForAllPredicate}
   )
 LIMIT 1
@@ -144,7 +144,7 @@ WHERE calls.room_id = :room_id
       CAST(:is_admin AS INTEGER) = 1
       OR
       calls.owner_user_id = :user_id
-      OR cp.user_id IS NOT NULL
+      OR (cp.user_id IS NOT NULL AND cp.invite_state NOT IN ('declined', 'cancelled'))
 {$freeForAllPredicate}
   )
 ORDER BY

@@ -101,6 +101,31 @@ try {
 
     $pdo->prepare(
         <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'cancelled'
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    )->execute([
+        ':call_id' => $inviteOnlyCallId,
+        ':user_id' => $standardUserId,
+    ]);
+
+    $cancelledParticipantDecision = videochat_decide_call_access_for_user($pdo, $inviteOnlyCallId, $standardUserId, 'user', $tenantId);
+    videochat_call_access_decision_assert(!(bool) ($cancelledParticipantDecision['allowed'] ?? true), 'cancelled guest-list entry should not retain invite-only access');
+    videochat_call_access_decision_assert((string) ($cancelledParticipantDecision['reason'] ?? '') === 'guest_list_entry_inactive', 'cancelled participant denial reason should be explicit');
+
+    $cancelledParticipantFetch = videochat_get_call_for_user($pdo, $inviteOnlyCallId, $standardUserId, 'user', $tenantId);
+    videochat_call_access_decision_assert(!(bool) ($cancelledParticipantFetch['ok'] ?? true), 'cancelled guest-list entry should not fetch invite-only call directly');
+    videochat_call_access_decision_assert((string) ($cancelledParticipantFetch['reason'] ?? '') === 'forbidden', 'cancelled participant fetch denial reason mismatch');
+
+    $resolveCancelledLink = videochat_resolve_call_access_for_user($pdo, $accessId, $standardUserId, 'user', $tenantId);
+    videochat_call_access_decision_assert(!(bool) ($resolveCancelledLink['ok'] ?? true), 'cancelled guest-list personal link should not resolve');
+    videochat_call_access_decision_assert((string) ($resolveCancelledLink['reason'] ?? '') === 'not_found', 'cancelled guest-list personal link should be hidden as not_found');
+
+    $pdo->prepare(
+        <<<'SQL'
 DELETE FROM call_participants
 WHERE call_id = :call_id
   AND user_id = :user_id

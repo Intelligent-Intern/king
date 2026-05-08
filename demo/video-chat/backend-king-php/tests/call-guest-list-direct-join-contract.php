@@ -32,6 +32,21 @@ function videochat_call_guest_list_direct_join_create_user(PDO $pdo, PDOStatemen
     return $userId;
 }
 
+function videochat_call_guest_list_direct_join_create_temporary_user(PDO $pdo, PDOStatement $insertUser, int $roleId, string $email, string $displayName): int
+{
+    $insertUser->execute([
+        ':email' => $email,
+        ':display_name' => $displayName,
+        ':password_hash' => null,
+        ':role_id' => $roleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $userId = (int) $pdo->lastInsertId();
+    videochat_call_guest_list_direct_join_assert($userId > 0, 'created temporary user id should be positive');
+    return $userId;
+}
+
 function videochat_call_guest_list_direct_join_attach_tenant(PDOStatement $attachTenant, int $tenantId, int $userId): void
 {
     $attachTenant->execute([
@@ -50,6 +65,43 @@ function videochat_call_guest_list_direct_join_attach_organization(PDOStatement 
         ':membership_role' => $role,
         ':updated_at' => gmdate('c'),
     ]);
+}
+
+function videochat_call_guest_list_direct_join_entry_count(PDO $pdo, string $callId, int $userId): int
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT COUNT(*)
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    );
+    $query->execute([
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+    ]);
+
+    return (int) $query->fetchColumn();
+}
+
+/**
+ * @param array<int, array<string, mixed>> $events
+ * @return array<string, int>
+ */
+function videochat_call_guest_list_direct_join_event_type_counts(array $events): array
+{
+    $counts = [];
+    foreach ($events as $event) {
+        $type = (string) ($event['event_type'] ?? '');
+        if ($type === '') {
+            continue;
+        }
+        $counts[$type] = ($counts[$type] ?? 0) + 1;
+    }
+
+    return $counts;
 }
 
 try {
@@ -240,6 +292,98 @@ SQL
     $orgAdminForeignDirectJoin = videochat_user_can_direct_join_call($pdo, $foreignOrgCallId, $orgAdminUserId, 'user', $tenantId);
     videochat_call_guest_list_direct_join_assert(!(bool) ($orgAdminForeignDirectJoin['ok'] ?? true), 'org admin should not direct join foreign organization call through own-org role');
     videochat_call_guest_list_direct_join_assert((string) ($orgAdminForeignDirectJoin['reason'] ?? '') === 'not_on_guest_list', 'org admin foreign direct join denial reason mismatch');
+
+    $managementRegisteredUserId = videochat_call_guest_list_direct_join_create_user(
+        $pdo,
+        $insertUser,
+        $roleId,
+        'direct-join-management-registered-' . $unique . '@example.test',
+        'Direct Join Management Registered'
+    );
+    videochat_call_guest_list_direct_join_attach_tenant($attachTenant, $tenantId, $managementRegisteredUserId);
+    videochat_call_guest_list_direct_join_attach_organization($attachOrganization, $tenantId, $organizationAId, $managementRegisteredUserId, 'member');
+
+    $registeredBeforeAdd = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $managementRegisteredUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($registeredBeforeAdd['ok'] ?? true), 'registered user should not direct join before guest-list add');
+
+    $registeredAdd = videochat_add_call_guest_list_entry($pdo, $ownOrgCallId, $managementRegisteredUserId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($registeredAdd['ok'] ?? false), 'owner should add registered user to guest list');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredAdd['reason'] ?? '') === 'added', 'registered add reason mismatch');
+    videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $managementRegisteredUserId) === 1, 'registered add should create exactly one guest-list entry');
+
+    $registeredAfterAdd = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $managementRegisteredUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($registeredAfterAdd['ok'] ?? false), 'registered user should direct join after guest-list add');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredAfterAdd['reason'] ?? '') === 'guest_list', 'registered add direct join reason mismatch');
+
+    $registeredDuplicate = videochat_add_call_guest_list_entry($pdo, $ownOrgCallId, $managementRegisteredUserId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($registeredDuplicate['ok'] ?? false), 'duplicate registered add should merge');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredDuplicate['reason'] ?? '') === 'merged', 'duplicate registered add reason mismatch');
+    videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $managementRegisteredUserId) === 1, 'duplicate registered add must not create extra entries');
+
+    $registeredScoped = videochat_user_can_direct_join_call($pdo, $foreignOrgCallId, $managementRegisteredUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($registeredScoped['ok'] ?? true), 'registered guest list must remain call-scoped');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredScoped['reason'] ?? '') === 'not_on_guest_list', 'registered call-scope denial reason mismatch');
+
+    $registeredRemove = videochat_remove_call_guest_list_entry($pdo, $ownOrgCallId, $managementRegisteredUserId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($registeredRemove['ok'] ?? false), 'owner should remove registered guest-list entry');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredRemove['reason'] ?? '') === 'removed', 'registered remove reason mismatch');
+
+    $registeredAfterRemove = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $managementRegisteredUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($registeredAfterRemove['ok'] ?? true), 'registered user should not direct join after guest-list removal');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredAfterRemove['reason'] ?? '') === 'guest_list_entry_inactive', 'registered removal direct join reason mismatch');
+
+    $registeredRestore = videochat_add_call_guest_list_entry($pdo, $ownOrgCallId, $managementRegisteredUserId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($registeredRestore['ok'] ?? false), 'owner should restore removed registered guest-list entry');
+    videochat_call_guest_list_direct_join_assert((string) ($registeredRestore['reason'] ?? '') === 'restored', 'registered restore reason mismatch');
+    videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $managementRegisteredUserId) === 1, 'registered restore must still keep one entry');
+
+    $temporaryGuestId = videochat_call_guest_list_direct_join_create_temporary_user(
+        $pdo,
+        $insertUser,
+        $roleId,
+        'guest+directjoinmanagement' . $unique . '@videochat.local',
+        'Direct Join Temporary Guest'
+    );
+    videochat_call_guest_list_direct_join_assert(!videochat_tenant_user_is_member($pdo, $temporaryGuestId, $tenantId), 'temporary guest should not require tenant membership');
+
+    $temporaryBeforeAdd = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $temporaryGuestId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($temporaryBeforeAdd['ok'] ?? true), 'temporary guest should not direct join before guest-list add');
+
+    $temporaryAdd = videochat_add_call_guest_list_entry($pdo, $ownOrgCallId, $temporaryGuestId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryAdd['ok'] ?? false), 'owner should add temporary account to guest list');
+    videochat_call_guest_list_direct_join_assert((string) ($temporaryAdd['reason'] ?? '') === 'added', 'temporary add reason mismatch');
+    videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $temporaryGuestId) === 1, 'temporary add should create exactly one guest-list entry');
+
+    $temporaryAfterAdd = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $temporaryGuestId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryAfterAdd['ok'] ?? false), 'temporary guest should direct join after guest-list add');
+    videochat_call_guest_list_direct_join_assert((string) ($temporaryAfterAdd['reason'] ?? '') === 'guest_list', 'temporary add direct join reason mismatch');
+
+    $temporaryDuplicate = videochat_add_call_guest_list_entry($pdo, $ownOrgCallId, $temporaryGuestId, $ownerAUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryDuplicate['ok'] ?? false), 'duplicate temporary add should merge');
+    videochat_call_guest_list_direct_join_assert((string) ($temporaryDuplicate['reason'] ?? '') === 'merged', 'duplicate temporary add reason mismatch');
+    videochat_call_guest_list_direct_join_assert(videochat_call_guest_list_direct_join_entry_count($pdo, $ownOrgCallId, $temporaryGuestId) === 1, 'duplicate temporary add must not create extra entries');
+
+    $plainNonGuestDecision = videochat_user_can_direct_join_call($pdo, $ownOrgCallId, $participantBUserId, 'user', $tenantId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($plainNonGuestDecision['ok'] ?? true), 'non-guest-list user should not direct join');
+
+    $events = videochat_audit_fetch_events($pdo, ['tenant_id' => $tenantId, 'call_id' => $ownOrgCallId, 'limit' => 100]);
+    $eventTypes = videochat_call_guest_list_direct_join_event_type_counts($events);
+    videochat_call_guest_list_direct_join_assert(($eventTypes['guest_list_entry_added'] ?? 0) >= 2, 'guest-list add audit events should exist');
+    videochat_call_guest_list_direct_join_assert(($eventTypes['guest_list_entry_merged'] ?? 0) >= 2, 'guest-list duplicate merge audit events should exist');
+    videochat_call_guest_list_direct_join_assert(($eventTypes['guest_list_entry_removed'] ?? 0) >= 1, 'guest-list remove audit event should exist');
+    videochat_call_guest_list_direct_join_assert(($eventTypes['guest_list_entry_restored'] ?? 0) >= 1, 'guest-list restore audit event should exist');
+    $encodedEvents = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_guest_list_direct_join_assert(is_string($encodedEvents), 'guest-list audit events should encode');
+    foreach ([
+        'direct-join-management-registered-' . $unique . '@example.test',
+        'Direct Join Management Registered',
+        'Direct Join Temporary Guest',
+    ] as $forbiddenAuditText) {
+        videochat_call_guest_list_direct_join_assert(
+            !str_contains($encodedEvents, $forbiddenAuditText),
+            'guest-list audit must not leak raw guest identifier: ' . $forbiddenAuditText
+        );
+    }
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-guest-list-direct-join-contract] PASS\n");
