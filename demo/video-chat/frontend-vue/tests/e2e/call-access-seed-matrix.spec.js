@@ -8,6 +8,7 @@ import {
   getSeedAccessLink,
   getSeedCall,
   getSeedScenario,
+  getSeedTenant,
   getSeedUser,
   seedUserKeys,
   sessionStorageKey,
@@ -23,6 +24,9 @@ const allowedDirectJoinScenarios = [
 
 const deniedDirectJoinScenarios = [
   'direct_join_org_admin_foreign_organization_denied',
+  'direct_join_active_org_switch_does_not_grant_foreign_call',
+  'direct_join_owner_rights_not_cross_org',
+  'direct_join_guest_list_not_cross_org',
   'direct_join_forged_client_admin_role_denied',
 ];
 
@@ -34,6 +38,7 @@ test('IAM call-access seed matrix covers required principals without temporary a
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
     'system_admin',
     'alpha_org_admin',
+    'alpha_admin_beta_member',
     'beta_org_admin',
     'alpha_call_owner',
     'alpha_normal_user',
@@ -227,6 +232,95 @@ test('direct workspace join denies a forged system-admin session token before ca
     await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
     await expect(page.locator('body')).not.toContainText(call.title);
     expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
+  } finally {
+    await context.close();
+  }
+});
+
+test('foreign personalized link review flags stay bound to the target organization and call', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario('review_flags_correct_org_for_foreign_personal_link');
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(scenario.expected.review_call_key);
+  const tenant = getSeedTenant(scenario.expected.review_tenant_key);
+  const subject = getSeedUser(scenario.expected.subject_user_key);
+  const target = getSeedUser(scenario.expected.target_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const reviewFlags = [];
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+    storedSessionUserKey: scenario.principal_user_key,
+    storedSessionCallKey: 'alpha_active',
+  });
+  try {
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      reviewFlags.push({
+        reason: 'duplicate_personalized_link',
+        status: 'open',
+        tenant_id: tenant.id,
+        tenant_key: scenario.expected.review_tenant_key,
+        call_id: call.id,
+        call_key: call.key,
+        subject_user_id: subject.id,
+        subject_user_key: subject.key,
+        target_user_id: target.id,
+        target_user_key: target.key,
+        payload: {
+          flag: 'duplicate_personalized_link',
+          link_kind: 'personal',
+          review_status: 'manual_review_required',
+          raw_link_identifier_logged: false,
+          account_email_logged: false,
+          host_name_logged: false,
+        },
+      });
+      await route.fulfill({
+        status: 403,
+        json: {
+          status: 'error',
+          error: {
+            code: 'call_access_forbidden',
+            message: 'Call access link is not available for your session.',
+            details: {
+              mismatch: 'strong_personalized_link',
+              fields: {
+                auth: 'not_bound_to_current_user',
+                host_name: 'not_verified',
+              },
+            },
+          },
+        },
+      });
+    });
+
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(403);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.error?.code).toBe('call_access_forbidden');
+    expect(joinPayload?.error?.details?.fields?.auth).toBe('not_bound_to_current_user');
+
+    expect(reviewFlags).toHaveLength(1);
+    expect(reviewFlags[0]).toMatchObject({
+      reason: scenario.expected.reason,
+      tenant_id: tenant.id,
+      tenant_key: scenario.expected.review_tenant_key,
+      call_id: call.id,
+      call_key: call.key,
+      subject_user_id: subject.id,
+      subject_user_key: subject.key,
+      target_user_id: target.id,
+      target_user_key: target.key,
+    });
+    expect(JSON.stringify(reviewFlags[0])).not.toContain(link.id);
+    expect(reviewFlags[0]?.payload?.raw_link_identifier_logged).toBe(false);
+    expect(reviewFlags[0]?.payload?.account_email_logged).toBe(false);
   } finally {
     await context.close();
   }

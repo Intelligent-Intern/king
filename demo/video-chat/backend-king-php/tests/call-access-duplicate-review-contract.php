@@ -49,6 +49,27 @@ SQL
     return $userId;
 }
 
+function videochat_call_access_duplicate_review_create_tenant(PDO $pdo, string $slug, string $label): int
+{
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO tenants(public_id, slug, label, status, created_at, updated_at)
+VALUES(:public_id, :slug, :label, 'active', :created_at, :updated_at)
+SQL
+    );
+    $insert->execute([
+        ':public_id' => videochat_generate_call_access_uuid(),
+        ':slug' => $slug,
+        ':label' => $label,
+        ':created_at' => gmdate('c'),
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $tenantId = (int) $pdo->lastInsertId();
+    videochat_call_access_duplicate_review_assert($tenantId > 0, "{$label} tenant should be created");
+    return $tenantId;
+}
+
 function videochat_call_access_duplicate_review_insert_session(PDO $pdo, string $sessionId, int $userId, int $tenantId): void
 {
     $tenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id') ? ', active_tenant_id' : '';
@@ -306,6 +327,53 @@ try {
     videochat_call_access_duplicate_review_assert($issuedRows === 0, 'duplicate denied and rate-limited attempts must not persist sessions');
     $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_duplicate_personalized_link_review'")->fetchColumn();
     videochat_call_access_duplicate_review_assert($auditCount >= 1, 'duplicate review must be audit-logged');
+
+    $alphaTenantId = videochat_call_access_duplicate_review_create_tenant($pdo, 'review-alpha-' . $secret, 'Review Alpha ' . $secret);
+    $betaTenantId = videochat_call_access_duplicate_review_create_tenant($pdo, 'review-beta-' . $secret, 'Review Beta ' . $secret);
+    $crossOrgAccessId = videochat_generate_call_access_uuid();
+    $crossOrgCallId = videochat_generate_call_access_uuid();
+    $crossOrgReview = videochat_call_access_record_duplicate_personalized_link_review(
+        $pdo,
+        [
+            'id' => $crossOrgAccessId,
+            'tenant_id' => $alphaTenantId,
+            'call_id' => $crossOrgCallId,
+            'participant_user_id' => $targetUserId,
+            'link_kind' => 'personal',
+        ],
+        [
+            'id' => $crossOrgCallId,
+            'tenant_id' => $betaTenantId,
+        ],
+        ['id' => $targetUserId],
+        $secondUserId,
+        'cross_org_review_assignment',
+        ['session_id' => 'sess_duplicate_cross_org_review']
+    );
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgReview['ok'] ?? false), 'cross-organization review flag should record');
+    videochat_call_access_duplicate_review_assert((bool) ($crossOrgReview['flag_created'] ?? false), 'cross-organization review flag should be created');
+    $crossOrgFlag = is_array($crossOrgReview['flag'] ?? null) ? $crossOrgReview['flag'] : [];
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgFlag['tenant_id'] ?? 0) === $betaTenantId, 'review flag tenant must follow the call organization');
+    videochat_call_access_duplicate_review_assert((string) ($crossOrgFlag['call_id'] ?? '') === $crossOrgCallId, 'review flag call id must follow the call');
+
+    $crossOrgAudit = $pdo->prepare(
+        <<<'SQL'
+SELECT tenant_id, call_id
+FROM videochat_audit_events
+WHERE event_type = 'call_access_duplicate_personalized_link_review'
+  AND actor_user_id = :actor_user_id
+  AND call_id = :call_id
+ORDER BY id DESC
+LIMIT 1
+SQL
+    );
+    $crossOrgAudit->execute([
+        ':actor_user_id' => $secondUserId,
+        ':call_id' => $crossOrgCallId,
+    ]);
+    $crossOrgAuditRow = $crossOrgAudit->fetch();
+    videochat_call_access_duplicate_review_assert(is_array($crossOrgAuditRow), 'cross-organization review audit event should exist');
+    videochat_call_access_duplicate_review_assert((int) ($crossOrgAuditRow['tenant_id'] ?? 0) === $betaTenantId, 'review audit tenant must follow the call organization');
 
     fwrite(STDOUT, "[call-access-duplicate-review-contract] PASS\n");
 } catch (Throwable $error) {

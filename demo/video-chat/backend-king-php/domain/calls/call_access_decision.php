@@ -88,6 +88,19 @@ function videochat_decide_call_access_for_user(
         );
     }
 
+    if (videochat_user_is_organization_admin_for_call($pdo, $call, $authUserId, $tenantId)) {
+        return videochat_call_access_decision_result(
+            true,
+            'allowed',
+            'organization_admin',
+            'organization',
+            $call,
+            $callRole,
+            'moderator',
+            'allowed'
+        );
+    }
+
     if (is_array($participant)) {
         return videochat_call_access_decision_result(
             true,
