@@ -1248,24 +1248,32 @@ client role cache data all resolve from current backend membership state.
 
 ## 3. Join Permissions
 
-- [ ] System admin can join every active call
-- [ ] System admin can join without guest-list entry
-- [ ] System admin can join without invitation
+- [x] System admin can join every active call
+- [x] System admin can join without guest-list entry
+- [x] System admin can join without invitation
 - [ ] System admin cannot join deleted call through normal join flow
 - [ ] System admin cannot join ended call through normal join flow
-- [ ] Organization admin can join every active call of own organization
-- [ ] Organization admin can join own organization call without guest-list entry
-- [ ] Organization admin cannot join another organization’s call through org-admin rights
-- [ ] User can join call when on guest list
+- [x] Organization admin can join every active call of own organization
+- [x] Organization admin can join own organization call without guest-list entry
+- [x] Organization admin cannot join another organization’s call through org-admin rights
+- [x] User can join call when on guest list
 - [ ] User cannot directly join call when not on guest list
-- [ ] User can join own call as owner
+- [x] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
 - [ ] Deleted / disabled user cannot join
 - [ ] Removed guest-list entry revokes direct join access
 - [ ] Newly added guest-list entry grants direct join access
-- [ ] Permissions are checked server-side
-- [ ] Manipulated client role does not grant access
+- [x] Permissions are checked server-side
+- [x] Manipulated client role does not grant access
 - [x] Manipulated call ID does not grant access to another call
+
+Proof: `call-access-seed-matrix.spec.js` runs the direct workspace join matrix
+for system admin, same-organization admin, normal owner, guest-list user,
+foreign-organization admin denial, forged client admin denial, and forged
+system-admin session token denial. `npx playwright test
+tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
+9 tests; `npm run test:contract:iam-call-access` passed frontend contracts and
+skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 
 ## 4. Calendar Invitation Flow
 
