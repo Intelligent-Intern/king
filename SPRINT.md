@@ -1292,8 +1292,8 @@ the authenticated account authoritative for the issued session.
 - [ ] Link data of other person is not displayed
 - [ ] Differing link data is not exposed in clear text
 - [ ] Host name is verified server-side
-- [ ] Wrong host name grants no direct access
-- [ ] Wrong host name does not reveal foreign data
+- [x] Wrong host name grants no direct access
+- [x] Wrong host name does not reveal foreign data
 - [ ] Wrong host name may lead to lobby / manual review
 - [ ] Correct host name is accepted
 - [ ] Correct host name shows success confirmation
@@ -1304,7 +1304,7 @@ the authenticated account authoritative for the issued session.
 - [ ] User can request account update
 - [ ] User must re-enter differing values manually
 - [ ] System does not show differing link values
-- [ ] System does not show data from guessed / foreign link
+- [x] System does not show data from guessed / foreign link
 - [ ] Email confirmation is sent to logged-in account email
 - [ ] Email is not sent to temporary link-account email
 - [ ] Without email confirmation, account data is not updated
@@ -1315,7 +1315,14 @@ the authenticated account authoritative for the issued session.
 - [ ] Flow is audit-logged
 - [ ] Host-name brute force is rate-limited
 - [ ] Repeated wrong host names trigger lock / review if configured
-- [ ] Host-name error messages leak no host data
+- [x] Host-name error messages leak no host data
+
+Proof: `call-access-strong-mismatch-privacy-contract` pins the focused browser
+case in `call-access-join.spec.js`: a logged-in wrong account opens a
+personalized link, the simulated server returns a strong-mismatch wrong-host
+denial, the join/session responses contain no invitee/host/session sentinels,
+the UI renders only the generic forbidden state, no workspace/lobby admission is
+entered, and the active browser session remains unchanged.
 
 ## 8. Duplicate Personalized Link / Abuse Detection
 
@@ -1470,12 +1477,12 @@ queued or admitted handoff left behind.
 
 ## 14. Privacy and Data Minimization
 
-- [ ] Foreign link data is not shown on strong mismatch
+- [x] Foreign link data is not shown on strong mismatch
 - [ ] Differing data is not shown as comparison list
 - [ ] User must re-enter differing data manually
 - [x] Guessed link reveals no personal data
 - [x] Invalid link reveals no personal data
-- [ ] Wrong host name reveals no personal data
+- [x] Wrong host name reveals no personal data
 - [ ] Account data is updated only after email confirmation
 - [ ] Email confirmation goes only to logged-in account
 - [ ] Temporary account data is not persisted unnecessarily
