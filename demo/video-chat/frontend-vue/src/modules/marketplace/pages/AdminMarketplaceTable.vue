@@ -10,12 +10,12 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="app in rows" :key="app.id">
+        <tr v-for="app in rows" :key="rowKey(app)">
           <td :data-label="t('marketplace.name')">
             <div class="marketplace-name">{{ app.name }}</div>
             <div class="marketplace-subline">{{ categoryLabel(app.category) }}</div>
             <div v-if="catalogApp(app)" class="marketplace-subline marketplace-call-app-state">
-              Call App: {{ callAppStateLabel(app) }}
+              {{ t('marketplace.call_app_state', { state: callAppStateLabel(app) }) }}
             </div>
           </td>
           <td :data-label="t('marketplace.manufacturer')">
@@ -34,15 +34,17 @@
                 v-if="catalogApp(app)"
                 icon="/assets/orgas/kingrt/icons/add.png"
                 :title="installTitle(app)"
-                :disabled="installingAppId === app.id || !canInstallCallApp(app)"
+                :disabled="installingAppKey === callAppKey(app) || !canInstallCallApp(app)"
                 @click="$emit('install-call-app', app)"
               />
               <AppIconButton
+                v-if="!isCatalogOnly(app)"
                 icon="/assets/orgas/kingrt/icons/gear.png"
                 :title="t('marketplace.edit_app')"
                 @click="$emit('edit-app', app)"
               />
               <AppIconButton
+                v-if="!isCatalogOnly(app)"
                 icon="/assets/orgas/kingrt/icons/remove_user.png"
                 :title="t('marketplace.delete_app')"
                 :disabled="mutatingAppId === app.id"
@@ -85,9 +87,9 @@ defineProps({
     type: Number,
     default: 0,
   },
-  installingAppId: {
-    type: Number,
-    default: 0,
+  installingAppKey: {
+    type: String,
+    default: '',
   },
 });
 
@@ -113,6 +115,21 @@ function catalogApp(app) {
   return String(catalog.app_key || '').trim() !== '' ? catalog : null;
 }
 
+function callAppKey(app) {
+  return String(catalogApp(app)?.app_key || '').trim();
+}
+
+function rowKey(app) {
+  const appId = Number(app?.id || 0);
+  if (appId > 0) return `marketplace:${appId}`;
+  const catalogKey = callAppKey(app);
+  return catalogKey === '' ? `catalog:${String(app?.name || '')}` : `catalog:${catalogKey}`;
+}
+
+function isCatalogOnly(app) {
+  return app?.catalog_only === true || String(app?.source || '') === 'call_app_catalog';
+}
+
 function organizationState(app) {
   const catalog = catalogApp(app);
   const organization = catalog?.organization;
@@ -134,18 +151,18 @@ function canInstallCallApp(app) {
 
 function callAppStateLabel(app) {
   const state = organizationState(app);
-  if (state.installed === true) return 'installed for organization';
-  if (state.status === 'disabled') return 'disabled for organization';
-  if (state.ordered === true) return 'ordered, not installed';
-  if (!isCatalogHealthy(app)) return 'catalog unhealthy';
-  return 'not installed';
+  if (state.installed === true) return t('marketplace.call_app_state.installed');
+  if (state.status === 'disabled') return t('marketplace.call_app_state.disabled');
+  if (state.ordered === true) return t('marketplace.call_app_state.ordered');
+  if (!isCatalogHealthy(app)) return t('marketplace.call_app_state.unhealthy');
+  return t('marketplace.call_app_state.not_installed');
 }
 
 function installTitle(app) {
-  if (isInstalled(app)) return 'Verify organization installation';
-  if (!isCatalogHealthy(app)) return 'Call App catalog is not healthy';
-  if (organizationState(app).status === 'disabled') return 'Enable for organization';
-  return 'Install for organization';
+  if (isInstalled(app)) return t('marketplace.call_app_install.verify');
+  if (!isCatalogHealthy(app)) return t('marketplace.call_app_install.unhealthy');
+  if (organizationState(app).status === 'disabled') return t('marketplace.call_app_install.enable');
+  return t('marketplace.call_app_install.install');
 }
 </script>
 

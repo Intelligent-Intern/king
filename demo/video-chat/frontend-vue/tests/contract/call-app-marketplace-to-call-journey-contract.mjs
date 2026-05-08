@@ -24,6 +24,7 @@ const [
   catalogStoreSource,
   adminMarketplaceSource,
   adminMarketplaceTableSource,
+  marketplaceEntitlementTestSource,
   crdtBridgeSource,
   whiteboardSource,
   whiteboardRuntimeSource,
@@ -34,6 +35,7 @@ const [
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
   read('demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceView.vue'),
   read('demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceTable.vue'),
+  read('demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
@@ -56,6 +58,12 @@ assert.match(
   lifecycleTestSource,
   /installed whiteboard availability should return 200[\s\S]*installed whiteboard must appear in available Call Apps[\s\S]*semantic_dns_mcp/,
   'backend journey must prove installed whiteboard availability through Semantic-DNS/MCP discovery',
+);
+
+assert.match(
+  marketplaceEntitlementTestSource,
+  /catalog whiteboard must start not installed for organization[\s\S]*catalog whiteboard must expose add-to-organization action before install[\s\S]*post-install Whiteboard must appear in call availability/s,
+  'marketplace contract must prove catalog visibility, add-to-organization action, and post-install call availability',
 );
 
 assert.match(
@@ -96,14 +104,14 @@ assert.match(
 
 assert.match(
   adminMarketplaceSource,
-  /\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/orders[\s\S]*\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/installations/s,
-  'admin marketplace must order and install Call Apps for the active organization from the real marketplace endpoints',
+  /const appKey = String\(catalog\?\.app_key \|\| ''\)\.trim\(\)[\s\S]*\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/orders[\s\S]*\/api\/marketplace\/call-apps\/\$\{encodeURIComponent\(appKey\)\}\/installations/s,
+  'admin marketplace must order and install catalog-only Call Apps for the active organization from the real marketplace endpoints',
 );
 
 assert.match(
   adminMarketplaceTableSource,
-  /catalogApp\(app\)[\s\S]*install-call-app[\s\S]*Verify organization installation[\s\S]*Install for organization/s,
-  'admin marketplace table must expose idempotent catalog-backed organization install actions',
+  /catalogApp\(app\)[\s\S]*install-call-app[\s\S]*isCatalogOnly\(app\)[\s\S]*marketplace\.call_app_install\.verify[\s\S]*marketplace\.call_app_install\.install/s,
+  'admin marketplace table must expose idempotent catalog-backed organization install actions for catalog-only rows',
 );
 
 assert.doesNotMatch(

@@ -485,6 +485,45 @@ function videochat_call_app_organization_state(PDO $pdo, int $tenantId, string $
 }
 
 /**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_organization_actions(string $appKey, array $organization): array
+{
+    $encodedAppKey = rawurlencode(trim($appKey));
+    $installed = (bool) ($organization['installed'] ?? false);
+    $ordered = (bool) ($organization['ordered'] ?? false);
+
+    return [
+        'add_to_organization' => [
+            'available' => !$installed,
+            'method' => 'POST_SEQUENCE',
+            'steps' => [
+                [
+                    'name' => 'order',
+                    'method' => 'POST',
+                    'path' => '/api/marketplace/call-apps/' . $encodedAppKey . '/orders',
+                    'required' => !$ordered,
+                    'idempotent' => true,
+                ],
+                [
+                    'name' => 'install',
+                    'method' => 'POST',
+                    'path' => '/api/marketplace/call-apps/' . $encodedAppKey . '/installations',
+                    'required' => !$installed,
+                    'idempotent' => true,
+                ],
+            ],
+        ],
+        'verify_installation' => [
+            'available' => $installed,
+            'method' => 'POST',
+            'path' => '/api/marketplace/call-apps/' . $encodedAppKey . '/installations',
+            'idempotent' => true,
+        ],
+    ];
+}
+
+/**
  * @param array<int, array<string, mixed>> $catalogApps
  * @return array<int, array<string, mixed>>
  */
@@ -494,6 +533,7 @@ function videochat_call_app_attach_organization_state(PDO $pdo, int $tenantId, a
         $appKey = (string) ($app['app_key'] ?? '');
         $version = (string) ($app['version'] ?? '');
         $app['organization'] = videochat_call_app_organization_state($pdo, $tenantId, $appKey, $version);
+        $app['organization_actions'] = videochat_call_app_organization_actions($appKey, $app['organization']);
         return $app;
     }, $catalogApps);
 }
