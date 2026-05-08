@@ -137,6 +137,7 @@ function hostHtml(baseURL) {
               logicalClock: 0,
               ops: [],
               presence: [],
+              presenceDeliveries: [],
               snapshot: null,
               snapshotClock: 0,
               appendAttempts: [],
@@ -307,6 +308,7 @@ function hostHtml(baseURL) {
                     actor_id: entry.actor_id,
                     payload_type: entry.payload_type,
                   })),
+                  presenceDeliveries: state.presenceDeliveries.map((entry) => ({ ...entry })),
                   snapshotClock: state.snapshotClock,
                   appendAttempts: state.appendAttempts.slice(),
                   deniedAppendCount: state.deniedAppendCount,
@@ -457,6 +459,13 @@ function hostHtml(baseURL) {
                     payload_type: String(message.payload_type || ''),
                     payload: message.payload || {},
                   });
+                  state.presenceDeliveries.push({
+                    from: participant.alias,
+                    to: target.alias,
+                    actor_id: participant.actorId,
+                    payload_type: String(message.payload_type || ''),
+                    label: String(message.payload?.label || message.payload?.display_name || ''),
+                  });
                 }
               }
             });
@@ -495,6 +504,29 @@ async function nonWhitePixelCount(page, frameName) {
   });
 }
 
+async function canvasRegionNonWhiteCount(page, frameName, region) {
+  const frame = page.frame({ name: frameName });
+  expect(frame).toBeTruthy();
+  return frame.evaluate((sampleRegion) => {
+    const canvas = document.getElementById('board');
+    const context = canvas.getContext('2d');
+    const x = Math.max(0, Math.min(canvas.width - 1, Math.floor(sampleRegion.x)));
+    const y = Math.max(0, Math.min(canvas.height - 1, Math.floor(sampleRegion.y)));
+    const width = Math.max(1, Math.min(canvas.width - x, Math.floor(sampleRegion.width)));
+    const height = Math.max(1, Math.min(canvas.height - y, Math.floor(sampleRegion.height)));
+    const pixels = context.getImageData(x, y, width, height).data;
+    let count = 0;
+    for (let index = 0; index < pixels.length; index += 4) {
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const alpha = pixels[index + 3];
+      if (alpha > 0 && !(red > 245 && green > 245 && blue > 245)) count += 1;
+    }
+    return count;
+  }, region);
+}
+
 test('Whiteboard Call App journey covers collaboration, presence, replay, snapshot, and revocation', async ({ page }) => {
   const assets = await readWhiteboardAssets();
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
@@ -531,8 +563,37 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
 
   const ownerCanvasBox = await ownerFrame.locator('#board').boundingBox();
   expect(ownerCanvasBox).toBeTruthy();
+  const cursorScreenPoint = {
+    x: ownerCanvasBox.x + 520,
+    y: ownerCanvasBox.y + 92,
+  };
+  const cursorBoardPoint = {
+    x: ((cursorScreenPoint.x - ownerCanvasBox.x) / ownerCanvasBox.width) * 1600,
+    y: ((cursorScreenPoint.y - ownerCanvasBox.y) / ownerCanvasBox.height) * 900,
+  };
+  const cursorRegion = {
+    x: cursorBoardPoint.x + 20,
+    y: cursorBoardPoint.y + 6,
+    width: 190,
+    height: 36,
+  };
+  const cursorRegionBefore = await canvasRegionNonWhiteCount(page, 'participant', cursorRegion);
   const presenceBeforeCursorBurst = await page.evaluate(() => window.whiteboardHarness.state.presence.length);
   await page.waitForTimeout(650);
+  await page.mouse.move(cursorScreenPoint.x, cursorScreenPoint.y);
+  await expect.poll(() => canvasRegionNonWhiteCount(page, 'participant', cursorRegion))
+    .toBeGreaterThan(cursorRegionBefore + 40);
+  const cursorRegionWithOwner = await canvasRegionNonWhiteCount(page, 'participant', cursorRegion);
+  expect(cursorRegionWithOwner).toBeGreaterThan(cursorRegionBefore + 40);
+  await expect.poll(() => page.evaluate(() => window.whiteboardHarness.state.presenceDeliveries))
+    .toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from: 'owner',
+        to: 'participant',
+        payload_type: 'cursor.move',
+        label: 'Owner',
+      }),
+    ]));
   for (let index = 0; index < 8; index += 1) {
     await page.mouse.move(ownerCanvasBox.x + 350 + index * 12, ownerCanvasBox.y + 120 + index * 4);
   }
@@ -583,6 +644,19 @@ test('Whiteboard Call App journey covers collaboration, presence, replay, snapsh
   await page.evaluate(() => window.whiteboardHarness.revoke('participant'));
   await expect(participantFrame.locator('#modeBadge')).toHaveText('No access');
   await expect(participantFrame.locator('[data-tool="pen"]')).toBeDisabled();
+  await expect.poll(() => canvasRegionNonWhiteCount(page, 'participant', cursorRegion))
+    .toBeLessThanOrEqual(cursorRegionBefore + 12);
+  const participantPresenceDeliveriesAfterRevoke = await page.evaluate(() => (
+    window.whiteboardHarness.state.presenceDeliveries.filter((entry) => entry.to === 'participant').length
+  ));
+  await page.waitForTimeout(650);
+  await page.mouse.move(cursorScreenPoint.x + 64, cursorScreenPoint.y + 24);
+  await page.waitForTimeout(200);
+  await expect.poll(() => page.evaluate(() => (
+    window.whiteboardHarness.state.presenceDeliveries.filter((entry) => entry.to === 'participant').length
+  ))).toBe(participantPresenceDeliveriesAfterRevoke);
+  const cursorRegionAfterRevoke = await canvasRegionNonWhiteCount(page, 'participant', cursorRegion);
+  expect(cursorRegionAfterRevoke).toBeLessThanOrEqual(cursorRegionBefore + 12);
 
   await drawStroke(page, 'iframe[name="participant"]');
   await expect.poll(() => page.evaluate(() => window.whiteboardHarness.state.ops.length))
