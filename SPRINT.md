@@ -1724,9 +1724,9 @@ requests a fresh `room/snapshot/request`.
 - [x] Removed invited user does not retain organization-member rights
 - [x] Removed invited user does not retain organization-admin rights
 - [ ] Removed invited user cannot join other organization calls
-- [ ] Removed invited user cannot access organization resources
+- [x] Removed invited user cannot access organization resources
 - [ ] Removed invited user cannot manage call unless separately owner/moderator
-- [ ] Removed invited user cannot use stale role data from token/session/cache
+- [x] Removed invited user cannot use stale role data from token/session/cache
 - [x] Removed invited user is blocked if invite was manually invalidated
 - [ ] Removed invited user is blocked if call was deleted
 - [ ] Removed invited user is blocked if call was ended
@@ -1747,12 +1747,16 @@ requests a fresh `room/snapshot/request`.
 - [ ] Removed user in lobby loses org-based rights but may remain in lobby through call-scoped invitation
 
 Proof: `call-access-membership-removal-contract` removes tenant, organization,
-and group memberships before opening the personalized link; verifies the link
-still resolves; issues a call-scoped session; authenticates through the
-call-access fallback without recreating membership; proves `tenant_admin` stays
-false; and confirms the admitted user enters only the bound call room. The
-focused Playwright spec `call-access-join.spec.js` proves the public join/session
-browser path and waiting-for-host state.
+and group memberships before opening the personalized link; proves a pre-removal
+normal tenant session with elevated tenant/org rights is rejected after removal,
+including through the locally issued session cache fallback; verifies an
+organization-scoped resource grant is lost with organization membership;
+verifies the link still resolves; issues a call-scoped session; authenticates
+through the call-access fallback without recreating membership; proves
+`tenant_admin` stays false and organization resource access stays denied; and
+confirms the admitted user enters only the bound call room. The focused
+Playwright spec `call-access-join.spec.js` proves the public join/session browser
+path and waiting-for-host state.
 
 ## 24. Invite Link Invalidation
 
