@@ -697,6 +697,29 @@ This sprint is focused on turning the complete permission and identity model int
 
 The expected outcome is not a manual checklist only, but an automated E2E test suite that can be executed in CI and prevents regressions in the IAM and videocall access model.
 
+## IAM E2E Proof Index
+
+This compact index points at the proof already recorded below. It is not a
+completion marker for unchecked leaves.
+
+- Core IAM/call-access contracts: `npm run test:contract:iam-call-access`,
+  including verified-context UI, strong-mismatch privacy, IAM E2E foundation,
+  membership-removal, and stale-organization-role proofs.
+- Focused call-access browser E2E: `npm run test:e2e:call-access`, covering the
+  live backend join path and deterministic seed-matrix browser path.
+- Broader E2E release coverage: `npm run test:e2e:matrix` and
+  `npm run test:e2e:release-gate`, recorded with the CI-smoke proof.
+- Realtime reconnect proofs: `npm run test:contract:realtime-reconnect-browser`
+  and `npm run test:e2e:realtime-reconnect-websocket`.
+- Lobby concurrency proof: `call-access-session-contract`,
+  `realtime-lobby-concurrency-contract`, and `lobby-concurrency-ui.spec.js`.
+- Backend/API proof leaves referenced below include
+  `call-access-session-contract`, `call-access-session-fixation-contract`,
+  `call-creation-owner-rights-contract`, `realtime-call-scope-contract`,
+  `call-access-membership-removal-contract`,
+  `call-access-stale-organization-role-contract`, and
+  `demo/video-chat/backend-king-php/tests/call-guest-lifecycle-contract.php`.
+
 ## Background
 
 The product supports:
