@@ -136,6 +136,22 @@ public_get_json() {
   rm -f "${output}"
 }
 
+assert_domain_contract() {
+  local nested=".${DEPLOY_APP_DOMAIN}" label var host
+  for label in app:DEPLOY_APP_DOMAIN api:DEPLOY_API_DOMAIN ws:DEPLOY_WS_DOMAIN sfu:DEPLOY_SFU_DOMAIN turn:DEPLOY_TURN_DOMAIN cdn:DEPLOY_CDN_DOMAIN registry:DEPLOY_REGISTRY_DOMAIN whiteboard:DEPLOY_CALL_APP_DOMAIN; do
+    var="${label#*:}"
+    host="${!var}"
+    [[ -n "${host}" ]] || fail "${var} must not be empty"
+    case "${host}" in *"${nested}"|*.app.kingrt.com) fail "${var} must not be nested under app.kingrt.com: ${host}" ;; esac
+  done
+  if [[ "${DEPLOY_DOMAIN}" == "kingrt.com" ]]; then
+    [[ "${DEPLOY_APP_DOMAIN}" == "app.kingrt.com" && "${DEPLOY_API_DOMAIN}" == "api.kingrt.com" && "${DEPLOY_WS_DOMAIN}" == "ws.kingrt.com" && "${DEPLOY_SFU_DOMAIN}" == "sfu.kingrt.com" && "${DEPLOY_TURN_DOMAIN}" == "turn.kingrt.com" && "${DEPLOY_CDN_DOMAIN}" == "cdn.kingrt.com" && "${DEPLOY_REGISTRY_DOMAIN}" == "registry.kingrt.com" && "${DEPLOY_CALL_APP_DOMAIN}" == "whiteboard.kingrt.com" ]] || fail "kingrt.com production domains must use app/api/ws/sfu/turn/cdn/registry/whiteboard kingrt.com hosts"
+  fi
+  log "domain contract: app/api/ws/sfu/cdn/turn/registry/whiteboard rooted at ${DEPLOY_DOMAIN}; no nested .app.kingrt.com domains"
+}
+
+expect_dns_resolves() { local host="$1"; php -r '$host = $argv[1] ?? ""; exit($host !== "" && gethostbynamel($host) !== false ? 0 : 1);' "${host}" || fail "DNS did not resolve ${host}"; log "dns ${host}: resolves"; }
+
 assert_public_health_payload() {
   php -r '
     $raw = stream_get_contents(STDIN);
@@ -686,34 +702,6 @@ admin_get_json() {
   fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
 }
 
-admin_post_json() {
-  local label="$1" url="$2" token="$3" payload="$4" output code attempt
-  output="$(mktemp)"
-  for attempt in $(seq 1 30); do
-    code="$(
-      curl -sS --max-time "${TIMEOUT}" \
-        -o "${output}" \
-        -w '%{http_code}' \
-        -X POST \
-        -H "authorization: Bearer ${token}" \
-        -H 'content-type: application/json' \
-        --data "${payload}" \
-        "${url}" || true
-    )"
-    if [[ "${code}" == "200" ]]; then
-      cat "${output}"
-      rm -f "${output}"
-      return 0
-    fi
-    sleep 1
-  done
-
-  printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
-  cat "${output}" >&2 || true
-  rm -f "${output}"
-  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
-}
-
 admin_post_json_expect_status() {
   local label="$1" expected_code="$2" url="$3" token="$4" payload="$5" output code attempt
   output="$(mktemp)"
@@ -761,13 +749,22 @@ DEPLOY_CALL_APP_DOMAIN="${VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN:-whiteboard.${DEPLOY_
 DEPLOY_REGISTRY_DOMAIN="${VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN:-${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-registry.${DEPLOY_DOMAIN}}}"
 DEPLOY_MOTHERNODE_DOMAIN="${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-${DEPLOY_REGISTRY_DOMAIN}}"
 
+assert_domain_contract
+log "BGF-07 proof commands: background contracts=(cd demo/video-chat/frontend-vue && npm run test:contract:background-filter && node tests/contract/prod-debug-observability-contract.mjs); build=(cd demo/video-chat/frontend-vue && npm run build); deploy=demo/video-chat/scripts/deploy.sh (operator-run separately; deploy-smoke does not invoke it); production smoke=VIDEOCHAT_DEPLOY_DOMAIN=${DEPLOY_DOMAIN} demo/video-chat/scripts/deploy-smoke.sh; production debug=VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh; browser smoke=Chrome/Chromium and Firefox real call camera/audio/screenshare/reconnect/background-unavailable modal"
+for domain_host in "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}"; do expect_dns_resolves "${domain_host}"; done
+
 check_https_redirect
 expect_http_code https-frontend 200 "https://${DEPLOY_APP_DOMAIN}/"
 expect_http_code cdn-mediapipe-tasks-model 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite"
+expect_http_code cdn-mediapipe-tasks-vision 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs"
+expect_http_code cdn-mediapipe-tasks-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/wasm/vision_wasm_internal.js"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
+expect_http_code background-modal-icon 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/icons/solid.png"
+expect_http_code background-avatar-placeholder 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/avatar-placeholder.svg"
 expect_http_code call-app-whiteboard-host 200 "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
 expect_http_code call-app-whiteboard-path 200 "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
+expect_http_code registry-host 200 "https://${DEPLOY_REGISTRY_DOMAIN}/"
 for call_app_url in "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"; do
   expect_response_header_contains call-app-frame-ancestor "${call_app_url}" Content-Security-Policy "frame-ancestors https://${DEPLOY_APP_DOMAIN}"
   expect_response_header_contains call-app-script-csp "${call_app_url}" Content-Security-Policy "script-src 'self'"
