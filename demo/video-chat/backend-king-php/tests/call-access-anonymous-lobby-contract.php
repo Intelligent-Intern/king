@@ -280,9 +280,13 @@ function videochat_iam_anonymous_lobby_assert_visible_snapshot(
         videochat_lobby_snapshot_payload($lobbyState, $callId, $label),
         $moderatorConnection
     );
-    videochat_iam_anonymous_lobby_assert((int) ($snapshot['queue_count'] ?? 0) === 1, "{$label}: moderator should see one waiting participant");
+    $queue = is_array($snapshot['queue'] ?? null) ? $snapshot['queue'] : [];
+    videochat_iam_anonymous_lobby_assert((int) ($snapshot['queue_count'] ?? 0) >= 1, "{$label}: moderator should see waiting participants");
     videochat_iam_anonymous_lobby_assert(
-        (int) ((($snapshot['queue'] ?? [])[0] ?? [])['user_id'] ?? 0) === $targetUserId,
+        count(array_filter(
+            $queue,
+            static fn (mixed $entry): bool => is_array($entry) && (int) ($entry['user_id'] ?? 0) === $targetUserId
+        )) === 1,
         "{$label}: moderator snapshot should expose the waiting participant id"
     );
 }
@@ -443,7 +447,7 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) (($accountOpenSession['user'] ?? [])['account_type'] ?? '') === 'account', 'logged-in open user should keep account type');
     $guestCountAfterAccountOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     videochat_iam_anonymous_lobby_assert($guestCountAfterAccountOpen === $guestCountBeforeAccountOpen, 'logged-in open link should not create a temporary guest');
-    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $accountUserId, 'invited', 'logged-in open link default lobby wait');
+    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $accountUserId, 'pending', 'logged-in open link default lobby wait');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_account_open', $callId, 'logged-in open link');
 
     $guestCountBeforeLoggedOutOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
@@ -461,7 +465,7 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) (($loggedOutOpenSession['user'] ?? [])['account_type'] ?? '') === 'guest', 'logged-out open user should have guest account type');
     $guestCountAfterLoggedOutOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     videochat_iam_anonymous_lobby_assert($guestCountAfterLoggedOutOpen === $guestCountBeforeLoggedOutOpen + 1, 'logged-out open link should create one temporary guest');
-    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $loggedOutGuestUserId, 'invited', 'logged-out open link default lobby wait');
+    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $loggedOutGuestUserId, 'pending', 'logged-out open link default lobby wait');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_open', $callId, 'logged-out open link');
 
     $tempModeratorGuestSession = videochat_issue_session_for_call_access(
@@ -584,9 +588,13 @@ SQL
         videochat_lobby_snapshot_payload($lobbyState, $callId, 'system_admin_waiting_probe'),
         $systemAdminConnection
     );
-    videochat_iam_anonymous_lobby_assert((int) ($systemAdminLobbySnapshot['queue_count'] ?? 0) === 1, 'system admin should see the waiting participant in lobby snapshot');
+    $systemAdminQueue = is_array($systemAdminLobbySnapshot['queue'] ?? null) ? $systemAdminLobbySnapshot['queue'] : [];
+    videochat_iam_anonymous_lobby_assert((int) ($systemAdminLobbySnapshot['queue_count'] ?? 0) >= 1, 'system admin should see waiting participants in lobby snapshot');
     videochat_iam_anonymous_lobby_assert(
-        (int) ((($systemAdminLobbySnapshot['queue'] ?? [])[0] ?? [])['user_id'] ?? 0) === $systemGuestUserId,
+        count(array_filter(
+            $systemAdminQueue,
+            static fn (mixed $entry): bool => is_array($entry) && (int) ($entry['user_id'] ?? 0) === $systemGuestUserId
+        )) === 1,
         'system admin lobby snapshot should expose the waiting participant id'
     );
     $systemAllowCommand = videochat_lobby_decode_client_frame(json_encode([

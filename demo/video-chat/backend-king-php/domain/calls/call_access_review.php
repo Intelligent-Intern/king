@@ -689,6 +689,25 @@ SQL
             'raw_credential_identifier_logged' => false,
         ],
     ]);
+    if ($normalizedOutcome !== 'correct_host_name') {
+        videochat_audit_record_event($pdo, [
+            'tenant_id' => videochat_call_access_review_tenant_id($accessLink, $call),
+            'event_type' => 'call_access_host_name_verification_failed',
+            'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+            'target_user_id' => null,
+            'call_id' => videochat_call_access_review_call_id($accessLink, $call),
+            'resource_type' => 'call_access_link',
+            'resource_fingerprint' => videochat_call_access_review_access_fingerprint($accessLink),
+            'payload' => [
+                'audit_scope' => 'iam_call_access',
+                'outcome' => $normalizedOutcome,
+                'host_name_verified' => false,
+                'host_name_logged' => false,
+                'raw_link_identifier_logged' => false,
+                'raw_credential_identifier_logged' => false,
+            ],
+        ]);
+    }
 
     return ['ok' => true, 'reason' => 'recorded'];
 }

@@ -112,7 +112,7 @@ try {
     $secret = 'parallel' . bin2hex(random_bytes(5));
     $ownerUserId = videochat_call_access_parallel_tabs_create_user($pdo, $adminRoleId, "owner-{$secret}@example.test", "Parallel Owner {$secret}");
     $linkedUserId = videochat_call_access_parallel_tabs_create_user($pdo, $userRoleId, "linked-{$secret}@example.test", "Parallel Linked {$secret}");
-    $otherUserId = videochat_call_access_parallel_tabs_create_user($pdo, $userRoleId, "other-{$secret}@example.test", "Parallel Other {$secret}");
+    $otherUserId = videochat_call_access_parallel_tabs_create_user($pdo, $userRoleId, "other-{$secret}@example.test", "Intruder Other {$secret}");
     videochat_tenant_attach_user($pdo, $ownerUserId, $tenantId, 'owner');
     videochat_tenant_attach_user($pdo, $linkedUserId, $tenantId, 'member');
     videochat_tenant_attach_user($pdo, $otherUserId, $tenantId, 'member');

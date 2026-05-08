@@ -212,7 +212,7 @@ try {
     );
     $openParticipant = videochat_call_access_admin_prevention_participant($pdo, $openCallId, $standardUserId);
     videochat_call_access_admin_prevention_assert(
-        is_array($openParticipant) && (string) ($openParticipant['invite_state'] ?? '') === 'invited',
+        is_array($openParticipant) && (string) ($openParticipant['invite_state'] ?? '') === 'pending',
         'anonymous/open logged-in account should wait for host admission'
     );
     videochat_call_access_admin_prevention_assert(
