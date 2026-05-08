@@ -766,6 +766,11 @@ export function createLocalMediaOrchestrationHelpers({
         ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim()
         : '',
       detectIntervalMs,
+      alphaGamma: 0.8,
+      maskContrast: 0.75,
+      averageRadius: 6,
+      temporalRise: 0.7,
+      temporalFall: 0.6,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
       mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),

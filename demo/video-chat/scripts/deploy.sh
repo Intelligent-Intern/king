@@ -650,7 +650,7 @@ REMOTE
 
 write_remote_runtime_files() {
   local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
-  local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
+  local infra_provider_q infra_cluster_q infra_node_roles_q infra_local_node_name_q infra_local_public_ip_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -670,6 +670,8 @@ write_remote_runtime_files() {
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
   infra_cluster_q="$(shell_quote "${VIDEOCHAT_INFRA_CLUSTER_NAME:-${DEPLOY_DOMAIN}}")"
   infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws,sfu}")"
+  infra_local_node_name_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_NODE_NAME:-${VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME:-}}")"
+  infra_local_public_ip_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_HOST:-}}}")"
   infra_hcloud_token_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_TOKEN:-${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}}")"
   infra_hcloud_api_base_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_API_BASE:-${VIDEOCHAT_DEPLOY_HCLOUD_API_BASE:-https://api.hetzner.cloud/v1}}")"
   otel_enable_q="$(shell_quote "${VIDEOCHAT_OTEL_ENABLE:-}")"
@@ -700,6 +702,8 @@ VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 INFRA_PROVIDER=${infra_provider_q}
 INFRA_CLUSTER=${infra_cluster_q}
 INFRA_NODE_ROLES=${infra_node_roles_q}
+INFRA_LOCAL_NODE_NAME=${infra_local_node_name_q}
+INFRA_LOCAL_PUBLIC_IP=${infra_local_public_ip_q}
 INFRA_HCLOUD_TOKEN=${infra_hcloud_token_q}
 INFRA_HCLOUD_API_BASE=${infra_hcloud_api_base_q}
 OTEL_ENABLE=${otel_enable_q}
@@ -786,6 +790,8 @@ VIDEOCHAT_INFRA_PROVIDER=\${INFRA_PROVIDER}
 VIDEOCHAT_INFRA_CLUSTER_NAME=\${INFRA_CLUSTER}
 VIDEOCHAT_INFRA_PUBLIC_DOMAIN=\${DOMAIN}
 VIDEOCHAT_INFRA_NODE_ROLES=\${INFRA_NODE_ROLES}
+VIDEOCHAT_INFRA_LOCAL_NODE_NAME=\${INFRA_LOCAL_NODE_NAME}
+VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP=\${INFRA_LOCAL_PUBLIC_IP}
 VIDEOCHAT_INFRA_HETZNER_TOKEN=\${INFRA_HCLOUD_TOKEN}
 VIDEOCHAT_INFRA_HETZNER_API_BASE=\${INFRA_HCLOUD_API_BASE}
 VIDEOCHAT_OTEL_ENABLE=\${OTEL_ENABLE}
@@ -812,6 +818,8 @@ services:
       VIDEOCHAT_TURN_URIS: turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp
       VIDEOCHAT_TURN_TTL_SECONDS: "3600"
       VIDEOCHAT_FRONTEND_ORIGIN: https://\${DOMAIN}
+      VIDEOCHAT_INFRA_LOCAL_NODE_NAME: "\${INFRA_LOCAL_NODE_NAME}"
+      VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP: "\${INFRA_LOCAL_PUBLIC_IP}"
     volumes:
       - ./secrets:/run/secrets/videochat:ro
       - /etc/letsencrypt/live/\${DOMAIN}:/run/certs/live:ro
@@ -931,7 +939,7 @@ REMOTE
 
 start_production_https() {
   local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
-  local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
+  local infra_provider_q infra_cluster_q infra_node_roles_q infra_local_node_name_q infra_local_public_ip_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -948,6 +956,8 @@ start_production_https() {
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
   infra_cluster_q="$(shell_quote "${VIDEOCHAT_INFRA_CLUSTER_NAME:-${DEPLOY_DOMAIN}}")"
   infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws,sfu}")"
+  infra_local_node_name_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_NODE_NAME:-${VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME:-}}")"
+  infra_local_public_ip_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_HOST:-}}}")"
   infra_hcloud_token_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_TOKEN:-${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}}")"
   infra_hcloud_api_base_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_API_BASE:-${VIDEOCHAT_DEPLOY_HCLOUD_API_BASE:-https://api.hetzner.cloud/v1}}")"
   otel_enable_q="$(shell_quote "${VIDEOCHAT_OTEL_ENABLE:-}")"
@@ -974,6 +984,8 @@ VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 INFRA_PROVIDER=${infra_provider_q}
 INFRA_CLUSTER=${infra_cluster_q}
 INFRA_NODE_ROLES=${infra_node_roles_q}
+INFRA_LOCAL_NODE_NAME=${infra_local_node_name_q}
+INFRA_LOCAL_PUBLIC_IP=${infra_local_public_ip_q}
 INFRA_HCLOUD_TOKEN=${infra_hcloud_token_q}
 INFRA_HCLOUD_API_BASE=${infra_hcloud_api_base_q}
 OTEL_ENABLE=${otel_enable_q}
@@ -1050,6 +1062,8 @@ set_env_value VIDEOCHAT_INFRA_PROVIDER "\${INFRA_PROVIDER}"
 set_env_value VIDEOCHAT_INFRA_CLUSTER_NAME "\${INFRA_CLUSTER}"
 set_env_value VIDEOCHAT_INFRA_PUBLIC_DOMAIN "\${DOMAIN}"
 set_env_value VIDEOCHAT_INFRA_NODE_ROLES "\${INFRA_NODE_ROLES}"
+set_env_value VIDEOCHAT_INFRA_LOCAL_NODE_NAME "\${INFRA_LOCAL_NODE_NAME}"
+set_env_value VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP "\${INFRA_LOCAL_PUBLIC_IP}"
 set_env_value VIDEOCHAT_INFRA_HETZNER_TOKEN "\${INFRA_HCLOUD_TOKEN}"
 set_env_value VIDEOCHAT_INFRA_HETZNER_API_BASE "\${INFRA_HCLOUD_API_BASE}"
 set_env_value VIDEOCHAT_OTEL_ENABLE "\${OTEL_ENABLE}"

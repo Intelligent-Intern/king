@@ -77,6 +77,8 @@ export function createBackgroundCompositorStage({
     getBackgroundColor,
     getBackgroundImageUrl,
     getBlurPx,
+    getMattePreset,
+    getShowSourceUntilMask,
     video,
 }) {
     const maskCanvas = document.createElement('canvas');
@@ -88,6 +90,11 @@ export function createBackgroundCompositorStage({
     const maskSourceLayer = maskSourceCanvas.getContext('2d', {
         alpha: true,
         willReadFrequently: true,
+    });
+    const foregroundCanvas = document.createElement('canvas');
+    const foregroundLayer = foregroundCanvas.getContext('2d', {
+        alpha: true,
+        desynchronized: true,
     });
     let maskSourceImageData = null;
     let backgroundImageCanvas = null;
@@ -104,11 +111,23 @@ export function createBackgroundCompositorStage({
         return false;
     }
 
-    function processMaskForAlpha(mask, width, height) {
+    function compositeAlpha(value, mode, backgroundColor, backgroundImageUrl, mattePreset) {
+        const normalized = Math.max(0, Math.min(1, Number(value) || 0));
+        const replacementLike = mode === 'replace'
+            || String(backgroundColor || '').trim() !== ''
+            || String(backgroundImageUrl || '').trim() !== ''
+            || String(mattePreset || '').trim().toLowerCase() === 'replace';
+        const low = replacementLike ? 0.38 : 0.14;
+        const high = replacementLike ? 0.72 : 0.38;
+        const t = Math.max(0, Math.min(1, (normalized - low) / Math.max(1e-6, high - low)));
+        return t * t * (3 - 2 * t);
+    }
+
+    function processMaskForAlpha(mask, width, height, mode, backgroundColor, backgroundImageUrl, mattePreset) {
         if (!(mask instanceof Float32Array)) return mask;
         const processed = new Float32Array(mask.length);
         for (let i = 0; i < mask.length; i += 1) {
-            processed[i] = Math.max(0, Math.min(1, Number(mask[i]) || 0));
+            processed[i] = compositeAlpha(mask[i], mode, backgroundColor, backgroundImageUrl, mattePreset);
         }
         return processed;
     }
@@ -198,15 +217,19 @@ export function createBackgroundCompositorStage({
         });
     }
 
-    function drawBackground(source, mode, backgroundColor, blurPx) {
+    function drawBackground(source, mode, backgroundColor, backgroundImageUrl, blurPx, compositeOperation = 'source-over') {
         ctx.save();
-        ctx.globalCompositeOperation = 'destination-over';
+        ctx.globalCompositeOperation = compositeOperation;
         if (mode === 'replace' && backgroundImageCanvas) {
             ctx.filter = 'none';
             drawCoverImage(ctx, backgroundImageCanvas, canvas.width, canvas.height);
         } else if (backgroundColor) {
             ctx.filter = 'none';
             ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (mode === 'replace' || String(backgroundImageUrl || '').trim() !== '') {
+            ctx.filter = 'none';
+            ctx.fillStyle = '#061a4a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (mode === 'blur') {
             ctx.filter = `blur(${blurPx}px)`;
@@ -216,6 +239,20 @@ export function createBackgroundCompositorStage({
             drawContainImage(ctx, source, canvas.width, canvas.height);
         }
         ctx.restore();
+    }
+
+    function drawForegroundLayer(source) {
+        if (!foregroundLayer) return false;
+        resizeCanvas(foregroundCanvas, canvas.width, canvas.height);
+        foregroundLayer.save();
+        foregroundLayer.clearRect(0, 0, foregroundCanvas.width, foregroundCanvas.height);
+        foregroundLayer.globalCompositeOperation = 'source-over';
+        foregroundLayer.filter = 'none';
+        drawContainImage(foregroundLayer, source, foregroundCanvas.width, foregroundCanvas.height);
+        foregroundLayer.globalCompositeOperation = 'destination-in';
+        foregroundLayer.drawImage(maskCanvas, 0, 0, foregroundCanvas.width, foregroundCanvas.height);
+        foregroundLayer.restore();
+        return true;
     }
 
     function drawDebugCanvases(source) {
@@ -280,7 +317,9 @@ export function createBackgroundCompositorStage({
         sourceFrame = null,
     }) {
         const backgroundColor = String(getBackgroundColor?.() || '').trim();
-        setBackgroundImageUrl(getBackgroundImageUrl?.() || '');
+        const backgroundImageUrl = String(getBackgroundImageUrl?.() || '').trim();
+        const mattePreset = String(getMattePreset?.() || '').trim();
+        setBackgroundImageUrl(backgroundImageUrl);
         const blurPx = Math.max(1, Math.round(Number(getBlurPx?.() || 3)));
         const foregroundSource = sourceFrame || video;
 
@@ -298,7 +337,11 @@ export function createBackgroundCompositorStage({
         if (maskUpdated) {
             hasRenderableMask = maskBitmap instanceof ImageBitmap
                 ? drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
-                : drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
+                : drawMaskValues(
+                    processMaskForAlpha(maskValues, maskWidth, maskHeight, mode, backgroundColor, backgroundImageUrl, mattePreset),
+                    maskWidth,
+                    maskHeight
+                );
         } else {
             hasRenderableMask = Boolean(hasMatteMask);
         }
@@ -308,7 +351,10 @@ export function createBackgroundCompositorStage({
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.globalCompositeOperation = 'source-over';
-            if (backgroundColor) {
+            if (getShowSourceUntilMask?.() === true) {
+                ctx.filter = 'none';
+                drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);
+            } else if (backgroundColor) {
                 ctx.filter = 'none';
                 ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -326,18 +372,16 @@ export function createBackgroundCompositorStage({
 
         ctx.save();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.filter = 'none';
-        drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);
+        drawBackground(foregroundSource, mode, backgroundColor, backgroundImageUrl, blurPx);
         ctx.restore();
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-in';
-        ctx.filter = 'none';
-        ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
-
-        drawBackground(foregroundSource, mode, backgroundColor, blurPx);
+        if (drawForegroundLayer(foregroundSource)) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.filter = 'none';
+            ctx.drawImage(foregroundCanvas, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
     }
 
     function reset() {

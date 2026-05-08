@@ -44,23 +44,37 @@ try {
   requireContains(stream, 'averageRadius: runtimeConfig.averageRadius,', 'background stream passes Gaussian averaging controls');
   requireContains(stream, 'temporalRise: runtimeConfig.temporalRise,', 'background stream passes temporal rise controls');
   requireContains(stream, 'temporalFall: runtimeConfig.temporalFall,', 'background stream passes temporal fall controls');
+  requireContains(stream, 'getMattePreset: () => runtimeConfig.mattePreset,', 'background stream passes matte preset to compositor');
+  requireContains(stream, 'showSourceUntilMask: options.showSourceUntilMask === true,', 'background stream keeps preview source warmup explicit');
+  requireContains(stream, 'getShowSourceUntilMask: () => runtimeConfig.showSourceUntilMask,', 'background stream passes preview warmup policy to compositor');
+  requireContains(stream, "Object.prototype.hasOwnProperty.call(nextOptions, 'showSourceUntilMask')", 'background stream preserves preview warmup policy on config update');
   requireMissing(stream, 'acquireWorkerSegmenterBackendLease', 'background stream MediaPipe worker lease');
   requireMissing(stream, 'backendWorkerSegmenter', 'background stream MediaPipe worker backend');
   requireMissing(stream, 'backendMediapipe', 'background stream legacy MediaPipe backend import');
   requireMissing(stream, 'backendTfjs', 'background stream legacy TFJS backend import');
   requireMissing(stream, "return sourceStream, active: false, reason: 'sinet_unavailable'", 'background stream raw SINet failure fallback');
 
-  requireContains(compositor, 'function processMaskForAlpha(mask, width, height) {', 'compositor mask postprocess boundary');
-  requireContains(compositor, 'processed[i] = Math.max(0, Math.min(1, Number(mask[i]) || 0));', 'compositor preserves shaped SINet alpha values');
+  requireContains(compositor, 'function processMaskForAlpha(mask, width, height, mode, backgroundColor, backgroundImageUrl, mattePreset) {', 'compositor mask postprocess boundary');
+  requireContains(compositor, 'function compositeAlpha(value, mode, backgroundColor, backgroundImageUrl, mattePreset) {', 'compositor has a compositing-only alpha hardener');
+  requireContains(compositor, "const replacementLike = mode === 'replace'", 'compositor hardens replacement backgrounds separately');
+  requireContains(compositor, 'const low = replacementLike ? 0.38 : 0.14;', 'compositor replacement low alpha knee');
+  requireContains(compositor, 'const high = replacementLike ? 0.72 : 0.38;', 'compositor replacement high alpha knee');
+  requireContains(compositor, 'processed[i] = compositeAlpha(mask[i], mode, backgroundColor, backgroundImageUrl, mattePreset);', 'compositor uses hardened foreground compositing alpha');
   requireMissing(compositor, 'const threshold = 0.5', 'compositor hard threshold');
   requireMissing(compositor, 'return blurMask(processed', 'compositor secondary blur after SINet shaping');
   requireMissing(compositor, 'if (hasMatteMask && !maskUpdated) return;', 'compositor stale-mask frame freeze');
-  requireContains(compositor, "ctx.globalCompositeOperation = 'destination-in';", 'compositor foreground is cut by alpha mask');
-  requireContains(compositor, "ctx.globalCompositeOperation = 'destination-over';", 'compositor draws replacement background behind cut foreground');
+  requireContains(compositor, 'function drawForegroundLayer(source) {', 'compositor isolates foreground on a separate layer');
+  requireContains(compositor, "foregroundLayer.globalCompositeOperation = 'destination-in';", 'compositor foreground layer is cut by alpha mask');
+  requireContains(compositor, "ctx.globalCompositeOperation = 'source-over';", 'compositor paints replacement background before the foreground layer');
+  requireContains(compositor, 'drawBackground(foregroundSource, mode, backgroundColor, backgroundImageUrl, blurPx);', 'compositor draws replacement background as the base frame');
+  requireContains(compositor, 'ctx.drawImage(foregroundCanvas, 0, 0, canvas.width, canvas.height);', 'compositor draws hardened foreground over replacement background');
   requireContains(compositor, "ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');", 'compositor solid background replacement');
   requireContains(compositor, 'ctx.fillRect(0, 0, canvas.width, canvas.height);', 'compositor solid background fills the full background');
   requireContains(compositor, 'if (backgroundColor) {', 'compositor no-mask fallback honors solid replacement backgrounds');
+  requireContains(compositor, "ctx.fillStyle = '#061a4a';", 'compositor replacement image warmup uses a deep-blue privacy placeholder');
   requireContains(compositor, "ctx.fillStyle = '#061a4a';", 'compositor uses deep-blue privacy placeholder while mask warms');
+  requireContains(compositor, 'getShowSourceUntilMask?.() === true', 'compositor can show the camera source during preview warmup');
+  requireContains(compositor, 'drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);', 'compositor preview warmup draws camera source frame');
   requireMissing(compositor, 'ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;', 'compositor warmup raw-camera blur fallback');
   requireContains(compositor, 'return maskLayer?.getImageData?.(0, 0, maskCanvas.width, maskCanvas.height) || null;', 'compositor exposes matte snapshot');
 
@@ -84,6 +98,9 @@ try {
     requireContains(source, "const backgroundColor = isExclusionBackdrop", `${label} background color consolidation`);
     requireContains(source, "? '#061a4a'", `${label} deep-blue exclusion background`);
     requireContains(source, "mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur')", `${label} exclusion matte mapping`);
+    if (label !== 'local orchestration') {
+      requireContains(source, 'showSourceUntilMask: true,', `${label} keeps camera visible while preview matte warms`);
+    }
   }
 
   requireContains(localOrchestration, 'refs.localFilteredStreamRef.value = stream;', 'local media stores processed background stream');

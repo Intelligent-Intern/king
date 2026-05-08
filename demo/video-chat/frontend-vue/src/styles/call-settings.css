@@ -367,6 +367,10 @@
   filter: brightness(0) invert(1);
 }
 
+.call-left-solid-background-icon {
+  filter: none;
+}
+
 .call-left-settings-error {
   font-size: 12px;
   color: var(--color-error);

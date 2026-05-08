@@ -17,6 +17,10 @@ const [
   bridgeSource,
   templateSource,
   iframeSource,
+  viteConfigSource,
+  edgeSource,
+  frontendDockerfile,
+  edgeDockerfile,
   lifecycleTestSource,
   sprintSource,
 ] = await Promise.all([
@@ -27,6 +31,10 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/video-chat/frontend-vue/vite.config.js'),
+  read('demo/video-chat/edge/edge.php'),
+  read('demo/video-chat/frontend-vue/Dockerfile'),
+  read('demo/video-chat/edge/Dockerfile'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('SPRINT.md'),
 ]);
@@ -75,8 +83,8 @@ assert.match(
 
 assert.match(
   hostSource,
-  /sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads"[\s\S]*csp="default-src 'self'/,
-  'iframe host must enforce sandbox and CSP policy',
+  /sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads"/,
+  'iframe host must enforce the sandbox policy',
 );
 
 assert.doesNotMatch(
@@ -84,6 +92,39 @@ assert.doesNotMatch(
   /allow-same-origin/,
   'Call App iframe must keep an opaque sandbox origin',
 );
+
+assert.doesNotMatch(
+  hostSource,
+  /\scsp=/,
+  'Call App host must not use the iframe csp attribute because browsers can hard-block embedded content before launch',
+);
+
+assert.match(
+  edgeSource,
+  /\$isCallAppAsset = str_starts_with\(\$path, '\/call-app\/'\)[\s\S]*Content-Security-Policy[\s\S]*frame-ancestors 'self'/,
+  'edge must enforce Call App CSP on the served response instead of iframe csp',
+);
+
+assert.match(
+  viteConfigSource,
+  /const callAppRoot = fileURLToPath\(new URL\('\.\.\/\.\.\/call-app\/', import\.meta\.url\)\)/,
+  'Vite must know the repo-native Call App package root',
+);
+
+assert.match(
+  viteConfigSource,
+  /const callAppStaticPlugin[\s\S]*generateBundle\(\)[\s\S]*fileName: `call-app\/\$\{relativePath\}`/s,
+  'Vite build must publish Call App static files into dist/call-app',
+);
+
+assert.match(
+  viteConfigSource,
+  /configureServer\(server\)[\s\S]*server\.middlewares\.use\(serveCallAppStatic\)/s,
+  'Vite dev server must serve Call App static files for local call-app testing',
+);
+
+assert.match(frontendDockerfile, /COPY demo\/call-app\/ \/call-app\//, 'frontend Docker build must include Call App packages');
+assert.match(edgeDockerfile, /COPY demo\/call-app\/ \/call-app\//, 'edge Docker build must include Call App packages');
 
 assert.match(
   bridgeSource,
@@ -105,8 +146,20 @@ assert.match(
 
 assert.match(
   bridgeSource,
-  /safePostMessagePayload[\s\S]*type:\s*['"]call_app\.launch['"][\s\S]*launch_token[\s\S]*frameWindow\.postMessage\(safePostMessagePayload/s,
-  'parent bridge must send the launch token only through the iframe bridge message',
+  /safePostMessagePayload[\s\S]*type:\s*['"]call_app\.launch['"][\s\S]*launch_token[\s\S]*sanitizeCallAppBridgePayload\(safePostMessagePayload\(session, launch\.value\)\)/s,
+  'parent bridge must send the launch token only through the sanitized iframe bridge message',
+);
+
+assert.match(
+  bridgeSource,
+  /function sanitizeCallAppBridgePayload[\s\S]*Array\.isArray\(value\)[\s\S]*map\(\(item\) => sanitizeCallAppBridgePayload/s,
+  'parent bridge must convert reactive/proxy arrays into cloneable arrays before postMessage',
+);
+
+assert.match(
+  bridgeSource,
+  /frameWindow\.postMessage\(sanitizeCallAppBridgePayload\(safePostMessagePayload\(session, launch\.value\)\), '\*'\)/,
+  'parent launch bridge must send only sanitized cloneable payloads',
 );
 
 assert.doesNotMatch(

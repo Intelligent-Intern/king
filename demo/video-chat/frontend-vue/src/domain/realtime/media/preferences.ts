@@ -454,7 +454,7 @@ export function applyCallBackgroundPreset(preset) {
     setCallBackgroundApplyOutgoing(true);
     return;
   }
-  if (preset !== 'light' && preset !== 'strong') {
+  if (preset !== 'light' && preset !== 'strong' && preset !== 'exclusion') {
     setCallBackgroundFilterMode('off');
     setCallBackgroundApplyOutgoing(false);
     return;

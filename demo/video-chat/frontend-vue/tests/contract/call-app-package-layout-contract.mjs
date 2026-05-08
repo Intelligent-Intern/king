@@ -156,5 +156,8 @@ const sprint = read('SPRINT.md')
 assert(sprint.includes('- [x] CAP-02 `demo/call-app` package layout'), 'SPRINT.md must mark CAP-02 complete')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 assert(packageJson.includes('call-app-package-layout-contract.mjs'), 'package scripts must include package layout contract')
+const viteConfig = read('demo/video-chat/frontend-vue/vite.config.js')
+assert(viteConfig.includes('callAppStaticPlugin()'), 'frontend build must install the Call App static publishing plugin')
+assert(viteConfig.includes('fileName: `call-app/${relativePath}`'), 'frontend build must emit Call App package files into dist/call-app')
 
 console.log('[call-app-package-layout-contract] PASS')

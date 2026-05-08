@@ -16,6 +16,12 @@ try {
   const harness = readUtf8('tests/standalone/king-background-segmentation-harness.ts');
   const backend = readUtf8('src/domain/realtime/background/backendSinetWasm.ts');
   const postprocess = readUtf8('src/domain/realtime/background/maskPostprocess.ts');
+  const productionCallPaths = [
+    readUtf8('src/domain/realtime/local/mediaOrchestration.ts'),
+    readUtf8('src/domain/calls/access/joinPreview.ts'),
+    readUtf8('src/domain/calls/dashboard/enterCall.ts'),
+    readUtf8('src/domain/calls/admin/enterCall.ts'),
+  ];
 
   assert.ok(html.includes('<option value="sinet">SINet fast</option>'), 'standalone default model must expose SINet fast first');
   assert.ok(html.includes('<option value="wasm">WASM</option>'), 'standalone default device must be WASM first');
@@ -44,6 +50,14 @@ try {
   assert.ok(postprocess.includes('Number(controls.averageRadius ?? 6)'), 'shared postprocess default Gaussian radius must be 6');
   assert.ok(postprocess.includes('controls.temporalRise ?? 0.7'), 'shared postprocess default temporal rise must be 0.7');
   assert.ok(postprocess.includes('controls.temporalFall ?? 0.6'), 'shared postprocess default temporal fall must be 0.6');
+
+  for (const source of productionCallPaths) {
+    assert.ok(source.includes('alphaGamma: 0.8,'), 'production call path must pass standalone gamma 0.8');
+    assert.ok(source.includes('maskContrast: 0.75,'), 'production call path must pass standalone contrast 0.75');
+    assert.ok(source.includes('averageRadius: 6,'), 'production call path must pass standalone Gaussian radius 6');
+    assert.ok(source.includes('temporalRise: 0.7,'), 'production call path must pass standalone temporal rise 0.7');
+    assert.ok(source.includes('temporalFall: 0.6,'), 'production call path must pass standalone temporal fall 0.6');
+  }
 
   console.log('[background-sinet-defaults-contract] PASS');
 } catch (error) {
