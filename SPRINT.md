@@ -2096,13 +2096,13 @@ direct-join denial cases for system admin and organization admin as part of the
 - [x] Owner does not rejoin before timer expires
 - [x] Call ends automatically after 15 minutes owner absence equivalent
 - [ ] Participants are notified when owner absence timer starts if applicable
-- [ ] Participants see visible countdown during last 5 minutes
+- [x] Participants see visible countdown during last 5 minutes
 - [x] Countdown starts when 5 minutes remain
 - [x] Countdown shows correct remaining time
-- [ ] Countdown updates correctly over time
+- [x] Countdown updates correctly over time
 - [ ] Countdown survives participant refresh
 - [ ] Countdown is synchronized across participants
-- [ ] Countdown does not reveal admin-only data
+- [x] Countdown does not reveal admin-only data
 - [x] Countdown disappears if owner rejoins
 - [x] Call does not end if owner rejoins before timeout
 - [x] Call ends if owner does not rejoin before timeout
@@ -2124,6 +2124,11 @@ shape, fake/test clock, room snapshot lifecycle payload, countdown boundary,
 owner-return cancellation, and persisted implicit end. The PHP owner-timeout
 runtime contract is committed and syntax-checked; execution is blocked on this
 host because PHP does not load `pdo_sqlite`.
+`call-access-owner-absence-browser.spec.js` drives the browser workspace through
+the final-countdown UI, countdown update, owner-absence automatic end, and owner
+return cancellation paths using the backend timer constants and room snapshots.
+The focused Playwright run passed 2 tests and the integrated frontend build
+passed.
 
 ## 30. Error and Edge Cases
 
@@ -2244,8 +2249,8 @@ temporary account removal plus reschedule/delete/end audit records.
 - [ ] Call is rescheduled and stale link no longer grants stale access
 - [ ] Call is deleted and all temporary access is revoked
 - [ ] Owner explicitly ends call and all participants receive ended state
-- [ ] Owner disconnects, final 5-minute countdown is shown, owner does not return, call ends automatically
-- [ ] Owner disconnects, final 5-minute countdown is shown, owner returns, countdown disappears and call remains active
+- [x] Owner disconnects, final 5-minute countdown is shown, owner does not return, call ends automatically
+- [x] Owner disconnects, final 5-minute countdown is shown, owner returns, countdown disappears and call remains active
 
 Proof: `call-access-main-journey-smoke.spec.js` covers
 `e2e_journey_003_registered_logged_in_matching_invitee_joins_as_account` and
@@ -2618,19 +2623,19 @@ against duplicate join/session request loops.
 - [ ] `e2e_end_implicit_004_owner_network_loss_starts_absence_timer`
 - [x] `e2e_end_implicit_005_no_countdown_before_10_min_equivalent`
 - [x] `e2e_end_implicit_006_countdown_visible_at_10_min_equivalent`
-- [ ] `e2e_end_implicit_007_countdown_updates_over_time`
+- [x] `e2e_end_implicit_007_countdown_updates_over_time`
 - [ ] `e2e_end_implicit_008_countdown_synchronized_across_participants`
 - [ ] `e2e_end_implicit_009_countdown_survives_participant_refresh`
 - [ ] `e2e_end_implicit_010_owner_rejoin_before_countdown_cancels_timer`
 - [x] `e2e_end_implicit_011_owner_rejoin_during_countdown_cancels_timer`
 - [x] `e2e_end_implicit_012_owner_absent_15_min_equivalent_ends_call`
-- [ ] `e2e_end_implicit_013_automatic_end_notifies_participants`
+- [x] `e2e_end_implicit_013_automatic_end_notifies_participants`
 - [ ] `e2e_end_implicit_014_automatic_end_blocks_new_joins`
 - [ ] `e2e_end_implicit_015_automatic_end_blocks_rejoins`
 - [ ] `e2e_end_implicit_016_automatic_end_invalidates_links`
 - [ ] `e2e_end_implicit_017_automatic_end_cleans_guest_accounts`
-- [ ] `e2e_end_implicit_018_timer_uses_server_time`
-- [ ] `e2e_end_implicit_019_ci_uses_test_clock_no_real_15_min_sleep`
+- [x] `e2e_end_implicit_018_timer_uses_server_time`
+- [x] `e2e_end_implicit_019_ci_uses_test_clock_no_real_15_min_sleep`
 
 ## Test Group: King Containers
 
@@ -2697,8 +2702,8 @@ against duplicate join/session request loops.
 - [x] `e2e_journey_021_rescheduled_call_old_link_invalid_new_link_valid`
 - [x] `e2e_journey_022_deleted_call_revokes_all_temp_access`
 - [x] `e2e_journey_023_explicit_call_end_revokes_all_join_paths`
-- [ ] `e2e_journey_024_owner_absence_countdown_then_auto_end`
-- [ ] `e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end`
+- [x] `e2e_journey_024_owner_absence_countdown_then_auto_end`
+- [x] `e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end`
 
 ---
 
