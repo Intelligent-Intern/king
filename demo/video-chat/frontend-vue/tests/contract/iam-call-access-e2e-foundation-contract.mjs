@@ -21,6 +21,7 @@ const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
+const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
@@ -99,6 +100,41 @@ assert.match(
   seedMatrixSpec,
   /temporary_personalized_guest[\s\S]*temporary_anonymous_guest[\s\S]*tenant_admin[\s\S]*false/s,
   'seed-matrix spec must prove temporary guests do not receive tenant/system admin rights',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /e2e_journey_003 logged-in own personalized link keeps the account through lobby admission/,
+  'main journey smoke split must cover the logged-in own personalized-link path from SPRINT section 32',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /e2e_journey_010 logged-out anonymous link creates a least-privilege guest, admits, leaves, and rejoins/,
+  'main journey smoke split must cover the logged-out anonymous lobby/admit/rejoin path from SPRINT section 32',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /installCallAccessSeedRoutes[\s\S]*installCallAccessFakeRealtime/s,
+  'main journey smoke split must compose the deterministic IAM seed routes with fake realtime admission',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /verified_user_id[\s\S]*verified_session_id[\s\S]*account_type[\s\S]*account/s,
+  'main journey smoke split must prove own personalized links preserve the logged-in registered account',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /guest_name[\s\S]*account_type[\s\S]*guest[\s\S]*is_guest[\s\S]*true/s,
+  'main journey smoke split must prove anonymous logged-out links create a temporary guest identity',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /platform_admin[\s\S]*false[\s\S]*tenant_admin[\s\S]*false[\s\S]*manage_lobby[\s\S]*false[\s\S]*admit_participants[\s\S]*false/s,
+  'main journey smoke split must prove no IAM privilege escalation across the journeys',
+);
+assert.match(
+  mainJourneySmokeSpec,
+  /noMediaSecretPayload[\s\S]*expectNoForbiddenNeedles/s,
+  'main journey smoke split must assert no media/auth secrets or foreign call data leak in the journeys',
 );
 assert.match(
   seedMatrixHelper,
