@@ -12,6 +12,10 @@ export const callAccessSeedMatrixPath = path.resolve(
 );
 
 function readSeedMatrix() {
+  const inlineMatrix = String(process.env.VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON || '').trim();
+  if (inlineMatrix !== '') {
+    return JSON.parse(inlineMatrix);
+  }
   return JSON.parse(fs.readFileSync(callAccessSeedMatrixPath, 'utf8'));
 }
 

@@ -72,12 +72,20 @@
       "script": "test:e2e:matrix",
       "command": "npm run test:e2e:matrix",
       "paths": [
-        "frontend-vue/tests/e2e/call-access-join.spec.js",
-        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
         "frontend-vue/tests/e2e/chat-attachments.spec.js",
         "frontend-vue/tests/e2e/chat-archive.spec.js",
         "frontend-vue/tests/e2e/call-layout-strategies.spec.js",
         "frontend-vue/tests/e2e/chat-activity-matrix.spec.js"
+      ]
+    },
+    "frontend:e2e:call-access": {
+      "kind": "npm_script",
+      "working_directory": "frontend-vue",
+      "script": "test:e2e:call-access",
+      "command": "npm run test:e2e:call-access",
+      "paths": [
+        "frontend-vue/tests/e2e/call-access-join.spec.js",
+        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js"
       ]
     },
     "frontend:contract:wlvc": {
