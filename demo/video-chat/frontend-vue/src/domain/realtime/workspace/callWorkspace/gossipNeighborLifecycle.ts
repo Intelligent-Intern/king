@@ -47,6 +47,17 @@ function shouldIgnoreStaleRemoteOfferAnswerFailure(error, pc) {
     );
 }
 
+function shouldIgnoreStableRollbackRace(error, pc) {
+  const signalingState = normalizedSignalingState(pc);
+  const message = String(error?.message || error || '').toLowerCase();
+  return (signalingState === 'stable' || signalingState === '')
+    && (
+      message.includes('wrong signalingstate')
+      || message.includes('wrong state')
+      || message.includes('stable')
+    );
+}
+
 function normalizeSdp(payload) {
   const sdpPayload = payload && typeof payload.sdp === 'object' ? payload.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
@@ -382,7 +393,24 @@ export function createGossipNeighborLifecycle({
       if (signalingState === 'have-local-offer') {
         const remoteWinsCollision = normalizedPeerId < localPeerId();
         if (!remoteWinsCollision) return;
-        await peer.pc.setLocalDescription({ type: 'rollback' });
+        try {
+          await peer.pc.setLocalDescription({ type: 'rollback' });
+        } catch (error) {
+          if (!shouldIgnoreStableRollbackRace(error, peer.pc)) throw error;
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'info',
+            eventType: 'gossip_neighbor_offer_stale',
+            code: 'gossip_neighbor_offer_stale',
+            message: 'Dedicated Gossip neighbor rollback raced with stable signaling; continuing with the remote offer.',
+            payload: {
+              peer_id: normalizedPeerId,
+              signaling_state: normalizedSignalingState(peer.pc),
+              error: String(error?.message || error || ''),
+              topology_epoch: topologyEpoch,
+            },
+          });
+        }
       } else if (signalingState !== 'stable' && signalingState !== '') {
         return;
       }

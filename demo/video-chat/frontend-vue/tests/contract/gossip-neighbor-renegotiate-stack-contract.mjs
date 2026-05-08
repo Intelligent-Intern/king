@@ -219,6 +219,69 @@ class StableAfterRemoteOfferPeerConnection {
   }
 }
 
+class RollbackStableRacePeerConnection {
+  static instances = []
+
+  constructor() {
+    this.listeners = new Map()
+    this.signalingState = 'stable'
+    this.connectionState = 'new'
+    this.localDescription = null
+    this.remoteDescription = null
+    this.createOfferCalls = 0
+    this.createAnswerCalls = 0
+    this.rollbackCalls = 0
+    this.closed = false
+    RollbackStableRacePeerConnection.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  async createOffer() {
+    this.createOfferCalls += 1
+    return { type: 'offer', sdp: 'v=0\r\n' }
+  }
+
+  async setLocalDescription(description) {
+    if (description?.type === 'offer') {
+      this.localDescription = description
+      this.signalingState = 'have-local-offer'
+      return
+    }
+    if (description?.type === 'rollback') {
+      this.rollbackCalls += 1
+      this.signalingState = 'stable'
+      throw new Error(
+        "Failed to execute 'setLocalDescription' on 'RTCPeerConnection': Called in wrong signalingState: stable",
+      )
+    }
+    if (description?.type === 'answer') {
+      this.localDescription = description
+      this.signalingState = 'stable'
+    }
+  }
+
+  async setRemoteDescription(description) {
+    this.remoteDescription = description
+    if (description?.type === 'offer') this.signalingState = 'have-remote-offer'
+    if (description?.type === 'answer') this.signalingState = 'stable'
+  }
+
+  async createAnswer() {
+    this.createAnswerCalls += 1
+    return { type: 'answer', sdp: 'v=0\r\n' }
+  }
+
+  async addIceCandidate() {}
+
+  close() {
+    this.closed = true
+    this.signalingState = 'closed'
+  }
+}
+
 try {
   globalThis.RTCSessionDescription = function RTCSessionDescription(description) {
     return description
@@ -433,6 +496,64 @@ try {
   assert.ok(
     staleRemoteDiagnostics.some((event) => event?.eventType === 'gossip_neighbor_offer_stale'),
     'stable-state stale remote offers must emit an idempotent stale-offer diagnostic',
+  )
+
+  globalThis.RTCPeerConnection = RollbackStableRacePeerConnection
+  const rollbackRaceDiagnostics = []
+  const rollbackRaceSentFrames = []
+  const rollbackRaceLifecycle = createGossipNeighborLifecycle({
+    callbacks: {
+      activeCallId: () => 'call-prod-rollback-stable-race',
+      activeRoomId: () => 'room-prod-rollback-stable-race',
+      captureClientDiagnostic: (event) => rollbackRaceDiagnostics.push(event),
+      currentUserId: () => 5002,
+      getDataTransport: () => ({
+        bindPeerConnection: () => {},
+        close: () => {},
+      }),
+      sendSocketFrame: (frame) => {
+        rollbackRaceSentFrames.push(frame)
+        return true
+      },
+    },
+  })
+
+  rollbackRaceLifecycle.applyAssignedNeighbors(
+    { topology_epoch: 46, admitted_peers: [{ peer_id: 5001 }] },
+    new Set(['5001']),
+  )
+  await delay(75)
+  rollbackRaceLifecycle.handleGossipNeighborSignal('call/offer', '5001', {
+    kind: 'gossip_neighbor_offer',
+    runtime_path: 'gossip_primary_neighbor',
+    sdp: { type: 'offer', sdp: 'v=0\r\n' },
+  })
+
+  await delay(75)
+  const rollbackRacePeerConnection = RollbackStableRacePeerConnection.instances[0]
+  assert.ok(rollbackRacePeerConnection, 'rollback-stable race must reuse the assigned initiator peer connection')
+  assert.equal(
+    rollbackRacePeerConnection.rollbackCalls,
+    1,
+    'remote-wins glare must attempt rollback before accepting the remote offer',
+  )
+  assert.equal(
+    rollbackRacePeerConnection.createAnswerCalls,
+    1,
+    'stable rollback race must continue into a valid answer instead of abandoning the remote offer',
+  )
+  assert.ok(
+    rollbackRaceSentFrames.some((frame) => frame?.payload?.kind === 'gossip_neighbor_answer'),
+    'stable rollback race must send a gossip neighbor answer',
+  )
+  assert.equal(
+    rollbackRaceDiagnostics.filter((event) => event?.eventType === 'gossip_neighbor_offer_handle_failed').length,
+    0,
+    'stable rollback race must not be reported as an offer-handle failure',
+  )
+  assert.ok(
+    rollbackRaceDiagnostics.some((event) => event?.eventType === 'gossip_neighbor_offer_stale'),
+    'stable rollback race must emit an idempotent stale-offer diagnostic',
   )
 
   console.log('[gossip-neighbor-renegotiate-stack-contract] PASS')
