@@ -54,7 +54,7 @@ async function waitForReconnectBackfill(page, before) {
   }, before, { timeout: 12_000 });
 }
 
-test('network reconnect backfills the call room without sending a leave frame', async ({ browser }) => {
+test('e2e_rejoin_003_rejoin_after_network_interruption: network reconnect backfills the call room without sending a leave frame', async ({ browser }) => {
   test.setTimeout(90_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
@@ -82,6 +82,59 @@ test('network reconnect backfills the call room without sending a leave frame', 
     expect(after.clientLeaveCloses).toBe(before.clientLeaveCloses);
     expect(after.networkDropCloses).toBeGreaterThan(before.networkDropCloses);
     expect(after.currentUrl).toContain(`/workspace/call/${matrixCallRef}`);
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
+  }
+});
+
+test('e2e_rejoin_002_rejoin_after_refresh: browser refresh rejoins with the stored session', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspaceWithRealtimeSocket(admin.page);
+    const beforeRefresh = await socketProbe(admin.page);
+    expect(beforeRefresh.connectionState).toBe('online');
+    expect(beforeRefresh.storedSessionPresent).toBe(true);
+
+    await admin.page.reload({ waitUntil: 'domcontentloaded' });
+    await openMatrixWorkspaceWithRealtimeSocket(admin.page);
+
+    const afterRefresh = await socketProbe(admin.page);
+    expect(afterRefresh.connectionState).toBe('online');
+    expect(afterRefresh.storedSessionPresent).toBe(true);
+    expect(afterRefresh.socketCount).toBeGreaterThan(0);
+    expect(afterRefresh.snapshotRequests).toBeGreaterThan(0);
+    expect(afterRefresh.currentUrl).toContain(`/workspace/call/${matrixCallRef}`);
+    await expect(admin.page.locator('.user-row', { hasText: matrixUsers.user.displayName })).toBeVisible();
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
+  }
+});
+
+test('same browser context can close the call tab and reopen with the stored session', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspaceWithRealtimeSocket(admin.page);
+    const beforeClose = await socketProbe(admin.page);
+    expect(beforeClose.connectionState).toBe('online');
+    expect(beforeClose.storedSessionPresent).toBe(true);
+
+    await admin.page.close();
+    const reopenedPage = await admin.context.newPage();
+    await openMatrixWorkspaceWithRealtimeSocket(reopenedPage);
+
+    const afterReopen = await socketProbe(reopenedPage);
+    expect(afterReopen.connectionState).toBe('online');
+    expect(afterReopen.storedSessionPresent).toBe(true);
+    expect(afterReopen.socketCount).toBeGreaterThan(0);
+    expect(afterReopen.snapshotRequests).toBeGreaterThan(0);
+    expect(afterReopen.currentUrl).toContain(`/workspace/call/${matrixCallRef}`);
+    await expect(reopenedPage.locator('.user-row', { hasText: matrixUsers.user.displayName })).toBeVisible();
   } finally {
     await Promise.allSettled([admin.context.close()]);
   }
