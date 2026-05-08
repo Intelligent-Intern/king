@@ -1758,8 +1758,8 @@ lacks `pdo_sqlite`.
 - [x] Guessed link reveals no personal data
 - [x] Invalid link reveals no personal data
 - [x] Wrong host name reveals no personal data
-- [ ] Account data is updated only after email confirmation
-- [ ] Email confirmation goes only to logged-in account
+- [x] Account data is updated only after email confirmation
+- [x] Email confirmation goes only to logged-in account
 - [ ] Temporary account data is not persisted unnecessarily
 - [ ] Temporary accounts are removed when logged-in user uses anonymous link
 - [ ] Temporary accounts are not merged with wrong registered account
@@ -1768,7 +1768,7 @@ lacks `pdo_sqlite`.
 - [x] API responses contain no foreign link data
 - [x] Browser DevTools / network response contains no foreign link data
 - [x] Error messages contain no foreign link data
-- [ ] Email texts contain no foreign link data unless explicitly safe and necessary
+- [x] Email texts contain no foreign link data unless explicitly safe and necessary
 - [ ] Host-name verification does not allow host enumeration
 - [x] Rate limits protect sensitive verification paths
 - [x] Privacy-relevant actions are logged
@@ -1857,29 +1857,38 @@ SQLite backend leg because `pdo_sqlite` is unavailable.
 - [x] Confirmation link is one-time use
 - [x] Without confirmation, account data remains unchanged
 - [x] After confirmation, only re-entered data is updated
-- [ ] Confirmation success state is shown
+- [x] Confirmation success state is shown
 - [x] Expired confirmation link updates no data
 - [x] Already used confirmation link updates no data again
-- [ ] Confirmation is audit-logged
+- [x] Confirmation is audit-logged
 - [x] Failed confirmation shows no sensitive data
 - [x] While confirmation is pending, user can continue with original account
-- [ ] Multiple pending confirmations are handled correctly
-- [ ] Newer change invalidates older confirmation if configured
-- [ ] Race condition between two confirmations resolves deterministically
+- [x] Multiple pending confirmations are handled correctly
+- [x] Newer change invalidates older confirmation if configured
+- [x] Race condition between two confirmations resolves deterministically
 
 Proof: `call-access-duplicate-review-email.spec.js` covers account-update
 confirmation request, logged-in-account-only delivery, account-bound
 confirmation, wrong-account denial, cross-browser same-account confirmation,
 replay denial, rate limiting, no update before confirmation, manually re-entered
-field updates, pending-state continuity, and safe failed-confirmation payloads.
+field updates, pending-state continuity, another-browser confirmation for the
+same account, and safe failed-confirmation payloads.
 The backend `call-access-email-confirmation-contract.php` additionally proves
 the dispatched email contains an absolute HTTPS account-update confirmation URL,
 the URL carries only the high-entropy confirmation token, the email and API
 response expose the configured expiry, expired confirmations update no account
-data and remain unconsumed, and no raw call-access id, host, link-target, or
-session data leaks into email, storage, or responses. Host PHP still skips this
-runtime proof because `pdo_sqlite` is unavailable; Docker PHP 8.4 with
-`pdo_sqlite` passed the contract locally.
+data and remain unconsumed, multiple pending confirmations resolve independently
+by default, a configured newer change supersedes the older pending confirmation,
+replay/consume races resolve as deterministic conflicts, and no raw call-access
+id, host, link-target, confirmation token, recipient email, or session data leaks
+into email, storage, audit rows, or responses. The `/account-update-confirmation`
+route now shows a confirmed success state only after the backend returns
+`state=confirmed`. Proof commands passed: `php -l` for the helper and contract,
+`node tests/contract/call-access-duplicate-review-email-contract.mjs`, Docker
+PHP 8.4 `call-access-email-confirmation-contract.php`,
+`npm run test:contract:iam-call-access`, and `git diff --check`. Host PHP still
+skips SQLite runtime proof because `pdo_sqlite` is unavailable. `npm run build`
+could not run in this leaf because local `vite` is not installed.
 
 ## 17. Guest List
 
@@ -2022,7 +2031,7 @@ privacy/session safety. Proof commands passed: Docker PHP 8.4
 - [x] Concurrent join attempts create no duplicate participants
 - [ ] Logout in one tab affects link verification in another tab correctly
 - [x] Login switch during warning modal is handled correctly
-- [ ] Email confirmation in another browser updates correct account
+- [x] Email confirmation in another browser updates correct account
 - [x] Session expiry while waiting in lobby is handled correctly
 - [x] Session expiry during call creates defined state
 - [x] Refresh during host-name verification creates defined state
@@ -2434,11 +2443,11 @@ no call, invitee, host, link, or session leakage.
 - [x] Host-name verification is logged
 - [ ] Successful host-name verification is logged
 - [x] Failed host-name verification is logged
-- [ ] Account-update request is logged
-- [ ] Confirmation email dispatch is logged
-- [ ] Successful email confirmation is logged
-- [ ] Failed email confirmation is logged
-- [ ] Account-data change is logged
+- [x] Account-update request is logged
+- [x] Confirmation email dispatch is logged
+- [x] Successful email confirmation is logged
+- [x] Failed email confirmation is logged
+- [x] Account-data change is logged
 - [ ] Lobby entry is logged
 - [ ] Lobby admission is logged
 - [ ] Lobby rejection is logged
@@ -2760,7 +2769,7 @@ and the IAM CI static gate.
 - [x] `e2e_email_007_no_update_without_confirmation`
 - [x] `e2e_email_008_confirmation_updates_only_reentered_data`
 - [x] `e2e_email_009_expired_confirmation_link_no_update`
-- [ ] `e2e_email_010_multiple_pending_confirmations_resolved`
+- [x] `e2e_email_010_multiple_pending_confirmations_resolved`
 
 ## Test Group: Guest List
 
