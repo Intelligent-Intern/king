@@ -216,6 +216,24 @@ export function createGossipNeighborLifecycle({
         return false;
       }
       const offer = await peer.pc.createOffer();
+      const preSetLocalState = String(peer.pc.signalingState || '').trim().toLowerCase();
+      if (preSetLocalState !== 'stable' && preSetLocalState !== '') {
+        peer.needsRenegotiate = true;
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'gossip_neighbor_offer_deferred',
+          code: 'gossip_neighbor_offer_deferred',
+          message: 'Dedicated Gossip neighbor offer was deferred because a remote offer arrived first.',
+          payload: {
+            peer_id: safePeerId(peer.peerId),
+            reason: String(reason || 'offer'),
+            signaling_state: preSetLocalState,
+            topology_epoch: topologyEpoch,
+          },
+        });
+        return false;
+      }
       await peer.pc.setLocalDescription(offer);
       const local = peer.pc.localDescription;
       if (!local?.sdp) return false;
