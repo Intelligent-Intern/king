@@ -135,4 +135,40 @@ assert.match(
   'logout E2E must prove no foreign call-access session is adopted',
 );
 
+assert.match(
+  callAccessJoinSpec,
+  /same personalized link in parallel contexts keeps account sessions isolated/,
+  'public join E2E must cover parallel use of one personalized link by two different logged-in accounts',
+);
+assert.match(
+  callAccessJoinSpec,
+  /createPublicJoinPage\(browser, baseURL\)[\s\S]*createPublicJoinPage\(browser, baseURL\)[\s\S]*Promise\.all\(\[[\s\S]*page\.goto\(`\/join\/\$\{accessId\}`\)[\s\S]*page\.goto\(`\/join\/\$\{accessId\}`\)/,
+  'parallel-account E2E must use separate browser contexts opening the same personalized link concurrently',
+);
+assert.match(
+  callAccessJoinSpec,
+  /requests\.a\.sessionAuthorization\)\.toBe\(`Bearer \$\{accountA\.sessionToken\}`\)[\s\S]*requests\.b\.sessionAuthorization\)\.toBe\(`Bearer \$\{accountB\.sessionToken\}`\)/,
+  'parallel-account E2E must prove each session POST uses its own current bearer token',
+);
+assert.match(
+  callAccessJoinSpec,
+  /requests\.a\.sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*accountA\.userId,\s*verified_session_id:\s*accountA\.sessionId,\s*\}\)[\s\S]*requests\.b\.sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*accountB\.userId,\s*verified_session_id:\s*accountB\.sessionId,\s*\}\)/,
+  'parallel-account E2E must prove verified link contexts are not crossed between accounts',
+);
+assert.match(
+  callAccessJoinSpec,
+  /storedA\.sessionToken\)\.toBe\(accountA\.issuedCallAccessToken\)[\s\S]*storedB\.sessionToken\)\.toBe\(accountB\.sessionToken\)[\s\S]*storedB\.sessionToken\)\.not\.toBe\(accountA\.issuedCallAccessToken\)[\s\S]*storedB\.sessionToken\)\.not\.toBe\(accountB\.rejectedCallAccessToken\)/,
+  'parallel-account E2E must prove localStorage/session state remains isolated after mixed success and conflict responses',
+);
+assert.match(
+  callAccessJoinSpec,
+  /dialogB[\s\S]*not\.toContainText\('Foreign Linked Call Title'\)[\s\S]*foreignNeedlesForB[\s\S]*not\.toContainText\(value\)/,
+  'parallel-account E2E must prove the rejected second account sees no foreign UI data',
+);
+assert.match(
+  callAccessJoinSpec,
+  /requests\.a\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.b\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.a\.sessionPostCount\)\.toBe\(1\)[\s\S]*requests\.b\.sessionPostCount\)\.toBe\(1\)/,
+  'parallel-account E2E must guard against reload loops or duplicate session POSTs in either context',
+);
+
 console.log('[call-access-verified-context-ui-contract] PASS');
