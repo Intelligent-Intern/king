@@ -18,6 +18,15 @@ function safePeerId(value) {
   return String(value || '').trim();
 }
 
+function normalizedSignalingState(pc) {
+  return String(pc?.signalingState || '').trim().toLowerCase();
+}
+
+function signalingStateIsStable(pc) {
+  const signalingState = normalizedSignalingState(pc);
+  return signalingState === 'stable' || signalingState === '';
+}
+
 function normalizeSdp(payload) {
   const sdpPayload = payload && typeof payload.sdp === 'object' ? payload.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
@@ -122,6 +131,14 @@ export function createGossipNeighborLifecycle({
       void negotiatePeer(peer, 'negotiationneeded');
     });
 
+    pc.addEventListener('signalingstatechange', () => {
+      if (!peer.initiator || peer.negotiating || !peer.needsRenegotiate) return;
+      if (!signalingStateIsStable(peer.pc)) return;
+      peer.needsRenegotiate = false;
+      peer.queuedRenegotiateAttempts = 0;
+      scheduleQueuedRenegotiate(peer, 'signaling_stable');
+    });
+
     pc.addEventListener('connectionstatechange', () => {
       const state = String(pc.connectionState || '').trim().toLowerCase();
       onPeerConnectionState(normalizedPeerId, state, 'connectionstatechange');
@@ -172,6 +189,22 @@ export function createGossipNeighborLifecycle({
 
   function scheduleQueuedRenegotiate(peer, reason = 'queued_renegotiate') {
     if (!peer?.pc || peer.pc.signalingState === 'closed') return false;
+    if (!signalingStateIsStable(peer.pc)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'gossip_neighbor_renegotiate_waiting_stable',
+        code: 'gossip_neighbor_renegotiate_waiting_stable',
+        message: 'Dedicated Gossip neighbor renegotiation is waiting for a stable signaling state.',
+        payload: {
+          peer_id: safePeerId(peer.peerId),
+          reason: String(reason || 'queued_renegotiate'),
+          signaling_state: normalizedSignalingState(peer.pc),
+          topology_epoch: topologyEpoch,
+        },
+      });
+      return false;
+    }
     if (peer.queuedRenegotiateTimer) return true;
 
     peer.queuedRenegotiateAttempts = Math.max(0, Number(peer.queuedRenegotiateAttempts || 0)) + 1;
@@ -210,13 +243,12 @@ export function createGossipNeighborLifecycle({
     }
     peer.negotiating = true;
     try {
-      const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
-      if (signalingState !== 'stable' && signalingState !== '') {
+      if (!signalingStateIsStable(peer.pc)) {
         peer.needsRenegotiate = true;
         return false;
       }
       const offer = await peer.pc.createOffer();
-      const preSetLocalState = String(peer.pc.signalingState || '').trim().toLowerCase();
+      const preSetLocalState = normalizedSignalingState(peer.pc);
       if (preSetLocalState !== 'stable' && preSetLocalState !== '') {
         peer.needsRenegotiate = true;
         captureClientDiagnostic({
@@ -273,8 +305,12 @@ export function createGossipNeighborLifecycle({
     } finally {
       peer.negotiating = false;
       if (peer.needsRenegotiate) {
-        peer.needsRenegotiate = false;
-        scheduleQueuedRenegotiate(peer, 'queued_renegotiate');
+        if (signalingStateIsStable(peer.pc)) {
+          peer.needsRenegotiate = false;
+          scheduleQueuedRenegotiate(peer, 'queued_renegotiate');
+        } else {
+          scheduleQueuedRenegotiate(peer, 'queued_renegotiate');
+        }
       }
     }
   }

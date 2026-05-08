@@ -56,6 +56,58 @@ class ReentrantOfferFailurePeerConnection {
   }
 }
 
+class StableDeferredPeerConnection {
+  static instances = []
+
+  constructor() {
+    this.listeners = new Map()
+    this.signalingState = 'stable'
+    this.connectionState = 'new'
+    this.localDescription = null
+    this.remoteDescription = null
+    this.createOfferCalls = 0
+    this.closed = false
+    StableDeferredPeerConnection.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  async createOffer() {
+    this.createOfferCalls += 1
+    if (this.createOfferCalls === 1) {
+      this.signalingState = 'have-remote-offer'
+    }
+    return { type: 'offer', sdp: 'v=0\r\n' }
+  }
+
+  async setLocalDescription(description) {
+    this.localDescription = description
+    if (description?.type === 'offer') this.signalingState = 'have-local-offer'
+  }
+
+  async setRemoteDescription(description) {
+    this.remoteDescription = description
+  }
+
+  async createAnswer() {
+    return { type: 'answer', sdp: 'v=0\r\n' }
+  }
+
+  async addIceCandidate() {}
+
+  releaseStableSignaling() {
+    this.signalingState = 'stable'
+    this.listeners.get('signalingstatechange')?.({ type: 'signalingstatechange' })
+  }
+
+  close() {
+    this.closed = true
+    this.signalingState = 'closed'
+  }
+}
+
 try {
   globalThis.RTCPeerConnection = ReentrantOfferFailurePeerConnection
 
@@ -110,6 +162,56 @@ try {
     callsAtClose,
     'closing a gossip neighbor must cancel any queued renegotiation timer',
   )
+
+  globalThis.RTCPeerConnection = StableDeferredPeerConnection
+  const stableDiagnostics = []
+  const sentFrames = []
+  const stableLifecycle = createGossipNeighborLifecycle({
+    callbacks: {
+      activeCallId: () => 'call-prod-stable-wait',
+      activeRoomId: () => 'room-prod-stable-wait',
+      captureClientDiagnostic: (event) => stableDiagnostics.push(event),
+      currentUserId: () => 2001,
+      getDataTransport: () => ({
+        bindPeerConnection: () => {},
+        close: () => {},
+      }),
+      sendSocketFrame: (frame) => {
+        sentFrames.push(frame)
+        return true
+      },
+    },
+  })
+
+  stableLifecycle.applyAssignedNeighbors(
+    { topology_epoch: 43, admitted_peers: [{ peer_id: 2002 }] },
+    new Set(['2002']),
+  )
+
+  await delay(125)
+  const stablePeerConnection = StableDeferredPeerConnection.instances[0]
+  assert.equal(
+    stablePeerConnection.createOfferCalls,
+    1,
+    'non-stable signaling must not spin queued gossip renegotiation attempts',
+  )
+  assert.equal(
+    stableDiagnostics.filter((event) => event?.eventType === 'gossip_neighbor_renegotiate_quarantined').length,
+    0,
+    'non-stable signaling deferral must not burn the quarantine budget',
+  )
+  assert.ok(
+    stableDiagnostics.some((event) => event?.eventType === 'gossip_neighbor_renegotiate_waiting_stable'),
+    'non-stable signaling deferral must emit a stable-wait diagnostic',
+  )
+  stablePeerConnection.releaseStableSignaling()
+  await delay(75)
+  assert.equal(
+    stablePeerConnection.createOfferCalls,
+    2,
+    'stable signaling transition must release the queued gossip renegotiation exactly once',
+  )
+  assert.equal(sentFrames.length, 1, 'stable signaling release must send the deferred gossip offer')
 
   console.log('[gossip-neighbor-renegotiate-stack-contract] PASS')
 } finally {
