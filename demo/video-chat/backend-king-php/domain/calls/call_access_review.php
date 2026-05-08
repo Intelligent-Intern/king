@@ -277,6 +277,10 @@ function videochat_call_access_record_duplicate_personalized_link_review(
     if (!is_string($payloadJson) || $payloadJson === '') {
         $payloadJson = '{}';
     }
+    videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $linkedUser, $actorUserId, 'strong_mismatch', [
+        'session_id' => $sessionId,
+        'stage' => strtolower(trim($stage)) ?: 'unknown',
+    ]);
 
     $existing = null;
     $existingQuery = $pdo->prepare(
@@ -662,6 +666,9 @@ SQL
     } catch (Throwable) {
         return ['ok' => false, 'reason' => 'attempt_write_failed'];
     }
+    videochat_audit_record_call_access_host_verification($pdo, $accessLink, $call, $actorUserId, $normalizedOutcome, [
+        'host_name_fingerprint_recorded' => $normalizedHostName !== '',
+    ]);
 
     videochat_audit_record_event($pdo, [
         'tenant_id' => videochat_call_access_review_tenant_id($accessLink, $call),

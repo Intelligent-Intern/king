@@ -2491,13 +2491,13 @@ no call, invitee, host, link, or session leakage.
 
 ## 31. Audit and Monitoring
 
-- [ ] Call creation is logged
-- [ ] Invitation creation is logged
+- [x] Call creation is logged
+- [x] Invitation creation is logged
 - [x] Personalized link open is logged
-- [ ] Anonymous link open is logged
-- [ ] Temporary account creation is logged
+- [x] Anonymous link open is logged
+- [x] Temporary account creation is logged
 - [x] Temporary account removal is logged
-- [ ] Link-account vs logged-in-account comparison is logged
+- [x] Link-account vs logged-in-account comparison is logged
 - [x] Strong mismatch is logged
 - [x] Host-name verification is logged
 - [x] Successful host-name verification is logged
@@ -2543,6 +2543,12 @@ temporary account removal plus reschedule/delete/end audit records.
 foreign personalized-link review audit entries include timestamp, actor, target,
 call, and organization while omitting raw link IDs, host names, session IDs,
 tokens, SDP, ICE, and account emails.
+`audit-call-access-events-contract.php` now also proves call creation,
+invitation creation, anonymous/open link opening, temporary-account creation,
+link-account comparison for strong mismatch and matched sessions, successful
+host-name verification, and account-update request audit events. Docker PHP 8.4
+runtime proof passed, and `iam-call-access-audit-events-contract.mjs` pins the
+backend paths, event types, live probe expectations, and sensitive-data guards.
 
 ## 32. End-to-End Main Paths
 
@@ -3005,13 +3011,13 @@ and the IAM CI static gate.
 
 ## Test Group: Audit and Monitoring
 
-- [ ] `e2e_audit_001_call_creation_logged`
-- [ ] `e2e_audit_002_invitation_creation_logged`
+- [x] `e2e_audit_001_call_creation_logged`
+- [x] `e2e_audit_002_invitation_creation_logged`
 - [x] `e2e_audit_003_link_open_logged`
-- [ ] `e2e_audit_004_temp_account_creation_logged`
+- [x] `e2e_audit_004_temp_account_creation_logged`
 - [x] `e2e_audit_005_strong_mismatch_logged`
 - [x] `e2e_audit_006_host_verification_logged`
-- [ ] `e2e_audit_007_account_update_logged`
+- [x] `e2e_audit_007_account_update_logged`
 - [ ] `e2e_audit_008_lobby_events_logged`
 - [x] `e2e_audit_009_join_leave_rejoin_logged`
 - [x] `e2e_audit_010_kick_logged`

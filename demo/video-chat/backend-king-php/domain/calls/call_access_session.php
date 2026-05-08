@@ -140,6 +140,13 @@ function videochat_issue_session_for_call_access(
                 ];
             }
             $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
+            if (is_array($targetUser)) {
+                videochat_audit_record_temporary_account_created($pdo, $targetUser, $tenantId, [
+                    'call_id' => (string) ($call['id'] ?? ''),
+                    'source' => 'anonymous_call_access_link',
+                    'tenant_membership_attached' => true,
+                ]);
+            }
         }
     }
 
@@ -308,6 +315,11 @@ function videochat_issue_session_for_call_access(
         $userRole = (string) ($targetUser['role'] ?? 'user');
         $foreignPersonalizedUsesAuthenticatedUser = true;
         videochat_call_access_bind_authenticated_personalized_user($pdo, $call, $targetUser);
+    }
+    if ($linkKind === 'personal' && $authenticatedUserId > 0 && $authenticatedUserId === $userId) {
+        videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $targetUser, $authenticatedUserId, 'matched', [
+            'session_id' => $authenticatedSessionId,
+        ]);
     }
 
     if ($linkKind === 'open') {

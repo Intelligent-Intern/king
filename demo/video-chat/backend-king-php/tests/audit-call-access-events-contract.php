@@ -57,6 +57,9 @@ SQL
 
 try {
     videochat_iam_rejoin_contract_skip_without_sqlite($label);
+    $outboxPath = sys_get_temp_dir() . '/videochat-audit-call-access-events-outbox-' . bin2hex(random_bytes(6)) . '.log';
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX=1');
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH=' . $outboxPath);
     [$databasePath, $pdo] = videochat_iam_rejoin_contract_bootstrap_database('videochat-audit-call-access-events');
     $ids = videochat_iam_rejoin_contract_fixture_ids($pdo, $label);
     $tenantId = $ids['tenant_id'];
@@ -110,6 +113,27 @@ try {
     $accessLink = is_array($access['access_link'] ?? null) ? $access['access_link'] : [];
     $accessId = (string) ($accessLink['id'] ?? '');
     videochat_iam_rejoin_contract_assert($accessId !== '', 'personal access id should be present', $label);
+
+    $openCall = videochat_iam_rejoin_contract_create_active_call(
+        $pdo,
+        $ownerUserId,
+        [],
+        $tenantId,
+        'IAM Audit Events Anonymous Open Link',
+        'free_for_all'
+    );
+    $openGuest = videochat_iam_rejoin_contract_issue_open_guest_session(
+        $pdo,
+        $openCall['call_id'],
+        $ownerUserId,
+        $tenantId,
+        'sess_audit_events_open_guest',
+        'Audit Events Open Guest',
+        $label
+    );
+    $openAccessId = (string) (($openGuest['access_link'] ?? [])['id'] ?? '');
+    $openGuestUserId = (int) (($openGuest['user'] ?? [])['id'] ?? 0);
+    videochat_iam_rejoin_contract_assert($openAccessId !== '' && $openGuestUserId > 0, 'anonymous open link should create access and temporary account audit context', $label);
 
     $participantAuth = videochat_iam_rejoin_contract_issue_user_session(
         $pdo,
@@ -269,6 +293,32 @@ try {
         'denial_reason' => 'wrong_host_name',
         'host_name_verified' => false,
     ]);
+    $correctHostName = 'Audit Events Owner';
+    $correctHostAttempt = videochat_call_access_record_host_verification_attempt($pdo, $accessLink, $callPayload, $wrongUserId, $correctHostName, 'correct_host_name');
+    videochat_iam_rejoin_contract_assert((bool) ($correctHostAttempt['ok'] ?? false), 'correct host-name verification attempt should audit', $label);
+
+    $matchedIssue = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        static fn (): string => 'sess_audit_events_matched_link',
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        [
+            'authenticated_user_id' => $participantUserId,
+            'authenticated_session_id' => 'sess_audit_events_participant',
+            'verified_user_id' => $participantUserId,
+            'verified_session_id' => 'sess_audit_events_participant',
+        ]
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($matchedIssue['ok'] ?? false), 'matched personalized account should issue before matched comparison audit', $label);
+
+    $accountUpdate = videochat_call_access_request_account_update_confirmation(
+        $pdo,
+        $accessId,
+        $wrongUserId,
+        ['display_name' => 'Audit Events Account Update Request'],
+        ['session_id' => $wrongSessionId, 'frontend_origin' => 'https://app.kingrt.test']
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($accountUpdate['ok'] ?? false), 'account-update confirmation request should be accepted before audit fetch', $label);
 
     videochat_iam_rejoin_contract_disable_tenant_membership($pdo, $tenantId, $participantUserId);
     videochat_iam_rejoin_contract_assert(
@@ -291,12 +341,19 @@ try {
     videochat_iam_rejoin_contract_assert((bool) ($inviteInvalidation['ok'] ?? false), 'invite invalidation should write an audit event', $label);
     videochat_iam_rejoin_contract_assert(videochat_call_access_link_is_invalidated($pdo, $accessLink), 'invite should be invalidated before audit fetch', $label);
 
-    $events = videochat_audit_fetch_events($pdo, ['tenant_id' => $tenantId, 'call_id' => $callId, 'limit' => 100]);
+    $events = videochat_audit_fetch_events($pdo, ['tenant_id' => $tenantId, 'limit' => 200]);
     $eventsByType = videochat_audit_events_contract_event_types($events);
     foreach ([
+        'call_created',
+        'call_access_invitation_created',
         'call_access_link_opened',
+        'temporary_account_created',
+        'call_access_account_compared',
         'call_access_duplicate_personalized_link_review',
         'call_access_strong_mismatch_denied',
+        'call_access_host_name_verified',
+        'call_access_host_name_verification_failed',
+        'call_access_account_update_confirmation_requested',
         'call_access_invitation_invalidated',
         'call_participant_joined',
         'call_participant_left',
@@ -307,6 +364,32 @@ try {
     ] as $eventType) {
         videochat_iam_rejoin_contract_assert(isset($eventsByType[$eventType]), "audit event missing: {$eventType}", $label);
     }
+    $callCreatedPayload = (array) (($eventsByType['call_created'][0] ?? [])['payload'] ?? []);
+    videochat_iam_rejoin_contract_assert((string) ($callCreatedPayload['action'] ?? '') === 'create_call', 'call creation audit action mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($callCreatedPayload['title_logged'] ?? true) === false, 'call creation audit must not log title', $label);
+    $invitationCreatedEvent = $eventsByType['call_access_invitation_created'][0] ?? [];
+    $invitationCreatedPayload = (array) (($invitationCreatedEvent['payload'] ?? []) ?: []);
+    videochat_iam_rejoin_contract_assert((string) ($invitationCreatedEvent['resource_id'] ?? '') === '', 'invitation creation audit must not persist raw access id', $label);
+    videochat_iam_rejoin_contract_assert((string) ($invitationCreatedPayload['action'] ?? '') === 'create_invitation', 'invitation creation audit action mismatch', $label);
+    $linkOpenKinds = [];
+    foreach ($eventsByType['call_access_link_opened'] ?? [] as $event) {
+        $linkOpenKinds[(string) (($event['payload'] ?? [])['link_kind'] ?? '')] = true;
+    }
+    videochat_iam_rejoin_contract_assert(isset($linkOpenKinds['personal']) && isset($linkOpenKinds['open']), 'link-open audit should include personalized and anonymous/open links', $label);
+    $temporaryPayload = (array) (($eventsByType['temporary_account_created'][0] ?? [])['payload'] ?? []);
+    videochat_iam_rejoin_contract_assert((string) ($temporaryPayload['source'] ?? '') === 'anonymous_call_access_link', 'temporary account audit source mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($temporaryPayload['raw_guest_identity_logged'] ?? true) === false, 'temporary account audit must not log raw guest identity', $label);
+    $comparisonOutcomes = [];
+    foreach ($eventsByType['call_access_account_compared'] ?? [] as $event) {
+        $comparisonOutcomes[(string) (($event['payload'] ?? [])['comparison_outcome'] ?? '')] = true;
+    }
+    videochat_iam_rejoin_contract_assert(isset($comparisonOutcomes['strong_mismatch']) && isset($comparisonOutcomes['matched']), 'account comparison audit should include mismatch and matched outcomes', $label);
+    $hostVerifiedPayload = (array) (($eventsByType['call_access_host_name_verified'][0] ?? [])['payload'] ?? []);
+    videochat_iam_rejoin_contract_assert((string) ($hostVerifiedPayload['outcome'] ?? '') === 'correct_host_name', 'successful host-name audit outcome mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($hostVerifiedPayload['host_name_logged'] ?? true) === false, 'successful host-name audit must not log host name', $label);
+    $accountUpdatePayload = (array) (($eventsByType['call_access_account_update_confirmation_requested'][0] ?? [])['payload'] ?? []);
+    videochat_iam_rejoin_contract_assert((bool) ($accountUpdatePayload['manual_reentry_required'] ?? false), 'account-update audit should require manual re-entry', $label);
+    videochat_iam_rejoin_contract_assert(!videochat_audit_events_contract_payload_has_key($accountUpdatePayload, 'confirmation_token'), 'account-update audit must not log confirmation token', $label);
 
     $rejoinPayload = (array) (($eventsByType['call_participant_rejoined'][0] ?? [])['payload'] ?? []);
     videochat_iam_rejoin_contract_assert((bool) ($rejoinPayload['rejoin'] ?? false), 'rejoin audit should mark rejoin=true', $label);
@@ -341,7 +424,11 @@ try {
         $wrongSessionId,
         $deniedSessionId,
         $inviteInvalidationSessionId,
+        'sess_audit_events_open_guest',
+        'sess_audit_events_matched_link',
         $wrongHostName,
+        $correctHostName,
+        $openAccessId,
     ] as $forbiddenText) {
         videochat_iam_rejoin_contract_assert(!str_contains($encodedEvents, $forbiddenText), 'audit events leaked raw value: ' . $forbiddenText, $label);
     }
@@ -349,6 +436,7 @@ try {
         videochat_audit_fingerprint($accessId),
         videochat_audit_fingerprint($wrongSessionId),
         videochat_audit_fingerprint($inviteInvalidationSessionId),
+        videochat_audit_fingerprint($openAccessId),
         videochat_audit_fingerprint($callId . ':' . $participantUserId),
     ] as $requiredFingerprint) {
         videochat_iam_rejoin_contract_assert(str_contains($encodedEvents, $requiredFingerprint), 'audit events missing fingerprint: ' . $requiredFingerprint, $label);
@@ -371,7 +459,12 @@ try {
     fwrite(STDERR, "[{$label}] ERROR: " . $error->getMessage() . "\n");
     exit(1);
 } finally {
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX');
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH');
     if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
         @unlink($databasePath);
+    }
+    if (isset($outboxPath) && is_string($outboxPath) && is_file($outboxPath)) {
+        @unlink($outboxPath);
     }
 }
