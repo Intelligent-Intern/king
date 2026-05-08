@@ -782,6 +782,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       && message === 'malformed_protected_frame';
   }
 
+  function shouldTreatNativeFrameErrorAsDuplicateDrop(direction, error, senderUserId = 0) {
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    return isRemoteNativeFrameError(direction, senderUserId)
+      && message === 'replay_detected';
+  }
+
   function shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId = 0) {
     return isRemoteNativeFrameError(direction, senderUserId)
       && shouldRecoverMediaSecurityFromFrameError(error);
@@ -954,8 +960,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
       ? 'native_media_frame_decrypt_failed'
       : 'native_media_frame_encrypt_failed';
     const bootstrapFrameDrop = shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId);
+    const duplicateFrameDrop = shouldTreatNativeFrameErrorAsDuplicateDrop(direction, error, senderUserId);
     const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId);
-    const recoverableFrameDrop = transientFrameDrop
+    const recoverableFrameDrop = duplicateFrameDrop
+      || transientFrameDrop
       || shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId);
     const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
     const nowMs = Date.now();
@@ -978,6 +986,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
           track_id: trackId,
           media_runtime_path: mediaRuntimePath.value,
           security: nativeAudioSecurityTelemetrySnapshot(),
+          duplicate_frame_drop: duplicateFrameDrop,
           recoverable_frame_drop: recoverableFrameDrop,
         },
         immediate: !recoverableFrameDrop,

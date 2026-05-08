@@ -747,7 +747,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame) {
     if (!peer || typeof peer !== 'object') return false;
-    const trackKey = sfuFrameTrackStateKey(frame);
+    const trackKey = remoteJitterTrackKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
     if (!peer.lastSfuFrameSequenceByTrack || typeof peer.lastSfuFrameSequenceByTrack !== 'object') {
       peer.lastSfuFrameSequenceByTrack = {};
