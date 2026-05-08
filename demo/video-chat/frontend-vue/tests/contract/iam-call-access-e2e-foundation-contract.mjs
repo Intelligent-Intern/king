@@ -27,6 +27,7 @@ const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/ca
 const anonymousDisabledBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js');
 const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
+const seedRuntimeHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedRuntime.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
@@ -347,6 +348,16 @@ assert.match(
   seedMatrixHelper,
   /VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON/,
   'seed-matrix helper must support compose smoke injection when contracts/v1 is outside the frontend container mount',
+);
+assert.match(
+  seedMatrixHelper,
+  /installCallAccessSeedRoutes/,
+  'seed-matrix helper must expose deterministic IAM seed routes',
+);
+assert.match(
+  seedRuntimeHelper,
+  /installCallAccessFakeRealtime/,
+  'seed runtime helper must expose fake realtime admission',
 );
 
 const liveFixtureModule = await import(pathToFileURL(path.join(

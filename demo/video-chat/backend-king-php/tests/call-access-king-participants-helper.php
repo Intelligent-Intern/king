@@ -116,7 +116,10 @@ function videochat_iam_king_participant_snapshot(
     $payload = videochat_realtime_room_snapshot_payload($presenceState, $viewerConnection, $openDatabase, $reason, $nowMs);
     $callId = videochat_realtime_connection_call_id($viewerConnection);
     $roomId = videochat_presence_normalize_room_id((string) ($viewerConnection['room_id'] ?? ''), '');
-    $payload['call_lifecycle']['owner_absence'] = videochat_realtime_apply_owner_absence_timeout($pdo, $callId, $roomId, $nowMs);
+    $ownerAbsence = (array) (($payload['call_lifecycle'] ?? [])['owner_absence'] ?? []);
+    if ((string) ($ownerAbsence['status'] ?? '') !== 'ended') {
+        $payload['call_lifecycle']['owner_absence'] = videochat_realtime_apply_owner_absence_timeout($pdo, $callId, $roomId, $nowMs);
+    }
     $payload['call_lifecycle']['status'] = (string) (($payload['call_lifecycle']['owner_absence'] ?? [])['call_status'] ?? '');
     return $payload;
 }
