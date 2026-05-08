@@ -643,6 +643,34 @@ Tickets:
         `test:contract:call-apps`; the pinned `php:8.5-cli-trixie` SQLite
         proof passes in Docker.
 
+- [x] WCA-10 Call App entitlement revocation contract
+  - Re-check active organization installation and entitlement state when
+    minting and validating Call App launch tokens for existing sessions.
+  - Prove revoked organization Whiteboard entitlement removes the app from call
+    availability, blocks new Call App session start, blocks launch for an
+    existing session, and invalidates a previously issued launch token.
+  - Keep participant/user grant revocation covered by the lifecycle contract:
+    denied users lose active launch tokens and cannot bootstrap, replay, or
+    append private Whiteboard CRDT state.
+  - Proof:
+    - `php -l demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php`
+    - `php -l demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php`
+    - `php -l demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.php`
+    - `node --check tests/contract/call-app-marketplace-to-call-journey-contract.mjs`
+    - `node --check tests/contract/call-app-permission-revocation-contract.mjs`
+    - `demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.sh`
+    - `demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.sh`
+    - `node tests/contract/call-app-marketplace-to-call-journey-contract.mjs`
+    - `node tests/contract/call-app-permission-revocation-contract.mjs`
+    - `npm run test:contract:call-apps`
+    - `npm run test:contract:call-apps:sqlite`
+    - `git diff --check`
+  - Result:
+    - Syntax and Node contracts passed. Host-PHP PDO-SQLite contract wrappers
+      skip where the local driver is unavailable; the pinned
+      `php:8.5-cli-trixie` SQLite proof ran the backend Call App contracts and
+      passed.
+
 
 
 

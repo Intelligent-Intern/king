@@ -67,6 +67,12 @@ assert.match(
 );
 
 assert.match(
+  marketplaceEntitlementTestSource,
+  /revoked organization entitlement must remove Whiteboard from call availability[\s\S]*revoked organization entitlement must block Call App session start[\s\S]*revoked organization entitlement must block launch for existing sessions[\s\S]*revoked organization entitlement must invalidate existing launch tokens/s,
+  'marketplace contract must prove organization entitlement revocation removes Call App tab availability and blocks session launch paths',
+);
+
+assert.match(
   lifecycleTestSource,
   /non-owner participant must not attach Call App[\s\S]*owner attach should create session[\s\S]*default-allowed participant launch token should return 201/,
   'backend journey must prove owner-only attach and participant launch admission',
