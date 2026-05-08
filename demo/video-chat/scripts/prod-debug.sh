@@ -24,6 +24,10 @@ shell_quote() {
   printf '%q' "$1"
 }
 
+regex_escape() {
+  printf '%s' "$1" | sed -E 's/[][(){}.^$?+*|\\]/\\&/g'
+}
+
 redact_stream() {
   sed -E \
     -e 's/(authorization:[[:space:]]*bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/Ig' \
@@ -76,6 +80,83 @@ http_probe() {
   rm -f "${body}"
 }
 
+header_value() {
+  local header_name="$1" headers="$2"
+  awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { sub("^[^:]*:[[:space:]]*", "", $0); gsub("\r", "", $0); print $0; exit }' "${headers}"
+}
+
+call_app_frame_header_probe() {
+  local label="$1" url="$2" headers body code csp allow_csp_from nested_pattern escaped_app_domain
+  local wildcard_frame_ancestors_pattern wildcard_frame_src_pattern wildcard_script_src_pattern wildcard_connect_src_pattern
+  headers="$(mktemp)"
+  body="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o "${body}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    printf '[videochat-prod-debug] %s headers:\n' "${label}" >&2
+    cat "${headers}" >&2 || true
+    printf '[videochat-prod-debug] %s body:\n' "${label}" >&2
+    head -c 2000 "${body}" >&2 || true
+    printf '\n' >&2
+    rm -f "${headers}" "${body}"
+    fail "${label}: expected HTTP 200, got ${code:-none}"
+  fi
+
+  csp="$(header_value Content-Security-Policy "${headers}")"
+  allow_csp_from="$(header_value Allow-CSP-From "${headers}")"
+  if [[ "${csp}" != *"frame-ancestors https://${DEPLOY_APP_DOMAIN}"* ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: Content-Security-Policy must allow frame ancestor https://${DEPLOY_APP_DOMAIN}"
+  fi
+  if [[ "${csp}" != *"script-src 'self'"* ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: Content-Security-Policy must keep script-src self-scoped"
+  fi
+  if [[ "${csp}" != *"connect-src 'self'"* ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: Content-Security-Policy must keep connect-src self-scoped"
+  fi
+  wildcard_frame_ancestors_pattern='(^|[[:space:];])frame-ancestors[^;]*\*'
+  wildcard_frame_src_pattern='(^|[[:space:];])frame-src[^;]*\*'
+  wildcard_script_src_pattern='(^|[[:space:];])script-src[^;]*\*'
+  wildcard_connect_src_pattern='(^|[[:space:];])connect-src[^;]*\*'
+  if [[ "${csp}" =~ ${wildcard_frame_ancestors_pattern} || "${csp}" =~ ${wildcard_frame_src_pattern} || "${csp}" =~ ${wildcard_script_src_pattern} || "${csp}" =~ ${wildcard_connect_src_pattern} ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: Content-Security-Policy must not use wildcard frame/script/connect directives"
+  fi
+  if [[ "${allow_csp_from}" != "https://${DEPLOY_APP_DOMAIN}" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: Allow-CSP-From must equal https://${DEPLOY_APP_DOMAIN}"
+  fi
+  if [[ -n "$(header_value X-Frame-Options "${headers}")" ]]; then
+    cat "${headers}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: X-Frame-Options must be absent for Call App iframe responses"
+  fi
+
+  escaped_app_domain="$(regex_escape "${DEPLOY_APP_DOMAIN}")"
+  nested_pattern="https?://[A-Za-z0-9.-]+\\.${escaped_app_domain}"
+  if grep -Eia "${nested_pattern}" "${headers}" "${body}" >/dev/null; then
+    printf '[videochat-prod-debug] %s nested app-domain origin matches:\n' "${label}" >&2
+    grep -Eia "${nested_pattern}" "${headers}" "${body}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: must not reference nested *.${DEPLOY_APP_DOMAIN} service origins"
+  fi
+
+  rm -f "${headers}" "${body}"
+  log "${label}: HTTP ${code}; CSP frame-ancestors https://${DEPLOY_APP_DOMAIN}; Allow-CSP-From https://${DEPLOY_APP_DOMAIN}; X-Frame-Options absent; no nested *.${DEPLOY_APP_DOMAIN} origins"
+}
+
+call_app_csp_header_proof() {
+  section "Call-App CSP Header Proof"
+  call_app_frame_header_probe "call-app whiteboard host CSP" "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
+  call_app_frame_header_probe "call-app whiteboard path CSP" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
+}
+
 websocket_probe() {
   local label="$1" url="$2" headers body code upgrade curl_url
   curl_url="${url/wss:\/\//https://}"
@@ -106,6 +187,13 @@ ssh_args() {
 }
 
 remote_readonly_probe() {
+  case "${VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE:-0}" in
+    1|true|TRUE|yes|YES)
+      log "remote SSH probes skipped; VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1"
+      return 0
+      ;;
+  esac
+
   [[ -n "${DEPLOY_HOST}" ]] || {
     log "remote SSH probes skipped; VIDEOCHAT_DEPLOY_HOST is not set"
     return 0
@@ -184,6 +272,8 @@ main() {
   http_probe "registry host" "https://${DEPLOY_REGISTRY_DOMAIN}/" HEAD
   websocket_probe "lobby websocket" "wss://${DEPLOY_WS_DOMAIN}/ws"
   websocket_probe "sfu websocket" "wss://${DEPLOY_SFU_DOMAIN}/sfu"
+
+  call_app_csp_header_proof
 
   remote_readonly_probe
 }
