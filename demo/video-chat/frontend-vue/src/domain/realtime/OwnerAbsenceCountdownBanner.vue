@@ -2,7 +2,7 @@
   <section
     v-if="visible"
     class="workspace-owner-absence-banner"
-    :class="{ ended: endedVisible }"
+    :class="{ ended: endedVisible, monitoring: monitoringVisible }"
     role="status"
     aria-live="polite"
     data-testid="owner-absence-countdown"
@@ -26,6 +26,7 @@ import {
   normalizeOwnerAbsencePayload,
   shouldShowOwnerAbsenceCountdown,
   shouldShowOwnerAbsenceEnded,
+  shouldShowOwnerAbsenceMonitoring,
 } from './workspace/callWorkspace/ownerAbsenceState.js';
 
 const props = defineProps({
@@ -36,13 +37,18 @@ const props = defineProps({
 });
 
 const state = computed(() => normalizeOwnerAbsencePayload(props.ownerAbsence));
+const monitoringVisible = computed(() => shouldShowOwnerAbsenceMonitoring(state.value));
 const countdownVisible = computed(() => shouldShowOwnerAbsenceCountdown(state.value));
 const endedVisible = computed(() => shouldShowOwnerAbsenceEnded(state.value));
-const visible = computed(() => countdownVisible.value || endedVisible.value);
+const visible = computed(() => monitoringVisible.value || countdownVisible.value || endedVisible.value);
 const countdownLabel = computed(() => formatOwnerAbsenceCountdown(state.value?.countdownRemainingMs || 0));
 const message = computed(() => (
   endedVisible.value
     ? t('calls.workspace.owner_absence_ended')
-    : t('calls.workspace.owner_absence_countdown', { countdown: countdownLabel.value })
+    : (
+      monitoringVisible.value
+        ? t('calls.workspace.owner_absence_monitoring')
+        : t('calls.workspace.owner_absence_countdown', { countdown: countdownLabel.value })
+    )
 ));
 </script>

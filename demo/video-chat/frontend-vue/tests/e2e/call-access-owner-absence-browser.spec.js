@@ -7,6 +7,7 @@ import { test, expect } from '@playwright/test';
 import {
   getSeedCall,
   getSeedUser,
+  installCallAccessMediaDeviceShim,
 } from './helpers/callAccessSeedMatrix.js';
 import { createDirectJoinMatrixPage } from './helpers/callAccessSeedRuntime.js';
 
@@ -106,20 +107,24 @@ function ownerAbsenceSnapshot(status, overrides = {}) {
   };
 }
 
-async function openOwnerAbsenceParticipantWorkspace(browser, baseURL) {
-  const session = await createDirectJoinMatrixPage(browser, baseURL, {
-    scenarioKey: 'direct_join_guest_list_user_allowed',
-  });
-  await session.page.goto(`/workspace/call/${call.id}`);
-  await expect(session.page.locator('.workspace-call-view')).toBeVisible({ timeout: 20_000 });
-  await session.page.waitForFunction(() => {
+async function waitForOwnerAbsenceRealtimeReady(page) {
+  await expect(page.locator('.workspace-call-view')).toBeVisible({ timeout: 20_000 });
+  await page.waitForFunction(() => {
     const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
     return setup?.connectionState === 'online'
       && typeof window.__iamCallAccessEmitRoomSnapshot === 'function';
   }, null, { timeout: 20_000 });
-  await session.page.waitForFunction(() => (
+  await page.waitForFunction(() => (
     (window.__iamCallAccessSocketFrames || []).some((frame) => frame?.type === 'room/snapshot/request')
   ), null, { timeout: 20_000 });
+}
+
+async function openOwnerAbsenceParticipantWorkspace(browser, baseURL, scenarioKey = 'direct_join_guest_list_user_allowed') {
+  const session = await createDirectJoinMatrixPage(browser, baseURL, {
+    scenarioKey,
+  });
+  await session.page.goto(`/workspace/call/${call.id}`);
+  await waitForOwnerAbsenceRealtimeReady(session.page);
   return session;
 }
 
@@ -144,6 +149,12 @@ test('e2e_journey_024_owner_absence_countdown_then_auto_end', async ({ browser }
   try {
     await expect(banner).toHaveCount(0);
 
+    await emitOwnerAbsenceSnapshot(page, ownerAbsenceSnapshot('monitoring'));
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Call owner disconnected. A countdown will appear if they do not return.');
+    await expect(page.getByTestId('owner-absence-remaining')).toHaveCount(0);
+    expect((await ownerAbsenceState(page))?.status).toBe('monitoring');
+
     await emitOwnerAbsenceSnapshot(page, ownerAbsenceSnapshot('countdown'));
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Call owner disconnected.');
@@ -164,6 +175,114 @@ test('e2e_journey_024_owner_absence_countdown_then_auto_end', async ({ browser }
     expect(state?.callStatus).toBe('ended');
     expect(state?.ended_reason).toBe('owner_absent_timeout');
     expect(state?.transitioned).toBe(true);
+  } finally {
+    await context.close();
+  }
+});
+
+test('e2e_end_implicit_008_countdown_synchronized_across_participants', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const first = await openOwnerAbsenceParticipantWorkspace(browser, baseURL, 'direct_join_guest_list_user_allowed');
+  const second = await openOwnerAbsenceParticipantWorkspace(browser, baseURL, 'direct_join_org_admin_own_organization_without_guest_list');
+  const syncedSnapshot = ownerAbsenceSnapshot('countdown', {
+    countdown_remaining_ms: ownerAbsenceContract.countdownMs - 120_000,
+  });
+
+  try {
+    await emitOwnerAbsenceSnapshot(first.page, syncedSnapshot);
+    await emitOwnerAbsenceSnapshot(second.page, syncedSnapshot);
+
+    await expect(first.page.getByTestId('owner-absence-remaining')).toHaveText('3:00');
+    await expect(second.page.getByTestId('owner-absence-remaining')).toHaveText('3:00');
+    expect((await ownerAbsenceState(first.page))?.countdownRemainingMs).toBe(ownerAbsenceContract.countdownMs - 120_000);
+    expect((await ownerAbsenceState(second.page))?.countdownRemainingMs).toBe(ownerAbsenceContract.countdownMs - 120_000);
+  } finally {
+    await first.context.close();
+    await second.context.close();
+  }
+});
+
+test('e2e_end_implicit_009_countdown_survives_participant_refresh', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const { context, page } = await openOwnerAbsenceParticipantWorkspace(browser, baseURL);
+  const refreshedSnapshot = ownerAbsenceSnapshot('countdown', {
+    countdown_remaining_ms: ownerAbsenceContract.countdownMs - 60_000,
+  });
+
+  try {
+    await emitOwnerAbsenceSnapshot(page, refreshedSnapshot);
+    await expect(page.getByTestId('owner-absence-remaining')).toHaveText('4:00');
+
+    await page.reload();
+    await waitForOwnerAbsenceRealtimeReady(page);
+    await emitOwnerAbsenceSnapshot(page, refreshedSnapshot);
+
+    await expect(page.getByTestId('owner-absence-countdown')).toBeVisible();
+    await expect(page.getByTestId('owner-absence-remaining')).toHaveText('4:00');
+    expect((await ownerAbsenceState(page))?.status).toBe('countdown');
+  } finally {
+    await context.close();
+  }
+});
+
+test('late user opening old owner-absence link sees safe ended-call state', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const accessId = '99999999-9999-4999-8999-999999999999';
+  const privateNeedles = [
+    'Owner Absence Private Call',
+    'owner-absence-host@example.invalid',
+    'Owner Absence Late Guest',
+    'owner-absence-private-call-id',
+    accessId,
+  ];
+  const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
+  await installCallAccessMediaDeviceShim(context);
+  const page = await context.newPage();
+
+  try {
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'error',
+          error: {
+            code: 'call_access_conflict',
+            message: 'Owner Absence Private Call ended because the owner did not return.',
+          },
+          result: {
+            ended_reason: 'owner_absent_timeout',
+            call: {
+              id: 'owner-absence-private-call-id',
+              title: 'Owner Absence Private Call',
+              owner: {
+                email: 'owner-absence-host@example.invalid',
+                display_name: 'Owner Absence Host',
+              },
+            },
+            target_user: {
+              display_name: 'Owner Absence Late Guest',
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/join/${accessId}`);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible();
+    await expect(joinDialog).toContainText('This call link cannot be used for the current call state.');
+    await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
+    const dialogText = await joinDialog.innerText();
+    for (const needle of privateNeedles) {
+      expect(dialogText).not.toContain(needle);
+    }
+    expect(page.url()).toContain(`/join/${accessId}`);
+    expect(page.url()).not.toContain('/workspace/call');
   } finally {
     await context.close();
   }

@@ -52,6 +52,7 @@ export const CALL_WORKSPACE_MESSAGES = Object.freeze({
   'calls.workspace.open_left_sidebar': 'Open left sidebar',
   'calls.workspace.open_right_sidebar': 'Open right sidebar',
   'calls.workspace.owner_absence_countdown': 'Call owner disconnected. This call ends in {countdown}.',
+  'calls.workspace.owner_absence_monitoring': 'Call owner disconnected. A countdown will appear if they do not return.',
   'calls.workspace.owner_absence_ended': 'Call ended because the owner did not return.',
   'calls.workspace.page_next_lobby': 'Next lobby page',
   'calls.workspace.page_next_users': 'Next users page',
