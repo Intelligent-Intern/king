@@ -133,7 +133,7 @@ try {
     videochat_call_guest_lifecycle_assert((string) ($personalCleanupPayload['cleanup_result'] ?? '') === 'invalidated', 'personal cleanup audit result mismatch');
     videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['guest_user_count'] ?? 0) === 1, 'personal cleanup audit guest count mismatch');
     videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['invalidated_guest_count'] ?? 0) === 1, 'personal cleanup audit invalidated count mismatch');
-    videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['revoked_session_count'] ?? 0) === 1, 'personal cleanup audit revoked session count mismatch');
+    videochat_call_guest_lifecycle_assert(!array_key_exists('revoked_session_count', $personalCleanupPayload), 'personal cleanup audit must not expose session-keyed counters');
     videochat_call_guest_lifecycle_assert((bool) ($personalCleanupPayload['had_effect'] ?? false), 'personal cleanup audit should show destructive effect');
     videochat_call_guest_lifecycle_assert((bool) ($personalCleanupPayload['idempotent_safe'] ?? false), 'personal cleanup audit should document idempotent-safe behavior');
 
@@ -179,7 +179,7 @@ try {
     videochat_call_guest_lifecycle_assert((string) ($repeatPayload['cleanup_result'] ?? '') === 'no_guest_accounts', 'repeat cleanup audit result mismatch');
     videochat_call_guest_lifecycle_assert((int) ($repeatPayload['guest_user_count'] ?? -1) === 0, 'repeat cleanup audit guest count mismatch');
     videochat_call_guest_lifecycle_assert((int) ($repeatPayload['invalidated_guest_count'] ?? -1) === 0, 'repeat cleanup audit invalidated count mismatch');
-    videochat_call_guest_lifecycle_assert((int) ($repeatPayload['revoked_session_count'] ?? -1) === 0, 'repeat cleanup audit revoked session count mismatch');
+    videochat_call_guest_lifecycle_assert(!array_key_exists('revoked_session_count', $repeatPayload), 'repeat cleanup audit must not expose session-keyed counters');
     videochat_call_guest_lifecycle_assert(!(bool) ($repeatPayload['had_effect'] ?? true), 'repeat cleanup audit should show no destructive effect');
     videochat_call_guest_lifecycle_assert((bool) ($repeatPayload['idempotent_safe'] ?? false), 'repeat cleanup audit should document idempotent-safe behavior');
 
