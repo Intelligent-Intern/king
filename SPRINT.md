@@ -1397,9 +1397,11 @@ the authority.
 Proof: `call-access-deleted-ended-disabled-join-contract` and the integrated
 Playwright run of `call-access-seed-matrix.spec.js` plus
 `call-access-join.spec.js` cover system-admin denial for deleted/ended calls,
-disabled/deleted user denial before call resolution, safe deleted/ended public
-link states, no replacement session issuance, and no leaked private call/user
-data. The focused integrated Playwright run passed 18 tests.
+normal invited-user denial for deleted/ended calls, organization-admin denial
+for same-organization deleted/ended calls, disabled/deleted user denial before
+call resolution, safe deleted/ended public link states, no replacement session
+issuance, and no leaked private call/user data. The focused integrated
+Playwright run passed 18 tests.
 
 ## 4. Calendar Invitation Flow
 
@@ -2459,8 +2461,9 @@ sessions, clears presence/lobby/admitted participant state, disables only scoped
 temporary guests, preserves unrelated calls and unrelated guests, and emits
 sanitized delete/guest-cleanup audit events.
 `call-access-deleted-ended-disabled-join-contract` now also proves
-same-organization admin denial after deletion plus system-admin deleted
-normal-join denial and deleted personalized link denial.
+same-organization admin denial after deletion, normal invited-user deleted-call
+denial, system-admin deleted normal-join denial, and deleted personalized link
+denial.
 `call-access-seed-matrix.spec.js` passed the org-admin deleted direct-join
 denial and deleted personalized-link UI safe-screen case;
 `call-access-lifecycle-stale-links.spec.js` passed the deleted stale-link
@@ -2504,11 +2507,12 @@ direct-join denial cases for system admin and organization admin as part of the
 24-test integrated run.
 2026-05-09 focused backend proof: Docker PHP 8.4 ran
 `call-access-deleted-ended-disabled-join-contract.php`, proving system-admin
-normal direct decision and `/api/calls/resolve/{id}` are blocked for ended and
-deleted calls, deleted calls remain safe `not_found`, ended personalized
-join/session issuance returns conflict without calling the session issuer, and
-no private call title, participant email, or replacement session leaks through
-those normal join responses.
+normal direct decision, same-organization admin normal direct decision, normal
+invited-user direct decision, and `/api/calls/resolve/{id}` are blocked for
+ended and deleted calls. Deleted calls remain safe `not_found`, ended
+personalized join/session issuance returns conflict without calling the session
+issuer, and no private call title, participant email, or replacement session
+leaks through those normal join responses.
 `call-guest-cleanup-lifecycle-remaining-contract` marks an anonymous open-link
 guest as active, ends the call, and proves the participant receives cancelled
 plus `left_at` state while the temporary account and stale open link are

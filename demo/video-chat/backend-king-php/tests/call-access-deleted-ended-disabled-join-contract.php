@@ -235,6 +235,10 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($endedAdminDecision['allowed'] ?? true), 'system admin must not get normal ended-call join access');
     videochat_iam_deleted_ended_disabled_join_assert((string) ($endedAdminDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended-call admin denial reason mismatch');
 
+    $endedInvitedDecision = videochat_decide_call_access_for_user($pdo, $endedCall['id'], $standardUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($endedInvitedDecision['allowed'] ?? true), 'invited user must not get normal ended-call join access');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($endedInvitedDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended-call invited user denial reason mismatch');
+
     $endedResolve = videochat_handle_call_routes(
         '/api/calls/resolve/' . $endedCall['id'],
         'GET',
@@ -251,6 +255,22 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert((string) (($endedResolvePayload['result'] ?? [])['state'] ?? '') === 'forbidden', 'ended direct resolve should be forbidden');
     videochat_iam_deleted_ended_disabled_join_assert(($endedResolvePayload['result']['call'] ?? null) === null, 'ended direct resolve must not include call payload');
     videochat_iam_deleted_ended_disabled_join_assert_omits($endedResolve, [$endedCall['title'], 'user@intelligent-intern.com'], 'ended direct resolve');
+
+    $endedInvitedResolve = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $endedCall['id'],
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/calls/resolve/' . $endedCall['id'], 'headers' => []],
+        videochat_iam_deleted_ended_disabled_join_auth_context($standardUserId, 'user', $tenantId),
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_iam_deleted_ended_disabled_join_assert(is_array($endedInvitedResolve), 'ended invited-user resolve response should exist');
+    $endedInvitedResolvePayload = videochat_iam_deleted_ended_disabled_join_decode($endedInvitedResolve);
+    videochat_iam_deleted_ended_disabled_join_assert((string) (($endedInvitedResolvePayload['result'] ?? [])['state'] ?? '') === 'forbidden', 'ended invited-user resolve should be forbidden');
+    videochat_iam_deleted_ended_disabled_join_assert(($endedInvitedResolvePayload['result']['call'] ?? null) === null, 'ended invited-user resolve must not include call payload');
+    videochat_iam_deleted_ended_disabled_join_assert_omits($endedInvitedResolve, [$endedCall['title'], 'user@intelligent-intern.com'], 'ended invited-user resolve');
 
     $endedJoin = videochat_handle_call_access_routes(
         '/api/call-access/' . $endedAccessId . '/join',
@@ -301,6 +321,10 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($deletedDecision['allowed'] ?? true), 'system admin must not get normal deleted-call join access');
     videochat_iam_deleted_ended_disabled_join_assert((string) ($deletedDecision['reason'] ?? '') === 'not_found', 'deleted-call admin denial reason mismatch');
 
+    $deletedInvitedDecision = videochat_decide_call_access_for_user($pdo, $deletedCall['id'], $standardUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($deletedInvitedDecision['allowed'] ?? true), 'invited user must not get normal deleted-call join access');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($deletedInvitedDecision['reason'] ?? '') === 'not_found', 'deleted-call invited user denial reason mismatch');
+
     $deletedResolve = videochat_handle_call_routes(
         '/api/calls/resolve/' . $deletedCall['id'],
         'GET',
@@ -317,6 +341,22 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert((string) (($deletedResolvePayload['result'] ?? [])['state'] ?? '') === 'not_found', 'deleted direct resolve should be safe not_found');
     videochat_iam_deleted_ended_disabled_join_assert(($deletedResolvePayload['result']['call'] ?? null) === null, 'deleted direct resolve must not include call payload');
     videochat_iam_deleted_ended_disabled_join_assert_omits($deletedResolve, [$deletedCall['title'], 'user@intelligent-intern.com'], 'deleted direct resolve');
+
+    $deletedInvitedResolve = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $deletedCall['id'],
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/calls/resolve/' . $deletedCall['id'], 'headers' => []],
+        videochat_iam_deleted_ended_disabled_join_auth_context($standardUserId, 'user', $tenantId),
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_iam_deleted_ended_disabled_join_assert(is_array($deletedInvitedResolve), 'deleted invited-user resolve response should exist');
+    $deletedInvitedResolvePayload = videochat_iam_deleted_ended_disabled_join_decode($deletedInvitedResolve);
+    videochat_iam_deleted_ended_disabled_join_assert((string) (($deletedInvitedResolvePayload['result'] ?? [])['state'] ?? '') === 'not_found', 'deleted invited-user resolve should be safe not_found');
+    videochat_iam_deleted_ended_disabled_join_assert(($deletedInvitedResolvePayload['result']['call'] ?? null) === null, 'deleted invited-user resolve must not include call payload');
+    videochat_iam_deleted_ended_disabled_join_assert_omits($deletedInvitedResolve, [$deletedCall['title'], 'user@intelligent-intern.com'], 'deleted invited-user resolve');
 
     $deletedJoin = videochat_handle_call_access_routes(
         '/api/call-access/' . $deletedAccessId . '/join',
@@ -377,6 +417,40 @@ try {
     videochat_iam_deleted_ended_disabled_join_assert(is_array($orgDeletedJoin), 'organization deleted personalized join response should exist');
     videochat_iam_deleted_ended_disabled_join_assert((int) ($orgDeletedJoin['status'] ?? 0) === 404, 'organization deleted personalized join should return not found');
     videochat_iam_deleted_ended_disabled_join_assert_omits($orgDeletedJoin, [$orgDeletedCall['title'], 'deleted-org-owner-join-contract@example.test', 'user@intelligent-intern.com'], 'organization deleted personalized join');
+
+    $orgEndedCall = videochat_iam_deleted_ended_disabled_join_create_call(
+        $pdo,
+        $orgOwnerUserId,
+        [$standardUserId],
+        'IAM Ended Organization Admin Secret Contract Call',
+        $tenantId
+    );
+    $orgAdminBeforeEnd = videochat_decide_call_access_for_user($pdo, $orgEndedCall['id'], $orgAdminUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert((bool) ($orgAdminBeforeEnd['allowed'] ?? false), 'organization admin should join same-organization call before ending');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($orgAdminBeforeEnd['source'] ?? '') === 'organization_admin', 'organization admin pre-end source mismatch');
+    $pdo->prepare('UPDATE calls SET status = :status WHERE id = :id')->execute([
+        ':status' => 'ended',
+        ':id' => $orgEndedCall['id'],
+    ]);
+
+    $orgEndedDecision = videochat_decide_call_access_for_user($pdo, $orgEndedCall['id'], $orgAdminUserId, 'user', $tenantId);
+    videochat_iam_deleted_ended_disabled_join_assert(!(bool) ($orgEndedDecision['allowed'] ?? true), 'organization admin must not get normal ended-call join access');
+    videochat_iam_deleted_ended_disabled_join_assert((string) ($orgEndedDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'organization admin ended-call denial reason mismatch');
+    $orgEndedResolve = videochat_handle_call_routes(
+        '/api/calls/resolve/' . $orgEndedCall['id'],
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/calls/resolve/' . $orgEndedCall['id'], 'headers' => []],
+        videochat_iam_deleted_ended_disabled_join_auth_context($orgAdminUserId, 'user', $tenantId),
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_iam_deleted_ended_disabled_join_assert(is_array($orgEndedResolve), 'organization admin ended resolve response should exist');
+    $orgEndedResolvePayload = videochat_iam_deleted_ended_disabled_join_decode($orgEndedResolve);
+    videochat_iam_deleted_ended_disabled_join_assert((string) (($orgEndedResolvePayload['result'] ?? [])['state'] ?? '') === 'forbidden', 'organization admin ended resolve should be forbidden');
+    videochat_iam_deleted_ended_disabled_join_assert(($orgEndedResolvePayload['result']['call'] ?? null) === null, 'organization admin ended resolve must not include call payload');
+    videochat_iam_deleted_ended_disabled_join_assert_omits($orgEndedResolve, [$orgEndedCall['title'], 'deleted-org-owner-join-contract@example.test'], 'organization admin ended resolve');
 
     $disabledCall = videochat_iam_deleted_ended_disabled_join_create_call(
         $pdo,
