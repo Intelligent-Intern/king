@@ -195,6 +195,44 @@ curl -sS -X POST "$BASE/api/calls/$CALL_ID/access-link" \
 The generated `join_path` is UUID-based and points to a real new call (not only seeded demo calls).
 Call responses include persisted `schedule` metadata so calendar views do not infer local dates or durations in the frontend.
 
+## IAM Call-Access CI Gates
+
+IAM proof is split between host-safe contract checks and browser/container
+checks:
+
+```bash
+cd demo/video-chat/frontend-vue
+npm run test:ci:iam-call-access
+```
+
+This runs the static Call Access contracts currently present in the integration
+branch, the IAM E2E foundation contract, and the release-gate matrix contract.
+It then runs the SQLite-backed backend IAM contracts only when the current
+`PHP_BIN` loads `pdo_sqlite`. If `pdo_sqlite` is missing, the command prints a
+`BLOCKED` list for those backend proofs and exits successfully; that output is
+not a backend SQLite proof.
+
+For a required local backend proof, use a PHP runtime with `pdo_sqlite` and run:
+
+```bash
+cd demo/video-chat/frontend-vue
+npm run test:ci:iam-call-access:full
+```
+
+The compose smoke is the CI/browser path. It builds the backend containers with
+`pdo_sqlite`, keeps the focused IAM Playwright suite split from the broader
+chat/layout matrix, and runs the live call-access browser proof against service
+DNS origins:
+
+```bash
+VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
+VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+bash demo/video-chat/scripts/smoke.sh
+```
+
+Use `VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1` only for local debugging when the
+host-safe IAM gate has already been run.
+
 ## Can We Run This On A Server?
 
 Short answer:
