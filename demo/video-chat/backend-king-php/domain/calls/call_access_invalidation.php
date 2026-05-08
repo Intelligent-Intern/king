@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/call_access_contract.php';
+require_once __DIR__ . '/call_guest_lifecycle.php';
 
 function videochat_call_access_invalidation_state(mixed $value): string
 {
@@ -243,17 +244,37 @@ function videochat_invalidate_call_access_invitation(
     $targetUser = videochat_call_access_invalidation_target_user($pdo, $accessLink);
     $accessSessionCount = videochat_call_access_invalidation_session_count($pdo, $normalizedAccessId);
     $hadEffect = !in_array($currentState, ['cancelled', 'declined'], true) || $currentState !== $normalizedNextState;
+    $guestCleanup = [
+        'ok' => true,
+        'reason' => 'not_applicable',
+        'guest_user_ids' => [],
+        'invalidated_guests' => 0,
+        'revoked_sessions' => 0,
+        'audit_events' => [],
+    ];
 
     try {
         $pdo->beginTransaction();
         if ($hadEffect && !videochat_call_access_update_invite_state_for_link($pdo, $accessLink, $normalizedNextState)) {
             throw new RuntimeException('invite_update_failed');
         }
+        if ($hadEffect) {
+            $guestCleanup = videochat_invalidate_guest_account_for_invitation($pdo, $accessLink, $tenantId);
+            if (!(bool) ($guestCleanup['ok'] ?? false)) {
+                throw new RuntimeException('guest_cleanup_failed');
+            }
+        }
         $audit = videochat_audit_record_call_access_invitation_invalidated($pdo, $accessLink, $call, $targetUser, $actorUserId, [
             ...$context,
             'invite_state' => $normalizedNextState,
             'had_effect' => $hadEffect,
             'access_session_count' => $accessSessionCount,
+            'guest_cleanup' => [
+                'reason' => (string) ($guestCleanup['reason'] ?? 'unknown'),
+                'guest_user_count' => count((array) ($guestCleanup['guest_user_ids'] ?? [])),
+                'invalidated_guest_count' => max(0, (int) ($guestCleanup['invalidated_guests'] ?? 0)),
+                'revoked_session_count' => max(0, (int) ($guestCleanup['revoked_sessions'] ?? 0)),
+            ],
         ]);
         if (!(bool) ($audit['ok'] ?? false)) {
             throw new RuntimeException('audit_write_failed');
@@ -274,6 +295,7 @@ function videochat_invalidate_call_access_invitation(
         'call' => $call,
         'target_user' => $targetUser,
         'access_session_count' => $accessSessionCount,
+        'guest_cleanup' => $guestCleanup,
         'audit_event' => is_array($audit['event'] ?? null) ? $audit['event'] : null,
     ];
 }
