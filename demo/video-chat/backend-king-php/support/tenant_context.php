@@ -209,9 +209,35 @@ function videochat_tenant_id_from_auth_context(array $authContext): int
     return $tenantId > 0 ? $tenantId : 0;
 }
 
+function videochat_tenant_is_active(PDO $pdo, ?int $tenantId): bool
+{
+    if (!is_int($tenantId) || $tenantId <= 0) {
+        return true;
+    }
+    if (videochat_tenant_table_has_column($pdo, 'tenants', 'id') === false) {
+        return true;
+    }
+
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT 1
+FROM tenants
+WHERE id = :tenant_id
+  AND status = 'active'
+LIMIT 1
+SQL
+    );
+    $query->execute([':tenant_id' => $tenantId]);
+
+    return $query->fetchColumn() !== false;
+}
+
 function videochat_tenant_user_is_member(PDO $pdo, int $userId, int $tenantId): bool
 {
     if ($userId <= 0 || $tenantId <= 0 || videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id') === false) {
+        return false;
+    }
+    if (!videochat_tenant_is_active($pdo, $tenantId)) {
         return false;
     }
 
@@ -253,7 +279,7 @@ function videochat_tenant_attach_user(PDO $pdo, int $userId, int $tenantId, stri
 
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO tenant_memberships(tenant_id, user_id, membership_role, permissions_json, status, default_membership, created_at, updated_at)
+INSERT OR IGNORE INTO tenant_memberships(tenant_id, user_id, membership_role, permissions_json, status, default_membership, created_at, updated_at)
 VALUES(:tenant_id, :user_id, :membership_role, '{}', 'active', 0, :created_at, :updated_at)
 SQL
     );

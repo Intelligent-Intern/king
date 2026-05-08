@@ -2222,16 +2222,16 @@ passed.
 
 ## 30. Error and Edge Cases
 
-- [ ] Call does not exist
+- [x] Call does not exist
 - [x] Call was deleted
 - [x] Call was ended
 - [ ] Call has not started yet if time-limited
 - [ ] Call has expired if time-limited
 - [ ] Organization does not exist
-- [ ] Organization is disabled
+- [x] Organization is disabled
 - [ ] Host no longer exists
-- [ ] Host is disabled
-- [ ] Invited temporary account was deleted
+- [x] Host is disabled
+- [x] Invited temporary account was deleted
 - [x] Registered account was disabled
 - [x] Registered account was deleted
 - [ ] User email is unconfirmed if relevant
@@ -2262,6 +2262,20 @@ passed.
 - [ ] Database error during join leads to safe abort
 - [ ] Network error during join leads to repeatable state
 - [ ] Timeout during lobby admission leads to consistent state
+
+Proof: `call-access-edge-error-matrix-contract` closes call-not-found, disabled
+organization/workspace, disabled host, and deleted invited temporary-account
+paths. The backend PHP proof drives direct `/api/calls/resolve`, public
+`/api/call-access/{id}/join`, and session issuance paths, verifies missing calls
+and missing access links fail closed, archives the tenant/workspace to prove the
+organization-disabled path returns no call payload or session, disables the host
+account to prove host-inactive denial, deletes an invited temporary guest account,
+and asserts no secret call/user data is emitted. The Playwright safe-screen case
+in `call-access-join.spec.js` covers the disabled organization, disabled host,
+and deleted temporary-account browser states and proves no Join button/session
+POST is possible. `call-access-edge-error-matrix-contract.mjs` binds the Sprint
+checkboxes, package script, CI gate, backend contract, browser proof, and runtime
+tenant/host session-binding checks.
 
 ## 31. Audit and Monitoring
 
