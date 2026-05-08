@@ -1540,16 +1540,16 @@ integrated run also covers kicked anonymous rejoin denial and passed 6 tests.
 
 ## 11. Lobby and Admission
 
-- [ ] User without direct permission lands in lobby
-- [ ] Anonymous not logged-in user lands in lobby
-- [ ] Personalized temporary user without direct permission lands in lobby
-- [ ] Logged-in user without direct permission lands in lobby
-- [ ] Lobby entry informs host / authorized moderators
-- [ ] Host sees waiting participant
+- [x] User without direct permission lands in lobby
+- [x] Anonymous not logged-in user lands in lobby
+- [x] Personalized temporary user without direct permission lands in lobby
+- [x] Logged-in user without direct permission lands in lobby
+- [x] Lobby entry informs host / authorized moderators
+- [x] Host sees waiting participant
 - [ ] Temporary moderator sees waiting participant
-- [ ] Organization admin sees waiting participant for own organization call
+- [x] Organization admin sees waiting participant for own organization call
 - [ ] System admin sees waiting participant
-- [ ] Unauthorized user sees no lobby management controls
+- [x] Unauthorized user sees no lobby management controls
 - [x] Host can admit participant
 - [ ] Temporary moderator can admit participant
 - [x] Organization admin can admit participant
@@ -1589,6 +1589,12 @@ snapshots, an admitted-plus-stale-queue race snapshot, duplicate room
 participant rows, and final reject-empty state; it proves the lobby badge and
 panel render one queued user, admitted/rejected states leave no stale allow
 controls, and duplicate participant snapshot rows aggregate into one UI row.
+`iam-lobby-admission-main.spec.js` validates `e2e_lobby_001`,
+`e2e_lobby_002`, `e2e_lobby_004`, and `e2e_lobby_005`: call-scoped,
+anonymous logged-out, temporary personalized, and logged-in no-direct-access
+users remain in the lobby pending host approval; host and own-organization admin
+workspaces receive the waiting participant snapshot and management controls;
+and a non-moderating participant sees no lobby tab, badge, or lobby controls.
 
 ## 12. Rejoin, Leave, Kick
 
@@ -2431,11 +2437,11 @@ against duplicate join/session request loops.
 
 ## Test Group: Lobby
 
-- [ ] `e2e_lobby_001_unauthorized_user_lands_in_lobby`
-- [ ] `e2e_lobby_002_host_sees_waiting_participant`
+- [x] `e2e_lobby_001_unauthorized_user_lands_in_lobby`
+- [x] `e2e_lobby_002_host_sees_waiting_participant`
 - [ ] `e2e_lobby_003_temp_moderator_sees_waiting_participant`
-- [ ] `e2e_lobby_004_org_admin_sees_waiting_participant_for_own_org`
-- [ ] `e2e_lobby_005_unauthorized_user_no_lobby_controls`
+- [x] `e2e_lobby_004_org_admin_sees_waiting_participant_for_own_org`
+- [x] `e2e_lobby_005_unauthorized_user_no_lobby_controls`
 - [ ] `e2e_lobby_006_host_admits_participant`
 - [ ] `e2e_lobby_007_host_rejects_participant`
 - [ ] `e2e_lobby_008_rejected_participant_cannot_enter`
