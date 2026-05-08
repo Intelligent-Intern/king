@@ -496,6 +496,11 @@ Tickets:
       - `[call-app-availability-contract] PASS`
       - `[call-app-session-lifecycle-contract] PASS`
       - `[call-app-sqlite-runtime-proof] PASS`
+    - Reconnect hardening proof added on 2026-05-08: launch-token validation
+      rechecks current installation/entitlement state, rejects tokens issued
+      before later grant changes, and rejects tokens issued before Call App
+      session reactivation; `call-app-sqlite-runtime-proof.sh` PASS via the
+      pinned `php:8.5-cli-trixie` Docker runtime.
 
 - [x] WCA-06 Whiteboard CRDT hardening
   - Add shape/text/sticky move undo where CRDT-safe.
