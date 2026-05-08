@@ -32,12 +32,35 @@ function assertStringArray(value, label) {
   }
 }
 
+function requireAnyStringContaining(strings, needle, label) {
+  assertStringArray(strings, label);
+  assert.ok(strings.some((item) => item.includes(needle)), `${label} missing signature fragment: ${needle}`);
+}
+
+function assertCaptureEnvironment(fixture) {
+  const capture = fixture.capture_environment;
+  assert.equal(capture.captured_at, '2026-05-08T19:11:22+02:00');
+  assert.ok(capture.os.includes('Linux 6.8.0-110-generic'), 'capture environment must record the exact Linux kernel baseline');
+  assert.equal(capture.probe_url, 'http://127.0.0.1:5177/');
+  assert.equal(capture.playwright_version, '1.59.1');
+  assert.equal(capture.probe_scope, 'worker INIT only; no production SINet or degraded matte code changes');
+}
+
 function assertFailureShape(fixture) {
   const failure = fixture.known_failure;
   assert.equal(failure.id, 'chromium_mediapipe_gpu_service_init_failure');
   assert.equal(failure.browser_family, 'chromium');
   assert.equal(failure.phase, 'segmentation_backend_init');
   assert.equal(failure.classification, 'gpu_service_init_failure');
+
+  assert.deepEqual(failure.reproduction, {
+    browser: 'Chrome Stable',
+    version: '147.0.7727.55',
+    delegate: 'CPU',
+    launcher_flags: ['--disable-gpu', '--disable-software-rasterizer', '--disable-3d-apis'],
+    result: 'INIT_ERROR',
+    cpu_delegate_touches_gpu_internals: true,
+  });
 
   const groups = failure.shape.must_match_groups;
   assert.ok(Array.isArray(groups), 'failure shape must expose matcher groups');
@@ -49,6 +72,21 @@ function assertFailureShape(fixture) {
   for (const group of groups) {
     assertStringArray(group.any, `failure shape matcher ${group.id}`);
   }
+  const gpuServiceGroup = groups.find((group) => group.id === 'chromium_gpu_service');
+  requireAnyStringContaining(gpuServiceGroup.any, 'Service "kGpuService"', 'Chrome GPU-service matcher group');
+  requireAnyStringContaining(gpuServiceGroup.any, 'gl_context_webgl.cc', 'Chrome GPU-service matcher group');
+  const initFailureGroup = groups.find((group) => group.id === 'init_failure');
+  requireAnyStringContaining(initFailureGroup.any, 'emscripten_webgl_create_context() returned error 0', 'Chrome init-failure matcher group');
+
+  const exactSignatures = failure.shape.exact_console_signatures;
+  requireAnyStringContaining(exactSignatures, 'delegate: CPU', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'gl_context_webgl.cc:91] Couldn\'t create webGL 2 context.', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'Service "kGpuService"', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'TensorsToSegmentationCalculator', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'was not provided and cannot be created', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'emscripten_webgl_create_context() returned error 0', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'StartGraph failed', 'known Chrome exact failure signatures');
+  requireAnyStringContaining(exactSignatures, 'INIT_ERROR: INTERNAL: Service "kGpuService"', 'known Chrome exact failure signatures');
 
   const cpuRisk = failure.shape.cpu_delegate_gpu_touch_risk;
   assert.equal(cpuRisk.delegate, 'CPU');
@@ -59,6 +97,9 @@ function assertFailureShape(fixture) {
     'DrawingUtils',
     "getContext('webgl2')",
   ]);
+  requireAnyStringContaining(cpuRisk.known_console_signatures, 'delegate: CPU', 'CPU delegate GPU-touch signatures');
+  requireAnyStringContaining(cpuRisk.known_console_signatures, 'gl_context.cc:407] GL version: 3.0', 'CPU delegate GPU-touch signatures');
+  requireAnyStringContaining(cpuRisk.known_console_signatures, 'renderer: WebKit WebGL', 'CPU delegate GPU-touch signatures');
 }
 
 function assertBackendLadder(fixture) {
@@ -128,6 +169,51 @@ function assertBrowserMatrixSchema(fixture) {
   }
 }
 
+function assertBrowserBehaviorRows(fixture) {
+  const rows = fixture.browser_behavior_rows;
+  assert.ok(Array.isArray(rows), 'browser behavior rows must be an array');
+  assert.deepEqual(
+    rows.map((entry) => entry.browser),
+    ['Chrome Stable', 'Chromium Ubuntu', 'Firefox'],
+    'browser behavior rows must capture Chrome Stable, Chromium Ubuntu, and Firefox in order',
+  );
+
+  const expectedVersions = {
+    'Chrome Stable': '147.0.7727.55',
+    'Chromium Ubuntu': '147.0.7727.116 snap',
+    Firefox: '148.0.2',
+  };
+  for (const row of rows) {
+    assert.equal(row.version, expectedVersions[row.browser], `${row.browser} must record the exact captured version`);
+    assert.equal(typeof row.os, 'string', `${row.browser} must record OS/executable context`);
+    assert.notEqual(row.os.trim(), '', `${row.browser} OS/executable context must not be blank`);
+    assert.equal(row.selected_backend, 'worker_segmenter', `${row.browser} must keep the worker segmenter as backend choice`);
+    assert.equal(row.mediapipe_demo_result.gpu, 'INIT_DONE', `${row.browser} MediaPipe demo GPU delegate result`);
+    assert.equal(row.mediapipe_demo_result.cpu, 'INIT_DONE', `${row.browser} MediaPipe demo CPU delegate result`);
+    assert.equal(row.cpu_delegation_touches_gpu_internals, true, `${row.browser} must record CPU delegate GPU/WebGL internals`);
+    requireAnyStringContaining(row.console_signatures, 'gl_context.cc:407] GL version: 3.0', `${row.browser} console signatures`);
+    requireAnyStringContaining(row.console_signatures, 'OpenGL error checking is disabled', `${row.browser} console signatures`);
+
+    assert.equal(row.king_production_path.selected_backend, 'worker_segmenter', `${row.browser} production path backend`);
+    assert.equal(row.king_production_path.mediapipe_scope, 'worker_only', `${row.browser} production MediaPipe scope`);
+    assert.equal(row.king_production_path.on_init_failure, 'keep_source_visible_then_prompt_user', `${row.browser} production init-failure behavior`);
+    assert.equal(row.king_production_path.uses_sinet_or_degraded_matte, false, `${row.browser} production path must not use SINet or degraded matte`);
+  }
+
+  const chrome = rows.find((row) => row.browser === 'Chrome Stable');
+  assert.equal(chrome.known_failure_capture_id, fixture.known_failure.id, 'Chrome row must reference the known GPU-service failure capture');
+  requireAnyStringContaining(chrome.console_signatures, 'Service "kGpuService"', 'Chrome failing console signatures');
+  requireAnyStringContaining(chrome.console_signatures, 'StartGraph failed', 'Chrome failing console signatures');
+  requireAnyStringContaining(chrome.console_signatures, 'emscripten_webgl_create_context() returned error 0', 'Chrome failing console signatures');
+
+  const chromium = rows.find((row) => row.browser === 'Chromium Ubuntu');
+  assert.equal(chromium.known_failure_capture_id, fixture.known_failure.id, 'Chromium row must share the known Chromium-family failure id');
+
+  const firefox = rows.find((row) => row.browser === 'Firefox');
+  assert.equal(firefox.known_failure_capture_id, null, 'Firefox row must not claim the Chromium GPU-service failure id');
+  requireAnyStringContaining(firefox.console_signatures, 'renderer: NVIDIA GeForce GTX 980, or similar', 'Firefox console signatures');
+}
+
 function assertCurrentRuntimeBoundaries(fixture) {
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
   const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
@@ -147,6 +233,8 @@ function assertCurrentRuntimeBoundaries(fixture) {
   requireContains(stream, 'notifySegmentationUnavailable', 'current unavailable prompt hook');
   requireMissing(stream, 'ImageSegmenter.createFromOptions', 'production stream must not directly instantiate MediaPipe');
   requireMissing(stream, "delegate === 'GPU' ? 'GPU' : 'CPU'", 'production stream must not switch MediaPipe delegates directly');
+  requireMissing(stream, 'createSinetWasmSegmentationBackend', 'production stream must not add SINet fallback backend');
+  requireMissing(stream, 'backendSelector', 'production stream must not add degraded matte backend selector');
 
   requireContains(workerBackend, "kind: 'worker-segmenter'", 'worker backend identity');
   requireContains(worker, 'ImageSegmenter.createFromOptions', 'local MediaPipe worker fixture boundary');
@@ -167,11 +255,13 @@ try {
   const fixture = readJson('tests/contract/background-regression-matrix-fixture.json');
   assert.equal(fixture.fixture_version, 1);
   assertStringArray(fixture.source_basis, 'source_basis');
+  assertCaptureEnvironment(fixture);
   assertFailureShape(fixture);
   assertDiagnostics(fixture);
   assertBackendLadder(fixture);
   assertQuarantine(fixture);
   assertBrowserMatrixSchema(fixture);
+  assertBrowserBehaviorRows(fixture);
   assertCurrentRuntimeBoundaries(fixture);
 
   console.log('[background-regression-matrix-contract] PASS');
