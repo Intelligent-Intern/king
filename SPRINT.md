@@ -1296,7 +1296,7 @@ Call Access Playwright gate.
 - [x] Organization admin can keep call-admin rights after owner transfer
 - [x] Owner rights cannot be transferred to a non-existent user
 - [x] Owner rights cannot be transferred across forbidden organization boundaries
-- [ ] Owner transfer is audit-logged
+- [x] Owner transfer is audit-logged
 
 Proof: `call-creation-owner-rights-contract.sh` covers registered normal-user
 and admin-user call creation through `POST /api/calls`, persisted creator
@@ -1309,10 +1309,15 @@ and `git diff --check`. `call-owner-transfer-contract.sh`,
 `call-temporary-moderator-contract.sh`, and
 `iam-owner-transfer-temp-moderator.spec.js` cover owner transfer, exactly one
 current owner, old owner rights loss/retention by organization role, new owner
-rights, forbidden transfer targets, temporary moderator grant/revoke, and forged
-moderator denial. The Playwright owner-transfer/temp-moderator spec passed 3
-tests; PHP persistence portions were skipped only where local `pdo_sqlite` is
-unavailable.
+rights, forbidden transfer targets, transfer audit rows emitted by the mutation
+path, temporary moderator grant/revoke, and forged moderator denial. The owner
+transfer contract also asserts audit actor, target, call fingerprint, previous
+owner, new owner, admin-retention marker, and one-owner invariant payloads.
+The owner-transfer permission/audit leaf revalidated the owner-transfer,
+organization-admin, owner-moderation, and audit-event contracts with Docker PHP
+8.4 SQLite.
+The Playwright owner-transfer/temp-moderator spec passed 3 tests; PHP
+persistence portions were skipped only where local `pdo_sqlite` is unavailable.
 
 ## 3. Join Permissions
 
@@ -1946,10 +1951,18 @@ SQLite run passed.
 - [x] Organization admin cannot join foreign organization calls through this role
 - [x] Organization admin cannot manage lobby of foreign organization
 - [x] Organization admin rights remain after owner transfer
-- [ ] Organization admin can transfer owner rights if allowed
-- [ ] Organization admin keeps admin rights when transferring ownership
+- [x] Organization admin can transfer owner rights if allowed
+- [x] Organization admin keeps admin rights when transferring ownership
 - [x] Revoking organization-admin role affects new joins and admin actions immediately
-- [ ] Organization admin rights cannot be expanded through manipulated organization ID
+- [x] Organization admin rights cannot be expanded through manipulated organization ID
+
+Proof: `call-owner-transfer-contract.sh` creates an organization-admin call
+owner, transfers ownership to another same-organization participant, proves the
+new owner is the only current owner, proves the demoted organization admin keeps
+call-admin/moderation rights without keeping owner-management rights, and
+asserts the owner-transfer audit row. `org-admin-call-rights-contract.php`
+also proves a forged `organization_id` on a foreign call-shaped payload does
+not expand organization-admin rights.
 
 ## 20. Normal User
 
@@ -2557,21 +2570,25 @@ Playwright run passed 26 tests.
 - [ ] `e2e_owner_003_owner_can_manage_guest_list`
 - [x] `e2e_owner_004_owner_can_admit_lobby_participant`
 - [x] `e2e_owner_005_owner_can_kick_participant`
-- [ ] `e2e_owner_006_normal_user_transfers_owner_and_loses_admin_rights`
-- [ ] `e2e_owner_007_org_admin_transfers_owner_and_keeps_admin_rights`
-- [ ] `e2e_owner_008_new_owner_receives_owner_and_admin_rights`
-- [ ] `e2e_owner_009_exactly_one_current_owner_after_transfer`
-- [ ] `e2e_owner_010_owner_transfer_to_nonexistent_user_rejected`
-- [ ] `e2e_owner_011_owner_transfer_cross_org_rejected_if_forbidden`
-- [ ] `e2e_owner_012_owner_transfer_audit_logged`
+- [x] `e2e_owner_006_normal_user_transfers_owner_and_loses_admin_rights`
+- [x] `e2e_owner_007_org_admin_transfers_owner_and_keeps_admin_rights`
+- [x] `e2e_owner_008_new_owner_receives_owner_and_admin_rights`
+- [x] `e2e_owner_009_exactly_one_current_owner_after_transfer`
+- [x] `e2e_owner_010_owner_transfer_to_nonexistent_user_rejected`
+- [x] `e2e_owner_011_owner_transfer_cross_org_rejected_if_forbidden`
+- [x] `e2e_owner_012_owner_transfer_audit_logged`
 
 Proof: `call-creation-owner-rights-contract` is the backend/API proof for
 `e2e_owner_001`, `e2e_owner_002`, `e2e_owner_004`, and `e2e_owner_005`: both
 registered normal-user and admin-user creators create their own call through
 `/api/calls`, become the persisted owner, receive own-call admin/moderation
 rights, admit a queued lobby participant, and kick an admitted participant while
-a non-owner is denied the same moderation commands. Owner-transfer scenarios
-remain unchecked for the separate owner-transfer lane.
+a non-owner is denied the same moderation commands. `call-owner-transfer-contract`
+is the backend persistence proof for `e2e_owner_006` through `e2e_owner_012`:
+normal-user transfer loses admin rights, organization-admin transfer keeps
+admin rights, the new owner receives owner/admin rights, failed target and
+cross-organization transfers are rejected, exactly one owner remains, and the
+successful transfer path writes the owner-transfer audit event.
 
 ## Test Group: Direct Join Permissions
 
