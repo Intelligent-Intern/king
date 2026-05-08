@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../support/auth_rbac.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 
