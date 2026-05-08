@@ -294,6 +294,8 @@ export function callAccessAuditProbe({ tenant = null, call = null, accessLink = 
       'call_scoped_access_continued',
       'call_access_duplicate_personalized_link_review',
       'call_access_strong_mismatch_denied',
+      'call_access_host_verification_failed',
+      'call_access_host_name_rejected',
       'call_access_host_name_verified',
       'call_access_host_name_verification_failed',
       'call_access_account_update_confirmation_requested',

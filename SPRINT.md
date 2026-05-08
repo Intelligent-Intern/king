@@ -2717,6 +2717,11 @@ link-account comparison for strong mismatch and matched sessions, successful
 host-name verification, and account-update request audit events. Docker PHP 8.4
 runtime proof passed, and `iam-call-access-audit-events-contract.mjs` pins the
 backend paths, event types, live probe expectations, and sensitive-data guards.
+The host-name verification audit proof preserves the canonical
+`call_access_host_name_verified` / `call_access_host_name_verification_failed`
+events while retaining the legacy `call_access_host_verification_succeeded`,
+`call_access_host_verification_failed`, and `call_access_host_name_rejected`
+aliases without logging submitted host names.
 Account-update email audit proof is now completed by
 `call-access-email-safe-texts-dispatch-audit-contract.mjs` plus Docker PHP 8.4
 `call-access-email-confirmation-contract.php`, covering email dispatch success,
