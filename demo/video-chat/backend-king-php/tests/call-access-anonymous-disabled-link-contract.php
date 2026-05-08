@@ -7,6 +7,7 @@ require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../http/module_calls.php';
+require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_iam_anonymous_disabled_assert(bool $condition, string $message): void
 {
@@ -48,11 +49,11 @@ SQL
     return $userId;
 }
 
-function videochat_iam_anonymous_disabled_create_open_call(PDO $pdo, int $ownerUserId, int $tenantId, string $title): string
+function videochat_iam_anonymous_disabled_create_open_call(PDO $pdo, int $ownerUserId, int $tenantId, string $title, string $accessMode = 'free_for_all'): string
 {
     $call = videochat_create_call($pdo, $ownerUserId, [
         'title' => $title,
-        'access_mode' => 'free_for_all',
+        'access_mode' => $accessMode,
         'starts_at' => gmdate('c', time() - 300),
         'ends_at' => gmdate('c', time() + 3600),
         'internal_participant_user_ids' => [],
@@ -104,6 +105,104 @@ function videochat_iam_anonymous_disabled_access_session_count(PDO $pdo, string 
     $query->execute([':access_id' => $accessId]);
 
     return (int) $query->fetchColumn();
+}
+
+function videochat_iam_anonymous_disabled_issue_guest_session(
+    PDO $pdo,
+    string $accessId,
+    string $sessionId,
+    string $guestName
+): int {
+    $issued = videochat_issue_session_for_call_access(
+        $pdo,
+        $accessId,
+        static fn (): string => $sessionId,
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-disabled-link-contract'],
+        ['guest_name' => $guestName]
+    );
+    videochat_iam_anonymous_disabled_assert((bool) ($issued['ok'] ?? false), "{$guestName} should issue from anonymous link");
+    videochat_iam_anonymous_disabled_assert((string) (($issued['session'] ?? [])['id'] ?? '') === $sessionId, "{$guestName} session id mismatch");
+    $userId = (int) ((($issued['user'] ?? [])['id'] ?? 0));
+    videochat_iam_anonymous_disabled_assert($userId > 0, "{$guestName} should bind to a temporary user");
+
+    return $userId;
+}
+
+function videochat_iam_anonymous_disabled_assert_session_room(
+    PDO $pdo,
+    string $callId,
+    string $sessionId,
+    string $expectedInitialRoomId,
+    string $label
+): void {
+    $auth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($sessionId) . '&room=' . rawurlencode($callId) . '&call_id=' . rawurlencode($callId),
+            'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+        ],
+        'websocket'
+    );
+    videochat_iam_anonymous_disabled_assert((bool) ($auth['ok'] ?? false), "{$label} should authenticate before disable");
+    $resolution = videochat_realtime_resolve_connection_rooms(
+        $auth,
+        $callId,
+        static fn (): PDO => $pdo,
+        $callId
+    );
+    videochat_iam_anonymous_disabled_assert((string) ($resolution['initial_room_id'] ?? '') === $expectedInitialRoomId, "{$label} initial room mismatch");
+    if ($expectedInitialRoomId === videochat_realtime_waiting_room_id()) {
+        videochat_iam_anonymous_disabled_assert((string) ($resolution['pending_room_id'] ?? '') === $callId, "{$label} pending room should stay call-bound");
+    } else {
+        videochat_iam_anonymous_disabled_assert((string) ($resolution['pending_room_id'] ?? '') === '', "{$label} should not keep a pending room");
+    }
+}
+
+/**
+ * @param array<int, string> $sessionIds
+ */
+function videochat_iam_anonymous_disabled_assert_sessions_invalidated(PDO $pdo, array $sessionIds, string $label): void
+{
+    foreach ($sessionIds as $sessionId) {
+        $validation = videochat_validate_session_token($pdo, $sessionId);
+        videochat_iam_anonymous_disabled_assert(!(bool) ($validation['ok'] ?? true), "{$label}: session {$sessionId} must fail after anonymous link disable");
+        videochat_iam_anonymous_disabled_assert((string) ($validation['reason'] ?? '') === 'call_access_link_invalidated', "{$label}: session {$sessionId} reason mismatch");
+        videochat_iam_anonymous_disabled_assert(videochat_fetch_call_access_session_binding($pdo, $sessionId) === null, "{$label}: binding {$sessionId} must not resolve after disable");
+
+        $auth = videochat_authenticate_request(
+            $pdo,
+            [
+                'method' => 'GET',
+                'uri' => '/ws?session=' . rawurlencode($sessionId),
+                'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+            ],
+            'websocket'
+        );
+        videochat_iam_anonymous_disabled_assert(!(bool) ($auth['ok'] ?? true), "{$label}: websocket auth {$sessionId} must fail after disable");
+        videochat_iam_anonymous_disabled_assert((string) ($auth['reason'] ?? '') === 'call_access_link_invalidated', "{$label}: websocket auth {$sessionId} reason mismatch");
+    }
+}
+
+function videochat_iam_anonymous_disabled_mark_guest_joined(PDO $pdo, string $callId, int $userId): void
+{
+    $update = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'allowed',
+    joined_at = :joined_at,
+    left_at = NULL
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    );
+    $update->execute([
+        ':joined_at' => gmdate('c'),
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+    ]);
+    videochat_iam_anonymous_disabled_assert($update->rowCount() > 0, 'anonymous guest participant should be marked as joined');
 }
 
 function videochat_iam_anonymous_disabled_json_response(int $status, array $payload): array
@@ -373,6 +472,70 @@ SQL
     videochat_iam_anonymous_disabled_assert($httpDisabledIssuerCalls === 0, 'disabled anonymous HTTP session must not call issuer');
     videochat_iam_anonymous_disabled_assert((string) ((videochat_iam_anonymous_disabled_decode($sessionResponse)['error'] ?? [])['code'] ?? '') === 'call_access_not_found', 'disabled anonymous HTTP session code mismatch');
     videochat_iam_anonymous_disabled_assert_omits((string) ($sessionResponse['body'] ?? ''), $disabledPrivateNeedles, 'disabled anonymous session response');
+
+    $lobbyCallId = videochat_iam_anonymous_disabled_create_open_call($pdo, $ownerUserId, $tenantId, 'Disabled Anonymous Link Lobby Active Secret');
+    $lobbyAccessId = videochat_iam_anonymous_disabled_create_open_link($pdo, $lobbyCallId, $ownerUserId, $tenantId);
+    $lobbySessionA = 'sess_iam_anon_disabled_lobby_a';
+    $lobbySessionB = 'sess_iam_anon_disabled_lobby_b';
+    videochat_iam_anonymous_disabled_issue_guest_session($pdo, $lobbyAccessId, $lobbySessionA, 'Disabled Lobby Guest A');
+    videochat_iam_anonymous_disabled_issue_guest_session($pdo, $lobbyAccessId, $lobbySessionB, 'Disabled Lobby Guest B');
+    videochat_iam_anonymous_disabled_assert_session_room($pdo, $lobbyCallId, $lobbySessionA, videochat_realtime_waiting_room_id(), 'anonymous lobby browser A');
+    videochat_iam_anonymous_disabled_assert_session_room($pdo, $lobbyCallId, $lobbySessionB, videochat_realtime_waiting_room_id(), 'anonymous lobby browser B');
+    $lobbyDisable = videochat_disable_anonymous_call_access_link($pdo, $lobbyAccessId, $ownerUserId, [
+        'invalidation_reason' => 'contract_anonymous_link_disable_while_lobby',
+    ]);
+    videochat_iam_anonymous_disabled_assert((bool) ($lobbyDisable['ok'] ?? false), 'anonymous link disable while lobby should succeed');
+    videochat_iam_anonymous_disabled_assert((int) ($lobbyDisable['access_session_count'] ?? 0) === 2, 'anonymous lobby disable should count both browser sessions');
+    videochat_iam_anonymous_disabled_assert_sessions_invalidated($pdo, [$lobbySessionA, $lobbySessionB], 'anonymous lobby disable');
+    $lobbyFreshIssuerCalls = 0;
+    $lobbyGuestCount = videochat_iam_anonymous_disabled_guest_user_count($pdo);
+    $lobbyFresh = videochat_issue_session_for_call_access(
+        $pdo,
+        $lobbyAccessId,
+        static function () use (&$lobbyFreshIssuerCalls): string {
+            $lobbyFreshIssuerCalls += 1;
+            return 'sess_iam_anon_disabled_lobby_fresh_should_not_issue';
+        },
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-disabled-link-contract'],
+        ['guest_name' => 'Disabled Lobby Fresh Guest']
+    );
+    videochat_iam_anonymous_disabled_assert(!(bool) ($lobbyFresh['ok'] ?? true), 'disabled lobby anonymous link must not issue a fresh session');
+    videochat_iam_anonymous_disabled_assert((string) ($lobbyFresh['reason'] ?? '') === 'not_found', 'disabled lobby anonymous fresh reason mismatch');
+    videochat_iam_anonymous_disabled_assert($lobbyFreshIssuerCalls === 0, 'disabled lobby anonymous link must not call fresh issuer');
+    videochat_iam_anonymous_disabled_assert(videochat_iam_anonymous_disabled_guest_user_count($pdo) === $lobbyGuestCount, 'disabled lobby anonymous link must not recreate a temporary guest');
+
+    $activeCallId = videochat_iam_anonymous_disabled_create_open_call($pdo, $ownerUserId, $tenantId, 'Disabled Anonymous Link In Call Secret');
+    $activeAccessId = videochat_iam_anonymous_disabled_create_open_link($pdo, $activeCallId, $ownerUserId, $tenantId);
+    $activeSessionA = 'sess_iam_anon_disabled_active_a';
+    $activeSessionB = 'sess_iam_anon_disabled_active_b';
+    $activeUserA = videochat_iam_anonymous_disabled_issue_guest_session($pdo, $activeAccessId, $activeSessionA, 'Disabled Active Guest A');
+    $activeUserB = videochat_iam_anonymous_disabled_issue_guest_session($pdo, $activeAccessId, $activeSessionB, 'Disabled Active Guest B');
+    videochat_iam_anonymous_disabled_mark_guest_joined($pdo, $activeCallId, $activeUserA);
+    videochat_iam_anonymous_disabled_mark_guest_joined($pdo, $activeCallId, $activeUserB);
+    videochat_iam_anonymous_disabled_assert_session_room($pdo, $activeCallId, $activeSessionA, $activeCallId, 'anonymous active-call browser A');
+    videochat_iam_anonymous_disabled_assert_session_room($pdo, $activeCallId, $activeSessionB, $activeCallId, 'anonymous active-call browser B');
+    $activeDisable = videochat_disable_anonymous_call_access_link($pdo, $activeAccessId, $ownerUserId, [
+        'invalidation_reason' => 'contract_anonymous_link_disable_while_in_call',
+    ]);
+    videochat_iam_anonymous_disabled_assert((bool) ($activeDisable['ok'] ?? false), 'anonymous link disable while in call should succeed');
+    videochat_iam_anonymous_disabled_assert((int) ($activeDisable['access_session_count'] ?? 0) === 2, 'anonymous active-call disable should count both browser sessions');
+    videochat_iam_anonymous_disabled_assert_sessions_invalidated($pdo, [$activeSessionA, $activeSessionB], 'anonymous active-call disable');
+    $activeFreshIssuerCalls = 0;
+    $activeGuestCount = videochat_iam_anonymous_disabled_guest_user_count($pdo);
+    $activeFresh = videochat_issue_session_for_call_access(
+        $pdo,
+        $activeAccessId,
+        static function () use (&$activeFreshIssuerCalls): string {
+            $activeFreshIssuerCalls += 1;
+            return 'sess_iam_anon_disabled_active_fresh_should_not_issue';
+        },
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-anonymous-disabled-link-contract'],
+        ['guest_name' => 'Disabled Active Fresh Guest']
+    );
+    videochat_iam_anonymous_disabled_assert(!(bool) ($activeFresh['ok'] ?? true), 'disabled active-call anonymous link must not issue a fresh session');
+    videochat_iam_anonymous_disabled_assert((string) ($activeFresh['reason'] ?? '') === 'not_found', 'disabled active-call anonymous fresh reason mismatch');
+    videochat_iam_anonymous_disabled_assert($activeFreshIssuerCalls === 0, 'disabled active-call anonymous link must not call fresh issuer');
+    videochat_iam_anonymous_disabled_assert(videochat_iam_anonymous_disabled_guest_user_count($pdo) === $activeGuestCount, 'disabled active-call anonymous link must not recreate a temporary guest');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-anonymous-disabled-link-contract] PASS\n");
