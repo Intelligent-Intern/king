@@ -1809,16 +1809,21 @@ false.
 - [x] Organization admin from organization A opens link to organization B call
 - [x] Organization admin from organization A receives no org-admin rights in organization B call
 - [ ] User with accounts in multiple organizations is checked in correct call context
-- [ ] Changing active organization in frontend does not change server-side call permission
+- [x] Changing active organization in frontend does not change server-side call permission
 - [x] Guest-list entry in organization A does not apply to organization B
 - [ ] Temporary account from organization A invitation receives no rights in organization B
 - [x] Owner rights of organization A call do not apply to organization B call
-- [ ] Review flags are assigned to correct organization / call
+- [x] Review flags are assigned to correct organization / call
 
 Proof: `realtime-call-scope-contract` resolves realtime call context with
 tenant-aware room/call binding, rejects forged same-tenant and foreign-tenant
 room joins, prevents foreign tenant lobby hydration, and proves presence in one
 call room does not imply subscription or moderation rights in another room.
+`call-access-seed-matrix.spec.js` now also proves active-org switch snapshots do
+not mint foreign call permissions, owner and guest-list rights do not cross org
+boundaries, and duplicate personalized-link review flags stay bound to the
+target organization and call. The integrated seed-matrix browser run passed 19
+tests.
 
 ## 22. Multi-Session, Devices, Browsers
 
@@ -2210,10 +2215,10 @@ temporary account removal plus reschedule/delete/end audit records.
 - [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
 - [x] Not logged-in user opens anonymous link, temporary account is created, user lands in lobby, is admitted, can rejoin
 - [ ] System admin joins foreign active call without invitation
-- [ ] Organization admin joins own organization active call without invitation
-- [ ] Organization admin cannot join foreign organization call through org-admin rights
+- [x] Organization admin joins own organization active call without invitation
+- [x] Organization admin cannot join foreign organization call through org-admin rights
 - [ ] Normal user on guest list joins foreign call
-- [ ] Normal user without guest-list entry lands in lobby or is denied
+- [x] Normal user without guest-list entry lands in lobby or is denied
 - [ ] User creates own call, becomes owner, transfers ownership, loses call-admin rights
 - [ ] Organization admin creates call, transfers ownership, keeps admin rights
 - [ ] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
@@ -2463,7 +2468,7 @@ against duplicate join/session request loops.
 - [ ] `e2e_guest_list_005_non_guest_user_no_direct_join`
 - [ ] `e2e_guest_list_006_temp_guest_list_user_direct_join`
 - [ ] `e2e_guest_list_007_guest_list_call_scoped`
-- [ ] `e2e_guest_list_008_guest_list_cross_org_not_valid`
+- [x] `e2e_guest_list_008_guest_list_cross_org_not_valid`
 - [ ] `e2e_guest_list_009_duplicate_guest_entries_handled`
 - [ ] `e2e_guest_list_010_guest_list_changes_audit_logged`
 
@@ -2471,13 +2476,13 @@ against duplicate join/session request loops.
 
 - [ ] `e2e_cross_org_001_user_a_opens_org_a_link`
 - [ ] `e2e_cross_org_002_user_a_opens_org_b_link`
-- [ ] `e2e_cross_org_003_org_admin_a_opens_org_a_call`
-- [ ] `e2e_cross_org_004_org_admin_a_opens_org_b_call`
-- [ ] `e2e_cross_org_005_org_admin_a_no_admin_rights_in_org_b`
-- [ ] `e2e_cross_org_006_active_org_switch_does_not_change_server_permission`
-- [ ] `e2e_cross_org_007_guest_list_not_cross_org`
-- [ ] `e2e_cross_org_008_owner_rights_not_cross_org`
-- [ ] `e2e_cross_org_009_review_flags_correct_org`
+- [x] `e2e_cross_org_003_org_admin_a_opens_org_a_call`
+- [x] `e2e_cross_org_004_org_admin_a_opens_org_b_call`
+- [x] `e2e_cross_org_005_org_admin_a_no_admin_rights_in_org_b`
+- [x] `e2e_cross_org_006_active_org_switch_does_not_change_server_permission`
+- [x] `e2e_cross_org_007_guest_list_not_cross_org`
+- [x] `e2e_cross_org_008_owner_rights_not_cross_org`
+- [x] `e2e_cross_org_009_review_flags_correct_org`
 
 ## Test Group: Multi Session and Device
 
