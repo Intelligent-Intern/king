@@ -342,6 +342,29 @@ Operational visibility is a first-class concern:
 - ticket, certificate, and reload lifecycle management
 - autoscaling and cluster integration hooks
 
+### Production Debug Process
+
+For live KingRT video-chat investigation, use the read-only production debug
+process:
+
+```bash
+demo/video-chat/scripts/prod-debug.sh
+```
+
+It reads `demo/video-chat/.env.local` for the existing deploy host and domain
+settings, or `VIDEOCHAT_PROD_DEBUG_ENV_FILE` when debugging from a separate
+worktree. It then reports public runtime health, configured domains,
+asset/version reachability, API/WS/SFU probes, TURN domain configuration, Call
+App/Mothernode reachability, read-only Call App marketplace counts, compose
+status, and recent remote container logs.
+Output is passed through secret redaction for token-, password-, auth-, cookie-,
+session-, key-, and secret-like values.
+
+This process is read-only by contract: it does not deploy, restart, write
+database data, change DNS, or use admin actions. Set
+`VIDEOCHAT_PROD_DEBUG_SKIP_SSH=1` to run only public network probes when SSH is
+not needed.
+
 ## Public Programming Model
 
 The core programming model is:
