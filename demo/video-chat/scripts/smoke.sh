@@ -550,6 +550,19 @@ compose_smoke() {
     }
   '
 
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_BACKEND_CALL_ACCESS_SESSION_CONTRACT:-0}" != "1" ]]; then
+    log "compose backend call-access session contract gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T videochat-backend-v1 sh -lc "\
+      cd \"\${VIDEOCHAT_SMOKE_BACKEND_WORKDIR:-/app}\" && \
+      tests/call-access-session-contract.sh"
+  fi
+
   if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_CALL_ACCESS_E2E:-0}" != "1" ]]; then
     local call_access_seed_matrix_json
     call_access_seed_matrix_json="$(tr -d '\n' < "${ROOT_DIR}/contracts/v1/iam-call-access-seeding.matrix.json")"
