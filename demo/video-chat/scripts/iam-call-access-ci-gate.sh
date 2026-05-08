@@ -88,6 +88,7 @@ STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
+  "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
@@ -96,6 +97,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/call-access-verified-context-ui-contract.mjs"
   "tests/contract/call-access-strong-mismatch-privacy-contract.mjs"
   "tests/contract/call-access-link-privacy-contract.mjs"
+  "tests/contract/call-access-duplicate-review-email-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
   "tests/contract/e2e-release-gate-contract.mjs"
 )
@@ -110,6 +112,8 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-session-contract.sh"
   "tests/call-access-session-fixation-contract.sh"
   "tests/call-access-session-route-guard-contract.sh"
+  "tests/call-access-duplicate-review-contract.sh"
+  "tests/call-access-email-confirmation-contract.sh"
   "tests/call-access-admin-prevention-contract.sh"
   "tests/call-access-cross-org-contract.sh"
   "tests/call-access-membership-active-removal-contract.sh"
