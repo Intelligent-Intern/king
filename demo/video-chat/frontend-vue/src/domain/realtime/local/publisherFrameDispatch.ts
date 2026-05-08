@@ -80,6 +80,7 @@ export async function dispatchPublisherFrame({
   captureClientDiagnosticError,
   onRequiredSfuUnavailable,
   onRequiredSfuFailure,
+  onOptionalSfuFailure,
 }) {
   const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
   const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional;
@@ -183,6 +184,7 @@ export async function dispatchPublisherFrame({
       mediaRuntimePath,
       failureDetails,
     });
+    safeFunction(onOptionalSfuFailure, () => undefined)(failureDetails);
     return {
       ok: gossipPublished,
       gossipPublished,
@@ -255,6 +257,15 @@ export async function dispatchWlvcPublisherFrame({
       );
       return false;
     },
+    onOptionalSfuFailure: (sfuSendFailureDetails) => {
+      safeFunction(paceForcedKeyframeRecovery, () => undefined)();
+      handleWlvcFrameSendFailure(
+        getSfuClientBufferedAmount(),
+        trackId,
+        String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
+        sfuSendFailureDetails,
+      );
+    },
   });
 }
 
@@ -309,6 +320,20 @@ export async function dispatchProtectedBrowserPublisherFrame({
         sfuSendFailureDetails,
       );
       return false;
+    },
+    onOptionalSfuFailure: (sfuSendFailureDetails) => {
+      if (!critical) {
+        reportNonCriticalDrop(String(sfuSendFailureDetails?.reason || 'sfu_browser_thumbnail_frame_send_failed'), {
+          ...(sfuSendFailureDetails || {}),
+        });
+        return;
+      }
+      handleWlvcFrameSendFailure(
+        getSfuClientBufferedAmount(),
+        trackId,
+        String(sfuSendFailureDetails?.reason || 'sfu_browser_encoded_frame_send_failed'),
+        sfuSendFailureDetails,
+      );
     },
   });
 }
