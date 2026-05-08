@@ -22,6 +22,7 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
+const tempGuestListDirectSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-temp-guest-list-direct-join.spec.js');
 const coreOrgSessionSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
 const anonymousDisabledBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js');
@@ -35,6 +36,7 @@ const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const activeRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-active-removal-contract.php');
 const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
+const guestListDirectJoinContract = readText('demo/video-chat/backend-king-php/tests/call-guest-list-direct-join-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
@@ -57,6 +59,11 @@ assert.match(
   callAccessScript,
   /tests\/e2e\/call-access-seed-matrix\.spec\.js/,
   'package script must include additive deterministic Call Access seed-matrix coverage',
+);
+assert.match(
+  callAccessScript,
+  /tests\/e2e\/call-access-temp-guest-list-direct-join\.spec\.js/,
+  'package script must include temporary personalized guest-list direct-join E2E coverage',
 );
 assert.match(
   callAccessScript,
@@ -621,6 +628,36 @@ assert.match(
   callAccessPublic,
   /videochat_fetch_active_user_for_call_access\([\s\S]*false[\s\S]*\);/,
   'public call-access resolution must allow explicit invitation lookup without active tenant membership',
+);
+assert.match(
+  tempGuestListDirectSpec,
+  /requiresAdmission:\s*false[\s\S]*e2e_personalized_logged_out_003_temp_guest_on_guest_list_direct_join[\s\S]*lobby\/queue\/join[\s\S]*toBe\(false\)/,
+  'temporary guest-list direct-join E2E must prove logged-out personalized links enter without lobby admission',
+);
+assert.match(
+  tempGuestListDirectSpec,
+  /participant_user_id=.*call_id=[\s\S]*expect\(sessionAuthorization\)\.toBe\(''\)[\s\S]*expect\(sessionBody\)\.toBeNull\(\)/,
+  'temporary guest-list direct-join E2E must prove logged-out URL identity parameters are not sent as session authority',
+);
+assert.match(
+  tempGuestListDirectSpec,
+  /e2e_personalized_logged_out_007_manipulated_link_rejected[\s\S]*joinResponse\.status\(\)\)\.toBe\(404\)[\s\S]*sessionRequests\)\.toBe\(0\)/,
+  'temporary guest-list manipulated-link E2E must reject changed link ids without session issuance',
+);
+assert.match(
+  guestListDirectJoinContract,
+  /sess_direct_join_temp_manipulated_body[\s\S]*body fields must not change the temporary link identity[\s\S]*temporary link must not assume another participant identity/,
+  'backend guest-list direct-join contract must prove temporary personalized links ignore forged body identity fields',
+);
+assert.match(
+  guestListDirectJoinContract,
+  /mutated temporary personalized link should be rejected[\s\S]*temporary guest-list session should remain bound after leaving[\s\S]*reopened temporary link should recognize the same temporary account/,
+  'backend guest-list direct-join contract must prove mutated-link rejection and same temporary-account recognition after leaving',
+);
+assert.match(
+  ciGate,
+  /call-guest-list-direct-join-contract\.sh/,
+  'IAM CI SQLite gate must include the guest-list direct-join backend proof',
 );
 
 process.stdout.write('[iam-call-access-e2e-foundation-contract] PASS\n');
