@@ -1618,8 +1618,8 @@ proof was validated in `php:8.4-cli` with `pdo_sqlite`; that local image lacks
 - [ ] Logged-in guest-list user can join through anonymous link
 - [x] Logged-in user not on guest list lands in lobby through anonymous link
 - [x] Anonymous link does not overwrite account data
-- [ ] Anonymous link does not modify guest list
-- [ ] Anonymous link creates no personalized identity binding
+- [x] Anonymous link does not modify guest list
+- [x] Anonymous link creates no personalized identity binding
 - [x] Invalid anonymous link is rejected
 - [x] Manipulated anonymous link grants no access
 
@@ -1632,6 +1632,11 @@ test tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list`
 passed 11 tests. `call-access-anonymous-disabled-link-contract` also proves a
 manipulated logged-in anonymous access id is rejected before session issuance
 and a forged anonymous session body cannot bind a foreign call.
+`call-access-anonymous-temp-rights-contract` proves logged-in anonymous/open
+sessions keep the authenticated account, create no temporary user, add no
+guest-list or lobby participant row before queueing, and keep the open link and
+call-access session binding non-personalized with no `participant_user_id`,
+`participant_email`, or `consumed_at` mutation. Docker PHP 8.4 SQLite passed.
 
 ## 10. Anonymous Join Link: User Not Logged In
 
@@ -1650,8 +1655,8 @@ and a forged anonymous session body cannot bind a foreign call.
 - [x] If admitted anonymous user leaves and was not kicked, they can rejoin
 - [x] Rejoin after admission does not require another approval
 - [x] If anonymous user was kicked, rejoin requires approval or is blocked
-- [ ] Anonymous temporary user cannot gain rights by changing display name
-- [ ] Multiple anonymous users through same link are separate temporary participants
+- [x] Anonymous temporary user cannot gain rights by changing display name
+- [x] Multiple anonymous users through same link are separate temporary participants
 - [x] Anonymous link does not reveal guest list or account data
 - [x] Anonymous link can be disabled if supported
 - [x] Disabled anonymous link allows no lobby entry
@@ -1675,7 +1680,13 @@ admin, and system admin admission work through server-revalidated lobby
 authority, and unauthorized waiting users cannot self-admit. The focused Docker
 SQLite run passed. `iam-lobby-management-moderator-rights-contract.mjs` binds
 the backend proof to the UI lobby-control gating and Playwright self-admit abuse
-pattern.
+pattern. `call-access-anonymous-temp-rights-contract` adds the remaining
+temporary-rights proof: an anonymous guest using the owner display name remains
+a normal guest with participant-only call role, cannot direct-join through guest
+list or call-access decisions, cannot authorize lobby admission, and multiple
+logged-out users through the same anonymous link receive separate temporary
+users, call-access session bindings, and pending participant rows only after
+they actually queue. Docker PHP 8.4 SQLite passed.
 
 ## 11. Lobby and Admission
 

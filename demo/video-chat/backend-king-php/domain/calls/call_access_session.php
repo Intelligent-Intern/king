@@ -414,17 +414,6 @@ function videochat_issue_session_for_call_access(
         ]);
     }
 
-    if ($linkKind === 'open') {
-        videochat_ensure_internal_call_participant(
-            $pdo,
-            (string) ($call['id'] ?? ''),
-            $userId,
-            (string) ($targetUser['email'] ?? ''),
-            (string) ($targetUser['display_name'] ?? ''),
-            'invited'
-        );
-    }
-
     $callDecision = videochat_decide_call_access_for_user(
         $pdo,
         (string) ($call['id'] ?? ''),
@@ -432,6 +421,23 @@ function videochat_issue_session_for_call_access(
         $userRole,
         $tenantId
     );
+    if ($linkKind === 'open') {
+        $directOpenLinkSources = ['system_admin', 'owner', 'organization_admin', 'internal_participant'];
+        $usesOwnDirectRights = (bool) ($callDecision['allowed'] ?? false)
+            && in_array((string) ($callDecision['source'] ?? ''), $directOpenLinkSources, true);
+        if (!$usesOwnDirectRights) {
+            $callDecision = videochat_call_access_decision_result(
+                true,
+                'allowed',
+                'anonymous_link_lobby',
+                'call',
+                $call,
+                'participant',
+                'participant',
+                'pending'
+            );
+        }
+    }
     if (!(bool) ($callDecision['allowed'] ?? false)) {
         $decisionReason = (string) ($callDecision['reason'] ?? 'forbidden');
         if ($decisionReason === 'call_not_joinable_from_status') {
