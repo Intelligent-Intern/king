@@ -27,6 +27,16 @@ function signalingStateIsStable(pc) {
   return signalingState === 'stable' || signalingState === '';
 }
 
+function shouldDeferOfferSetLocalFailure(error, pc) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return normalizedSignalingState(pc) !== 'closed'
+    && (
+      message.includes('wrong state')
+      || message.includes('have-remote-offer')
+      || message.includes('stable')
+    );
+}
+
 function normalizeSdp(payload) {
   const sdpPayload = payload && typeof payload.sdp === 'object' ? payload.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
@@ -266,7 +276,29 @@ export function createGossipNeighborLifecycle({
         });
         return false;
       }
-      await peer.pc.setLocalDescription(offer);
+      try {
+        await peer.pc.setLocalDescription(offer);
+      } catch (error) {
+        if (shouldDeferOfferSetLocalFailure(error, peer.pc)) {
+          peer.needsRenegotiate = true;
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'info',
+            eventType: 'gossip_neighbor_offer_deferred',
+            code: 'gossip_neighbor_offer_deferred',
+            message: 'Dedicated Gossip neighbor offer was deferred because signaling state changed while setting the local offer.',
+            payload: {
+              peer_id: safePeerId(peer.peerId),
+              reason: String(reason || 'offer'),
+              signaling_state: normalizedSignalingState(peer.pc),
+              error: String(error?.message || error || ''),
+              topology_epoch: topologyEpoch,
+            },
+          });
+          return false;
+        }
+        throw error;
+      }
       const local = peer.pc.localDescription;
       if (!local?.sdp) return false;
       const sent = sendSocketFrame({

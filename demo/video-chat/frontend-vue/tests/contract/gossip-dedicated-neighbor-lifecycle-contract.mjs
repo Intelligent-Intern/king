@@ -66,9 +66,10 @@ assert(
     || /const preSetLocalState = normalizedSignalingState\(peer\.pc\)/.test(lifecycle)
   )
     && /preSetLocalState !== 'stable'/.test(lifecycle)
+    && /shouldDeferOfferSetLocalFailure\(error,\s*peer\.pc\)/.test(lifecycle)
     && /gossip_neighbor_offer_deferred/.test(lifecycle)
     && /await peer\.pc\.setLocalDescription\(offer\)/.test(lifecycle),
-  'Gossip neighbor offer creation must re-check signaling state before setLocalDescription to avoid have-remote-offer glare',
+  'Gossip neighbor offer creation must defer both pre-set and setLocalDescription have-remote-offer glare',
 )
 assert(
   /addEventListener\('signalingstatechange'/.test(lifecycle)
