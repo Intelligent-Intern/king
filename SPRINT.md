@@ -2109,15 +2109,15 @@ host because PHP does not load `pdo_sqlite`.
 
 - [ ] Call creation is logged
 - [ ] Invitation creation is logged
-- [ ] Personalized link open is logged
+- [x] Personalized link open is logged
 - [ ] Anonymous link open is logged
 - [ ] Temporary account creation is logged
-- [ ] Temporary account removal is logged
+- [x] Temporary account removal is logged
 - [ ] Link-account vs logged-in-account comparison is logged
-- [ ] Strong mismatch is logged
-- [ ] Host-name verification is logged
+- [x] Strong mismatch is logged
+- [x] Host-name verification is logged
 - [ ] Successful host-name verification is logged
-- [ ] Failed host-name verification is logged
+- [x] Failed host-name verification is logged
 - [ ] Account-update request is logged
 - [ ] Confirmation email dispatch is logged
 - [ ] Successful email confirmation is logged
@@ -2126,25 +2126,35 @@ host because PHP does not load `pdo_sqlite`.
 - [ ] Lobby entry is logged
 - [ ] Lobby admission is logged
 - [ ] Lobby rejection is logged
-- [ ] Call join is logged
-- [ ] Call leave is logged
-- [ ] Rejoin is logged
-- [ ] Kick is logged
-- [ ] Owner transfer is logged
+- [x] Call join is logged
+- [x] Call leave is logged
+- [x] Rejoin is logged
+- [x] Kick is logged
+- [x] Owner transfer is logged
 - [ ] Guest-list change is logged
-- [ ] Review flag for duplicate link is logged
-- [ ] Membership removal is logged
+- [x] Review flag for duplicate link is logged
+- [x] Membership removal is logged
 - [ ] Invite invalidation is logged
-- [ ] Call reschedule is logged
-- [ ] Call deletion is logged
-- [ ] Explicit call end is logged
+- [x] Call reschedule is logged
+- [x] Call deletion is logged
+- [x] Explicit call end is logged
 - [ ] Implicit call end is logged
 - [ ] Owner absence timer start is logged
 - [ ] Owner absence timer cancellation is logged
 - [ ] Audit logs contain time, actor, target, call, and organization
-- [ ] Audit logs contain no unnecessary sensitive link data
-- [ ] Security-relevant events are visible in monitoring
+- [x] Audit logs contain no unnecessary sensitive link data
+- [x] Security-relevant events are visible in monitoring
 - [ ] Failed E2E test artifacts include relevant logs
+
+Proof: `iam-call-access-audit-events-contract.mjs` and
+`audit-call-access-events-contract.php` pin audit helpers and event types for
+personalized link open, duplicate-link review, strong mismatch / failed
+host-name verification, join, leave, rejoin, kick, owner transfer, and
+membership removal. The contract also asserts real state transitions happen
+before the audit write, fingerprints link/session identifiers, omits raw
+access/session/token/password/SDP/ICE keys, and exposes the live audit probe
+event list for monitoring. Lifecycle and guest-cleanup contracts cover
+temporary account removal plus reschedule/delete/end audit records.
 
 ## 32. End-to-End Main Paths
 
@@ -2573,24 +2583,24 @@ against duplicate join/session request loops.
 
 - [ ] `e2e_audit_001_call_creation_logged`
 - [ ] `e2e_audit_002_invitation_creation_logged`
-- [ ] `e2e_audit_003_link_open_logged`
+- [x] `e2e_audit_003_link_open_logged`
 - [ ] `e2e_audit_004_temp_account_creation_logged`
-- [ ] `e2e_audit_005_strong_mismatch_logged`
-- [ ] `e2e_audit_006_host_verification_logged`
+- [x] `e2e_audit_005_strong_mismatch_logged`
+- [x] `e2e_audit_006_host_verification_logged`
 - [ ] `e2e_audit_007_account_update_logged`
 - [ ] `e2e_audit_008_lobby_events_logged`
-- [ ] `e2e_audit_009_join_leave_rejoin_logged`
-- [ ] `e2e_audit_010_kick_logged`
-- [ ] `e2e_audit_011_owner_transfer_logged`
-- [ ] `e2e_audit_012_duplicate_link_flag_logged`
-- [ ] `e2e_audit_013_membership_removal_logged`
+- [x] `e2e_audit_009_join_leave_rejoin_logged`
+- [x] `e2e_audit_010_kick_logged`
+- [x] `e2e_audit_011_owner_transfer_logged`
+- [x] `e2e_audit_012_duplicate_link_flag_logged`
+- [x] `e2e_audit_013_membership_removal_logged`
 - [ ] `e2e_audit_014_invite_invalidation_logged`
-- [ ] `e2e_audit_015_reschedule_logged`
-- [ ] `e2e_audit_016_delete_logged`
-- [ ] `e2e_audit_017_explicit_end_logged`
+- [x] `e2e_audit_015_reschedule_logged`
+- [x] `e2e_audit_016_delete_logged`
+- [x] `e2e_audit_017_explicit_end_logged`
 - [ ] `e2e_audit_018_implicit_end_logged`
 - [ ] `e2e_audit_019_owner_absence_timer_logged`
-- [ ] `e2e_audit_020_logs_minimize_sensitive_data`
+- [x] `e2e_audit_020_logs_minimize_sensitive_data`
 
 ## Test Group: Main E2E Journeys
 
@@ -2645,7 +2655,7 @@ against duplicate join/session request loops.
 - [ ] Membership removal after invitation is tested with call-scoped guest access behavior
 - [x] Privacy and data minimization assertions are included
 - [ ] Security manipulation cases are covered
-- [ ] Audit-relevant flows are asserted where audit logs exist
+- [x] Audit-relevant flows are asserted where audit logs exist
 - [x] Test names are stable and mapped to the checklist
 - [ ] Documentation explains how to run tests locally
 - [ ] Documentation explains how to run tests in CI
