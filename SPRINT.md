@@ -1309,6 +1309,13 @@ the authenticated account authoritative for the issued session.
 - [ ] Repeated wrong host names trigger lock / review if configured
 - [ ] Host-name error messages leak no host data
 
+Proof: `call-access-strong-mismatch-privacy-contract` pins the focused browser
+case in `call-access-join.spec.js`: a logged-in wrong account opens a
+personalized link, the simulated server returns a strong-mismatch wrong-host
+denial, the join/session responses contain no invitee/host/session sentinels,
+the UI renders only the generic forbidden state, no workspace/lobby admission is
+entered, and the active browser session remains unchanged.
+
 ## 8. Duplicate Personalized Link / Abuse Detection
 
 - [ ] Personalized link is first opened by account A

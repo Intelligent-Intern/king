@@ -15,6 +15,23 @@ function accessIdFromJoinPath(joinPath) {
   return match ? match[1].toLowerCase() : '';
 }
 
+function parseJsonPostData(request) {
+  try {
+    return JSON.parse(request.postData() || '{}');
+  } catch {
+    return null;
+  }
+}
+
+function expectTextDoesNotContain(text, values, label) {
+  const lowerText = String(text || '').toLowerCase();
+  for (const value of values) {
+    const needle = String(value || '').trim().toLowerCase();
+    if (needle === '') continue;
+    expect(lowerText, `${label} must not contain ${value}`).not.toContain(needle);
+  }
+}
+
 async function createPublicJoinPage(browser, baseURL) {
   const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
   await installMediaDeviceShim(context);
@@ -139,6 +156,187 @@ test('invalid call-access link renders safe state without foreign call data', as
     await expect(joinDialog).not.toContainText(foreignTitle);
     await expect(joinDialog).not.toContainText(foreignEmail);
     await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test('strong personalized-link mismatch wrong host denial gives no access and leaks no foreign person data', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const accessId = '33333333-3333-4333-8333-333333333333';
+  const callId = 'strong-mismatch-call';
+  const safeCallTitle = 'Strong Mismatch Waiting Room';
+  const wrongHostName = 'Definitely Wrong Host';
+  const linkInviteeName = 'Foreign Link Invitee';
+  const linkInviteeEmail = 'foreign-link-invitee@example.invalid';
+  const realHostName = 'Private Foreign Host';
+  const realHostEmail = 'private-host@example.invalid';
+  const deniedSessionToken = 'sess_denied_strong_mismatch_should_not_bind';
+  const wrongLoggedInUserId = 3;
+  const wrongLoggedInSession = {
+    sessionId: 'sess_wrong_logged_in_user',
+    sessionToken: 'sess_wrong_logged_in_user',
+    expiresAt: '2026-09-01T10:00:00Z',
+  };
+  const foreignNeedles = [
+    linkInviteeName,
+    linkInviteeEmail,
+    realHostName,
+    realHostEmail,
+    deniedSessionToken,
+  ];
+
+  const { context, page } = await createPublicJoinPage(browser, baseURL);
+  let sessionStateRequestAuthorization = '';
+  let joinGetCount = 0;
+  let sessionPostCount = 0;
+  let sessionRequestAuthorization = '';
+  let sessionRequestBody = null;
+
+  try {
+    await context.addInitScript(({ key, session }) => {
+      localStorage.setItem(key, JSON.stringify(session));
+    }, { key: sessionStorageKey, session: wrongLoggedInSession });
+
+    await page.route('**/api/auth/session-state', async (route) => {
+      sessionStateRequestAuthorization = route.request().headers().authorization || '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: { state: 'authenticated' },
+          session: {
+            id: wrongLoggedInSession.sessionId,
+            token: wrongLoggedInSession.sessionToken,
+            expires_at: wrongLoggedInSession.expiresAt,
+          },
+          user: {
+            id: wrongLoggedInUserId,
+            email: 'wrong-current-user@example.invalid',
+            display_name: 'Wrong Current User',
+            role: 'user',
+            status: 'active',
+          },
+          tenant: {
+            id: 1,
+            uuid: 'tenant-1',
+            label: 'Intelligent Intern',
+            role: 'member',
+            permissions: { tenant_admin: false },
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      joinGetCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            state: 'resolved',
+            access_link: { id: accessId },
+            link_kind: 'personal',
+            call: {
+              id: callId,
+              room_id: 'lobby',
+              title: safeCallTitle,
+            },
+            target_hint: { participant_email: null },
+            join_path: `/join/${accessId}`,
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/session`, async (route) => {
+      sessionPostCount += 1;
+      sessionRequestAuthorization = route.request().headers().authorization || '';
+      sessionRequestBody = parseJsonPostData(route.request());
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'error',
+          error: {
+            code: 'call_access_forbidden',
+            message: 'Call access link is not available for your session.',
+            details: {
+              mismatch: 'strong_personalized_link',
+              fields: {
+                host_name: 'wrong_host_name',
+              },
+            },
+          },
+        }),
+      });
+    });
+
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(`/join/${accessId}`);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    expect(sessionStateRequestAuthorization).toBe(`Bearer ${wrongLoggedInSession.sessionToken}`);
+    const joinBody = await joinResponse.text();
+    expectTextDoesNotContain(joinBody, foreignNeedles, 'strong-mismatch join response');
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(safeCallTitle);
+    await expect(joinDialog).toContainText('Personalized link');
+    for (const value of foreignNeedles) {
+      await expect(joinDialog, `dialog must not render ${value}`).not.toContainText(value);
+    }
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(403);
+    const sessionBody = await sessionResponse.text();
+    expectTextDoesNotContain(sessionBody, foreignNeedles, 'strong-mismatch wrong-host denial response');
+    const sessionPayload = JSON.parse(sessionBody);
+    expect(sessionPayload?.error?.code).toBe('call_access_forbidden');
+    expect(sessionPayload?.error?.details?.mismatch).toBe('strong_personalized_link');
+    expect(sessionPayload?.error?.details?.fields?.host_name).toBe('wrong_host_name');
+
+    expect(sessionPostCount).toBe(1);
+    expect(sessionRequestAuthorization).toBe(`Bearer ${wrongLoggedInSession.sessionToken}`);
+    expect(sessionRequestBody).toEqual({
+      verified_user_id: wrongLoggedInUserId,
+      verified_session_id: wrongLoggedInSession.sessionId,
+    });
+
+    await expect(joinDialog).toContainText('This call link is not available for your session.');
+    await expect(joinDialog).not.toContainText(/Call owner has been notified|Waiting for host/i);
+    for (const value of [...foreignNeedles, wrongHostName]) {
+      await expect(joinDialog, `dialog denial must not render ${value}`).not.toContainText(value);
+    }
+    expect(page.url()).toContain(`/join/${accessId}`);
+    expect(page.url()).not.toContain('/workspace/call');
+
+    const storedSession = await page.evaluate((key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '{}');
+      } catch {
+        return {};
+      }
+    }, sessionStorageKey);
+    expect(storedSession.sessionId).toBe(wrongLoggedInSession.sessionId);
+    expect(storedSession.sessionToken).toBe(wrongLoggedInSession.sessionToken);
+    expect(storedSession.sessionToken).not.toBe(deniedSessionToken);
+
+    await page.waitForTimeout(300);
+    expect(joinGetCount).toBe(1);
+    expect(sessionPostCount).toBe(1);
   } finally {
     await context.close();
   }
