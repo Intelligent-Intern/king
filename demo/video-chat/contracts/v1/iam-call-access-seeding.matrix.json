@@ -381,6 +381,18 @@
       "direct_guest_list_entry": false
     },
     {
+      "key": "alpha_open_disabled",
+      "id": "10000000-0000-4000-8000-000000000105",
+      "link_kind": "open",
+      "call_key": "alpha_active",
+      "target_user_key": null,
+      "anonymous_user_key": "temporary_anonymous_guest",
+      "join_path": "/join/10000000-0000-4000-8000-000000000105",
+      "requires_admission": true,
+      "direct_guest_list_entry": false,
+      "disabled_at": "2026-05-08T10:00:00.000Z"
+    },
+    {
       "key": "beta_personal_for_beta_admin",
       "id": "10000000-0000-4000-8000-000000000104",
       "link_kind": "personal",
@@ -812,6 +824,23 @@
         "temporary": true,
         "uses_authenticated_account": false,
         "requires_admission": true,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "anonymous_open_disabled_logged_out_no_lobby_entry",
+      "journey_key": "e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry",
+      "sprint_groups": ["10", "15"],
+      "link_key": "alpha_open_disabled",
+      "principal_user_key": "temporary_anonymous_guest",
+      "expected": {
+        "state": "not_found",
+        "link_kind": "open",
+        "disabled": true,
+        "creates_session": false,
+        "creates_lobby_entry": false,
         "system_admin": false,
         "tenant_admin": false,
         "platform_admin": false

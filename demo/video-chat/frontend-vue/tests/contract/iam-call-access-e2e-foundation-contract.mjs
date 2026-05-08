@@ -22,10 +22,12 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
+const anonymousDisabledBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js');
 const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
+const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
@@ -67,6 +69,11 @@ assert.match(
 );
 assert.match(
   callAccessScript,
+  /tests\/e2e\/call-access-anonymous-disabled-link\.spec\.js/,
+  'package script must include disabled anonymous link E2E coverage',
+);
+assert.match(
+  callAccessScript,
   /--workers=1/,
   'call-access E2E script must run serially to avoid live backend access-link contention',
 );
@@ -94,6 +101,11 @@ assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
   /call-access-email-confirmation-contract\.sh/,
   'IAM Call Access contract gate must include the backend email confirmation proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /call-access-anonymous-disabled-link-contract\.sh/,
+  'IAM Call Access contract gate must include the disabled anonymous link backend proof',
 );
 assert.doesNotMatch(
   matrixScript,
@@ -132,6 +144,10 @@ assert.ok(
 assert.ok(
   callAccessPaths.has('frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js'),
   'focused Call Access command must list the deterministic main-journey smoke spec',
+);
+assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js'),
+  'focused Call Access command must list the disabled anonymous link E2E spec',
 );
 assert.ok(
   requiredSpecs.has('frontend-vue/tests/e2e/call-access-join.spec.js'),
@@ -188,6 +204,21 @@ assert.match(
   mainJourneySmokeSpec,
   /kicked_requires_renewed_admission[\s\S]*expectDirectRejoinRequiresRenewedApproval/s,
   'main journey smoke split must prove kicked temporary users cannot direct-rejoin without renewed approval',
+);
+assert.match(
+  anonymousDisabledBrowserSpec,
+  /e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry[\s\S]*call_access_not_found[\s\S]*lobbyFrames[\s\S]*toBe\(0\)/s,
+  'disabled anonymous browser proof must show the link creates no lobby entry',
+);
+assert.match(
+  anonymousDisabledBackendContract,
+  /videochat_disable_anonymous_call_access_link[\s\S]*videochat_iam_anonymous_disabled_guest_participant_count[\s\S]*must not create a lobby participant/s,
+  'backend proof must reject disabled anonymous links before temporary guest or lobby entry creation',
+);
+assert.match(
+  ciGate,
+  /call-access-anonymous-disabled-link-contract\.sh/,
+  'IAM CI gate must include the disabled anonymous link backend proof',
 );
 assert.match(
   mainJourneySmokeSpec,

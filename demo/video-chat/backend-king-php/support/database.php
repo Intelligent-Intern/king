@@ -124,6 +124,11 @@ function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
             'sync_calendar_ids',
             "ALTER TABLE workspace_calendars ADD COLUMN sync_calendar_ids TEXT NOT NULL DEFAULT '[]'",
         ],
+        [
+            'call_access_links',
+            'disabled_at',
+            'ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT',
+        ],
     ];
 
     foreach ($additiveColumns as [$tableName, $columnName, $sql]) {

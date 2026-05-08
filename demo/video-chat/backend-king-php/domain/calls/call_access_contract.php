@@ -51,7 +51,8 @@ function videochat_normalize_call_access_id(string $accessId): string
  *   created_at: string,
  *   expires_at: ?string,
  *   last_used_at: ?string,
- *   consumed_at: ?string
+ *   consumed_at: ?string,
+ *   disabled_at: ?string
  * }|null
  */
 function videochat_fetch_call_access_link(PDO $pdo, string $accessId, ?int $tenantId = null): ?array
@@ -62,7 +63,9 @@ function videochat_fetch_call_access_link(PDO $pdo, string $accessId, ?int $tena
     }
 
     $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id');
+    $hasDisabledAtColumn = videochat_tenant_table_has_column($pdo, 'call_access_links', 'disabled_at');
     $tenantSelect = $hasTenantColumn ? 'tenant_id,' : 'NULL AS tenant_id,';
+    $disabledAtSelect = $hasDisabledAtColumn ? 'disabled_at' : 'NULL AS disabled_at';
     $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND tenant_id = :tenant_id' : '';
     $statement = $pdo->prepare(
         <<<SQL
@@ -77,7 +80,8 @@ SELECT
     created_at,
     expires_at,
     last_used_at,
-    consumed_at
+    consumed_at,
+    {$disabledAtSelect}
 FROM call_access_links
 WHERE lower(id) = :id
   {$tenantWhere}
@@ -112,6 +116,7 @@ SQL
         'expires_at' => is_string($row['expires_at'] ?? null) ? (string) $row['expires_at'] : null,
         'last_used_at' => is_string($row['last_used_at'] ?? null) ? (string) $row['last_used_at'] : null,
         'consumed_at' => is_string($row['consumed_at'] ?? null) ? (string) $row['consumed_at'] : null,
+        'disabled_at' => is_string($row['disabled_at'] ?? null) ? (string) $row['disabled_at'] : null,
     ];
 }
 
@@ -139,9 +144,13 @@ function videochat_validate_call_access_session_binding(
         ];
     }
 
+    $linkDisabledAtSelect = videochat_tenant_table_has_column($pdo, 'call_access_links', 'disabled_at')
+        ? 'call_access_links.disabled_at AS link_disabled_at'
+        : 'NULL AS link_disabled_at';
+
     try {
         $statement = $pdo->prepare(
-            <<<'SQL'
+            <<<SQL
 SELECT
     call_access_sessions.session_id,
     call_access_sessions.access_id,
@@ -157,6 +166,7 @@ SELECT
     call_access_links.participant_user_id AS link_participant_user_id,
     call_access_links.participant_email AS link_participant_email,
     call_access_links.expires_at AS link_expires_at,
+    {$linkDisabledAtSelect},
     calls.id AS resolved_call_id,
     calls.room_id AS resolved_room_id,
     calls.status AS resolved_call_status,
@@ -247,6 +257,7 @@ SQL
         'participant_email' => is_string($row['link_participant_email'] ?? null)
             ? (string) $row['link_participant_email']
             : null,
+        'disabled_at' => is_string($row['link_disabled_at'] ?? null) ? (string) $row['link_disabled_at'] : null,
     ])) {
         return $fail('call_access_link_invalidated');
     }
@@ -407,8 +418,22 @@ SQL
     return strtolower(trim((string) ($row['invite_state'] ?? '')));
 }
 
+function videochat_call_access_link_disabled_at(array $accessLink): string
+{
+    return is_string($accessLink['disabled_at'] ?? null) ? trim((string) $accessLink['disabled_at']) : '';
+}
+
+function videochat_call_access_link_is_disabled(array $accessLink): bool
+{
+    return videochat_call_access_link_disabled_at($accessLink) !== '';
+}
+
 function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink): bool
 {
+    if (videochat_call_access_link_is_disabled($accessLink)) {
+        return true;
+    }
+
     return in_array(videochat_call_access_participant_invite_state($pdo, $accessLink), ['cancelled', 'declined'], true);
 }
 
