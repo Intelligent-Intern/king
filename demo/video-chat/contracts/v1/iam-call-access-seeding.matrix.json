@@ -180,6 +180,9 @@
       "organization_memberships": [],
       "removed_memberships": [
         { "tenant_key": "alpha", "role": "member" }
+      ],
+      "removed_organization_memberships": [
+        { "organization_key": "alpha_org", "role": "admin" }
       ]
     },
     {
