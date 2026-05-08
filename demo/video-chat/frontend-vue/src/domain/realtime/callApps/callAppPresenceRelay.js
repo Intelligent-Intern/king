@@ -22,13 +22,39 @@ export function normalizeCallAppPresenceDisplayName(value) {
   return displayName.slice(0, 80);
 }
 
-export function normalizeCallAppPresenceParticipantRows(rows, currentUserId = 0) {
+function normalizeCallAppPresenceGrantState(value) {
+  const state = plainString(value).toLowerCase();
+  return state === 'allowed' || state === 'denied' ? state : '';
+}
+
+function defaultGrantStateForSession(session = {}) {
+  return plainString(session?.default_app_policy || session?.defaultAppPolicy).toLowerCase() === 'allowed_by_default'
+    ? 'allowed'
+    : 'denied';
+}
+
+export function callAppPresenceUserAuthorizedForSession(session = {}, userId = 0) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+
+  const grants = Array.isArray(session?.grants) ? session.grants : [];
+  const grant = grants.find((row) => (
+    plainString(row?.subject_type).toLowerCase() === 'user'
+    && Number(row?.user_id || row?.userId || 0) === normalizedUserId
+  ));
+  const explicitState = normalizeCallAppPresenceGrantState(grant?.grant_state || grant?.grantState);
+  return (explicitState || defaultGrantStateForSession(session)) === 'allowed';
+}
+
+export function normalizeCallAppPresenceParticipantRows(rows, currentUserId = 0, session = null) {
   const localUserId = Number(currentUserId || 0);
   const seen = new Set();
   const participants = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     const userId = Number(row?.userId || row?.user_id || 0);
     if (!Number.isInteger(userId) || userId <= 0 || userId === localUserId || seen.has(userId)) continue;
+    if (row?.isRoomMember === false || row?.is_room_member === false) continue;
+    if (session && !callAppPresenceUserAuthorizedForSession(session, userId)) continue;
     seen.add(userId);
     participants.push({
       userId,
