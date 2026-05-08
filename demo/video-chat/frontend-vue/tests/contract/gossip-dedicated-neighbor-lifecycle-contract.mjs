@@ -72,6 +72,13 @@ assert(
   'Gossip neighbor offer creation must defer both pre-set and setLocalDescription have-remote-offer glare',
 )
 assert(
+  /function shouldIgnoreStaleRemoteOfferAnswerFailure\(error,\s*pc\)/.test(lifecycle)
+    && /const postRemoteState = normalizedSignalingState\(peer\.pc\)/.test(lifecycle)
+    && /postRemoteState !== 'have-remote-offer'/.test(lifecycle)
+    && /gossip_neighbor_offer_stale/.test(lifecycle),
+  'remote Gossip offers that become stale while answering must be treated idempotently instead of failing the neighbor link',
+)
+assert(
   /addEventListener\('signalingstatechange'/.test(lifecycle)
     && /gossip_neighbor_renegotiate_waiting_stable/.test(lifecycle)
     && /peer\.queuedRenegotiateAttempts = 0;[\s\S]*scheduleQueuedRenegotiate\(peer,\s*'signaling_stable'\)/.test(lifecycle),

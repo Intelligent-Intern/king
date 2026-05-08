@@ -37,6 +37,16 @@ function shouldDeferOfferSetLocalFailure(error, pc) {
     );
 }
 
+function shouldIgnoreStaleRemoteOfferAnswerFailure(error, pc) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return normalizedSignalingState(pc) !== 'closed'
+    && (
+      message.includes('wrong signalingstate')
+      || message.includes('wrong state')
+      || message.includes('stable')
+    );
+}
+
 function normalizeSdp(payload) {
   const sdpPayload = payload && typeof payload.sdp === 'object' ? payload.sdp : null;
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
@@ -378,9 +388,45 @@ export function createGossipNeighborLifecycle({
       }
 
       await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
+      const postRemoteState = normalizedSignalingState(peer.pc);
+      if (postRemoteState !== 'have-remote-offer') {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'gossip_neighbor_offer_stale',
+          code: 'gossip_neighbor_offer_stale',
+          message: 'Dedicated Gossip neighbor offer was ignored because signaling no longer has a pending remote offer.',
+          payload: {
+            peer_id: normalizedPeerId,
+            signaling_state: postRemoteState,
+            topology_epoch: topologyEpoch,
+          },
+        });
+        return;
+      }
       await flushPendingIce(peer);
       const answer = await peer.pc.createAnswer();
-      await peer.pc.setLocalDescription(answer);
+      try {
+        await peer.pc.setLocalDescription(answer);
+      } catch (error) {
+        if (shouldIgnoreStaleRemoteOfferAnswerFailure(error, peer.pc)) {
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'info',
+            eventType: 'gossip_neighbor_offer_stale',
+            code: 'gossip_neighbor_offer_stale',
+            message: 'Dedicated Gossip neighbor answer was skipped because the remote offer was no longer pending.',
+            payload: {
+              peer_id: normalizedPeerId,
+              signaling_state: normalizedSignalingState(peer.pc),
+              error: String(error?.message || error || ''),
+              topology_epoch: topologyEpoch,
+            },
+          });
+          return;
+        }
+        throw error;
+      }
       const local = peer.pc.localDescription;
       if (!local?.sdp) return;
       sendSocketFrame({

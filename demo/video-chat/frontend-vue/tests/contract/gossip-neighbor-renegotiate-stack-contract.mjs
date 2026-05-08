@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 
 const previousRtcPeerConnection = globalThis.RTCPeerConnection
+const previousRtcSessionDescription = globalThis.RTCSessionDescription
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -167,7 +168,61 @@ class SetLocalGlareDeferredPeerConnection {
   }
 }
 
+class StableAfterRemoteOfferPeerConnection {
+  static instances = []
+
+  constructor() {
+    this.listeners = new Map()
+    this.signalingState = 'stable'
+    this.connectionState = 'new'
+    this.localDescription = null
+    this.remoteDescription = null
+    this.createAnswerCalls = 0
+    this.setLocalAnswerCalls = 0
+    this.closed = false
+    StableAfterRemoteOfferPeerConnection.instances.push(this)
+  }
+
+  addEventListener(type, listener) {
+    this.listeners.set(type, listener)
+  }
+
+  async createOffer() {
+    return { type: 'offer', sdp: 'v=0\r\n' }
+  }
+
+  async setLocalDescription(description) {
+    if (description?.type === 'answer') {
+      this.setLocalAnswerCalls += 1
+      throw new Error(
+        "Failed to execute 'setLocalDescription' on 'RTCPeerConnection': Called in wrong signalingState: stable",
+      )
+    }
+    this.localDescription = description
+  }
+
+  async setRemoteDescription(description) {
+    this.remoteDescription = description
+    this.signalingState = 'stable'
+  }
+
+  async createAnswer() {
+    this.createAnswerCalls += 1
+    return { type: 'answer', sdp: 'v=0\r\n' }
+  }
+
+  async addIceCandidate() {}
+
+  close() {
+    this.closed = true
+    this.signalingState = 'closed'
+  }
+}
+
 try {
+  globalThis.RTCSessionDescription = function RTCSessionDescription(description) {
+    return description
+  }
   globalThis.RTCPeerConnection = ReentrantOfferFailurePeerConnection
 
   const { createGossipNeighborLifecycle } = await loadViteSsrModule(
@@ -322,11 +377,74 @@ try {
   )
   assert.equal(glareSentFrames.length, 1, 'setLocalDescription glare recovery must send the deferred gossip offer')
 
+  globalThis.RTCPeerConnection = StableAfterRemoteOfferPeerConnection
+  const staleRemoteDiagnostics = []
+  const staleRemoteSentFrames = []
+  const staleRemoteLifecycle = createGossipNeighborLifecycle({
+    callbacks: {
+      activeCallId: () => 'call-prod-stale-remote-offer',
+      activeRoomId: () => 'room-prod-stale-remote-offer',
+      captureClientDiagnostic: (event) => staleRemoteDiagnostics.push(event),
+      currentUserId: () => 4001,
+      getDataTransport: () => ({
+        bindPeerConnection: () => {},
+        close: () => {},
+      }),
+      sendSocketFrame: (frame) => {
+        staleRemoteSentFrames.push(frame)
+        return true
+      },
+    },
+  })
+
+  staleRemoteLifecycle.applyAssignedNeighbors(
+    { topology_epoch: 45, admitted_peers: [{ peer_id: 4002 }] },
+    new Set(),
+  )
+  staleRemoteLifecycle.handleGossipNeighborSignal('call/offer', '4002', {
+    kind: 'gossip_neighbor_offer',
+    runtime_path: 'gossip_primary_neighbor',
+    sdp: { type: 'offer', sdp: 'v=0\r\n' },
+  })
+
+  await delay(75)
+  const staleRemotePeerConnection = StableAfterRemoteOfferPeerConnection.instances[0]
+  assert.ok(staleRemotePeerConnection, 'remote gossip offer must create a non-initiator peer connection')
+  assert.equal(
+    staleRemotePeerConnection.createAnswerCalls,
+    0,
+    'stale remote offer that leaves signaling stable must not create an invalid answer',
+  )
+  assert.equal(
+    staleRemotePeerConnection.setLocalAnswerCalls,
+    0,
+    'stale remote offer that leaves signaling stable must not call setLocalDescription(answer)',
+  )
+  assert.equal(
+    staleRemoteSentFrames.length,
+    0,
+    'stale remote offer must not emit a gossip answer frame',
+  )
+  assert.equal(
+    staleRemoteDiagnostics.filter((event) => event?.eventType === 'gossip_neighbor_offer_handle_failed').length,
+    0,
+    'stable-state stale remote offers must not be reported as offer-handle failures',
+  )
+  assert.ok(
+    staleRemoteDiagnostics.some((event) => event?.eventType === 'gossip_neighbor_offer_stale'),
+    'stable-state stale remote offers must emit an idempotent stale-offer diagnostic',
+  )
+
   console.log('[gossip-neighbor-renegotiate-stack-contract] PASS')
 } finally {
   if (previousRtcPeerConnection === undefined) {
     delete globalThis.RTCPeerConnection
   } else {
     globalThis.RTCPeerConnection = previousRtcPeerConnection
+  }
+  if (previousRtcSessionDescription === undefined) {
+    delete globalThis.RTCSessionDescription
+  } else {
+    globalThis.RTCSessionDescription = previousRtcSessionDescription
   }
 }
