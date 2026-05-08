@@ -1,33 +1,71 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, isProxy, isRef, onBeforeUnmount, ref, toRaw, unref, watch } from 'vue';
 import { emitCallAppDiagnostic } from './callAppDiagnostics.js';
 
 export const CALL_APP_IFRAME_BRIDGE_PROTOCOL = 'king.call_app.iframe.v1';
 export const CALL_APP_IFRAME_OPAQUE_ORIGIN = 'null';
 
-export function sanitizeCallAppBridgePayload(value, depth = 0) {
+function rawBridgeValue(value) {
+  if (isRef(value)) return rawBridgeValue(unref(value));
+  return isProxy(value) ? toRaw(value) : value;
+}
+
+function plainBridgeObject(value) {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+export function sanitizeCallAppBridgePayload(value, depth = 0, seen = new WeakSet()) {
   if (depth > 8) return null;
   if (value === null || value === undefined) return null;
+  const rawValue = rawBridgeValue(value);
+  if (rawValue !== value) return sanitizeCallAppBridgePayload(rawValue, depth, seen);
   const valueType = typeof value;
   if (valueType === 'string' || valueType === 'boolean') return value;
   if (valueType === 'number') return Number.isFinite(value) ? value : 0;
   if (valueType === 'bigint') return value.toString();
   if (valueType !== 'object') return null;
   if (value instanceof Date) return value.toISOString();
+  if (value instanceof URL) return value.toString();
+  if (value instanceof Error) return { name: value.name, message: value.message };
+  if (ArrayBuffer.isView(value)) return Array.from(value);
+  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
+  if (seen.has(value)) return null;
+  seen.add(value);
   if (Array.isArray(value)) {
-    return value.map((item) => sanitizeCallAppBridgePayload(item, depth + 1));
+    return Array.from(value, (item) => sanitizeCallAppBridgePayload(item, depth + 1, seen));
   }
+  if (!plainBridgeObject(value)) return null;
 
   const out = {};
   for (const key of Object.keys(value)) {
     const normalizedKey = String(key || '').trim();
     if (normalizedKey === '') continue;
+    if (['__proto__', 'constructor', 'prototype'].includes(normalizedKey)) continue;
     try {
-      out[normalizedKey] = sanitizeCallAppBridgePayload(value[key], depth + 1);
+      out[normalizedKey] = sanitizeCallAppBridgePayload(value[key], depth + 1, seen);
     } catch {
       out[normalizedKey] = null;
     }
   }
+  seen.delete(value);
   return out;
+}
+
+export function cloneSafeCallAppBridgePayload(value) {
+  const sanitized = sanitizeCallAppBridgePayload(value);
+  if (typeof structuredClone === 'function') {
+    try {
+      structuredClone(sanitized);
+      return sanitized;
+    } catch {
+      // Fall through to JSON cloning, which preserves the bridge's JSON-only contract.
+    }
+  }
+  try {
+    return JSON.parse(JSON.stringify(sanitized));
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLaunchResponse(payload) {
@@ -103,6 +141,7 @@ export function createCallAppIframeBridge({
   const status = ref('idle');
   const error = ref('');
   let generation = 0;
+  let failedPostGeneration = -1;
 
   const sessionId = computed(() => String(activeSession?.value?.id || '').trim());
   const appKey = computed(() => String(activeSession?.value?.app_key || '').trim());
@@ -117,6 +156,7 @@ export function createCallAppIframeBridge({
 
   function resetLaunchState(nextStatus = 'idle') {
     generation += 1;
+    failedPostGeneration = -1;
     launch.value = null;
     status.value = nextStatus;
     error.value = '';
@@ -126,15 +166,30 @@ export function createCallAppIframeBridge({
     const frameWindow = iframeRef?.value?.contentWindow || null;
     const session = activeSession?.value || null;
     if (!frameWindow || !session || !launch.value?.token) return false;
+    if (failedPostGeneration === generation) return false;
 
     try {
+      const message = cloneSafeCallAppBridgePayload(
+        safePostMessagePayload(session, launch.value, { participantDisplayName }),
+      );
+      if (!message) {
+        throw new Error('Call App launch message could not be serialized.');
+      }
       frameWindow.postMessage(
-        sanitizeCallAppBridgePayload(safePostMessagePayload(session, launch.value, { participantDisplayName })),
+        message,
         '*',
       );
     } catch (postError) {
+      failedPostGeneration = generation;
       status.value = 'error';
       error.value = postError instanceof Error ? postError.message : 'Call App launch message could not be sent.';
+      emitCallAppDiagnostic('call_app_iframe_bridge_error', {
+        session_id: sessionId.value,
+        app_key: appKey.value,
+        iframe_message_type: 'call_app.launch',
+        reason: 'post_message_failed',
+        message: error.value,
+      });
       return false;
     }
     status.value = 'launch_sent';
