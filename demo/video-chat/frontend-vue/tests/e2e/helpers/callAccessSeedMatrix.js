@@ -767,21 +767,48 @@ export async function installCallAccessFakeRealtime(context, { linkKey = '', cal
   const link = String(linkKey || '').trim() !== '' ? requiredRow(accessLinkIndex, linkKey, 'access link') : null;
   const call = link ? requiredRow(callIndex, link.call_key, 'call') : requiredRow(callIndex, callKey, 'call');
   const user = String(userKey || '').trim() !== '' ? requiredRow(userIndex, userKey, 'user') : null;
+  const owner = requiredRow(userIndex, call.owner_user_key, 'user');
   const decision = user ? directJoinDecisionFor(user, call) : null;
   const callSnapshot = callPayload(call, user, 'allowed', { includeViewerIfMissing: false });
   const resolvedRequiresAdmission = requiresAdmission === null
     ? Boolean(link && link.requires_admission !== false)
     : Boolean(requiresAdmission);
 
-  await context.addInitScript(({ roomId, callId, admissionRequired, participants, viewer }) => {
+  await context.addInitScript(({ roomId, callId, ownerUserId, admissionRequired, participants, viewer }) => {
     const listenersSymbol = Symbol('listeners');
 
     window.__iamCallAccessSocketFrames = [];
     window.__iamCallAccessSocketEvents = [];
     window.__iamCallAccessSockets = [];
 
-    function snapshotPayload(reason = 'requested') {
+    function ownerAbsencePayload(overrides = {}) {
+      const activeParticipantCount = participants.length;
+      const activeNonOwnerCount = participants.filter((participant) => Number(participant?.user_id || 0) !== ownerUserId).length;
       return {
+        enabled: true,
+        call_id: callId,
+        room_id: roomId,
+        call_status: 'active',
+        owner_user_id: ownerUserId,
+        owner_present: true,
+        active_participant_count: activeParticipantCount,
+        active_non_owner_count: activeNonOwnerCount,
+        timer_ms: 15 * 60 * 1000,
+        countdown_ms: 5 * 60 * 1000,
+        status: 'owner_present',
+        countdown_started: false,
+        ...overrides,
+      };
+    }
+
+    function snapshotPayload(reason = 'requested', overrides = {}) {
+      const lifecycleOverrides = overrides.call_lifecycle && typeof overrides.call_lifecycle === 'object'
+        ? overrides.call_lifecycle
+        : {};
+      const ownerAbsenceOverrides = lifecycleOverrides.owner_absence && typeof lifecycleOverrides.owner_absence === 'object'
+        ? lifecycleOverrides.owner_absence
+        : {};
+      const base = {
         type: 'room/snapshot',
         room_id: roomId,
         call_id: callId,
@@ -790,8 +817,22 @@ export async function installCallAccessFakeRealtime(context, { linkKey = '', cal
         viewer,
         layout: null,
         activity: [],
+        call_lifecycle: {
+          status: 'active',
+          ...lifecycleOverrides,
+          owner_absence: ownerAbsencePayload(ownerAbsenceOverrides),
+        },
         reason,
         time: new Date().toISOString(),
+      };
+      return {
+        ...base,
+        ...overrides,
+        call_lifecycle: {
+          ...base.call_lifecycle,
+          ...lifecycleOverrides,
+          owner_absence: ownerAbsencePayload(ownerAbsenceOverrides),
+        },
       };
     }
 
@@ -878,10 +919,22 @@ export async function installCallAccessFakeRealtime(context, { linkKey = '', cal
       }
     }
 
+    window.__iamCallAccessEmitRoomSnapshot = (overrides = {}) => {
+      const payload = snapshotPayload('test_emit', overrides && typeof overrides === 'object' ? overrides : {});
+      let sent = 0;
+      for (const socket of window.__iamCallAccessSockets) {
+        if (socket?.readyState !== FakeWebSocket.OPEN || typeof socket.emit !== 'function') continue;
+        socket.emit(payload);
+        sent += 1;
+      }
+      return sent;
+    };
+
     window.WebSocket = FakeWebSocket;
   }, {
     roomId: call.room_id,
     callId: call.id,
+    ownerUserId: owner.id,
     admissionRequired: resolvedRequiresAdmission,
     participants: callSnapshot.participants.internal.map((participant) => ({
       user_id: participant.user_id,
