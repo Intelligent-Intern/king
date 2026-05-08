@@ -952,9 +952,38 @@ export function createLocalMediaOrchestrationHelpers({
     return Number(generation || 0) === Math.max(0, Number(state.localMediaCaptureGeneration || 0));
   }
 
+  function activeLocalMediaStreamsForCleanup() {
+    const streams = [
+      refs.localStreamRef.value,
+      refs.localRawStreamRef.value,
+      refs.localFilteredStreamRef.value,
+    ];
+    if (screenShareStream instanceof MediaStream) {
+      streams.push(screenShareStream);
+    }
+    return streams.filter((stream) => stream instanceof MediaStream);
+  }
+
   function discardStaleLocalMediaCapture(generation, streams = []) {
     if (isCurrentLocalMediaCaptureGeneration(generation)) return false;
-    stopRetiredLocalStreams(streams, []);
+    stopRetiredLocalStreams(streams, activeLocalMediaStreamsForCleanup(), {
+      reason: 'stale_local_media_capture_discarded',
+      captureDiagnostic,
+      mediaRuntimePath: refs.mediaRuntimePathRef.value,
+    });
+    captureDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'stale_local_media_capture_discarded',
+      code: 'stale_local_media_capture_discarded',
+      message: 'Stale local media capture was discarded without stopping active camera, microphone, or screen-share tracks.',
+      payload: {
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+        stale_generation: Number(generation || 0),
+        current_generation: Math.max(0, Number(state.localMediaCaptureGeneration || 0)),
+        active_screen_share_track_id: activeScreenShareTrackId,
+      },
+    });
     return true;
   }
 
