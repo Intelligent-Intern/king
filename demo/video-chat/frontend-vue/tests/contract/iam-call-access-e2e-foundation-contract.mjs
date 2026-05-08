@@ -58,6 +58,11 @@ assert.match(
 );
 assert.match(
   callAccessScript,
+  /tests\/e2e\/call-access-main-journey-smoke\.spec\.js/,
+  'package script must include deterministic main-journey Call Access smoke coverage',
+);
+assert.match(
+  callAccessScript,
   /--workers=1/,
   'call-access E2E script must run serially to avoid live backend access-link contention',
 );
@@ -121,6 +126,10 @@ assert.ok(
   'focused Call Access command must list the owner absence browser proof spec',
 );
 assert.ok(
+  callAccessPaths.has('frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js'),
+  'focused Call Access command must list the deterministic main-journey smoke spec',
+);
+assert.ok(
   requiredSpecs.has('frontend-vue/tests/e2e/call-access-join.spec.js'),
   'release gate must pin the Call Access join spec as required coverage',
 );
@@ -159,6 +168,22 @@ assert.match(
   mainJourneySmokeSpec,
   /e2e_journey_010 logged-out anonymous link creates a least-privilege guest, admits, leaves, and rejoins/,
   'main journey smoke split must cover the logged-out anonymous lobby/admit/rejoin path from SPRINT section 32',
+);
+for (const namedTest of [
+  'e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin',
+  'e2e_rejoin_004_kicked_temp_user_cannot_direct_rejoin',
+  'e2e_rejoin_005_kick_overrides_previous_admission',
+]) {
+  assert.match(
+    mainJourneySmokeSpec,
+    new RegExp(`test\\('${namedTest}'`),
+    `main journey smoke split must include ${namedTest}`,
+  );
+}
+assert.match(
+  mainJourneySmokeSpec,
+  /kicked_requires_renewed_admission[\s\S]*expectDirectRejoinRequiresRenewedApproval/s,
+  'main journey smoke split must prove kicked temporary users cannot direct-rejoin without renewed approval',
 );
 assert.match(
   mainJourneySmokeSpec,
