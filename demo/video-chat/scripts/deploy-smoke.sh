@@ -451,6 +451,31 @@ assert_admin_session_payload() {
   '
 }
 
+assert_admin_settings_locale_payload() {
+  VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en}" php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $expectedLocale = trim((string) getenv("VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE"));
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("admin settings payload status is not ok");
+    }
+    $settings = $payload["result"]["settings"] ?? null;
+    if (!is_array($settings)) {
+        fail("admin settings payload missing settings");
+    }
+    if ($expectedLocale !== "" && (string) ($settings["locale"] ?? "") !== $expectedLocale) {
+        fail("admin settings locale expected " . $expectedLocale . ", got " . (string) ($settings["locale"] ?? "<missing>"));
+    }
+    if ($expectedLocale === "en" && (string) ($settings["direction"] ?? "") !== "ltr") {
+        fail("admin settings direction expected ltr, got " . (string) ($settings["direction"] ?? "<missing>"));
+    }
+  '
+}
+
 assert_admin_localization_locales_payload() {
   php -r '
     function fail(string $message): void {
@@ -502,6 +527,23 @@ assert_admin_localization_csv_disabled_payload() {
         fail("localization CSV disabled payload replacement mismatch");
     }
   '
+}
+
+ensure_admin_smoke_locale() {
+  local token="$1" expected_locale payload response
+  expected_locale="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en}"
+  [[ -n "${expected_locale}" ]] || return 0
+
+  payload="$(
+    VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${expected_locale}" php -r '
+      echo json_encode([
+          "locale" => (string) getenv("VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE"),
+      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    '
+  )"
+  response="$(admin_patch_json "admin settings locale normalize" "https://${DEPLOY_API_DOMAIN}/api/user/settings" "${token}" "${payload}")"
+  printf '%s' "${response}" | assert_admin_settings_locale_payload
+  log "admin settings locale: normalized to ${expected_locale} for smoke"
 }
 
 assert_admin_video_operations_payload() {
@@ -572,6 +614,7 @@ verify_admin_operations() {
   local token session_payload csv_preview_request csv_disabled_payload localization_locales_payload infrastructure_payload operations_payload
   token="$(admin_session_token)"
   ADMIN_SMOKE_SESSION_TOKEN="${token}"
+  ensure_admin_smoke_locale "${token}"
   session_payload="$(admin_get_json "admin session" "https://${DEPLOY_API_DOMAIN}/api/auth/session" "${token}")"
   printf '%s' "${session_payload}" | assert_admin_session_payload
   log "admin session: authenticated default locale payload verified"
@@ -637,6 +680,34 @@ admin_post_json() {
         -o "${output}" \
         -w '%{http_code}' \
         -X POST \
+        -H "authorization: Bearer ${token}" \
+        -H 'content-type: application/json' \
+        --data "${payload}" \
+        "${url}" || true
+    )"
+    if [[ "${code}" == "200" ]]; then
+      cat "${output}"
+      rm -f "${output}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
+  cat "${output}" >&2 || true
+  rm -f "${output}"
+  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
+}
+
+admin_patch_json() {
+  local label="$1" url="$2" token="$3" payload="$4" output code attempt
+  output="$(mktemp)"
+  for attempt in $(seq 1 30); do
+    code="$(
+      curl -sS --max-time "${TIMEOUT}" \
+        -o "${output}" \
+        -w '%{http_code}' \
+        -X PATCH \
         -H "authorization: Bearer ${token}" \
         -H 'content-type: application/json' \
         --data "${payload}" \

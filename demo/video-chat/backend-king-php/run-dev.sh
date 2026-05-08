@@ -20,6 +20,17 @@ WS_WORKERS="${VIDEOCHAT_KING_WS_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_WS_
 php_args=("-d" "king.security_allow_config_override=1")
 ext_source=""
 
+php_module_loaded() {
+  local module_name="$1"
+  local modules=""
+
+  if ! modules="$("${PHP_BIN}" "${php_args[@]}" -m)"; then
+    return 1
+  fi
+
+  grep -Eiq "^${module_name}$" <<<"${modules}"
+}
+
 append_php_ini_if_set() {
   local env_name="$1"
   local ini_name="$2"
@@ -29,7 +40,7 @@ append_php_ini_if_set() {
   fi
 }
 
-if "${PHP_BIN}" -m | grep -Eiq '^king$'; then
+if php_module_loaded "king"; then
   ext_source="php.ini"
 elif [[ -f "${KING_EXTENSION_PATH}" ]]; then
   php_args+=("-d" "extension=${KING_EXTENSION_PATH}")
@@ -57,7 +68,7 @@ append_php_ini_if_set VIDEOCHAT_OTEL_LOGS_ENABLE king.otel_logs_enable
 append_php_ini_if_set VIDEOCHAT_OTEL_LOGS_EXPORTER_BATCH_SIZE king.otel_logs_exporter_batch_size
 
 # Fail fast when sqlite driver support is unavailable.
-if ! "${PHP_BIN}" "${php_args[@]}" -m | grep -Eiq '^pdo_sqlite$'; then
+if ! php_module_loaded "pdo_sqlite"; then
   echo "[video-chat][king-php-backend] Missing required PHP extension: pdo_sqlite." >&2
   echo "Install/enable pdo_sqlite (or use docker-compose.v1.yml backend image)." >&2
   exit 1
@@ -186,6 +197,27 @@ cleanup() {
   echo "[video-chat][king-php-backend] stopped" >&2
 }
 
+wait_for_first_backend_exit() {
+  local wait_help=""
+  local pid=""
+
+  wait_help="$(help wait 2>/dev/null || true)"
+  if grep -Eq -- '(^|[[:space:]])-n([[:space:],]|$)' <<<"${wait_help}"; then
+    wait -n "${backend_pids[@]}"
+    return $?
+  fi
+
+  while true; do
+    for pid in "${backend_pids[@]}"; do
+      if ! kill -0 "${pid}" >/dev/null 2>&1; then
+        wait "${pid}" 2>/dev/null
+        return $?
+      fi
+    done
+    sleep 1
+  done
+}
+
 trap 'cleanup SIGINT; exit 0' INT
 trap 'cleanup SIGTERM; exit 0' TERM
 
@@ -194,7 +226,7 @@ if [[ "${#backend_pids[@]}" -eq 1 ]]; then
   exit $?
 fi
 
-wait -n "${backend_pids[@]}"
+wait_for_first_backend_exit
 exit_code=$?
 cleanup SIGTERM
 exit "${exit_code}"

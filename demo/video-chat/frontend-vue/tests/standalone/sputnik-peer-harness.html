@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KingRT Sputnik Peer Harness</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #061323;
+      --panel: #0b1c31;
+      --panel-strong: #102a49;
+      --line: #29496e;
+      --text: #eef6ff;
+      --muted: #9eb5d0;
+      --green: #22c55e;
+      --cyan: #38bdf8;
+      --amber: #f59e0b;
+      --red: #f87171;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      background: #07182b;
+    }
+
+    .title {
+      display: grid;
+      gap: 2px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button {
+      min-height: 38px;
+      border: 1px solid #3c648e;
+      border-radius: 6px;
+      background: #12375e;
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) {
+      background: #174574;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    select {
+      min-height: 34px;
+      border: 1px solid #3c648e;
+      border-radius: 6px;
+      background: #0b223b;
+      color: var(--text);
+      font: inherit;
+      padding: 0 10px;
+    }
+
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--cyan);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #0b223b;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .status.connected {
+      border-color: #45a66a;
+      background: #0a2c1d;
+      color: #a8f0bd;
+    }
+
+    .status.error {
+      border-color: #9f3535;
+      background: #351214;
+      color: #fecaca;
+    }
+
+    .grid {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 16px;
+      padding: 16px;
+    }
+
+    .stage {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-content: start;
+    }
+
+    .tile,
+    .side {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .tile-header,
+    .side-header {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-strong);
+    }
+
+    .tile-title,
+    .side-title {
+      font-weight: 800;
+    }
+
+    .tile-note {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    video,
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      background: #000;
+    }
+
+    .bot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .bot-card {
+      min-width: 0;
+      border: 1px solid #244363;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #061323;
+    }
+
+    .bot-label {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 9px;
+      background: #07182b;
+      border-bottom: 1px solid #244363;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .bot-label strong {
+      color: var(--text);
+    }
+
+    .side {
+      align-self: start;
+      min-width: 0;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .metric {
+      border: 1px solid #254466;
+      border-radius: 6px;
+      padding: 10px;
+      background: #07182b;
+      min-width: 0;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    .log {
+      border-top: 1px solid var(--line);
+      max-height: 360px;
+      overflow: auto;
+      padding: 10px 14px 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #c7d7eb;
+    }
+
+    .log-row {
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      .stage {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="title">
+        <h1>KingRT Sputnik Peer Harness</h1>
+        <div class="subtitle">One real camera peer, multiple browser-local Sputnik peers, and production GossipController routing.</div>
+      </div>
+      <div class="actions">
+        <button id="startButton" type="button">Start Camera + Fake Peers</button>
+        <button id="stopButton" type="button" disabled>Stop</button>
+        <label>
+          Fake peers
+          <select id="fakePeerCountSelect">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <label>
+          <input id="soundToggle" type="checkbox">
+          Optional sound
+        </label>
+        <span id="status" class="status">idle</span>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="stage">
+        <article class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Local camera</span>
+            <span class="tile-note">Alice publishes</span>
+          </div>
+          <video id="localCameraVideo" muted playsinline autoplay></video>
+        </article>
+
+        <article class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Sputnik generated video</span>
+            <span class="tile-note">green screen, rotating white circles</span>
+          </div>
+          <div id="sputnikGeneratedGrid" class="bot-grid"></div>
+        </article>
+
+        <article class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Alice receives Sputnik peers</span>
+            <span class="tile-note">remote peer track</span>
+          </div>
+          <div id="aliceReceivesGrid" class="bot-grid"></div>
+        </article>
+
+        <article class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Sputnik peers receive Alice</span>
+            <span class="tile-note">camera feed received by the bot</span>
+          </div>
+          <div id="sputnikReceivesGrid" class="bot-grid"></div>
+        </article>
+      </section>
+
+      <aside class="side">
+        <div class="side-header">
+          <span class="side-title">Peer Link</span>
+          <span id="iceState" class="tile-note">not connected</span>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>Alice PC</span><strong id="aliceState">new</strong></div>
+          <div class="metric"><span>Fake PCs</span><strong id="sputnikState">new</strong></div>
+          <div class="metric"><span>Sputnik frames</span><strong id="sputnikFrames">0</strong></div>
+          <div class="metric"><span>Bots saw camera</span><strong id="botSawCamera">no</strong></div>
+          <div class="metric"><span>Data channel</span><strong id="dataChannelState">closed</strong></div>
+          <div class="metric"><span>Audio</span><strong id="audioState">off</strong></div>
+          <div class="metric"><span>Gossip recv</span><strong id="gossipReceived">0</strong></div>
+          <div class="metric"><span>Gossip sends</span><strong id="gossipSends">0</strong></div>
+        </div>
+        <div id="eventLog" class="log"></div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="./sputnik-peer-harness.ts"></script>
+</body>
+</html>
