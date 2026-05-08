@@ -3027,8 +3027,17 @@ and the IAM CI static gate.
 - [x] `e2e_membership_011_user_inside_call_loses_org_privileges_immediately`
 - [x] `e2e_membership_012_removed_org_admin_inside_call_loses_admin_controls`
 - [x] `e2e_membership_013_removed_user_rejoin_allowed_only_while_invite_valid`
-- [ ] `e2e_membership_014_membership_removal_audit_logged`
+- [x] `e2e_membership_014_membership_removal_audit_logged`
 - [x] `e2e_membership_015_stale_role_cache_ignored_after_membership_removal`
+
+Proof: `audit-call-access-events-contract.php` disables tenant membership
+before writing `videochat_audit_record_membership_removal`, fetches audit
+events, requires the `membership_removed` event type, and asserts the payload
+preserves call-scoped invitation state while not preserving organization
+rights. `audit-call-access-membership-contract.php` independently requires the
+`membership_removed` event after membership removal and verifies the encoded
+audit output fingerprints the access link without leaking raw access/session
+identifiers.
 
 ## Test Group: Invite Invalidation
 
