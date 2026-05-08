@@ -33,6 +33,7 @@ const backendContract = readText('demo/video-chat/backend-king-php/tests/call-ac
 const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
 const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
+const activeRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-active-removal-contract.php');
 const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
@@ -550,6 +551,26 @@ assert.match(
   invitedOrgRemovalContract,
   /bindingMismatch[\s\S]*access_session_binding[\s\S]*mismatch/s,
   'invited organization-removal contract must prove the call-scoped session cannot bind an unrelated call',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /removed invited user must not join deleted call[\s\S]*removed invited user must not join ended call[\s\S]*removed invited kicked user must not direct-rejoin the call room/s,
+  'invited organization-removal contract must prove deleted, ended, and kicked states override the call-scoped invitation',
+);
+assert.match(
+  invitedOrgRemovalContract,
+  /removed invited user should receive a session while invite remains valid[\s\S]*removed invited user must not rejoin after invite invalidation/s,
+  'invited organization-removal contract must prove rejoin is allowed only while the invitation remains valid',
+);
+assert.match(
+  activeRemovalContract,
+  /active removed user should remain connected when explicit call-scoped access exists[\s\S]*active removed org admin must lose realtime moderator controls immediately/s,
+  'active membership-removal contract must prove active call-scoped participants stay connected while org-admin controls are revoked',
+);
+assert.match(
+  activeRemovalContract,
+  /stale org role connection must lose active call binding after removal[\s\S]*active removed user should keep room admission only through allowed call-scoped access/s,
+  'active membership-removal contract must prove removed org users remain in calls only through explicit call-scoped permission',
 );
 assert.match(
   ciGate,
