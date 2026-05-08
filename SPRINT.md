@@ -2254,17 +2254,17 @@ registered, and anonymous temporary participant states.
 
 ## 26. Call Rescheduling
 
-- [ ] Owner reschedules call before guest opens invite link
-- [ ] Owner reschedules call while guest is in lobby
+- [x] Owner reschedules call before guest opens invite link
+- [x] Owner reschedules call while guest is in lobby
 - [x] Owner reschedules call while guest is already inside call
 - [x] Personalized invite link from old time is invalidated after reschedule if required
 - [x] New personalized invite link is issued after reschedule if required
 - [x] Old temporary guest account is deleted, invalidated, or migrated according to product rule
 - [x] Guest using old link after reschedule cannot join stale call state
-- [ ] Guest using new link after reschedule can join according to current permissions
+- [x] Guest using new link after reschedule can join according to current permissions
 - [x] Registered invited user receives correct behavior when using old link after reschedule
-- [ ] Anonymous join link behavior after reschedule is tested
-- [ ] Lobby entries from old schedule are cleared or migrated according to product rule
+- [x] Anonymous join link behavior after reschedule is tested
+- [x] Lobby entries from old schedule are cleared or migrated according to product rule
 - [x] Admitted temporary participants from old schedule are cleared or migrated according to product rule
 - [x] Audit log records reschedule
 - [x] Audit log records related invite cleanup
@@ -2277,8 +2277,13 @@ registered and temporary participants, invalidates old personalized links,
 revokes active call-access sessions, clears realtime presence, disables the
 scoped temporary guest, preserves registered accounts, emits sanitized
 reschedule/guest-cleanup audit events, and proves a fresh registered link can
-resolve after reschedule. `call-access-lifecycle-stale-links.spec.js` passed
-the rescheduled stale-link safe-screen case.
+resolve after reschedule. `call-reschedule-stale-link-safety-contract` covers
+owner reschedule before a guest opens an invite, reschedule while a guest is in
+lobby, stale old personalized/open links denying late sessions, fresh
+registered and anonymous links issuing against the current call permissions,
+and old lobby entries migrating out of waiting state.
+`call-access-lifecycle-stale-links.spec.js` passed the rescheduled stale-link
+safe-screen case.
 
 ## 27. Call Deletion
 
@@ -2566,7 +2571,7 @@ tokens, SDP, ICE, and account emails.
 - [x] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
 - [ ] Invited user is removed from organization before opening link, then joins as call-scoped invited guest
 - [ ] Invite link is invalidated before use and cannot be used
-- [ ] Call is rescheduled and stale link no longer grants stale access
+- [x] Call is rescheduled and stale link no longer grants stale access
 - [ ] Call is deleted and all temporary access is revoked
 - [ ] Owner explicitly ends call and all participants receive ended state
 - [x] Owner disconnects, final 5-minute countdown is shown, owner does not return, call ends automatically
@@ -2918,16 +2923,16 @@ and the IAM CI static gate.
 
 ## Test Group: Call Rescheduling
 
-- [ ] `e2e_reschedule_001_owner_reschedules_before_guest_opens_link`
-- [ ] `e2e_reschedule_002_owner_reschedules_while_guest_in_lobby`
+- [x] `e2e_reschedule_001_owner_reschedules_before_guest_opens_link`
+- [x] `e2e_reschedule_002_owner_reschedules_while_guest_in_lobby`
 - [x] `e2e_reschedule_003_owner_reschedules_while_guest_in_call`
 - [x] `e2e_reschedule_004_old_personalized_link_invalidated`
 - [x] `e2e_reschedule_005_new_personalized_link_works`
 - [x] `e2e_reschedule_006_old_temp_guest_handled_by_product_rule`
 - [x] `e2e_reschedule_007_old_link_cannot_join_stale_call`
 - [x] `e2e_reschedule_008_registered_invitee_old_link_behavior`
-- [ ] `e2e_reschedule_009_anonymous_link_behavior_after_reschedule`
-- [ ] `e2e_reschedule_010_lobby_entries_migrated_or_cleared`
+- [x] `e2e_reschedule_009_anonymous_link_behavior_after_reschedule`
+- [x] `e2e_reschedule_010_lobby_entries_migrated_or_cleared`
 - [x] `e2e_reschedule_011_admitted_temp_participants_migrated_or_cleared`
 - [x] `e2e_reschedule_012_reschedule_audit_logged`
 
@@ -3070,7 +3075,7 @@ and the IAM CI static gate.
 - [ ] Tests cover all critical IAM and call-access flows
 - [ ] Tests cover invitation invalidation
 - [x] Tests cover guest account cleanup
-- [ ] Tests cover call rescheduling
+- [x] Tests cover call rescheduling
 - [ ] Tests cover call deletion
 - [ ] Tests cover explicit call ending
 - [x] Tests cover implicit owner-absence ending
