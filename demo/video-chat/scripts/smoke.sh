@@ -537,8 +537,34 @@ compose_smoke() {
     }
   '
 
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_CALL_ACCESS_E2E:-0}" != "1" ]]; then
+    local call_access_seed_matrix_json
+    call_access_seed_matrix_json="$(tr -d '\n' < "${ROOT_DIR}/contracts/v1/iam-call-access-seeding.matrix.json")"
+    log "compose frontend Playwright call-access gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T \
+      -e "VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON=${call_access_seed_matrix_json}" \
+      videochat-frontend-v1 sh -lc "\
+      cd \"\${VIDEOCHAT_SMOKE_FRONTEND_WORKDIR:-/app}\" && \
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+      PLAYWRIGHT_FRONTEND_PORT=4174 \
+      VITE_VIDEOCHAT_BACKEND_ORIGIN='http://videochat-backend-v1:18080' \
+      VITE_VIDEOCHAT_BACKEND_PORT='18080' \
+      VITE_VIDEOCHAT_WS_ORIGIN='http://videochat-backend-ws-v1:18080' \
+      VITE_VIDEOCHAT_WS_PORT='18080' \
+      VITE_VIDEOCHAT_SFU_ORIGIN='http://videochat-backend-sfu-v1:18080' \
+      VITE_VIDEOCHAT_SFU_PORT='18080' \
+      VITE_VIDEOCHAT_ALLOW_INSECURE_WS='1' \
+      npm run test:e2e:call-access -- --reporter=list --workers=1"
+  fi
+
   if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_E2E_MATRIX:-0}" != "1" ]]; then
-    log "compose frontend Playwright matrix gate"
+    log "compose frontend Playwright chat/layout matrix gate"
     VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
     VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
