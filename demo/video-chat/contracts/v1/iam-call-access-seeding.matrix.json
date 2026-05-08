@@ -262,6 +262,21 @@
       ]
     },
     {
+      "key": "alpha_temp_guest_list_active",
+      "id": "20000000-0000-4000-8000-000000000106",
+      "room_id": "iam-alpha-temp-guest-list-room",
+      "tenant_key": "alpha",
+      "organization_key": "alpha_org",
+      "title": "IAM Alpha Temporary Guest List Call",
+      "status": "active",
+      "starts_at": "2026-05-08T10:00:00.000Z",
+      "ends_at": "2026-05-08T11:00:00.000Z",
+      "owner_user_key": "alpha_call_owner",
+      "guest_list_user_keys": [
+        "temporary_personalized_guest"
+      ]
+    },
+    {
       "key": "alpha_ended",
       "id": "20000000-0000-4000-8000-000000000104",
       "room_id": "iam-alpha-ended-room",
@@ -579,6 +594,50 @@
         "state": "resolved",
         "decision_source": "guest_list",
         "guest_list_required": false,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_temporary_guest_list_user_allowed",
+      "sprint_groups": ["3", "17", "20"],
+      "principal_user_key": "temporary_personalized_guest",
+      "call_key": "alpha_temp_guest_list_active",
+      "expected": {
+        "state": "resolved",
+        "decision_source": "guest_list",
+        "guest_list_required": false,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_normal_user_not_on_guest_list_denied",
+      "sprint_groups": ["3", "17", "20"],
+      "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "decision_reason": "not_on_guest_list",
+        "guest_list_required": true,
+        "can_manage_lobby": false,
+        "tenant_admin": false,
+        "platform_admin": false
+      }
+    },
+    {
+      "key": "direct_join_temporary_guest_not_on_guest_list_denied",
+      "sprint_groups": ["3", "17", "20"],
+      "principal_user_key": "temporary_anonymous_guest",
+      "call_key": "alpha_active",
+      "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "decision_reason": "not_on_guest_list",
+        "guest_list_required": true,
         "can_manage_lobby": false,
         "tenant_admin": false,
         "platform_admin": false

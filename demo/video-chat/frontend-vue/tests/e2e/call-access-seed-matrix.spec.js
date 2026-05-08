@@ -20,6 +20,7 @@ const allowedDirectJoinScenarios = [
   'direct_join_org_admin_own_organization_without_guest_list',
   'direct_join_normal_owner_without_guest_list',
   'direct_join_guest_list_user_allowed',
+  'direct_join_temporary_guest_list_user_allowed',
 ];
 
 const deniedDirectJoinScenarios = [
@@ -32,6 +33,8 @@ const deniedDirectJoinScenarios = [
   'direct_join_owner_rights_not_cross_org',
   'direct_join_guest_list_not_cross_org',
   'direct_join_normal_non_guest_user_denied',
+  'direct_join_normal_user_not_on_guest_list_denied',
+  'direct_join_temporary_guest_not_on_guest_list_denied',
   'direct_join_forged_client_admin_role_denied',
 ];
 
@@ -82,6 +85,32 @@ test('IAM call-access seed matrix covers required principals without temporary a
   expect(systemAdminScenario.expected.guest_list_required).toBe(false);
   expect(systemAdminScenario.expected.can_manage_lobby).toBe(true);
   expect(systemAdminScenario.expected.platform_admin).toBe(true);
+
+  const temporaryGuestListScenario = getSeedScenario('direct_join_temporary_guest_list_user_allowed');
+  const temporaryGuestListCall = getSeedCall(temporaryGuestListScenario.call_key);
+  expect(temporaryGuestListCall.guest_list_user_keys).toEqual(expect.arrayContaining(['temporary_personalized_guest']));
+  expect(directJoinDecisionForSeedUser(
+    temporaryGuestListScenario.principal_user_key,
+    temporaryGuestListScenario.call_key,
+  )).toMatchObject({
+    allowed: true,
+    source: 'guest_list',
+    scope: 'call',
+    can_manage_lobby: false,
+  });
+
+  for (const scenarioKey of [
+    'direct_join_normal_user_not_on_guest_list_denied',
+    'direct_join_temporary_guest_not_on_guest_list_denied',
+  ]) {
+    const scenario = getSeedScenario(scenarioKey);
+    expect(directJoinDecisionForSeedUser(scenario.principal_user_key, scenario.call_key)).toMatchObject({
+      allowed: false,
+      reason: 'not_on_guest_list',
+      source: 'none',
+      can_manage_lobby: false,
+    });
+  }
 
   for (const userKey of ['temporary_personalized_guest', 'temporary_anonymous_guest']) {
     const user = getSeedUser(userKey);
