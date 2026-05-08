@@ -143,12 +143,11 @@ SELECT
     0 AS membership_id,
     'member' AS membership_role,
     '{}' AS permissions_json,
-    roles.slug AS global_role
+    'user' AS global_role
 FROM call_access_sessions
 INNER JOIN calls ON calls.id = call_access_sessions.call_id
 INNER JOIN tenants ON tenants.id = {$sessionTenantSelect}
 INNER JOIN users ON users.id = call_access_sessions.user_id
-INNER JOIN roles ON roles.id = users.role_id
 WHERE call_access_sessions.session_id = :session_id
   AND call_access_sessions.user_id = :user_id
   AND calls.status IN ('scheduled', 'active')
