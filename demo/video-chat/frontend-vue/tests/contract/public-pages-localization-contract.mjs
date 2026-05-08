@@ -98,5 +98,10 @@ for (const key of [
 ]) {
   assert.match(fallbackMessagesSource, new RegExp(`'${key}'`), `${key} must have an English fallback`);
 }
+assert.match(
+  englishMessagesSource,
+  /'errors\.api\.call_access_not_found': 'This call link does not exist\.'/,
+  'call_access_not_found must keep stable no-data safe copy for deleted or missing personalized links',
+);
 
 console.log('[public-pages-localization-contract] PASS');
