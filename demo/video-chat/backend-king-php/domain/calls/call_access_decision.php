@@ -32,6 +32,26 @@ function videochat_decide_call_access_for_user(
         return videochat_call_access_decision_result(false, 'not_found');
     }
 
+    if (!videochat_call_tenant_is_active($pdo, $call)) {
+        return videochat_call_access_decision_result(
+            false,
+            'tenant_inactive',
+            'none',
+            'none',
+            $call
+        );
+    }
+
+    if (!videochat_call_owner_is_active($call)) {
+        return videochat_call_access_decision_result(
+            false,
+            'call_host_inactive',
+            'none',
+            'none',
+            $call
+        );
+    }
+
     if (!videochat_is_call_joinable_status((string) ($call['status'] ?? ''))) {
         return videochat_call_access_decision_result(
             false,

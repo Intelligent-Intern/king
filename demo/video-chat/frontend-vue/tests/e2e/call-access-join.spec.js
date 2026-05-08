@@ -273,6 +273,92 @@ test('stale deleted ended and inactive-user call links render safe state without
         },
       },
     },
+    {
+      label: 'disabled organization',
+      accessId: '66666666-6666-4666-8666-666666666666',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Archived Organization Private Call',
+        'archived-org-host@example.invalid',
+        'Archived Organization Invitee',
+        'sess_archived_org_should_not_bind',
+        'archived-org-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Archived Organization Private Call is unavailable.',
+        },
+        result: {
+          call: {
+            id: 'archived-org-private-call-id',
+            title: 'Archived Organization Private Call',
+            owner: { email: 'archived-org-host@example.invalid', display_name: 'Archived Organization Host' },
+          },
+          target_user: { display_name: 'Archived Organization Invitee' },
+        },
+      },
+    },
+    {
+      label: 'disabled host',
+      accessId: '77777777-7777-4777-8777-777777777777',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Disabled Host Private Call',
+        'disabled-host@example.invalid',
+        'Disabled Host Invitee',
+        'sess_disabled_host_should_not_bind',
+        'disabled-host-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Disabled Host Private Call is unavailable for disabled-host@example.invalid.',
+        },
+        result: {
+          call: {
+            id: 'disabled-host-private-call-id',
+            title: 'Disabled Host Private Call',
+            owner: { email: 'disabled-host@example.invalid', display_name: 'Disabled Host' },
+          },
+          target_user: { display_name: 'Disabled Host Invitee' },
+        },
+      },
+    },
+    {
+      label: 'deleted temporary account',
+      accessId: '88888888-8888-4888-8888-888888888888',
+      status: 404,
+      code: 'call_access_not_found',
+      privateNeedles: [
+        'Deleted Temporary Guest Private Call',
+        'guest+deleted-temp@videochat.local',
+        'Deleted Temporary Guest',
+        'sess_deleted_temp_should_not_bind',
+        'deleted-temp-private-call-id',
+      ],
+      payload: {
+        status: 'error',
+        error: {
+          code: 'call_access_not_found',
+          message: 'Deleted Temporary Guest Private Call is unavailable for guest+deleted-temp@videochat.local.',
+        },
+        result: {
+          call: {
+            id: 'deleted-temp-private-call-id',
+            title: 'Deleted Temporary Guest Private Call',
+          },
+          target_user: {
+            email: 'guest+deleted-temp@videochat.local',
+            display_name: 'Deleted Temporary Guest',
+          },
+        },
+      },
+    },
   ];
 
   for (const item of cases) {
