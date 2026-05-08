@@ -361,6 +361,198 @@ test('login switch after verified call-access link fails without rebinding or le
   }
 });
 
+test('logout during verified call-access link context fails closed without leaking or joining', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const accessId = '55555555-5555-4555-8555-555555555555';
+  const callId = 'call-access-logout-verified-call';
+  const safeCallTitle = 'Verified Logout Link Call';
+  const foreignTitle = 'Foreign Logout Session Call';
+  const foreignInviteEmail = 'foreign-logout-invitee@example.invalid';
+  const foreignHostName = 'Private Logout Host';
+  const foreignHostEmail = 'private-logout-host@example.invalid';
+  const rejectedSessionToken = 'sess_logout_foreign_should_not_bind';
+  const verifiedSession = {
+    sessionId: 'sess_verified_before_logout',
+    sessionToken: 'sess_verified_before_logout',
+    expiresAt: '2026-09-01T10:00:00Z',
+  };
+  const foreignNeedles = [
+    foreignTitle,
+    foreignInviteEmail,
+    foreignHostName,
+    foreignHostEmail,
+    rejectedSessionToken,
+  ];
+
+  const { context, page } = await createPublicJoinPage(browser, baseURL);
+  let sessionStateRequestAuthorization = '';
+  let joinGetCount = 0;
+  let sessionPostCount = 0;
+  let logoutPostCount = 0;
+  const navigations = [];
+
+  try {
+    await context.addInitScript(({ key, session }) => {
+      localStorage.setItem(key, JSON.stringify(session));
+    }, { key: sessionStorageKey, session: verifiedSession });
+
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) navigations.push(frame.url());
+    });
+
+    await page.route('**/api/auth/session-state', async (route) => {
+      sessionStateRequestAuthorization = route.request().headers().authorization || '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: { state: 'authenticated' },
+          session: {
+            id: verifiedSession.sessionId,
+            token: verifiedSession.sessionToken,
+            expires_at: verifiedSession.expiresAt,
+          },
+          user: {
+            id: 2,
+            email: 'verified-logout-user@example.invalid',
+            display_name: 'Verified Logout User',
+            role: 'user',
+            status: 'active',
+          },
+          tenant: {
+            id: 1,
+            uuid: 'tenant-1',
+            label: 'Intelligent Intern',
+            role: 'member',
+            permissions: { tenant_admin: false },
+          },
+        }),
+      });
+    });
+
+    await page.route('**/api/auth/logout', async (route) => {
+      logoutPostCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', result: { post_logout_landing_url: '' } }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      joinGetCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            state: 'resolved',
+            access_link: { id: accessId, target_user_id: 2 },
+            link_kind: 'personal',
+            call: {
+              id: callId,
+              room_id: 'lobby',
+              title: safeCallTitle,
+            },
+            target_hint: { participant_email: null },
+            join_path: `/join/${accessId}`,
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/session`, async (route) => {
+      sessionPostCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            session: {
+              id: rejectedSessionToken,
+              token: rejectedSessionToken,
+              expires_at: '2026-09-01T10:05:00Z',
+            },
+            user: {
+              id: 99,
+              email: foreignInviteEmail,
+              display_name: 'Foreign Logout Invitee',
+              role: 'user',
+            },
+            call: {
+              id: 'foreign-logout-call-id',
+              title: foreignTitle,
+              owner: {
+                display_name: foreignHostName,
+                email: foreignHostEmail,
+              },
+            },
+          },
+        }),
+      });
+    });
+
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(`/join/${accessId}`);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    expect(sessionStateRequestAuthorization).toBe(`Bearer ${verifiedSession.sessionToken}`);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(safeCallTitle);
+    await expect(joinDialog).toContainText('Personalized link');
+
+    const logoutResult = await page.evaluate(async () => {
+      const { logoutSession, sessionState } = await import('/src/domain/auth/session.ts');
+      const result = await logoutSession();
+      return {
+        result,
+        userId: sessionState.userId,
+        sessionId: sessionState.sessionId,
+        sessionToken: sessionState.sessionToken,
+      };
+    });
+    expect(logoutResult.sessionId).toBe('');
+    expect(logoutResult.sessionToken).toBe('');
+    expect(logoutResult.userId).toBe(0);
+    expect(logoutPostCount).toBe(1);
+
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    await expect(joinDialog).toContainText('This call link cannot be used for the current call state.');
+    await page.waitForTimeout(300);
+
+    expect(sessionPostCount).toBe(0);
+    expect(joinGetCount).toBe(1);
+    expect(page.url()).toContain(`/join/${accessId}`);
+    expect(page.url()).not.toContain('/workspace/call');
+    expect(navigations.filter((url) => url.includes('/workspace/call'))).toEqual([]);
+
+    for (const value of foreignNeedles) {
+      await expect(joinDialog, `logout denial must not render ${value}`).not.toContainText(value);
+    }
+
+    const storedSession = await page.evaluate((key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '{}');
+      } catch {
+        return {};
+      }
+    }, sessionStorageKey);
+    expect(storedSession.sessionId || '').toBe('');
+    expect(storedSession.sessionToken || '').toBe('');
+    expect(JSON.stringify(storedSession)).not.toContain(rejectedSessionToken);
+  } finally {
+    await context.close();
+  }
+});
+
 test('strong personalized-link mismatch wrong host denial gives no access and leaks no foreign person data', async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const accessId = '33333333-3333-4333-8333-333333333333';

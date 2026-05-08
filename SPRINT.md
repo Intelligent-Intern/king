@@ -1540,7 +1540,7 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 - [ ] CSRF protection works for account-data change
 - [x] Session fixation during link opening is prevented
 - [x] Login switch during link verification does not cause wrong account binding
-- [ ] Logout during link verification causes no data leak
+- [x] Logout during link verification causes no data leak
 - [ ] Parallel tabs with different accounts cause no incorrect merge
 - [ ] Permission changes during active call are applied correctly
 - [ ] Owner transfer during active call is applied correctly
@@ -1564,6 +1564,10 @@ state. The focused Playwright case `call-access-join.spec.js` covers the
 browser login-switch path after link verification, asserting the session POST
 carries the verified context plus the current bearer, returns a safe conflict,
 does not render foreign response data, and does not replace local session state.
+The focused Playwright logout case clears the verified browser session after
+link verification and proves the join flow fails locally without a
+call-access session POST, workspace navigation, foreign data rendering, or
+foreign session adoption.
 
 ## 16. Email Confirmation for Account Data Update
 
