@@ -1175,8 +1175,14 @@ The sprint is complete when:
 - [x] User from organization A does not receive rights from organization B
 - [x] Organization admin from organization A cannot join organization B calls through org-admin rights
 - [x] Organization role is evaluated server-side
-- [ ] Stale organization role in client cache is ignored
-- [ ] Stale organization role in session token is revalidated where required
+- [x] Stale organization role in client cache is ignored
+- [x] Stale organization role in session token is revalidated where required
+
+Proof: `call-access-stale-organization-role-contract` issues a session while a
+user has tenant and organization admin roles, downgrades both roles without
+rotating the token, and proves auth/session payloads, local session cache
+fallback, call access, call-admin decisions, forged role input, and stale
+client role cache data all resolve from current backend membership state.
 
 ## 2. Call Creation and Owner Rights
 
