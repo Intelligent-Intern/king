@@ -1259,8 +1259,8 @@ passed 3 tests; PHP persistence portions were skipped only where local
 - [x] System admin can join every active call
 - [x] System admin can join without guest-list entry
 - [x] System admin can join without invitation
-- [ ] System admin cannot join deleted call through normal join flow
-- [ ] System admin cannot join ended call through normal join flow
+- [x] System admin cannot join deleted call through normal join flow
+- [x] System admin cannot join ended call through normal join flow
 - [x] Organization admin can join every active call of own organization
 - [x] Organization admin can join own organization call without guest-list entry
 - [x] Organization admin cannot join another organization’s call through org-admin rights
@@ -1268,7 +1268,7 @@ passed 3 tests; PHP persistence portions were skipped only where local
 - [ ] User cannot directly join call when not on guest list
 - [x] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
-- [ ] Deleted / disabled user cannot join
+- [x] Deleted / disabled user cannot join
 - [ ] Removed guest-list entry revokes direct join access
 - [ ] Newly added guest-list entry grants direct join access
 - [x] Permissions are checked server-side
@@ -1282,6 +1282,13 @@ system-admin session token denial. `npx playwright test
 tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
 9 tests; `npm run test:contract:iam-call-access` passed frontend contracts and
 skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
+
+Proof: `call-access-deleted-ended-disabled-join-contract` and the integrated
+Playwright run of `call-access-seed-matrix.spec.js` plus
+`call-access-join.spec.js` cover system-admin denial for deleted/ended calls,
+disabled/deleted user denial before call resolution, safe deleted/ended public
+link states, no replacement session issuance, and no leaked private call/user
+data. The focused integrated Playwright run passed 18 tests.
 
 ## 4. Calendar Invitation Flow
 
@@ -2065,8 +2072,8 @@ host because PHP does not load `pdo_sqlite`.
 ## 30. Error and Edge Cases
 
 - [ ] Call does not exist
-- [ ] Call was deleted
-- [ ] Call was ended
+- [x] Call was deleted
+- [x] Call was ended
 - [ ] Call has not started yet if time-limited
 - [ ] Call has expired if time-limited
 - [ ] Organization does not exist
@@ -2074,8 +2081,8 @@ host because PHP does not load `pdo_sqlite`.
 - [ ] Host no longer exists
 - [ ] Host is disabled
 - [ ] Invited temporary account was deleted
-- [ ] Registered account was disabled
-- [ ] Registered account was deleted
+- [x] Registered account was disabled
+- [x] Registered account was deleted
 - [ ] User email is unconfirmed if relevant
 - [ ] Calendar appointment was cancelled
 - [ ] Calendar appointment was moved
@@ -2224,18 +2231,18 @@ unchecked for the separate owner-transfer lane.
 
 ## Test Group: Direct Join Permissions
 
-- [ ] `e2e_join_001_system_admin_can_join_any_active_call`
-- [ ] `e2e_join_002_system_admin_joins_without_guest_list`
-- [ ] `e2e_join_003_org_admin_can_join_own_org_call`
-- [ ] `e2e_join_004_org_admin_cannot_join_foreign_org_call`
-- [ ] `e2e_join_005_guest_list_user_can_join`
+- [x] `e2e_join_001_system_admin_can_join_any_active_call`
+- [x] `e2e_join_002_system_admin_joins_without_guest_list`
+- [x] `e2e_join_003_org_admin_can_join_own_org_call`
+- [x] `e2e_join_004_org_admin_cannot_join_foreign_org_call`
+- [x] `e2e_join_005_guest_list_user_can_join`
 - [ ] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
-- [ ] `e2e_join_007_owner_can_join_own_call`
-- [ ] `e2e_join_008_disabled_user_cannot_join`
+- [x] `e2e_join_007_owner_can_join_own_call`
+- [x] `e2e_join_008_disabled_user_cannot_join`
 - [ ] `e2e_join_009_removed_guest_list_entry_revokes_join`
 - [ ] `e2e_join_010_added_guest_list_entry_grants_join`
-- [ ] `e2e_join_011_manipulated_role_rejected`
-- [ ] `e2e_join_012_manipulated_call_id_rejected`
+- [x] `e2e_join_011_manipulated_role_rejected`
+- [x] `e2e_join_012_manipulated_call_id_rejected`
 
 ## Test Group: Calendar Invitation
 
@@ -2516,8 +2523,8 @@ against duplicate join/session request loops.
 - [x] `e2e_delete_005_owner_deletes_call_with_anonymous_guests_inside`
 - [x] `e2e_delete_006_deleted_call_blocks_owner_join`
 - [ ] `e2e_delete_007_deleted_call_blocks_org_admin_join`
-- [ ] `e2e_delete_008_deleted_call_blocks_system_admin_normal_join`
-- [ ] `e2e_delete_009_deleted_call_blocks_personalized_link`
+- [x] `e2e_delete_008_deleted_call_blocks_system_admin_normal_join`
+- [x] `e2e_delete_009_deleted_call_blocks_personalized_link`
 - [x] `e2e_delete_010_deleted_call_blocks_anonymous_link`
 - [x] `e2e_delete_011_deleted_call_blocks_admitted_guest_rejoin`
 - [x] `e2e_delete_012_deleted_call_cleans_temp_guests`
