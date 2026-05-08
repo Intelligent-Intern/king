@@ -528,6 +528,7 @@ sync_checkout() {
     --exclude 'compat-artifacts/' \
     --exclude '.cache/' \
     --exclude 'demo/video-chat/docker-compose.deploy.local.yml' \
+    --exclude 'demo/video-chat/secrets/' \
     --exclude 'demo/video-chat/frontend-vue/node_modules/' \
     --exclude 'demo/video-chat/frontend-vue/.vite/' \
     --exclude 'demo/video-chat/frontend-vue/dist/' \
@@ -664,6 +665,24 @@ for cert_domain in "\${EXTRA_CERT_DOMAINS[@]}"; do
   fi
 done
 
+existing_certificate_has_required_sans() {
+  local cert_path="/etc/letsencrypt/live/\${DOMAIN}/fullchain.pem"
+  local san_text required_domain index
+
+  \${SUDO}test -r "\${cert_path}" || return 1
+  \${SUDO}openssl x509 -checkend 0 -noout -in "\${cert_path}" >/dev/null 2>&1 || return 1
+  san_text="\$(\${SUDO}openssl x509 -in "\${cert_path}" -noout -ext subjectAltName 2>/dev/null | tr ',' '\\n')" || return 1
+
+  for ((index = 0; index < \${#CERTBOT_DOMAINS[@]}; index += 2)); do
+    if [ "\${CERTBOT_DOMAINS[\${index}]}" != "-d" ]; then
+      continue
+    fi
+    required_domain="\${CERTBOT_DOMAINS[\$((index + 1))]}"
+    printf '%s\\n' "\${san_text}" | sed 's/^[[:space:]]*//' | grep -Fx "DNS:\${required_domain}" >/dev/null || return 1
+  done
+}
+
+certbot_status=0
 \${SUDO} certbot certonly \\
   --standalone \\
   --non-interactive \\
@@ -672,7 +691,15 @@ done
   --cert-name "\${DOMAIN}" \\
   --expand \\
   --keep-until-expiring \\
-  "\${CERTBOT_DOMAINS[@]}"
+  "\${CERTBOT_DOMAINS[@]}" || certbot_status=\$?
+
+if [ "\${certbot_status}" -ne 0 ]; then
+  if existing_certificate_has_required_sans; then
+    echo "certbot failed, but existing certificate is still valid for all required SANs; continuing deploy." >&2
+  else
+    exit "\${certbot_status}"
+  fi
+fi
 
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/fullchain.pem"
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/privkey.pem"
@@ -1516,8 +1543,8 @@ prepare() {
   check_dns_hint
   bootstrap_remote
   sync_checkout
-  certbot_standalone
   write_remote_runtime_files
+  certbot_standalone
   sync_remote_secrets_to_local
 }
 
@@ -1557,6 +1584,7 @@ case "${ACTION}" in
   certonly)
     refresh_known_hosts_for_target
     bootstrap_remote
+    write_remote_runtime_files
     certbot_standalone
     ;;
   sync)
