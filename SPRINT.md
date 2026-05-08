@@ -462,6 +462,10 @@ Tickets:
       named remote cursors visible only for authorized participants, and clears
       cursor/selection state after revocation:
       `call-app-whiteboard-cursors-access-contract`.
+    - Regression proof renders multiple named remote cursors (`Owner`,
+      `Reviewer`, `Facilitator`), removes only the leaving remote cursor on
+      `call_app.presence.leave`, clears all remote cursor labels on revoke, and
+      asserts the participant iframe launch count and URL do not change.
     - Move undo/redo for shapes, text, and sticky notes uses CRDT update ops.
     - Browser E2E covers duplicate/out-of-order replay injection, throttled
       non-persistent presence, snapshot compaction, revoke, and reconnect.
