@@ -175,6 +175,41 @@ function videochat_iam_invitation_invalidation_assert_no_private_data(string $bo
     }
 }
 
+function videochat_iam_invitation_invalidation_seed_account_session(
+    PDO $pdo,
+    int $userId,
+    int $tenantId,
+    string $sessionId,
+    string $clientIp,
+    string $userAgent
+): void {
+    $trimmedSessionId = trim($sessionId);
+    videochat_iam_invitation_invalidation_assert($userId > 0, 'account session user id is required', 'call-access-invalidation-contract');
+    videochat_iam_invitation_invalidation_assert($trimmedSessionId !== '', 'account session id is required', 'call-access-invalidation-contract');
+
+    $hasActiveTenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id');
+    $tenantColumn = $hasActiveTenantColumn ? ', active_tenant_id' : '';
+    $tenantValue = $hasActiveTenantColumn ? ', :active_tenant_id' : '';
+    $statement = $pdo->prepare(
+        <<<SQL
+INSERT OR IGNORE INTO sessions(id, user_id{$tenantColumn}, issued_at, expires_at, revoked_at, client_ip, user_agent)
+VALUES(:id, :user_id{$tenantValue}, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
+SQL
+    );
+    $params = [
+        ':id' => $trimmedSessionId,
+        ':user_id' => $userId,
+        ':issued_at' => gmdate('c', time() - 60),
+        ':expires_at' => gmdate('c', time() + 3600),
+        ':client_ip' => $clientIp,
+        ':user_agent' => $userAgent,
+    ];
+    if ($hasActiveTenantColumn) {
+        $params[':active_tenant_id'] = $tenantId > 0 ? $tenantId : null;
+    }
+    $statement->execute($params);
+}
+
 function videochat_iam_invitation_invalidation_payload_has_key(mixed $value, string $needle): bool
 {
     if (is_object($value)) {
@@ -312,9 +347,33 @@ function videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
     string $label,
     string $expectedReason,
     int $expectedHttpStatus,
-    string $expectedHttpCode
+    string $expectedHttpCode,
+    array $requestContext = []
 ): void {
     $accessId = (string) ($fixture['access_id'] ?? '');
+    $contextLabel = trim((string) ($requestContext['label'] ?? 'default'));
+    $contextSuffix = preg_replace('/[^a-z0-9_]+/', '_', strtolower($contextLabel));
+    if (!is_string($contextSuffix) || trim($contextSuffix, '_') === '') {
+        $contextSuffix = 'default';
+    }
+    $contextSuffix = trim($contextSuffix, '_');
+    $clientIp = trim((string) ($requestContext['client_ip'] ?? '127.0.0.1'));
+    $userAgent = trim((string) ($requestContext['user_agent'] ?? $label));
+    $issuerSessionId = trim((string) ($requestContext['issuer_session_id'] ?? ''));
+    if ($issuerSessionId === '') {
+        $issuerSessionId = 'sess_iam_invitation_stale_should_not_issue_' . $contextSuffix . '_' . substr(str_replace('-', '', $accessId), 0, 8);
+    }
+    $httpIssuerSessionId = trim((string) ($requestContext['http_issuer_session_id'] ?? ''));
+    if ($httpIssuerSessionId === '') {
+        $httpIssuerSessionId = 'sess_iam_invitation_http_should_not_issue_' . $contextSuffix;
+    }
+    $sessionOptions = [];
+    foreach (['authenticated_user_id', 'authenticated_session_id', 'verified_user_id', 'verified_session_id', 'host_name', 'guest_name'] as $optionKey) {
+        if (array_key_exists($optionKey, $requestContext)) {
+            $sessionOptions[$optionKey] = $requestContext[$optionKey];
+        }
+    }
+
     $resolution = videochat_resolve_call_access_public($pdo, $accessId);
     videochat_iam_invitation_invalidation_assert(!(bool) ($resolution['ok'] ?? true), 'stale personalized link must not resolve', $label);
     videochat_iam_invitation_invalidation_assert((string) ($resolution['reason'] ?? '') === $expectedReason, 'stale link resolution reason mismatch', $label);
@@ -324,15 +383,15 @@ function videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
     videochat_iam_invitation_invalidation_assert((($resolution['target_hint'] ?? [])['participant_email'] ?? null) === null, 'stale resolution must not expose participant email hint', $label);
 
     $sessionIssuerCalls = 0;
-    $sessionId = 'sess_iam_invitation_stale_should_not_issue_' . substr(str_replace('-', '', $accessId), 0, 8);
     $sessionResult = videochat_issue_session_for_call_access(
         $pdo,
         $accessId,
-        static function () use (&$sessionIssuerCalls, $sessionId): string {
+        static function () use (&$sessionIssuerCalls, $issuerSessionId): string {
             $sessionIssuerCalls += 1;
-            return $sessionId;
+            return $issuerSessionId;
         },
-        ['client_ip' => '127.0.0.1', 'user_agent' => $label]
+        ['client_ip' => $clientIp, 'user_agent' => $userAgent],
+        $sessionOptions
     );
     videochat_iam_invitation_invalidation_assert(!(bool) ($sessionResult['ok'] ?? true), 'stale personalized link must not create a fresh session', $label);
     videochat_iam_invitation_invalidation_assert((string) ($sessionResult['reason'] ?? '') === $expectedReason, 'stale session reason mismatch', $label);
@@ -342,15 +401,28 @@ function videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
     videochat_iam_invitation_invalidation_assert(($sessionResult['access_link'] ?? null) === null, 'stale session attempt must not expose access link', $label);
     videochat_iam_invitation_invalidation_assert(($sessionResult['call'] ?? null) === null, 'stale session attempt must not expose call', $label);
 
-    $sessionCount = (int) $pdo->query('SELECT COUNT(*) FROM sessions WHERE id = ' . $pdo->quote($sessionId))->fetchColumn();
+    $sessionCount = (int) $pdo->query('SELECT COUNT(*) FROM sessions WHERE id = ' . $pdo->quote($issuerSessionId))->fetchColumn();
     videochat_iam_invitation_invalidation_assert($sessionCount === 0, 'stale link must not persist a fresh session', $label);
 
     [$jsonResponse, $errorResponse, $decodeJsonBody] = videochat_iam_invitation_invalidation_http_helpers();
     $openDatabase = static fn (): PDO => $pdo;
+    $headers = [];
+    if ($userAgent !== '') {
+        $headers['User-Agent'] = $userAgent;
+    }
+    $authorizationSessionId = trim((string) ($requestContext['authorization_session_id'] ?? ($requestContext['authenticated_session_id'] ?? '')));
+    if ($authorizationSessionId !== '') {
+        $headers['Authorization'] = 'Bearer ' . $authorizationSessionId;
+    }
     $joinResponse = videochat_handle_call_routes(
         '/api/call-access/' . $accessId . '/join',
         'GET',
-        ['method' => 'GET', 'uri' => '/api/call-access/' . $accessId . '/join', 'headers' => []],
+        [
+            'method' => 'GET',
+            'uri' => '/api/call-access/' . $accessId . '/join',
+            'headers' => $headers,
+            'remote_address' => $clientIp,
+        ],
         [],
         $jsonResponse,
         $errorResponse,
@@ -364,24 +436,30 @@ function videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
     videochat_iam_invitation_invalidation_assert_no_private_data((string) ($joinResponse['body'] ?? ''), $fixture, $label, 'stale join response');
 
     $httpSessionIssuerCalls = 0;
+    $bodyPayload = [];
+    foreach (['verified_user_id', 'verified_session_id', 'host_name', 'guest_name'] as $bodyKey) {
+        if (array_key_exists($bodyKey, $requestContext)) {
+            $bodyPayload[$bodyKey] = $requestContext[$bodyKey];
+        }
+    }
     $httpSessionResponse = videochat_handle_call_routes(
         '/api/call-access/' . $accessId . '/session',
         'POST',
         [
             'method' => 'POST',
             'uri' => '/api/call-access/' . $accessId . '/session',
-            'headers' => ['User-Agent' => $label],
-            'remote_address' => '127.0.0.1',
-            'body' => '{}',
+            'headers' => $headers,
+            'remote_address' => $clientIp,
+            'body' => json_encode($bodyPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
         ],
         [],
         $jsonResponse,
         $errorResponse,
         $decodeJsonBody,
         $openDatabase,
-        static function () use (&$httpSessionIssuerCalls): string {
+        static function () use (&$httpSessionIssuerCalls, $httpIssuerSessionId): string {
             $httpSessionIssuerCalls += 1;
-            return 'sess_iam_invitation_http_should_not_issue';
+            return $httpIssuerSessionId;
         }
     );
     videochat_iam_invitation_invalidation_assert(is_array($httpSessionResponse), 'stale HTTP session response should be an array', $label);
@@ -390,6 +468,70 @@ function videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
     $httpSessionPayload = videochat_iam_invitation_invalidation_decode($httpSessionResponse);
     videochat_iam_invitation_invalidation_assert((string) (($httpSessionPayload['error'] ?? [])['code'] ?? '') === $expectedHttpCode, 'stale HTTP session error code mismatch', $label);
     videochat_iam_invitation_invalidation_assert_no_private_data((string) ($httpSessionResponse['body'] ?? ''), $fixture, $label, 'stale session response');
+}
+
+function videochat_iam_invitation_invalidation_assert_state_across_browser_device_sessions(
+    PDO $pdo,
+    array $fixture,
+    string $label,
+    string $prefix = 'cross-context'
+): void {
+    $tenantId = (int) ($fixture['tenant_id'] ?? 0);
+    $userId = (int) ($fixture['invited_user_id'] ?? 0);
+    $accessPrefix = substr(str_replace('-', '', (string) ($fixture['access_id'] ?? '')), 0, 8);
+    $contexts = [
+        [
+            'label' => $prefix . '-browser-a',
+            'client_ip' => '127.10.24.11',
+            'user_agent' => 'King IAM invalidated-link Chromium browser A',
+            'authenticated_session_id' => 'sess_iam_invalidated_browser_a_' . $accessPrefix,
+            'verified_session_id' => 'sess_iam_invalidated_browser_a_' . $accessPrefix,
+        ],
+        [
+            'label' => $prefix . '-device-b',
+            'client_ip' => '127.10.24.12',
+            'user_agent' => 'King IAM invalidated-link mobile device B',
+            'authenticated_session_id' => 'sess_iam_invalidated_device_b_' . $accessPrefix,
+            'verified_session_id' => 'sess_iam_invalidated_device_b_' . $accessPrefix,
+        ],
+        [
+            'label' => $prefix . '-fresh-session-c',
+            'client_ip' => '127.10.24.13',
+            'user_agent' => 'King IAM invalidated-link fresh session C',
+            'authenticated_session_id' => 'sess_iam_invalidated_session_c_' . $accessPrefix,
+            'verified_session_id' => 'sess_iam_invalidated_session_c_' . $accessPrefix,
+        ],
+    ];
+
+    foreach ($contexts as $context) {
+        videochat_iam_invitation_invalidation_seed_account_session(
+            $pdo,
+            $userId,
+            $tenantId,
+            (string) ($context['authenticated_session_id'] ?? ''),
+            (string) ($context['client_ip'] ?? ''),
+            (string) ($context['user_agent'] ?? '')
+        );
+        $context['authenticated_user_id'] = $userId;
+        $context['verified_user_id'] = $userId;
+        $context['authorization_session_id'] = (string) ($context['authenticated_session_id'] ?? '');
+        $context['issuer_session_id'] = 'sess_iam_invalidated_should_not_issue_' . preg_replace('/[^a-z0-9_]+/', '_', strtolower((string) ($context['label'] ?? 'context'))) . '_' . $accessPrefix;
+        $context['http_issuer_session_id'] = 'sess_iam_invalidated_http_should_not_issue_' . preg_replace('/[^a-z0-9_]+/', '_', strtolower((string) ($context['label'] ?? 'context'))) . '_' . $accessPrefix;
+        videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
+            $pdo,
+            $fixture,
+            $label,
+            'not_found',
+            404,
+            'call_access_not_found',
+            $context
+        );
+    }
+
+    $issuedPrefixCount = (int) $pdo->query(
+        "SELECT COUNT(*) FROM sessions WHERE id LIKE 'sess_iam_invalidated_should_not_issue_%' OR id LIKE 'sess_iam_invalidated_http_should_not_issue_%'"
+    )->fetchColumn();
+    videochat_iam_invitation_invalidation_assert($issuedPrefixCount === 0, 'invalidated link must not persist any cross-context call-access sessions', $label);
 }
 
 function videochat_iam_invitation_invalidation_session_id(array $fixture, string $suffix): string
