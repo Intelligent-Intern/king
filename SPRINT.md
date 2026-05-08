@@ -1655,6 +1655,10 @@ errors remain retryable inside a bounded grace window, revoked sessions still
 close as policy violations, requested call reconnect backfill failures return
 retryable 503 diagnostics before websocket upgrade, and successful backfill
 sends authoritative lobby/room snapshots for the call room.
+Browser E2E proof: `npm run test:e2e:realtime-reconnect-websocket` drives the
+workspace through retryable websocket auth and reconnect-backfill failures in a
+fake browser WebSocket and proves no reload/logout path fires while reconnect
+requests a fresh `room/snapshot/request`.
 
 ## 23. Organization Membership Changes After Invitation
 
