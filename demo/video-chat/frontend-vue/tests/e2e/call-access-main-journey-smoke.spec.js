@@ -6,13 +6,15 @@ import {
   getSeedCall,
   getSeedScenario,
   getSeedUser,
-  installCallAccessFakeRealtime,
-  installCallAccessMediaDeviceShim,
   installCallAccessSeedRoutes,
   installStoredSeedSession,
   sessionStorageKey,
   storedSessionForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import {
+  installCallAccessFakeRealtime,
+  installCallAccessMediaDeviceShim,
+} from './helpers/callAccessSeedRuntime.js';
 
 function escapeRegExp(input) {
   return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

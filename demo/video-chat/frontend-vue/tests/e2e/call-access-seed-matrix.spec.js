@@ -2,8 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import {
   accessIdFromJoinPath,
-  createCallAccessMatrixPage,
-  createDirectJoinMatrixPage,
   directJoinDecisionForSeedUser,
   getSeedAccessLink,
   getSeedCall,
@@ -14,6 +12,10 @@ import {
   sessionStorageKey,
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import {
+  createCallAccessMatrixPage,
+  createDirectJoinMatrixPage,
+} from './helpers/callAccessSeedRuntime.js';
 
 const allowedDirectJoinScenarios = [
   'direct_join_system_admin_without_guest_list',
@@ -28,6 +30,7 @@ const deniedDirectJoinScenarios = [
   'direct_join_org_admin_explicit_ended_call_denied',
   'direct_join_org_admin_foreign_organization_denied',
   'direct_join_system_admin_deleted_call_denied',
+  'direct_join_org_admin_deleted_call_denied',
   'direct_join_system_admin_ended_call_denied',
   'direct_join_active_org_switch_does_not_grant_foreign_call',
   'direct_join_owner_rights_not_cross_org',
@@ -58,6 +61,15 @@ function escapeRegExp(input) {
 function scenarioTestName(scenarioKey, suffix) {
   const journeyKey = String(getSeedScenario(scenarioKey).journey_key || '').trim();
   return journeyKey === '' ? suffix : `${journeyKey}: ${suffix}`;
+}
+
+function expectTextDoesNotContain(text, values, label) {
+  const lowerText = String(text || '').toLowerCase();
+  for (const value of values) {
+    const needle = String(value || '').trim().toLowerCase();
+    if (needle === '') continue;
+    expect(lowerText, `${label} must not contain ${value}`).not.toContain(needle);
+  }
 }
 
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
@@ -201,6 +213,46 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
     }, sessionStorageKey);
     expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
     expect(storedSession.sessionId).toBe(sessionPayload?.result?.session?.id);
+  } finally {
+    await context.close();
+  }
+});
+
+test('deleted personalized call-access link is denied without leaking call payload', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario('deleted_personalized_link_denied');
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const participant = getSeedUser(link.target_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+  });
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(404);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.status).toBe('error');
+    expect(joinPayload?.error?.code).toBe('call_access_not_found');
+    expect(JSON.stringify(joinPayload)).not.toContain(call.title);
+    expect(JSON.stringify(joinPayload)).not.toContain(participant.email);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid/i);
+    await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
+    expectTextDoesNotContain(
+      await joinDialog.innerText(),
+      [call.id, call.title, participant.email, participant.display_name, accessId],
+      'deleted personalized link dialog',
+    );
   } finally {
     await context.close();
   }

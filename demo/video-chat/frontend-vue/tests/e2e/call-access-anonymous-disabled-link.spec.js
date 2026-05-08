@@ -2,13 +2,13 @@ import { test, expect } from '@playwright/test';
 
 import {
   accessIdFromJoinPath,
-  createCallAccessMatrixPage,
   getSeedAccessLink,
   getSeedCall,
   getSeedScenario,
   getSeedUser,
   sessionStorageKey,
 } from './helpers/callAccessSeedMatrix.js';
+import { createCallAccessMatrixPage } from './helpers/callAccessSeedRuntime.js';
 
 function expectNoForbiddenNeedles(value, needles, label) {
   const text = String(value || '').toLowerCase();

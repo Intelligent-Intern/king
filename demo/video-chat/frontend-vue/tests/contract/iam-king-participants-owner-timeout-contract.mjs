@@ -23,12 +23,13 @@ const ownerAbsenceBanner = read('frontend-vue/src/domain/realtime/OwnerAbsenceCo
 const callWorkspaceTemplate = read('frontend-vue/src/domain/realtime/CallWorkspaceView.template.html');
 const callWorkspaceView = read('frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
 const roomState = read('frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts');
-const seedMatrixHelper = read('frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
+const seedRuntimeHelper = read('frontend-vue/tests/e2e/helpers/callAccessSeedRuntime.js');
 const browserSpec = read('frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
 const packageJson = read('frontend-vue/package.json');
 
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;', '15-minute owner absence timer');
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;', '5-minute owner absence countdown');
+requireContains(ownerAbsence, "require_once __DIR__ . '/../calls/call_lifecycle.php';", 'owner absence terminal lifecycle import');
 requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence snapshot clock');
 requireContains(ownerAbsence, 'function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence transition clock');
 requireContains(ownerAbsence, "'status' => 'owner_present'", 'owner return cancellation status');
@@ -38,6 +39,7 @@ requireContains(ownerAbsence, '$countdownStartsAtMs = max($absentSinceMs, $endsA
 requireContains(ownerAbsence, "$status = $countdownStarted ? 'countdown' : 'monitoring';", 'monitoring-to-countdown state split');
 requireContains(ownerAbsence, "$status = 'ended';", 'implicit ended state');
 requireContains(ownerAbsence, "SET status = 'ended',", 'persisted implicit call ending');
+requireContains(ownerAbsence, 'videochat_apply_call_terminal_lifecycle(', 'implicit end uses terminal call lifecycle cleanup');
 requireContains(ownerAbsence, "$payload['ended_reason'] = 'owner_absent_timeout';", 'owner absence end reason');
 
 requireContains(roomSnapshot, "require_once __DIR__ . '/realtime_owner_absence.php';", 'room snapshot owner-absence helper import');
@@ -65,6 +67,10 @@ requireContains(ownerTimeoutContract, "($ownerReturn['status'] ?? '') === 'owner
 requireContains(ownerTimeoutContract, "videochat_iam_owner_timeout_left_at($pdo, $callId, $ownerUserId) === ''", 'owner left marker cancellation assertion');
 requireContains(ownerTimeoutContract, "($ended['status'] ?? '') === 'ended'", 'implicit end assertion');
 requireContains(ownerTimeoutContract, "videochat_iam_owner_timeout_call_status($pdo, $callId) === 'ended'", 'persisted ended assertion');
+requireContains(ownerTimeoutContract, 'owner-timeout end should invalidate personalized links', 'implicit end link invalidation assertion');
+requireContains(ownerTimeoutContract, 'owner-timeout ended state should block fresh direct joins', 'implicit end fresh join denial assertion');
+requireContains(ownerTimeoutContract, 'owner-timeout end should revoke call-access sessions', 'implicit end rejoin denial assertion');
+requireContains(ownerTimeoutContract, 'owner-timeout end should clear lobby rows', 'implicit end lobby cleanup assertion');
 
 requireContains(ownerAbsenceUiState, 'normalizeOwnerAbsencePayload', 'frontend owner-absence payload normalizer');
 requireContains(ownerAbsenceUiState, "state.status === 'countdown' && state.countdownStarted", 'frontend countdown visibility rule');
@@ -76,9 +82,9 @@ requireContains(ownerAbsenceBanner, "calls.workspace.owner_absence_ended", 'loca
 requireContains(callWorkspaceTemplate, '<OwnerAbsenceCountdownBanner :owner-absence="ownerAbsenceState" />', 'workspace owner-absence banner mounting');
 requireContains(callWorkspaceView, 'const ownerAbsenceState = ref(null);', 'workspace owner-absence state ref');
 requireContains(roomState, 'ownerAbsenceState.value = normalizeOwnerAbsencePayload(ownerAbsence);', 'room snapshot owner-absence state application');
-requireContains(seedMatrixHelper, 'call_lifecycle', 'fake realtime snapshot lifecycle payload');
-requireContains(seedMatrixHelper, 'owner_absence: ownerAbsencePayload(ownerAbsenceOverrides)', 'fake realtime owner absence shape');
-requireContains(seedMatrixHelper, 'window.__iamCallAccessEmitRoomSnapshot', 'browser test realtime snapshot emitter');
+requireContains(seedRuntimeHelper, 'call_lifecycle', 'fake realtime snapshot lifecycle payload');
+requireContains(seedRuntimeHelper, 'owner_absence: ownerAbsencePayload(ownerAbsenceOverrides)', 'fake realtime owner absence shape');
+requireContains(seedRuntimeHelper, 'window.__iamCallAccessEmitRoomSnapshot', 'browser test realtime snapshot emitter');
 requireContains(browserSpec, 'realtime_owner_absence.php', 'browser spec reads backend owner-absence contract constants');
 requireContains(browserSpec, 'e2e_journey_024_owner_absence_countdown_then_auto_end', 'browser auto-end journey proof');
 requireContains(browserSpec, 'e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end', 'browser owner-return journey proof');
