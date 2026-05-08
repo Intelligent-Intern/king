@@ -2080,20 +2080,20 @@ path and waiting-for-host state.
 
 - [x] Personalized invite link is manually invalidated before use
 - [x] Personalized invite link is invalidated after first use
-- [ ] Personalized invite link is invalidated while invitee is in lobby
-- [ ] Personalized invite link is invalidated while invitee is already in call
-- [ ] Anonymous join link is manually invalidated before use
-- [ ] Anonymous join link is invalidated while anonymous guest is in lobby
-- [ ] Anonymous join link is invalidated while anonymous guest is already in call
+- [x] Personalized invite link is invalidated while invitee is in lobby
+- [x] Personalized invite link is invalidated while invitee is already in call
+- [x] Anonymous join link is manually invalidated before use
+- [x] Anonymous join link is invalidated while anonymous guest is in lobby
+- [x] Anonymous join link is invalidated while anonymous guest is already in call
 - [x] Invalidated link cannot be used for fresh join attempts
 - [x] Invalidated link cannot be used for rejoin unless product rule allows admitted rejoin
 - [x] Invalidated link does not reveal whether original invitee exists
 - [x] Invalidated link does not reveal guest account data
 - [x] Invalidated link does not recreate deleted temporary accounts
 - [x] Invalidated link state is enforced server-side
-- [ ] Invalidated link state works across browsers
-- [ ] Invalidated link state works across devices
-- [ ] Invalidated link state works across sessions
+- [x] Invalidated link state works across browsers
+- [x] Invalidated link state works across devices
+- [x] Invalidated link state works across sessions
 - [ ] Invalidated link state survives application restart during CI
 - [x] Rejected invalidated link shows safe invalid-link state
 - [x] Rejected invalidated link does not leak personal data
@@ -2102,11 +2102,20 @@ path and waiting-for-host state.
 Proof: `call-access-invalidation-contract` proves manual personalized invite
 invalidation before use and after a session was issued, rejects fresh
 join/session attempts without exposing call, link, or target-user data, and
-rejects stale websocket rejoin through the call-access session binding.
+rejects stale websocket rejoin through the call-access session binding. It now
+also issues two browser/device sessions while the invitee is in lobby, issues
+two sessions while the invitee is already in the call, invalidates the invite,
+then proves every stale session and websocket auth fails with
+`call_access_link_invalidated`; the active participant row is cancelled and
+receives `left_at`. `call-access-anonymous-disabled-link-contract` disables an
+open anonymous link before use, while two anonymous guest sessions are in
+lobby, and while two anonymous guest sessions are already admitted; it proves
+the disabled link counts existing sessions, invalidates all browser/device
+sessions, rejects fresh session creation, and recreates no temporary guest.
 `call-access-invite-invalidation.spec.js` proves stale browser state renders
 the safe invalid-link state and does not issue a replacement session. Local
-PHP syntax checks passed; SQLite-backed contract execution is blocked on this
-host by missing `pdo_sqlite`.
+`php -l`, `git diff --check`, and Docker `php:8.4-cli` runs for both
+SQLite-backed contracts passed.
 
 ## 25. Guest Account Lifecycle
 
@@ -2775,15 +2784,15 @@ and the IAM CI static gate.
 
 - [x] `e2e_invite_invalid_001_personalized_link_invalidated_before_use`
 - [x] `e2e_invite_invalid_002_personalized_link_invalidated_after_first_use`
-- [ ] `e2e_invite_invalid_003_personalized_link_invalidated_in_lobby`
-- [ ] `e2e_invite_invalid_004_personalized_link_invalidated_in_call`
-- [ ] `e2e_invite_invalid_005_anonymous_link_invalidated_before_use`
-- [ ] `e2e_invite_invalid_006_anonymous_link_invalidated_in_lobby`
-- [ ] `e2e_invite_invalid_007_anonymous_link_invalidated_in_call`
+- [x] `e2e_invite_invalid_003_personalized_link_invalidated_in_lobby`
+- [x] `e2e_invite_invalid_004_personalized_link_invalidated_in_call`
+- [x] `e2e_invite_invalid_005_anonymous_link_invalidated_before_use`
+- [x] `e2e_invite_invalid_006_anonymous_link_invalidated_in_lobby`
+- [x] `e2e_invite_invalid_007_anonymous_link_invalidated_in_call`
 - [x] `e2e_invite_invalid_008_invalidated_link_blocks_fresh_join`
 - [x] `e2e_invite_invalid_009_invalidated_link_blocks_rejoin_if_required`
 - [x] `e2e_invite_invalid_010_invalidated_link_no_data_leak`
-- [ ] `e2e_invite_invalid_011_invalidated_link_does_not_recreate_temp_account`
+- [x] `e2e_invite_invalid_011_invalidated_link_does_not_recreate_temp_account`
 - [ ] `e2e_invite_invalid_012_invalidated_link_survives_app_restart`
 
 ## Test Group: Guest Account Lifecycle
