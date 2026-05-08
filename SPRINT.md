@@ -1600,11 +1600,11 @@ and a forged anonymous session body cannot bind a foreign call.
 - [x] Temporary anonymous account receives no registered user rights
 - [x] Temporary anonymous account receives no organization rights
 - [x] Temporary anonymous account receives no owner rights
-- [ ] Lobby shows waiting anonymous user according to privacy rules
-- [ ] Host can admit anonymous user
-- [ ] Temporary moderator can admit anonymous user
-- [ ] Admin can admit anonymous user
-- [ ] Unauthorized participant cannot admit anonymous user
+- [x] Lobby shows waiting anonymous user according to privacy rules
+- [x] Host can admit anonymous user
+- [x] Temporary moderator can admit anonymous user
+- [x] Admin can admit anonymous user
+- [x] Unauthorized participant cannot admit anonymous user
 - [x] After admission, anonymous temporary user enters call
 - [x] If admitted anonymous user leaves and was not kicked, they can rejoin
 - [x] Rejoin after admission does not require another approval
@@ -1628,30 +1628,36 @@ without creating a temporary guest, call-access session, or lobby participant;
 the focused Docker SQLite run passed. `call-access-anonymous-disabled-link.spec.js`
 covers `e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry`
 with no session POST and no `lobby/queue/join` frame; the focused Playwright run
-passed.
+passed. `call-access-anonymous-lobby-contract.php` now proves the logged-out
+anonymous guest waits in the lobby, host, temporary moderator, organization
+admin, and system admin admission work through server-revalidated lobby
+authority, and unauthorized waiting users cannot self-admit. The focused Docker
+SQLite run passed. `iam-lobby-management-moderator-rights-contract.mjs` binds
+the backend proof to the UI lobby-control gating and Playwright self-admit abuse
+pattern.
 
 ## 11. Lobby and Admission
 
-- [ ] User without direct permission lands in lobby
-- [ ] Anonymous not logged-in user lands in lobby
+- [x] User without direct permission lands in lobby
+- [x] Anonymous not logged-in user lands in lobby
 - [ ] Personalized temporary user without direct permission lands in lobby
-- [ ] Logged-in user without direct permission lands in lobby
-- [ ] Lobby entry informs host / authorized moderators
-- [ ] Host sees waiting participant
-- [ ] Temporary moderator sees waiting participant
-- [ ] Organization admin sees waiting participant for own organization call
+- [x] Logged-in user without direct permission lands in lobby
+- [x] Lobby entry informs host / authorized moderators
+- [x] Host sees waiting participant
+- [x] Temporary moderator sees waiting participant
+- [x] Organization admin sees waiting participant for own organization call
 - [x] System admin sees waiting participant
-- [ ] Unauthorized user sees no lobby management controls
+- [x] Unauthorized user sees no lobby management controls
 - [x] Host can admit participant
-- [ ] Temporary moderator can admit participant
+- [x] Temporary moderator can admit participant
 - [x] Organization admin can admit participant
 - [x] System admin can admit participant
 - [x] Host can reject participant
-- [ ] Temporary moderator can reject participant
+- [x] Temporary moderator can reject participant
 - [x] Organization admin can reject participant
 - [x] System admin can reject participant
-- [ ] Rejected participant cannot enter call
-- [ ] Admitted participant enters call
+- [x] Rejected participant cannot enter call
+- [x] Admitted participant enters call
 - [x] Admission is stored call-scoped
 - [x] Admission does not apply to other calls
 - [x] Admission does not apply to other organizations
@@ -1689,7 +1695,17 @@ gate wiring.
 connection can see the waiting participant in the lobby snapshot, keeps stored
 `call_role` separate from owner-equivalent `effective_call_role`, and admits the
 participant through the revalidated lobby authority. The focused PHP 8.5
-Docker SQLite run passed.
+Docker SQLite run passed. The same contract now proves host, temporary
+moderator, organization admin, and system admin waiting snapshots, admission,
+and rejection; admitted users resolve into the call room while rejected users
+stay in the waiting room. It also proves a queued participant cannot self-admit
+and only receives their own redacted lobby row. `iam-lobby-management-moderator-rights-contract.mjs`
+binds that backend proof to the workspace UI contract that shows the Lobby tab
+only from server-derived moderation context and fail-closes allow/remove/all
+controls before websocket send. Focused validation passed with Docker PHP 8.5
+SQLite and the Node static contract. `realtime-lobby-security-contract.php`
+also passed and proves forged client role/call IDs are rebound to the
+server-side room context before denial.
 
 ## 12. Rejoin, Leave, Kick
 
@@ -2680,12 +2696,12 @@ against duplicate join/session request loops.
 ## Test Group: Anonymous Link Logged Out
 
 - [ ] `e2e_anon_logged_out_001_temp_anonymous_account_created`
-- [ ] `e2e_anon_logged_out_002_temp_anonymous_user_lands_in_lobby`
+- [x] `e2e_anon_logged_out_002_temp_anonymous_user_lands_in_lobby`
 - [ ] `e2e_anon_logged_out_003_temp_anonymous_has_no_registered_rights`
-- [ ] `e2e_anon_logged_out_004_host_can_admit_anonymous_guest`
-- [ ] `e2e_anon_logged_out_005_temp_moderator_can_admit_anonymous_guest`
-- [ ] `e2e_anon_logged_out_006_admin_can_admit_anonymous_guest`
-- [ ] `e2e_anon_logged_out_007_unauthorized_user_cannot_admit_guest`
+- [x] `e2e_anon_logged_out_004_host_can_admit_anonymous_guest`
+- [x] `e2e_anon_logged_out_005_temp_moderator_can_admit_anonymous_guest`
+- [x] `e2e_anon_logged_out_006_admin_can_admit_anonymous_guest`
+- [x] `e2e_anon_logged_out_007_unauthorized_user_cannot_admit_guest`
 - [x] `e2e_anon_logged_out_008_admitted_guest_can_rejoin`
 - [x] `e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin`
 - [ ] `e2e_anon_logged_out_010_multiple_anonymous_guests_are_separate`
@@ -2693,14 +2709,14 @@ against duplicate join/session request loops.
 
 ## Test Group: Lobby
 
-- [ ] `e2e_lobby_001_unauthorized_user_lands_in_lobby`
-- [ ] `e2e_lobby_002_host_sees_waiting_participant`
-- [ ] `e2e_lobby_003_temp_moderator_sees_waiting_participant`
-- [ ] `e2e_lobby_004_org_admin_sees_waiting_participant_for_own_org`
-- [ ] `e2e_lobby_005_unauthorized_user_no_lobby_controls`
-- [ ] `e2e_lobby_006_host_admits_participant`
-- [ ] `e2e_lobby_007_host_rejects_participant`
-- [ ] `e2e_lobby_008_rejected_participant_cannot_enter`
+- [x] `e2e_lobby_001_unauthorized_user_lands_in_lobby`
+- [x] `e2e_lobby_002_host_sees_waiting_participant`
+- [x] `e2e_lobby_003_temp_moderator_sees_waiting_participant`
+- [x] `e2e_lobby_004_org_admin_sees_waiting_participant_for_own_org`
+- [x] `e2e_lobby_005_unauthorized_user_no_lobby_controls`
+- [x] `e2e_lobby_006_host_admits_participant`
+- [x] `e2e_lobby_007_host_rejects_participant`
+- [x] `e2e_lobby_008_rejected_participant_cannot_enter`
 - [ ] `e2e_lobby_009_admission_is_call_scoped`
 - [x] `e2e_lobby_010_concurrent_admission_idempotent`
 - [x] `e2e_lobby_011_concurrent_admit_reject_deterministic`

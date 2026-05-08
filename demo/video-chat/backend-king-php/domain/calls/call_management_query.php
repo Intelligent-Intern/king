@@ -586,7 +586,7 @@ WHERE calls.room_id = :room_id
   AND calls.status IN ('active', 'scheduled')
   AND (
       calls.owner_user_id = :user_id
-      OR (cp.user_id IS NOT NULL AND cp.invite_state NOT IN ('declined', 'cancelled'))
+      OR cp.user_id IS NOT NULL
       OR calls.access_mode = 'free_for_all'
   )
 ORDER BY

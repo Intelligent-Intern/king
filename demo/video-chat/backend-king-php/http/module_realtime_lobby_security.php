@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/auth_rbac.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 
 function videochat_realtime_lobby_command_requires_moderation(array $lobbyCommand): bool
@@ -78,6 +79,16 @@ function videochat_realtime_authorize_lobby_moderation_command(
             $serverRole,
             $tenantId
         );
+        if ($requestedCallId !== '' && videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '') === '') {
+            $context = videochat_realtime_call_role_context_for_room_user(
+                $pdo,
+                $normalizedRoomId,
+                $userId,
+                '',
+                $serverRole,
+                $tenantId
+            );
+        }
     } catch (Throwable) {
         return [
             'ok' => false,
