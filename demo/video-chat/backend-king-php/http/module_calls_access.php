@@ -597,6 +597,8 @@ function videochat_handle_call_access_routes(
             ]);
         }
 
+        $appEnv = (string) (getenv('VIDEOCHAT_KING_ENV') ?: 'development');
+
         return $jsonResponse(200, [
             'status' => 'ok',
             'result' => [
@@ -605,9 +607,14 @@ function videochat_handle_call_access_routes(
                 'recipient_user_id' => $requestResult['recipient_user_id'] ?? null,
                 'sent_to_logged_in_account' => (bool) ($requestResult['sent_to_logged_in_account'] ?? false),
                 'sent_to_link_account' => (bool) ($requestResult['sent_to_link_account'] ?? true),
-                'debug_confirmation_token' => (getenv('VIDEOCHAT_KING_ENV') ?: 'development') === 'production'
+                'expires_at' => $requestResult['expires_at'] ?? null,
+                'expires_in_seconds' => is_numeric($requestResult['expires_in_seconds'] ?? null) ? (int) $requestResult['expires_in_seconds'] : null,
+                'debug_confirmation_token' => $appEnv === 'production'
                     ? null
                     : ($requestResult['token'] ?? null),
+                'debug_confirmation_url' => $appEnv === 'production'
+                    ? null
+                    : ($requestResult['confirmation_url'] ?? null),
             ],
             'time' => gmdate('c'),
         ]);
