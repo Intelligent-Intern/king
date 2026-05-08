@@ -1687,6 +1687,10 @@ sends authoritative lobby/room snapshots for the call room.
 Browser proof: `npm run test:contract:realtime-reconnect-browser` proves
 transient websocket auth/backfill errors stay in retrying UI state with
 retryable diagnostics and request room snapshot backfill after reconnect.
+Browser E2E proof: `npm run test:e2e:realtime-reconnect-websocket` drives the
+workspace through retryable websocket auth and reconnect-backfill failures in a
+fake browser WebSocket and proves no reload/logout path fires while reconnect
+requests a fresh `room/snapshot/request`.
 
 ## 23. Organization Membership Changes After Invitation
 
