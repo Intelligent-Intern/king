@@ -30,6 +30,18 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         ];
     }
 
+    if (videochat_call_access_link_is_invalidated($pdo, $accessLink)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'not_found'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
+
     $expiresAt = is_string($accessLink['expires_at'] ?? null) ? (string) $accessLink['expires_at'] : '';
     if ($expiresAt !== '') {
         $expiresAtUnix = strtotime($expiresAt);
