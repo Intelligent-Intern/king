@@ -1155,7 +1155,7 @@ The sprint is complete when:
 - [ ] User can join call when on guest list
 - [ ] User cannot directly join call when not on guest list
 - [ ] User can join own call as owner
-- [ ] User cannot directly join unrelated foreign call
+- [x] User cannot directly join unrelated foreign call
 - [ ] Deleted / disabled user cannot join
 - [ ] Removed guest-list entry revokes direct join access
 - [ ] Newly added guest-list entry grants direct join access
@@ -1349,7 +1349,7 @@ The sprint is complete when:
 - [ ] Admitted participant enters call
 - [x] Admission is stored call-scoped
 - [x] Admission does not apply to other calls
-- [ ] Admission does not apply to other organizations
+- [x] Admission does not apply to other organizations
 - [ ] Temporary user admission applies only to same temporary user / link context
 - [ ] Concurrent admission by multiple moderators creates no error state
 - [ ] Concurrent rejection and admission resolves deterministically
@@ -1567,8 +1567,13 @@ session validation.
 - [ ] Changing active organization in frontend does not change server-side call permission
 - [x] Guest-list entry in organization A does not apply to organization B
 - [ ] Temporary account from organization A invitation receives no rights in organization B
-- [ ] Owner rights of organization A call do not apply to organization B call
+- [x] Owner rights of organization A call do not apply to organization B call
 - [ ] Review flags are assigned to correct organization / call
+
+Proof: `realtime-call-scope-contract` resolves realtime call context with
+tenant-aware room/call binding, rejects forged same-tenant and foreign-tenant
+room joins, prevents foreign tenant lobby hydration, and proves presence in one
+call room does not imply subscription or moderation rights in another room.
 
 ## 22. Multi-Session, Devices, Browsers
 
