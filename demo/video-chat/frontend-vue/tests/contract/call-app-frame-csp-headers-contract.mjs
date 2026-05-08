@@ -16,6 +16,7 @@ const [
   semanticDnsSource,
   semanticDnsContract,
   deploySmoke,
+  prodDebug,
 ] = await Promise.all([
   read('demo/video-chat/edge/edge.php'),
   read('demo/video-chat/edge/call_app_static.php'),
@@ -23,6 +24,7 @@ const [
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_semantic_dns.php'),
   read('demo/video-chat/backend-king-php/tests/call-app-semantic-dns-contract.php'),
   read('demo/video-chat/scripts/deploy-smoke.sh'),
+  read('demo/video-chat/scripts/prod-debug.sh'),
 ]);
 
 assert.match(
@@ -97,8 +99,32 @@ assert.match(
   'deploy smoke must verify production Whiteboard CSP headers and absence of frame-blocking X-Frame-Options',
 );
 
+assert.match(
+  prodDebug,
+  /call_app_csp_header_proof[\s\S]*\/public\/index\.html[\s\S]*\/call-app\/whiteboard\/public\/index\.html/s,
+  'prod-debug must provide a read-only proof path for both Whiteboard Call App production entrypoints',
+);
+
+assert.match(
+  prodDebug,
+  /Content-Security-Policy[\s\S]*frame-ancestors https:\/\/\$\{DEPLOY_APP_DOMAIN\}[\s\S]*script-src 'self'[\s\S]*connect-src 'self'[\s\S]*Allow-CSP-From[\s\S]*https:\/\/\$\{DEPLOY_APP_DOMAIN\}[\s\S]*X-Frame-Options/s,
+  'prod-debug must prove Call App CSP and Embedded-CSP headers are compatible with the configured app embedder',
+);
+
+assert.match(
+  prodDebug,
+  /wildcard_frame_ancestors_pattern[\s\S]*frame-ancestors\[\^;\]\*\\\*[\s\S]*wildcard_frame_src_pattern[\s\S]*frame-src\[\^;\]\*\\\*[\s\S]*wildcard_script_src_pattern[\s\S]*script-src\[\^;\]\*\\\*[\s\S]*wildcard_connect_src_pattern[\s\S]*connect-src\[\^;\]\*\\\*/,
+  'prod-debug must reject wildcard frame/script/connect CSP directives in production responses',
+);
+
+assert.match(
+  prodDebug,
+  /nested_pattern="https\?:\/\/\[A-Za-z0-9\.-\]\+\\\\\.\$\{escaped_app_domain\}"[\s\S]*must not reference nested \*\.\$\{DEPLOY_APP_DOMAIN\} service origins/s,
+  'prod-debug must reject nested *.app.kingrt.com service origins in Call App production responses',
+);
+
 assert.doesNotMatch(
-  `${edgeSource}\n${callAppStaticSource}\n${deploySmoke}`,
+  `${edgeSource}\n${callAppStaticSource}\n${deploySmoke}\n${prodDebug}`,
   /location\.reload|window\.location\.reload|reload\(\)/,
   'edge/deploy Call App frame CSP failures must not be handled through reload loops',
 );
