@@ -50,6 +50,20 @@ try {
 
     $pdo->exec(
         <<<'SQL'
+CREATE TABLE roles (
+    id INTEGER PRIMARY KEY,
+    slug TEXT NOT NULL
+);
+INSERT INTO roles(id, slug) VALUES(1, 'admin'), (2, 'user');
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    status TEXT NOT NULL,
+    role_id INTEGER NOT NULL
+);
+INSERT INTO users(id, email, password_hash, status, role_id)
+VALUES(1, 'admin@example.test', 'hash', 'active', 1);
 CREATE TABLE calls (
     id TEXT PRIMARY KEY,
     room_id TEXT NOT NULL,
@@ -402,8 +416,8 @@ SQL
         throw new RuntimeException('database_unavailable');
     };
     videochat_realtime_admission_bypass_assert(
-        videochat_realtime_connection_can_bypass_admission_for_room($ownerFastPathConnection, 'demo-call-room', $failingOpenDatabase),
-        'owner call-role fast-path must bypass admission even when db lookup is unavailable'
+        !videochat_realtime_connection_can_bypass_admission_for_room($ownerFastPathConnection, 'demo-call-room', $failingOpenDatabase),
+        'owner call-role cache must not bypass admission when current db permissions are unavailable'
     );
 
     fwrite(STDOUT, "[realtime-admission-bypass-contract] PASS\n");
