@@ -2039,15 +2039,15 @@ requests a fresh `room/snapshot/request`.
 - [x] Removed invited user cannot manage call unless separately owner/moderator
 - [x] Removed invited user cannot use stale role data from token/session/cache
 - [x] Removed invited user is blocked if invite was manually invalidated
-- [ ] Removed invited user is blocked if call was deleted
-- [ ] Removed invited user is blocked if call was ended
-- [ ] Removed invited user is blocked or routed according to policy if kicked
-- [ ] User already inside call remains connected after org removal if access was call-scoped
-- [ ] User already inside call immediately loses organization-level privileges after removal
-- [ ] Removed org-admin already inside call loses org-admin controls immediately
-- [ ] Removed org-admin already inside call remains only if explicit call-scoped access exists
-- [ ] Removed user can leave and rejoin same call only while invitation remains valid
-- [ ] Removed user cannot rejoin after invite invalidation
+- [x] Removed invited user is blocked if call was deleted
+- [x] Removed invited user is blocked if call was ended
+- [x] Removed invited user is blocked or routed according to policy if kicked
+- [x] User already inside call remains connected after org removal if access was call-scoped
+- [x] User already inside call immediately loses organization-level privileges after removal
+- [x] Removed org-admin already inside call loses org-admin controls immediately
+- [x] Removed org-admin already inside call remains only if explicit call-scoped access exists
+- [x] Removed user can leave and rejoin same call only while invitation remains valid
+- [x] Removed user cannot rejoin after invite invalidation
 - [x] Audit log records membership removal
 - [ ] Audit log records permission downgrade
 - [x] Audit log records continued call-scoped access
@@ -2075,6 +2075,16 @@ before admission, and admits them only as a non-moderating participant after
 host approval. The focused
 Playwright spec `call-access-join.spec.js` proves the public join/session browser
 path and waiting-for-host state.
+Extended proof: `call-access-invited-user-org-removal-contract` now creates
+removed invited users for deleted, ended, kicked, and manually invalidated
+invites. It proves deleted and ended calls do not issue new call-access sessions,
+kick removes direct room bypass and routes the removed invitee back to host
+approval, and rejoin succeeds only while the personal invitation remains valid.
+`call-access-membership-active-removal-contract` now proves an already-connected
+org admin stays in the call only through explicit call-scoped access, immediately
+loses organization resource access, org-admin call rights, realtime moderator
+controls, and snapshot moderation flags, while a removed org admin without
+call-scoped permission loses the active call binding.
 
 ## 24. Invite Link Invalidation
 
@@ -2769,14 +2779,14 @@ and the IAM CI static gate.
 - [x] `e2e_membership_003_removed_invited_admin_no_org_admin_rights`
 - [x] `e2e_membership_004_removed_invited_user_cannot_join_other_org_calls`
 - [x] `e2e_membership_005_removed_invited_user_cannot_access_org_resources`
-- [ ] `e2e_membership_006_removed_invited_user_blocked_after_invite_invalidation`
-- [ ] `e2e_membership_007_removed_invited_user_blocked_after_call_deleted`
-- [ ] `e2e_membership_008_removed_invited_user_blocked_after_call_ended`
-- [ ] `e2e_membership_009_removed_invited_user_kick_overrides_invite`
-- [ ] `e2e_membership_010_user_inside_call_remains_if_call_scoped_access`
-- [ ] `e2e_membership_011_user_inside_call_loses_org_privileges_immediately`
-- [ ] `e2e_membership_012_removed_org_admin_inside_call_loses_admin_controls`
-- [ ] `e2e_membership_013_removed_user_rejoin_allowed_only_while_invite_valid`
+- [x] `e2e_membership_006_removed_invited_user_blocked_after_invite_invalidation`
+- [x] `e2e_membership_007_removed_invited_user_blocked_after_call_deleted`
+- [x] `e2e_membership_008_removed_invited_user_blocked_after_call_ended`
+- [x] `e2e_membership_009_removed_invited_user_kick_overrides_invite`
+- [x] `e2e_membership_010_user_inside_call_remains_if_call_scoped_access`
+- [x] `e2e_membership_011_user_inside_call_loses_org_privileges_immediately`
+- [x] `e2e_membership_012_removed_org_admin_inside_call_loses_admin_controls`
+- [x] `e2e_membership_013_removed_user_rejoin_allowed_only_while_invite_valid`
 - [ ] `e2e_membership_014_membership_removal_audit_logged`
 - [x] `e2e_membership_015_stale_role_cache_ignored_after_membership_removal`
 
