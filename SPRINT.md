@@ -1297,10 +1297,10 @@ skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 
 ## 5. Personalized Link: User Not Logged In
 
-- [ ] Not logged-in user opens personalized link
+- [x] Not logged-in user opens personalized link
 - [ ] Temporary account from link data is created / used
 - [ ] Temporary account does not automatically log in existing registered account
-- [ ] User enters intended flow with temporary account
+- [x] User enters intended flow with temporary account
 - [ ] Temporary account may be on guest list
 - [ ] Temporary account on guest list can join directly
 - [ ] Temporary account not on guest list lands in lobby
@@ -1313,24 +1313,30 @@ skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 - [ ] Temporary account cannot receive organization-wide rights
 - [ ] Invalid personalized link is rejected
 - [ ] Manipulated personalized link is rejected
-- [ ] Error state for invalid personalized link leaks no data
+- [x] Error state for invalid personalized link leaks no data
+
+Proof: `call-access-personalized-identity.spec.js` covers a logged-out
+personalized link entering the linked call session without identity proof, plus
+safe failure states that do not expose foreign link data. `npx playwright test
+tests/e2e/call-access-personalized-identity.spec.js --workers=1 --reporter=list`
+passed 5 tests.
 
 ## 6. Personalized Link: Logged-In User, No / Light Mismatch
 
-- [ ] Logged-in user opens personalized link
+- [x] Logged-in user opens personalized link
 - [x] Logged-in account remains active
 - [x] Temporary link account does not replace active session
-- [ ] Link account is compared with logged-in account
+- [x] Link account is compared with logged-in account
 - [ ] No mismatch does not show warning modal
 - [ ] Light mismatch does not show strong foreign-link warning
 - [x] Logged-in account is used for call
 - [x] Temporary account is not set as active session
 - [x] Permission check uses logged-in account
-- [ ] User can join if logged-in account is authorized
-- [ ] User lands in lobby if logged-in account is not directly authorized
-- [ ] Temporary link data does not overwrite account data automatically
+- [x] User can join if logged-in account is authorized
+- [x] User lands in lobby if logged-in account is not directly authorized
+- [x] Temporary link data does not overwrite account data automatically
 - [ ] Light mismatches are optionally logged
-- [ ] No link data is unnecessarily exposed in frontend
+- [x] No link data is unnecessarily exposed in frontend
 - [ ] Same logged-in account can reopen same link without duplicate-link flag
 
 Proof: `call-access-verified-context-ui-contract` proves the public join view
@@ -1342,7 +1348,7 @@ the authenticated account authoritative for the issued session.
 
 ## 7. Personalized Link: Logged-In User, Strong Mismatch
 
-- [ ] Logged-in user opens personalized link with strongly different link data
+- [x] Logged-in user opens personalized link with strongly different link data
 - [ ] Strong mismatch is detected when first name differs
 - [ ] Strong mismatch is detected when last name differs
 - [ ] Strong mismatch is detected when first and last name differ
@@ -1350,9 +1356,9 @@ the authenticated account authoritative for the issued session.
 - [ ] Warning modal explains link may have been issued for someone else
 - [ ] Warning modal explains link data differs from account data
 - [ ] Warning modal asks for host name
-- [ ] Link data of other person is not displayed
-- [ ] Differing link data is not exposed in clear text
-- [ ] Host name is verified server-side
+- [x] Link data of other person is not displayed
+- [x] Differing link data is not exposed in clear text
+- [x] Host name is verified server-side
 - [x] Wrong host name grants no direct access
 - [x] Wrong host name does not reveal foreign data
 - [ ] Wrong host name may lead to lobby / manual review
@@ -1364,7 +1370,7 @@ the authenticated account authoritative for the issued session.
 - [ ] Declining update continues with logged-in account
 - [ ] User can request account update
 - [ ] User must re-enter differing values manually
-- [ ] System does not show differing link values
+- [x] System does not show differing link values
 - [x] System does not show data from guessed / foreign link
 - [ ] Email confirmation is sent to logged-in account email
 - [ ] Email is not sent to temporary link-account email
@@ -1379,7 +1385,7 @@ the authenticated account authoritative for the issued session.
 - [x] Host-name error messages leak no host data
 
 Proof: `call-access-strong-mismatch-privacy-contract` pins the focused browser
-case in `call-access-join.spec.js`: a logged-in wrong account opens a
+case in `call-access-personalized-identity.spec.js`: a logged-in wrong account opens a
 personalized link, the simulated server returns a strong-mismatch wrong-host
 denial, the join/session responses contain no invitee/host/session sentinels,
 the UI renders only the generic forbidden state, no workspace/lobby admission is
@@ -1517,7 +1523,7 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 - [ ] Admitted temporary user can reopen same call
 - [ ] Admitted temporary user can rejoin without approval
 - [ ] Rejoin works after browser refresh
-- [ ] Rejoin works after short network interruption
+- [x] Rejoin works after short network interruption
 - [ ] Rejoin works after closing tab and reopening if session remains
 - [ ] Rejoin does not work as another user with same temporary context if account binding is violated
 - [ ] Kicked temporary user cannot directly rejoin
@@ -1534,6 +1540,14 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 - [ ] Rejoin after guest-list removal is denied or routed to lobby
 - [ ] Rejoin after admin-role removal uses updated permissions
 - [ ] Rejoin after owner transfer uses updated permissions
+
+Proof: `call-access-rejoin-kick-membership.spec.js` covers network reconnect
+backfill without a leave frame, explicit hangup followed by same-session rejoin
+with a fresh snapshot, and stale lobby kick controls remaining hidden. `npx
+playwright test tests/e2e/call-access-rejoin-kick-membership.spec.js
+--workers=1 --reporter=list` passed 3 tests; PHP SQLite membership/kick
+contracts were syntax-checked but skipped at runtime because local PHP lacks
+`pdo_sqlite`.
 
 ## 13. Temporary Moderators
 
