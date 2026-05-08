@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_realtime_lobby_security_assert(bool $condition, string $message): void
@@ -36,7 +37,9 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL,
     display_name TEXT NOT NULL,
-    role_id INTEGER NOT NULL
+    role_id INTEGER NOT NULL,
+    password_hash TEXT NOT NULL DEFAULT 'test-hash',
+    status TEXT NOT NULL DEFAULT 'active'
 )
 SQL
     );
@@ -45,10 +48,21 @@ SQL
 CREATE TABLE calls (
     id TEXT PRIMARY KEY,
     room_id TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT 'Lobby Security Contract',
+    access_mode TEXT NOT NULL DEFAULT 'invite_only',
     owner_user_id INTEGER NOT NULL,
     status TEXT NOT NULL,
     starts_at TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    ends_at TEXT NOT NULL DEFAULT '2026-05-08T11:00:00Z',
+    schedule_timezone TEXT NOT NULL DEFAULT 'UTC',
+    schedule_date TEXT NOT NULL DEFAULT '',
+    schedule_duration_minutes INTEGER NOT NULL DEFAULT 60,
+    schedule_all_day INTEGER NOT NULL DEFAULT 0,
+    cancelled_at TEXT,
+    cancel_reason TEXT,
+    cancel_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT '2026-05-08T09:00:00Z'
 )
 SQL
     );

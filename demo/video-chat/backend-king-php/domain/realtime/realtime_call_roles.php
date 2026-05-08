@@ -70,8 +70,14 @@ function videochat_realtime_call_role_context_from_row(
         : videochat_realtime_normalize_call_invite_state(
             $row['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited')
         );
-    $canModerate = $isSystemAdmin || $isOrganizationAdmin || in_array($callRole, ['owner', 'moderator'], true);
-    $canManageOwner = $isSystemAdmin || $callRole === 'owner';
+    $scopedRoleActive = $isSystemAdmin
+        || $isOrganizationAdmin
+        || (int) ($row['owner_user_id'] ?? 0) === $userId
+        || videochat_call_invite_state_allows_scoped_role($inviteState);
+    $canModerate = $isSystemAdmin
+        || $isOrganizationAdmin
+        || ($scopedRoleActive && in_array($callRole, ['owner', 'moderator'], true));
+    $canManageOwner = $isSystemAdmin || ($scopedRoleActive && $callRole === 'owner');
 
     return [
         'call_id' => (string) ($row['id'] ?? ''),
