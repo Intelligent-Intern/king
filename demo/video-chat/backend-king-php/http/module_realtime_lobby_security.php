@@ -41,7 +41,8 @@ SQL
  *   room_id: string,
  *   call_id: string,
  *   role: string,
- *   call_role: string
+ *   call_role: string,
+ *   effective_call_role: string
  * }
  */
 function videochat_realtime_authorize_lobby_moderation_command(
@@ -60,6 +61,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => '',
             'role' => 'user',
             'call_role' => 'participant',
+            'effective_call_role' => 'participant',
         ];
     }
 
@@ -84,11 +86,15 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => '',
             'role' => 'user',
             'call_role' => 'participant',
+            'effective_call_role' => 'participant',
         ];
     }
 
     $callId = videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '');
     $callRole = videochat_normalize_call_participant_role((string) ($context['call_role'] ?? 'participant'));
+    $effectiveCallRole = videochat_normalize_call_participant_role(
+        (string) ($context['effective_call_role'] ?? $callRole)
+    );
     $contextRoleActive = $callRole === 'owner'
         || $serverRole === 'admin'
         || videochat_call_invite_state_allows_scoped_role($context['invite_state'] ?? 'invited');
@@ -116,6 +122,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
                 'call_id' => (string) ($call['id'] ?? ''),
                 'role' => $serverRole,
                 'call_role' => $isOwner ? 'owner' : 'moderator',
+                'effective_call_role' => $isOwner ? 'owner' : 'moderator',
             ];
         }
 
@@ -126,6 +133,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => $callId,
             'role' => $serverRole,
             'call_role' => $callRole,
+            'effective_call_role' => $effectiveCallRole,
         ];
     }
 
@@ -136,6 +144,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
         'call_id' => $callId,
         'role' => $serverRole,
         'call_role' => $callRole,
+        'effective_call_role' => $effectiveCallRole,
     ];
 }
 
@@ -161,7 +170,9 @@ function videochat_realtime_reject_unauthorized_lobby_moderation_command(
         $presenceConnection['raw_role'] = strtolower((string) ($presenceConnection['role'] ?? 'user'));
         $presenceConnection['active_call_id'] = (string) ($lobbyAuthority['call_id'] ?? ($presenceConnection['active_call_id'] ?? ''));
         $presenceConnection['call_role'] = videochat_normalize_call_participant_role((string) ($lobbyAuthority['call_role'] ?? 'participant'));
-        $presenceConnection['effective_call_role'] = $presenceConnection['call_role'];
+        $presenceConnection['effective_call_role'] = videochat_normalize_call_participant_role(
+            (string) ($lobbyAuthority['effective_call_role'] ?? $presenceConnection['call_role'])
+        );
         $presenceConnection['can_moderate_call'] = true;
         return null;
     }

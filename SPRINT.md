@@ -1563,7 +1563,7 @@ passed.
 - [ ] Host sees waiting participant
 - [ ] Temporary moderator sees waiting participant
 - [ ] Organization admin sees waiting participant for own organization call
-- [ ] System admin sees waiting participant
+- [x] System admin sees waiting participant
 - [ ] Unauthorized user sees no lobby management controls
 - [x] Host can admit participant
 - [ ] Temporary moderator can admit participant
@@ -1608,6 +1608,11 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 `e2e_lobby_011`, and `e2e_lobby_012` to the backend compare-and-set race
 contract plus the focused browser snapshot proof, and pins both package and CI
 gate wiring.
+`call-access-anonymous-lobby-contract.php` now proves the system-admin
+connection can see the waiting participant in the lobby snapshot, keeps stored
+`call_role` separate from owner-equivalent `effective_call_role`, and admits the
+participant through the revalidated lobby authority. The focused PHP 8.5
+Docker SQLite run passed.
 
 ## 12. Rejoin, Leave, Kick
 
@@ -1814,17 +1819,26 @@ available.
 ## 18. System Admin
 
 - [x] System admin can join call from every organization
-- [ ] System admin can join call without organization if such calls exist
+- [x] System admin can join call without organization if such calls exist
 - [x] System admin can join without guest-list entry
 - [x] System admin can manage lobby
 - [x] System admin can admit participants
 - [x] System admin can reject participants
 - [x] System admin can kick participants
-- [ ] System admin can view / handle review flags if supported
+- [x] System admin can view / handle review flags if supported
 - [x] System admin rights are never granted to temporary accounts
 - [x] System admin rights cannot be simulated through link data
 - [x] System admin rights remain after owner transfer
 - [x] System admin cannot be degraded through call-owner transfer
+
+Proof: `system-admin-call-rights-contract.php` creates an active tenantless call
+and proves system-admin direct join, null `tenant_id` preservation, no
+participant-row dependency, owner-equivalent admin rights, and negative
+organization-admin, forged-role, and temporary-account cases. It also records,
+lists, resolves, dismisses, and audits call-access review flags through the
+system-admin-only domain and HTTP routes while keeping access fingerprints and
+raw account identifiers out of public/audit payloads. The focused PHP 8.5 Docker
+SQLite run passed.
 
 ## 19. Organization Admin
 
@@ -2311,7 +2325,7 @@ temporary account removal plus reschedule/delete/end audit records.
 - [x] Same personalized link is opened by second logged-in account and review flag is created
 - [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
 - [x] Not logged-in user opens anonymous link, temporary account is created, user lands in lobby, is admitted, can rejoin
-- [ ] System admin joins foreign active call without invitation
+- [x] System admin joins foreign active call without invitation
 - [x] Organization admin joins own organization active call without invitation
 - [x] Organization admin cannot join foreign organization call through org-admin rights
 - [ ] Normal user on guest list joins foreign call
@@ -2334,6 +2348,10 @@ integrated browser run. `npx playwright test
 tests/e2e/call-access-main-journey-smoke.spec.js --workers=1 --reporter=list`
 passed 6 tests including the temporary-user kick and renewed-approval denial
 path.
+`call-access-seed-matrix.spec.js` now covers
+`e2e_journey_011_system_admin_join_without_invite` and
+`e2e_journey_011b_system_admin_join_tenantless_call_without_org`; the focused
+Playwright run passed 26 tests.
 
 ---
 
