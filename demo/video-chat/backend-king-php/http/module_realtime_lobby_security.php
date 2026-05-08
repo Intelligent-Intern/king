@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/calls/call_management.php';
+
 function videochat_realtime_lobby_command_requires_moderation(array $lobbyCommand): bool
 {
-    return in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/allow', 'lobby/remove', 'lobby/allow_all'], true);
+    return in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/allow', 'lobby/remove', 'lobby/reject', 'lobby/kick', 'lobby/allow_all'], true);
 }
 
 function videochat_realtime_lobby_server_role_for_user(PDO $pdo, int $userId): string
@@ -88,6 +90,32 @@ function videochat_realtime_authorize_lobby_moderation_command(
     $callId = videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '');
     $callRole = videochat_normalize_call_participant_role((string) ($context['call_role'] ?? 'participant'));
     if ($callId === '' || !(bool) ($context['can_moderate'] ?? false)) {
+        $requestedCallId = videochat_realtime_connection_call_id($presenceConnection);
+        $call = videochat_fetch_call_for_update($pdo, $requestedCallId, $tenantId);
+        if (
+            is_array($call)
+            && videochat_presence_normalize_room_id((string) ($call['room_id'] ?? ''), '') === $normalizedRoomId
+            && videochat_can_administer_call(
+                $pdo,
+                (string) ($call['id'] ?? ''),
+                $serverRole,
+                $userId,
+                (int) ($call['owner_user_id'] ?? 0),
+                $tenantId
+            )
+        ) {
+            $isOwner = $userId === (int) ($call['owner_user_id'] ?? 0);
+
+            return [
+                'ok' => true,
+                'error' => '',
+                'room_id' => $normalizedRoomId,
+                'call_id' => (string) ($call['id'] ?? ''),
+                'role' => $serverRole,
+                'call_role' => $isOwner ? 'owner' : 'moderator',
+            ];
+        }
+
         return [
             'ok' => false,
             'error' => 'forbidden',
@@ -109,7 +137,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
 }
 
 function videochat_realtime_reject_unauthorized_lobby_moderation_command(
-    array $presenceConnection,
+    array &$presenceConnection,
     array $lobbyCommand,
     string $roomId,
     mixed $websocket,
@@ -126,6 +154,12 @@ function videochat_realtime_reject_unauthorized_lobby_moderation_command(
         $openDatabase
     );
     if ((bool) ($lobbyAuthority['ok'] ?? false)) {
+        $presenceConnection['role'] = (string) ($lobbyAuthority['role'] ?? ($presenceConnection['role'] ?? 'user'));
+        $presenceConnection['raw_role'] = strtolower((string) ($presenceConnection['role'] ?? 'user'));
+        $presenceConnection['active_call_id'] = (string) ($lobbyAuthority['call_id'] ?? ($presenceConnection['active_call_id'] ?? ''));
+        $presenceConnection['call_role'] = videochat_normalize_call_participant_role((string) ($lobbyAuthority['call_role'] ?? 'participant'));
+        $presenceConnection['effective_call_role'] = $presenceConnection['call_role'];
+        $presenceConnection['can_moderate_call'] = true;
         return null;
     }
 

@@ -338,8 +338,11 @@ function sessionStatePayload(record) {
   };
 }
 
-function targetUserForAccessLink(link, requestBody = {}) {
+function targetUserForAccessLink(link, requestBody = {}, authenticatedUser = null) {
   if (link.link_kind === 'open') {
+    if (authenticatedUser && Number(authenticatedUser.id || 0) > 0) {
+      return authenticatedUser;
+    }
     const anonymousKey = String(link.anonymous_user_key || 'temporary_anonymous_guest');
     const anonymousUser = requiredRow(userIndex, anonymousKey, 'user');
     const guestName = String(requestBody.guest_name || '').trim();
@@ -406,7 +409,8 @@ export async function installCallAccessSeedRoutes(context) {
         return;
       }
       const body = parseJsonBody(request);
-      if (link.link_kind === 'open' && String(body.guest_name || '').trim() === '') {
+      const authenticatedRecord = seededSessionRecordFromToken(bearerToken(request));
+      if (!authenticatedRecord && link.link_kind === 'open' && String(body.guest_name || '').trim() === '') {
         await fulfillJson(route, 422, {
           status: 'error',
           error: { code: 'call_access_validation_failed', message: 'Guest name is required.' },
@@ -414,7 +418,7 @@ export async function installCallAccessSeedRoutes(context) {
         return;
       }
       const call = requiredRow(callIndex, link.call_key, 'call');
-      const targetUser = targetUserForAccessLink(link, body);
+      const targetUser = targetUserForAccessLink(link, body, authenticatedRecord?.user || null);
       const tenant = tenantSnapshotFor(targetUser, call);
       const sessionId = callAccessSessionId(link, targetUser);
       const session = {
@@ -622,13 +626,20 @@ export async function installCallAccessMediaDeviceShim(context) {
   });
 }
 
-export async function createCallAccessMatrixPage(browser, baseURL, { scenarioKey }) {
+export async function createCallAccessMatrixPage(browser, baseURL, {
+  scenarioKey,
+  storedSessionUserKey = '',
+  storedSessionCallKey = 'alpha_active',
+} = {}) {
   const scenario = requiredRow(scenarioIndex, scenarioKey, 'scenario');
   const linkKey = String(scenario.link_key || '').trim();
   if (linkKey === '') throw new Error(`Scenario ${scenarioKey} is not bound to a call-access link.`);
 
   const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
   await installCallAccessSeedRoutes(context);
+  if (String(storedSessionUserKey || '').trim() !== '') {
+    await installStoredSeedSession(context, storedSessionUserKey, storedSessionCallKey);
+  }
   await installCallAccessMediaDeviceShim(context);
   await installCallAccessFakeRealtime(context, { linkKey });
   const page = await context.newPage();

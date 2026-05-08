@@ -109,21 +109,27 @@ function videochat_issue_session_for_call_access(
             'call' => $call,
         ];
     }
+    $openLinkUsesAuthenticatedUser = false;
     if ($linkKind === 'open') {
-        $guestName = trim((string) ($options['guest_name'] ?? ''));
-        $guestCreate = videochat_create_guest_user_for_call_access($pdo, $guestName, $tenantId);
-        if (!(bool) ($guestCreate['ok'] ?? false)) {
-            return [
-                'ok' => false,
-                'reason' => (string) ($guestCreate['reason'] ?? 'validation_failed'),
-                'errors' => is_array($guestCreate['errors'] ?? null) ? $guestCreate['errors'] : ['guest_name' => 'required_guest_name'],
-                'session' => null,
-                'user' => null,
-                'access_link' => null,
-                'call' => null,
-            ];
+        if ($authenticatedUserId > 0) {
+            $targetUser = videochat_fetch_active_user_for_call_access($pdo, $authenticatedUserId, null, $tenantId, false);
+            $openLinkUsesAuthenticatedUser = is_array($targetUser);
+        } else {
+            $guestName = trim((string) ($options['guest_name'] ?? ''));
+            $guestCreate = videochat_create_guest_user_for_call_access($pdo, $guestName, $tenantId);
+            if (!(bool) ($guestCreate['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'reason' => (string) ($guestCreate['reason'] ?? 'validation_failed'),
+                    'errors' => is_array($guestCreate['errors'] ?? null) ? $guestCreate['errors'] : ['guest_name' => 'required_guest_name'],
+                    'session' => null,
+                    'user' => null,
+                    'access_link' => null,
+                    'call' => null,
+                ];
+            }
+            $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
         }
-        $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
     }
 
     if (!is_array($targetUser)) {
@@ -185,7 +191,7 @@ function videochat_issue_session_for_call_access(
             $userId,
             (string) ($targetUser['email'] ?? ''),
             (string) ($targetUser['display_name'] ?? ''),
-            'allowed'
+            'invited'
         );
     }
 
@@ -246,7 +252,7 @@ function videochat_issue_session_for_call_access(
     $callId = trim((string) ($call['id'] ?? ''));
     $roomId = trim((string) ($call['room_id'] ?? ''));
     $postLogoutLandingUrl = '';
-    if ($linkKind === 'open') {
+    if ($linkKind === 'open' && !$openLinkUsesAuthenticatedUser) {
         $ownerUserId = (int) (($call['owner']['user_id'] ?? 0));
         $postLogoutLandingUrl = videochat_fetch_user_post_logout_landing_url($pdo, $ownerUserId);
     } else {
