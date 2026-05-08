@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../support/auth_rbac.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 
 function videochat_call_guest_list_direct_join_assert(bool $condition, string $message): void
