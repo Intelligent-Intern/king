@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/calls/call_access.php';
 
 function videochat_call_access_route_user_id(array $authContext): int
 {
@@ -147,6 +148,16 @@ function videochat_handle_call_access_routes(
         );
         $targetUserId = videochat_call_access_resolved_target_user_id($resolveResult);
         if ($authenticatedJoinUserId > 0 && $linkKind === 'personal' && $targetUserId > 0 && $targetUserId !== $authenticatedJoinUserId) {
+            videochat_call_access_record_duplicate_personalized_link_review(
+                $pdo,
+                is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : [],
+                is_array($resolveResult['call'] ?? null) ? $resolveResult['call'] : [],
+                is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : null,
+                $authenticatedJoinUserId,
+                'join_opened',
+                ['session_id' => videochat_call_access_route_session_id($effectiveJoinAuthContext)]
+            );
+
             return $errorResponse(403, 'call_access_forbidden', 'Call access link is not available for your session.', [
                 'mismatch' => 'strong_personalized_link',
                 'fields' => [
@@ -265,6 +276,12 @@ function videochat_handle_call_access_routes(
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
+            if ($reason === 'rate_limited') {
+                return $errorResponse(429, 'call_access_rate_limited', 'Call access confirmation is rate-limited.', [
+                    'access_id' => strtolower(trim($accessId)),
+                    'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
+                ]);
+            }
 
             return $errorResponse(500, 'call_access_session_failed', 'Could not start call session.', [
                 'reason' => 'internal_error',
@@ -283,6 +300,167 @@ function videochat_handle_call_access_routes(
                 ),
                 'call' => $issueResult['call'] ?? null,
                 'join_path' => '/join/' . strtolower(trim($accessId)),
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/call-access/([A-Fa-f0-9-]{36})/account-update-confirmation$#', $path, $accountUpdateMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-access/{id}/account-update-confirmation.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'call_access_invalid_request_body', 'Account update confirmation payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $authContext = videochat_call_access_session_auth_context($pdo, $request, $apiAuthContext);
+            if (!(bool) ($authContext['ok'] ?? false)) {
+                return $errorResponse(401, 'auth_failed', 'A valid session token is required when session credentials are presented.', [
+                    'reason' => (string) ($authContext['reason'] ?? 'invalid_session'),
+                ]);
+            }
+            $effectiveAuthContext = is_array($authContext['context'] ?? null) ? $authContext['context'] : [];
+            $authenticatedUserId = videochat_call_access_route_user_id($effectiveAuthContext);
+            if ($authenticatedUserId <= 0) {
+                return $errorResponse(401, 'auth_failed', 'A valid logged-in account is required.', [
+                    'reason' => 'invalid_user_context',
+                ]);
+            }
+
+            $requestResult = videochat_call_access_request_account_update_confirmation(
+                $pdo,
+                (string) ($accountUpdateMatch[1] ?? ''),
+                $authenticatedUserId,
+                $payload,
+                ['session_id' => videochat_call_access_route_session_id($effectiveAuthContext)]
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_access_account_update_confirmation_failed', 'Could not create account update confirmation.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($requestResult['ok'] ?? false)) {
+            $reason = (string) ($requestResult['reason'] ?? 'internal_error');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'call_access_validation_failed', 'Account update confirmation payload failed validation.', [
+                    'fields' => is_array($requestResult['errors'] ?? null) ? $requestResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.', [
+                    'fields' => is_array($requestResult['errors'] ?? null) ? $requestResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'call_access_forbidden', 'Account update confirmation is not allowed.', [
+                    'fields' => is_array($requestResult['errors'] ?? null) ? $requestResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'rate_limited') {
+                return $errorResponse(429, 'call_access_rate_limited', 'Account update confirmation is rate-limited.', [
+                    'fields' => is_array($requestResult['errors'] ?? null) ? $requestResult['errors'] : [],
+                    'retry_after_seconds' => (int) ($requestResult['retry_after_seconds'] ?? 0),
+                ]);
+            }
+
+            return $errorResponse(500, 'call_access_account_update_confirmation_failed', 'Could not create account update confirmation.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'pending_confirmation',
+                'recipient_email' => $requestResult['recipient_email'] ?? null,
+                'recipient_user_id' => $requestResult['recipient_user_id'] ?? null,
+                'sent_to_logged_in_account' => (bool) ($requestResult['sent_to_logged_in_account'] ?? false),
+                'sent_to_link_account' => (bool) ($requestResult['sent_to_link_account'] ?? true),
+                'debug_confirmation_token' => (getenv('VIDEOCHAT_KING_ENV') ?: 'development') === 'production'
+                    ? null
+                    : ($requestResult['token'] ?? null),
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/call-access/account-update-confirmations/([A-Za-z0-9._-]{20,200})/confirm$#', $path, $accountConfirmMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-access/account-update-confirmations/{token}/confirm.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $authContext = videochat_call_access_session_auth_context($pdo, $request, $apiAuthContext);
+            if (!(bool) ($authContext['ok'] ?? false)) {
+                return $errorResponse(401, 'auth_failed', 'A valid session token is required when session credentials are presented.', [
+                    'reason' => (string) ($authContext['reason'] ?? 'invalid_session'),
+                ]);
+            }
+            $effectiveAuthContext = is_array($authContext['context'] ?? null) ? $authContext['context'] : [];
+            $authenticatedUserId = videochat_call_access_route_user_id($effectiveAuthContext);
+            if ($authenticatedUserId <= 0) {
+                return $errorResponse(401, 'auth_failed', 'A valid logged-in account is required.', [
+                    'reason' => 'invalid_user_context',
+                ]);
+            }
+            $confirmResult = videochat_call_access_confirm_account_update(
+                $pdo,
+                (string) ($accountConfirmMatch[1] ?? ''),
+                $authenticatedUserId
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_access_account_update_confirm_failed', 'Could not confirm account update.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($confirmResult['ok'] ?? false)) {
+            $reason = (string) ($confirmResult['reason'] ?? 'internal_error');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'call_access_validation_failed', 'Confirmation token is invalid.', [
+                    'fields' => is_array($confirmResult['errors'] ?? null) ? $confirmResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'call_access_confirmation_not_found', 'Confirmation token does not exist.', []);
+            }
+            if ($reason === 'forbidden') {
+                return $errorResponse(403, 'call_access_forbidden', 'Confirmation token is not available for your account.', [
+                    'fields' => is_array($confirmResult['errors'] ?? null) ? $confirmResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'expired') {
+                return $errorResponse(410, 'call_access_confirmation_expired', 'Confirmation token has expired.', []);
+            }
+            if ($reason === 'conflict') {
+                return $errorResponse(409, 'call_access_conflict', 'Confirmation token has already been used.', [
+                    'fields' => is_array($confirmResult['errors'] ?? null) ? $confirmResult['errors'] : [],
+                ]);
+            }
+
+            return $errorResponse(500, 'call_access_account_update_confirm_failed', 'Could not confirm account update.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'confirmed',
+                'user' => $confirmResult['user'] ?? null,
+                'consumed_at' => $confirmResult['consumed_at'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);
