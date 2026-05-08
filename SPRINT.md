@@ -1372,15 +1372,15 @@ the authenticated account authoritative for the issued session.
 - [ ] User must re-enter differing values manually
 - [x] System does not show differing link values
 - [x] System does not show data from guessed / foreign link
-- [ ] Email confirmation is sent to logged-in account email
-- [ ] Email is not sent to temporary link-account email
-- [ ] Without email confirmation, account data is not updated
-- [ ] With email confirmation, only confirmed data is updated
-- [ ] After update, user remains logged in as original account
-- [ ] Update does not modify temporary foreign account
-- [ ] Update does not modify other registered accounts
+- [x] Email confirmation is sent to logged-in account email
+- [x] Email is not sent to temporary link-account email
+- [x] Without email confirmation, account data is not updated
+- [x] With email confirmation, only confirmed data is updated
+- [x] After update, user remains logged in as original account
+- [x] Update does not modify temporary foreign account
+- [x] Update does not modify other registered accounts
 - [ ] Flow is audit-logged
-- [ ] Host-name brute force is rate-limited
+- [x] Host-name brute force is rate-limited
 - [ ] Repeated wrong host names trigger lock / review if configured
 - [x] Host-name error messages leak no host data
 
@@ -1404,9 +1404,9 @@ persisted.
 - [ ] Personalized link is first opened by account A
 - [ ] Same personalized link is reopened by account A
 - [ ] Reuse by same account does not create false foreign-account flag
-- [ ] Same personalized link is later opened by account B
-- [ ] Use of same personalized link by different logged-in account is detected
-- [ ] Account B is flagged for review
+- [x] Same personalized link is later opened by account B
+- [x] Use of same personalized link by different logged-in account is detected
+- [x] Account B is flagged for review
 - [ ] Account A may appear as affected reference in audit log
 - [ ] Flag is created even if account B provides correct host name
 - [ ] Flag is created even if account B does not enter the call
@@ -1414,42 +1414,58 @@ persisted.
 - [ ] Concurrent use of same personalized link by two accounts is detected
 - [ ] Race condition on parallel link open creates no inconsistent assignment
 - [ ] Link already used inside call marks later use by other account as suspicious
-- [ ] Temporary account cannot be taken over by second registered account without review
-- [ ] Review flag contains call, link ID, affected accounts, and timestamps
-- [ ] Review flag contains no unnecessary sensitive link data
+- [x] Temporary account cannot be taken over by second registered account without review
+- [x] Review flag contains call, link ID, affected accounts, and timestamps
+- [x] Review flag contains no unnecessary sensitive link data
 - [ ] Admin / reviewer can understand the flag
 - [ ] Abuse detection works after logout / login switch in same browser
 - [ ] Abuse detection works across devices
 - [ ] Abuse detection works across browsers
 
+Proof: `call-access-duplicate-review-email-contract.mjs` pins duplicate-link
+review flags, safe review payloads, logged-in account preservation,
+host-verification rate limiting, account-bound confirmation tokens, manual
+re-entry, no pre-confirmation update, and no session rebinding. `npx playwright
+test tests/e2e/call-access-duplicate-review-email.spec.js --workers=1
+--reporter=list` passed 2 tests; PHP SQLite wrappers were syntax-checked but
+skipped at runtime because local PHP lacks `pdo_sqlite`.
+
 ## 9. Anonymous Join Link: User Logged In
 
-- [ ] Logged-in user opens anonymous join link
-- [ ] Temporary account is not permanently created or is removed
-- [ ] User joins as logged-in user
-- [ ] Logged-in user’s rights are used
-- [ ] Logged-in user receives no rights from anonymous link
+- [x] Logged-in user opens anonymous join link
+- [x] Temporary account is not permanently created or is removed
+- [x] User joins as logged-in user
+- [x] Logged-in user’s rights are used
+- [x] Logged-in user receives no rights from anonymous link
 - [ ] Logged-in user can join if own rights allow it
-- [ ] Logged-in user lands in lobby if no direct permission exists
+- [x] Logged-in user lands in lobby if no direct permission exists
 - [ ] Logged-in system admin can join every active call through anonymous link
 - [ ] Logged-in organization admin can join own organization calls through anonymous link
 - [ ] Logged-in organization admin cannot join foreign organization calls through anonymous link
 - [ ] Logged-in guest-list user can join through anonymous link
-- [ ] Logged-in user not on guest list lands in lobby through anonymous link
-- [ ] Anonymous link does not overwrite account data
+- [x] Logged-in user not on guest list lands in lobby through anonymous link
+- [x] Anonymous link does not overwrite account data
 - [ ] Anonymous link does not modify guest list
 - [ ] Anonymous link creates no personalized identity binding
 - [ ] Invalid anonymous link is rejected
 - [ ] Manipulated anonymous link grants no access
 
+Proof: `call-access-seed-matrix.spec.js` covers anonymous open links for a
+logged-in user keeping their own account, avoiding temporary identity creation,
+using only the logged-in account rights, and waiting in lobby without direct
+permission. The same spec covers a logged-out anonymous guest entering the lobby
+with no platform, tenant, lobby-management, or admission rights. `npx playwright
+test tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list`
+passed 11 tests.
+
 ## 10. Anonymous Join Link: User Not Logged In
 
 - [x] Not logged-in user opens anonymous join link
 - [x] Temporary anonymous account is created
-- [ ] Temporary anonymous account lands in lobby
-- [ ] Temporary anonymous account receives no registered user rights
-- [ ] Temporary anonymous account receives no organization rights
-- [ ] Temporary anonymous account receives no owner rights
+- [x] Temporary anonymous account lands in lobby
+- [x] Temporary anonymous account receives no registered user rights
+- [x] Temporary anonymous account receives no organization rights
+- [x] Temporary anonymous account receives no owner rights
 - [ ] Lobby shows waiting anonymous user according to privacy rules
 - [ ] Host can admit anonymous user
 - [ ] Temporary moderator can admit anonymous user
