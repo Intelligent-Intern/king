@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../support/tenant_migrations.php';
+require_once __DIR__ . '/../../support/tenant_context.php';
 
 function videochat_fetch_call_for_update(PDO $pdo, string $callId, ?int $tenantId = null): ?array
 {
@@ -36,7 +36,8 @@ SELECT
     calls.created_at,
     calls.updated_at,
     owners.email AS owner_email,
-    owners.display_name AS owner_display_name
+    owners.display_name AS owner_display_name,
+    owners.status AS owner_status
 FROM calls
 INNER JOIN users owners ON owners.id = calls.owner_user_id
 WHERE calls.id = :id
@@ -75,7 +76,19 @@ SQL
         'updated_at' => (string) ($row['updated_at'] ?? ''),
         'owner_email' => strtolower((string) ($row['owner_email'] ?? '')),
         'owner_display_name' => (string) ($row['owner_display_name'] ?? ''),
+        'owner_status' => strtolower(trim((string) ($row['owner_status'] ?? 'active'))),
     ];
+}
+
+function videochat_call_tenant_is_active(PDO $pdo, array $call): bool
+{
+    $tenantId = is_numeric($call['tenant_id'] ?? null) ? (int) $call['tenant_id'] : null;
+    return videochat_tenant_is_active($pdo, $tenantId);
+}
+
+function videochat_call_owner_is_active(array $call): bool
+{
+    return strtolower(trim((string) ($call['owner_status'] ?? 'active'))) === 'active';
 }
 
 function videochat_user_has_system_admin_call_rights(PDO $pdo, int $authUserId, string $authRole): bool
@@ -652,6 +665,14 @@ function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, 
     $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
     $call = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if ($call === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+    if (!videochat_call_tenant_is_active($pdo, $call) || !videochat_call_owner_is_active($call)) {
         return [
             'ok' => false,
             'reason' => 'not_found',

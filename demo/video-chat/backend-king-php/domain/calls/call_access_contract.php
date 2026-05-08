@@ -147,6 +147,9 @@ function videochat_validate_call_access_session_binding(
     $linkDisabledAtSelect = videochat_tenant_table_has_column($pdo, 'call_access_links', 'disabled_at')
         ? 'call_access_links.disabled_at AS link_disabled_at'
         : 'NULL AS link_disabled_at';
+    $callTenantSelect = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+        ? 'calls.tenant_id AS resolved_call_tenant_id'
+        : 'NULL AS resolved_call_tenant_id';
 
     try {
         $statement = $pdo->prepare(
@@ -170,10 +173,13 @@ SELECT
     calls.id AS resolved_call_id,
     calls.room_id AS resolved_room_id,
     calls.status AS resolved_call_status,
+    {$callTenantSelect},
+    call_owners.status AS resolved_call_owner_status,
     users.email AS resolved_user_email
 FROM call_access_sessions
 LEFT JOIN call_access_links ON call_access_links.id = call_access_sessions.access_id
 LEFT JOIN calls ON calls.id = call_access_sessions.call_id
+LEFT JOIN users call_owners ON call_owners.id = calls.owner_user_id
 LEFT JOIN users ON users.id = call_access_sessions.user_id
 WHERE call_access_sessions.session_id = :session_id
 LIMIT 1
@@ -275,6 +281,13 @@ SQL
     }
     if (!videochat_is_call_joinable_status((string) ($row['resolved_call_status'] ?? ''))) {
         return $fail('call_access_call_not_joinable');
+    }
+    $resolvedCallTenantId = is_numeric($row['resolved_call_tenant_id'] ?? null) ? (int) $row['resolved_call_tenant_id'] : null;
+    if (!videochat_tenant_is_active($pdo, $resolvedCallTenantId)) {
+        return $fail('call_access_tenant_inactive');
+    }
+    if (strtolower(trim((string) ($row['resolved_call_owner_status'] ?? 'active'))) !== 'active') {
+        return $fail('call_access_call_host_inactive');
     }
     if ($linkKind !== (string) ($binding['link_kind'] ?? 'personal')) {
         return $fail('call_access_binding_mismatch');

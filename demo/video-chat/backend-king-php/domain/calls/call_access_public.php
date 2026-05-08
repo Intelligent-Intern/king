@@ -73,6 +73,17 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
             'target_hint' => ['participant_email' => null],
         ];
     }
+    if (!videochat_call_tenant_is_active($pdo, $call) || !videochat_call_owner_is_active($call)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['call_id' => 'call_not_found'],
+            'access_link' => null,
+            'call' => null,
+            'target_user' => null,
+            'target_hint' => ['participant_email' => null],
+        ];
+    }
 
     $callStatus = (string) ($call['status'] ?? 'scheduled');
     if (!videochat_is_call_joinable_status($callStatus)) {
