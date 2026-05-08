@@ -356,8 +356,7 @@ SQL
     videochat_iam_anonymous_logged_in_rights_assert((int) (($foreignSession['user'] ?? [])['id'] ?? 0) === $alphaAdminId, 'foreign organization anonymous link should keep logged-in account');
     videochat_iam_anonymous_logged_in_rights_assert(videochat_iam_anonymous_logged_in_rights_guest_list_count($pdo, $betaCallId) === $betaGuestListBefore, 'foreign anonymous link must not add a guest-list entry');
     $foreignParticipant = videochat_iam_anonymous_logged_in_rights_participant($pdo, $betaCallId, $alphaAdminId);
-    videochat_iam_anonymous_logged_in_rights_assert(is_array($foreignParticipant), 'foreign anonymous link should persist only a lobby participant row');
-    videochat_iam_anonymous_logged_in_rights_assert((string) ($foreignParticipant['invite_state'] ?? '') === 'pending', 'foreign anonymous link participant must stay pending');
+    videochat_iam_anonymous_logged_in_rights_assert($foreignParticipant === null, 'foreign anonymous link should wait without a lobby participant row before queueing');
     videochat_iam_anonymous_logged_in_rights_assert_open_binding($pdo, 'foreign organization admin', $betaOpenAccessId, 'sess_anon_logged_in_org_admin_foreign', $betaCallId, $alphaAdminId);
 
     $foreignDecision = videochat_decide_call_access_for_user($pdo, $betaCallId, $alphaAdminId, 'user', $tenantBId);

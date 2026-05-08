@@ -113,6 +113,11 @@ function videochat_iam_anonymous_lobby_assert_invite_state(PDO $pdo, string $cal
     videochat_iam_anonymous_lobby_assert((string) ($participant['invite_state'] ?? '') === $state, "{$label}: invite state should be {$state}");
 }
 
+function videochat_iam_anonymous_lobby_assert_no_participant(PDO $pdo, string $callId, int $userId, string $label): void
+{
+    videochat_iam_anonymous_lobby_assert(videochat_iam_anonymous_lobby_participant($pdo, $callId, $userId) === null, "{$label}: participant row should not exist before queueing");
+}
+
 function videochat_iam_anonymous_lobby_assert_waiting(
     PDO $pdo,
     callable $openDatabase,
@@ -447,7 +452,7 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) (($accountOpenSession['user'] ?? [])['account_type'] ?? '') === 'account', 'logged-in open user should keep account type');
     $guestCountAfterAccountOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     videochat_iam_anonymous_lobby_assert($guestCountAfterAccountOpen === $guestCountBeforeAccountOpen, 'logged-in open link should not create a temporary guest');
-    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $accountUserId, 'pending', 'logged-in open link default lobby wait');
+    videochat_iam_anonymous_lobby_assert_no_participant($pdo, $callId, $accountUserId, 'logged-in open link default lobby wait');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_account_open', $callId, 'logged-in open link');
 
     $guestCountBeforeLoggedOutOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
@@ -465,7 +470,7 @@ SQL
     videochat_iam_anonymous_lobby_assert((string) (($loggedOutOpenSession['user'] ?? [])['account_type'] ?? '') === 'guest', 'logged-out open user should have guest account type');
     $guestCountAfterLoggedOutOpen = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
     videochat_iam_anonymous_lobby_assert($guestCountAfterLoggedOutOpen === $guestCountBeforeLoggedOutOpen + 1, 'logged-out open link should create one temporary guest');
-    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $callId, $loggedOutGuestUserId, 'pending', 'logged-out open link default lobby wait');
+    videochat_iam_anonymous_lobby_assert_no_participant($pdo, $callId, $loggedOutGuestUserId, 'logged-out open link default lobby wait');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_guest_open', $callId, 'logged-out open link');
 
     $tempModeratorGuestSession = videochat_issue_session_for_call_access(

@@ -153,6 +153,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/call-access-session-route-guard-contract.sh"
   "tests/call-access-security-manipulation-contract.sh"
   "tests/call-access-anonymous-disabled-link-contract.sh"
+  "tests/call-access-anonymous-temp-rights-contract.sh"
   "tests/call-access-anonymous-lobby-contract.sh"
   "tests/call-access-parallel-account-tabs-contract.sh"
   "tests/iam-core-org-session-journey-contract.sh"

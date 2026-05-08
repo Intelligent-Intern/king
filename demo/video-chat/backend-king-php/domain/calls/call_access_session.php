@@ -424,18 +424,10 @@ function videochat_issue_session_for_call_access(
         $tenantId
     );
     if ($linkKind === 'open') {
-        $openLinkDirectSources = ['system_admin', 'owner', 'organization_admin', 'internal_participant'];
-        $openLinkUsesOwnDirectRights = (bool) ($callDecision['allowed'] ?? false)
-            && in_array((string) ($callDecision['source'] ?? ''), $openLinkDirectSources, true);
-        if (!$openLinkUsesOwnDirectRights) {
-            videochat_ensure_internal_call_participant(
-                $pdo,
-                (string) ($call['id'] ?? ''),
-                $userId,
-                (string) ($targetUser['email'] ?? ''),
-                (string) ($targetUser['display_name'] ?? ''),
-                'pending'
-            );
+        $directOpenLinkSources = ['system_admin', 'owner', 'organization_admin', 'internal_participant'];
+        $usesOwnDirectRights = (bool) ($callDecision['allowed'] ?? false)
+            && in_array((string) ($callDecision['source'] ?? ''), $directOpenLinkSources, true);
+        if (!$usesOwnDirectRights) {
             $callDecision = videochat_call_access_decision_result(
                 true,
                 'allowed',

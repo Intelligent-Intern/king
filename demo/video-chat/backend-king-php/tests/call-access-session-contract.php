@@ -321,9 +321,7 @@ SQL
         ':user_id' => $guestUserId,
     ]);
     $guestParticipantRow = $guestParticipant->fetch();
-    videochat_call_access_session_assert(is_array($guestParticipantRow), 'open guest should be inserted as call participant');
-    videochat_call_access_session_assert((string) ($guestParticipantRow['source'] ?? '') === 'internal', 'open guest participant source mismatch');
-    videochat_call_access_session_assert((string) ($guestParticipantRow['invite_state'] ?? '') === 'pending', 'open guest participant invite state mismatch');
+    videochat_call_access_session_assert(!is_array($guestParticipantRow), 'open guest session should not create a guest-list or lobby row before queueing');
 
     $openAuth = videochat_authenticate_request(
         $pdo,
@@ -389,7 +387,7 @@ SQL
         ':call_id' => $openCallId,
         ':user_id' => $standardUserId,
     ]);
-    videochat_call_access_session_assert((int) $sameUserParticipantQuery->fetchColumn() === 1, 'same user concurrent devices must not create duplicate participant rows');
+    videochat_call_access_session_assert((int) $sameUserParticipantQuery->fetchColumn() === 0, 'same user concurrent devices must not create participant rows before queueing');
 
     $sameUserBindingQuery = $pdo->prepare(
         <<<'SQL'
