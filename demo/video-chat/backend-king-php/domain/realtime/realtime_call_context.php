@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/tenant_context.php';
 require_once __DIR__ . '/../calls/call_management_contract.php';
+require_once __DIR__ . '/../calls/call_access_decision.php';
 require_once __DIR__ . '/../calls/invite_code_contract.php';
 require_once __DIR__ . '/realtime_connection_contract.php';
 require_once __DIR__ . '/realtime_presence.php';
 require_once __DIR__ . '/realtime_call_roles.php';
+require_once __DIR__ . '/realtime_lobby_participants.php';
 
 function videochat_realtime_connection_tenant_id(array $connection): ?int
 {
@@ -189,35 +191,7 @@ function videochat_realtime_mark_call_participant_pending_for_queue(
     callable $openDatabase,
     array $connection
 ): bool {
-    $callId = videochat_realtime_connection_call_id($connection);
-    $userId = (int) ($connection['user_id'] ?? 0);
-    if ($callId === '' || $userId <= 0) {
-        return false;
-    }
-
-    try {
-        $pdo = $openDatabase();
-        $statement = $pdo->prepare(
-            <<<'SQL'
-UPDATE call_participants
-SET invite_state = 'pending',
-    joined_at = NULL,
-    left_at = NULL
-WHERE call_id = :call_id
-  AND user_id = :user_id
-  AND source = 'internal'
-  AND invite_state IN ('invited', 'declined', 'cancelled')
-SQL
-        );
-        $statement->execute([
-            ':call_id' => $callId,
-            ':user_id' => $userId,
-        ]);
-
-        return $statement->rowCount() > 0;
-    } catch (Throwable) {
-        return false;
-    }
+    return videochat_realtime_upsert_pending_lobby_participant($openDatabase, $connection);
 }
 
 function videochat_realtime_mark_call_participant_joined(callable $openDatabase, array $connection): void
@@ -676,6 +650,7 @@ function videochat_realtime_resolve_connection_rooms(
     $userId = (int) ($user['id'] ?? 0);
     $userRole = (string) ($user['role'] ?? 'user');
     $sessionId = videochat_realtime_session_id_from_auth($websocketAuth);
+    $boundOpenAccessSession = false;
     if ($sessionId !== '') {
         try {
             $pdo = $openDatabase();
@@ -699,6 +674,7 @@ function videochat_realtime_resolve_connection_rooms(
 
                 $resolvedRequestedRoomId = $boundRoomId;
                 $normalizedRequestedCallId = $boundCallId;
+                $boundOpenAccessSession = (string) ($accessBinding['link_kind'] ?? '') === 'open';
                 $tenantId = null;
             }
         } catch (Throwable) {
@@ -719,6 +695,11 @@ function videochat_realtime_resolve_connection_rooms(
                 $tenantId
             );
             $canBypassLobby = videochat_realtime_call_context_allows_admission_bypass($context);
+            if ($boundOpenAccessSession) {
+                $decision = videochat_decide_call_access_for_user($pdo, $normalizedRequestedCallId, $userId, $userRole, $tenantId);
+                $directSources = ['system_admin', 'owner', 'organization_admin', 'internal_participant'];
+                $canBypassLobby = $canBypassLobby && in_array((string) ($decision['source'] ?? ''), $directSources, true);
+            }
         } catch (Throwable) {
             if ($requiresAuthoritativeBackfill) {
                 return videochat_realtime_room_resolution_backfill_unavailable();

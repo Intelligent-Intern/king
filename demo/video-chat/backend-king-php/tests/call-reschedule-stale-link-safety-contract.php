@@ -263,7 +263,7 @@ SQL
     videochat_reschedule_stale_link_assert((bool) (($newOpenSession['user'] ?? [])['is_guest'] ?? false), 'new anonymous link should use a temporary guest identity');
     videochat_reschedule_stale_link_assert((string) (($newOpenSession['call'] ?? [])['id'] ?? '') === $openCallId, 'new anonymous link should bind to the current call');
     $newOpenParticipant = videochat_reschedule_stale_link_participant($pdo, $openCallId, $newOpenGuestId);
-    videochat_reschedule_stale_link_assert((string) ($newOpenParticipant['invite_state'] ?? '') === 'invited', 'new anonymous guest should follow current lobby permission state');
+    videochat_reschedule_stale_link_assert($newOpenParticipant === [], 'new anonymous guest should not create a lobby row before queueing');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[{$contract}] PASS\n");

@@ -34,6 +34,7 @@ const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpe
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const anonymousDisabledBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-disabled-link-contract.php');
 const anonymousLoggedInRightsBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-logged-in-rights-contract.php');
+const anonymousTempRightsBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-temp-rights-contract.php');
 const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
 const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
 const activeRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-active-removal-contract.php');
@@ -142,6 +143,11 @@ assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
   /call-access-anonymous-logged-in-rights-contract\.sh/,
   'IAM Call Access contract gate must include logged-in anonymous-link org-admin and guest-list rights proof',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /call-access-anonymous-temp-rights-contract\.sh/,
+  'IAM Call Access contract gate must include anonymous temporary rights backend proof',
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
@@ -377,9 +383,24 @@ assert.match(
   'backend proof must reject disabled anonymous links before temporary guest or lobby entry creation',
 );
 assert.match(
+  anonymousTempRightsBackendContract,
+  /participant_user_id[\s\S]*open link must not gain participant_user_id/s,
+  'backend proof must keep anonymous/open links non-personalized',
+);
+assert.match(
+  anonymousTempRightsBackendContract,
+  /guest-list entry[\s\S]*same anonymous link must allocate separate temporary users[\s\S]*display-name spoof must not authorize lobby admission/s,
+  'backend proof must pin anonymous temporary rights and separate identities',
+);
+assert.match(
   ciGate,
   /call-access-anonymous-disabled-link-contract\.sh/,
   'IAM CI gate must include the disabled anonymous link backend proof',
+);
+assert.match(
+  ciGate,
+  /call-access-anonymous-temp-rights-contract\.sh/,
+  'IAM CI gate must include the anonymous temporary rights backend proof',
 );
 assert.match(
   mainJourneySmokeSpec,
