@@ -14,15 +14,7 @@ export function useCallLeftSidebarTabs({
   let probeSeq = 0;
 
   const normalizedCallId = computed(() => asText(activeCallId));
-  const showTabs = computed(() => Boolean(
-    normalizedCallId.value !== ''
-    && (
-      unref(callAppsCatalogStore.loading)
-      || asText(callAppsCatalogStore.error) !== ''
-      || unref(callAppsCatalogStore.hasAvailableApps)
-      || asText(currentLayoutMode) === 'call_app_workspace'
-    ),
-  ));
+  const showTabs = computed(() => normalizedCallId.value !== '');
   const showCallAppsPanel = computed(() => showTabs.value && activePanel.value === 'call_apps');
   const showSettingsPanel = computed(() => !showTabs.value || activePanel.value === 'settings');
 
