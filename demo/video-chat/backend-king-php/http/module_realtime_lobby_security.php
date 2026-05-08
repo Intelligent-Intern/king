@@ -89,7 +89,10 @@ function videochat_realtime_authorize_lobby_moderation_command(
 
     $callId = videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '');
     $callRole = videochat_normalize_call_participant_role((string) ($context['call_role'] ?? 'participant'));
-    if ($callId === '' || !(bool) ($context['can_moderate'] ?? false)) {
+    $contextRoleActive = $callRole === 'owner'
+        || $serverRole === 'admin'
+        || videochat_call_invite_state_allows_scoped_role($context['invite_state'] ?? 'invited');
+    if ($callId === '' || !(bool) ($context['can_moderate'] ?? false) || !$contextRoleActive) {
         $requestedCallId = videochat_realtime_connection_call_id($presenceConnection);
         $call = videochat_fetch_call_for_update($pdo, $requestedCallId, $tenantId);
         if (
