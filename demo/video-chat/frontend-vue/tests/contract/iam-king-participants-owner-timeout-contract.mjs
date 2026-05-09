@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { callAccessE2eSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const videoChatRoot = path.resolve(__dirname, '../../..');
@@ -28,7 +29,6 @@ const roomState = read('frontend-vue/src/domain/realtime/workspace/callWorkspace
 const seedRuntimeHelper = read('frontend-vue/tests/e2e/helpers/callAccessSeedRuntime.js');
 const joinView = read('frontend-vue/src/domain/calls/access/JoinView.vue');
 const browserSpec = read('frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
-const packageJson = read('frontend-vue/package.json');
 
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;', '15-minute owner absence timer');
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;', '5-minute owner absence countdown');
@@ -124,6 +124,6 @@ requireContains(browserSpec, "owner_absent_timeout", 'browser spec asserts owner
 requireContains(browserSpec, 'A countdown will appear if they do not return.', 'browser timer-start participant notification proof');
 requireContains(browserSpec, "countdown_remaining_ms: ownerAbsenceContract.countdownMs - 60_000", 'browser spec asserts countdown update');
 requireContains(browserSpec, 'This call link cannot be used for the current call state.', 'browser late-user ended state proof');
-requireContains(packageJson, 'tests/e2e/call-access-owner-absence-browser.spec.js', 'focused call-access command includes owner-absence browser proof');
+requireContains(callAccessE2eSuiteText, 'tests/e2e/call-access-owner-absence-browser.spec.js', 'focused call-access command includes owner-absence browser proof');
 
 process.stdout.write('[iam-king-participants-owner-timeout-contract] PASS\n');

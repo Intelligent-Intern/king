@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -52,8 +56,15 @@ const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/re
 const realtimeCallRoles = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_roles.php');
 
 const scripts = packageJson.scripts || {};
-const callAccessScript = String(scripts['test:e2e:call-access'] || '');
+const callAccessScript = callAccessE2eSuiteText;
+const iamContractScript = iamCallAccessContractSuiteText;
 const matrixScript = String(scripts['test:e2e:matrix'] || '');
+
+assert.match(
+  String(scripts['test:e2e:call-access'] || ''),
+  /call-access-e2e-suite\.mjs/,
+  'package script must expose the live backend Call Access Playwright suite helper',
+);
 
 assert.match(
   callAccessScript,
@@ -112,56 +123,61 @@ assert.match(
 );
 assert.match(
   String(scripts['test:contract:iam-call-access'] || ''),
+  /iam-call-access-contract-suite\.mjs/,
+  'package script must expose the IAM Call Access contract suite helper',
+);
+assert.match(
+  iamContractScript,
   /iam-call-access-e2e-foundation-contract\.mjs/,
   'package script must expose the IAM Call Access contract gate',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /call-access-duplicate-review-email-contract\.mjs/,
   'IAM Call Access contract gate must include duplicate-review/account-confirmation static proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /iam-king-participants-owner-timeout-contract\.mjs/,
   'IAM Call Access contract gate must include the owner-absence runtime/browser proof contract',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /\.\.\/backend-king-php\/tests\/call-access-membership-removal-contract\.sh/,
   'IAM Call Access contract gate must include the backend membership-removal proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /\.\.\/backend-king-php\/tests\/iam-core-org-session-journey-contract\.sh/,
   'IAM Call Access contract gate must include the backend core organization/account/session proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /call-access-email-confirmation-contract\.sh/,
   'IAM Call Access contract gate must include the backend email confirmation proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /call-access-anonymous-disabled-link-contract\.sh/,
   'IAM Call Access contract gate must include the disabled anonymous link backend proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /call-access-anonymous-logged-in-rights-contract\.sh/,
   'IAM Call Access contract gate must include logged-in anonymous-link org-admin and guest-list rights proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /call-access-anonymous-temp-rights-contract\.sh/,
   'IAM Call Access contract gate must include anonymous temporary rights backend proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /\.\.\/backend-king-php\/tests\/call-access-invited-user-org-removal-contract\.sh/,
   'IAM Call Access contract gate must include the invited-user organization-removal proof',
 );
 assert.match(
-  String(scripts['test:contract:iam-call-access'] || ''),
+  iamContractScript,
   /\.\.\/backend-king-php\/tests\/call-access-membership-stale-invite-rights-contract\.sh/,
   'IAM Call Access contract gate must include the stale-invite membership-rights proof',
 );

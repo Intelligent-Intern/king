@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -26,9 +30,20 @@ const backendContract = read('demo/video-chat/backend-king-php/tests/call-access
 const backendWrapper = read('demo/video-chat/backend-king-php/tests/call-access-parallel-account-tabs-contract.sh');
 
 const scripts = packageJson.scripts || {};
-const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
-const callAccessContractScript = String(scripts['test:contract:iam-call-access'] || '');
+const callAccessE2eScript = callAccessE2eSuiteText;
+const callAccessContractScript = iamCallAccessContractSuiteText;
 const callAccessMatrixPaths = new Set(matrix.commands?.['frontend:e2e:call-access']?.paths || []);
+
+assert.match(
+  String(scripts['test:e2e:call-access'] || ''),
+  /call-access-e2e-suite\.mjs/,
+  'package script must expose the Call Access E2E suite helper',
+);
+assert.match(
+  String(scripts['test:contract:iam-call-access'] || ''),
+  /iam-call-access-contract-suite\.mjs/,
+  'package script must expose the IAM Call Access contract suite helper',
+);
 
 assert.match(
   e2eSpec,
