@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/realtime/chat_archive.php';
 require_once __DIR__ . '/module_calls_access.php';
+require_once __DIR__ . '/module_operator_feedback.php';
 
 function videochat_handle_call_routes(
     string $path,
@@ -29,6 +30,20 @@ function videochat_handle_call_routes(
     );
     if ($accessRouteResponse !== null) {
         return $accessRouteResponse;
+    }
+
+    $operatorFeedbackResponse = videochat_handle_operator_feedback_routes(
+        $path,
+        $method,
+        $request,
+        $apiAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    if ($operatorFeedbackResponse !== null) {
+        return $operatorFeedbackResponse;
     }
 
     if (preg_match('#^/api/calls/resolve/([A-Za-z0-9._-]{1,200})$#', $path, $resolveMatch) === 1) {
