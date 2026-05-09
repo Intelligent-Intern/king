@@ -37,6 +37,9 @@ User-facing problem:
 - Call chat needs an operator feedback path so users can flag missing features
   or issues while staying in the call; those reports must be persisted and
   turned into sprint work.
+- Call Apps must be reversible at call scope: an owner/moderator who attaches a
+  Call App must also be able to remove that active Call App from the call
+  without leaving stale iframe, grant, launch-token, or snapshot state behind.
 
 Sprint goal:
 - Add installable, package-described Call Apps for collaborative documents,
@@ -83,6 +86,10 @@ Acceptance criteria:
   into sprint tickets.
 - After a feedback-derived fix is deployed, users see
   `feature '<requested feature>' deployed` once for that deployed request.
+- Call owners/moderators can remove the active Call App from the call. The
+  removal uses the backend session lifecycle, broadcasts a fresh room snapshot,
+  clears the embedded Call App UI for all participants, and prevents removed
+  sessions from being launched again.
 - Each worker branch is merged locally before deploy. Deploy diagnostics collect
   all distinct errors before any follow-up deployment is prepared.
 
@@ -167,6 +174,17 @@ Tickets:
     `npm run test:contract:call-apps:sqlite`, PHP syntax checks for the touched
     Call App backend modules, and `git diff --check` PASS locally. No deploy,
     push, DNS, certbot, Background, Gossip, or SFU work was run in this loop.
+
+- [ ] OCA-07 Remove active Call App from a call
+  - Add a clear owner/moderator-only remove action for the active Call App in
+    the Call Apps sidebar.
+  - Use the existing backend-backed session lifecycle instead of local-only UI
+    state; removing a session must call the session DELETE route, request a
+    fresh room snapshot, and leave removed sessions unavailable for launch.
+  - Clear the active Call App workspace surface for all participants through the
+    broadcast snapshot path; no manual reload or refresh button.
+  - Add focused frontend/backend contract proof that attach, remove, and
+    removed-session launch denial stay wired.
 
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
