@@ -34,6 +34,8 @@ async function main() {
   const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const protectedBrowserVideoEncoder = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
   const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
   const backgroundTabPolicy = read('src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
   const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
@@ -100,6 +102,10 @@ async function main() {
   requireContains(sfuClient, 'disablePublisherMediaRecovery', 'SFU client can disable publisher media recovery requests');
   requireContains(sfuClient, 'suppressPublisherFrameDropDiagnostics', 'SFU client can suppress noisy strict frame drop diagnostics');
   requireContains(mediaSecurityRuntime, "strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')", 'strict mode coalesces sender-key-not-ready churn');
+  requireContains(mediaSecurityRuntime, "eventType: 'media_security_sync_hint'", 'media security sync hint remains available outside strict coalescing');
+  requireContains(mediaSecurityRuntime, "eventType: 'media_security_handshake_timeout'", 'media security timeout remains available outside strict coalescing');
+  requireContains(mediaStack, "suppressRemoteFrameDropDiagnostics: strictPolicyEnabled(constants.strictStabilityPolicy, 'quietPublisherFrameDrops')", 'strict mode suppresses remote continuity-drop diagnostics');
+  requireContains(frameDecode, 'suppressRemoteFrameDropDiagnostics = false', 'frame decoder accepts strict remote drop suppression');
 
   const server = await createServer({
     root: frontendRoot,

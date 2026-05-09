@@ -53,7 +53,8 @@ function videochat_sfu_drop_stale_ingress_frame_if_needed(mixed $websocket, arra
     $trustedIngressAgeMs = videochat_sfu_frame_trusted_ingress_age_ms($frame);
     $latencyBudgetMs = videochat_sfu_frame_latency_budget_ms($frame);
     if ($trustedIngressAgeMs <= $latencyBudgetMs || $trustedIngressAgeMs <= 0) {
-        if ($receiveLatencyMs > $latencyBudgetMs) {
+        $outgoingVideoQualityProfile = strtolower(trim((string) ($frame['outgoing_video_quality_profile'] ?? '')));
+        if ($receiveLatencyMs > $latencyBudgetMs && $outgoingVideoQualityProfile !== 'strict_720p30') {
             videochat_sfu_log_runtime_event('sfu_frame_ingress_wall_clock_skew_observed', [
                 'room_id' => $roomId,
                 'publisher_id' => $publisherId,
