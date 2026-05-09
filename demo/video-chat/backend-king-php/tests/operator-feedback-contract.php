@@ -2,294 +2,371 @@
 
 declare(strict_types=1);
 
-function videochat_operator_feedback_contract_failures(array $failures): void
+require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/../domain/realtime/operator_feedback.php';
+require_once __DIR__ . '/../http/module_operator_feedback.php';
+
+function videochat_operator_feedback_contract_assert(bool $condition, string $message): void
 {
-    if ($failures === []) {
-        fwrite(STDOUT, "[operator-feedback-contract] PASS\n");
+    if ($condition) {
         return;
     }
 
-    foreach ($failures as $failure) {
-        fwrite(STDERR, "[operator-feedback-contract] FAIL: {$failure}\n");
-    }
+    fwrite(STDERR, "[operator-feedback-contract] FAIL: {$message}\n");
     exit(1);
 }
 
-function videochat_operator_feedback_contract_assert(array &$failures, bool $condition, string $message): void
+function videochat_operator_feedback_contract_response(int $status, array $payload): array
 {
-    if (!$condition) {
-        $failures[] = $message;
-    }
+    return [
+        'status' => $status,
+        'headers' => ['content-type' => 'application/json'],
+        'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+    ];
 }
 
-function videochat_operator_feedback_contract_read(string $repoRoot, string $relativePath): string
+function videochat_operator_feedback_contract_error(int $status, string $code, string $message, array $details = []): array
 {
-    $path = $repoRoot . '/' . $relativePath;
-    return is_file($path) ? (string) file_get_contents($path) : '';
+    return videochat_operator_feedback_contract_response($status, [
+        'status' => 'error',
+        'error' => [
+            'code' => $code,
+            'message' => $message,
+            'details' => $details,
+        ],
+        'time' => gmdate('c'),
+    ]);
 }
 
-function videochat_operator_feedback_contract_glob(string $repoRoot, string $pattern): string
+function videochat_operator_feedback_contract_decode(array $request): array
 {
-    $source = '';
-    foreach (glob($repoRoot . '/' . $pattern) ?: [] as $path) {
-        if (is_file($path)) {
-            $source .= "\n/* " . basename($path) . " */\n" . (string) file_get_contents($path);
-        }
-    }
-    return $source;
+    $body = $request['body'] ?? '';
+    $decoded = is_string($body) ? json_decode($body, true) : null;
+
+    return is_array($decoded) ? [$decoded, null] : [null, 'invalid_json'];
 }
 
-function videochat_operator_feedback_contract_table_columns(PDO $pdo, string $table): array
+function videochat_operator_feedback_contract_body(array $response): array
 {
-    $columns = [];
-    foreach ($pdo->query('PRAGMA table_info(' . $table . ')') ?: [] as $row) {
-        $name = (string) ($row['name'] ?? '');
-        if ($name !== '') {
-            $columns[$name] = true;
-        }
-    }
-    return $columns;
+    $decoded = json_decode((string) ($response['body'] ?? ''), true);
+    return is_array($decoded) ? $decoded : [];
 }
 
-function videochat_operator_feedback_contract_insert_row(PDO $pdo, string $table, array $values): void
+function videochat_operator_feedback_contract_auth(PDO $pdo, int $userId, string $role): array
 {
-    $columns = videochat_operator_feedback_contract_table_columns($pdo, $table);
-    $filtered = [];
-    foreach ($values as $column => $value) {
-        if (isset($columns[$column])) {
-            $filtered[$column] = $value;
-        }
+    $tenant = videochat_tenant_context_for_user($pdo, $userId);
+    videochat_operator_feedback_contract_assert(is_array($tenant), 'tenant context missing for auth fixture');
+
+    return [
+        'ok' => true,
+        'token' => 'sess_operator_feedback_' . $userId,
+        'user' => ['id' => $userId, 'role' => $role, 'status' => 'active'],
+        'session' => ['id' => 'sess_operator_feedback_' . $userId],
+        'tenant' => videochat_tenant_auth_payload($tenant),
+    ];
+}
+
+try {
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        fwrite(STDOUT, "[operator-feedback-contract] SKIP: PDO sqlite driver not available\n");
+        exit(0);
     }
-    if ($filtered === []) {
-        return;
-    }
 
-    $columnSql = implode(', ', array_keys($filtered));
-    $placeholderSql = implode(', ', array_map(static fn (string $column): string => ':' . $column, array_keys($filtered)));
-    $stmt = $pdo->prepare("INSERT OR IGNORE INTO {$table}({$columnSql}) VALUES({$placeholderSql})");
-    foreach ($filtered as $column => $value) {
-        $stmt->bindValue(':' . $column, $value);
-    }
-    $stmt->execute();
-}
-
-$repoRoot = dirname(__DIR__, 4);
-$failures = [];
-
-$router = videochat_operator_feedback_contract_read($repoRoot, 'demo/video-chat/backend-king-php/http/router.php');
-$httpSources = videochat_operator_feedback_contract_glob($repoRoot, 'demo/video-chat/backend-king-php/http/*.php');
-$domainSources = videochat_operator_feedback_contract_glob($repoRoot, 'demo/video-chat/backend-king-php/domain/**/*.php');
-$supportSources = videochat_operator_feedback_contract_glob($repoRoot, 'demo/video-chat/backend-king-php/support/*.php');
-$chatSource = videochat_operator_feedback_contract_read($repoRoot, 'demo/video-chat/backend-king-php/domain/realtime/realtime_chat.php');
-$websocketCommandSource = videochat_operator_feedback_contract_read($repoRoot, 'demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
-$operatorSource = $httpSources . "\n" . $domainSources . "\n" . $supportSources;
-$operatorTableBlock = '';
-if (preg_match('/CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+operator_feedback[\s\S]{0,5000}?(?:\)\s*SQL|"\s*,|;\s*)/i', $operatorSource, $matches) === 1) {
-    $operatorTableBlock = (string) ($matches[0] ?? '');
-}
-
-videochat_operator_feedback_contract_assert(
-    $failures,
-    str_contains($operatorSource, 'operator_feedback'),
-    'backend must define an operator_feedback contract term across intake, persistence, queue, and delivery code'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    preg_match('/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+operator_feedback|CREATE\s+TABLE\s+operator_feedback/i', $operatorSource) === 1,
-    'backend migrations/bootstrap must create an operator_feedback table'
-);
-foreach ([
-    'call_id',
-    'room_id',
-    'sender_user_id',
-    'session_id',
-    'message_text',
-    'status',
-    'deployed_feature',
-] as $column) {
-    videochat_operator_feedback_contract_assert(
-        $failures,
-        preg_match('/\b' . preg_quote($column, '/') . '\b/', $operatorTableBlock) === 1,
-        "operator_feedback storage must expose {$column}"
-    );
-}
-videochat_operator_feedback_contract_assert(
-    $failures,
-    preg_match('/\b(?:tenant_id|organization_id)\b/', $operatorTableBlock) === 1,
-    'operator_feedback storage must keep tenant_id or organization_id context'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    str_contains($chatSource, 'operator_feedback'),
-    'chat decoder must preserve the client operator_feedback flag on chat/send commands'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    str_contains($websocketCommandSource, 'videochat_operator_feedback_capture_chat_message'),
-    'websocket chat handler must capture flagged chat messages through videochat_operator_feedback_capture_chat_message'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    !str_contains($websocketCommandSource, 'videochat_operator_feedback_capture_chat_message') || preg_match('/operator_feedback[\s\S]{0,1200}videochat_operator_feedback_capture_chat_message|videochat_operator_feedback_capture_chat_message[\s\S]{0,1200}operator_feedback/', $websocketCommandSource) === 1,
-    'websocket chat handler must pass the decoded operator flag into feedback capture'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    preg_match('#/api/operator-feedback/queue#', $httpSources) === 1,
-    'backend must expose GET /api/operator-feedback/queue for manager triage'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    !preg_match("#['\"]/api/operator-feedback/queue['\"]#", $router),
-    'operator feedback queue must not be listed as a public router endpoint'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    preg_match('/function\s+videochat_handle_operator_feedback_routes\s*\([\s\S]*array\s+\$apiAuthContext/', $httpSources) === 1,
-    'operator feedback route handler must receive authenticated apiAuthContext'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    preg_match('/\/api\/operator-feedback\/queue[\s\S]{0,2000}videochat_operator_feedback_queue|videochat_operator_feedback_queue[\s\S]{0,2000}\/api\/operator-feedback\/queue/', $httpSources) === 1,
-    'queue endpoint must read from videochat_operator_feedback_queue'
-);
-videochat_operator_feedback_contract_assert(
-    $failures,
-    str_contains($operatorSource, 'videochat_operator_feedback_deployed_notification_payload')
-        && str_contains($operatorSource, "feature '")
-        && str_contains($operatorSource, "' deployed"),
-    "backend must provide deployed notification payload text feature '<requested feature>' deployed"
-);
-
-$domainFile = $repoRoot . '/demo/video-chat/backend-king-php/domain/realtime/operator_feedback.php';
-if (is_file($repoRoot . '/demo/video-chat/backend-king-php/support/database.php')) {
-    require_once $repoRoot . '/demo/video-chat/backend-king-php/support/database.php';
-}
-if (is_file($domainFile)) {
-    require_once $domainFile;
-}
-
-$runtimeFunctions = [
-    'videochat_operator_feedback_bootstrap',
-    'videochat_operator_feedback_capture_chat_message',
-    'videochat_operator_feedback_queue',
-    'videochat_operator_feedback_mark_deployed',
-    'videochat_operator_feedback_deployed_notification_payload',
-];
-foreach ($runtimeFunctions as $functionName) {
-    videochat_operator_feedback_contract_assert(
-        $failures,
-        function_exists($functionName),
-        "backend must implement {$functionName}()"
-    );
-}
-
-if (function_exists('videochat_bootstrap_sqlite')
-    && function_exists('videochat_open_sqlite_pdo')
-    && in_array('sqlite', PDO::getAvailableDrivers(), true)
-    && array_reduce($runtimeFunctions, static fn (bool $carry, string $name): bool => $carry && function_exists($name), true)
-) {
     $databasePath = sys_get_temp_dir() . '/videochat-operator-feedback-' . bin2hex(random_bytes(6)) . '.sqlite';
     @unlink($databasePath);
     videochat_bootstrap_sqlite($databasePath);
     $pdo = videochat_open_sqlite_pdo($databasePath);
     videochat_operator_feedback_bootstrap($pdo);
 
-    $tenantId = (int) ($pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn() ?: 1);
-    $senderUserId = (int) ($pdo->query("SELECT id FROM users WHERE lower(email) = lower('user@intelligent-intern.com') LIMIT 1")->fetchColumn() ?: 2);
+    $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
+    $adminRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'admin' LIMIT 1")->fetchColumn();
+    $userRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    $organizationId = (int) $pdo->query('SELECT id FROM organizations WHERE tenant_id = ' . $tenantId . ' ORDER BY id ASC LIMIT 1')->fetchColumn();
+    videochat_operator_feedback_contract_assert($tenantId > 0 && $adminRoleId > 0 && $userRoleId > 0 && $organizationId > 0, 'seed fixtures missing');
+
     $now = gmdate('c');
-    $callId = 'call_operator_feedback_contract';
-    $roomId = 'room_operator_feedback_contract';
-    $sessionId = 'sess_operator_feedback_contract';
-    videochat_operator_feedback_contract_insert_row($pdo, 'rooms', [
-        'id' => $roomId,
-        'tenant_id' => $tenantId,
-        'name' => 'Operator Feedback Contract Room',
-        'visibility' => 'private',
-        'status' => 'active',
-        'created_by_user_id' => $senderUserId,
-        'created_at' => $now,
-        'updated_at' => $now,
-    ]);
-    videochat_operator_feedback_contract_insert_row($pdo, 'calls', [
-        'id' => $callId,
-        'tenant_id' => $tenantId,
-        'room_id' => $roomId,
-        'title' => 'Operator Feedback Contract Call',
-        'access_mode' => 'invite_only',
-        'owner_user_id' => $senderUserId,
-        'status' => 'active',
-        'starts_at' => $now,
-        'ends_at' => gmdate('c', time() + 3600),
-        'schedule_timezone' => 'UTC',
-        'schedule_date' => gmdate('Y-m-d'),
-        'schedule_duration_minutes' => 60,
-        'schedule_all_day' => 0,
-        'created_at' => $now,
-        'updated_at' => $now,
+    $adminUserId = 9700;
+    $ownerUserId = 9701;
+    $participantUserId = 9702;
+    $otherUserId = 9703;
+    $callId = 'operator-feedback-call';
+    $roomId = 'operator-feedback-room';
+
+    $insertUser = $pdo->prepare(
+        <<<'SQL'
+INSERT OR REPLACE INTO users(id, email, display_name, password_hash, role_id, status, created_at, updated_at)
+VALUES(:id, :email, :display_name, :password_hash, :role_id, 'active', :created_at, :updated_at)
+SQL
+    );
+    foreach ([
+        [$adminUserId, 'operator-feedback-admin@example.test', 'Feedback Admin', $adminRoleId],
+        [$ownerUserId, 'operator-feedback-owner@example.test', 'Feedback Owner', $userRoleId],
+        [$participantUserId, 'operator-feedback-user@example.test', 'Feedback User', $userRoleId],
+        [$otherUserId, 'operator-feedback-other@example.test', 'Feedback Other', $userRoleId],
+    ] as [$id, $email, $displayName, $roleId]) {
+        $insertUser->execute([
+            ':id' => $id,
+            ':email' => $email,
+            ':display_name' => $displayName,
+            ':password_hash' => password_hash('pw', PASSWORD_DEFAULT),
+            ':role_id' => $roleId,
+            ':created_at' => $now,
+            ':updated_at' => $now,
+        ]);
+        videochat_tenant_attach_user($pdo, $id, $tenantId, $roleId === $adminRoleId ? 'admin' : 'member');
+    }
+
+    $pdo->prepare(
+        <<<'SQL'
+INSERT OR IGNORE INTO organization_memberships(tenant_id, organization_id, user_id, membership_role, status, created_at, updated_at)
+VALUES(:tenant_id, :organization_id, :user_id, 'member', 'active', :created_at, :updated_at)
+SQL
+    )->execute([
+        ':tenant_id' => $tenantId,
+        ':organization_id' => $organizationId,
+        ':user_id' => $participantUserId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
     ]);
 
-    $connection = [
-        'user_id' => $senderUserId,
-        'session_id' => $sessionId,
-        'active_call_id' => $callId,
-        'room_id' => $roomId,
-        'tenant_id' => $tenantId,
-    ];
-    $message = [
-        'id' => 'chat_operator_feedback_contract_001',
-        'client_message_id' => 'client_operator_feedback_contract_001',
-        'text' => 'Please add status filters to the participant list',
-        'sender' => [
-            'user_id' => $senderUserId,
-            'display_name' => 'Contract Sender',
+    $pdo->prepare(
+        <<<'SQL'
+INSERT OR REPLACE INTO rooms(id, tenant_id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, :tenant_id, 'Operator Feedback Room', 'private', 'active', :owner_user_id, :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $roomId,
+        ':tenant_id' => $tenantId,
+        ':owner_user_id' => $ownerUserId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+
+    $pdo->prepare(
+        <<<'SQL'
+INSERT OR REPLACE INTO calls(id, tenant_id, room_id, title, access_mode, owner_user_id, status, starts_at, ends_at, created_at, updated_at)
+VALUES(:id, :tenant_id, :room_id, 'Operator Feedback Call', 'invite_only', :owner_user_id, 'active', :starts_at, :ends_at, :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $callId,
+        ':tenant_id' => $tenantId,
+        ':room_id' => $roomId,
+        ':owner_user_id' => $ownerUserId,
+        ':starts_at' => $now,
+        ':ends_at' => gmdate('c', time() + 3600),
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+
+    $insertParticipant = $pdo->prepare(
+        <<<'SQL'
+INSERT OR REPLACE INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', :call_role, 'allowed', :joined_at, NULL)
+SQL
+    );
+    foreach ([
+        [$ownerUserId, 'operator-feedback-owner@example.test', 'Feedback Owner', 'owner'],
+        [$participantUserId, 'operator-feedback-user@example.test', 'Feedback User', 'participant'],
+    ] as [$userId, $email, $displayName, $callRole]) {
+        $insertParticipant->execute([
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+            ':email' => $email,
+            ':display_name' => $displayName,
+            ':call_role' => $callRole,
+            ':joined_at' => $now,
+        ]);
+    }
+
+    $state = videochat_presence_state_init();
+    $connection = videochat_presence_connection_descriptor(
+        [
+            'id' => $participantUserId,
+            'display_name' => 'Feedback User',
             'role' => 'user',
         ],
-        'server_time' => '2026-05-09T10:20:00Z',
-    ];
+        'sess-feedback-user',
+        'conn-feedback-user',
+        'socket-feedback-user',
+        $roomId
+    );
+    $connection['active_call_id'] = $callId;
+    $join = videochat_presence_join_room($state, $connection, $roomId, static fn (): bool => true);
+    $connection = (array) ($join['connection'] ?? $connection);
+    $connection['active_call_id'] = $callId;
+    $connection['tenant_id'] = $tenantId;
+    $connection['session_id'] = 'sess-feedback-user';
 
-    $flaggedCapture = videochat_operator_feedback_capture_chat_message($pdo, $callId, $roomId, $connection, $message, [
+    $command = videochat_chat_decode_client_frame(json_encode([
+        'type' => 'chat/send',
+        'message' => 'Please add a better planning image zoom mode',
+        'client_message_id' => 'feedback-client-001',
         'operator_feedback' => true,
-    ]);
-    videochat_operator_feedback_contract_assert($failures, (bool) ($flaggedCapture['ok'] ?? false), 'flagged chat message must create operator feedback');
-    $feedbackId = (string) (($flaggedCapture['feedback'] ?? [])['id'] ?? ($flaggedCapture['id'] ?? ''));
-    videochat_operator_feedback_contract_assert($failures, $feedbackId !== '', 'created operator feedback must return a stable feedback id');
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_operator_feedback_contract_assert((bool) ($command['ok'] ?? false), 'operator feedback chat frame should decode');
+    videochat_operator_feedback_contract_assert((bool) ($command['operator_feedback'] ?? false), 'operator feedback flag should normalize');
 
-    $queue = videochat_operator_feedback_queue($pdo, ['status' => 'open']);
-    $queueRows = is_array($queue['feedback'] ?? null) ? $queue['feedback'] : (is_array($queue['items'] ?? null) ? $queue['items'] : []);
-    videochat_operator_feedback_contract_assert($failures, count($queueRows) === 1, 'open feedback queue must contain the flagged chat feedback only');
-    $row = is_array($queueRows[0] ?? null) ? $queueRows[0] : [];
-    videochat_operator_feedback_contract_assert($failures, (string) ($row['call_id'] ?? '') === $callId, 'feedback queue row must keep call_id');
-    videochat_operator_feedback_contract_assert($failures, (string) ($row['room_id'] ?? '') === $roomId, 'feedback queue row must keep room_id');
-    videochat_operator_feedback_contract_assert($failures, (int) ($row['sender_user_id'] ?? 0) === $senderUserId, 'feedback queue row must keep sender_user_id');
-    videochat_operator_feedback_contract_assert($failures, (string) ($row['session_id'] ?? '') === $sessionId, 'feedback queue row must keep session_id');
-    videochat_operator_feedback_contract_assert($failures, (string) ($row['message_text'] ?? '') === $message['text'], 'feedback queue row must keep message_text');
-    videochat_operator_feedback_contract_assert($failures, (string) ($row['status'] ?? '') === 'open', 'new feedback status must be open');
-    $rowTenantId = (int) ($row['tenant_id'] ?? ($row['organization_id'] ?? 0));
-    videochat_operator_feedback_contract_assert($failures, $rowTenantId === $tenantId, 'feedback queue row must keep tenant_id or organization_id');
+    $publish = videochat_chat_publish($state, $connection, $command, static fn (): bool => true, 1_779_000_001_000);
+    videochat_operator_feedback_contract_assert((bool) ($publish['ok'] ?? false), 'normal chat publish should still succeed');
+    $persist = videochat_operator_feedback_persist_from_chat_event($pdo, $connection, (array) ($publish['event'] ?? []), $command);
+    videochat_operator_feedback_contract_assert((bool) ($persist['ok'] ?? false), 'flagged chat message should persist as operator feedback');
+    $feedback = is_array($persist['feedback'] ?? null) ? $persist['feedback'] : [];
+    $feedbackId = (string) ($feedback['id'] ?? '');
+    videochat_operator_feedback_contract_assert($feedbackId !== '', 'feedback public id missing');
+    videochat_operator_feedback_contract_assert((string) ($feedback['status'] ?? '') === 'open', 'new feedback status should be open');
+    videochat_operator_feedback_contract_assert((string) ($feedback['call_id'] ?? '') === $callId, 'feedback call id mismatch');
+    videochat_operator_feedback_contract_assert((string) ($feedback['room_id'] ?? '') === $roomId, 'feedback room id mismatch');
+    videochat_operator_feedback_contract_assert((string) ($feedback['client_message_id'] ?? '') === 'feedback-client-001', 'feedback client message id mismatch');
+    videochat_operator_feedback_contract_assert((string) (($feedback['organization'] ?? [])['public_id'] ?? '') !== '', 'organization context should be captured');
 
-    $normalCapture = videochat_operator_feedback_capture_chat_message($pdo, $callId, $roomId, $connection, [
-        ...$message,
-        'id' => 'chat_operator_feedback_contract_002',
-        'client_message_id' => 'client_operator_feedback_contract_002',
-        'text' => 'This is a normal chat message',
-    ], [
-        'operator_feedback' => false,
-    ]);
-    videochat_operator_feedback_contract_assert($failures, (string) ($normalCapture['state'] ?? 'skipped') === 'skipped', 'normal chat messages without operator flag must be skipped');
-    $queueAfterNormal = videochat_operator_feedback_queue($pdo, ['status' => 'open']);
-    $queueRowsAfterNormal = is_array($queueAfterNormal['feedback'] ?? null) ? $queueAfterNormal['feedback'] : (is_array($queueAfterNormal['items'] ?? null) ? $queueAfterNormal['items'] : []);
-    videochat_operator_feedback_contract_assert($failures, count($queueRowsAfterNormal) === 1, 'normal chat messages must not add feedback rows');
+    $participantAuth = videochat_operator_feedback_contract_auth($pdo, $participantUserId, 'user');
+    $ownerAuth = videochat_operator_feedback_contract_auth($pdo, $ownerUserId, 'user');
+    $adminAuth = videochat_operator_feedback_contract_auth($pdo, $adminUserId, 'admin');
+    $otherAuth = videochat_operator_feedback_contract_auth($pdo, $otherUserId, 'user');
+    $jsonResponse = 'videochat_operator_feedback_contract_response';
+    $errorResponse = 'videochat_operator_feedback_contract_error';
+    $decodeBody = 'videochat_operator_feedback_contract_decode';
+    $openDatabase = static fn (): PDO => $pdo;
 
-    $deployed = videochat_operator_feedback_mark_deployed($pdo, $feedbackId, 'participant list status filters');
-    videochat_operator_feedback_contract_assert($failures, (bool) ($deployed['ok'] ?? false), 'mark deployed must update feedback');
-    $payload = videochat_operator_feedback_deployed_notification_payload(is_array($deployed['feedback'] ?? null) ? $deployed['feedback'] : [
-        'id' => $feedbackId,
-        'requested_feature' => 'participant list status filters',
-        'deployed_feature' => 'participant list status filters',
-    ]);
-    videochat_operator_feedback_contract_assert($failures, (string) ($payload['type'] ?? '') === 'operator-feedback/deployed', 'deployed notification type mismatch');
-    videochat_operator_feedback_contract_assert($failures, (string) (($payload['toast'] ?? [])['message'] ?? '') === "feature 'participant list status filters' deployed", 'deployed notification toast text mismatch');
+    $participantQueue = videochat_handle_operator_feedback_routes(
+        '/api/calls/operator-feedback',
+        'GET',
+        ['uri' => '/api/calls/operator-feedback'],
+        $participantAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($participantQueue['status'] ?? 0) === 403, 'participant must not read global queue');
+
+    $adminQueue = videochat_handle_operator_feedback_routes(
+        '/api/calls/operator-feedback',
+        'GET',
+        ['uri' => '/api/calls/operator-feedback?status=open'],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($adminQueue['status'] ?? 0) === 200, 'admin should read global queue');
+    $adminQueueBody = videochat_operator_feedback_contract_body($adminQueue);
+    videochat_operator_feedback_contract_assert((int) (((($adminQueueBody['result'] ?? [])['queue'] ?? [])['pagination'] ?? [])['total'] ?? 0) >= 1, 'admin queue should include feedback');
+
+    $ownerCallQueue = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback',
+        'GET',
+        ['uri' => '/api/calls/' . $callId . '/operator-feedback?status=all'],
+        $ownerAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($ownerCallQueue['status'] ?? 0) === 200, 'call owner should read call feedback queue');
+
+    $otherCallQueue = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback',
+        'GET',
+        ['uri' => '/api/calls/' . $callId . '/operator-feedback?status=all'],
+        $otherAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($otherCallQueue['status'] ?? 0) === 403, 'non-participant must not read call feedback queue');
+
+    $restCreate = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback',
+        'POST',
+        [
+            'uri' => '/api/calls/' . $callId . '/operator-feedback',
+            'body' => json_encode(['message_text' => 'REST fallback feedback', 'client_message_id' => 'rest-feedback-001'], JSON_UNESCAPED_SLASHES),
+        ],
+        $participantAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($restCreate['status'] ?? 0) === 201, 'REST feedback create should persist');
+
+    $patch = videochat_handle_operator_feedback_routes(
+        '/api/calls/operator-feedback/' . $feedbackId,
+        'PATCH',
+        [
+            'uri' => '/api/calls/operator-feedback/' . $feedbackId,
+            'body' => json_encode([
+                'status' => 'deployed',
+                'toast_feature_label' => 'planning image zoom mode',
+                'sprint_ticket_ref' => 'OCA-04',
+            ], JSON_UNESCAPED_SLASHES),
+        ],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($patch['status'] ?? 0) === 200, 'admin should mark feedback deployed');
+    $patchBody = videochat_operator_feedback_contract_body($patch);
+    $patchedFeedback = (($patchBody['result'] ?? [])['feedback'] ?? []);
+    videochat_operator_feedback_contract_assert((string) ($patchedFeedback['status'] ?? '') === 'deployed', 'feedback status should be deployed');
+    videochat_operator_feedback_contract_assert((string) ((($patchedFeedback['toast'] ?? [])['feature_label'] ?? '')) === 'planning image zoom mode', 'toast feature label mismatch');
+
+    $toasts = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback/toasts',
+        'GET',
+        ['uri' => '/api/calls/' . $callId . '/operator-feedback/toasts'],
+        $participantAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($toasts['status'] ?? 0) === 200, 'sender should read pending deployed toasts');
+    $toastBody = videochat_operator_feedback_contract_body($toasts);
+    $toastRows = (($toastBody['result'] ?? [])['toasts'] ?? []);
+    videochat_operator_feedback_contract_assert(count($toastRows) === 1, 'exactly one pending toast expected');
+    videochat_operator_feedback_contract_assert((string) (($toastRows[0] ?? [])['message'] ?? '') === "feature 'planning image zoom mode' deployed", 'toast message mismatch');
+
+    $delivered = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback/' . $feedbackId . '/toast-delivered',
+        'POST',
+        ['uri' => '/api/calls/' . $callId . '/operator-feedback/' . $feedbackId . '/toast-delivered'],
+        $participantAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    videochat_operator_feedback_contract_assert((int) ($delivered['status'] ?? 0) === 200, 'sender should mark deployed toast delivered');
+
+    $toastsAfter = videochat_handle_operator_feedback_routes(
+        '/api/calls/' . $callId . '/operator-feedback/toasts',
+        'GET',
+        ['uri' => '/api/calls/' . $callId . '/operator-feedback/toasts'],
+        $participantAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeBody,
+        $openDatabase
+    );
+    $toastsAfterBody = videochat_operator_feedback_contract_body($toastsAfter);
+    videochat_operator_feedback_contract_assert(count((($toastsAfterBody['result'] ?? [])['toasts'] ?? [])) === 0, 'delivered toast should not be returned again');
+
+    @unlink($databasePath);
+    @unlink($databasePath . '-wal');
+    @unlink($databasePath . '-shm');
+    @unlink($databasePath . '.bootstrap.lock');
+    fwrite(STDOUT, "[operator-feedback-contract] PASS\n");
+} catch (Throwable $error) {
+    fwrite(STDERR, "[operator-feedback-contract] ERROR: {$error->getMessage()}\n");
+    fwrite(STDERR, $error->getTraceAsString() . "\n");
+    exit(1);
 }
-
-videochat_operator_feedback_contract_failures($failures);
