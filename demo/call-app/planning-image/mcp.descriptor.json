@@ -56,6 +56,7 @@
     "name": "Image Planning",
     "category": "collaboration",
     "order_scope": "organization",
+    "default_participant_access": "allowed_by_default",
     "summary": "Shared image upload with zoomable review canvas for planning calls."
   }
 }

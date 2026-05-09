@@ -210,6 +210,10 @@ function videochat_call_app_mcp_validate_package(array $package): array
     if (trim((string) ($marketplaceListing['order_scope'] ?? '')) !== 'organization') {
         $errors['marketplace_listing.order_scope'] = 'must_be_organization';
     }
+    $listingDefaultAccess = trim((string) ($marketplaceListing['default_participant_access'] ?? ''));
+    if ($listingDefaultAccess !== '' && $listingDefaultAccess !== trim((string) ($manifest['default_participant_access'] ?? ''))) {
+        $errors['marketplace_listing.default_participant_access'] = 'must_match_manifest';
+    }
     if (trim((string) ($marketplaceListing['summary'] ?? '')) === '') {
         $errors['marketplace_listing.summary'] = 'required';
     }
@@ -359,6 +363,7 @@ function videochat_call_app_mcp_marketplace_listing(array $package): array
         'category' => (string) ($listing['category'] ?? ''),
         'summary' => (string) ($listing['summary'] ?? ''),
         'order_scope' => (string) ($listing['order_scope'] ?? ''),
+        'default_participant_access' => (string) ($manifest['default_participant_access'] ?? ''),
         'requires_installation' => (bool) ($manifest['marketplace']['requires_installation'] ?? true),
         'categories' => videochat_call_app_string_list($manifest['marketplace']['categories'] ?? []),
         'default_license' => (string) ($manifest['marketplace']['default_license'] ?? ''),

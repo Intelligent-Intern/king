@@ -59,7 +59,7 @@
     "call_apps.export.request",
     "call_apps.export.download"
   ],
-  "default_participant_access": "blocked_by_default",
+  "default_participant_access": "allowed_by_default",
   "iframe": {
     "sandbox": [
       "allow-scripts",
