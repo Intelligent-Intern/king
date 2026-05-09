@@ -216,7 +216,17 @@ jobs:
         run: |
           VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
           VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+          VIDEOCHAT_SMOKE_ARTIFACTS_DIR=compat-artifacts/video-chat-smoke \
           bash demo/video-chat/scripts/smoke.sh
+
+      - name: Upload video-chat E2E failure artifacts
+        if: failure() && matrix.shard-index == 1
+        uses: actions/upload-artifact@v6
+        with:
+          name: video-chat-smoke-e2e-failure-artifacts
+          if-no-files-found: ignore
+          path: |
+            compat-artifacts/video-chat-smoke/
 
       - name: Run canonical PHPT suite
         working-directory: extension

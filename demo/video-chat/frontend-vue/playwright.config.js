@@ -24,6 +24,7 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
+    video: process.env.CI ? 'retain-on-failure' : 'off',
     launchOptions: chromiumExecutablePath !== '' ? {
       executablePath: chromiumExecutablePath,
     } : undefined,
