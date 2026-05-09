@@ -32,6 +32,58 @@ function assertStringArray(value, label) {
   }
 }
 
+function assertNonBlankString(value, label) {
+  assert.equal(typeof value, 'string', `${label} must be a string`);
+  assert.notEqual(value.trim(), '', `${label} must not be blank`);
+}
+
+function assertEvidenceEventArray(value, label, { allowEmpty = true } = {}) {
+  assert.ok(Array.isArray(value), `${label} must be an array`);
+  if (!allowEmpty) assert.ok(value.length > 0, `${label} must not be empty`);
+  for (const item of value) {
+    const type = typeof item;
+    assert.ok(type === 'string' || (item && type === 'object'), `${label} entries must be strings or event objects`);
+    if (type === 'string') assert.notEqual(item.trim(), '', `${label} string entries must not be blank`);
+    else assert.ok(String(item.text || item.message || item.type || '').trim(), `${label} event entries must carry text/message/type`);
+  }
+}
+
+function assertSafeSelectedBackend(value, label) {
+  assertNonBlankString(value, label);
+  const normalized = value.trim().toLowerCase();
+  assert.ok(![
+    'sinet',
+    'bodypix',
+    'tfjs',
+    'canvas_2d_segmenter',
+    'canvas-2d-segmenter',
+    'confidence-mask',
+    'confidence_mask',
+    'softmax_matte',
+    'sigmoid_matte',
+  ].includes(normalized), `${label} must not use weaker matte backend: ${value}`);
+  assert.ok([
+    'worker-segmenter',
+    'worker_segmenter',
+    'user_avatar_placeholder',
+    'standard_avatar',
+    'uploaded_avatar',
+    'unfiltered_video',
+  ].includes(normalized), `${label} must be worker-segmenter or an explicit user fallback: ${value}`);
+}
+
+function assertCaptureStatus(value, label) {
+  assertNonBlankString(value, label);
+  assert.ok([
+    'init_ok',
+    'init_failed',
+    'segment_failed',
+    'ok',
+    'failed',
+    'not_run',
+  ].includes(value), `${label} has unexpected status: ${value}`);
+}
+
 function assertFailureShape(fixture) {
   const failure = fixture.known_failure;
   assert.equal(failure.id, 'chromium_mediapipe_gpu_service_init_failure');
@@ -128,6 +180,79 @@ function assertBrowserMatrixSchema(fixture) {
   }
 }
 
+function assertBrowserMatrixEvidence(fixture) {
+  const required = fixture.browser_matrix_required;
+  const requiredBrowsers = required.map((entry) => entry.browser);
+  const requiredByBrowser = new Map(required.map((entry) => [entry.browser, entry.required_fields]));
+  const status = fixture.browser_matrix_evidence_status;
+  const evidence = fixture.browser_matrix_evidence;
+
+  assert.ok(status && typeof status === 'object', 'browser matrix evidence status must be present');
+  assert.equal(status.bgf_01_status, 'open', 'BGF-01 must stay open until Firefox evidence exists');
+  assert.ok(status.reason.includes('Firefox'), 'open BGF-01 evidence status must name the missing Firefox capture');
+  assert.deepEqual(status.captured_browsers, ['Chrome Stable', 'Chromium Ubuntu']);
+  assert.deepEqual(status.missing_browsers, ['Firefox']);
+  assert.equal(status.capture_script, 'tests/e2e/background-regression-capture.mjs');
+  assertNonBlankString(status.capture_mode, 'browser matrix evidence capture mode');
+
+  assert.ok(Array.isArray(evidence), 'browser matrix evidence must be an array');
+  assert.deepEqual(
+    evidence.map((entry) => entry.browser),
+    status.captured_browsers,
+    'browser matrix evidence must record only the browsers captured so far',
+  );
+
+  const missing = requiredBrowsers.filter((browser) => !status.captured_browsers.includes(browser));
+  assert.deepEqual(missing, status.missing_browsers, 'evidence status must honestly list missing required browsers');
+  assert.ok(!evidence.some((entry) => entry.browser === 'Firefox'), 'Firefox evidence must not be faked');
+
+  for (const entry of evidence) {
+    assert.ok(requiredByBrowser.has(entry.browser), `${entry.browser} must be in the required browser matrix`);
+    assert.equal(entry.schema_version, 'king.bgf.browser_regression_capture.v1');
+    assertNonBlankString(entry.browser_engine, `${entry.browser} browser_engine`);
+    assertNonBlankString(entry.browser_family, `${entry.browser} browser_family`);
+    assertNonBlankString(entry.version, `${entry.browser} version`);
+    assertNonBlankString(entry.os, `${entry.browser} os`);
+    assert.ok(!Number.isNaN(Date.parse(entry.captured_at)), `${entry.browser} captured_at must be an ISO timestamp`);
+    assertNonBlankString(entry.capture_command, `${entry.browser} capture command`);
+    assertNonBlankString(entry.gpu_availability, `${entry.browser} gpu availability`);
+    assertNonBlankString(entry.model_source, `${entry.browser} model source`);
+    assertSafeSelectedBackend(entry.selected_backend, `${entry.browser} selected backend`);
+    assertCaptureStatus(entry.mediapipe_gpu_result, `${entry.browser} MediaPipe GPU result`);
+    assertCaptureStatus(entry.mediapipe_cpu_result, `${entry.browser} MediaPipe CPU result`);
+    assertEvidenceEventArray(entry.console_signatures, `${entry.browser} console signatures`);
+
+    for (const field of requiredByBrowser.get(entry.browser)) {
+      assert.ok(Object.prototype.hasOwnProperty.call(entry, field), `${entry.browser} evidence missing required field: ${field}`);
+    }
+
+    const cpuTouch = entry.cpu_delegate_gpu_touch;
+    assert.ok(cpuTouch && typeof cpuTouch === 'object', `${entry.browser} CPU delegate GPU-touch evidence must be present`);
+    assert.equal(typeof cpuTouch.observed, 'boolean', `${entry.browser} CPU delegate GPU-touch observed flag must be boolean`);
+    assertEvidenceEventArray(
+      cpuTouch.gpu_touch_signatures,
+      `${entry.browser} CPU delegate GPU-touch signatures`,
+      { allowEmpty: !cpuTouch.observed },
+    );
+    assertEvidenceEventArray(cpuTouch.console_signatures, `${entry.browser} CPU delegate GPU-service signatures`);
+
+    const paths = entry.path_results;
+    assert.ok(paths && typeof paths === 'object', `${entry.browser} path results must be present`);
+    const workerDirect = paths.mediapipe_worker_direct;
+    const production = paths.king_production_background_stream;
+    assert.ok(workerDirect && typeof workerDirect === 'object', `${entry.browser} worker-direct path result missing`);
+    assert.ok(production && typeof production === 'object', `${entry.browser} production stream path result missing`);
+    assert.equal(workerDirect.gpu.status, entry.mediapipe_gpu_result, `${entry.browser} GPU path status must match top-level evidence`);
+    assert.equal(workerDirect.cpu.status, entry.mediapipe_cpu_result, `${entry.browser} CPU path status must match top-level evidence`);
+    assertSafeSelectedBackend(workerDirect.gpu.selected_backend, `${entry.browser} GPU worker selected backend`);
+    assertSafeSelectedBackend(workerDirect.cpu.selected_backend, `${entry.browser} CPU worker selected backend`);
+    assertCaptureStatus(production.status, `${entry.browser} production stream status`);
+    assertSafeSelectedBackend(production.selected_backend, `${entry.browser} production selected backend`);
+    assert.equal(production.active, true, `${entry.browser} production background stream must stay active`);
+    assert.equal(production.unavailable_callbacks_count, 0, `${entry.browser} production path must not require fallback when init succeeds`);
+  }
+}
+
 function assertCurrentRuntimeBoundaries(fixture) {
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
   const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
@@ -153,6 +278,11 @@ function assertCurrentRuntimeBoundaries(fixture) {
   requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'local MediaPipe delegate boundary');
   requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'local MediaPipe category-mask WebGL boundary');
   requireContains(worker, 'new DrawingUtils(glCtx)', 'local MediaPipe DrawingUtils WebGL boundary');
+  requireContains(worker, "error: 'production_category_mask_unavailable'", 'category mask fail-closed boundary');
+  requireMissing(worker, 'confidenceMaskValues', 'weaker confidence-mask fallback');
+  requireMissing(worker, 'outputConfidenceMasks', 'weaker confidence-mask output');
+  requireContains(stream, 'enterSegmentationUnavailable(matteRejection.reason', 'rejected matte user-choice transition');
+  requireContains(stream, 'resolveSegmentErrorUnavailable(segmentation)', 'worker segment error user-choice transition');
   requireContains(modal, 'background_use_standard_avatar', 'standard avatar choice');
   requireContains(modal, 'background_upload_avatar', 'uploaded avatar choice');
   requireContains(modal, 'background_send_unfiltered', 'unfiltered video choice');
@@ -172,6 +302,7 @@ try {
   assertBackendLadder(fixture);
   assertQuarantine(fixture);
   assertBrowserMatrixSchema(fixture);
+  assertBrowserMatrixEvidence(fixture);
   assertCurrentRuntimeBoundaries(fixture);
 
   console.log('[background-regression-matrix-contract] PASS');

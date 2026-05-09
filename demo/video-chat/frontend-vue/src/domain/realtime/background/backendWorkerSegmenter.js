@@ -24,6 +24,8 @@ const INIT_TIMEOUT_MS = 15000;
 const LEASE_WAIT_TIMEOUT_MS = 2000;
 const LEASE_WAIT_POLL_MS = 25;
 const SHARED_BACKEND_IDLE_TTL_MS = 60000;
+const SEGMENT_ERROR_UNAVAILABLE_THRESHOLD = 3;
+const PRODUCTION_MASK_UNAVAILABLE_ERROR = 'production_category_mask_unavailable';
 
 let sharedBackend = null;
 let sharedBackendPromise = null;
@@ -106,6 +108,10 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     let pendingMaskWidth = 0;
     let pendingMaskHeight = 0;
     let pendingResultFrame = false;
+    let consecutiveSegmentErrors = 0;
+    let pendingSegmentErrorReason = '';
+    let pendingSegmentErrorCount = 0;
+    let terminalSegmentError = false;
     let disposed = false;
     let hasQueuedFrame = false;
     let queuedFrameParams = null;
@@ -122,6 +128,10 @@ export async function createWorkerSegmenterBackend(opts = {}) {
         pendingMaskWidth = 0;
         pendingMaskHeight = 0;
         pendingResultFrame = false;
+        consecutiveSegmentErrors = 0;
+        pendingSegmentErrorReason = '';
+        pendingSegmentErrorCount = 0;
+        terminalSegmentError = false;
         hasQueuedFrame = false;
         queuedFrameParams = null;
     }
@@ -137,7 +147,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     }
 
     function dispatchFrame(params) {
-        if (!params || disposed) return;
+        if (!params || disposed || terminalSegmentError) return;
         const { video, sourceWidth, sourceHeight, targetWidth, targetHeight, timestampMs, nowMs } = params;
         pendingFrame = true;
         lastDetectAt = nowMs;
@@ -183,12 +193,16 @@ export async function createWorkerSegmenterBackend(opts = {}) {
                 resolve();
             }
         } else if (type === 'SEGMENT_RESULT') {
-            if (Math.max(0, Math.round(Number(event.data.sessionId) || 0)) !== sessionId) {
+            const eventSessionId = Math.max(0, Math.round(Number(event.data.sessionId) || 0));
+            if (eventSessionId !== sessionId) {
                 event.data.maskBitmap?.close?.();
-                pendingFrame = false;
                 return;
             }
             pendingFrame = false;
+            consecutiveSegmentErrors = 0;
+            pendingSegmentErrorReason = '';
+            pendingSegmentErrorCount = 0;
+            terminalSegmentError = false;
             const { maskBitmap, maskValues, width, height, inferenceMs, inferenceTime } = event.data;
             const sample = typeof inferenceMs === 'number'
                 ? inferenceMs
@@ -224,15 +238,24 @@ export async function createWorkerSegmenterBackend(opts = {}) {
                 dispatchFrame(nextParams);
             }
         } else if (type === 'SEGMENT_ERROR') {
+            const eventSessionId = Math.max(0, Math.round(Number(event.data.sessionId) || 0));
+            if (eventSessionId !== sessionId) return;
             pendingFrame = false;
-            if (hasQueuedFrame && queuedFrameParams) {
+            consecutiveSegmentErrors += 1;
+            pendingSegmentErrorReason = String(event.data.error || 'segment_error').trim() || 'segment_error';
+            pendingSegmentErrorCount = consecutiveSegmentErrors;
+            terminalSegmentError = pendingSegmentErrorReason === PRODUCTION_MASK_UNAVAILABLE_ERROR
+                || consecutiveSegmentErrors >= SEGMENT_ERROR_UNAVAILABLE_THRESHOLD;
+            if (!terminalSegmentError && hasQueuedFrame && queuedFrameParams) {
                 const nextParams = queuedFrameParams;
                 hasQueuedFrame = false;
                 queuedFrameParams = null;
                 dispatchFrame(nextParams);
+            } else if (terminalSegmentError) {
+                hasQueuedFrame = false;
+                queuedFrameParams = null;
             }
         }
-        // SEGMENT_ERROR is logged but we just continue - next frame will retry.
     };
 
     return {
@@ -264,6 +287,18 @@ export async function createWorkerSegmenterBackend(opts = {}) {
 
         nextFaces(video, vw, vh, nowMs) {
             if (disposed) return { faces: [], detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
+
+            if (terminalSegmentError) {
+                return {
+                    faces: [],
+                    detectSampleMs: null,
+                    matteMaskBitmap: null,
+                    matteMaskValues: null,
+                    segmentErrorCount: pendingSegmentErrorCount,
+                    segmentErrorFatal: true,
+                    segmentErrorReason: pendingSegmentErrorReason || 'segment_error',
+                };
+            }
 
             const sourceWidth = Math.max(1, Math.round(Number(video?.videoWidth) || Number(vw) || 1));
             const sourceHeight = Math.max(1, Math.round(Number(video?.videoHeight) || Number(vh) || 1));
@@ -321,6 +356,9 @@ export async function createWorkerSegmenterBackend(opts = {}) {
                 matteMaskValues: maskValues,
                 matteMaskWidth: maskWidth,
                 matteMaskHeight: maskHeight,
+                segmentErrorCount: pendingSegmentErrorCount,
+                segmentErrorFatal: false,
+                segmentErrorReason: pendingSegmentErrorReason,
                 sourceFrame,
             };
         },
