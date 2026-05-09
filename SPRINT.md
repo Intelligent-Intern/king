@@ -241,6 +241,20 @@ Tickets:
     audio, screenshare, reconnect, and background-filter transitions against
     the deployed build. Do not close from deploy diagnostics, public endpoint
     probes, remote log scans, or degraded fallback behavior alone.
+  - Diagnostics proof gap 2026-05-09 Loop 4: live-call fallback proof must
+    collect `local_background_backend_init`,
+    `local_background_matte_rejected`,
+    `local_background_replacement_unavailable`, and
+    `local_background_replacement_modal_choice` from client diagnostics logs,
+    including `failed_backend`, `fallback_reason`, `gpu_availability`, and
+    `user_choice_required`. `prod-debug.sh` now has a read-only
+    "background fallback transitions" bucket for those events; routine
+    post-deploy diagnostics should use
+    `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
+    for public probes and full `demo/video-chat/scripts/prod-debug.sh` only
+    when remote compose/log access is explicitly available. DNS/certbot checks
+    remain outside routine diagnostics and belong to explicit domain/certificate
+    smoke only.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
