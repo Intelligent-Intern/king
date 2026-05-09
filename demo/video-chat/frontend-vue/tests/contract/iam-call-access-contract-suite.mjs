@@ -17,6 +17,7 @@ export const IAM_CALL_ACCESS_CONTRACT_COMMANDS = Object.freeze([
   'node tests/contract/call-access-security-manipulation-contract.mjs',
   'node tests/contract/call-access-parallel-account-tabs-contract.mjs',
   'node tests/contract/call-access-cross-org-foreign-join-contract.mjs',
+  'node tests/contract/iam-cross-org-remaining-proof-contract.mjs',
   'node tests/contract/call-access-duplicate-review-email-contract.mjs',
   'node tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs',
   'node tests/contract/call-access-edge-error-matrix-contract.mjs',

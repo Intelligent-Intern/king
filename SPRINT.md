@@ -2890,9 +2890,15 @@ tests/e2e/call-access-main-journey-smoke.spec.js --workers=1 --reporter=list`
 passed 6 tests including the temporary-user kick and renewed-approval denial
 path.
 `call-access-seed-matrix.spec.js` now covers
-`e2e_journey_011_system_admin_join_without_invite` and
-`e2e_journey_011b_system_admin_join_tenantless_call_without_org`; the focused
-Playwright run passed 26 tests.
+`e2e_journey_011_system_admin_join_without_invite`,
+`e2e_journey_011b_system_admin_join_tenantless_call_without_org`, and
+`e2e_journey_013_org_admin_foreign_org_denied`; the focused
+Playwright run passed 26 tests. The remaining cross-org proof contract also
+pins the named journey mapping to the denied direct-join scenario. Focused
+follow-up proof: `PLAYWRIGHT_FRONTEND_PORT=4187 npx playwright test
+tests/e2e/call-access-seed-matrix.spec.js --grep
+"e2e_org_008|e2e_anon_logged_in_006|e2e_journey_013|deleted personalized"
+--workers=1 --reporter=list` passed 4 tests.
 `call-access-invite-reschedule-delete-end-main-journeys.spec.js` covers the
 terminal main journeys: invalidated personalized links render safe denied state
 without issuing sessions, rescheduled stale links are denied while the fresh
@@ -2925,9 +2931,19 @@ cleanup audit.
 - [x] `e2e_org_005_login_normal_user`
 - [x] `e2e_org_006_login_organization_admin`
 - [x] `e2e_org_007_logged_out_user_has_no_session`
-- [ ] `e2e_org_008_cross_org_rights_not_leaked`
-- [ ] `e2e_org_009_stale_client_role_ignored`
-- [ ] `e2e_org_010_stale_session_role_revalidated`
+- [x] `e2e_org_008_cross_org_rights_not_leaked`
+- [x] `e2e_org_009_stale_client_role_ignored`
+- [x] `e2e_org_010_stale_session_role_revalidated`
+
+Proof: `call-access-seed-matrix.spec.js` names
+`e2e_org_008_cross_org_rights_not_leaked` through the cross-organization
+denied direct-join matrix, proving active organization switch, owner-rights,
+and guest-list rights do not cross the call tenant boundary.
+`call-access-stale-organization-role-contract.php` proves
+`e2e_org_009_stale_client_role_ignored` and
+`e2e_org_010_stale_session_role_revalidated` by downgrading an organization
+admin after session issuance, then rejecting forged client role cache data and
+stale decoded session context against current backend membership state.
 
 ## Test Group: Call Creation and Ownership
 
@@ -3445,7 +3461,7 @@ with the Node audit contract and Docker PHP 8.5 SQLite runtime proof.
 - [x] `e2e_journey_010_logged_out_user_anonymous_link_lobby_admit_rejoin`
 - [x] `e2e_journey_011_system_admin_join_without_invite`
 - [ ] `e2e_journey_012_org_admin_join_own_org_without_invite`
-- [ ] `e2e_journey_013_org_admin_foreign_org_denied`
+- [x] `e2e_journey_013_org_admin_foreign_org_denied`
 - [x] `e2e_journey_014_normal_guest_list_user_joins_foreign_call`
 - [x] `e2e_journey_015_normal_non_guest_user_lobby_or_denied`
 - [x] `e2e_journey_016_normal_user_owner_transfer_loses_admin`
