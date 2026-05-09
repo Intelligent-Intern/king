@@ -84,8 +84,9 @@ Tickets:
 - [x] STAB-06 Keep local capture strict: 720p30 camera or audio-only/receive-only
   instead of lower-video fallback.
 - [x] STAB-07 Add focused contracts for strict 720p30 behavior.
-- [ ] STAB-08 Build/test locally and commit on
+- [x] STAB-08 Build/test locally and commit on
   `prod-kingrt-do-not-push-to-github` without pushing.
+  - Local commit: `15988481 Add strict 720p30 call stability policy`.
 - [ ] STAB-09 Deploy without DNS/certbot/push and run post-deploy diagnostics.
 
 Proof so far:
