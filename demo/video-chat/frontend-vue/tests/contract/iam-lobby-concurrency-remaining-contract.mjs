@@ -34,8 +34,9 @@ const lobbySpec = read('demo/video-chat/frontend-vue/tests/e2e/lobby-concurrency
 const roomState = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts');
 const participantUi = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/participantUi.ts');
 const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
+const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
 const activeCallKick = read('demo/video-chat/backend-king-php/http/module_realtime_active_call_kick.php');
-const lobbyCommandPersistence = `${websocketCommands}\n${activeCallKick}`;
+const lobbyCommandPersistence = `${websocketCommands}\n${lobbyPersistence}\n${activeCallKick}`;
 
 const scripts = packageJson.scripts || {};
 const lobbyScript = String(scripts['test:e2e:lobby-concurrency'] || '');

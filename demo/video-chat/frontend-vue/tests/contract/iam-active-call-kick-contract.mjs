@@ -17,6 +17,7 @@ const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const realtimeModule = read('demo/video-chat/backend-king-php/http/module_realtime.php');
 const activeKickModule = read('demo/video-chat/backend-king-php/http/module_realtime_active_call_kick.php');
 const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
+const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
 const websocketRoute = read('demo/video-chat/backend-king-php/http/module_realtime_websocket.php');
 const lobbyDomain = read('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby.php');
 const presenceDb = read('demo/video-chat/backend-king-php/domain/realtime/realtime_call_presence_db.php');
@@ -25,6 +26,7 @@ const backendContract = read('demo/video-chat/backend-king-php/tests/call-access
 const callWorkspaceView = read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-rejoin-kick-membership.spec.js');
 const matrixHarness = read('demo/video-chat/frontend-vue/tests/e2e/helpers/videochatMatrixHarness.js');
+const lobbyCommandPersistence = `${websocketCommands}\n${lobbyPersistence}`;
 
 assert.match(
   String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
@@ -58,7 +60,7 @@ assert.match(
   'websocket command path must promote DB-backed active targets instead of returning target_not_found',
 );
 assert.match(
-  websocketCommands,
+  lobbyCommandPersistence,
   /videochat_realtime_apply_lobby_remove_result\([\s\S]*\$presenceState/,
   'websocket command path must pass presence state into the focused active-call removal applier',
 );
