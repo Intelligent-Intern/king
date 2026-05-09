@@ -103,13 +103,15 @@ Acceptance criteria:
   is visually separated from non-destructive actions.
 - A gear above the user table opens a right-sidebar action-options view where
   visible actions can be selected, including Call App permission actions such
-  as read, write, and delete.
+  as read, write, and delete across UI, API, persistence, and realtime refresh.
 - Call Apps can enter fullscreen and remain usable there.
 - Screenshare behaves as a participant media surface: its mini tile supports
-  double-click fullscreen, zoom, and pan without breaking camera/audio.
+  double-click fullscreen, zoom, and pan without breaking camera/audio. Shared
+  screen content defaults to full-content fit, not camera-style crop.
 - Clicking call controls or losing focus does not trigger reconnects. Reconnect
   diagnostics only appear for real transient socket/media failures or explicit
-  foreground recovery after actual backgrounding.
+  foreground recovery after actual backgrounding. Visible `window.blur`/`focus`
+  transitions, including iframe focus, must not arm a workspace reconnect.
 - The next loop records local proof, deploy proof, and post-deploy diagnostics
   before closing any ticket.
 
@@ -117,6 +119,8 @@ Tickets:
 - [ ] CWS-01 Left sidebar tabs and Call Apps responsive layout
   - Split Settings and Call Apps into clear tab panels with visible tab
     affordances and a non-overlapping scroll body.
+  - Keep tabs visible once a call ref is known, even while owner/moderator or
+    Call Apps catalog context is still resolving.
   - Make Call Apps content fully visible/responsive in the left sidebar and in
     the call workspace layout.
   - Preserve media tile/stage dimensions when both sidebars are open.
@@ -134,7 +138,8 @@ Tickets:
   - Clicking it opens a right-sidebar options view for choosing which per-user
     actions are shown.
   - Include Call App permission actions such as read, write, and delete where
-    the permission model allows them.
+    the permission model allows them, including backend/API persistence and
+    realtime sidebar refresh.
 
 - [ ] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.
@@ -147,10 +152,14 @@ Tickets:
   - Double-clicking its mini video opens fullscreen.
   - Fullscreen screenshare supports zoom/pan and is not cut off by sidebars or
     Call Apps content.
+  - Default screenshare fullscreen shows the full shared surface without
+    clipping; zoom/pan is opt-in and resettable.
 
 - [ ] CWS-06 Focus/click reconnect stability
   - Clicking call UI or focusing inputs/buttons must not cause realtime/SFU
     reconnects.
+  - Visible `window.blur` or iframe focus must not call workspace foreground
+    reconnect logic, close the SFU client, or reconnect the realtime socket.
   - Losing browser focus must not recycle media unless the tab actually
     backgrounds and foreground recovery is required.
   - Diagnostics must distinguish real websocket/SFU failure from harmless UI
