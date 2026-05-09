@@ -153,12 +153,57 @@ function videochat_handle_call_app_routes(
                 return $callError;
             }
 
-            $refresh = videochat_call_app_refresh_catalog($pdo);
+            $refresh = videochat_call_app_refresh_catalog_for_availability($pdo);
             $available = videochat_call_app_list_available_for_tenant($pdo, $tenantId, $filters);
-        } catch (Throwable) {
-            return $errorResponse(500, 'call_app_availability_failed', 'Could not load Call App availability.', [
-                'reason' => 'internal_error',
-            ]);
+        } catch (Throwable $error) {
+            $isTransient = function_exists('videochat_sqlite_is_transient_lock')
+                && videochat_sqlite_is_transient_lock($error);
+            error_log(sprintf(
+                '[video-chat][call-apps] availability failed call_id=%s tenant_id=%d user_id=%d transient=%s error=%s',
+                $callId,
+                $tenantId,
+                $authenticatedUserId,
+                $isTransient ? 'yes' : 'no',
+                $error->getMessage()
+            ));
+
+            return $errorResponse(
+                $isTransient ? 503 : 500,
+                $isTransient ? 'call_app_availability_temporarily_unavailable' : 'call_app_availability_failed',
+                $isTransient ? 'Call App availability is temporarily unavailable.' : 'Could not load Call App availability.',
+                [
+                    'reason' => $isTransient ? 'transient_storage_error' : 'internal_error',
+                    'retryable' => $isTransient,
+                ]
+            );
+        }
+
+        $refreshSkipped = (bool) ($refresh['refresh_skipped'] ?? false);
+        $cacheStatus = trim((string) ($refresh['cache_status'] ?? ($refreshSkipped ? 'warm' : 'refreshed')));
+        if ($cacheStatus === '') {
+            $cacheStatus = $refreshSkipped ? 'warm' : 'refreshed';
+        }
+        $fallbackReason = trim((string) ($refresh['fallback_reason'] ?? ''));
+        $discovery = [
+            'source' => 'semantic_dns_mcp',
+            'ok' => (bool) ($refresh['ok'] ?? false),
+            'invalid' => is_array($refresh['invalid'] ?? null) ? $refresh['invalid'] : [],
+            'refreshed_at' => (string) ($refresh['refreshed_at'] ?? ''),
+            'refresh_skipped' => $refreshSkipped,
+            'cache_status' => $cacheStatus,
+        ];
+        if ($fallbackReason !== '') {
+            $discovery['fallback_reason'] = $fallbackReason;
+        }
+
+        if (!(bool) ($refresh['ok'] ?? false)) {
+            error_log(sprintf(
+                '[video-chat][call-apps] availability using catalog fallback call_id=%s tenant_id=%d cache_status=%s fallback_reason=%s',
+                $callId,
+                $tenantId,
+                $cacheStatus,
+                $fallbackReason !== '' ? $fallbackReason : 'invalid_catalog'
+            ));
         }
 
         $page = (int) ($filters['page'] ?? 1);
@@ -185,12 +230,7 @@ function videochat_handle_call_app_routes(
                     'has_prev' => $page > 1,
                     'has_next' => $pageCount > 0 && $page < $pageCount,
                 ],
-                'discovery' => [
-                    'source' => 'semantic_dns_mcp',
-                    'ok' => (bool) ($refresh['ok'] ?? false),
-                    'invalid' => is_array($refresh['invalid'] ?? null) ? $refresh['invalid'] : [],
-                    'refreshed_at' => (string) ($refresh['refreshed_at'] ?? ''),
-                ],
+                'discovery' => $discovery,
             ],
             'time' => gmdate('c'),
         ]);

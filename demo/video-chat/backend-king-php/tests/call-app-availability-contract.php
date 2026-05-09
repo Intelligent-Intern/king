@@ -111,7 +111,7 @@ SQL
     $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
     $adminAuth = videochat_call_app_availability_auth($pdo, $adminUserId, 'admin');
 
-    $dispatch = static function (string $method, string $uri, array $auth) use (
+    $dispatch = static function (string $method, string $uri, array $auth, ?callable $databaseOpener = null) use (
         $jsonResponse,
         $errorResponse,
         $openDatabase
@@ -130,7 +130,7 @@ SQL
             $auth,
             $jsonResponse,
             $errorResponse,
-            $openDatabase
+            $databaseOpener ?? $openDatabase
         );
         videochat_call_app_availability_assert(is_array($response), 'route should return a response for ' . $uri);
         return $response;
@@ -161,6 +161,55 @@ SQL
     videochat_call_app_availability_assert((bool) (($app['availability'] ?? [])['healthy'] ?? false), 'available app must be marked healthy');
     videochat_call_app_availability_assert((string) (($app['installation'] ?? [])['status'] ?? '') === 'enabled', 'available app installation must be enabled');
     videochat_call_app_availability_assert((string) (($app['installation'] ?? [])['default_app_policy'] ?? '') === 'allowed_by_default', 'available app policy mismatch');
+
+    $sentinelVerifiedAt = '2099-01-01T00:00:00+00:00';
+    $pdo->prepare("UPDATE call_app_catalog_entries SET verified_at = :verified_at, updated_at = :verified_at")
+        ->execute([':verified_at' => $sentinelVerifiedAt]);
+    $warmCatalog = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=white&page=1&page_size=6', $adminAuth);
+    $warmCatalogPayload = videochat_call_app_availability_decode($warmCatalog);
+    $warmDiscovery = is_array(($warmCatalogPayload['result'] ?? [])['discovery'] ?? null) ? ($warmCatalogPayload['result'] ?? [])['discovery'] : [];
+    $warmApps = is_array(($warmCatalogPayload['result'] ?? [])['apps'] ?? null) ? ($warmCatalogPayload['result'] ?? [])['apps'] : [];
+    $verifiedAfterWarmAvailability = (string) $pdo->query("SELECT verified_at FROM call_app_catalog_entries WHERE app_key = 'whiteboard' LIMIT 1")->fetchColumn();
+    videochat_call_app_availability_assert((int) ($warmCatalog['status'] ?? 0) === 200, 'warm availability should return 200');
+    videochat_call_app_availability_assert(count($warmApps) === 1, 'warm catalog availability should keep installed apps visible');
+    videochat_call_app_availability_assert((bool) ($warmDiscovery['refresh_skipped'] ?? false) === true, 'warm availability must not rewrite the catalog on every sidebar load');
+    videochat_call_app_availability_assert((string) ($warmDiscovery['cache_status'] ?? '') === 'warm', 'warm availability must report warm catalog cache status');
+    videochat_call_app_availability_assert($verifiedAfterWarmAvailability === $sentinelVerifiedAt, 'warm availability must preserve catalog verified_at instead of forcing write-refresh');
+
+    $staleVerifiedAt = '2020-01-01T00:00:00+00:00';
+    $pdo->prepare("UPDATE call_app_catalog_entries SET verified_at = :verified_at, updated_at = :verified_at")
+        ->execute([':verified_at' => $staleVerifiedAt]);
+    $lockedOpenDatabase = static function () use ($databasePath): PDO {
+        $lockedPdo = videochat_open_sqlite_pdo($databasePath);
+        $lockedPdo->exec('PRAGMA busy_timeout = 50');
+        return $lockedPdo;
+    };
+    $writeLock = videochat_open_sqlite_pdo($databasePath);
+    $writeLock->exec('BEGIN IMMEDIATE');
+    try {
+        $staleFallback = $dispatch(
+            'GET',
+            '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=white&page=1&page_size=6',
+            $adminAuth,
+            $lockedOpenDatabase
+        );
+    } finally {
+        $writeLock->exec('ROLLBACK');
+    }
+    $staleFallbackPayload = videochat_call_app_availability_decode($staleFallback);
+    $staleDiscovery = is_array(($staleFallbackPayload['result'] ?? [])['discovery'] ?? null) ? ($staleFallbackPayload['result'] ?? [])['discovery'] : [];
+    $staleApps = is_array(($staleFallbackPayload['result'] ?? [])['apps'] ?? null) ? ($staleFallbackPayload['result'] ?? [])['apps'] : [];
+    $staleInvalid = is_array($staleDiscovery['invalid'] ?? null) ? $staleDiscovery['invalid'] : [];
+    $staleRefreshError = is_array(($staleInvalid[0] ?? [])['errors'] ?? null) ? ($staleInvalid[0] ?? [])['errors'] : [];
+    $verifiedAfterStaleFallback = (string) $pdo->query("SELECT verified_at FROM call_app_catalog_entries WHERE app_key = 'whiteboard' LIMIT 1")->fetchColumn();
+    videochat_call_app_availability_assert((int) ($staleFallback['status'] ?? 0) === 200, 'stale fallback availability should return 200 under transient refresh lock');
+    videochat_call_app_availability_assert(count($staleApps) === 1 && (string) ($staleApps[0]['app_key'] ?? '') === 'whiteboard', 'stale fallback availability should keep installed app visible');
+    videochat_call_app_availability_assert((bool) ($staleDiscovery['ok'] ?? true) === false, 'stale fallback discovery should report failed refresh');
+    videochat_call_app_availability_assert((bool) ($staleDiscovery['refresh_skipped'] ?? false) === true, 'stale fallback should skip the failed refresh and use persisted catalog');
+    videochat_call_app_availability_assert((string) ($staleDiscovery['cache_status'] ?? '') === 'stale_fallback', 'stale fallback cache status mismatch');
+    videochat_call_app_availability_assert((string) ($staleDiscovery['fallback_reason'] ?? '') === 'transient_refresh_failed', 'stale fallback reason mismatch');
+    videochat_call_app_availability_assert((string) ($staleRefreshError['catalog_refresh'] ?? '') === 'transient_unavailable', 'stale fallback refresh error mismatch');
+    videochat_call_app_availability_assert($verifiedAfterStaleFallback === $staleVerifiedAt, 'stale fallback must not rewrite catalog verified_at after failed refresh');
 
     $pdo->exec("UPDATE call_app_catalog_entries SET health_status = 'unhealthy' WHERE app_key = 'whiteboard'");
     $availabilityFilters = videochat_call_app_availability_filters([]);

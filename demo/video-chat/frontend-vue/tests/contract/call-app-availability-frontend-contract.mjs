@@ -21,6 +21,18 @@ assert.match(
 
 assert.match(
   storeSource,
+  /AVAILABILITY_RETRY_DELAYS_MS[\s\S]*isRetryableAvailabilityLoadError[\s\S]*responseStatus[\s\S]*503[\s\S]*call_app_availability_failed/,
+  'Call App sidebar catalog must retry transient backend availability failures instead of emptying the panel immediately',
+);
+
+assert.match(
+  storeSource,
+  /requestAvailableAppsPayload[\s\S]*apiRequest[\s\S]*availabilityRetryDelay/,
+  'Call App availability retries must stay scoped to the catalog loader helper',
+);
+
+assert.match(
+  storeSource,
   /availability\?\.installed\s*===\s*true[\s\S]*availability\?\.healthy\s*===\s*true[\s\S]*installation\?\.status\s*===\s*['"]enabled['"][\s\S]*health_status\s*===\s*['"]healthy['"]/,
   'Call App sidebar catalog must expose only installed, enabled, healthy apps',
 );
