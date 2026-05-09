@@ -289,6 +289,7 @@ SQL
     $grantPatchPayload = videochat_call_app_session_lifecycle_decode($grantPatch);
     videochat_call_app_session_lifecycle_assert((int) ($grantPatch['status'] ?? 0) === 200, 'owner grant patch should return 200');
     videochat_call_app_session_lifecycle_assert_diagnostic($grantPatchPayload, 'call_app_grants_changed', 'grant patch must emit a grant-change diagnostic');
+    videochat_call_app_session_lifecycle_assert((string) (($grantPatchPayload['result'] ?? [])['state'] ?? '') === 'updated', 'grant patch result state should be updated');
     videochat_call_app_session_lifecycle_assert(count((array) (($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])) === 1, 'grant patch should create one audit event');
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['changed_grants'] ?? [])[0] ?? [])['retired_launch_tokens'] ?? 0) === 1, 'denying a participant must revoke their active launch token');
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant audit must record retired launch tokens');
@@ -305,10 +306,17 @@ SQL
     $grantList = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth);
     $grantListPayload = videochat_call_app_session_lifecycle_decode($grantList);
     videochat_call_app_session_lifecycle_assert((int) ($grantList['status'] ?? 0) === 200, 'grant list should return 200');
+    videochat_call_app_session_lifecycle_assert((string) (($grantListPayload['result'] ?? [])['session_id'] ?? '') === $sessionId, 'grant list must expose exact GET payload session and call ids');
+    videochat_call_app_session_lifecycle_assert((string) (($grantListPayload['result'] ?? [])['call_id'] ?? '') === $callId, 'grant list must expose exact GET payload call id');
+    videochat_call_app_session_lifecycle_assert((string) (($grantListPayload['result'] ?? [])['default_app_policy'] ?? '') === 'allowed_by_default', 'grant list must expose default app policy for frontend fallback labels');
+    $grantListRegularGrant = array_values(array_filter((array) (($grantListPayload['result'] ?? [])['grants'] ?? []), static fn (array $grant): bool => (int) ($grant['user_id'] ?? 0) === $regularUserId))[0] ?? [];
+    videochat_call_app_session_lifecycle_assert((string) ($grantListRegularGrant['grant_state'] ?? '') === 'denied', 'grant list must include the denied participant grant state');
     videochat_call_app_session_lifecycle_assert(count((array) (($grantListPayload['result'] ?? [])['audit_events'] ?? [])) >= 1, 'grant list should include audit events');
     videochat_call_app_session_lifecycle_assert((int) (((($grantListPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant list audit trail should expose revocation metadata');
     $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_audit_events WHERE app_session_id = {$sessionRowId} AND event_type = 'participant_grant_changed'")->fetchColumn();
     videochat_call_app_session_lifecycle_assert($auditCount === 1, 'grant patch should persist exactly one audit event');
+    $deniedGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_participant_grants WHERE app_session_id = {$sessionRowId} AND user_id = {$regularUserId} AND grant_state = 'denied' AND source = 'explicit'")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($deniedGrantCount === 1, 'grant patch should persist the denied state in call_app_participant_grants');
 
     $sessionRecordAfterUserDeny = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
     videochat_call_app_session_lifecycle_assert(is_array($sessionRecordAfterUserDeny), 'session record should still exist after user deny');
@@ -421,6 +429,8 @@ SQL
         ]],
     ]);
     videochat_call_app_session_lifecycle_assert((int) ($reallowPatch['status'] ?? 0) === 200, 'owner should re-allow participant app access');
+    $allowedGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_participant_grants WHERE app_session_id = {$sessionRowId} AND user_id = {$regularUserId} AND grant_state = 'allowed' AND source = 'explicit'")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($allowedGrantCount === 1, 'grant patch should persist the re-allowed state in call_app_participant_grants');
     $regularCollabLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $userAuth);
     $regularCollabLaunchPayload = videochat_call_app_session_lifecycle_decode($regularCollabLaunch);
     $regularCollabCapabilities = (array) (((($regularCollabLaunchPayload['result'] ?? [])['context'] ?? [])['capabilities'] ?? []));
