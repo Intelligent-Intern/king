@@ -25,6 +25,7 @@ const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-acc
 const tempGuestListDirectSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-temp-guest-list-direct-join.spec.js');
 const coreOrgSessionSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js');
 const mainJourneySmokeSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js');
+const ownerTransferMainJourneysSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-transfer-main-journeys.spec.js');
 const terminalMainJourneysSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js');
 const anonymousDisabledBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js');
 const ownerAbsenceBrowserSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js');
@@ -88,6 +89,11 @@ assert.match(
   callAccessScript,
   /tests\/e2e\/call-access-main-journey-smoke\.spec\.js/,
   'package script must include deterministic main-journey Call Access smoke coverage',
+);
+assert.match(
+  callAccessScript,
+  /tests\/e2e\/call-access-owner-transfer-main-journeys\.spec\.js/,
+  'package script must include owner-transfer main-journey E2E coverage',
 );
 assert.match(
   callAccessScript,
@@ -328,6 +334,31 @@ assert.match(
   mainJourneySmokeSpec,
   /e2e_journey_010 logged-out anonymous link creates a least-privilege guest, admits, leaves, and rejoins/,
   'main journey smoke split must cover the logged-out anonymous lobby/admit/rejoin path from SPRINT section 32',
+);
+assert.match(
+  ownerTransferMainJourneysSpec,
+  /Guest List User/,
+  'owner-transfer main journey proof must include a dedicated guest-list target',
+);
+assert.match(
+  ownerTransferMainJourneysSpec,
+  /function addGuestListUserFromDashboard[\s\S]*Replace participant list during edit[\s\S]*Call updated\./s,
+  'owner-transfer main journey proof must use the compose participant replacement UI',
+);
+assert.match(
+  ownerTransferMainJourneysSpec,
+  /e2e_owner_003_owner_can_manage_guest_list[\s\S]*addGuestListUserFromDashboard[\s\S]*internal_participant_user_ids/s,
+  'owner-transfer main journey proof must cover owner guest-list management through the compose UI',
+);
+assert.match(
+  ownerTransferMainJourneysSpec,
+  /normal-owner transfer removes call-admin rights[\s\S]*role: 'owner'[\s\S]*canModerate\)\.toBe\(false\)[\s\S]*canManageOwnerRole\)\.toBe\(false\)[\s\S]*denied\.status\)\.toBe\(403\)/s,
+  'owner-transfer main journey proof must show a normal creator loses call-admin rights after transfer',
+);
+assert.match(
+  ownerTransferMainJourneysSpec,
+  /e2e_journey_017_org_admin_create_call_transfer_owner_keeps_admin_rights[\s\S]*path: '\/admin\/calls'[\s\S]*role: 'owner'[\s\S]*canModerate\)\.toBe\(true\)[\s\S]*retained\.status\)\.toBe\(200\)/s,
+  'owner-transfer main journey proof must show an org-admin creator keeps call-admin rights after transfer',
 );
 for (const namedTest of [
   'e2e_journey_020_invalidated_invite_link_denied',
