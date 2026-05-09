@@ -1906,6 +1906,17 @@ websocket detach cleanup helpers, proving aborting the waiting connection clears
 the lobby and resets the participant to invited. `iam-lobby-timeout-consistency-contract.mjs`
 binds the runtime deferral/repair path, package script, CI gate, and Sprint
 checkboxes.
+`realtime-lobby-state-cleanup-contract` applies real lobby queue, allow,
+cancel, and reject commands against the King PHP lobby/presence state and proves
+admission removes the queued row, admitted retry cannot recreate it, aborting a
+join removes the queued participant, and rejection removes without admission.
+`iam-lobby-state-cleanup.spec.js` drives the host browser lobby and public join
+modal: host-visible lobby rows/badges update from snapshots, admitted and
+aborted participants disappear from the lobby, abort sends `lobby/queue/cancel`,
+rejected participants never enter the workspace, and admitted participants
+enter the call workspace. `iam-lobby-state-cleanup-proof-contract.mjs` binds the
+focused browser/backend proofs to the package scripts, UI parity matrix, and IAM
+CI gate wiring.
 
 ## 12. Rejoin, Leave, Kick
 
