@@ -17,8 +17,13 @@ function readJson(relativePath) {
   return JSON.parse(readText(relativePath));
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
+const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
@@ -32,6 +37,16 @@ const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls
 const scripts = packageJson.scripts || {};
 const callAccessScript = String(scripts['test:e2e:call-access'] || '');
 const matrixScript = String(scripts['test:e2e:matrix'] || '');
+const directJoinScenarioKeys = [
+  'direct_join_system_admin_alpha_active_allowed',
+  'direct_join_system_admin_beta_active_allowed',
+  'direct_join_system_admin_tenantless_active_allowed',
+  'direct_join_alpha_org_admin_alpha_active_allowed',
+  'direct_join_alpha_org_admin_beta_active_denied',
+  'direct_join_registered_guest_alpha_active_allowed',
+  'direct_join_alpha_normal_user_alpha_active_denied',
+  'direct_join_alpha_call_owner_alpha_active_allowed',
+];
 
 assert.match(
   callAccessScript,
@@ -99,10 +114,64 @@ assert.match(
   /temporary_personalized_guest[\s\S]*temporary_anonymous_guest[\s\S]*tenant_admin[\s\S]*false/s,
   'seed-matrix spec must prove temporary guests do not receive tenant/system admin rights',
 );
+const seedScenarioKeys = new Set((callAccessSeedMatrix.scenarios || []).map((scenario) => scenario?.key));
+const seedScenariosByKey = new Map((callAccessSeedMatrix.scenarios || []).map((scenario) => [scenario?.key, scenario]));
+for (const scenarioKey of directJoinScenarioKeys) {
+  assert.ok(
+    seedScenarioKeys.has(scenarioKey),
+    `seed matrix must include Direct Join Permissions scenario ${scenarioKey}`,
+  );
+  assert.match(
+    seedMatrixSpec,
+    new RegExp(escapeRegExp(scenarioKey)),
+    `seed-matrix spec must exercise Direct Join Permissions scenario ${scenarioKey}`,
+  );
+}
+for (const scenarioKey of [
+  'direct_join_alpha_org_admin_beta_active_denied',
+  'direct_join_alpha_normal_user_alpha_active_denied',
+]) {
+  const expected = seedScenariosByKey.get(scenarioKey)?.expected || {};
+  assert.equal(expected.expected_resolve_status, 200, `${scenarioKey} resolve denial must keep production HTTP 200 envelope`);
+  assert.equal(expected.expected_resolve_state, 'forbidden', `${scenarioKey} resolve denial must be forbidden`);
+  assert.equal(expected.expected_resolve_reason, 'calls_forbidden', `${scenarioKey} resolve denial reason must match production`);
+  assert.equal(expected.expected_call_status, 403, `${scenarioKey} call GET denial must be HTTP 403`);
+  assert.equal(expected.expected_call_error_code, 'calls_forbidden', `${scenarioKey} call GET denial code must match production`);
+}
+assert.match(
+  seedMatrixSpec,
+  /directJoinPermissionCases[\s\S]*createDirectJoinProbePage[\s\S]*fetchDirectJoinResponses/s,
+  'seed-matrix spec must exercise Direct Join Permissions through direct call-ref API probes',
+);
+assert.match(
+  seedMatrixSpec,
+  /expected\.expected_resolve_status[\s\S]*expected\.expected_resolve_state[\s\S]*expected\.expected_resolve_reason/s,
+  'seed-matrix spec must assert denied direct call resolve from matrix expectations',
+);
+assert.match(
+  seedMatrixSpec,
+  /expected\.expected_call_status[\s\S]*expected\.expected_call_error_code/s,
+  'seed-matrix spec must assert denied direct call GET from matrix expectations',
+);
 assert.match(
   seedMatrixHelper,
   /VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON/,
   'seed-matrix helper must support compose smoke injection when contracts/v1 is outside the frontend container mount',
+);
+assert.match(
+  seedMatrixHelper,
+  /canDirectlyResolveCall[\s\S]*authenticatedSeedSessionRecord/s,
+  'seed-matrix helper must model authenticated direct call-ref permission decisions',
+);
+assert.match(
+  seedMatrixHelper,
+  /resolveMatch[\s\S]*fulfillJson\(route,\s*200,[\s\S]*state:\s*'forbidden'[\s\S]*reason:\s*'calls_forbidden'[\s\S]*call:\s*null/s,
+  'seed-matrix helper must model denied /api/calls/resolve/{ref} as HTTP 200 forbidden with calls_forbidden',
+);
+assert.match(
+  seedMatrixHelper,
+  /callMatch[\s\S]*fulfillJson\(route,\s*403,[\s\S]*code:\s*'calls_forbidden'/s,
+  'seed-matrix helper must model denied /api/calls/{id} GET as HTTP 403 calls_forbidden',
 );
 assert.match(
   backendContract,

@@ -1614,8 +1614,8 @@ Proof: Loop 13 (2026-05-09) reran `call-creation-owner-rights-contract`,
 - [ ] Organization admin can join every active call of own organization
 - [ ] Organization admin can join own organization call without guest-list entry
 - [ ] Organization admin cannot join another organization’s call through org-admin rights
-- [ ] User can join call when on guest list
-- [ ] User cannot directly join call when not on guest list
+- [x] User can join call when on guest list
+- [x] User cannot directly join call when not on guest list
 - [ ] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
 - [ ] Deleted / disabled user cannot join
@@ -2472,14 +2472,24 @@ unchecked for the separate owner-transfer lane.
 - [ ] `e2e_join_002_system_admin_joins_without_guest_list`
 - [ ] `e2e_join_003_org_admin_can_join_own_org_call`
 - [ ] `e2e_join_004_org_admin_cannot_join_foreign_org_call`
-- [ ] `e2e_join_005_guest_list_user_can_join`
-- [ ] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
+- [x] `e2e_join_005_guest_list_user_can_join`
+- [x] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
 - [ ] `e2e_join_007_owner_can_join_own_call`
 - [ ] `e2e_join_008_disabled_user_cannot_join`
 - [ ] `e2e_join_009_removed_guest_list_entry_revokes_join`
 - [ ] `e2e_join_010_added_guest_list_entry_grants_join`
 - [ ] `e2e_join_011_manipulated_role_rejected`
 - [ ] `e2e_join_012_manipulated_call_id_rejected`
+
+Proof: Loop 14 (2026-05-09) added Direct Join Permissions seed-matrix
+coverage through `iam-call-access-seeding.matrix.json`,
+`call-access-seed-matrix.spec.js`, and `helpers/callAccessSeedMatrix.js`,
+then passed `npm run test:e2e:call-access -- --reporter=list
+tests/e2e/call-access-seed-matrix.spec.js` (9 passed). The backend
+`call-guest-list-direct-join-contract.php` also passed in
+`php:8.5-cli-trixie`, proving guest-list allow, non-guest denial, and
+call-scoped denial. Admin, owner, deleted/ended, mutation, manipulation, and
+audit direct-join cases remain open.
 
 ## Test Group: Calendar Invitation
 
@@ -2655,10 +2665,10 @@ against duplicate join/session request loops.
 - [ ] `e2e_guest_list_001_add_registered_user_to_guest_list`
 - [ ] `e2e_guest_list_002_add_temp_account_to_guest_list`
 - [ ] `e2e_guest_list_003_remove_guest_list_entry`
-- [ ] `e2e_guest_list_004_guest_list_user_direct_join`
-- [ ] `e2e_guest_list_005_non_guest_user_no_direct_join`
+- [x] `e2e_guest_list_004_guest_list_user_direct_join`
+- [x] `e2e_guest_list_005_non_guest_user_no_direct_join`
 - [ ] `e2e_guest_list_006_temp_guest_list_user_direct_join`
-- [ ] `e2e_guest_list_007_guest_list_call_scoped`
+- [x] `e2e_guest_list_007_guest_list_call_scoped`
 - [ ] `e2e_guest_list_008_guest_list_cross_org_not_valid`
 - [ ] `e2e_guest_list_009_duplicate_guest_entries_handled`
 - [ ] `e2e_guest_list_010_guest_list_changes_audit_logged`

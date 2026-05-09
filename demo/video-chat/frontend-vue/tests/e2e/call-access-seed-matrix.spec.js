@@ -14,54 +14,14 @@ import {
 } from './helpers/callAccessSeedMatrix.js';
 
 const directJoinPermissionCases = [
-  {
-    label: 'system admin alpha',
-    principalUserKey: 'system_admin',
-    callKey: 'alpha_active',
-    allowed: true,
-  },
-  {
-    label: 'system admin beta',
-    principalUserKey: 'system_admin',
-    callKey: 'beta_active',
-    allowed: true,
-  },
-  {
-    label: 'system admin tenantless',
-    principalUserKey: 'system_admin',
-    callKey: 'tenantless_active',
-    allowed: true,
-  },
-  {
-    label: 'alpha org admin alpha',
-    principalUserKey: 'alpha_org_admin',
-    callKey: 'alpha_active',
-    allowed: true,
-  },
-  {
-    label: 'registered guest alpha',
-    principalUserKey: 'registered_guest',
-    callKey: 'alpha_active',
-    allowed: true,
-  },
-  {
-    label: 'alpha call owner alpha',
-    principalUserKey: 'alpha_call_owner',
-    callKey: 'alpha_active',
-    allowed: true,
-  },
-  {
-    label: 'alpha org admin beta',
-    principalUserKey: 'alpha_org_admin',
-    callKey: 'beta_active',
-    allowed: false,
-  },
-  {
-    label: 'alpha normal user alpha',
-    principalUserKey: 'alpha_normal_user',
-    callKey: 'alpha_active',
-    allowed: false,
-  },
+  'direct_join_system_admin_alpha_active_allowed',
+  'direct_join_system_admin_beta_active_allowed',
+  'direct_join_system_admin_tenantless_active_allowed',
+  'direct_join_alpha_org_admin_alpha_active_allowed',
+  'direct_join_registered_guest_alpha_active_allowed',
+  'direct_join_alpha_call_owner_alpha_active_allowed',
+  'direct_join_alpha_org_admin_beta_active_denied',
+  'direct_join_alpha_normal_user_alpha_active_denied',
 ];
 
 async function createDirectJoinProbePage(browser, baseURL, { principalUserKey, callKey }) {
@@ -138,13 +98,15 @@ test('Direct Join Permissions seed matrix enforces direct call-ref API access', 
   test.setTimeout(120_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
 
-  for (const row of directJoinPermissionCases) {
-    await test.step(row.label, async () => {
-      const call = getSeedCall(row.callKey);
-      const principal = getSeedUser(row.principalUserKey);
+  for (const scenarioKey of directJoinPermissionCases) {
+    await test.step(scenarioKey, async () => {
+      const scenario = getSeedScenario(scenarioKey);
+      const call = getSeedCall(scenario.call_key);
+      const principal = getSeedUser(scenario.principal_user_key);
+      const expected = scenario.expected || {};
       const { context, page } = await createDirectJoinProbePage(browser, baseURL, {
-        principalUserKey: row.principalUserKey,
-        callKey: row.callKey,
+        principalUserKey: scenario.principal_user_key,
+        callKey: scenario.call_key,
       });
 
       try {
@@ -153,24 +115,24 @@ test('Direct Join Permissions seed matrix enforces direct call-ref API access', 
           callId: call.id,
         });
 
-        expect.soft(responses.storedSession.userId, `${row.label} stored user id`).toBe(principal.id);
-        expect.soft(responses.storedSession.sessionToken, `${row.label} stored session token`).toMatch(/^sess_iam_seed_/);
+        expect.soft(responses.storedSession.userId, `${scenarioKey} stored user id`).toBe(principal.id);
+        expect.soft(responses.storedSession.sessionToken, `${scenarioKey} stored session token`).toMatch(/^sess_iam_seed_/);
 
-        expect.soft(responses.resolve.status, `${row.label} resolve HTTP status`).toBe(200);
-        expect.soft(responses.resolve.payload?.status, `${row.label} resolve envelope`).toBe('ok');
-        if (row.allowed) {
-          expect.soft(responses.resolve.payload?.result?.state, `${row.label} resolve state`).toBe('resolved');
-          expect.soft(responses.resolve.payload?.result?.call?.id, `${row.label} resolved call id`).toBe(call.id);
-          expect.soft(responses.call.status, `${row.label} call HTTP status`).toBe(200);
-          expect.soft(responses.call.payload?.status, `${row.label} call envelope`).toBe('ok');
-          expect.soft(responses.call.payload?.call?.id, `${row.label} fetched call id`).toBe(call.id);
+        expect.soft(responses.resolve.status, `${scenarioKey} resolve HTTP status`).toBe(expected.expected_resolve_status);
+        expect.soft(responses.resolve.payload?.status, `${scenarioKey} resolve envelope`).toBe('ok');
+        if (expected.direct_join_allowed === true) {
+          expect.soft(responses.resolve.payload?.result?.state, `${scenarioKey} resolve state`).toBe(expected.expected_resolve_state);
+          expect.soft(responses.resolve.payload?.result?.call?.id, `${scenarioKey} resolved call id`).toBe(call.id);
+          expect.soft(responses.call.status, `${scenarioKey} call HTTP status`).toBe(expected.expected_call_status);
+          expect.soft(responses.call.payload?.status, `${scenarioKey} call envelope`).toBe('ok');
+          expect.soft(responses.call.payload?.call?.id, `${scenarioKey} fetched call id`).toBe(call.id);
         } else {
-          expect.soft(responses.resolve.payload?.result?.state, `${row.label} resolve denied state`).toBe('forbidden');
-          expect.soft(responses.resolve.payload?.result?.reason, `${row.label} resolve denied reason`).toBe('calls_forbidden');
-          expect.soft(responses.resolve.payload?.result?.call ?? null, `${row.label} resolve denied call`).toBeNull();
-          expect.soft(responses.call.status, `${row.label} call denied HTTP status`).toBe(403);
-          expect.soft(responses.call.payload?.status, `${row.label} call denied envelope`).toBe('error');
-          expect.soft(responses.call.payload?.error?.code, `${row.label} call denied code`).toBe('calls_forbidden');
+          expect.soft(responses.resolve.payload?.result?.state, `${scenarioKey} resolve denied state`).toBe(expected.expected_resolve_state);
+          expect.soft(responses.resolve.payload?.result?.reason, `${scenarioKey} resolve denied reason`).toBe(expected.expected_resolve_reason);
+          expect.soft(responses.resolve.payload?.result?.call ?? null, `${scenarioKey} resolve denied call`).toBeNull();
+          expect.soft(responses.call.status, `${scenarioKey} call denied HTTP status`).toBe(expected.expected_call_status);
+          expect.soft(responses.call.payload?.status, `${scenarioKey} call denied envelope`).toBe('error');
+          expect.soft(responses.call.payload?.error?.code, `${scenarioKey} call denied code`).toBe(expected.expected_call_error_code);
         }
       } finally {
         await context.close();
