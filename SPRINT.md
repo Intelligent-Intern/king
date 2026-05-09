@@ -1807,7 +1807,7 @@ they actually queue. Docker PHP 8.4 SQLite passed.
 
 - [x] User without direct permission lands in lobby
 - [x] Anonymous not logged-in user lands in lobby
-- [ ] Personalized temporary user without direct permission lands in lobby
+- [x] Personalized temporary user without direct permission lands in lobby
 - [x] Logged-in user without direct permission lands in lobby
 - [x] Lobby entry informs host / authorized moderators
 - [x] Host sees waiting participant
@@ -1873,6 +1873,12 @@ controls before websocket send. Focused validation passed with Docker PHP 8.5
 SQLite and the Node static contract. `realtime-lobby-security-contract.php`
 also passed and proves forged client role/call IDs are rebound to the
 server-side room context before denial.
+`iam-lobby-admission-main.spec.js` validates `e2e_lobby_001`,
+`e2e_lobby_002`, `e2e_lobby_004`, and `e2e_lobby_005`: call-scoped,
+anonymous logged-out, temporary personalized, and logged-in no-direct-access
+users remain in the lobby pending host approval; host and own-organization admin
+workspaces receive the waiting participant snapshot and management controls;
+and a non-moderating participant sees no lobby tab, badge, or lobby controls.
 
 ## 12. Rejoin, Leave, Kick
 
