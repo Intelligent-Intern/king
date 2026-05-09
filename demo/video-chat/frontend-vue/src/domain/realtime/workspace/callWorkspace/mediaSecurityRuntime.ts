@@ -9,6 +9,13 @@ import {
   shouldRecoverMediaSecuritySignalSender,
 } from './mediaSecurityParticipantSet';
 import { createMediaSecuritySfuPublishGate } from './mediaSecuritySfuPublishGate';
+import {
+  isSenderKeyParticipantSetSignalResult,
+  mediaSecurityParticipantMismatchRecoveryKey,
+  normalizeMediaSecurityParticipantSetHash,
+  shouldRunMediaSecurityParticipantMismatchRecovery,
+  MEDIA_SECURITY_PARTICIPANT_MISMATCH_RECOVERY_WINDOW_MS,
+} from './mediaSecuritySenderKeyRecovery';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceMediaSecurityRuntime({
@@ -110,6 +117,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       clearTimeout(state.mediaSecurityResyncTimer);
       state.mediaSecurityResyncTimer = null;
     }
+    state.mediaSecurityResyncReasons?.clear?.();
   }
 
   function clearMediaSecurityHandshakeWatchdog() {
@@ -195,15 +203,25 @@ export function createCallWorkspaceMediaSecurityRuntime({
     }, constants.mediaSecurityHandshakeWatchdogIntervalMs);
   }
 
+  function mediaSecurityResyncReasonSet() {
+    if (!(state.mediaSecurityResyncReasons instanceof Set)) {
+      state.mediaSecurityResyncReasons = new Set();
+    }
+    return state.mediaSecurityResyncReasons;
+  }
+
   function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
     if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
 
     state.mediaSecurityResyncForceRekey = state.mediaSecurityResyncForceRekey || Boolean(forceRekey);
+    const resyncReasons = mediaSecurityResyncReasonSet();
+    const reasonLabel = String(reason || 'unspecified').trim() || 'unspecified';
+    resyncReasons.add(reasonLabel);
     if (state.mediaSecurityResyncTimer !== null) return;
 
     const settleMs = Math.max(0, Number(mediaSecuritySfuTargetSettleMs || 0));
-    const normalizedReason = String(reason || '').trim().toLowerCase();
+    const normalizedReason = reasonLabel.toLowerCase();
     const shouldSettleParticipantChurn = [
       'context_changed',
       'hello_',
@@ -219,9 +237,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityResyncTimer = null;
       const shouldForceRekey = state.mediaSecurityResyncForceRekey;
       state.mediaSecurityResyncForceRekey = false;
+      const scheduledReasons = Array.from(mediaSecurityResyncReasonSet());
+      state.mediaSecurityResyncReasons.clear();
       if (!isSocketOnline.value || currentUserId.value <= 0) return;
       if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
-      mediaDebugLog('[MediaSecurity] scheduled participant sync', { reason, forceRekey: shouldForceRekey });
+      mediaDebugLog('[MediaSecurity] scheduled participant sync', {
+        reason: scheduledReasons.join(','),
+        reasons: scheduledReasons,
+        forceRekey: shouldForceRekey,
+      });
       void syncMediaSecurityWithParticipants(shouldForceRekey);
     }, resyncDelayMs);
   }
@@ -481,6 +505,97 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecurityHandshakeRetryCountByUserId.clear();
   }
 
+  function currentMediaSecurityParticipantSetHash(session) {
+    return normalizeMediaSecurityParticipantSetHash(
+      session?.participantSetHash
+      || session?.telemetrySnapshot?.(currentMediaSecurityRuntimePath())?.participant_set_hash
+    );
+  }
+
+  function clearMediaSecuritySignalCacheForPeer(userId, session) {
+    const normalizedUserId = normalizeRemoteMediaSecurityUserId(userId);
+    if (normalizedUserId <= 0) return;
+    state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedUserId, session));
+    const senderKeySignalKey = mediaSecuritySenderKeySignalKey(normalizedUserId, session);
+    state.mediaSecuritySenderKeySignalsSent.delete(senderKeySignalKey);
+    sfuPublishGate.deleteSenderKeySignalTime(senderKeySignalKey);
+  }
+
+  async function recoverMediaSecuritySenderKeyParticipantMismatch({
+    clearSignalCache = true,
+    direction = 'receiver',
+    peerHasWrappingKey = false,
+    peerState = '',
+    senderUserId = 0,
+    session = null,
+    signalType = 'media-security/sender-key',
+    staleParticipantSetHash = '',
+  } = {}) {
+    const normalizedSenderUserId = normalizeRemoteMediaSecurityUserId(senderUserId);
+    if (normalizedSenderUserId <= 0) return false;
+    const activeSession = session || ensureMediaSecuritySession();
+    const staleHash = normalizeMediaSecurityParticipantSetHash(staleParticipantSetHash);
+    const currentHash = currentMediaSecurityParticipantSetHash(activeSession);
+    const recoveryKey = mediaSecurityParticipantMismatchRecoveryKey({
+      activeRoomId: activeRoomId.value,
+      runtimePath: currentMediaSecurityRuntimePath(),
+      senderUserId: normalizedSenderUserId,
+      staleHash,
+      currentHash,
+    });
+    if (!shouldRunMediaSecurityParticipantMismatchRecovery(state.mediaSecurityRecoveryLastByUserId, recoveryKey)) {
+      return false;
+    }
+
+    const normalizedDirection = String(direction || 'receiver').trim().toLowerCase();
+    if (clearSignalCache) {
+      clearMediaSecuritySignalCacheForPeer(normalizedSenderUserId, activeSession);
+    }
+    requestRoomSnapshot();
+    scheduleMediaSecurityParticipantSync('sender_key_participant_mismatch', false);
+    requestRemoteMediaSecuritySync(normalizedSenderUserId, 'sender_key_participant_mismatch', {
+      recovery_throttle_key: `${recoveryKey}:remote-sync`,
+      signal_type: signalType,
+      direction: normalizedDirection,
+      stale_participant_set_hash: staleHash,
+      current_participant_set_hash: currentHash,
+      media_security_only: true,
+      requested_action: 'media_security_sync_only',
+      request_full_keyframe: false,
+      suppress_reconnect: true,
+      suppress_quality_recovery: true,
+      suppress_gossip_recovery: true,
+      suppress_background_recovery: true,
+    });
+    await sendMediaSecurityHello(normalizedSenderUserId, true);
+
+    const participantPayload = normalizedDirection === 'outgoing'
+      ? { target_user_id: normalizedSenderUserId }
+      : { sender_user_id: normalizedSenderUserId };
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_sender_key_participant_mismatch',
+      code: 'media_security_sender_key_participant_mismatch',
+      message: normalizedDirection === 'outgoing'
+        ? 'Media security sender key was deferred because the participant transcript changed before key wrap completed.'
+        : 'Incoming media security sender key was stale for the current participant set; a fresh hello/sync was requested.',
+      payload: {
+        ...participantPayload,
+        signal_type: signalType,
+        direction: normalizedDirection,
+        peer_state: String(peerState || ''),
+        peer_has_wrapping_key: Boolean(peerHasWrappingKey),
+        stale_participant_set_hash: staleHash,
+        current_participant_set_hash: currentHash,
+        coalesce_window_ms: MEDIA_SECURITY_PARTICIPANT_MISMATCH_RECOVERY_WINDOW_MS,
+        media_runtime_path: mediaRuntimePath.value,
+        security: activeSession.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return true;
+  }
+
   async function sendMediaSecurityHello(targetUserId, force = false) {
     if (!isSocketOnline.value) return false;
     const normalizedTargetId = normalizeRemoteMediaSecurityUserId(targetUserId);
@@ -574,33 +689,14 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const errorCode = mediaSecurityErrorCode(error);
       if (errorCode === 'participant_set_mismatch') {
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
-        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
-        state.mediaSecuritySenderKeySignalsSent.delete(key);
-        sfuPublishGate.deleteSenderKeySignalTime(key);
-        state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
-        requestRoomSnapshot();
-        startMediaSecurityHandshakeWatchdog();
-        scheduleMediaSecurityParticipantSync(
-          'sender_key_participant_mismatch',
-          false,
-        );
-        requestRemoteMediaSecuritySync(normalizedTargetId, 'sender_key_participant_mismatch', {
-          peer_state: String(peer?.state || ''),
-          peer_has_wrapping_key: Boolean(peer?.wrappingKey),
-        });
-        await sendMediaSecurityHello(normalizedTargetId, true);
-        captureClientDiagnostic({
-          category: 'media',
-          level: 'warning',
-          eventType: 'media_security_sender_key_participant_mismatch',
-          code: 'media_security_sender_key_participant_mismatch',
-          message: 'Media security sender key was deferred because the participant transcript changed before key wrap completed.',
-          payload: {
-            target_user_id: normalizedTargetId,
-            peer_state: String(peer?.state || ''),
-            media_runtime_path: mediaRuntimePath.value,
-            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
-          },
+        await recoverMediaSecuritySenderKeyParticipantMismatch({
+          direction: 'outgoing',
+          peerState: String(peer?.state || ''),
+          peerHasWrappingKey: Boolean(peer?.wrappingKey),
+          senderUserId: normalizedTargetId,
+          session,
+          signalType: 'media-security/sender-key',
+          staleParticipantSetHash: peer?.participantSetHash,
         });
         return false;
       }
@@ -815,7 +911,9 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const normalizedUserId = Number(publisherUserId || 0);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
     const nowMs = Date.now();
-    const throttleKey = `remote-sync:${normalizedUserId}`;
+    const payload = extraPayload && typeof extraPayload === 'object' ? { ...extraPayload } : {};
+    const throttleKey = String(payload.recovery_throttle_key || `remote-sync:${normalizedUserId}`);
+    delete payload.recovery_throttle_key;
     const lastRecoveryMs = Number(state.mediaSecurityRecoveryLastByUserId.get(throttleKey) || 0);
     if ((nowMs - lastRecoveryMs) < 3000) return false;
     state.mediaSecurityRecoveryLastByUserId.set(throttleKey, nowMs);
@@ -827,7 +925,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         reason: String(reason || 'media_security_recovery'),
         requester_user_id: Number(currentUserId.value || 0),
         media_runtime_path: mediaRuntimePath.value,
-        ...extraPayload,
+        ...payload,
       },
     });
   }
@@ -1104,6 +1202,29 @@ export function createCallWorkspaceMediaSecurityRuntime({
           state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedSenderUserId);
           resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted');
         }
+        const senderKeySignalResult = String(session.lastSenderKeySignalResult || '');
+        if (
+          !accepted
+          && isSenderKeyParticipantSetSignalResult(senderKeySignalResult)
+          && shouldRecoverMediaSecuritySignalSender({
+            hasRealtimeRoomSync: hasRealtimeRoomSync.value,
+            targetUserIds: remoteMediaSecurityTargetIds(),
+            senderUserId: normalizedSenderUserId,
+          })
+        ) {
+          const peer = session.peers instanceof Map ? session.peers.get(normalizedSenderUserId) : null;
+          await recoverMediaSecuritySenderKeyParticipantMismatch({
+            clearSignalCache: false,
+            direction: 'receiver',
+            peerState: String(peer?.state || ''),
+            peerHasWrappingKey: Boolean(peer?.wrappingKey),
+            senderUserId: normalizedSenderUserId,
+            session,
+            signalType: type,
+            staleParticipantSetHash: payloadBody?.participant_set_hash,
+          });
+          return;
+        }
         if (!accepted && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)) {
           scheduleMediaSecurityParticipantSync('sender_key_pending');
         } else if (
@@ -1121,7 +1242,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
         }
       }
     } catch (error) {
-      mediaDebugLog('[MediaSecurity] signaling failed', error);
       const errorCode = mediaSecurityErrorCode(error);
       const shouldRecoverSignalSender = shouldRecoverMediaSecuritySignalSender({
         hasRealtimeRoomSync: hasRealtimeRoomSync.value,
@@ -1133,34 +1253,20 @@ export function createCallWorkspaceMediaSecurityRuntime({
         && errorCode === 'participant_set_mismatch'
         && shouldRecoverSignalSender
       ) {
-        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
-        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
-        sfuPublishGate.deleteSenderKeySignalTime(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
-        requestRoomSnapshot();
-        requestRemoteMediaSecuritySync(normalizedSenderUserId, 'sender_key_participant_mismatch', {
-          error_code: errorCode,
-          signal_type: type,
+        const peer = session.peers instanceof Map ? session.peers.get(normalizedSenderUserId) : null;
+        await recoverMediaSecuritySenderKeyParticipantMismatch({
+          clearSignalCache: false,
           direction: 'receiver',
-        });
-        await sendMediaSecurityHello(normalizedSenderUserId, true);
-        scheduleMediaSecurityParticipantSync('sender_key_participant_mismatch', false);
-        startMediaSecurityHandshakeWatchdog();
-        captureClientDiagnostic({
-          category: 'media',
-          level: 'warning',
-          eventType: 'media_security_sender_key_participant_mismatch',
-          code: 'media_security_sender_key_participant_mismatch',
-          message: 'Incoming media security sender key was stale for the current participant set; a fresh hello/sync was requested.',
-          payload: {
-            sender_user_id: normalizedSenderUserId,
-            signal_type: type,
-            direction: 'receiver',
-            media_runtime_path: mediaRuntimePath.value,
-            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
-          },
+          peerState: String(peer?.state || ''),
+          peerHasWrappingKey: Boolean(peer?.wrappingKey),
+          senderUserId: normalizedSenderUserId,
+          session,
+          signalType: type,
+          staleParticipantSetHash: payloadBody?.participant_set_hash,
         });
         return;
       }
+      mediaDebugLog('[MediaSecurity] signaling failed', error);
       if (
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && shouldRecoverSignalSender

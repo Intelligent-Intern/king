@@ -79,6 +79,10 @@ try {
   assert.equal(aliceSenderKey.payload.kex_suite, 'x25519_hkdf_sha256_v1');
   assert.ok(String(aliceSenderKey.payload.kex_transcript_hash || '').length > 20, 'sender-key signal must pin KEX transcript');
   assert.ok(String(aliceSenderKey.payload.participant_set_hash || '').length > 20, 'sender-key signal must pin participant set');
+  assert.ok(
+    Number(aliceSenderKey.payload.participant_set_revision || 0) >= 1,
+    'sender-key signal must expose the local participant-set revision for idempotent stale-key handling',
+  );
   assert.ok(!('raw_media_key' in aliceSenderKey.payload), 'sender-key signal must not expose raw media key fields');
   assert.ok(String(aliceSenderKey.payload.encrypted_key || '').length > 20, 'sender key must be wrapped');
   await assert.rejects(
@@ -102,10 +106,15 @@ try {
   await staleParticipantBob.handleHelloSignal(101, staleAliceHello.payload);
   const staleSenderKey = await staleParticipantAlice.buildSenderKeySignal(202);
   staleParticipantBob.markParticipantSet([101, 303]);
-  await assert.rejects(
-    () => staleParticipantBob.handleSenderKeySignal(101, staleSenderKey.payload),
-    /participant_set_mismatch/,
-    'receiver must classify stale participant-set sender keys as reconnectable churn, not a KEX downgrade',
+  assert.equal(
+    await staleParticipantBob.handleSenderKeySignal(101, staleSenderKey.payload),
+    false,
+    'receiver must idempotently drop stale participant-set sender keys instead of throwing',
+  );
+  assert.equal(
+    staleParticipantBob.lastSenderKeySignalResult,
+    'stale_participant_set',
+    'receiver must classify known stale participant-set sender keys as recoverable churn, not a KEX downgrade',
   );
 
   const pendingStaleBob = createMediaSecuritySession({ callId: 'call-stale', roomId: 'room-stale', userId: 202 });
@@ -459,10 +468,11 @@ try {
   assert.match(mediaSecurityRuntimeSource, /const shouldRotateSenderKey = shouldForceMediaSecurityRekeyForParticipantSetDelta\(participantDelta, forceRekey\);[\s\S]*if \(marked\.changed \|\| shouldRotateSenderKey\) \{[\s\S]*clearMediaSecuritySignalCaches\(\);[\s\S]*if \(shouldRotateSenderKey\) \{/m, 'participant-set additions must invalidate hello/sender-key signal caches without forcing a sender-key epoch rotation');
   assert.match(mediaSecurityRuntimeSource, /if \(type === 'call\/media-security-sync-request'\) \{[\s\S]*if \(marked\.changed \|\| shouldForceRekey\) \{[\s\S]*clearMediaSecuritySignalCaches\(\);/m, 'remote sync requests must clear stale signal caches after participant-set additions before replaying hello');
   assert.match(mediaSecurityRuntimeSource, /if \(type === 'media-security\/hello'\) \{[\s\S]*if \(marked\.changed\) \{[\s\S]*clearMediaSecuritySignalCaches\(\);[\s\S]*scheduleMediaSecurityParticipantSync\('hello_participant_set_changed', shouldForceRekey\);/m, 'incoming hello participant-set additions must refresh cached hello/sender-key signals without forcing a rekey storm');
-  assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\([\s\S]*'sender_key_participant_mismatch',[\s\S]*false,[\s\S]*\);/m, 'sender-key participant mismatch must wait for a fresh hello instead of force-rekeying every stale transcript');
-  assert.match(mediaSecurityRuntimeSource, /requestRemoteMediaSecuritySync\(normalizedTargetId, 'sender_key_participant_mismatch'/, 'sender-key participant mismatch must prompt the remote peer to refresh hello/sender-key state');
-  assert.match(mediaSecurityRuntimeSource, /requestRoomSnapshot\(\);[\s\S]*scheduleMediaSecurityParticipantSync\([\s\S]*'sender_key_participant_mismatch',[\s\S]*false,[\s\S]*\);/m, 'sender-key participant mismatch must refresh the authoritative room snapshot before non-forced transcript recovery');
-  assert.match(mediaSecurityRuntimeSource, /type === 'media-security\/sender-key'[\s\S]*errorCode === 'participant_set_mismatch'[\s\S]*requestRemoteMediaSecuritySync\(normalizedSenderUserId, 'sender_key_participant_mismatch'[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, true\);[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_participant_mismatch', false\);[\s\S]*eventType: 'media_security_sender_key_participant_mismatch'/m, 'incoming stale sender-key participant mismatches must use sender-key recovery instead of the generic hard signal-failure path');
+  assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('sender_key_participant_mismatch', false\);/m, 'sender-key participant mismatch must wait for a fresh hello instead of force-rekeying every stale transcript');
+  assert.match(mediaSecurityRuntimeSource, /async function recoverMediaSecuritySenderKeyParticipantMismatch\([\s\S]*requestRemoteMediaSecuritySync\(normalizedSenderUserId, 'sender_key_participant_mismatch'/m, 'sender-key participant mismatch must prompt the remote peer to refresh hello/sender-key state');
+  assert.match(mediaSecurityRuntimeSource, /async function recoverMediaSecuritySenderKeyParticipantMismatch\([\s\S]*requestRoomSnapshot\(\);[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_participant_mismatch', false\);/m, 'sender-key participant mismatch must refresh the authoritative room snapshot before non-forced transcript recovery');
+  assert.match(mediaSecurityRuntimeSource, /if \(type === 'media-security\/sender-key'\) \{[\s\S]*isSenderKeyParticipantSetSignalResult\(senderKeySignalResult\)[\s\S]*await recoverMediaSecuritySenderKeyParticipantMismatch\(\{[\s\S]*clearSignalCache: false,[\s\S]*direction: 'receiver'[\s\S]*return;/m, 'incoming stale sender-key participant mismatches must use sender-key recovery from idempotent false returns instead of the generic hard signal-failure path');
+  assert.match(mediaSecurityRuntimeSource, /type === 'media-security\/sender-key'[\s\S]*errorCode === 'participant_set_mismatch'[\s\S]*await recoverMediaSecuritySenderKeyParticipantMismatch\(\{[\s\S]*clearSignalCache: false,[\s\S]*direction: 'receiver'/m, 'incoming thrown participant mismatches from older runtime paths must still use sender-key recovery');
   {
     const senderKeyMismatchRecoveryIndex = mediaSecurityRuntimeSource.indexOf("type === 'media-security/sender-key'\n        && errorCode === 'participant_set_mismatch'");
     const senderKeyMismatchReturnIndex = mediaSecurityRuntimeSource.indexOf('        return;', senderKeyMismatchRecoveryIndex);
