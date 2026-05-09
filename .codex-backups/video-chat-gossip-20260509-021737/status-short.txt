@@ -1,0 +1,2 @@
+ M demo/video-chat/frontend-vue/src/domain/realtime/layout/strategies.ts
+ M demo/video-chat/frontend-vue/tests/contract/call-layout-active-strategy-contract.mjs

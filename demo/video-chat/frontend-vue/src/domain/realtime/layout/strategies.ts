@@ -439,9 +439,10 @@ export function selectCallLayoutParticipants({
       ];
       clippedVisibleIds = [mainUserId, ...miniUserIds].filter((id) => byUserId.has(id)).slice(0, limit);
     } else {
-      miniUserIds = explicitMiniUserIds.length > 0
-        ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds)
-        : fallbackMiniUserIds;
+      const manualMiniUserIds = visibleIds.filter((id) => id !== mainUserId);
+      miniUserIds = automationActive
+        ? (explicitMiniUserIds.length > 0 ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds) : fallbackMiniUserIds)
+        : [...new Set([...explicitMiniVisibleIds, ...manualMiniUserIds])];
     }
   } else if (mode === 'call_app_workspace') {
     miniUserIds = clippedVisibleIds;

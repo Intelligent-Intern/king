@@ -1,0 +1,3 @@
+ .../src/domain/realtime/layout/strategies.ts       |  7 +++---
+ .../call-layout-active-strategy-contract.mjs       | 29 ++++++++++++++++++++++
+ 2 files changed, 33 insertions(+), 3 deletions(-)

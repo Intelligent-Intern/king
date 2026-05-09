@@ -317,6 +317,35 @@ try {
     assert.ok(nextBucket.miniParticipants.every((row) => row.userId !== 2), 'round robin mini pool excludes the speaker');
   }
 
+  {
+    const rows = [
+      { userId: 1, displayName: 'Admin', role: 'admin', callRole: 'owner' },
+      { userId: 880000, displayName: 'Alice', role: 'user', callRole: 'participant' },
+      { userId: 880001, displayName: 'Sputnik 1', role: 'user', callRole: 'participant' },
+      { userId: 880002, displayName: 'Sputnik 2', role: 'user', callRole: 'participant' },
+      { userId: 880003, displayName: 'Sputnik 3', role: 'user', callRole: 'participant' },
+      { userId: 42, displayName: 'Late User', role: 'user', callRole: 'participant' },
+    ];
+    const result = selectCallLayoutParticipants({
+      participants: rows,
+      currentUserId: 1,
+      pinnedUsers: { 880001: true },
+      activityByUserId: {},
+      layoutState: {
+        mode: 'main_mini',
+        strategy: 'manual_pinned',
+        selection: {
+          mini_user_ids: [1, 880002, 880003, 42],
+        },
+      },
+      nowMs,
+    });
+    const miniIds = result.miniParticipants.map((row) => row.userId);
+
+    assert.equal(result.mainUserId, 880001, 'locally pinned Sputnik must become main video');
+    assert.ok(miniIds.includes(880000), 'manual pinning Sputnik must keep Alice in the mini strip');
+  }
+
   process.stdout.write('[call-layout-active-strategy-contract] PASS\n');
 } catch (error) {
   if (error instanceof Error) fail(error.message);

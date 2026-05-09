@@ -1,0 +1,58 @@
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/layout/strategies.ts b/demo/video-chat/frontend-vue/src/domain/realtime/layout/strategies.ts
+index 6032b41f..7bca9223 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/layout/strategies.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/layout/strategies.ts
+@@ -439,9 +439,10 @@ export function selectCallLayoutParticipants({
+       ];
+       clippedVisibleIds = [mainUserId, ...miniUserIds].filter((id) => byUserId.has(id)).slice(0, limit);
+     } else {
+-      miniUserIds = explicitMiniUserIds.length > 0
+-        ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds)
+-        : fallbackMiniUserIds;
++      const manualMiniUserIds = visibleIds.filter((id) => id !== mainUserId);
++      miniUserIds = automationActive
++        ? (explicitMiniUserIds.length > 0 ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds) : fallbackMiniUserIds)
++        : [...new Set([...explicitMiniVisibleIds, ...manualMiniUserIds])];
+     }
+   } else if (mode === 'call_app_workspace') {
+     miniUserIds = clippedVisibleIds;
+diff --git a/demo/video-chat/frontend-vue/tests/contract/call-layout-active-strategy-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/call-layout-active-strategy-contract.mjs
+index d77ab0da..57577039 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/call-layout-active-strategy-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/call-layout-active-strategy-contract.mjs
+@@ -317,6 +317,35 @@ try {
+     assert.ok(nextBucket.miniParticipants.every((row) => row.userId !== 2), 'round robin mini pool excludes the speaker');
+   }
+ 
++  {
++    const rows = [
++      { userId: 1, displayName: 'Admin', role: 'admin', callRole: 'owner' },
++      { userId: 880000, displayName: 'Alice', role: 'user', callRole: 'participant' },
++      { userId: 880001, displayName: 'Sputnik 1', role: 'user', callRole: 'participant' },
++      { userId: 880002, displayName: 'Sputnik 2', role: 'user', callRole: 'participant' },
++      { userId: 880003, displayName: 'Sputnik 3', role: 'user', callRole: 'participant' },
++      { userId: 42, displayName: 'Late User', role: 'user', callRole: 'participant' },
++    ];
++    const result = selectCallLayoutParticipants({
++      participants: rows,
++      currentUserId: 1,
++      pinnedUsers: { 880001: true },
++      activityByUserId: {},
++      layoutState: {
++        mode: 'main_mini',
++        strategy: 'manual_pinned',
++        selection: {
++          mini_user_ids: [1, 880002, 880003, 42],
++        },
++      },
++      nowMs,
++    });
++    const miniIds = result.miniParticipants.map((row) => row.userId);
++
++    assert.equal(result.mainUserId, 880001, 'locally pinned Sputnik must become main video');
++    assert.ok(miniIds.includes(880000), 'manual pinning Sputnik must keep Alice in the mini strip');
++  }
++
+   process.stdout.write('[call-layout-active-strategy-contract] PASS\n');
+ } catch (error) {
+   if (error instanceof Error) fail(error.message);
