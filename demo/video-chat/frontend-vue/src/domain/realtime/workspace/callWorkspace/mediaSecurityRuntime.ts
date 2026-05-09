@@ -536,18 +536,17 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const activeSession = session || ensureMediaSecuritySession();
     const staleHash = normalizeMediaSecurityParticipantSetHash(staleParticipantSetHash);
     const currentHash = currentMediaSecurityParticipantSetHash(activeSession);
+    const normalizedDirection = String(direction || 'receiver').trim().toLowerCase();
     const recoveryKey = mediaSecurityParticipantMismatchRecoveryKey({
       activeRoomId: activeRoomId.value,
       runtimePath: currentMediaSecurityRuntimePath(),
+      direction: normalizedDirection,
       senderUserId: normalizedSenderUserId,
-      staleHash,
-      currentHash,
     });
     if (!shouldRunMediaSecurityParticipantMismatchRecovery(state.mediaSecurityRecoveryLastByUserId, recoveryKey)) {
       return false;
     }
 
-    const normalizedDirection = String(direction || 'receiver').trim().toLowerCase();
     if (clearSignalCache) {
       clearMediaSecuritySignalCacheForPeer(normalizedSenderUserId, activeSession);
     }
