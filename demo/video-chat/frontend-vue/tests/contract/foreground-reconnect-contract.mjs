@@ -124,6 +124,12 @@ try {
     listeners.get('window:focus')?.({ type: 'focus' });
     assert.deepEqual(events, [], 'visible blur/focus must not arm or run reconnect callbacks');
 
+    listeners.get('window:blur')?.({ type: 'blur', target: { tagName: 'IFRAME' } });
+    listeners.get('window:focus')?.({ type: 'focus', target: { tagName: 'IFRAME' } });
+    listeners.get('window:blur')?.({ type: 'blur', target: { tagName: 'BUTTON' } });
+    listeners.get('window:focus')?.({ type: 'focus', target: { tagName: 'BUTTON' } });
+    assert.deepEqual(events, [], 'visible iframe and call-control focus churn must not arm or run reconnect callbacks');
+
     documentHarness.visibilityState = 'hidden';
     listeners.get('document:visibilitychange')?.();
     assert.deepEqual(events, [['background', 'document_hidden', true]], 'hidden visibility change must arm background recovery');
@@ -145,6 +151,20 @@ try {
     listeners.get('window:online')?.({ type: 'online' });
     assert.equal(events.at(-1)?.[0], 'foreground', 'online event must still run foreground recovery');
     assert.equal(events.at(-1)?.[1], 'online', 'online foreground recovery must preserve its reason');
+
+    events.length = 0;
+    documentHarness.visibilityState = 'visible';
+    listeners.get('window:pagehide')?.({ type: 'pagehide' });
+    assert.deepEqual(events, [['background', 'pagehide', false]], 'pagehide must arm true lifecycle recovery even before visibility flips');
+    listeners.get('window:pageshow')?.({ type: 'pageshow' });
+    assert.deepEqual(
+      events,
+      [
+        ['background', 'pagehide', false],
+        ['foreground', 'pageshow', false],
+      ],
+      'pageshow after pagehide must run foreground recovery',
+    );
 
     detach();
   } finally {
