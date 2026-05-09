@@ -212,13 +212,36 @@ function videochat_iam_owner_timeout_create_personal_link(PDO $pdo, string $call
     return $accessId;
 }
 
-function videochat_iam_owner_timeout_issue_access_session(PDO $pdo, string $accessId, string $sessionId, string $label): array
+function videochat_iam_owner_timeout_create_open_link(PDO $pdo, string $callId, int $ownerUserId, int $tenantId, string $label): string
+{
+    $link = videochat_create_call_access_link_for_user(
+        $pdo,
+        $callId,
+        $ownerUserId,
+        'admin',
+        ['link_kind' => 'open'],
+        $tenantId
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($link['ok'] ?? false), 'anonymous owner-timeout link should be created', $label);
+    $accessId = (string) (($link['access_link'] ?? [])['id'] ?? '');
+    videochat_iam_rejoin_contract_assert($accessId !== '', 'anonymous owner-timeout link id should be present', $label);
+    return $accessId;
+}
+
+function videochat_iam_owner_timeout_issue_access_session(
+    PDO $pdo,
+    string $accessId,
+    string $sessionId,
+    string $label,
+    array $options = []
+): array
 {
     $issued = videochat_issue_session_for_call_access(
         $pdo,
         $accessId,
         static fn (): string => $sessionId,
-        ['client_ip' => '127.0.0.1', 'user_agent' => $label]
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        $options
     );
     videochat_iam_rejoin_contract_assert((bool) ($issued['ok'] ?? false), 'call-access session should issue before owner timeout', $label);
 
@@ -650,6 +673,86 @@ SQL
         'owner-timeout end should preserve call-ended audit log',
         $label
     );
+
+    $anonymousCall = videochat_iam_owner_timeout_seed_active_call(
+        $pdo,
+        $tenantId,
+        $ownerUserId,
+        $participantUserId,
+        'IAM Owner Absence Anonymous Link Contract'
+    );
+    $anonymousCallId = $anonymousCall['call_id'];
+    $anonymousRoomId = $anonymousCall['room_id'];
+    $pdo->prepare("UPDATE calls SET access_mode = 'free_for_all' WHERE id = :call_id")->execute([
+        ':call_id' => $anonymousCallId,
+    ]);
+    $anonymousAccessId = videochat_iam_owner_timeout_create_open_link($pdo, $anonymousCallId, $ownerUserId, $tenantId, $label);
+    $anonymousSessionId = 'sess_owner_timeout_anonymous_guest';
+    $anonymousSession = videochat_iam_owner_timeout_issue_access_session($pdo, $anonymousAccessId, $anonymousSessionId, $label, [
+        'guest_name' => 'IAM Owner Timeout Anonymous Guest',
+    ]);
+    $anonymousGuestId = (int) (($anonymousSession['user'] ?? [])['id'] ?? 0);
+    videochat_iam_rejoin_contract_assert($anonymousGuestId > 0, 'anonymous owner-timeout guest id should be issued', $label);
+
+    $anonymousPresenceState = videochat_presence_state_init();
+    $anonymousStartMs = 1_778_100_000_000;
+    $anonymousOwnerConnection = videochat_iam_king_participant_client(
+        $pdo,
+        $anonymousPresenceState,
+        $anonymousRoomId,
+        $anonymousCallId,
+        $ownerUserId,
+        'IAM Owner',
+        'admin',
+        'owner',
+        $tenantId,
+        $anonymousStartMs,
+        'anonymous-owner'
+    );
+    $anonymousParticipantConnection = videochat_iam_king_participant_client(
+        $pdo,
+        $anonymousPresenceState,
+        $anonymousRoomId,
+        $anonymousCallId,
+        $participantUserId,
+        'IAM Owner Timeout Participant',
+        'user',
+        'participant',
+        $tenantId,
+        $anonymousStartMs + 1000,
+        'anonymous-participant'
+    );
+    videochat_iam_king_participant_touch($pdo, $anonymousOwnerConnection, $anonymousStartMs + 2000);
+    videochat_iam_king_participant_touch($pdo, $anonymousParticipantConnection, $anonymousStartMs + 2000);
+    $anonymousOwnerLeftMs = $anonymousStartMs + 60_000;
+    videochat_iam_king_participant_leave($pdo, $anonymousPresenceState, $anonymousOwnerConnection, $anonymousOwnerLeftMs);
+    $anonymousDeadlineMs = $anonymousOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;
+    videochat_iam_king_participant_touch($pdo, $anonymousParticipantConnection, $anonymousDeadlineMs);
+    $anonymousEndedSnapshot = videochat_iam_king_participant_snapshot(
+        $pdo,
+        $anonymousPresenceState,
+        $anonymousParticipantConnection,
+        $anonymousDeadlineMs,
+        'owner_absence_anonymous_link_deadline'
+    );
+    $anonymousEnded = (array) (($anonymousEndedSnapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
+    $anonymousEndedLifecycle = (array) ($anonymousEnded['lifecycle'] ?? []);
+    videochat_iam_rejoin_contract_assert((string) ($anonymousEnded['status'] ?? '') === 'ended', 'anonymous owner-timeout call should end after owner absence', $label);
+    videochat_iam_rejoin_contract_assert((int) ($anonymousEndedLifecycle['invalidated_link_count'] ?? 0) >= 1, 'owner-timeout end should invalidate anonymous links', $label);
+    videochat_iam_rejoin_contract_assert((int) ($anonymousEndedLifecycle['revoked_access_session_count'] ?? 0) >= 1, 'owner-timeout end should revoke anonymous call-access sessions', $label);
+    videochat_iam_rejoin_contract_assert((string) (videochat_resolve_call_access_public($pdo, $anonymousAccessId)['reason'] ?? '') === 'not_found', 'owner-timeout end should invalidate anonymous join link', $label);
+    $lateAnonymousSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $anonymousAccessId,
+        static fn (): string => 'sess_owner_timeout_late_anonymous',
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        ['guest_name' => 'IAM Owner Timeout Late Anonymous Guest']
+    );
+    videochat_iam_rejoin_contract_assert(!(bool) ($lateAnonymousSession['ok'] ?? true), 'owner-timeout ended anonymous link must not issue a new session', $label);
+    videochat_iam_rejoin_contract_assert(!videochat_iam_owner_timeout_session_exists($pdo, 'sess_owner_timeout_late_anonymous'), 'owner-timeout denied late anonymous session must not be stored', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_session_revoked($pdo, $anonymousSessionId), 'owner-timeout end should revoke anonymous session', $label);
+    videochat_iam_owner_timeout_assert_auth_denied($pdo, $anonymousSessionId, $anonymousCallId, $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_user_status($pdo, $anonymousGuestId) === 'disabled', 'owner-timeout end should disable anonymous temporary guest', $label);
 
     videochat_iam_owner_timeout_assert_abrupt_absence_mode($pdo, $tenantId, $ownerUserId, $participantUserId, 'owner_browser_crash', 10_000_000, $label);
     videochat_iam_owner_timeout_assert_abrupt_absence_mode($pdo, $tenantId, $ownerUserId, $participantUserId, 'owner_context_killed', 20_000_000, $label);

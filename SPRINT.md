@@ -2674,7 +2674,7 @@ invalidated.
 - [x] Call ends if owner does not rejoin before timeout
 - [x] Call-ended state prevents new joins
 - [x] Call-ended state prevents rejoins
-- [ ] Call-ended state invalidates anonymous join link
+- [x] Call-ended state invalidates anonymous join link
 - [x] Call-ended state invalidates personalized invite links
 - [x] Call-ended state deletes or invalidates temporary guest accounts
 - [x] Call-ended state clears lobby entries
@@ -2691,8 +2691,9 @@ the contract shape, fake/test clock, room snapshot lifecycle payload, countdown
 boundary, owner-return cancellation, terminal lifecycle binding, and persisted
 implicit end. `call-access-owner-timeout-contract.php` passed under Docker PHP
 8.4 with `pdo_sqlite` and proves automatic end blocks fresh joins and stale
-session rejoins, invalidates personalized links, disables pending/admitted
-temporary guests, clears lobby entries, and preserves call-ended audit.
+session rejoins, invalidates personalized and anonymous links, disables
+pending/admitted/anonymous temporary guests, clears lobby entries, and preserves
+call-ended audit.
 `call-access-owner-absence-browser.spec.js` drives the browser workspace through
 the final-countdown UI, countdown update, owner-absence automatic end, and owner
 return cancellation paths using the backend timer constants and room snapshots.
