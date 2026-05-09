@@ -222,7 +222,7 @@ Tickets:
   owner/moderator/admin admits them.
 - [x] GJL-03 Right sidebar keeps the user-tab lobby badge; collapsed sidebar
   shows the main lobby notification for new join requests.
-- [ ] GJL-04 Contract/build proof and no-push deploy without DNS or Certbot,
+- [x] GJL-04 Contract/build proof and no-push deploy without DNS or Certbot,
   followed by diagnostics.
   - Local proof before deploy: PHP lint for changed call-access files,
     `npm run test:contract:iam-call-access`,
@@ -230,3 +230,12 @@ Tickets:
     `npm run test:contract:build-size`, and `git diff --check`.
   - Runtime SQLite call-access session contract is extended for external
     guest admission but skips locally because `pdo_sqlite` is unavailable.
+  - Deployed on 2026-05-09 from the local branch without pushing. No DNS
+    changes were made, and certbot issuance was skipped.
+  - Post-deploy diagnostics: `https://api.kingrt.com/health` and
+    `https://app.kingrt.com/` returned 200, runtime asset version
+    `20260509212621` is active, core frontend assets returned 200, and an
+    invalid call-access join URL returned a structured 404 instead of 500.
+  - Remote containers are up. Fresh logs did not show call-access fatal errors
+    or API 500s. Remaining warnings are scoped to the parked Media/SFU/Gossip
+    diagnostics and were not changed in this hotfix.
