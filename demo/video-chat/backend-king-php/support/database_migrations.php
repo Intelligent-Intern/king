@@ -792,5 +792,6 @@ SQL,
         51 => ['name' => '0051_call_app_grant_audit', 'statements' => videochat_call_app_grant_audit_migration_statements()],
         52 => ['name' => '0052_call_app_crdt_envelope', 'statements' => videochat_call_app_crdt_migration_statements()],
         53 => ['name' => '0053_workspace_calendar_settings', 'statements' => videochat_workspace_calendar_additive_migration_statements()],
+        54 => ['name' => '0054_call_app_grant_permission_actions', 'statements' => videochat_call_app_grant_permission_actions_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

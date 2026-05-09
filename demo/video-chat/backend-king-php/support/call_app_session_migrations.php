@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS call_app_participant_grants (
     user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
     guest_id TEXT NOT NULL DEFAULT '',
     grant_state TEXT NOT NULL DEFAULT 'denied' CHECK (grant_state IN ('allowed', 'denied')),
+    permission_actions_json TEXT NOT NULL DEFAULT '["read","write","delete"]',
     source TEXT NOT NULL DEFAULT 'default' CHECK (source IN ('default', 'explicit')),
     changed_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
     changed_at TEXT NOT NULL,
@@ -70,6 +71,13 @@ CREATE TABLE IF NOT EXISTS call_app_launch_tokens (
 SQL,
         'CREATE INDEX IF NOT EXISTS idx_call_app_launch_tokens_session ON call_app_launch_tokens(tenant_id, app_session_id, revoked_at, expires_at)',
         'CREATE INDEX IF NOT EXISTS idx_call_app_launch_tokens_hash ON call_app_launch_tokens(token_hash)',
+    ];
+}
+
+function videochat_call_app_grant_permission_actions_migration_statements(): array
+{
+    return [
+        'ALTER TABLE call_app_participant_grants ADD COLUMN permission_actions_json TEXT NOT NULL DEFAULT \'["read","write","delete"]\'',
     ];
 }
 
