@@ -258,6 +258,25 @@ Tickets:
     when remote compose/log access is explicitly available. DNS/certbot checks
     remain outside routine diagnostics and belong to explicit domain/certificate
     smoke only.
+  - Diagnostic-only proof 2026-05-09 Loop 6 cleanup deploy: cleanup deploy from
+    `bgf-sprint-integration` `2d7236ca` synced the scoped cleanup files,
+    deleted the three remote background-regression capture/matrix artifacts,
+    and rebuilt/restarted production containers with direct `docker compose`.
+    No push, `deploy.sh`, certbot, DNS changes, or broad `rsync --delete` were
+    used. Remote checks proved the three deleted files are absent and no
+    background-regression references remain in the deployed video-chat tree.
+    Public-only `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
+    PASS; public-only `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1
+    VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`
+    PASS; compose diagnostics showed backend/ws/sfu/edge/frontend/turn running
+    with restart count 0. Remote logs only recorded transient SFU/websocket
+    client diagnostics during the restart window, and a fresh post-stabilization
+    log window had no new matches. BGF-07 remains open until real deployed
+    Chrome/Chromium/Firefox call smoke proves camera, audio, screenshare,
+    reconnect, background-filter transitions, and the unavailable branch
+    exposing only standard avatar, uploaded avatar, or unfiltered video.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
