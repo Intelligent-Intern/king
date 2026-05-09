@@ -9,8 +9,23 @@ async function read(relativePath) {
   return readFile(path.join(repoRoot, relativePath), 'utf8');
 }
 
+function cssBlock(source, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`, 'm'));
+  assert.ok(match, `${selector} CSS block must exist`);
+  return match[1];
+}
+
+function zIndex(source, selector) {
+  const block = cssBlock(source, selector);
+  const match = block.match(/z-index:\s*(\d+);/);
+  assert.ok(match, `${selector} must declare a numeric z-index`);
+  return Number(match[1]);
+}
+
 const [
   componentSource,
+  stageCssSource,
   stateSource,
   templateSource,
   workspaceSource,
@@ -22,6 +37,7 @@ const [
   migrationsSource,
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppWorkspaceState.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
@@ -32,6 +48,9 @@ const [
   read('demo/video-chat/backend-king-php/domain/realtime/realtime_activity_layout.php'),
   read('demo/video-chat/backend-king-php/support/database_migrations.php'),
 ]);
+
+const callAppFullscreenZ = zIndex(componentSource, '.call-app-workspace-host.fullscreen');
+const videoFullscreenZ = zIndex(stageCssSource, '.workspace-video-fullscreen-overlay');
 
 assert.match(strategiesSource, /CALL_LAYOUT_MODES\s*=\s*\[[^\]]*call_app_workspace/s, 'frontend layout modes must include call_app_workspace');
 assert.match(uiOptionsSource, /mode:\s*['"]call_app_workspace['"]/, 'layout controls must expose Call App workspace mode');
@@ -54,8 +73,12 @@ assert.match(componentSource, /referrerpolicy="no-referrer"/, 'Call App iframe m
 assert.match(componentSource, /--call-app-workspace-mini-height:\s*112px[\s\S]*grid-template-rows:\s*var\(--call-app-workspace-mini-height\)\s*minmax\(0,\s*1fr\)[\s\S]*height:\s*var\(--call-app-workspace-mini-height\)/, 'Call App workspace must keep mini strip and iframe sizing stable');
 assert.match(componentSource, /class="\{ fullscreen: isWorkspaceFullscreen \}"/, 'Call App workspace host must expose a dedicated fullscreen state');
 assert.match(componentSource, /call-app-workspace-fullscreen-toggle[\s\S]*aria-pressed[\s\S]*fullscreenToggleLabel[\s\S]*@click\.stop="toggleWorkspaceFullscreen"/, 'Call App workspace must provide an iframe fullscreen toggle without using participant video fullscreen controls');
+assert.match(componentSource, /call-app-workspace-fullscreen-icon[\s\S]*class="\{ active: isWorkspaceFullscreen \}"/, 'Call App workspace fullscreen toggle must render a clear stateful icon inside the button');
+assert.doesNotMatch(componentSource, /\{\{\s*isWorkspaceFullscreen\s*\?\s*['"]X['"]\s*:\s*['"]\[\]['"]\s*\}\}/, 'Call App workspace fullscreen toggle must not rely on raw text glyphs');
 assert.match(componentSource, /\.call-app-workspace-host\.fullscreen\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*z-index:\s*9990;[\s\S]*height:\s*100dvh;[\s\S]*grid-template-rows:\s*var\(--call-app-workspace-mini-height\)\s*minmax\(0,\s*1fr\)/, 'Call App fullscreen must escape sidebars/body clipping while preserving the mini video strip row');
 assert.match(componentSource, /\.call-app-workspace-mini-strip\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*2;[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/, 'Call App fullscreen must keep mini video tiles visible and horizontally usable');
+assert.match(componentSource, /\.call-app-workspace-frame-shell\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*1;[\s\S]*overflow:\s*hidden;/, 'Call App iframe frame must stay layered below the mini video strip');
+assert.ok(videoFullscreenZ > callAppFullscreenZ, 'participant video fullscreen overlay must stay above Call App workspace fullscreen');
 assert.doesNotMatch(componentSource, /requestFullscreen|webkitRequestFullscreen|mozRequestFullScreen|msRequestFullscreen/, 'Call App fullscreen must remain an app workspace layout state, not a browser fullscreen API path');
 assert.match(componentSource, /accessNoticeState[\s\S]*no-access[\s\S]*call_apps\.crdt\.read[\s\S]*call_apps\.crdt\.append[\s\S]*read-only/s, 'Call App workspace must show explicit no-access and read-only states from launch grant capabilities');
 
