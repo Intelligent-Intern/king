@@ -546,6 +546,11 @@ Tickets:
     Chrome/Chromium/Firefox call smoke proves camera, audio, screenshare,
     reconnect, background-filter transitions, and the unavailable branch
     exposing only standard avatar, uploaded avatar, or unfiltered video.
+  - Loop 11 proof/prep note: BGF-07 remains open. Background-regression
+    matrix/capture artifacts are still absent, and the only fallback choices
+    remain standard avatar, uploaded avatar, or unfiltered video. The next
+    deploy loop must run predeploy, deploy, prod-debug diagnostics, and
+    production Chrome/Firefox browser smoke before closing.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
