@@ -322,6 +322,11 @@ fi
 echo "# docker compose ps"
 "\${COMPOSE[@]}" ps 2>&1 | redact_stream || true
 filter_recent_logs "call health and runtime status" 'call|lobby|diagnostic|health|runtime|room|presence|error|warn|fail'
+filter_recent_logs "BGF-07 browser proof: background init" 'local_background_backend_init|background_backend_init_failed|segmentation_backend_init_failed|background.*backend.*init|failed_backend'
+filter_recent_logs "BGF-07 browser proof: matte rejected" 'local_background_matte_rejected|background_matte_rejected|matte.*reject|production_category_mask_unavailable|worker_segment_errors_repeated'
+filter_recent_logs "BGF-07 browser proof: replacement unavailable" 'local_background_replacement_unavailable|background_replacement_requires_user_choice|replacement.*unavailable|fallback_reason'
+filter_recent_logs "BGF-07 browser proof: modal choice" 'local_background_replacement_modal_choice|background_modal_choice|replacement_modal_choice|modal.*choice|user_choice_required'
+filter_recent_logs "BGF-07 browser proof: media/screen reconnect" 'media[_ -]?reconnect|reconnect.*media|foreground[_ -]?reconnect|local[_ -]?media.*reconnect|screen[_ -]?share.*(reconnect|exhaust|stopped|disconnect)|screen_share.*reconnect|local_screen_share_sfu_reconnect'
 filter_recent_logs "media reconnect" 'media[_ -]?reconnect|reconnect.*media|foreground[_ -]?reconnect|local[_ -]?media.*reconnect|stale_local_media_capture_discarded'
 filter_recent_logs "screen-share reconnect exhaustion" 'local_screen_share_sfu_reconnect_exhausted|screen[_ -]?share.*(reconnect|exhaust|stopped|disconnect)|screen_share.*reconnect'
 filter_recent_logs "stale local media capture discard" 'stale_local_media_capture_discarded|local_media_cleanup_preserved_active_track|stale.*local.*media.*discard'
