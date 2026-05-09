@@ -135,8 +135,12 @@ Tickets:
   - Keep the live source visible during warmup/failure and ask the user for one
     of the real alternatives: standard avatar, uploaded avatar, or unfiltered
     video.
-  - Proof: the runtime, fallback, and compositor contracts cover the strict
-    unavailable path without a browser evidence matrix.
+  - Proof: `background-runtime-diagnostics-contract.mjs`,
+    `background-filter-mask-contract.mjs`, `background-king-wasm-contract.mjs`,
+    `background-sinet-defaults-contract.mjs`, and the compositor warmup
+    contracts cover the strict unavailable path without a browser evidence
+    matrix. This closes the local fallback-policy checkbox only; it is not
+    deploy or real-browser smoke proof.
 
 - [x] BGF-02 Backend selection ladder with quarantine
   - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
@@ -237,6 +241,9 @@ Tickets:
     audio, screenshare, reconnect, and background-filter transitions against
     the deployed build. Do not close from deploy diagnostics, public endpoint
     probes, remote log scans, or degraded fallback behavior alone.
+  - The real-call smoke must also prove the unavailable-segmentation branch
+    exposes only the three allowed choices: standard avatar, uploaded avatar,
+    or unfiltered video.
   - Diagnostics proof gap 2026-05-09 Loop 4: live-call fallback proof must
     collect `local_background_backend_init`,
     `local_background_matte_rejected`,
