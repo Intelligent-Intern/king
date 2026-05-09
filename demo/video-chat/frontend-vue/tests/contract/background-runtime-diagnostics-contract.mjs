@@ -32,10 +32,14 @@ requireContains(diagnostics, 'BACKGROUND_RUNTIME_DIAGNOSTIC_THROTTLE_MS = 60000'
 requireContains(diagnostics, 'shouldEmitBackgroundRuntimeDiagnostic', 'shared throttle helper');
 requireContains(diagnostics, 'reportClientDiagnostic(diagnostic)', 'existing diagnostics channel fallback');
 requireContains(diagnostics, 'browser_family', 'browser family field');
+requireContains(diagnostics, 'failed_backend', 'failed backend field');
+requireContains(diagnostics, 'fallback_reason', 'fallback reason field');
 requireContains(diagnostics, 'model_source', 'model source field');
+requireContains(diagnostics, 'gpu_availability', 'GPU availability summary field');
 requireContains(diagnostics, 'gpu_available', 'GPU availability field');
 requireContains(diagnostics, 'gpu_failure_signature', 'GPU failure signature field');
 requireContains(diagnostics, 'reason_user_choice_required', 'user-choice-required reason field');
+requireContains(diagnostics, 'user_choice_required', 'user-choice-required boolean field');
 requireContains(diagnostics, 'captureBackgroundBackendInitDiagnostic', 'backend init diagnostic helper');
 requireContains(diagnostics, "eventType: 'local_background_backend_init'", 'backend init event');
 requireContains(diagnostics, 'captureBackgroundMatteRejectionDiagnostic', 'matte rejection diagnostic helper');
@@ -45,6 +49,9 @@ requireContains(diagnostics, "eventType: 'local_background_replacement_modal_cho
 requireContains(diagnostics, 'normalizeBackgroundFailureSignature', 'sanitized failure signatures');
 requireContains(diagnostics, '.replace(/[A-Za-z0-9+/=_-]{48,}/g,', 'opaque value redaction');
 requireContains(diagnostics, 'DEFAULT_MODEL_ASSET', 'model asset source classification');
+requireContains(diagnostics, "failedBackend: failed ? 'worker-segmenter' : 'none'", 'backend init failed backend attribution');
+requireContains(diagnostics, 'failedBackend: backend', 'matte rejection failed backend attribution');
+requireContains(diagnostics, "fallbackReason: details.fallbackReason || details.fallback_reason || details.reason || 'background_replacement_requires_user_choice'", 'modal choice fallback reason attribution');
 
 for (const forbidden of [
   'MediaStream',
