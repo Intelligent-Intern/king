@@ -304,6 +304,12 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
         failures: [`smoke:${SEGMENTATION_UNAVAILABLE_SMOKE_FLAG}`],
         phase: 'failed',
       });
+      captureBackgroundMatteRejectionDiagnostic({
+        backend: 'none',
+        maskKind: 'smoke',
+        mode: runtimeConfig.mode,
+        reason: 'smoke_forced_segmentation_unavailable',
+      });
       enterSegmentationUnavailable('smoke_forced_segmentation_unavailable', [
         `smoke:${SEGMENTATION_UNAVAILABLE_SMOKE_FLAG}`,
       ]);

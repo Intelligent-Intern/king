@@ -1,23 +1,29 @@
 import { test, expect } from '@playwright/test';
 
+import {
+  adminCredentials as defaultAdminCredentials,
+  userCredentials as defaultUserCredentials,
+  admitFirstLobbyUser,
+  createAuthenticatedPage,
+  createInvitedCallViaApi,
+  createPersonalAccessJoinPath,
+  escapeRegExp,
+  measureNativeAudioBridgeEnergy,
+  nativeAudioBridgeSnapshot,
+  queueUserAdmission,
+  sfuRemoteVideoSnapshot,
+  sfuSocketStats,
+} from './helpers/nativeAudioTransferHarness.js';
+
 const REQUIRED_FLAG = 'VIDEOCHAT_PRODUCTION_BROWSER_SMOKE';
-const SESSION_STORAGE_KEY = 'ii_videocall_v1_session';
+const BACKGROUND_SMOKE_FLAG = 'bgf07-segmentation-unavailable';
 const MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
-
-const mediaLaunchArgs = [
-  '--use-fake-device-for-media-stream',
-  '--use-fake-ui-for-media-stream',
-  '--autoplay-policy=no-user-gesture-required',
+const REQUIRED_BACKGROUND_EVENTS = [
+  'local_background_backend_init',
+  'local_background_matte_rejected',
+  'local_background_replacement_unavailable',
+  'local_background_replacement_modal_choice',
 ];
-const chromiumExecutablePath = envValue('PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH');
-
-test.use({
-  permissions: ['camera', 'microphone'],
-  launchOptions: {
-    args: mediaLaunchArgs,
-    ...(chromiumExecutablePath !== '' ? { executablePath: chromiumExecutablePath } : {}),
-  },
-});
 
 function envValue(...keys) {
   for (const key of keys) {
@@ -31,44 +37,45 @@ function isEnabled(value) {
   return /^(?:1|true|yes|on)$/i.test(String(value || '').trim());
 }
 
-function deployedCallUrl() {
-  return envValue(
-    'VIDEOCHAT_PRODUCTION_CALL_URL',
-    'VIDEOCHAT_DEPLOY_CALL_URL',
-    'VIDEOCHAT_ONLINE_CALL_URL',
-    'BGF_PRODUCTION_CALL_URL',
-  );
+function productionBaseUrl(testInfo) {
+  return String(
+    testInfo.project.use.baseURL
+      || process.env.PLAYWRIGHT_PRODUCTION_BASE_URL
+      || process.env.VIDEOCHAT_ONLINE_BASE_URL
+      || 'https://app.kingrt.com',
+  ).replace(/\/+$/, '');
 }
 
-function credentialsFromEnv() {
+function credentialsFor(role) {
+  const upperRole = String(role || '').trim().toUpperCase();
+  const defaults = upperRole === 'ADMIN' ? defaultAdminCredentials : defaultUserCredentials;
   return {
-    email: envValue('VIDEOCHAT_PRODUCTION_EMAIL', 'VIDEOCHAT_E2E_ADMIN_EMAIL', 'VIDEOCHAT_E2E_USER_EMAIL'),
+    email: envValue(
+      `VIDEOCHAT_PRODUCTION_${upperRole}_EMAIL`,
+      `VIDEOCHAT_E2E_${upperRole}_EMAIL`,
+    ) || defaults.email,
     password: envValue(
-      'VIDEOCHAT_PRODUCTION_PASSWORD',
-      'VIDEOCHAT_E2E_ADMIN_PASSWORD',
-      'VIDEOCHAT_E2E_USER_PASSWORD',
-      'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD',
-      'VIDEOCHAT_DEPLOY_USER_PASSWORD',
-    ),
+      `VIDEOCHAT_PRODUCTION_${upperRole}_PASSWORD`,
+      `VIDEOCHAT_E2E_${upperRole}_PASSWORD`,
+      upperRole === 'ADMIN' ? 'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD' : 'VIDEOCHAT_DEPLOY_USER_PASSWORD',
+    ) || defaults.password,
   };
 }
 
-function configuredSessionJson() {
-  return envValue('VIDEOCHAT_PRODUCTION_SESSION_JSON', 'VIDEOCHAT_DEPLOY_SESSION_JSON');
+function smokeQuery() {
+  const query = new URLSearchParams();
+  query.set('kingrt_background_smoke', BACKGROUND_SMOKE_FLAG);
+  query.set('kingrt_background_force_segmentation_unavailable', '1');
+  return query.toString();
 }
 
-function callOrigin(callUrl) {
-  return new URL(callUrl).origin;
-}
-
-async function installSmokeInstrumentation(context) {
-  const sessionJson = configuredSessionJson();
-  await context.addInitScript(({ mediaPrefsKey, sessionKey, sessionValue }) => {
+async function installProductionSmokeHooks(context, { forceBackgroundUnavailable = false } = {}) {
+  await context.addInitScript(({ mediaPrefsKey, backgroundSmokeFlag, forceBackground }) => {
     window.__bgfProdSmoke = {
       diagnostics: [],
       fetches: [],
       focusEvents: [],
-      media: { enumerateDevices: [], getUserMedia: [] },
+      media: { enumerateDevices: [], getDisplayMedia: [], getUserMedia: [] },
       sockets: [],
     };
 
@@ -81,25 +88,27 @@ async function installSmokeInstrumentation(context) {
     }
     localStorage.setItem(mediaPrefsKey, JSON.stringify({
       ...previousPrefs,
+      audio_id: previousPrefs.audio_id || 'king-audio',
       background_apply_outgoing: true,
       background_backdrop_mode: 'image',
       background_filter_mode: 'replace',
       background_replacement_image_url: '/assets/orgas/kingrt/social/invitation-preview.png',
-      video_id: previousPrefs.video_id || '',
-      audio_id: previousPrefs.audio_id || '',
+      video_id: previousPrefs.video_id || 'king-video',
       outgoing_video_quality_profile: 'balanced',
       outgoing_video_quality_profile_version: 5,
     }));
 
-    if (sessionValue) {
-      localStorage.setItem(sessionKey, sessionValue);
+    if (forceBackground) {
+      window.__kingrtExpectedBackgroundSmokeFlag = backgroundSmokeFlag;
     }
 
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
-      const url = String(args[0]?.url || args[0] || '');
-      const method = String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
-      const body = String(args[1]?.body || args[0]?.body || '');
+      const request = args[0];
+      const init = args[1] || {};
+      const url = String(request?.url || request || '');
+      const method = String(init.method || request?.method || 'GET').toUpperCase();
+      const body = typeof init.body === 'string' ? init.body : '';
       window.__bgfProdSmoke.fetches.push({ url, method, body, at: Date.now() });
       const response = await nativeFetch(...args);
       if (/\/api\/user\/client-diagnostics(?:[/?#]|$)/.test(url) && method === 'POST') {
@@ -128,11 +137,8 @@ async function installSmokeInstrumentation(context) {
     if (NativeWebSocket && !NativeWebSocket.__bgfProdSmokeWrapped) {
       class InstrumentedWebSocket extends NativeWebSocket {
         constructor(url, protocols) {
-          if (protocols === undefined) {
-            super(url);
-          } else {
-            super(url, protocols);
-          }
+          if (protocols === undefined) super(url);
+          else super(url, protocols);
           const entry = {
             url: String(url || ''),
             opens: 0,
@@ -163,75 +169,177 @@ async function installSmokeInstrumentation(context) {
       window.WebSocket = InstrumentedWebSocket;
     }
 
-    const wrapMediaDevices = () => {
-      if (!navigator.mediaDevices || navigator.mediaDevices.__bgfProdSmokeWrapped) return true;
-      const nativeGetUserMedia = navigator.mediaDevices.getUserMedia?.bind(navigator.mediaDevices);
-      const nativeEnumerateDevices = navigator.mediaDevices.enumerateDevices?.bind(navigator.mediaDevices);
-      if (typeof nativeGetUserMedia !== 'function' || typeof nativeEnumerateDevices !== 'function') return false;
+    function createDisplayMediaStream() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280;
+      canvas.height = 720;
+      const ctx = canvas.getContext('2d');
+      let frame = 0;
+      const draw = () => {
+        if (!ctx) return;
+        ctx.fillStyle = frame % 2 === 0 ? '#0f172a' : '#155e75';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect((frame * 31) % canvas.width, 0, 180, canvas.height);
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '44px sans-serif';
+        ctx.fillText('KingRT BGF screen smoke', 72, 180);
+        ctx.fillText(`frame ${frame}`, 72, 250);
+        frame += 1;
+      };
+      draw();
+      window.setInterval(draw, 100);
+      const stream = canvas.captureStream?.(10) || new MediaStream();
+      const track = stream.getVideoTracks?.()[0] || null;
+      if (track) {
+        try {
+          Object.defineProperty(track, 'label', {
+            configurable: true,
+            get: () => 'KingRT BGF smoke screen',
+          });
+        } catch {
+          // Browser labels are read-only in some engines; the stream itself is enough proof.
+        }
+      }
+      return stream;
+    }
+
+    function wrapMediaDevices() {
+      const current = navigator.mediaDevices || {};
+      if (current.__bgfProdSmokeWrapped) return true;
+      const nativeGetUserMedia = current.getUserMedia?.bind(current);
+      const nativeEnumerateDevices = current.enumerateDevices?.bind(current);
       Object.defineProperty(navigator, 'mediaDevices', {
         configurable: true,
         value: {
-          ...navigator.mediaDevices,
+          ...current,
           __bgfProdSmokeWrapped: true,
-          getUserMedia: async (constraints) => {
+          getDisplayMedia: async (constraints = {}) => {
+            window.__bgfProdSmoke.media.getDisplayMedia.push({ constraints, at: Date.now() });
+            return createDisplayMediaStream();
+          },
+          getUserMedia: async (constraints = {}) => {
             window.__bgfProdSmoke.media.getUserMedia.push({ constraints, at: Date.now() });
+            if (typeof nativeGetUserMedia !== 'function') return new MediaStream();
             return nativeGetUserMedia(constraints);
           },
           enumerateDevices: async () => {
-            const devices = await nativeEnumerateDevices();
+            const devices = typeof nativeEnumerateDevices === 'function'
+              ? await nativeEnumerateDevices()
+              : [];
             window.__bgfProdSmoke.media.enumerateDevices.push(devices.map((device) => ({
+              deviceId: device.deviceId,
               kind: device.kind,
               label: device.label,
-              deviceId: device.deviceId,
             })));
             return devices;
           },
         },
       });
       return true;
-    };
+    }
+
     if (!wrapMediaDevices()) {
       nativeAddEventListener('DOMContentLoaded', wrapMediaDevices, { once: true });
     }
   }, {
+    backgroundSmokeFlag: BACKGROUND_SMOKE_FLAG,
+    forceBackground: Boolean(forceBackgroundUnavailable),
     mediaPrefsKey: MEDIA_PREFS_KEY,
-    sessionKey: SESSION_STORAGE_KEY,
-    sessionValue: sessionJson,
   });
 }
 
-async function loginIfNeeded(page, callUrl) {
-  const credentials = credentialsFromEnv();
-  if (!credentials.email || !credentials.password) return;
-
-  await page.goto(`${callOrigin(callUrl)}/login?redirect=${encodeURIComponent(new URL(callUrl).pathname + new URL(callUrl).search)}`);
-  await expect(page.getByLabel('Email')).toBeVisible({ timeout: 20_000 });
-  await page.getByLabel('Email').fill(credentials.email);
-  await page.getByLabel('Password').fill(credentials.password);
-  await page.getByRole('button', { name: /sign in/i }).click();
-  await page.waitForFunction((key) => Boolean(localStorage.getItem(key)), SESSION_STORAGE_KEY, { timeout: 30_000 });
-}
-
-async function openCallPage(page, callUrl) {
-  await page.goto(callUrl);
-  await expect(page.locator('.workspace-call-view')).toBeVisible({ timeout: 45_000 });
+async function openOwnerCallWithBackgroundSmoke(page, callId) {
+  await page.goto(`/workspace/call/${encodeURIComponent(callId)}?${smokeQuery()}`);
   const joinDialog = page.getByRole('dialog', { name: /(?:enter|join) video call/i });
-  if (await joinDialog.isVisible({ timeout: 8_000 }).catch(() => false)) {
+  if (await joinDialog.isVisible({ timeout: 15_000 }).catch(() => false)) {
     await joinDialog.getByRole('button', { name: /join call/i }).click();
   }
-  await expect(page.locator('.workspace-main-video')).toBeVisible({ timeout: 45_000 });
+  await page.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callId)}(?:[/?#].*)?$`), { timeout: 30_000 });
+  await expect(page.locator('.workspace-main-video')).toBeVisible({ timeout: 30_000 });
 }
 
-async function forceBackgroundUnavailablePrompt(page) {
-  await page.waitForFunction(() => {
+async function smokeSnapshot(page) {
+  return page.evaluate(() => {
     const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
-    if (!setup?.callMediaPrefs) return false;
-    setup.callMediaPrefs.backgroundReplacementUnavailablePromptOpen = true;
-    setup.callMediaPrefs.backgroundReplacementUnavailableReason = 'production_browser_smoke_forced_unavailable';
-    setup.callMediaPrefs.backgroundReplacementUnavailableFailures = ['production_browser_smoke_forced_unavailable'];
-    return true;
-  }, null, { timeout: 10_000 });
-  await expect(page.getByRole('dialog', { name: 'Background replacement unavailable' })).toBeVisible({ timeout: 10_000 });
+    const smoke = window.__bgfProdSmoke || {};
+    const media = smoke.media || {};
+    const sockets = Array.isArray(smoke.sockets) ? smoke.sockets : [];
+    const stream = setup?.localStreamRef?.value instanceof MediaStream ? setup.localStreamRef.value : null;
+    return {
+      connectionState: String(setup?.connectionState || ''),
+      connectionReason: String(setup?.connectionReason || ''),
+      controlState: {
+        cameraEnabled: Boolean(setup?.controlState?.cameraEnabled),
+        micEnabled: Boolean(setup?.controlState?.micEnabled),
+        screenEnabled: Boolean(setup?.controlState?.screenEnabled),
+      },
+      diagnostics: Array.isArray(smoke.diagnostics) ? smoke.diagnostics : [],
+      focusEvents: Array.isArray(smoke.focusEvents) ? smoke.focusEvents : [],
+      media: {
+        getDisplayMedia: Array.isArray(media.getDisplayMedia) ? media.getDisplayMedia : [],
+        getUserMedia: Array.isArray(media.getUserMedia) ? media.getUserMedia : [],
+      },
+      socketSummary: sockets.map((socket) => ({
+        closes: socket.closes,
+        errors: socket.errors,
+        opens: socket.opens,
+        sent: socket.sent,
+        url: socket.url,
+      })),
+      tracks: stream ? stream.getTracks().map((track) => ({
+        enabled: Boolean(track.enabled),
+        id: String(track.id || ''),
+        kind: String(track.kind || ''),
+        label: String(track.label || ''),
+        readyState: String(track.readyState || ''),
+      })) : [],
+    };
+  });
+}
+
+function diagnosticEntries(snapshot) {
+  const entries = [];
+  for (const request of snapshot.diagnostics || []) {
+    let payload = null;
+    try {
+      payload = JSON.parse(request.body || '{}');
+    } catch {
+      payload = null;
+    }
+    const batch = Array.isArray(payload?.entries) ? payload.entries : [];
+    for (const entry of batch) {
+      entries.push(entry);
+    }
+  }
+  return entries;
+}
+
+function diagnosticEventTypes(snapshot) {
+  return diagnosticEntries(snapshot).map((entry) => String(entry?.event_type || entry?.eventType || ''));
+}
+
+function reconnectDiagnostics(snapshot) {
+  return diagnosticEntries(snapshot).filter((entry) => {
+    const text = JSON.stringify(entry || {});
+    return /reconnect|backfill|sfu_video_reconnect|websocket_reconnect/i.test(text);
+  });
+}
+
+function socketFailureCount(snapshot) {
+  return (snapshot.socketSummary || []).reduce((total, socket) => (
+    total + Number(socket.errors || 0) + (Array.isArray(socket.closes) ? socket.closes.length : 0)
+  ), 0);
+}
+
+async function expectDiagnostics(page, requiredEvents) {
+  await expect.poll(async () => {
+    const seen = new Set(diagnosticEventTypes(await smokeSnapshot(page)));
+    return requiredEvents.filter((eventType) => seen.has(eventType));
+  }, {
+    intervals: [1_000, 2_000, 3_000],
+    timeout: 20_000,
+  }).toEqual(requiredEvents);
 }
 
 async function unavailableChoices(page) {
@@ -247,78 +355,148 @@ async function unavailableChoices(page) {
   });
 }
 
-async function smokeSnapshot(page) {
-  return page.evaluate(() => {
-    const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
-    const smoke = window.__bgfProdSmoke || {};
-    const media = smoke.media || {};
-    const sockets = Array.isArray(smoke.sockets) ? smoke.sockets : [];
-    return {
-      connectionState: String(setup?.connectionState || ''),
-      connectionReason: String(setup?.connectionReason || ''),
-      diagnostics: Array.isArray(smoke.diagnostics) ? smoke.diagnostics : [],
-      focusEvents: Array.isArray(smoke.focusEvents) ? smoke.focusEvents : [],
-      getUserMediaCalls: Array.isArray(media.getUserMedia) ? media.getUserMedia : [],
-      enumerateDeviceSnapshots: Array.isArray(media.enumerateDevices) ? media.enumerateDevices : [],
-      reconnectText: document.body.innerText.match(/reconnect\w*|diagnostic\w*/gi) || [],
-      socketSummary: sockets.map((socket) => ({
-        url: socket.url,
-        opens: socket.opens,
-        closes: socket.closes,
-        errors: socket.errors,
-        sent: socket.sent,
-      })),
-    };
-  });
+async function waitForRemoteVideo(page) {
+  await expect.poll(async () => {
+    const canvases = await sfuRemoteVideoSnapshot(page);
+    return canvases.filter((canvas) => canvas.rendered && canvas.width > 0 && canvas.height > 0).length;
+  }, {
+    timeout: 90_000,
+  }).toBeGreaterThan(0);
 }
 
-function reconnectDiagnostics(snapshot) {
-  return snapshot.diagnostics.filter((entry) => /reconnect|backfill|sfu_video_reconnect|websocket_reconnect/i.test(
-    `${entry.url}\n${entry.body}`,
-  ));
+async function waitForSfuFlow(page) {
+  await expect.poll(async () => {
+    const stats = await sfuSocketStats(page);
+    return Math.min(stats.binaryInCount, stats.binaryOutCount);
+  }, {
+    timeout: 60_000,
+  }).toBeGreaterThan(5);
 }
 
-test('production call page loads with fake browser media and keeps background fallback focus stable', async ({ context, page }) => {
-  test.setTimeout(120_000);
-
-  const callUrl = deployedCallUrl();
+test('deployed browser call proves BGF fallback, media, screenshare, and focus stability', async ({ browser }, testInfo) => {
+  test.setTimeout(240_000);
   test.skip(!isEnabled(process.env[REQUIRED_FLAG]), `${REQUIRED_FLAG}=1 is required for deployed production smoke.`);
-  test.skip(callUrl === '', 'VIDEOCHAT_PRODUCTION_CALL_URL or VIDEOCHAT_DEPLOY_CALL_URL is required.');
-  test.skip(configuredSessionJson() === '' && (!credentialsFromEnv().email || !credentialsFromEnv().password), 'Supply VIDEOCHAT_PRODUCTION_SESSION_JSON or production email/password env vars.');
 
-  await context.grantPermissions(['camera', 'microphone'], { origin: callOrigin(callUrl) });
-  await installSmokeInstrumentation(context);
-  await loginIfNeeded(page, callUrl);
-  await openCallPage(page, callUrl);
+  const adminCredentials = credentialsFor('admin');
+  const userCredentials = credentialsFor('user');
+  if (!adminCredentials.email || !adminCredentials.password || !userCredentials.email || !userCredentials.password) {
+    throw new Error('Production browser smoke requires admin and user credentials in VIDEOCHAT_PRODUCTION_* or VIDEOCHAT_E2E_* env vars.');
+  }
 
-  await page.waitForFunction(() => {
-    const calls = window.__bgfProdSmoke?.media?.getUserMedia || [];
-    return calls.some((entry) => entry?.constraints?.audio !== false)
-      && calls.some((entry) => entry?.constraints?.video !== false);
-  }, null, { timeout: 30_000 });
-
-  const mediaSnapshot = await smokeSnapshot(page);
-  expect(mediaSnapshot.getUserMediaCalls.length).toBeGreaterThan(0);
-
-  await forceBackgroundUnavailablePrompt(page);
-  await expect(unavailableChoices(page)).resolves.toEqual([
-    'Use standard avatar',
-    'Upload avatar',
-    'Send unfiltered video',
-  ]);
-
-  const beforeFocus = await smokeSnapshot(page);
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('blur'));
-    window.dispatchEvent(new Event('focus'));
-    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
-    document.dispatchEvent(new Event('visibilitychange'));
+  const baseURL = productionBaseUrl(testInfo);
+  const admin = await createAuthenticatedPage(browser, baseURL, adminCredentials, {
+    audioFrequency: 440,
+    outgoingVideoQualityProfile: 'balanced',
+    videoFrameRate: 12,
+    videoHeight: 360,
+    videoWidth: 640,
   });
-  await page.bringToFront();
-  await page.waitForTimeout(1_500);
-  const afterFocus = await smokeSnapshot(page);
+  const user = await createAuthenticatedPage(browser, baseURL, userCredentials, {
+    audioFrequency: 660,
+    outgoingVideoQualityProfile: 'balanced',
+    videoFrameRate: 12,
+    videoHeight: 360,
+    videoWidth: 640,
+  });
 
-  expect(afterFocus.connectionState || beforeFocus.connectionState).not.toBe('retrying');
-  expect(reconnectDiagnostics(afterFocus).slice(reconnectDiagnostics(beforeFocus).length)).toEqual([]);
-  expect(afterFocus.reconnectText.filter((text) => !/unavailable/i.test(text))).toEqual([]);
+  await installProductionSmokeHooks(admin.context, { forceBackgroundUnavailable: true });
+  await installProductionSmokeHooks(user.context);
+
+  let callId = '';
+  try {
+    const participantUserId = user.storedSession.userId || 2;
+    callId = await createInvitedCallViaApi({
+      sessionToken: admin.storedSession.sessionToken,
+      title: `BGF production browser smoke ${Date.now()}`,
+      participantUserId,
+    });
+    const userJoinPath = await createPersonalAccessJoinPath({
+      callId,
+      sessionToken: admin.storedSession.sessionToken,
+      participantUserId,
+    });
+
+    await openOwnerCallWithBackgroundSmoke(admin.page, callId);
+    await queueUserAdmission(user.page, userJoinPath);
+    await admitFirstLobbyUser(admin.page);
+    await user.page.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callId)}(?:[/?#].*)?$`), { timeout: 30_000 });
+    await expect(user.page.locator('.workspace-main-video')).toBeVisible({ timeout: 30_000 });
+
+    await Promise.all([
+      waitForRemoteVideo(admin.page),
+      waitForRemoteVideo(user.page),
+      waitForSfuFlow(admin.page),
+      waitForSfuFlow(user.page),
+    ]);
+    await Promise.all([
+      expect.poll(() => nativeAudioBridgeSnapshot(admin.page), { timeout: 60_000 }).toMatchObject({ hasLiveTrack: true }),
+      expect.poll(() => nativeAudioBridgeSnapshot(user.page), { timeout: 60_000 }).toMatchObject({ hasLiveTrack: true }),
+    ]);
+    await Promise.all([
+      expect.poll(async () => (await measureNativeAudioBridgeEnergy(admin.page)).maxRms, { timeout: 45_000 }).toBeGreaterThan(0.003),
+      expect.poll(async () => (await measureNativeAudioBridgeEnergy(user.page)).maxRms, { timeout: 45_000 }).toBeGreaterThan(0.003),
+    ]);
+    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-call-active.png') });
+
+    const backgroundDialog = admin.page.getByRole('dialog', { name: 'Background replacement unavailable' });
+    await expect(backgroundDialog).toBeVisible({ timeout: 30_000 });
+    await expect(unavailableChoices(admin.page)).resolves.toEqual([
+      'Use standard avatar',
+      'Upload avatar',
+      'Send unfiltered video',
+    ]);
+    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-background-unavailable.png') });
+    await backgroundDialog.getByRole('button', { name: 'Send unfiltered video' }).click();
+    await expect(backgroundDialog).toBeHidden({ timeout: 15_000 });
+    await expectDiagnostics(admin.page, REQUIRED_BACKGROUND_EVENTS);
+
+    await admin.page.getByRole('button', { name: 'Share screen' }).click();
+    await expect.poll(async () => (await smokeSnapshot(admin.page)).controlState.screenEnabled, {
+      timeout: 30_000,
+    }).toBe(true);
+    await expect.poll(async () => (await smokeSnapshot(admin.page)).media.getDisplayMedia.length, {
+      timeout: 15_000,
+    }).toBeGreaterThan(0);
+    await expectDiagnostics(admin.page, ['local_screen_share_started']);
+    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-screenshare-active.png') });
+
+    await admin.page.getByRole('button', { name: 'Share screen' }).click();
+    await expect.poll(async () => (await smokeSnapshot(admin.page)).controlState.screenEnabled, {
+      timeout: 45_000,
+    }).toBe(false);
+    await expectDiagnostics(admin.page, ['local_screen_share_stopped']);
+    const restoredMedia = await smokeSnapshot(admin.page);
+    expect(restoredMedia.tracks.some((track) => track.kind === 'audio' && track.readyState === 'live')).toBe(true);
+    expect(restoredMedia.tracks.some((track) => track.kind === 'video' && track.readyState === 'live')).toBe(true);
+
+    const beforeFocus = await smokeSnapshot(admin.page);
+    await admin.page.locator('.workspace-main-video').click({ position: { x: 20, y: 20 } });
+    await admin.page.evaluate(() => {
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new Event('focus'));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await admin.page.bringToFront();
+    await admin.page.waitForTimeout(1_500);
+    const afterFocus = await smokeSnapshot(admin.page);
+    expect(afterFocus.connectionState).toBe('online');
+    expect(socketFailureCount(afterFocus)).toBe(socketFailureCount(beforeFocus));
+    expect(reconnectDiagnostics(afterFocus).slice(reconnectDiagnostics(beforeFocus).length)).toEqual([]);
+
+    console.log('[background-production-browser-smoke] PASS');
+    console.log(JSON.stringify({
+      baseURL,
+      browserName: testInfo.project.name,
+      browserVersion: browser.version(),
+      callId,
+      backgroundEvents: diagnosticEventTypes(await smokeSnapshot(admin.page))
+        .filter((eventType) => REQUIRED_BACKGROUND_EVENTS.includes(eventType)),
+    }, null, 2));
+  } finally {
+    await Promise.allSettled([
+      admin.context.close(),
+      user.context.close(),
+    ]);
+  }
 });
