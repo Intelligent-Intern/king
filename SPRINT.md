@@ -209,3 +209,5 @@ Tickets:
   with the per-app delete action.
 - [x] PI-05 Planning Image uses existing per-participant read/write/delete
   Call App grants for view/upload/delete.
+- [x] PI-06 Deployed without push, DNS changes, or Certbot; post-deploy
+  diagnostics and Planning Image asset checks passed.
