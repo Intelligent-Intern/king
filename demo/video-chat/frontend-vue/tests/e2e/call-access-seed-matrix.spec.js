@@ -74,6 +74,7 @@ const authDeniedDirectJoinScenarios = [
 const mainJourneyScenarioBindings = [
   ['e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights', 'anonymous_open_logged_in_uses_own_account_waits_for_host'],
   ['e2e_journey_011_system_admin_join_without_invite', 'direct_join_system_admin_without_guest_list'],
+  ['e2e_journey_013_org_admin_foreign_org_denied', 'direct_join_org_admin_foreign_organization_denied'],
   ['e2e_journey_014_normal_guest_list_user_joins_foreign_call', 'direct_join_guest_list_user_allowed'],
   ['e2e_journey_015_normal_non_guest_user_lobby_or_denied', 'direct_join_normal_non_guest_user_denied'],
 ];
@@ -151,7 +152,7 @@ function expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, user, label)
   }
 }
 
-test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
+test('e2e_org_008_cross_org_rights_not_leaked: IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
     'system_admin',
     'alpha_org_admin',
