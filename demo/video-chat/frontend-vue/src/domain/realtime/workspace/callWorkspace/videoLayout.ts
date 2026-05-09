@@ -100,7 +100,8 @@ export function createCallWorkspaceVideoLayoutHelpers({
   function framingForSurface(target, role) {
     const targetAspectRatio = targetAspectRatioForSurface(target, role);
     const isPortraitOrSquare = targetAspectRatio > 0 && targetAspectRatio <= 1.02;
-    const shouldCover = role === REMOTE_RENDER_SURFACE_ROLES.MINI
+    const isCallAppWorkspaceMini = role === REMOTE_RENDER_SURFACE_ROLES.MINI && currentLayoutMode() === 'call_app_workspace';
+    const shouldCover = (!isCallAppWorkspaceMini && role === REMOTE_RENDER_SURFACE_ROLES.MINI)
       || (
         isPortraitOrSquare
         && [
