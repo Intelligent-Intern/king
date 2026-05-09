@@ -239,6 +239,36 @@
                 :send-socket-frame="sendSocketFrame"
                 :request-room-snapshot="requestRoomSnapshot"
               />
+              <CallAppParticipantGrantButton
+                v-if="visibleActionSet.has('callAppRead')"
+                :session="activeCallAppSession"
+                :row="row"
+                :can-manage="canModerate"
+                :api-request="apiRequest"
+                :send-socket-frame="sendSocketFrame"
+                :request-room-snapshot="requestRoomSnapshot"
+                permission-action="read"
+              />
+              <CallAppParticipantGrantButton
+                v-if="visibleActionSet.has('callAppWrite')"
+                :session="activeCallAppSession"
+                :row="row"
+                :can-manage="canModerate"
+                :api-request="apiRequest"
+                :send-socket-frame="sendSocketFrame"
+                :request-room-snapshot="requestRoomSnapshot"
+                permission-action="write"
+              />
+              <CallAppParticipantGrantButton
+                v-if="visibleActionSet.has('callAppDelete')"
+                :session="activeCallAppSession"
+                :row="row"
+                :can-manage="canModerate"
+                :api-request="apiRequest"
+                :send-socket-frame="sendSocketFrame"
+                :request-room-snapshot="requestRoomSnapshot"
+                permission-action="delete"
+              />
               <button
                 v-if="visibleActionSet.has('owner')"
                 class="icon-mini-btn roster-action-btn"
@@ -307,6 +337,10 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 import CallAppParticipantGrantButton from '../../callApps/CallAppParticipantGrantButton.vue';
+import {
+  CALL_APP_PERMISSION_ACTIONS,
+  supportedCallAppPermissionActions,
+} from '../../callApps/callAppParticipantGrantHelpers.js';
 
 const props = defineProps({
   active: { type: Boolean, default: false },
@@ -368,9 +402,13 @@ defineEmits([
 const usersListEl = ref(null);
 const lobbyListEl = ref(null);
 const showActionOptions = ref(false);
+const hasActiveCallAppSession = computed(() => (
+  String(props.activeCallAppSession?.id || '').trim() !== ''
+  && String(props.activeCallAppSession?.status || '').trim().toLowerCase() === 'active'
+));
 const supportedCallAppPermissions = computed(() => {
-  const raw = props.activeCallAppSession?.permission_actions || props.activeCallAppSession?.permissionActions || [];
-  return Array.isArray(raw) ? raw.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean) : [];
+  const supported = supportedCallAppPermissionActions(props.activeCallAppSession || {});
+  return supported.length > 0 ? supported : (hasActiveCallAppSession.value ? [...CALL_APP_PERMISSION_ACTIONS] : []);
 });
 const actionVisibility = ref({
   mute: true,
@@ -380,9 +418,9 @@ const actionVisibility = ref({
   owner: true,
   kick: true,
   lobbyAllow: true,
-  callAppRead: false,
-  callAppWrite: false,
-  callAppDelete: false,
+  callAppRead: true,
+  callAppWrite: true,
+  callAppDelete: true,
 });
 const rosterActionOptions = computed(() => {
   const supportedPermissions = new Set(supportedCallAppPermissions.value);
@@ -397,17 +435,17 @@ const rosterActionOptions = computed(() => {
     {
       key: 'callAppRead',
       label: props.t('calls.workspace.action_option_call_app_read'),
-      disabled: !supportedPermissions.has('read'),
+      disabled: !hasActiveCallAppSession.value || !supportedPermissions.has('read'),
     },
     {
       key: 'callAppWrite',
       label: props.t('calls.workspace.action_option_call_app_write'),
-      disabled: !supportedPermissions.has('write'),
+      disabled: !hasActiveCallAppSession.value || !supportedPermissions.has('write'),
     },
     {
       key: 'callAppDelete',
       label: props.t('calls.workspace.action_option_call_app_delete'),
-      disabled: !supportedPermissions.has('delete'),
+      disabled: !hasActiveCallAppSession.value || !supportedPermissions.has('delete'),
     },
   ];
 });

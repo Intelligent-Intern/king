@@ -11,6 +11,7 @@ async function read(relativePath) {
 
 const [
   buttonSource,
+  helperSource,
   templateSource,
   rightRosterSource,
   workspaceSource,
@@ -25,6 +26,7 @@ const [
   sprintSource,
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppParticipantGrantButton.vue'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppParticipantGrantHelpers.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/RightRosterPanel.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
@@ -65,8 +67,14 @@ assert.match(
 
 assert.match(
   rightRosterSource,
-  /callAppRead[\s\S]*calls\.workspace\.action_option_call_app_read[\s\S]*supportedPermissions\.has\('read'\)[\s\S]*callAppWrite[\s\S]*supportedPermissions\.has\('write'\)[\s\S]*callAppDelete[\s\S]*supportedPermissions\.has\('delete'\)/s,
-  'right roster action options must name read/write/delete Call App permissions only when the session advertises support',
+  /permission-action="read"[\s\S]*permission-action="write"[\s\S]*permission-action="delete"/s,
+  'right roster must render real read/write/delete Call App permission actions',
+);
+
+assert.match(
+  rightRosterSource,
+  /supportedCallAppPermissionActions[\s\S]*hasActiveCallAppSession[\s\S]*CALL_APP_PERMISSION_ACTIONS/s,
+  'right roster must enable additive read/write/delete actions for active sessions even before backend persistence is upgraded',
 );
 
 assert.match(
@@ -77,14 +85,44 @@ assert.match(
 
 assert.match(
   buttonSource,
+  /permissionAction:[\s\S]*default: 'access'[\s\S]*validator: \(value\) => \['access', 'read', 'write', 'delete'\]\.includes\(value\)/,
+  'grant button must support access/read/write/delete actions',
+);
+
+assert.match(
+  buttonSource,
+  /buildCallAppGrantPatch\(\{[\s\S]*permissionAction: normalizedPermissionAction\.value[\s\S]*enabled: nextEnabledState\.value[\s\S]*\}\)/,
+  'grant button must build additive per-permission grant patches',
+);
+
+assert.match(
+  buttonSource,
+  /permissions: grantPatch\.permissions[\s\S]*permission_actions: grantPatch\.permission_actions/s,
+  'grant button must send additive permission fields in PATCH and realtime payloads',
+);
+
+assert.match(
+  buttonSource,
   /type:\s*['"]call-app\/grants-updated['"][\s\S]*requestRoomSnapshot\(\)/,
   'grant updates must emit a realtime signal and request snapshot backfill',
 );
 
 assert.match(
   buttonSource,
-  /defineEmits\(\[['"]grant-updated['"]\]\)[\s\S]*emit\(['"]grant-updated['"][\s\S]*sessionId:\s*sessionId\.value[\s\S]*userId:\s*rowUserId\.value[\s\S]*grantState/s,
-  'grant button must emit local grant updates for sidebar state labels',
+  /defineEmits\(\[['"]grant-updated['"]\]\)[\s\S]*emit\(['"]grant-updated['"][\s\S]*sessionId:\s*sessionId\.value[\s\S]*userId:\s*rowUserId\.value[\s\S]*grantState[\s\S]*permissions[\s\S]*permissionActions/s,
+  'grant button must emit local grant updates with permission details for sidebar state labels',
+);
+
+assert.match(
+  helperSource,
+  /CALL_APP_PERMISSION_ACTIONS = Object\.freeze\(\['read', 'write', 'delete'\]\)/,
+  'grant helper must define the read/write/delete permission action set',
+);
+
+assert.match(
+  helperSource,
+  /grant_state: grantState[\s\S]*permissions,[\s\S]*permission_actions: permissionActions/s,
+  'grant helper must preserve compatible grant_state while adding permissions and permission_actions',
 );
 
 assert.doesNotMatch(
