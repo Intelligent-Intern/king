@@ -15,6 +15,7 @@ const RETRYABLE_RECONNECT_BACKFILL_REASONS = Object.freeze([
 ]);
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/answer',
+  'call/control-state',
   'call/ice',
   'call/media-quality-pressure',
   MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE,
@@ -527,7 +528,7 @@ export function createCallWorkspaceSocketHelpers({
             failed_command_type: failedCommandType,
             failed_target_user_id: failedTargetUserId,
             expected_stale_target_prune: true,
-            details: payload?.details || {},
+            signaling_reason: signalingError,
           },
           immediate: true,
         });

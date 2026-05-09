@@ -43,12 +43,12 @@ assert(
   'media-security stale-target pruning must force a fresh full-frame keyframe for remaining receivers',
 );
 assert(
-  /const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object\.freeze\(\[[\s\S]*'call\/answer'[\s\S]*'call\/ice'[\s\S]*'call\/media-quality-pressure'[\s\S]*'call\/offer'[\s\S]*\]\);/m.test(socketLifecycle),
-  'socket lifecycle must explicitly cover native answer, ICE, media-quality pressure, and native offer stale-target pruning',
+  /const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object\.freeze\(\[[\s\S]*'call\/answer'[\s\S]*'call\/control-state'[\s\S]*'call\/ice'[\s\S]*'call\/media-quality-pressure'[\s\S]*'call\/offer'[\s\S]*\]\);/m.test(socketLifecycle),
+  'socket lifecycle must explicitly cover control-state, native answer, ICE, media-quality pressure, and native offer stale-target pruning',
 );
 assert(
   /const failedStaleTargetPruningSignal = failedMediaSecuritySignal[\s\S]*\|\| STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);[\s\S]*const shouldPruneTargetNotInRoom = targetIsKnown[\s\S]*&& normalizedError === 'target_not_in_room'[\s\S]*&& failedStaleTargetPruningSignal;[\s\S]*\? removeParticipantLocallyAfterHangup\(normalizedTargetUserId\)/m.test(socketLifecycle),
-  'target_not_in_room recovery must prune the same local participant/native/SFU/gossip state for media-security, call/media-quality-pressure, call/answer, call/ice, and call/offer',
+  'target_not_in_room recovery must prune the same local participant/native/SFU/gossip state for media-security, call/control-state, call/media-quality-pressure, call/answer, call/ice, and call/offer',
 );
 assert(
   /function isExpectedStaleTargetPublishFailure\(code, failedCommandType, signalingError, failedTargetUserId\)[\s\S]*signalingError[\s\S]*!== 'target_not_in_room'[\s\S]*return mediaSecuritySignalTypes\.includes\(failedCommandType\)[\s\S]*\|\| STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);/m.test(socketLifecycle),
@@ -59,7 +59,7 @@ assert(
   'real signaling broker failures must remain error diagnostics',
 );
 assert(
-  /else if \(expectedStaleTargetPublishFailure\)[\s\S]*level: 'warning'[\s\S]*eventType: 'realtime_signaling_stale_target_pruned'[\s\S]*code: 'target_not_in_room'[\s\S]*expected_stale_target_prune: true/m.test(socketLifecycle),
+  /else if \(expectedStaleTargetPublishFailure\)[\s\S]*level: 'warning'[\s\S]*eventType: 'realtime_signaling_stale_target_pruned'[\s\S]*code: 'target_not_in_room'[\s\S]*expected_stale_target_prune: true[\s\S]*signaling_reason: signalingError/m.test(socketLifecycle),
   'expected stale-target pruning must emit a warning diagnostic that is distinct from broker failure',
 );
 assert(
