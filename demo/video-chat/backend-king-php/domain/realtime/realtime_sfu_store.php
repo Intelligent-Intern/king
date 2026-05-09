@@ -313,6 +313,42 @@ function videochat_sfu_touch_track(PDO $pdo, string $roomId, string $publisherId
     videochat_sfu_mirror_touch_track($roomId, $publisherId, $trackId, $updatedAtMs);
 }
 
+/**
+ * @param array<int|string, mixed> $tracks
+ */
+function videochat_sfu_refresh_active_publisher_presence(
+    PDO $pdo,
+    string $roomId,
+    string $publisherId,
+    string $userId,
+    string $userName,
+    array $tracks
+): void {
+    videochat_sfu_upsert_publisher($pdo, $roomId, $publisherId, $userId, $userName);
+
+    foreach ($tracks as $track) {
+        if (!is_array($track)) {
+            continue;
+        }
+        $trackId = trim((string) ($track['id'] ?? ($track['track_id'] ?? ($track['trackId'] ?? ''))));
+        if ($trackId === '') {
+            continue;
+        }
+        $kind = strtolower(trim((string) ($track['kind'] ?? 'video')));
+        if (!in_array($kind, ['audio', 'video', 'screen'], true)) {
+            $kind = 'video';
+        }
+        videochat_sfu_upsert_track(
+            $pdo,
+            $roomId,
+            $publisherId,
+            $trackId,
+            $kind,
+            (string) ($track['label'] ?? '')
+        );
+    }
+}
+
 function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
 {
     $statement = $pdo->prepare(

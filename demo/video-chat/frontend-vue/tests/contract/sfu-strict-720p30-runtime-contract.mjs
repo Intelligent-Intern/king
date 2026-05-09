@@ -52,6 +52,7 @@ async function main() {
   requireContains(policySource, 'frameHeight: 720', 'strict frame height');
   requireContains(policySource, 'disableAutoQuality: true', 'strict auto quality gate');
   requireContains(policySource, 'disableGossipMediaRepair: true', 'strict gossip repair gate');
+  requireContains(policySource, 'disableGossipPublish: false', 'strict allows the room-bound server relay publish path');
   requireContains(policySource, 'disableBackgroundTabPolicy: true', 'strict background tab gate');
   requireContains(policySource, 'strictCaptureOnly: true', 'strict capture fallback gate');
   requireContains(policySource, 'strictFixedOutputFrame: true', 'strict fixed frame output gate');
@@ -87,14 +88,14 @@ async function main() {
   requireContains(publisherPipeline, "suppressSfuSendFailures: quietStrictPublisherDrops", 'publisher quietly drops strict SFU send failures');
   requireContains(publisherFrameDispatch, 'suppressGossipPrimary = false', 'frame dispatch accepts strict gossip suppression');
   requireContains(publisherFrameDispatch, 'suppressSfuSendFailures = false', 'frame dispatch accepts strict SFU send failure suppression');
-  requireContains(publisherFrameDispatch, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true', 'frame dispatch does not enter gossip-primary when strict suppresses it');
+  requireContains(publisherFrameDispatch, '(VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || GOSSIP_SERVER_RELAY_CONFIG.primary) && suppressGossipPrimary !== true', 'frame dispatch can enter the explicit room-bound relay primary path unless strict suppresses it');
   requireContains(browserVideoEncoderConfig, "String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30'", 'browser encoder sizing detects strict profile');
   requireContains(browserVideoEncoderConfig, "{ mode: 'cover', targetAspectRatio: maxWidth / maxHeight }", 'browser encoder uses fixed 16:9 strict output sizing');
   requireContains(publisherFrameTrace, 'raw_source_frame_width: frameSize.sourceWidth', 'transport metrics preserve raw source width separately under strict fixed output');
   requireContains(protectedBrowserVideoEncoder, 'raw_source_frame_width: positiveInteger(frameSize.sourceWidth, 0)', 'browser encoder metrics preserve raw source width separately under strict fixed output');
 
   requireContains(backgroundTabPolicy, "strictPolicyEnabled(policy, 'disableBackgroundTabPolicy')", 'background tab policy can no-op under strict mode');
-  requireContains(gossipDataLane, "strictGossipMediaDisabled('disableGossipPublish')", 'gossip publish is disabled under strict mode');
+  requireContains(gossipDataLane, "strictGossipMediaDisabled('disableGossipPublish')", 'gossip publish remains policy-gated while strict allows the explicit room-bound relay');
   requireContains(gossipDataLane, "strictGossipMediaDisabled('disableGossipReceiveRecovery')", 'gossip receive recovery is disabled under strict mode');
   requireContains(gossipDataLane, "strictGossipMediaDisabled()) return false;", 'gossip topology repair is disabled under strict mode');
   requireContains(socketLifecycle, "strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')", 'socket lifecycle absorbs media quality pressure under strict mode');

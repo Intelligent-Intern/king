@@ -391,6 +391,7 @@ function videochat_handle_sfu_routes(
     $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
     $nextLiveFrameRelayCleanupMs = videochat_sfu_now_ms() + 5000;
     $nextBrokerFramePresenceTouchMs = 0;
+    $nextBrokerPublisherPresenceTouchMs = 0;
     $stampKingReceiveMetrics = static function (array $msg): array {
         $kingReceiveAtMs = videochat_sfu_now_ms();
         $msg['king_receive_at_ms'] = $kingReceiveAtMs;
@@ -554,6 +555,18 @@ function videochat_handle_sfu_routes(
         $activeSfuDatabase = $ensureBrokerDatabase();
         if ($activeSfuDatabase instanceof PDO && videochat_sfu_now_ms() >= $nextBrokerPollMs) {
             try {
+                $nowMs = videochat_sfu_now_ms();
+                if ($role === 'publisher' && $nowMs >= $nextBrokerPublisherPresenceTouchMs) {
+                    videochat_sfu_refresh_active_publisher_presence(
+                        $activeSfuDatabase,
+                        $roomStateKey,
+                        (string) $clientId,
+                        $userIdString,
+                        $userName,
+                        is_array($sfuClients[$clientId]['tracks'] ?? null) ? $sfuClients[$clientId]['tracks'] : []
+                    );
+                    $nextBrokerPublisherPresenceTouchMs = $nowMs + 2000;
+                }
                 videochat_sfu_poll_broker(
                     $activeSfuDatabase,
                     $websocket,

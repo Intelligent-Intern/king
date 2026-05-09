@@ -61,6 +61,58 @@ Contract anchors:
 - `demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php`
 - `demo/video-chat/scripts/prod-debug.sh`
 
+## Hotfix: Room-Bound Gossip Server Media Relay
+
+Goal:
+- Keep live video moving when SFU/media-security negotiation is stale by
+  relaying already encoded frames over the authenticated call websocket.
+- Do not use SFU publisher discovery, sender-key handshakes, Gossip repair, or
+  quality/recovery experiments for this relay path.
+- Keep the relay scoped to the current tenant, room, call, and authenticated
+  call websocket participants.
+
+Tickets:
+- [x] GSP-02 Publisher pipeline decoupling
+  - Publisher encode can proceed independently from an open SFU send socket
+    when the selected carrier has an independent Gossip/server-relay path.
+  - Proof anchor: `gossip-publisher-pipeline-decoupling-contract.mjs`.
+- [x] GSP-08 Server no-normal-media-fanout guard
+  - Generic `sfu/frame`, `gossip/media-frame`, protected-frame, and base64 media
+    payloads remain rejected on the normal realtime websocket with
+    `normal_media_fanout_forbidden`.
+  - The only media exception is the explicit `gossip/server-frame` command,
+    which is re-emitted as `call/gossip-server-frame` to matching call
+    participants.
+  - Proof anchor: `gossip-server-no-media-fanout-contract.mjs`.
+- [x] GSP-09 Integration contracts and smoke checks
+  - The three media-carrier modes `gossip_primary`, `sfu_first`, and `sfu_mirror`
+    remain covered by the integration smoke proof.
+  - Proof anchor: `gossip-media-carrier-integration-smoke-contract.mjs`.
+- [x] GSR-01 Encode publisher frames without requiring an open SFU connection
+  when the server relay is primary.
+- [x] GSR-02 Route relay frames into the existing remote decoder path as
+  transport-only frames.
+- [ ] GSR-03 Build, deploy without push/DNS/certbot, and run post-deploy
+  diagnostics for relay delivery and websocket errors.
+
+Proof so far:
+- `php -l demo/video-chat/backend-king-php/http/module_realtime_gossip_media_relay.php`
+- `php demo/video-chat/backend-king-php/tests/realtime-gossipmesh-runtime-contract.php`
+- `php demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php`
+  - Runtime persistence proof skipped locally because `pdo_sqlite` is not
+    available.
+- `node tests/contract/gossip-server-no-media-fanout-contract.mjs`
+- `node tests/contract/gossip-media-carrier-contract.mjs`
+- `node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs`
+- `node tests/contract/gossip-publisher-pipeline-decoupling-contract.mjs`
+- `node tests/contract/gossip-live-receive-decode-route-contract.mjs`
+- `node tests/contract/gossip-data-lane-feature-flag-contract.mjs`
+- `node tests/contract/gossip-outbound-live-publication-contract.mjs`
+- `npm run test:contract:strict-720p30`
+- `npm run build`
+- `npm run test:contract:build-size`
+- `git diff --check`
+
 ## Sprint: MEDIA-SEC-01 Idempotent Sender-Key Participant-Set Recovery
 
 Goal:

@@ -695,6 +695,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         ...(extraTransportMetrics && typeof extraTransportMetrics === 'object' ? extraTransportMetrics : {}),
       },
       data: chunk.data,
+      relayData: chunk.data,
       type: encodedFrameType,
       codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID,
       runtimeId: PROTECTED_BROWSER_VIDEO_RUNTIME_ID,

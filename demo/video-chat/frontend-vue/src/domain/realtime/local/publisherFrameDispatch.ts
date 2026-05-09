@@ -1,8 +1,8 @@
-import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
+import { GOSSIP_SERVER_RELAY_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
 import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
 
 export function publisherRequiresSfuBeforeEncode() {
-  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuRequiredBeforeGossip;
+  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuRequiredBeforeGossip && !GOSSIP_SERVER_RELAY_CONFIG.primary;
 }
 
 function safeFunction(value, fallback = () => false) {
@@ -13,6 +13,7 @@ function diagnosticsPayload({ trackId, mediaRuntimePath, extra = {} }) {
   return {
     media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
     gossip_may_publish_without_sfu: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipMayPublishWithoutSfu,
+    gossip_server_relay_mode: GOSSIP_SERVER_RELAY_CONFIG.mode,
     sfu_send_optional: VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional,
     diagnostics_label: VIDEOCHAT_MEDIA_CARRIER_CONFIG.diagnosticsLabel,
     media_runtime_path: String(mediaRuntimePath || ''),
@@ -66,7 +67,7 @@ function diagnoseOptionalSfuSkip({
 }
 
 function shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished) {
-  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !gossipPublished;
+  return (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || GOSSIP_SERVER_RELAY_CONFIG.primary) && !gossipPublished;
 }
 
 function isQuietSfuSendFailure(reason, details = {}) {
@@ -93,8 +94,9 @@ export async function dispatchPublisherFrame({
   suppressGossipPrimary = false,
   suppressSfuSendFailures = false,
 }) {
-  const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true;
-  const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional && suppressGossipPrimary !== true;
+  const gossipRelayAllowed = GOSSIP_SERVER_RELAY_CONFIG.enabled && suppressGossipPrimary !== true;
+  const gossipFirst = (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || GOSSIP_SERVER_RELAY_CONFIG.primary) && suppressGossipPrimary !== true;
+  const sfuOptional = (VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional || gossipRelayAllowed) && suppressGossipPrimary !== true;
   let gossipPublished = false;
 
   if (gossipFirst) {
@@ -105,6 +107,16 @@ export async function dispatchPublisherFrame({
       publishLocalEncodedFrameToGossip,
       captureClientDiagnosticError,
     });
+    if (GOSSIP_SERVER_RELAY_CONFIG.primary && gossipPublished) {
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: true,
+        sfuMirrorSkipped: true,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+      };
+    }
   }
 
   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
@@ -119,7 +131,16 @@ export async function dispatchPublisherFrame({
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
       };
     }
-    if (gossipFirst && gossipPublished) {
+    if (!gossipPublished && gossipRelayAllowed) {
+      gossipPublished = publishGossipFrame({
+        frame,
+        trackId,
+        mediaRuntimePath,
+        publishLocalEncodedFrameToGossip,
+        captureClientDiagnosticError,
+      });
+    }
+    if (gossipPublished) {
       return {
         ok: true,
         gossipPublished,

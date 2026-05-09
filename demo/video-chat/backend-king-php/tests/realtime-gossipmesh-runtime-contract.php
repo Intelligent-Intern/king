@@ -953,6 +953,55 @@ $controlGuardClassification = videochat_realtime_classify_normal_media_fanout_fr
     ],
 ], JSON_UNESCAPED_SLASHES));
 videochat_gossipmesh_test_assert(!(bool) ($controlGuardClassification['blocked'] ?? true), 'control-plane recovery ops must not be blocked by media fanout guard');
+$relayGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
+    'type' => 'gossip/server-frame',
+    'lane' => 'media',
+    'payload' => [
+        'track_id' => 'camera',
+        'data_base64' => 'AQID',
+    ],
+], JSON_UNESCAPED_SLASHES));
+videochat_gossipmesh_test_assert(!(bool) ($relayGuardClassification['blocked'] ?? true), 'room-bound gossip server relay must not be blocked by media fanout guard');
+videochat_gossipmesh_test_assert((string) ($relayGuardClassification['reason'] ?? '') === 'room_bound_gossip_server_relay', 'room-bound gossip server relay guard reason mismatch');
+
+$otherCallConnection = [
+    ...$ownerConnection,
+    'connection_id' => 'conn-30',
+    'session_id' => 'session-30',
+    'socket' => 'socket-other-call',
+    'user_id' => 30,
+    'display_name' => 'Other Call',
+    'active_call_id' => 'call-beta',
+    'requested_call_id' => 'call-beta',
+    'call_role' => 'participant',
+];
+$presenceState['connections']['conn-30'] = $otherCallConnection;
+$presenceState['rooms']['room-alpha']['conn-30'] = 'socket-other-call';
+
+$GLOBALS['gossipmesh_sent_frames'] = [];
+$relayCommand = videochat_gossip_media_relay_decode_client_frame(json_encode([
+    'type' => 'gossip/server-frame',
+    'room_id' => 'room-alpha',
+    'call_id' => 'call-alpha',
+    'payload' => [
+        'track_id' => 'camera-main',
+        'data_base64' => 'AQID',
+    ],
+], JSON_UNESCAPED_SLASHES) ?: '');
+$relayResult = videochat_realtime_handle_gossip_media_relay_command(
+    $relayCommand,
+    $socketOwner,
+    $presenceState,
+    $ownerConnection,
+    $gossipmeshFrameSender
+);
+videochat_gossipmesh_test_assert((bool) ($relayResult['handled'] ?? false), 'room-bound gossip server relay command should be handled');
+$relaySockets = array_map(static fn (array $sentFrame): string => (string) ($sentFrame['socket'] ?? ''), $GLOBALS['gossipmesh_sent_frames']);
+sort($relaySockets);
+videochat_gossipmesh_test_assert($relaySockets === [$socketModerator, $socketPeer], 'room-bound gossip server relay must deliver only to same-call peers');
+$relayFrame = (array) (($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? [])['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($relayFrame['protection_mode'] ?? '') === 'transport_only', 'room-bound gossip server relay must force transport-only delivery');
+videochat_gossipmesh_test_assert(!array_key_exists('protected_frame', $relayFrame), 'room-bound gossip server relay must strip protected frame fields');
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $normalMediaGuardResult = videochat_realtime_guard_no_normal_media_fanout(

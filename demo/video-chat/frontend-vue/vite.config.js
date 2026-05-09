@@ -241,6 +241,13 @@ const callWorkspaceChunkForId = (id) => {
     }
     return 'vendor';
   }
+  if (
+    normalized.includes('/src/lib/gossipmesh/')
+    || normalized.includes('/src/domain/realtime/workspace/callWorkspace/gossip')
+    || normalized.endsWith('/src/domain/realtime/workspace/callWorkspace/roomStateTopology.ts')
+  ) {
+    return 'call-workspace-gossip';
+  }
   if (normalized.includes('/src/lib/wasm/') || normalized.includes('/src/domain/realtime/local/')) {
     return 'call-workspace-capture';
   }

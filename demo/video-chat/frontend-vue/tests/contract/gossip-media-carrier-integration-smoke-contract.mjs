@@ -38,7 +38,17 @@ async function loadPublisherDispatch(mode) {
   const config = mediaCarrier.resolveVideochatMediaCarrierConfig({
     VITE_VIDEOCHAT_MEDIA_CARRIER: mode,
   })
+  const serverRelayConfig = {
+    mode: 'off',
+    enabled: false,
+    primary: false,
+    diagnosticsLabel: 'gossip_server_relay_off',
+  }
   const source = read('demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts')
+    .replace(
+      "import { GOSSIP_SERVER_RELAY_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';\n",
+      `const VIDEOCHAT_MEDIA_CARRIER_CONFIG = ${JSON.stringify(config)};\nconst GOSSIP_SERVER_RELAY_CONFIG = ${JSON.stringify(serverRelayConfig)};\n`,
+    )
     .replace(
       "import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';\n",
       `const VIDEOCHAT_MEDIA_CARRIER_CONFIG = ${JSON.stringify(config)};\n`,

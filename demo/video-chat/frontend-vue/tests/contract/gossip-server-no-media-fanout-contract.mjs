@@ -5,6 +5,7 @@ const root = path.resolve(new URL('../..', import.meta.url).pathname)
 const repoRoot = path.resolve(root, '../../..')
 const websocketCommands = fs.readFileSync(path.join(root, '../backend-king-php/http/module_realtime_websocket_commands.php'), 'utf8')
 const mediaFanoutGuard = fs.readFileSync(path.join(root, '../backend-king-php/http/module_realtime_media_fanout_guard.php'), 'utf8')
+const gossipMediaRelay = fs.readFileSync(path.join(root, '../backend-king-php/http/module_realtime_gossip_media_relay.php'), 'utf8')
 const sfuGateway = fs.readFileSync(path.join(root, '../backend-king-php/domain/realtime/realtime_sfu_gateway.php'), 'utf8')
 const sfuSubscriberBudget = fs.readFileSync(path.join(root, '../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php'), 'utf8')
 const recoveryHandler = fs.readFileSync(path.join(root, '../backend-king-php/http/module_realtime_gossipmesh_recovery.php'), 'utf8')
@@ -30,8 +31,17 @@ assert(
     && mediaFanoutGuard.includes("'sfu/frame-chunk'")
     && mediaFanoutGuard.includes("'gossip/media-frame'")
     && mediaFanoutGuard.includes("'protected_frame'")
-    && mediaFanoutGuard.includes("'data_base64'"),
-  'media fanout guard must reject SFU/Gossip media commands and media-bearing payload fields',
+    && mediaFanoutGuard.includes("'data_base64'")
+    && mediaFanoutGuard.includes("return $type === 'gossip/server-frame';"),
+  'media fanout guard must reject generic SFU/Gossip media commands while allowing the explicit room-bound server relay',
+)
+assert(
+  gossipMediaRelay.includes("VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame'")
+    && gossipMediaRelay.includes("VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame'")
+    && gossipMediaRelay.includes('videochat_gossip_media_relay_broadcast_call_event(')
+    && gossipMediaRelay.includes('videochat_realtime_connection_call_id($connection) !== $normalizedCallId')
+    && gossipMediaRelay.includes("'protection_mode'] = 'transport_only'"),
+  'the only normal websocket media exception must be the room/call-bound transport-only Gossip server relay',
 )
 assert(
   /videochat_presence_send_frame\(\s*\$websocket/.test(mediaFanoutGuard)

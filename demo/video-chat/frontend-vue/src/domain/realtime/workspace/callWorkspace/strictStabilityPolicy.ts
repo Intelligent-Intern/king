@@ -37,7 +37,7 @@ const STRICT_720P30_POLICY = Object.freeze({
   disableSfuSocketRecoveryReconnect: true,
   disableForcedKeyframeRecovery: true,
   disableGossipMediaRepair: true,
-  disableGossipPublish: true,
+  disableGossipPublish: false,
   disableGossipReceiveRecovery: true,
   disableBackgroundOutgoing: true,
   disableBackgroundTabPolicy: true,

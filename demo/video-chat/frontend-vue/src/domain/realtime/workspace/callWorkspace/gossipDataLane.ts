@@ -1,5 +1,5 @@
 import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
-import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+import { GOSSIP_DATA_LANE_CONFIG, GOSSIP_SERVER_RELAY_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
@@ -29,6 +29,7 @@ export function createCallWorkspaceGossipDataLane({
   let unsubscribeLiveGossipDelivery = null;
   const assignedGossipNeighborIds = new Set();
   const liveGossipFrameSequenceByTrack = new Map();
+  const serverRelayFrameSequenceByTrack = new Map();
   const gossipTopologyRepairRequestedAtByPeerId = new Map();
   const gossipRecoveryState = createGossipRecoveryState();
   let lastGossipTelemetrySnapshotSentAtMs = 0;
@@ -48,6 +49,8 @@ export function createCallWorkspaceGossipDataLane({
       media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
       media_carrier_diagnostics_label: VIDEOCHAT_MEDIA_CARRIER_CONFIG.diagnosticsLabel,
       gossip_may_publish_without_sfu: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipMayPublishWithoutSfu,
+      gossip_server_relay_mode: GOSSIP_SERVER_RELAY_CONFIG.mode,
+      gossip_server_relay_diagnostics_label: GOSSIP_SERVER_RELAY_CONFIG.diagnosticsLabel,
       sfu_send_optional: VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional,
     };
   }
@@ -213,6 +216,7 @@ export function createCallWorkspaceGossipDataLane({
       gossipDataChannelTransport = null;
     }
     liveGossipFrameSequenceByTrack.clear();
+    serverRelayFrameSequenceByTrack.clear();
 
     const controller = new GossipController(roomId(), callId());
     controller.setDataLaneConfig(GOSSIP_DATA_LANE_CONFIG);
@@ -464,31 +468,32 @@ export function createCallWorkspaceGossipDataLane({
     return true;
   }
 
-  function publishLocalEncodedFrameToGossip(frame) {
-    if (strictGossipMediaDisabled('disableGossipPublish')) return false;
-    if (!GOSSIP_DATA_LANE_CONFIG.publish) {
-      return recordGossipShadowWouldPublish(frame, 'publish_disabled');
-    }
-    if (!gossipDataPlaneAllowed()) {
-      return recordGossipShadowWouldPublish(frame, 'rollout_gate_blocked');
-    }
-    const controller = ensureLiveGossipController();
-    if (!controller || !frame || typeof frame !== 'object') return false;
-    const peerId = localPeerId();
-    if (peerId === '' || peerId === '0') return false;
-    const trackId = String(frame.trackId || '').trim();
-    if (trackId === '') return false;
-
+  function nextFrameSequenceForTrack(sequenceMap, peerId, trackId) {
     const sequenceKey = `${peerId}:${trackId}`;
-    const frameSequence = Math.max(1, Number(liveGossipFrameSequenceByTrack.get(sequenceKey) || 0) + 1);
-    liveGossipFrameSequenceByTrack.set(sequenceKey, frameSequence);
-    const dataBuffer = normalizeGossipFrameArrayBuffer(frame.data);
+    const frameSequence = Math.max(1, Number(sequenceMap.get(sequenceKey) || 0) + 1);
+    sequenceMap.set(sequenceKey, frameSequence);
+    return frameSequence;
+  }
+
+  function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, plainRelay = false) {
+    if (!frame || typeof frame !== 'object') return null;
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return null;
+    const trackId = String(frame.trackId || '').trim();
+    if (trackId === '') return null;
+
+    const frameSequence = nextFrameSequenceForTrack(sequenceMap, peerId, trackId);
+    const relayData = plainRelay
+      ? (frame.relayData || frame.plainData || frame.data)
+      : frame.data;
+    const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
     const dataBase64 = dataBuffer.byteLength > 0 ? arrayBufferToBase64Url(dataBuffer) : '';
-    const protectedFrame = String(frame.protectedFrame || '').trim();
-    const protectionMode = protectedFrame !== ''
-      ? String(frame.protectionMode || 'protected')
-      : String(frame.protectionMode || 'transport_only');
-    const msg = {
+    const protectedFrame = plainRelay ? '' : String(frame.protectedFrame || '').trim();
+    if (dataBase64 === '' && protectedFrame === '') return null;
+    const protectionMode = plainRelay || protectedFrame === ''
+      ? 'transport_only'
+      : String(frame.protectionMode || 'protected');
+    return {
       type: 'sfu/frame',
       protocol_version: 2,
       publisher_id: String(frame.publisherId || peerId),
@@ -518,6 +523,39 @@ export function createCallWorkspaceGossipDataLane({
       roi_norm_width: Math.max(0, Number(frame.roiNormWidth || 0)),
       roi_norm_height: Math.max(0, Number(frame.roiNormHeight || 0)),
     };
+  }
+
+  function publishLocalEncodedFrameToServerRelay(frame) {
+    if (!GOSSIP_SERVER_RELAY_CONFIG.enabled) return false;
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return false;
+    const msg = gossipFrameMessageFromEncodedFrame(frame, serverRelayFrameSequenceByTrack, true);
+    if (!msg) return false;
+    gossipRecoveryState.rememberPublishedFrame(msg);
+    return sendSocketFrame({
+      type: 'gossip/server-frame',
+      lane: 'media',
+      room_id: String(activeRoomId() || '').trim(),
+      call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
+      payload: msg,
+    });
+  }
+
+  function publishLocalEncodedFrameToGossip(frame) {
+    if (strictGossipMediaDisabled('disableGossipPublish')) return false;
+    if (publishLocalEncodedFrameToServerRelay(frame)) return true;
+    if (!GOSSIP_DATA_LANE_CONFIG.publish) {
+      return recordGossipShadowWouldPublish(frame, 'publish_disabled');
+    }
+    if (!gossipDataPlaneAllowed()) {
+      return recordGossipShadowWouldPublish(frame, 'rollout_gate_blocked');
+    }
+    const controller = ensureLiveGossipController();
+    if (!controller || !frame || typeof frame !== 'object') return false;
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return false;
+    const msg = gossipFrameMessageFromEncodedFrame(frame, liveGossipFrameSequenceByTrack, false);
+    if (!msg) return false;
     gossipRecoveryState.rememberPublishedFrame(msg);
     controller.publishFrame(peerId, msg);
     emitGossipTelemetrySnapshot('local_publish');
@@ -590,6 +628,40 @@ export function createCallWorkspaceGossipDataLane({
       },
     });
     return sent;
+  }
+  function handleGossipServerRelayFrame(type, senderUserId, payload) {
+    const normalizedType = String(type || '').trim().toLowerCase();
+    if (normalizedType !== 'call/gossip-server-frame') return false;
+    const localUserId = Number(currentUserId() || 0);
+    if (Number(senderUserId || 0) === localUserId) return true;
+    const body = payload && typeof payload === 'object' ? payload : null;
+    if (!body) return true;
+    const frame = sfuFrameFromGossipMessage(body, {
+      from_peer_id: String(senderUserId || body.publisher_user_id || body.publisher_id || ''),
+      frame_id: body.frame_id || '',
+    });
+    if (!frame) return true;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'gossip_server_relay_frame_routed',
+      code: 'gossip_server_relay_frame_routed',
+      message: 'Room-bound Gossip server relay routed a media frame to the decoder path.',
+      payload: {
+        ...mediaCarrierDiagnosticPayload(),
+        from_peer_id: String(senderUserId || ''),
+        publisher_id: String(frame.publisherId || ''),
+        publisher_user_id: String(frame.publisherUserId || ''),
+        track_id: String(frame.trackId || ''),
+        frame_sequence: Number(frame.frameSequence || 0),
+        transport_path: 'gossip_server_relay',
+      },
+    });
+    handleSFUEncodedFrame({
+      ...frame,
+      transportPath: 'gossip_server_relay',
+    });
+    return true;
   }
   function handleGossipRecoveryOpsMessage(type, senderUserId, payload) {
     const normalizedType = String(type || '').trim().toLowerCase();
@@ -882,6 +954,7 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipController = null;
     liveGossipControllerKey = '';
     liveGossipFrameSequenceByTrack.clear();
+    serverRelayFrameSequenceByTrack.clear();
     gossipRecoveryState.clear();
     assignedGossipNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();
@@ -898,7 +971,7 @@ export function createCallWorkspaceGossipDataLane({
     applyGossipTopologyHint,
     getAssignedGossipNeighborCount,
     getGossipRolloutGateState,
-    handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
+    handleGossipNeighborSignal: (...args) => handleGossipServerRelayFrame(...args) || handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
     pruneGossipNeighborForUserId,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,
