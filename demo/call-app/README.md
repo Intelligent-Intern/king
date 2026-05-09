@@ -14,8 +14,8 @@ demo/call-app/<app-key>/
   crdt.schema.json
   health.descriptor.json
   public/index.html
-  public/whiteboard.css
-  public/whiteboard.js
+  public/<app-key>.css
+  public/<app-key>.js
 ```
 
 Required package contracts:
@@ -29,6 +29,11 @@ Required package contracts:
 - `public/index.html` is the iframe launch entrypoint.
 - `public/*.css` and `public/*.js` hold the app runtime assets used by the
   sandbox entrypoint.
+
+Included packages:
+
+- `whiteboard`: shared drawing, notes, shapes, cursors, and exports.
+- `planning-image`: shared image upload with pan/zoom canvas review.
 
 Runtime invariants:
 

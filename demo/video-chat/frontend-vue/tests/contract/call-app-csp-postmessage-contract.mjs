@@ -33,8 +33,14 @@ assert.match(
 
 assert.match(
   workspaceStateSource,
-  /VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*normalizeConfiguredCallAppOrigin[\s\S]*\['app', 'apps', 'whiteboard'\]\.includes\(parts\[0\]\)[\s\S]*parts\[0\] = hostAppKey/s,
-  'Call App iframe URL must use the configured whiteboard host and derive future app subdomains from that host family',
+  /VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*normalizeConfiguredCallAppOrigin[\s\S]*\['app', 'apps'\]\.includes\(parts\[0\]\)[\s\S]*parts\[0\] = hostAppKey/s,
+  'Call App iframe URL must derive app subdomains only from generic app hosts',
+);
+
+assert.doesNotMatch(
+  workspaceStateSource,
+  /\['app', 'apps', 'whiteboard'\]/,
+  'Call App iframe URL must not require new DNS by deriving app-specific hosts from the concrete whiteboard host',
 );
 
 assert.doesNotMatch(

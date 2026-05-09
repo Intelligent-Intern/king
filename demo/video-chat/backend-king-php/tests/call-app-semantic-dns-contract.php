@@ -130,8 +130,21 @@ try {
     videochat_call_app_semantic_dns_assert((bool) ($runtimeRegistration['ok'] ?? false), 'runtime registration must succeed');
     videochat_call_app_semantic_dns_assert(count($runtimeServices) >= 1, 'runtime registration must register service payloads');
     videochat_call_app_semantic_dns_assert(count($runtimeMotherNodes) === 1, 'runtime registration must register exactly one Mothernode');
-    videochat_call_app_semantic_dns_assert((string) ($runtimeServices[0]['hostname'] ?? '') === 'whiteboard.kingrt.test', 'runtime service hostname mismatch');
-    videochat_call_app_semantic_dns_assert((string) (($runtimeServices[0]['attributes'] ?? [])['mcp_endpoint'] ?? '') === 'mcp://registry.kingrt.test/call_app.whiteboard.mcp', 'runtime service MCP endpoint mismatch');
+    $runtimeServicesByKey = [];
+    foreach ($runtimeServices as $runtimeService) {
+        if (!is_array($runtimeService)) {
+            continue;
+        }
+        $runtimeAppKey = (string) (($runtimeService['attributes'] ?? [])['app_key'] ?? '');
+        if ($runtimeAppKey !== '') {
+            $runtimeServicesByKey[$runtimeAppKey] = $runtimeService;
+        }
+    }
+    videochat_call_app_semantic_dns_assert(isset($runtimeServicesByKey['whiteboard']), 'runtime registration must include whiteboard service');
+    videochat_call_app_semantic_dns_assert(isset($runtimeServicesByKey['planning-image']), 'runtime registration must include planning-image service');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeServicesByKey['whiteboard']['hostname'] ?? '') === 'whiteboard.kingrt.test', 'runtime whiteboard service hostname mismatch');
+    videochat_call_app_semantic_dns_assert((string) (($runtimeServicesByKey['whiteboard']['attributes'] ?? [])['mcp_endpoint'] ?? '') === 'mcp://registry.kingrt.test/call_app.whiteboard.mcp', 'runtime whiteboard service MCP endpoint mismatch');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeServicesByKey['planning-image']['hostname'] ?? '') === 'planning-image.kingrt.test', 'runtime planning-image service hostname mismatch');
     videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['node_id'] ?? '') === 'registry-kingrt-test', 'runtime Mothernode id mismatch');
     videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['hostname'] ?? '') === 'registry.kingrt.test', 'runtime registry host mismatch');
     videochat_call_app_semantic_dns_assert((int) ($runtimeMotherNodes[0]['managed_services_count'] ?? 0) >= 1, 'runtime Mothernode must report managed services');
