@@ -40,9 +40,58 @@ redact_stream() {
     -e 's/([A-Za-z_][A-Za-z0-9_]*(MEDIA_PAYLOAD|FRAME_DATA|IMAGE_DATA|ENCODED_FRAME|BINARY_FRAME)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED_MEDIA_PAYLOAD]/Ig'
 }
 
+trim_env_value() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "${value}"
+}
+
+parse_local_env_value() {
+  local value
+  value="$(trim_env_value "$1")"
+  if [[ "${value}" == \"* ]]; then
+    [[ "${#value}" -ge 2 && "${value}" == *\" ]] || return 1
+    value="${value:1:${#value}-2}"
+    value="${value//\\\"/\"}"
+    value="${value//\\\\/\\}"
+  elif [[ "${value}" == \'* ]]; then
+    [[ "${#value}" -ge 2 && "${value}" == *\' ]] || return 1
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "${value}"
+}
+
+local_env_group() {
+  case "$1" in
+    VIDEOCHAT_DEPLOY_DOMAIN|DEPLOY_DOMAIN) printf 'DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_APP_DOMAIN|DEPLOY_APP_DOMAIN) printf 'APP_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_API_DOMAIN|DEPLOY_API_DOMAIN) printf 'API_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_WS_DOMAIN|DEPLOY_WS_DOMAIN) printf 'WS_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_SFU_DOMAIN|DEPLOY_SFU_DOMAIN) printf 'SFU_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_TURN_DOMAIN|DEPLOY_TURN_DOMAIN) printf 'TURN_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_CDN_DOMAIN|DEPLOY_CDN_DOMAIN) printf 'CDN_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN|DEPLOY_CALL_APP_DOMAIN) printf 'CALL_APP_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN|DEPLOY_REGISTRY_DOMAIN) printf 'REGISTRY_DOMAIN' ;;
+    VIDEOCHAT_DEPLOY_HOST|DEPLOY_HOST) printf 'HOST' ;;
+    VIDEOCHAT_DEPLOY_USER|DEPLOY_USER) printf 'USER' ;;
+    VIDEOCHAT_DEPLOY_SSH_PORT|DEPLOY_SSH_PORT) printf 'SSH_PORT' ;;
+    VIDEOCHAT_DEPLOY_PATH|DEPLOY_PATH) printf 'PATH' ;;
+    VIDEOCHAT_DEPLOY_SSH_KEY) printf 'SSH_KEY' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+local_env_service_domain_group() {
+  case "$1" in
+    APP_DOMAIN|API_DOMAIN|WS_DOMAIN|SFU_DOMAIN|TURN_DOMAIN|CDN_DOMAIN|CALL_APP_DOMAIN|REGISTRY_DOMAIN) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 load_local_env() {
   [[ -f "${LOCAL_ENV_FILE}" ]] || return 0
-  local preserved_names=(
+  local allowed_names=(
     VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN
     VIDEOCHAT_DEPLOY_APP_DOMAIN DEPLOY_APP_DOMAIN
     VIDEOCHAT_DEPLOY_API_DOMAIN DEPLOY_API_DOMAIN
@@ -56,31 +105,36 @@ load_local_env() {
     VIDEOCHAT_DEPLOY_USER DEPLOY_USER
     VIDEOCHAT_DEPLOY_SSH_PORT DEPLOY_SSH_PORT
     VIDEOCHAT_DEPLOY_PATH DEPLOY_PATH
+    VIDEOCHAT_DEPLOY_SSH_KEY
     VIDEOCHAT_PROD_DEBUG_DRY_RUN VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE
   )
-  local name
-  declare -A preserved_values=()
-  for name in "${preserved_names[@]}"; do
+  local line name raw_value value group
+  declare -A allowed_env_names=()
+  declare -A explicit_env_groups=()
+  for name in "${allowed_names[@]}"; do
+    allowed_env_names["${name}"]=1
     if [[ -n "${!name+x}" ]]; then
-      preserved_values["${name}"]="${!name}"
+      group="$(local_env_group "${name}")"
+      explicit_env_groups["${group}"]=1
     fi
   done
-  set -a
-  # shellcheck source=/dev/null
-  source "${LOCAL_ENV_FILE}"
-  set +a
-  if [[ -n "${preserved_values[VIDEOCHAT_DEPLOY_DOMAIN]+x}" || -n "${preserved_values[DEPLOY_DOMAIN]+x}" ]]; then
-    local service_prefix
-    for service_prefix in APP API WS SFU TURN CDN CALL_APP REGISTRY; do
-      if [[ -z "${preserved_values[VIDEOCHAT_DEPLOY_${service_prefix}_DOMAIN]+x}" && -z "${preserved_values[DEPLOY_${service_prefix}_DOMAIN]+x}" ]]; then
-        unset "VIDEOCHAT_DEPLOY_${service_prefix}_DOMAIN" "DEPLOY_${service_prefix}_DOMAIN"
-      fi
-    done
-  fi
-  for name in "${!preserved_values[@]}"; do
-    printf -v "${name}" '%s' "${preserved_values[${name}]}"
-    export "${name}"
-  done
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ "${line}" =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=(.*)$ ]] || continue
+    name="${BASH_REMATCH[2]}"
+    raw_value="${BASH_REMATCH[3]}"
+    [[ -n "${allowed_env_names[${name}]+x}" ]] || continue
+    group="$(local_env_group "${name}")"
+    [[ -z "${explicit_env_groups[${group}]+x}" ]] || continue
+    if [[ -n "${explicit_env_groups[DOMAIN]+x}" ]] && local_env_service_domain_group "${group}"; then
+      continue
+    fi
+    if value="$(parse_local_env_value "${raw_value}")"; then
+      printf -v "${name}" '%s' "${value}"
+      export "${name}"
+    fi
+  done < "${LOCAL_ENV_FILE}"
 }
 
 normalize_domains() {
@@ -144,6 +198,19 @@ header_value() {
   awk -v name="${header_name}" 'BEGIN { lower = tolower(name) ":" } tolower($0) ~ "^" lower { sub("^[^:]*:[[:space:]]*", "", $0); gsub("\r", "", $0); print $0; exit }' "${headers}"
 }
 
+dump_call_app_headers() {
+  local label="$1" headers="$2"
+  printf '[videochat-prod-debug] %s headers:\n' "${label}" >&2
+  redact_stream < "${headers}" >&2 || true
+}
+
+dump_call_app_body_sample() {
+  local label="$1" body="$2"
+  printf '[videochat-prod-debug] %s body:\n' "${label}" >&2
+  head -c 2000 "${body}" | redact_stream >&2 || true
+  printf '\n' >&2
+}
+
 call_app_frame_header_probe() {
   local label="$1" url="$2" headers body code csp allow_csp_from nested_pattern escaped_app_domain
   local wildcard_frame_ancestors_pattern wildcard_frame_src_pattern wildcard_script_src_pattern wildcard_connect_src_pattern
@@ -155,11 +222,8 @@ call_app_frame_header_probe() {
   body="$(mktemp)"
   code="$(curl -sS --max-time "${TIMEOUT}" -D "${headers}" -o "${body}" -w '%{http_code}' "${url}" || true)"
   if [[ "${code}" != "200" ]]; then
-    printf '[videochat-prod-debug] %s headers:\n' "${label}" >&2
-    cat "${headers}" >&2 || true
-    printf '[videochat-prod-debug] %s body:\n' "${label}" >&2
-    head -c 2000 "${body}" >&2 || true
-    printf '\n' >&2
+    dump_call_app_headers "${label}" "${headers}"
+    dump_call_app_body_sample "${label}" "${body}"
     rm -f "${headers}" "${body}"
     fail "${label}: expected HTTP 200, got ${code:-none}"
   fi
@@ -167,17 +231,17 @@ call_app_frame_header_probe() {
   csp="$(header_value Content-Security-Policy "${headers}")"
   allow_csp_from="$(header_value Allow-CSP-From "${headers}")"
   if [[ "${csp}" != *"frame-ancestors https://${DEPLOY_APP_DOMAIN}"* ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: Content-Security-Policy must allow frame ancestor https://${DEPLOY_APP_DOMAIN}"
   fi
   if [[ "${csp}" != *"script-src 'self'"* ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: Content-Security-Policy must keep script-src self-scoped"
   fi
   if [[ "${csp}" != *"connect-src 'self'"* ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: Content-Security-Policy must keep connect-src self-scoped"
   fi
@@ -186,17 +250,17 @@ call_app_frame_header_probe() {
   wildcard_script_src_pattern='(^|[[:space:];])script-src[^;]*\*'
   wildcard_connect_src_pattern='(^|[[:space:];])connect-src[^;]*\*'
   if [[ "${csp}" =~ ${wildcard_frame_ancestors_pattern} || "${csp}" =~ ${wildcard_frame_src_pattern} || "${csp}" =~ ${wildcard_script_src_pattern} || "${csp}" =~ ${wildcard_connect_src_pattern} ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: Content-Security-Policy must not use wildcard frame/script/connect directives"
   fi
   if [[ "${allow_csp_from}" != "https://${DEPLOY_APP_DOMAIN}" ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: Allow-CSP-From must equal https://${DEPLOY_APP_DOMAIN}"
   fi
   if [[ -n "$(header_value X-Frame-Options "${headers}")" ]]; then
-    cat "${headers}" >&2 || true
+    dump_call_app_headers "${label}" "${headers}"
     rm -f "${headers}" "${body}"
     fail "${label}: X-Frame-Options must be absent for Call App iframe responses"
   fi
@@ -205,7 +269,7 @@ call_app_frame_header_probe() {
   nested_pattern="https?://[A-Za-z0-9.-]+\\.${escaped_app_domain}"
   if grep -Eia "${nested_pattern}" "${headers}" "${body}" >/dev/null; then
     printf '[videochat-prod-debug] %s nested app-domain origin matches:\n' "${label}" >&2
-    grep -Eia "${nested_pattern}" "${headers}" "${body}" >&2 || true
+    grep -Eia "${nested_pattern}" "${headers}" "${body}" | redact_stream >&2 || true
     rm -f "${headers}" "${body}"
     fail "${label}: must not reference nested *.${DEPLOY_APP_DOMAIN} service origins"
   fi
@@ -345,7 +409,7 @@ main() {
 
   section "Read Only Contract"
   log "mode: read-only production diagnostics; no deploy, restart, DB write, DNS change, or admin action"
-  log "env source: ${LOCAL_ENV_FILE} if present; values are used only for domains and SSH target"
+  log "env file: ${LOCAL_ENV_FILE} if present; inert parser only imports whitelisted deploy/debug names for domains and SSH target"
 
   section "Domains"
   assert_domain_contract
