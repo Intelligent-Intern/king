@@ -1963,6 +1963,11 @@ tests/e2e/call-access-authorized-rejoin.spec.js
 tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
 35 tests.
 
+Backend proof: `call-access-authorized-rejoin-contract.php` adds the backend
+contract for registered authorized, system-admin, organization-admin, and
+guest-list rejoin after `left_at`; host PHP skipped runtime execution because
+local `pdo_sqlite` is unavailable.
+
 ## 13. Temporary Moderators
 
 - [x] Host can assign temporary moderator if supported
