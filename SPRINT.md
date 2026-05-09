@@ -135,7 +135,7 @@ Tickets:
     The package default is shared call editing while preserving backend grants.
     Local proof must remain green in the deploy loop before OCA-05 closes.
 
-- [ ] OCA-04 Operator feedback chat intake and sprint triage
+- [x] OCA-04 Operator feedback chat intake and sprint triage
   - Add an Operator checkbox to the existing call chat composer.
   - Persist checked feedback messages in the backend database with call ID,
     organization, sender, session, message text, status, and deployed feature
@@ -150,6 +150,19 @@ Tickets:
     persistence, queue auth, delivered notification payload, and non-flagged
     chat skip behavior; the frontend contract pins checkbox payload wiring and
     the deployed-feature toast.
+  - Loop proof: merged `c1c20f3a Add operator feedback chat UI` from
+    `agent/operator-feedback-frontend` and `0df5a9dd Add operator feedback
+    backend queue` from `agent/operator-feedback-backend`. The chat composer
+    now sends flagged `chat/send.operator_feedback` payloads through the normal
+    chat path, resets the checkbox after successful send, and prepares the
+    deployed-feature toast. The backend persists flagged chat as
+    `operator_feedback`, exposes authenticated queue/mark-deployed handling,
+    keeps non-flagged chat out of the queue, and returns notification payload
+    text `feature '<requested feature>' deployed`. Proof commands:
+    `npm run test:contract:operator-feedback` PASS with host backend skip,
+    container `operator-feedback-contract.php`, `realtime-chat-contract.php`,
+    and `chat-archive-contract.php` PASS, PHP syntax checks PASS, and
+    `git diff --check` PASS.
 
 - [x] OCA-05 Local merge, deploy, and diagnostics proof
   - Merge completed worker branches into the local dev branch only; do not push.
