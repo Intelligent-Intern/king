@@ -373,6 +373,59 @@ media/screen reconnect, stale local media capture discard, audio/video track
 loss, SFU reconnect, and Call App frame/CSP checks do not deploy, restart,
 write DB data, change DNS, or use admin actions.
 
+For the BGF production browser smoke after the Loop 10 proof has merged, prefer
+the safe runner when it exists:
+
+```bash
+PLAYWRIGHT_PRODUCTION_BASE_URL="https://app.kingrt.com" \
+VITE_VIDEOCHAT_BACKEND_ORIGIN="https://api.kingrt.com" \
+VITE_VIDEOCHAT_WS_ORIGIN="wss://ws.kingrt.com" \
+VITE_VIDEOCHAT_SFU_ORIGIN="wss://sfu.kingrt.com" \
+VIDEOCHAT_PRODUCTION_ADMIN_EMAIL="<admin-email>" \
+VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD="<admin-password>" \
+VIDEOCHAT_PRODUCTION_USER_EMAIL="<user-email>" \
+VIDEOCHAT_PRODUCTION_USER_PASSWORD="<user-password>" \
+demo/video-chat/scripts/bgf-production-browser-smoke.sh
+```
+
+If that runner is not present in the merged tree, run the raw npm fallback from
+the frontend package:
+
+```bash
+cd demo/video-chat/frontend-vue
+PLAYWRIGHT_PRODUCTION_BASE_URL="https://app.kingrt.com" \
+VITE_VIDEOCHAT_BACKEND_ORIGIN="https://api.kingrt.com" \
+VITE_VIDEOCHAT_WS_ORIGIN="wss://ws.kingrt.com" \
+VITE_VIDEOCHAT_SFU_ORIGIN="wss://sfu.kingrt.com" \
+VIDEOCHAT_PRODUCTION_ADMIN_EMAIL="<admin-email>" \
+VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD="<admin-password>" \
+VIDEOCHAT_PRODUCTION_USER_EMAIL="<user-email>" \
+VIDEOCHAT_PRODUCTION_USER_PASSWORD="<user-password>" \
+npm run test:e2e:production-browser-smoke
+```
+
+This browser smoke is read-only from an infrastructure perspective. It must not
+run deploys, certbot, DNS changes, SSH writes, or any other remote-host write.
+It does create a normal app-level call through the deployed API, admits a user,
+and exercises camera/audio, SFU media, screen share, reconnect/focus stability,
+and the background-unavailable fallback choices for proof.
+
+Required origins are the app origin (`PLAYWRIGHT_PRODUCTION_BASE_URL`, or
+`VIDEOCHAT_ONLINE_BASE_URL`/`VIDEOCHAT_DEPLOY_APP_ORIGIN`), API origin
+(`VITE_VIDEOCHAT_BACKEND_ORIGIN`), lobby websocket origin
+(`VITE_VIDEOCHAT_WS_ORIGIN`), and SFU websocket origin
+(`VITE_VIDEOCHAT_SFU_ORIGIN`). The production-domain aliases
+`VIDEOCHAT_DEPLOY_DOMAIN`, `VIDEOCHAT_DEPLOY_API_DOMAIN`,
+`VIDEOCHAT_DEPLOY_WS_DOMAIN`, and `VIDEOCHAT_DEPLOY_SFU_DOMAIN` may also fill
+the service origins when the Playwright config is allowed to derive them.
+Provide credentials only through the environment or a secret manager:
+`VIDEOCHAT_PRODUCTION_ADMIN_EMAIL`, `VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD`,
+`VIDEOCHAT_PRODUCTION_USER_EMAIL`, and `VIDEOCHAT_PRODUCTION_USER_PASSWORD`.
+The fallback credential names are `VIDEOCHAT_E2E_ADMIN_EMAIL`,
+`VIDEOCHAT_E2E_ADMIN_PASSWORD`, `VIDEOCHAT_E2E_USER_EMAIL`, and
+`VIDEOCHAT_E2E_USER_PASSWORD`; admin/user password fallback also accepts
+`VIDEOCHAT_DEPLOY_ADMIN_PASSWORD` and `VIDEOCHAT_DEPLOY_USER_PASSWORD`.
+
 ## Public Programming Model
 
 The core programming model is:
