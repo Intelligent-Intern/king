@@ -42,20 +42,49 @@ function videochat_call_app_crdt_session_for_actor(PDO $pdo, int $tenantId, stri
     if (!is_array($session)) {
         return ['ok' => false, 'reason' => 'session_not_found'];
     }
-    $grantState = videochat_call_app_launch_user_grant_state($pdo, $tenantId, $record, $actorUserId);
-    return ['ok' => true, 'record' => $record, 'session' => $session, 'grant_state' => $grantState];
+    $grant = videochat_call_app_launch_subject_grant($pdo, $tenantId, $record, 'user', $actorUserId, '');
+    return [
+        'ok' => true,
+        'record' => $record,
+        'session' => $session,
+        'grant_state' => (string) ($grant['grant_state'] ?? 'denied'),
+        'permission_actions' => (array) ($grant['permission_actions'] ?? []),
+    ];
 }
 
-function videochat_call_app_crdt_requires_allowed_grant(array $resolved): ?array
+function videochat_call_app_crdt_requires_permission(array $resolved, string $permissionAction): ?array
 {
     if ((string) ($resolved['grant_state'] ?? 'denied') === 'allowed') {
-        return null;
+        $actions = (array) ($resolved['permission_actions'] ?? []);
+        if (in_array($permissionAction, $actions, true)) {
+            return null;
+        }
+        return [
+            'ok' => false,
+            'reason' => 'participant_permission_denied',
+            'grant_state' => 'allowed',
+            'permission_action' => $permissionAction,
+        ];
     }
     return [
         'ok' => false,
         'reason' => 'participant_grant_denied',
         'grant_state' => (string) ($resolved['grant_state'] ?? 'denied'),
+        'permission_action' => $permissionAction,
     ];
+}
+
+function videochat_call_app_crdt_requires_allowed_grant(array $resolved): ?array
+{
+    if ((string) ($resolved['grant_state'] ?? 'denied') !== 'allowed') {
+        return [
+            'ok' => false,
+            'reason' => 'participant_grant_denied',
+            'grant_state' => (string) ($resolved['grant_state'] ?? 'denied'),
+            'permission_action' => 'read',
+        ];
+    }
+    return videochat_call_app_crdt_requires_permission($resolved, 'read');
 }
 
 function videochat_call_app_crdt_presence_payload_types(array $session): array
@@ -186,6 +215,7 @@ function videochat_call_app_crdt_bootstrap(PDO $pdo, int $tenantId, string $sess
             'op_count' => (int) ($document['op_count'] ?? 0),
         ],
         'grant_state' => (string) ($resolved['grant_state'] ?? 'denied'),
+        'permission_actions' => array_values((array) ($resolved['permission_actions'] ?? [])),
         'ops' => videochat_call_app_crdt_fetch_ops($pdo, $tenantId, $document, $resolved['session'], $replayAfter, 250),
         'replay_cursor' => ['after_clock' => $replayAfter],
     ];
@@ -253,7 +283,7 @@ function videochat_call_app_crdt_append_op(PDO $pdo, int $tenantId, string $sess
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
     }
-    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    $grantDenied = videochat_call_app_crdt_requires_permission($resolved, 'write');
     if ($grantDenied !== null) {
         return $grantDenied;
     }
@@ -327,7 +357,7 @@ function videochat_call_app_crdt_compact_snapshot(PDO $pdo, int $tenantId, strin
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
     }
-    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    $grantDenied = videochat_call_app_crdt_requires_permission($resolved, 'write');
     if ($grantDenied !== null) {
         return $grantDenied;
     }
