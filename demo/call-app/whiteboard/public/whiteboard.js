@@ -34,6 +34,7 @@
   let participantLabel = 'User';
   let grantState = 'denied';
   let capabilities = new Set();
+  let permissionActions = new Set();
   let activeTool = 'pen';
   let activeColor = colors[0];
   let latestClock = 0;
@@ -52,6 +53,14 @@
     return grantState === 'allowed' && capabilities.has('call_apps.crdt.append');
   }
 
+  function canDelete() {
+    return grantState === 'allowed' && permissionActions.has('delete');
+  }
+
+  function canAppendPayload(payloadType) {
+    return String(payloadType || '').trim().toLowerCase().endsWith('.delete') ? canDelete() : canAppend();
+  }
+
   function canRead() {
     return grantState === 'allowed' && capabilities.has('call_apps.crdt.read');
   }
@@ -66,7 +75,8 @@
     modeBadge.textContent = canAppend() ? 'Editor' : (canRead() ? 'Viewer' : 'No access');
     clock.textContent = `${latestClock} ops`;
     document.querySelectorAll('[data-tool], .swatch, #width, #undo, #redo').forEach((element) => {
-      element.disabled = !canAppend();
+      const tool = String(element.getAttribute('data-tool') || '');
+      element.disabled = tool === 'delete' ? !canDelete() : !canAppend();
     });
     document.getElementById('undo').disabled = !canAppend() || undoStack.length === 0;
     document.getElementById('redo').disabled = !canAppend() || redoStack.length === 0;
@@ -123,7 +133,7 @@
   }
 
   function appendOperation(payloadType, payload, options = {}) {
-    if (!canAppend()) {
+    if (!canAppendPayload(payloadType)) {
       setStatus('Viewer mode. Drawing is disabled for this participant.');
       return null;
     }
@@ -511,13 +521,12 @@
   }
 
   function pointerDown(event) {
-    if (!canAppend()) return;
     const point = normalizePoint(event);
-    if (activeTool === 'text' || activeTool === 'sticky') {
-      openInlineEditor(point, activeTool);
-      return;
-    }
     if (activeTool === 'delete') {
+      if (!canDelete()) {
+        setStatus('Delete permission is disabled for this participant.');
+        return;
+      }
       const id = hitTest(point);
       const deleted = id ? objectForHistory(id) : null;
       if (id) {
@@ -527,6 +536,11 @@
           redoStack.length = 0;
         }
       }
+      return;
+    }
+    if (!canAppend()) return;
+    if (activeTool === 'text' || activeTool === 'sticky') {
+      openInlineEditor(point, activeTool);
       return;
     }
     if (activeTool === 'select') {
@@ -747,6 +761,7 @@
       actorId = String(context.participant?.actor_id || '');
       participantLabel = displayNameLabel(context.participant?.display_name, actorId ? actorId.slice(5, 11) : 'User');
       capabilities = new Set(Array.isArray(message.capabilities) ? message.capabilities : []);
+      permissionActions = new Set(Array.isArray(context.permission_actions) ? context.permission_actions : []);
       emit('call_app.ready', {
         app_session_id: appSessionId,
         call_id: callId,

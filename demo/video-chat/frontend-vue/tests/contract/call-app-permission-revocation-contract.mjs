@@ -16,6 +16,8 @@ const [
   routeSource,
   workspaceApiSource,
   crdtBridgeSource,
+  iframeBridgeSource,
+  presenceRelaySource,
   iframeSource,
   iframeRuntimeSource,
   lifecycleTestSource,
@@ -27,6 +29,8 @@ const [
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/api.ts'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
@@ -78,6 +82,12 @@ assert.match(
 );
 
 assert.match(
+  crdtDomainSource,
+  /function videochat_call_app_crdt_permission_for_payload_type[\s\S]*\.delete[\s\S]*function videochat_call_app_crdt_append_op[\s\S]*videochat_call_app_crdt_normalize_append[\s\S]*videochat_call_app_crdt_permission_for_payload_type/s,
+  'CRDT append must normalize payloads before gating write payloads by write and .delete payloads by delete',
+);
+
+assert.match(
   routeSource,
   /call_app_crdt_bootstrap_failed[\s\S]*participant_grant_denied[\s\S]*\? 403/s,
   'CRDT bootstrap route must map participant grant denial to HTTP 403',
@@ -96,9 +106,33 @@ assert.match(
 );
 
 assert.match(
+  iframeBridgeSource,
+  /permission_actions[\s\S]*permissions[\s\S]*read[\s\S]*write[\s\S]*delete/s,
+  'iframe launch bridge must forward canonical permission actions and map to sandbox runtime permissions',
+);
+
+assert.match(
+  presenceRelaySource,
+  /callAppPresenceUserAuthorizedForSession\(session = \{\}, userId = 0, requiredAction = 'read'\)[\s\S]*actions\.includes[\s\S]*requiredAction/s,
+  'presence relay authorization must evaluate read/write permission actions, not only binary grant state',
+);
+
+assert.match(
+  crdtBridgeSource,
+  /handlePresencePublish[\s\S]*callAppPresenceUserAuthorizedForSession\(session,[\s\S]*'write'\)[\s\S]*handleRemotePresence[\s\S]*callAppPresenceUserAuthorizedForSession\(session,[\s\S]*'read'\)/s,
+  'iframe CRDT bridge must require write for presence publish and read for incoming presence delivery',
+);
+
+assert.match(
   whiteboardSource,
   /let capabilities = new Set\(\)[\s\S]*function canRead\(\)[\s\S]*capabilities\.has\('call_apps\.crdt\.read'\)/,
   'whiteboard iframe must derive read access from launch capabilities',
+);
+
+assert.match(
+  whiteboardSource,
+  /let permissionActions = new Set\(\)[\s\S]*function canDelete\(\)[\s\S]*permissionActions\.has\('delete'\)[\s\S]*appendOperation\(payloadType[\s\S]*canAppendPayload\(payloadType\)/s,
+  'whiteboard iframe must gate delete operations by delete permission action before sending append requests',
 );
 
 assert.match(
