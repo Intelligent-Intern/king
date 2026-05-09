@@ -286,7 +286,9 @@ try {
         return $pdo;
     };
 
+    $adminRoleId = videochat_iam_anonymous_logged_in_rights_role_id($pdo, 'admin');
     $userRoleId = videochat_iam_anonymous_logged_in_rights_role_id($pdo, 'user');
+    videochat_iam_anonymous_logged_in_rights_assert($adminRoleId > 0, 'expected admin role');
     videochat_iam_anonymous_logged_in_rights_assert($userRoleId > 0, 'expected user role');
 
     $unique = bin2hex(random_bytes(5));
@@ -295,6 +297,7 @@ try {
     $organizationAId = videochat_iam_anonymous_logged_in_rights_create_organization($pdo, $tenantAId, 'Anonymous Rights A Org');
     $organizationBId = videochat_iam_anonymous_logged_in_rights_create_organization($pdo, $tenantBId, 'Anonymous Rights B Org');
 
+    $systemAdminId = videochat_iam_anonymous_logged_in_rights_create_user($pdo, $adminRoleId, 'anon-rights-system-admin@example.test', 'Anonymous System Admin');
     $alphaAdminId = videochat_iam_anonymous_logged_in_rights_create_user($pdo, $userRoleId, 'anon-rights-alpha-admin@example.test', 'Alpha Anonymous Org Admin');
     $alphaOwnerId = videochat_iam_anonymous_logged_in_rights_create_user($pdo, $userRoleId, 'anon-rights-alpha-owner@example.test', 'Alpha Anonymous Owner');
     $guestListUserId = videochat_iam_anonymous_logged_in_rights_create_user($pdo, $userRoleId, 'anon-rights-guest-list@example.test', 'Anonymous Guest List User');
@@ -327,6 +330,23 @@ SQL
     $betaOpenAccessId = videochat_iam_anonymous_logged_in_rights_insert_open_link($pdo, $tenantBId, $betaCallId, $betaOwnerId);
 
     $alphaGuestListBefore = videochat_iam_anonymous_logged_in_rights_guest_list_count($pdo, $alphaCallId);
+    $systemAdminSession = videochat_iam_anonymous_logged_in_rights_issue($pdo, $alphaOpenAccessId, 'sess_anon_logged_in_system_admin', $systemAdminId);
+    videochat_iam_anonymous_logged_in_rights_assert((bool) ($systemAdminSession['ok'] ?? false), 'system admin should issue through anonymous open link');
+    videochat_iam_anonymous_logged_in_rights_assert((int) (($systemAdminSession['user'] ?? [])['id'] ?? 0) === $systemAdminId, 'system admin anonymous session should keep logged-in account');
+    videochat_iam_anonymous_logged_in_rights_assert(videochat_iam_anonymous_logged_in_rights_participant($pdo, $alphaCallId, $systemAdminId) === null, 'system admin anonymous link must not add guest-list row');
+    videochat_iam_anonymous_logged_in_rights_assert(videochat_iam_anonymous_logged_in_rights_guest_list_count($pdo, $alphaCallId) === $alphaGuestListBefore, 'system admin anonymous link must not modify guest list');
+    videochat_iam_anonymous_logged_in_rights_assert_open_binding($pdo, 'system admin', $alphaOpenAccessId, 'sess_anon_logged_in_system_admin', $alphaCallId, $systemAdminId);
+
+    $systemAdminDecision = videochat_decide_call_access_for_user($pdo, $alphaCallId, $systemAdminId, 'admin', $tenantAId);
+    videochat_iam_anonymous_logged_in_rights_assert((bool) ($systemAdminDecision['allowed'] ?? false), 'system admin anonymous link should retain direct call access');
+    videochat_iam_anonymous_logged_in_rights_assert((string) ($systemAdminDecision['source'] ?? '') === 'system_admin', 'system admin anonymous link decision source mismatch');
+    videochat_iam_anonymous_logged_in_rights_assert((string) ($systemAdminDecision['scope'] ?? '') === 'system', 'system admin anonymous link decision scope mismatch');
+
+    $systemAdminAuth = videochat_iam_anonymous_logged_in_rights_auth($pdo, 'sess_anon_logged_in_system_admin', $alphaCallId);
+    $systemAdminResolution = videochat_realtime_resolve_connection_rooms($systemAdminAuth, $alphaCallId, $openDatabase, $alphaCallId);
+    videochat_iam_anonymous_logged_in_rights_assert((string) ($systemAdminResolution['initial_room_id'] ?? '') === $alphaCallId, 'system admin should enter active call room through anonymous link');
+    videochat_iam_anonymous_logged_in_rights_assert((string) ($systemAdminResolution['pending_room_id'] ?? '') === '', 'system admin should not need anonymous-link lobby admission');
+
     $ownOrgSession = videochat_iam_anonymous_logged_in_rights_issue($pdo, $alphaOpenAccessId, 'sess_anon_logged_in_org_admin_own', $alphaAdminId);
     videochat_iam_anonymous_logged_in_rights_assert((bool) ($ownOrgSession['ok'] ?? false), 'own organization admin should issue through anonymous open link');
     videochat_iam_anonymous_logged_in_rights_assert((int) (($ownOrgSession['user'] ?? [])['id'] ?? 0) === $alphaAdminId, 'own organization admin session should keep logged-in account');
