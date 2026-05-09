@@ -10,6 +10,7 @@
   "test_bindings": {
     "live_backend_playwright_spec": "frontend-vue/tests/e2e/call-access-join.spec.js",
     "seed_matrix_playwright_spec": "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
+    "authorized_rejoin_playwright_spec": "frontend-vue/tests/e2e/call-access-authorized-rejoin.spec.js",
     "core_org_session_playwright_spec": "frontend-vue/tests/e2e/call-access-core-org-session-journey.spec.js",
     "helper": "frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js",
     "isolated_from_existing_matrix_helpers": [
