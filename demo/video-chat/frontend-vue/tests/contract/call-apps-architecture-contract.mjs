@@ -20,7 +20,7 @@ function assertIncludes(source, value, message) {
   assert(source.includes(value), message)
 }
 
-const sprint = readRepo('SPRINT.md')
+const sprint = `${readRepo('SPRINT.md')}\n${readRepo('BACKLOG.md')}`
 const semanticDnsHeader = readRepo('extension/include/semantic_dns/semantic_dns.h')
 const mcpHeader = readRepo('extension/include/mcp/mcp.h')
 const marketplaceDomain = readRepo('demo/video-chat/backend-king-php/domain/marketplace/call_app_marketplace.php')
@@ -32,7 +32,7 @@ const marketplaceDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules
 const callsDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules/calls/descriptor.js')
 const packageJson = readRepo('demo/video-chat/frontend-vue/package.json')
 
-assertIncludes(sprint, '## Sprint: Whiteboard Call App Hardening And Production Integration', 'SPRINT.md must contain the active Whiteboard Call App sprint')
+assertIncludes(sprint, 'Prior sprint: Whiteboard Call App Hardening And Production Integration', 'planning sources must preserve the migrated Whiteboard Call App sprint')
 assertIncludes(sprint, '- [x] WCA-01 Sprint/backlog hygiene and package contract', 'WCA-01 must be closed only after sprint/backlog cleanup and contract proof exist')
 assertIncludes(sprint, '- [x] WCA-02 Whiteboard runtime tool completeness first pass', 'WCA-02 must be closed after the first Whiteboard runtime hardening pass')
 assertIncludes(sprint, 'demo/call-app/<app-key>/', 'Call Apps must live under demo/call-app/<app-key>/')

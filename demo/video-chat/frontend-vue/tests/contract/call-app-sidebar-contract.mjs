@@ -28,7 +28,7 @@ const [
   read('demo/video-chat/frontend-vue/src/layouts/useCallLeftSidebarTabs.js'),
   read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue'),
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
 ]);
@@ -270,8 +270,8 @@ assert.doesNotMatch(
 
 assert.match(
   sprintSource,
-  /## Sprint: Whiteboard Call App Hardening And Production Integration/,
-  'SPRINT.md must keep Whiteboard Call Apps as the active sprint',
+  /Prior sprint: Whiteboard Call App Hardening And Production Integration/,
+  'planning sources must keep the migrated Whiteboard Call App sprint anchor',
 );
 
 console.log('[call-app-sidebar-contract] PASS');

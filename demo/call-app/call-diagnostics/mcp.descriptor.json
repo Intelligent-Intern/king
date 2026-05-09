@@ -52,11 +52,20 @@
     "launch_token_required": true,
     "primary_session_token_allowed": false
   },
+  "visibility": {
+    "internal_only": true,
+    "public_marketplace": false,
+    "admin_roles": [
+      "admin"
+    ]
+  },
   "marketplace_listing": {
     "name": "Call Diagnostics",
     "category": "utility",
     "order_scope": "organization",
-    "default_participant_access": "allowed_by_default",
+    "default_participant_access": "blocked_by_default",
+    "public_listing": false,
+    "internal_only": true,
     "summary": "Shared live diagnostic tail for call connection, media, and Call App bridge events."
   }
 }

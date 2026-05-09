@@ -90,6 +90,122 @@ Rules:
 4. [ ] Paper trading flow.
 5. [ ] MarketView packaging and operations.
 
+## Parked From Sprint Cleanup 2026-05-09
+
+### Completed/Parked Call App Integration Detail
+
+1. [ ] Prior `Collaborative Office Call Apps And Operator Feedback` sprint detail
+   was removed from `SPRINT.md`. Keep follow-up defects here, not in the active
+   sprint: collaborative text, presentation, spreadsheet, planning-image,
+   operator-feedback, Call App removal, availability, and Call Diagnostics
+   package work are represented by local commits on the active integration
+   branch.
+2. [ ] Prior `Call Workspace Sidebars, Call Apps, And Media Stability` detail was
+   removed from `SPRINT.md`. Reopen only concrete defects that affect the active
+   Video Call Stabilization sprint.
+3. [ ] Prior Whiteboard Call App hardening and production integration detail was
+   removed from `SPRINT.md`. Reopen only concrete runtime defects.
+4. [ ] Prior IAM E2E sprint text was removed from `SPRINT.md`. Any remaining IAM
+   proof work should be restored as focused backlog tickets, not as a large
+   embedded checklist.
+
+### Migrated Call App Contract Anchors
+
+- Prior sprint: Whiteboard Call App Hardening And Production Integration.
+- [x] WCA-01 Sprint/backlog hygiene and package contract.
+- [x] WCA-02 Whiteboard runtime tool completeness first pass.
+- [ ] WCA-08 Observability and acceptance form.
+- [ ] WCA-09 Production deployment, subdomain, and Mothernode registration:
+  Call App iframe host and Mothernode host.
+- Package roots stay `demo/call-app/<app-key>/`; the first concrete package was
+  `demo/call-app/whiteboard/`.
+- Whiteboard can be discovered from the package metadata and Marketplace/Call
+  App catalog path.
+- Collaborative whiteboard state remains synchronized through King CRDT envelopes.
+- revoked participants cannot submit CRDT ops.
+- Call App grant hardening and revocation proof remain preserved by contracts,
+  but are not the active sprint.
+- `CallWorkspaceView.vue` must not grow with app-specific logic; Call App work
+  belongs in focused host/bridge/sidebar modules.
+- Migrated Call App capability anchors:
+  - `call_apps.discover`
+  - `call_apps.marketplace.order`
+  - `call_apps.marketplace.install`
+  - `call_apps.marketplace.disable`
+  - `call_apps.call.attach`
+  - `call_apps.call.remove`
+  - `call_apps.call.view`
+  - `call_apps.permissions.manage`
+  - `call_apps.permissions.use`
+  - `call_apps.permissions.revoke`
+  - `call_apps.launch`
+  - `call_apps.launch.validate`
+  - `call_apps.crdt.read`
+  - `call_apps.crdt.append`
+  - `call_apps.crdt.replay`
+  - `call_apps.presence.publish`
+  - `call_apps.export.request`
+  - `call_apps.export.download`
+- Migrated Call App route anchors:
+  - `GET /api/admin/marketplace/apps`
+  - `POST /api/admin/marketplace/apps`
+  - `GET /api/admin/marketplace/apps/{app_id}`
+  - `PATCH /api/admin/marketplace/apps/{app_id}`
+  - `DELETE /api/admin/marketplace/apps/{app_id}`
+  - `GET /api/marketplace/call-apps`
+  - `GET /api/marketplace/call-apps/{app_key}`
+  - `POST /api/marketplace/call-apps/{app_key}/orders`
+  - `POST /api/marketplace/call-apps/{app_key}/installations`
+  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
+  - `GET /api/calls/{call_id}/call-apps/available`
+  - `GET /api/calls/{call_id}/call-app-sessions`
+  - `POST /api/calls/{call_id}/call-app-sessions`
+  - `PATCH /api/call-app-sessions/{session_id}`
+  - `DELETE /api/call-app-sessions/{session_id}`
+  - `GET /api/call-app-sessions/{session_id}/participant-grants`
+  - `PATCH /api/call-app-sessions/{session_id}/participant-grants`
+  - `POST /api/call-app-sessions/{session_id}/launch-token`
+  - `POST /api/call-app-sessions/{session_id}/launch-token/validate`
+  - `GET /api/call-app-sessions/{session_id}/crdt/bootstrap`
+  - `GET /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/snapshots`
+  - `POST /api/call-app-sessions/{session_id}/exports`
+  - `GET /api/call-app-exports/{job_id}`
+  - `GET /api/call-app-exports/{job_id}/download`
+- Migrated MCP metadata method anchors:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+
+### Manual/Parked Media Work
+
+1. [ ] Background Replacement, BTGF-07 browser proof, and background tests remain
+   manual/parked. Do not let active stabilization work mutate these files.
+2. [ ] Gossip and SFU work remain manual/parked. Video-call stabilization may
+   observe diagnostics around these systems, but must not change their internals
+   in the active sprint.
+3. [ ] Dirty BGF worktrees and the dirty `codex/bgf-06-background-diagnostics`
+   checkout must be preserved or explicitly classified before cleanup; do not
+   auto-discard them.
+
+### Branch/Worktree Cleanup Holding Area
+
+1. [ ] Classify dirty worktree `agent/call-app-remove-session`; likely redundant
+   with the integrated Call App removal flow, but do not discard until compared.
+2. [ ] Classify dirty worktree `agent/planning-image-call-app`; compare the
+   uncommitted `image-planning` package/test diff with the integrated package.
+3. [ ] Classify dirty worktree `agent/l15-org-admin-join-proof`; only integrate
+   the realtime org-admin role diff if it is required for call stabilization.
+4. [ ] Classify dirty worktree `codex/iam-call-access-e2e-foundation`; keep it
+   outside the active sprint unless needed for deploy smoke stability.
+5. [ ] Clean up `codex/iam-duplicate-cleanup-reaudit-20260509` only after its
+   conflict state is proven redundant with `iam-e2e-integration`.
+
 ## Cleanup Notes
 
 - Old batch items from the previous backlog were removed because they were either completed, replaced by the new active sprint, or too stale to keep as live backlog entries.

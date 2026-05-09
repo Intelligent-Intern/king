@@ -7,6 +7,13 @@
   "category": "utility",
   "manufacturer": "KINGRT",
   "description": "Live diagnostic tail for WebSocket, ICE, STUN, TURN, SFU, and Call App bridge events.",
+  "visibility": {
+    "internal_only": true,
+    "public_marketplace": false,
+    "admin_roles": [
+      "admin"
+    ]
+  },
   "entrypoints": {
     "iframe": "public/index.html",
     "mcp_descriptor": "mcp.descriptor.json",
@@ -41,6 +48,8 @@
   "marketplace": {
     "order_scope": "organization",
     "requires_installation": true,
+    "public_listing": false,
+    "internal_only": true,
     "categories": [
       "utility",
       "diagnostics"
@@ -62,7 +71,7 @@
     "call_apps.export.request",
     "call_apps.export.download"
   ],
-  "default_participant_access": "allowed_by_default",
+  "default_participant_access": "blocked_by_default",
   "iframe": {
     "sandbox": [
       "allow-scripts",

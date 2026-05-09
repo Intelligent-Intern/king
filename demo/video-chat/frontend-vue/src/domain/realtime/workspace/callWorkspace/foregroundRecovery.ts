@@ -11,6 +11,15 @@ function isForegroundVisible(getDocument) {
   return String(documentRef?.visibilityState || 'visible') !== 'hidden';
 }
 
+export function shouldArmWorkspaceForegroundRecovery(context = null, documentRef = null) {
+  const reason = String(context?.reason || context?.type || '').trim().toLowerCase();
+  const visibilityState = String(context?.visibility_state || documentRef?.visibilityState || '').trim().toLowerCase();
+  return context?.hidden === true
+    || visibilityState === 'hidden'
+    || reason === 'pagehide'
+    || reason === 'document_hidden';
+}
+
 export function createWorkspaceForegroundRecoveryController({
   connectSocket,
   getArmed,

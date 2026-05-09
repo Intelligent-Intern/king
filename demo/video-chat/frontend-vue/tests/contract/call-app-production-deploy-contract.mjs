@@ -23,7 +23,7 @@ const [
   deploySmoke,
   deployHetzner,
 ] = await Promise.all([
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_semantic_dns.php'),
   read('demo/video-chat/backend-king-php/tests/call-app-semantic-dns-contract.php'),
   read('demo/video-chat/backend-king-php/server.php'),

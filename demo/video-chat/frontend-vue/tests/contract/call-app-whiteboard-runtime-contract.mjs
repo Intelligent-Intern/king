@@ -30,7 +30,7 @@ const [
   read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/frontend-vue/tests/e2e/call-app-whiteboard.spec.js'),
   read('demo/video-chat/frontend-vue/package.json'),
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
 
 const whiteboardSource = `${iframeSource}\n${stylesheetSource}\n${runtimeSource}`;

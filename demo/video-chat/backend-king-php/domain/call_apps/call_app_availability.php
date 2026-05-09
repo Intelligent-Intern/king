@@ -55,8 +55,65 @@ function videochat_call_app_availability_filters(array $queryParams): array
         'page_size' => $pageSize,
         'limit' => $pageSize,
         'offset' => ($page - 1) * $pageSize,
+        'include_internal' => false,
         'errors' => $errors,
     ];
+}
+
+function videochat_call_app_internal_only_app_keys(): array
+{
+    return ['call-diagnostics'];
+}
+
+function videochat_call_app_is_internal_only_key(string $appKey): bool
+{
+    return in_array(strtolower(trim($appKey)), videochat_call_app_internal_only_app_keys(), true);
+}
+
+function videochat_call_app_internal_only_error_response(
+    string $appKey,
+    string $actorRole,
+    string $sessionId,
+    callable $errorResponse
+): ?array {
+    if (!videochat_call_app_is_internal_only_key($appKey) || strtolower(trim($actorRole)) === 'admin') {
+        return null;
+    }
+
+    return $errorResponse(403, 'call_app_internal_only', 'This Call App is only available to administrators.', [
+        'app_key' => strtolower(trim($appKey)),
+        'session_id' => trim($sessionId),
+    ]);
+}
+
+function videochat_call_app_availability_runtime_fallback_response(
+    string $callId,
+    int $tenantId,
+    array $filters,
+    callable $jsonResponse
+): array {
+    $page = (int) ($filters['page'] ?? 1);
+    $pageSize = (int) ($filters['page_size'] ?? 12);
+    return $jsonResponse(200, [
+        'status' => 'ok',
+        'result' => [
+            'call_id' => $callId,
+            'tenant_id' => $tenantId,
+            'apps' => [],
+            'filters' => ['query' => (string) ($filters['query'] ?? ''), 'category' => (string) ($filters['category'] ?? 'all')],
+            'pagination' => ['page' => $page, 'page_size' => $pageSize, 'total' => 0, 'page_count' => 0, 'returned' => 0, 'has_prev' => $page > 1, 'has_next' => false],
+            'discovery' => [
+                'source' => 'semantic_dns_mcp',
+                'ok' => false,
+                'invalid' => [['app_key' => '', 'errors' => ['availability' => 'runtime_unavailable']]],
+                'refreshed_at' => '',
+                'refresh_skipped' => true,
+                'cache_status' => 'runtime_fallback',
+                'fallback_reason' => 'availability_runtime_failed',
+            ],
+        ],
+        'time' => gmdate('c'),
+    ]);
 }
 
 /**
@@ -104,11 +161,12 @@ function videochat_call_app_available_row(array $row): array
  *   page_count: int
  * }
  */
-function videochat_call_app_list_available_for_tenant(PDO $pdo, int $tenantId, array $filters): array
+function videochat_call_app_list_available_for_tenant(PDO $pdo, int $tenantId, array $filters, bool $includeInternal = false): array
 {
     if ($tenantId <= 0) {
         return ['apps' => [], 'total' => 0, 'page_count' => 0];
     }
+    $includeInternal = $includeInternal || (bool) ($filters['include_internal'] ?? false);
 
     $where = [
         'installations.tenant_id = :tenant_id',
@@ -122,6 +180,10 @@ function videochat_call_app_list_available_for_tenant(PDO $pdo, int $tenantId, a
         ':tenant_id' => $tenantId,
         ':now' => gmdate('c'),
     ];
+    if (!$includeInternal) {
+        $where[] = 'catalog.app_key <> :internal_app_key';
+        $params[':internal_app_key'] = videochat_call_diagnostics_app_key();
+    }
 
     $query = trim((string) ($filters['query'] ?? ''));
     if ($query !== '') {
