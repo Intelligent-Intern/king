@@ -12,6 +12,12 @@ const participants = [
   { id: 4, name: 'Cora Caller', role: 'participant' },
   { id: 5, name: 'Dina Designer', role: 'participant' },
   { id: 6, name: 'Eli Engineer', role: 'participant' },
+  { id: 7, name: 'Faye Facilitator', role: 'participant' },
+  { id: 8, name: 'Gus Guest', role: 'participant' },
+  { id: 9, name: 'Hana Host', role: 'participant' },
+  { id: 10, name: 'Ivan Integrator', role: 'participant' },
+  { id: 11, name: 'Jia Joiner', role: 'participant' },
+  { id: 12, name: 'Kai Keeper', role: 'participant' },
 ];
 
 function corsHeaders() {
@@ -31,8 +37,8 @@ function participantRows() {
     email: `call-app-${participant.id}@example.test`,
     call_role: participant.role,
     invite_state: 'allowed',
-    joined_at: `2026-04-19T12:00:0${index}.000Z`,
-    connected_at: `2026-04-29T01:00:0${index}.000Z`,
+    joined_at: `2026-04-19T12:00:${String(index).padStart(2, '0')}.000Z`,
+    connected_at: `2026-04-29T01:00:${String(index).padStart(2, '0')}.000Z`,
   }));
 }
 
@@ -239,7 +245,7 @@ async function installApiRoutes(page) {
 }
 
 async function installFakeSocket(page) {
-  await page.addInitScript(({ callIdValue, roomIdValue, session }) => {
+  await page.addInitScript(({ callIdValue, roomIdValue, session, participantFixture }) => {
     const listenersSymbol = Symbol('listeners');
     window.__callAppFullscreenSocketFrames = [];
     window.__callAppFullscreenSocketState = {
@@ -250,23 +256,26 @@ async function installFakeSocket(page) {
         strategy: 'manual_pinned',
         automation_paused: false,
         pinned_user_ids: [],
-        selected_user_ids: [1, 2, 3, 4, 5],
+        selected_user_ids: participantFixture.map((participant) => participant.id),
         main_user_id: 1,
         selection: {
           main_user_id: 1,
-          visible_user_ids: [1, 2, 3, 4, 5],
-          mini_user_ids: [1, 2, 3, 4, 5],
+          visible_user_ids: participantFixture.map((participant) => participant.id),
+          mini_user_ids: participantFixture.map((participant) => participant.id),
           pinned_user_ids: [],
         },
       },
-      participants: [
-        { connection_id: 'conn-1', room_id: roomIdValue, user: { id: 1, display_name: 'Layout Admin', role: 'admin', call_role: 'owner' }, connected_at: '2026-04-29T01:00:00.000Z' },
-        { connection_id: 'conn-2', room_id: roomIdValue, user: { id: 2, display_name: 'Ada Analyst', role: 'user', call_role: 'participant' }, connected_at: '2026-04-29T01:00:01.000Z' },
-        { connection_id: 'conn-3', room_id: roomIdValue, user: { id: 3, display_name: 'Bert Builder', role: 'user', call_role: 'participant' }, connected_at: '2026-04-29T01:00:02.000Z' },
-        { connection_id: 'conn-4', room_id: roomIdValue, user: { id: 4, display_name: 'Cora Caller', role: 'user', call_role: 'participant' }, connected_at: '2026-04-29T01:00:03.000Z' },
-        { connection_id: 'conn-5', room_id: roomIdValue, user: { id: 5, display_name: 'Dina Designer', role: 'user', call_role: 'participant' }, connected_at: '2026-04-29T01:00:04.000Z' },
-        { connection_id: 'conn-6', room_id: roomIdValue, user: { id: 6, display_name: 'Eli Engineer', role: 'user', call_role: 'participant' }, connected_at: '2026-04-29T01:00:05.000Z' },
-      ],
+      participants: participantFixture.map((participant, index) => ({
+        connection_id: `conn-${participant.id}`,
+        room_id: roomIdValue,
+        user: {
+          id: participant.id,
+          display_name: participant.name,
+          role: participant.id === 1 ? 'admin' : 'user',
+          call_role: participant.role,
+        },
+        connected_at: `2026-04-29T01:00:${String(index).padStart(2, '0')}.000Z`,
+      })),
       callApps: {
         active_sessions: [session],
         active_session_count: 1,
@@ -354,7 +363,7 @@ async function installFakeSocket(page) {
         removeEventListener: () => {},
       },
     });
-  }, { callIdValue: callId, roomIdValue: roomId, session: activeCallAppSession() });
+  }, { callIdValue: callId, roomIdValue: roomId, session: activeCallAppSession(), participantFixture: participants });
 }
 
 async function installSession(page) {
@@ -382,6 +391,20 @@ async function openWorkspace(page, viewport) {
   await expect(page.locator('.call-app-workspace-frame')).toBeVisible();
 }
 
+async function installMiniVideoElements(page) {
+  await page.locator('.call-app-workspace-mini-video-slot').first().waitFor();
+  await page.evaluate(() => {
+    for (const slot of document.querySelectorAll('.call-app-workspace-mini-video-slot')) {
+      const video = document.createElement('video');
+      video.dataset.callVideoSurfaceRole = 'mini';
+      video.muted = true;
+      video.playsInline = true;
+      video.style.background = 'linear-gradient(90deg, #1b6b5f 0 25%, #f0c14b 25% 50%, #ef6f6c 50% 75%, #224f8f 75%)';
+      slot.replaceChildren(video);
+    }
+  });
+}
+
 async function layoutMetrics(page) {
   return page.evaluate(() => {
     function rect(selector) {
@@ -406,10 +429,44 @@ async function layoutMetrics(page) {
       return Number(window.getComputedStyle(element).zIndex);
     }
 
+    const miniStrip = document.querySelector('.call-app-workspace-mini-strip');
+    const miniVideoFraming = Array.from(document.querySelectorAll('.call-app-workspace-mini-video-slot video')).map((video) => {
+      const videoBox = video.getBoundingClientRect();
+      const slotBox = video.parentElement.getBoundingClientRect();
+      return {
+        objectFit: window.getComputedStyle(video).objectFit,
+        video: {
+          left: videoBox.left,
+          top: videoBox.top,
+          right: videoBox.right,
+          bottom: videoBox.bottom,
+          width: videoBox.width,
+          height: videoBox.height,
+        },
+        slot: {
+          left: slotBox.left,
+          top: slotBox.top,
+          right: slotBox.right,
+          bottom: slotBox.bottom,
+          width: slotBox.width,
+          height: slotBox.height,
+        },
+      };
+    });
+
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       host: rect('.call-app-workspace-host'),
       mini: rect('.call-app-workspace-mini-strip'),
+      miniScroll: miniStrip ? {
+        clientWidth: miniStrip.clientWidth,
+        scrollWidth: miniStrip.scrollWidth,
+        scrollLeft: miniStrip.scrollLeft,
+        overflowX: window.getComputedStyle(miniStrip).overflowX,
+        display: window.getComputedStyle(miniStrip).display,
+        visibility: window.getComputedStyle(miniStrip).visibility,
+      } : null,
+      miniVideoFraming,
       frameShell: rect('.call-app-workspace-frame-shell'),
       frame: rect('.call-app-workspace-frame'),
       overlay: rect('.workspace-video-fullscreen-overlay'),
@@ -431,12 +488,27 @@ for (const viewport of [
     await openWorkspace(page, viewport);
 
     const miniTiles = page.locator('.call-app-workspace-mini-tile');
-    await expect(miniTiles).toHaveCount(5);
+    await expect(miniTiles).toHaveCount(10);
+    await expect(miniTiles).toContainText([
+      'Layout Admin',
+      'Ada Analyst',
+      'Bert Builder',
+      'Cora Caller',
+      'Dina Designer',
+      'Eli Engineer',
+      'Faye Facilitator',
+      'Gus Guest',
+      'Hana Host',
+      'Ivan Integrator',
+    ]);
+    await expect(page.getByText('Jia Joiner')).toHaveCount(0);
+    await expect(page.getByText('Kai Keeper')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open Call App fullscreen' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Open Call App fullscreen' }).click();
     await expect(page.locator('.call-app-workspace-host.fullscreen')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Exit Call App fullscreen' })).toBeVisible();
+    await installMiniVideoElements(page);
 
     const fullscreen = await layoutMetrics(page);
     expect(fullscreen.host.x).toBeLessThanOrEqual(1);
@@ -447,6 +519,24 @@ for (const viewport of [
     expect(fullscreen.frame.height).toBeGreaterThan(120);
     expect(fullscreen.mini.bottom).toBeLessThanOrEqual(fullscreen.frameShell.top + 1);
     expect(fullscreen.miniZ).toBeGreaterThan(fullscreen.frameShellZ);
+    expect(fullscreen.miniScroll.overflowX).toBe('auto');
+    expect(fullscreen.miniScroll.scrollWidth).toBeGreaterThan(fullscreen.miniScroll.clientWidth);
+    expect(fullscreen.miniVideoFraming).toHaveLength(10);
+    for (const row of fullscreen.miniVideoFraming) {
+      expect(row.objectFit).toBe('contain');
+      expect(row.video.left).toBeGreaterThanOrEqual(row.slot.left - 1);
+      expect(row.video.top).toBeGreaterThanOrEqual(row.slot.top - 1);
+      expect(row.video.right).toBeLessThanOrEqual(row.slot.right + 1);
+      expect(row.video.bottom).toBeLessThanOrEqual(row.slot.bottom + 1);
+    }
+
+    await page.getByRole('button', { name: 'Hide Call App participant strip' }).click();
+    await expect(page.locator('.call-app-workspace-mini-strip')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Show Call App participant strip' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Show Call App participant strip' }).click();
+    await expect(page.locator('.call-app-workspace-mini-strip')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hide Call App participant strip' })).toBeVisible();
 
     await miniTiles.first().dblclick();
     await expect(page.locator('.workspace-video-fullscreen-overlay')).toBeVisible();
