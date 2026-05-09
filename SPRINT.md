@@ -215,6 +215,19 @@ Tickets:
     PASS; `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
     VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
     PASS.
+  - Proof 2026-05-09 (read-only production smoke only; BGF-07 deploy/browser
+    proof remains open; BGF-10/BGF-11 org-install proof is unchanged):
+    `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
+    PASS against production asset `20260508185724`; `/api/runtime`, app shell,
+    CDN root, MediaPipe model/wasm assets, background modal/avatar assets,
+    `whiteboard.kingrt.com`, and `registry.kingrt.com` returned HTTP 200.
+    Unauthenticated Marketplace, lobby websocket, and SFU websocket probes
+    returned auth failures without mutating state. Whiteboard `/public/index.html`
+    and `/call-app/whiteboard/public/index.html` returned HTTP 200 with
+    `Content-Security-Policy` frame ancestors and `Allow-CSP-From` set to
+    `https://app.kingrt.com`, no `X-Frame-Options`, and no nested
+    `*.app.kingrt.com` service origins.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
