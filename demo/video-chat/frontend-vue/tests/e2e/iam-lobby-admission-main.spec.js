@@ -2,14 +2,16 @@ import { test, expect } from '@playwright/test';
 
 import {
   accessIdFromJoinPath,
-  createCallAccessMatrixPage,
-  createDirectJoinMatrixPage,
   getSeedAccessLink,
   getSeedCall,
   getSeedScenario,
   getSeedUser,
   sessionStorageKey,
 } from './helpers/callAccessSeedMatrix.js';
+import {
+  createCallAccessMatrixPage,
+  createDirectJoinMatrixPage,
+} from './helpers/callAccessSeedRuntime.js';
 
 function escapeRegExp(input) {
   return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -239,8 +241,8 @@ test('e2e_lobby_005_unauthorized_user_no_lobby_controls: participant cannot see 
   try {
     await emitLobbySnapshot(page, lobbySnapshotFor(call, waitingUser, 'unauthorized_user_controls_hidden'));
     await expect(page.locator('button.tab-lobby')).toHaveCount(0);
-    await expect(page.locator('button[title="Allow user"]')).toHaveCount(0);
-    await expect(page.locator('button[title="Remove user"]')).toHaveCount(0);
+    await expect(page.locator('.panel-lobby button[title="Allow user"]')).toHaveCount(0);
+    await expect(page.locator('.panel-lobby button[title="Remove user"]')).toHaveCount(0);
     await expect(page.locator('.tab-lobby .tab-notice-badge')).toHaveCount(0);
   } finally {
     await context.close();
