@@ -101,6 +101,7 @@ STATIC_CONTRACTS=(
   "tests/contract/iam-king-container-ci-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
+  "tests/contract/iam-lobby-state-cleanup-proof-contract.mjs"
   "tests/contract/iam-system-admin-edge-cases-contract.mjs"
   "tests/contract/iam-lobby-concurrency-remaining-contract.mjs"
   "tests/contract/iam-lobby-timeout-consistency-contract.mjs"
@@ -128,6 +129,7 @@ FULL_STATIC_CONTRACTS=(
   "tests/contract/iam-king-container-ci-contract.mjs"
   "tests/contract/iam-king-participants-owner-timeout-contract.mjs"
   "tests/contract/iam-call-access-e2e-foundation-contract.mjs"
+  "tests/contract/iam-lobby-state-cleanup-proof-contract.mjs"
   "tests/contract/iam-system-admin-edge-cases-contract.mjs"
   "tests/contract/iam-lobby-concurrency-remaining-contract.mjs"
   "tests/contract/iam-lobby-timeout-consistency-contract.mjs"
@@ -142,6 +144,10 @@ BLOCKED_STATIC_CONTRACTS=()
 
 HOST_SAFE_BACKEND_CONTRACTS=(
   "tests/audit-call-access-privacy-minimization-contract.sh"
+)
+
+HOST_BACKEND_CONTRACTS=(
+  "tests/realtime-lobby-state-cleanup-contract.sh"
 )
 
 SQLITE_BACKEND_CONTRACTS=(
@@ -223,6 +229,14 @@ report_static_blockers() {
   done
 }
 
+run_host_backend_gate() {
+  local contract=""
+
+  for contract in "${HOST_BACKEND_CONTRACTS[@]}"; do
+    run_step "backend/host ${contract}" run_backend_contract "${contract}"
+  done
+}
+
 report_sqlite_blocker() {
   log "BLOCKED: ${PHP_BIN} does not load pdo_sqlite; SQLite-backed IAM backend proofs were not executed in this host gate."
   log "BLOCKED: run --full or --sqlite in a PHP runtime with pdo_sqlite, or use the compose smoke where backend containers install pdo_sqlite."
@@ -254,6 +268,7 @@ case "${MODE}" in
   available)
     run_static_gate 0
     report_static_blockers
+    run_host_backend_gate
     run_sqlite_gate 0
     ;;
   static)
@@ -265,6 +280,7 @@ case "${MODE}" in
     ;;
   full)
     run_static_gate 1
+    run_host_backend_gate
     run_sqlite_gate 1
     ;;
 esac

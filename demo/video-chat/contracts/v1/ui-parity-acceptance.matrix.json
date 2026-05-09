@@ -87,6 +87,15 @@
         "frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"
       ]
     },
+    "frontend:e2e:lobby-state-cleanup": {
+      "kind": "npm_script",
+      "working_directory": "frontend-vue",
+      "script": "test:e2e:lobby-state-cleanup",
+      "command": "npm run test:e2e:lobby-state-cleanup",
+      "paths": [
+        "frontend-vue/tests/e2e/iam-lobby-state-cleanup.spec.js"
+      ]
+    },
     "frontend:e2e:call-access": {
       "kind": "npm_script",
       "working_directory": "frontend-vue",
@@ -102,6 +111,7 @@
         "frontend-vue/tests/e2e/call-access-cross-org-foreign-join.spec.js",
         "frontend-vue/tests/e2e/call-access-owner-absence-browser.spec.js",
         "frontend-vue/tests/e2e/call-access-main-journey-smoke.spec.js",
+        "frontend-vue/tests/e2e/iam-lobby-state-cleanup.spec.js",
         "frontend-vue/tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js",
         "frontend-vue/tests/e2e/call-access-anonymous-disabled-link.spec.js"
       ]
@@ -142,10 +152,11 @@
     "backend:lobby-admission": {
       "kind": "shell",
       "working_directory": "backend-king-php",
-      "command": "backend-king-php/tests/realtime-lobby-contract.sh",
+      "command": "backend-king-php/tests/realtime-lobby-contract.sh && backend-king-php/tests/realtime-lobby-db-sync-contract.sh && backend-king-php/tests/realtime-lobby-state-cleanup-contract.sh",
       "paths": [
         "backend-king-php/tests/realtime-lobby-contract.sh",
-        "backend-king-php/tests/realtime-lobby-db-sync-contract.sh"
+        "backend-king-php/tests/realtime-lobby-db-sync-contract.sh",
+        "backend-king-php/tests/realtime-lobby-state-cleanup-contract.sh"
       ]
     },
     "backend:chat-archive-attachments": {
@@ -247,10 +258,15 @@
           "paths": ["frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"]
         },
         {
+          "command_id": "frontend:e2e:lobby-state-cleanup",
+          "paths": ["frontend-vue/tests/e2e/iam-lobby-state-cleanup.spec.js"]
+        },
+        {
           "command_id": "backend:lobby-admission",
           "paths": [
             "backend-king-php/tests/realtime-lobby-contract.sh",
-            "backend-king-php/tests/realtime-lobby-db-sync-contract.sh"
+            "backend-king-php/tests/realtime-lobby-db-sync-contract.sh",
+            "backend-king-php/tests/realtime-lobby-state-cleanup-contract.sh"
           ]
         },
         {

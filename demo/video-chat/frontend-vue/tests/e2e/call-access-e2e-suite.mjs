@@ -22,6 +22,7 @@ export const CALL_ACCESS_E2E_SPECS = Object.freeze([
   'tests/e2e/call-access-cross-org-foreign-join.spec.js',
   'tests/e2e/call-access-owner-absence-browser.spec.js',
   'tests/e2e/call-access-main-journey-smoke.spec.js',
+  'tests/e2e/iam-lobby-state-cleanup.spec.js',
   'tests/e2e/call-access-owner-transfer-main-journeys.spec.js',
   'tests/e2e/call-access-invite-reschedule-delete-end-main-journeys.spec.js',
   'tests/e2e/call-access-security-manipulation.spec.js',
