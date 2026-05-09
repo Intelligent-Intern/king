@@ -1580,10 +1580,14 @@ client role cache data all resolve from current backend membership state.
 
 ## 2. Call Creation and Owner Rights
 
-- [ ] Registered user with role `User` can create own call
-- [ ] Registered user with role `Admin` can create own call
-- [ ] Call creator becomes call owner
-- [ ] Call creator receives admin rights in own call
+- [x] Registered user with role `User` can create own call
+- [x] Registered user with role `Admin` can create own call
+- [x] Call creator becomes call owner
+- [x] Call creator receives admin rights in own call
+
+Proof: Loop 13 (2026-05-09) reran `call-creation-owner-rights-contract`,
+`call-create-contract`, and `call-create-endpoint-contract` in
+`php:8.5-cli-trixie` because host PHP lacks `pdo_sqlite`; all three passed.
 - [ ] Owner can add users to guest list
 - [ ] Owner can manage guest list
 - [ ] Owner can admit lobby participants
