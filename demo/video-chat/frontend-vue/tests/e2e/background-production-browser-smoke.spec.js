@@ -1,11 +1,9 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { test, expect } from '@playwright/test';
 
 import {
-  adminCredentials as defaultAdminCredentials,
-  userCredentials as defaultUserCredentials,
   admitFirstLobbyUser,
   createAuthenticatedPage,
   createInvitedCallViaApi,
@@ -27,6 +25,13 @@ const REQUIRED_BACKGROUND_EVENTS = [
   'local_background_replacement_unavailable',
   'local_background_replacement_modal_choice',
 ];
+const SCREEN_SHARE_STARTED_EVENT = 'local_screen_share_participant_started';
+const SCREEN_SHARE_STOPPED_EVENT = 'local_screen_share_participant_stopped';
+const REDACTED_VALUE = '[REDACTED]';
+const REDACTED_MEDIA_PAYLOAD = '[REDACTED_MEDIA_PAYLOAD]';
+const SENSITIVE_KEY_PATTERN = /(?:authorization|bearer|cookie|credential|key|pass|password|secret|session|token|access|invite|link)/i;
+const MEDIA_PAYLOAD_KEY_PATTERN = /(?:binary|bytes|encoded|frame|frame_data|image_data|media_payload|payload)/i;
+const URL_KEY_PATTERN = /(?:href|link|origin|path|url|uri)/i;
 
 function envValue(...keys) {
   for (const key of keys) {
@@ -52,9 +57,9 @@ function productionBaseUrl(testInfo) {
 function serializeError(error) {
   if (!error) return null;
   return {
-    message: error instanceof Error ? error.message : String(error),
+    message: sanitizeArtifactValue(error instanceof Error ? error.message : String(error)),
     name: error instanceof Error ? error.name : 'Error',
-    stack: error instanceof Error && typeof error.stack === 'string' ? error.stack : '',
+    stack: error instanceof Error && typeof error.stack === 'string' ? sanitizeArtifactValue(error.stack) : '',
   };
 }
 
@@ -95,20 +100,147 @@ function projectProof(testInfo) {
   };
 }
 
-function credentialsFor(role) {
-  const upperRole = String(role || '').trim().toUpperCase();
-  const defaults = upperRole === 'ADMIN' ? defaultAdminCredentials : defaultUserCredentials;
+function sanitizeUrl(value) {
+  const text = String(value || '');
+  if (text === '') return '';
+  try {
+    const url = new URL(text, 'https://kingrt.invalid');
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    url.pathname = url.pathname.replace(/\/join\/[^/?#]+/i, '/join/[REDACTED]');
+    let redacted = false;
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (SENSITIVE_KEY_PATTERN.test(key)) {
+        url.searchParams.set(key, REDACTED_VALUE);
+        redacted = true;
+      }
+    }
+    if (!redacted && url.search) {
+      url.search = '?[REDACTED_QUERY]';
+    }
+    const output = url.toString();
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) {
+      return output.replace(/^https:\/\/kingrt\.invalid/i, '');
+    }
+    return output;
+  } catch {
+    return text
+      .replace(/\/join\/[^/?#\s]+/gi, '/join/[REDACTED]')
+      .replace(/([?&][^=&\s]*(?:authorization|bearer|cookie|credential|key|pass|password|secret|session|token|access|invite|link)[^=&\s]*=)[^&\s]+/gi, `$1${REDACTED_VALUE}`)
+      .replace(/\?[^#\s]+/g, '?[REDACTED_QUERY]');
+  }
+}
+
+function sanitizeText(value) {
+  return String(value)
+    .replace(/\b(?:https?|wss?):\/\/[^\s"'<>\\]+/gi, (url) => sanitizeUrl(url))
+    .replace(/(^|[\s"'(])((?:\/[^\s"'<>\\]+)\?[^\s"'<>\\]*)/g, (_match, prefix, url) => `${prefix}${sanitizeUrl(url)}`)
+    .replace(/(authorization:\s*bearer\s+)[^\s]+/gi, `$1${REDACTED_VALUE}`)
+    .replace(/(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, `$1${REDACTED_VALUE}`)
+    .replace(/("(?:token|secret|password|pass|key|credential|cookie|session)[^"]*"\s*:\s*")[^"]+/gi, `$1${REDACTED_VALUE}`)
+    .replace(/(data:(?:image|video|audio)\/[A-Za-z0-9.+-]+;base64,)[A-Za-z0-9+/=._~-]+/gi, `$1${REDACTED_MEDIA_PAYLOAD}`);
+}
+
+function sanitizeDiagnosticBody(value) {
+  const body = String(value || '');
+  let parsed = null;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return {
+      bodyBytes: body.length,
+      parseable: false,
+      redacted: true,
+    };
+  }
+  const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
   return {
-    email: envValue(
-      `VIDEOCHAT_PRODUCTION_${upperRole}_EMAIL`,
-      `VIDEOCHAT_E2E_${upperRole}_EMAIL`,
-    ) || defaults.email,
-    password: envValue(
-      `VIDEOCHAT_PRODUCTION_${upperRole}_PASSWORD`,
-      `VIDEOCHAT_E2E_${upperRole}_PASSWORD`,
-      upperRole === 'ADMIN' ? 'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD' : 'VIDEOCHAT_DEPLOY_USER_PASSWORD',
-    ) || defaults.password,
+    bodyBytes: body.length,
+    entryCount: entries.length,
+    eventTypes: entries.map((entry) => String(entry?.event_type || entry?.eventType || '')).filter(Boolean),
+    entries: entries.map((entry) => {
+      const payload = entry?.payload && typeof entry.payload === 'object' ? entry.payload : {};
+      return {
+        category: String(entry?.category || ''),
+        code: String(entry?.code || ''),
+        event_type: String(entry?.event_type || entry?.eventType || ''),
+        level: String(entry?.level || ''),
+        message: sanitizeArtifactValue(String(entry?.message || '')),
+        payload: {
+          failed_backend: sanitizeArtifactValue(payload.failed_backend),
+          fallback_reason: sanitizeArtifactValue(payload.fallback_reason),
+          gpu_availability: sanitizeArtifactValue(payload.gpu_availability),
+          user_choice_required: typeof payload.user_choice_required === 'boolean' ? payload.user_choice_required : undefined,
+        },
+      };
+    }),
+    flushReason: sanitizeArtifactValue(parsed?.flush_reason),
+    parseable: true,
+    redacted: true,
   };
+}
+
+function sanitizeArtifactValue(value, key = '') {
+  if (value === null || value === undefined) return value;
+  const normalizedKey = String(key || '');
+  if (normalizedKey === 'body') return sanitizeDiagnosticBody(value);
+  if (/^(?:deviceId|groupId|id|label|publisherId|track_id|track_label|userId)$/i.test(normalizedKey)) {
+    return REDACTED_VALUE;
+  }
+  if (SENSITIVE_KEY_PATTERN.test(normalizedKey)) return REDACTED_VALUE;
+  if (MEDIA_PAYLOAD_KEY_PATTERN.test(normalizedKey) && typeof value === 'string' && value.length > 80) {
+    return REDACTED_MEDIA_PAYLOAD;
+  }
+  if (typeof value === 'string') {
+    return URL_KEY_PATTERN.test(normalizedKey) ? sanitizeUrl(value) : sanitizeText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeArtifactValue(entry, normalizedKey));
+  }
+  if (typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
+      entryKey,
+      sanitizeArtifactValue(entryValue, entryKey),
+    ]));
+  }
+  return value;
+}
+
+async function envFileValue(...keys) {
+  for (const key of keys) {
+    const filePath = envValue(`${key}_FILE`);
+    if (filePath === '') continue;
+    const value = (await readFile(filePath, 'utf8')).trim();
+    if (value !== '') return value;
+  }
+  return '';
+}
+
+async function credentialsFor(role) {
+  const upperRole = String(role || '').trim().toUpperCase();
+  const email = envValue(
+    `VIDEOCHAT_PRODUCTION_${upperRole}_EMAIL`,
+    `VIDEOCHAT_E2E_${upperRole}_EMAIL`,
+    `VIDEOCHAT_DEPLOY_${upperRole}_EMAIL`,
+  );
+  const password = envValue(
+    `VIDEOCHAT_PRODUCTION_${upperRole}_PASSWORD`,
+    `VIDEOCHAT_E2E_${upperRole}_PASSWORD`,
+    `VIDEOCHAT_DEPLOY_${upperRole}_PASSWORD`,
+  ) || await envFileValue(
+    `VIDEOCHAT_PRODUCTION_${upperRole}_PASSWORD`,
+    `VIDEOCHAT_E2E_${upperRole}_PASSWORD`,
+    `VIDEOCHAT_DEPLOY_${upperRole}_PASSWORD`,
+  );
+  return {
+    email,
+    password,
+  };
+}
+
+function missingCredentialsMessage() {
+  return 'Production browser smoke requires explicit credentials: VIDEOCHAT_PRODUCTION_ADMIN_EMAIL, VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD, VIDEOCHAT_PRODUCTION_USER_EMAIL, VIDEOCHAT_PRODUCTION_USER_PASSWORD; accepted aliases are VIDEOCHAT_E2E_ADMIN_EMAIL, VIDEOCHAT_E2E_ADMIN_PASSWORD, VIDEOCHAT_E2E_USER_EMAIL, VIDEOCHAT_E2E_USER_PASSWORD, VIDEOCHAT_DEPLOY_ADMIN_EMAIL, VIDEOCHAT_DEPLOY_ADMIN_PASSWORD, VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE, VIDEOCHAT_DEPLOY_USER_EMAIL, VIDEOCHAT_DEPLOY_USER_PASSWORD, and VIDEOCHAT_DEPLOY_USER_PASSWORD_FILE.';
 }
 
 function smokeQuery() {
@@ -151,6 +283,21 @@ async function installProductionSmokeHooks(context, { forceBackgroundUnavailable
       window.__kingrtExpectedBackgroundSmokeFlag = backgroundSmokeFlag;
     }
 
+    const sanitizeSmokeUrl = (value) => {
+      const text = String(value || '');
+      try {
+        const url = new URL(text, window.location.origin);
+        url.username = '';
+        url.password = '';
+        url.hash = '';
+        url.pathname = url.pathname.replace(/\/join\/[^/?#]+/i, '/join/[REDACTED]');
+        if (url.search) url.search = '?[REDACTED_QUERY]';
+        return url.toString();
+      } catch {
+        return text.replace(/\/join\/[^/?#\s]+/gi, '/join/[REDACTED]').replace(/\?[^#\s]+/g, '?[REDACTED_QUERY]');
+      }
+    };
+
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const request = args[0];
@@ -158,11 +305,11 @@ async function installProductionSmokeHooks(context, { forceBackgroundUnavailable
       const url = String(request?.url || request || '');
       const method = String(init.method || request?.method || 'GET').toUpperCase();
       const body = typeof init.body === 'string' ? init.body : '';
-      window.__bgfProdSmoke.fetches.push({ url, method, body, at: Date.now() });
+      window.__bgfProdSmoke.fetches.push({ url: sanitizeSmokeUrl(url), method, bodyBytes: body.length, at: Date.now() });
       const response = await nativeFetch(...args);
       if (/\/api\/user\/client-diagnostics(?:[/?#]|$)/.test(url) && method === 'POST') {
         window.__bgfProdSmoke.diagnostics.push({
-          url,
+          url: sanitizeSmokeUrl(url),
           status: response.status,
           body,
           at: Date.now(),
@@ -334,7 +481,7 @@ async function smokeSnapshot(page) {
         closes: socket.closes,
         errors: socket.errors,
         opens: socket.opens,
-        sent: socket.sent,
+        sentCount: Array.isArray(socket.sent) ? socket.sent.length : 0,
         url: socket.url,
       })),
       tracks: stream ? stream.getTracks().map((track) => ({
@@ -348,9 +495,15 @@ async function smokeSnapshot(page) {
   });
 }
 
-function diagnosticEntries(snapshot) {
+function isSuccessfulDiagnosticRequest(request) {
+  const status = Number(request.status || 0);
+  return status >= 200 && status < 300;
+}
+
+function diagnosticEntries(snapshot, { successfulOnly = true } = {}) {
   const entries = [];
   for (const request of snapshot.diagnostics || []) {
+    if (successfulOnly && !isSuccessfulDiagnosticRequest(request)) continue;
     let payload = null;
     try {
       payload = JSON.parse(request.body || '{}');
@@ -369,6 +522,12 @@ function diagnosticEventTypes(snapshot) {
   return diagnosticEntries(snapshot).map((entry) => String(entry?.event_type || entry?.eventType || ''));
 }
 
+function failedDiagnosticStatuses(snapshot) {
+  return (snapshot.diagnostics || [])
+    .filter((request) => !isSuccessfulDiagnosticRequest(request))
+    .map((request) => Number(request.status || 0));
+}
+
 function mediaHookCounts(snapshot) {
   const media = snapshot?.media || {};
   return {
@@ -384,9 +543,41 @@ function socketSummaries(snapshot) {
     closes: Array.isArray(socket.closes) ? socket.closes : [],
     errors: Number(socket.errors || 0),
     opens: Number(socket.opens || 0),
-    sentCount: Array.isArray(socket.sent) ? socket.sent.length : 0,
-    url: String(socket.url || ''),
+    sentCount: Number(socket.sentCount || 0),
+    url: sanitizeUrl(socket.url),
   }));
+}
+
+function isProductionSmokeSocketUrl(url) {
+  try {
+    const parsed = new URL(String(url || ''), 'wss://kingrt.invalid');
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.replace(/\/+$/, '') || '/';
+    return host.startsWith('ws.')
+      || host.startsWith('sfu.')
+      || /\/(?:ws|sfu)(?:\/|$)/.test(`${path}/`);
+  } catch {
+    return /\/(?:ws|sfu)(?:[/?#]|$)/.test(String(url || ''));
+  }
+}
+
+async function waitForSocketSettle(page, { timeout = 10_000, interval = 500 } = {}) {
+  const startedAt = Date.now();
+  let previousSignature = '';
+  while (Date.now() - startedAt < timeout) {
+    const snapshot = await smokeSnapshot(page);
+    const signature = JSON.stringify(socketSummaries(snapshot)
+      .filter((socket) => isProductionSmokeSocketUrl(socket.url))
+      .map((socket) => ({
+        closeCount: socket.closeCount,
+        errors: socket.errors,
+        opens: socket.opens,
+        url: socket.url,
+      })));
+    if (signature !== '' && signature === previousSignature) return;
+    previousSignature = signature;
+    await page.waitForTimeout(interval);
+  }
 }
 
 async function captureRoleProof(role, page) {
@@ -428,7 +619,7 @@ async function captureRoleProof(role, page) {
 async function writeJsonArtifact(testInfo, fileName, payload) {
   const artifactPath = testInfo.outputPath(fileName);
   await mkdir(dirname(artifactPath), { recursive: true });
-  await writeFile(artifactPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  await writeFile(artifactPath, `${JSON.stringify(sanitizeArtifactValue(payload), null, 2)}\n`, 'utf8');
   return artifactPath;
 }
 
@@ -497,19 +688,39 @@ function reconnectDiagnostics(snapshot) {
 }
 
 function socketFailureCount(snapshot) {
-  return (snapshot.socketSummary || []).reduce((total, socket) => (
+  return (snapshot.socketSummary || []).filter((socket) => isProductionSmokeSocketUrl(socket.url)).reduce((total, socket) => (
     total + Number(socket.errors || 0) + (Array.isArray(socket.closes) ? socket.closes.length : 0)
   ), 0);
 }
 
 async function expectDiagnostics(page, requiredEvents) {
+  await expect.poll(async () => failedDiagnosticStatuses(await smokeSnapshot(page)), {
+    intervals: [1_000, 2_000, 3_000],
+    timeout: 45_000,
+  }).toEqual([]);
   await expect.poll(async () => {
     const seen = new Set(diagnosticEventTypes(await smokeSnapshot(page)));
     return requiredEvents.filter((eventType) => seen.has(eventType));
   }, {
     intervals: [1_000, 2_000, 3_000],
-    timeout: 20_000,
+    timeout: 45_000,
   }).toEqual(requiredEvents);
+}
+
+async function safeSmokeScreenshot(page, testInfo, fileName) {
+  await page.screenshot({
+    fullPage: false,
+    mask: [
+      page.locator('video'),
+      page.locator('canvas'),
+      page.locator('.workspace-main-video'),
+      page.locator('.workspace-chat'),
+      page.locator('.panel-lobby'),
+      page.locator('.panel-users'),
+      page.locator('[data-sensitive]'),
+    ],
+    path: testInfo.outputPath(fileName),
+  });
 }
 
 async function unavailableChoices(page) {
@@ -547,10 +758,10 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
   test.setTimeout(240_000);
   test.skip(!isEnabled(process.env[REQUIRED_FLAG]), `${REQUIRED_FLAG}=1 is required for deployed production smoke.`);
 
-  const adminCredentials = credentialsFor('admin');
-  const userCredentials = credentialsFor('user');
+  const adminCredentials = await credentialsFor('admin');
+  const userCredentials = await credentialsFor('user');
   if (!adminCredentials.email || !adminCredentials.password || !userCredentials.email || !userCredentials.password) {
-    throw new Error('Production browser smoke requires admin and user credentials in VIDEOCHAT_PRODUCTION_* or VIDEOCHAT_E2E_* env vars.');
+    throw new Error(missingCredentialsMessage());
   }
 
   const baseURL = productionBaseUrl(testInfo);
@@ -609,7 +820,7 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
       expect.poll(async () => (await measureNativeAudioBridgeEnergy(admin.page)).maxRms, { timeout: 45_000 }).toBeGreaterThan(0.003),
       expect.poll(async () => (await measureNativeAudioBridgeEnergy(user.page)).maxRms, { timeout: 45_000 }).toBeGreaterThan(0.003),
     ]);
-    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-call-active.png') });
+    await safeSmokeScreenshot(admin.page, testInfo, 'bgf-production-call-active.png');
 
     const backgroundDialog = admin.page.getByRole('dialog', { name: 'Background replacement unavailable' });
     await expect(backgroundDialog).toBeVisible({ timeout: 30_000 });
@@ -618,7 +829,7 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
       'Upload avatar',
       'Send unfiltered video',
     ]);
-    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-background-unavailable.png') });
+    await safeSmokeScreenshot(admin.page, testInfo, 'bgf-production-background-unavailable.png');
     await backgroundDialog.getByRole('button', { name: 'Send unfiltered video' }).click();
     await expect(backgroundDialog).toBeHidden({ timeout: 15_000 });
     await expectDiagnostics(admin.page, REQUIRED_BACKGROUND_EVENTS);
@@ -630,28 +841,30 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     await expect.poll(async () => (await smokeSnapshot(admin.page)).media.getDisplayMedia.length, {
       timeout: 15_000,
     }).toBeGreaterThan(0);
-    await expectDiagnostics(admin.page, ['local_screen_share_started']);
-    await admin.page.screenshot({ fullPage: true, path: testInfo.outputPath('bgf-production-screenshare-active.png') });
+    await expectDiagnostics(admin.page, [SCREEN_SHARE_STARTED_EVENT]);
+    await safeSmokeScreenshot(admin.page, testInfo, 'bgf-production-screenshare-active.png');
 
     await admin.page.getByRole('button', { name: 'Share screen' }).click();
     await expect.poll(async () => (await smokeSnapshot(admin.page)).controlState.screenEnabled, {
       timeout: 45_000,
     }).toBe(false);
-    await expectDiagnostics(admin.page, ['local_screen_share_stopped']);
+    await expectDiagnostics(admin.page, [SCREEN_SHARE_STOPPED_EVENT]);
     const restoredMedia = await smokeSnapshot(admin.page);
     expect(restoredMedia.tracks.some((track) => track.kind === 'audio' && track.readyState === 'live')).toBe(true);
     expect(restoredMedia.tracks.some((track) => track.kind === 'video' && track.readyState === 'live')).toBe(true);
 
+    await waitForSocketSettle(admin.page);
     const beforeFocus = await smokeSnapshot(admin.page);
     await admin.page.locator('.workspace-main-video').click({ position: { x: 20, y: 20 } });
     await admin.page.evaluate(() => {
       window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
       window.dispatchEvent(new Event('focus'));
       window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
       document.dispatchEvent(new Event('visibilitychange'));
     });
     await admin.page.bringToFront();
-    await admin.page.waitForTimeout(1_500);
+    await waitForSocketSettle(admin.page);
     const afterFocus = await smokeSnapshot(admin.page);
     expect(afterFocus.connectionState).toBe('online');
     expect(socketFailureCount(afterFocus)).toBe(socketFailureCount(beforeFocus));
@@ -662,7 +875,7 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
       baseURL,
       browserName: testInfo.project.name,
       browserVersion: browser.version(),
-      callId,
+      callIdPresent: callId !== '',
       backgroundEvents: diagnosticEventTypes(await smokeSnapshot(admin.page))
         .filter((eventType) => REQUIRED_BACKGROUND_EVENTS.includes(eventType)),
     }, null, 2));

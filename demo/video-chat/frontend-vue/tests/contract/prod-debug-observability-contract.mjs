@@ -185,6 +185,10 @@ assert.doesNotMatch(callAppCspDiagnostics, /\bgrep\s+-Eia\s+"\$\{nested_pattern\
 
 assert.match(script, /docker compose[\s\S]* ps/, 'remote probe must inspect compose container status');
 assert.match(script, /\$\{COMPOSE\[@\]\}" logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
+assert.doesNotMatch(script, /--env-file\s+\.env\.local/, 'remote read-only compose diagnostics must not consume full .env.local');
+assert.match(script, /SANITIZED_ENV_FILE="\\\$\(mktemp\)"/, 'remote read-only compose diagnostics must use a sanitized temporary env file');
+assert.match(script, /\*TOKEN\*\|\*SECRET\*\|\*PASSWORD\*\|\*PASS\*\|\*KEY\*\|\*CREDENTIAL\*\|\*COOKIE\*\|\*SESSION\*\|\*HCLOUD\*/, 'remote sanitized compose env must exclude secrets and provider tokens');
+assert.match(script, /COMPOSE=\(docker compose --env-file \.env --env-file "\\\$\{SANITIZED_ENV_FILE\}"/, 'remote compose must use sanitized env allowlist after base .env');
 assert.match(script, /filter_recent_logs\(\)/, 'remote log filtering must label each investigation category');
 assert.match(script, /stale_local_media_capture_discarded/, 'remote log scan must include stale local media capture discard diagnostics');
 assert.match(script, /local_background_\(backend_init\|matte_rejected\|replacement_unavailable\|replacement_modal_choice\)/, 'remote log scan must include BGF fallback transition event types');

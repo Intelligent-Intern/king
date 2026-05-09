@@ -366,6 +366,10 @@ the SSH target. `prod-debug.sh` does not deploy, restart, write DB data, change
 DNS, or use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only
 public HTTP/WebSocket/header probes, or `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1` to
 prove the local read-only flow without network or SSH.
+When remote compose status/log reads are enabled, the script builds a temporary
+sanitized env-file from the remote `.env.local` and excludes token, password,
+secret, credential, cookie, session, key, and provider-token variables before
+running read-only `docker compose ps/logs`.
 
 Read-only BGF-07 browser proof buckets in prod-debug.sh are non-mutating:
 background init, matte rejected, replacement unavailable, modal choice,
