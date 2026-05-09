@@ -9,6 +9,7 @@ import {
   joinPathFromAccessPayload,
 } from '../calls/access/admissionGate';
 import {
+  resolveBackendWebSocketOrigin,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
@@ -712,7 +713,22 @@ const sputnikPeerRuntime = createSputnikPeerRuntime({
   enabled: sputnikPeersEnabled,
   getRoomId: () => activeRoomId.value || desiredRoomId.value || 'lobby',
   getCallId: () => activeSocketCallId.value || activeCallId.value || '',
-  getSocketOrigins: () => resolveBackendWebSocketOriginCandidates(),
+  getSocketOrigins: () => {
+    const primary = String(resolveBackendWebSocketOrigin() || '').trim();
+    const candidates = resolveBackendWebSocketOriginCandidates()
+      .map((origin) => String(origin || '').trim())
+      .filter((origin) => origin !== '');
+    const wsOnly = candidates.filter((origin) => {
+      try {
+        const wsUrl = new URL(origin);
+        const primaryUrl = primary !== '' ? new URL(primary) : null;
+        return !primaryUrl || wsUrl.port === primaryUrl.port;
+      } catch {
+        return false;
+      }
+    });
+    return wsOnly.length > 0 ? wsOnly : (primary !== '' ? [primary] : candidates);
+  },
   buildSocketUrl: socketUrlForRoom,
   preparePeerSessions: async ({ peers }) => {
     const credentialsByPeerId = {

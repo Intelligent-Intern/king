@@ -1042,65 +1042,90 @@ export function createSputnikPeerRuntime(options: SputnikRuntimeOptions) {
 
   async function connectPeer(peer: SputnikPeerRuntime): Promise<void> {
     const callId = peerCallId();
-    if (callId === '') throw new Error('Sputnik peers require an active call id.');
     const origins = options.getSocketOrigins().map((entry) => String(entry || '').trim()).filter(Boolean);
     if (origins.length === 0) throw new Error('Sputnik peers require an available websocket origin.');
-    const socketUrl = appendSputnikQuery(options.buildSocketUrl(peerRoomId(), origins[0], callId), peer.definition);
-    const socket = new WebSocket(socketUrl);
-    peer.socket = socket;
+    const attemptsPerOrigin = 2;
+    let lastError: Error | null = null;
+    for (const origin of origins) {
+      const socketUrl = appendSputnikQuery(options.buildSocketUrl(peerRoomId(), origin, callId), peer.definition);
+      for (let attempt = 1; attempt <= attemptsPerOrigin; attempt += 1) {
+        try {
+          const socket = new WebSocket(socketUrl);
+          peer.socket = socket;
+          let socketCountedAsConnected = false;
 
-    socket.addEventListener('message', (event) => {
-      let payload: Record<string, unknown>;
-      try {
-        payload = JSON.parse(String(event.data || '')) as Record<string, unknown>;
-      } catch {
-        return;
-      }
-      const type = String(payload.type || '').trim().toLowerCase();
-      if (type === 'system/welcome') {
-        sendSocketFrame(peer, { type: 'room/snapshot/request' });
-        return;
-      }
-      if (type === 'room/snapshot' || type === 'room/joined' || type === 'room/left') {
-        applyGossipTopologyFromRoomStatePayload(payload, peer.definition.peerId, (hint: unknown) => applyTopologyHint(peer, hint));
-        return;
-      }
-      if (type === 'call/gossip-topology' || type === 'topology_hint') {
-        applyTopologyHint(peer, payload);
-        return;
-      }
-      if (type === 'call/offer' || type === 'call/answer' || type === 'call/ice') return;
-    });
-    socket.addEventListener('close', () => {
-      state.connectedSockets = Math.max(0, state.connectedSockets - 1);
-    });
+          socket.addEventListener('message', (event) => {
+            let payload: Record<string, unknown>;
+            try {
+              payload = JSON.parse(String(event.data || '')) as Record<string, unknown>;
+            } catch {
+              return;
+            }
+            const type = String(payload.type || '').trim().toLowerCase();
+            if (type === 'system/welcome') {
+              sendSocketFrame(peer, { type: 'room/snapshot/request' });
+              return;
+            }
+            if (type === 'room/snapshot' || type === 'room/joined' || type === 'room/left') {
+              applyGossipTopologyFromRoomStatePayload(payload, peer.definition.peerId, (hint: unknown) => applyTopologyHint(peer, hint));
+              return;
+            }
+            if (type === 'call/gossip-topology' || type === 'topology_hint') {
+              applyTopologyHint(peer, payload);
+              return;
+            }
+            if (type === 'call/offer' || type === 'call/answer' || type === 'call/ice') return;
+          });
+          socket.addEventListener('close', () => {
+            if (socketCountedAsConnected) {
+              socketCountedAsConnected = false;
+              state.connectedSockets = Math.max(0, state.connectedSockets - 1);
+            }
+          });
 
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const timeout = window.setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        reject(new Error(`Sputnik websocket open timed out for ${peer.definition.displayName}.`));
-      }, 6000);
-      socket.addEventListener('open', () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        state.connectedSockets += 1;
-        sendSocketFrame(peer, { type: 'room/join', room_id: peerRoomId() });
-        sendSocketFrame(peer, { type: 'room/snapshot/request' });
-        peer.pingTimer = window.setInterval(() => {
-          sendSocketFrame(peer, { type: 'ping' });
-        }, 10000);
-        resolve();
-      }, { once: true });
-      socket.addEventListener('error', () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        reject(new Error(`Sputnik websocket failed for ${peer.definition.displayName}.`));
-      }, { once: true });
-    });
+          await new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const timeout = window.setTimeout(() => {
+              if (settled) return;
+              settled = true;
+              reject(new Error(`Sputnik websocket open timed out for ${peer.definition.displayName}.`));
+            }, 6000);
+            socket.addEventListener('open', () => {
+              if (settled) return;
+              settled = true;
+              window.clearTimeout(timeout);
+              socketCountedAsConnected = true;
+              state.connectedSockets += 1;
+              sendSocketFrame(peer, { type: 'room/join', room_id: peerRoomId() });
+              sendSocketFrame(peer, { type: 'room/snapshot/request' });
+              peer.pingTimer = window.setInterval(() => {
+                sendSocketFrame(peer, { type: 'ping' });
+              }, 10000);
+              resolve();
+            }, { once: true });
+            socket.addEventListener('error', () => {
+              if (settled) return;
+              settled = true;
+              window.clearTimeout(timeout);
+              reject(new Error(`Sputnik websocket failed for ${peer.definition.displayName}.`));
+            }, { once: true });
+          });
+          return;
+        } catch (error) {
+          if (peer.pingTimer) {
+            window.clearInterval(peer.pingTimer);
+            peer.pingTimer = 0;
+          }
+          if (peer.socket) {
+            try { peer.socket.close(); } catch {}
+            peer.socket = null;
+          }
+          const errorText = error instanceof Error ? error.message : String(error || 'unknown socket error');
+          lastError = new Error(`${errorText} (origin=${origin}, attempt=${attempt}/${attemptsPerOrigin})`);
+        }
+      }
+    }
+    throw lastError || new Error(`Sputnik websocket failed for ${peer.definition.displayName}.`);
   }
 
   async function startPeer(definition: SputnikPeerDefinition, soundEnabled: boolean): Promise<void> {
@@ -1129,14 +1154,35 @@ export function createSputnikPeerRuntime(options: SputnikRuntimeOptions) {
       lastAudioResponseAtMs: 0,
     };
     peers.set(definition.peerId, peer);
-    ensureController(peer);
-    await connectPeer(peer);
-    peer.publisher = createPublisher(peer);
-    const videoTrack = syntheticMedia.stream.getVideoTracks()[0] || null;
-    if (videoTrack) {
-      await peer.publisher.startEncodingPipeline(videoTrack);
+    try {
+      ensureController(peer);
+      await connectPeer(peer);
+      peer.publisher = createPublisher(peer);
+      const videoTrack = syntheticMedia.stream.getVideoTracks()[0] || null;
+      if (videoTrack) {
+        await peer.publisher.startEncodingPipeline(videoTrack);
+      }
+      syncAudioPublisher(peer, 'peer_started');
+    } catch (error) {
+      if (peer.responseTimer) window.clearTimeout(peer.responseTimer);
+      if (peer.telemetryTimer) window.clearTimeout(peer.telemetryTimer);
+      if (peer.pingTimer) window.clearInterval(peer.pingTimer);
+      stopAudioPublisher(peer, 'start_failed');
+      stopSputnikEncodingPipeline(peer);
+      for (const nativeAudioPeer of peer.nativeAudioPeers.values()) {
+        nativeAudioPeer.pc.close();
+      }
+      peer.nativeAudioPeers.clear();
+      peer.dataTransport?.close?.();
+      peer.audioTransport?.close?.();
+      peer.controller?.dispose?.();
+      peer.syntheticMedia?.stop?.();
+      try {
+        peer.socket?.close?.(1000, 'sputnik_start_failed');
+      } catch {}
+      peers.delete(definition.peerId);
+      throw error;
     }
-    syncAudioPublisher(peer, 'peer_started');
   }
 
   async function spawn(count: number, spawnOptions: { includeAlice?: boolean; soundEnabled?: boolean } = {}): Promise<boolean> {
@@ -1147,41 +1193,60 @@ export function createSputnikPeerRuntime(options: SputnikRuntimeOptions) {
     state.lastError = '';
     const requestedDefinitions = buildPeerDefinitions(count, spawnOptions.includeAlice !== false);
     state.activePeerCount = requestedDefinitions.length;
-    try {
-      const definitions = typeof options.preparePeerSessions === 'function'
-        ? await options.preparePeerSessions({
+    let definitions = requestedDefinitions;
+    if (typeof options.preparePeerSessions === 'function') {
+      try {
+        definitions = await options.preparePeerSessions({
           callId: peerCallId(),
           roomId: peerRoomId(),
           peers: requestedDefinitions,
-        })
-        : requestedDefinitions;
-      state.activePeerCount = definitions.length;
-      for (const definition of definitions) {
-        await startPeer(definition, spawnOptions.soundEnabled === true);
+        });
+      } catch (error) {
+        state.lastError = error instanceof Error ? error.message : String(error);
       }
-      state.status = 'running';
-      capture({
-        eventType: 'sputnik_peer_runtime_started',
-        message: 'Dev-only Sputnik peers joined the call control plane.',
-        payload: {
-          peer_count: definitions.length,
-          identity_mode: definitions.some((definition) => String(definition.sessionToken || '').trim() !== '')
-            ? 'real_user_sessions'
-            : 'query_identity_override',
-          gossip_data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
-          media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
-        },
-      });
-      return true;
-    } catch (error) {
-      state.status = 'error';
-      state.lastError = error instanceof Error ? error.message : String(error);
-      options.captureClientDiagnosticError?.('sputnik_peer_runtime_start_failed', error, {
-        peer_count: requestedDefinitions.length,
-      }, { code: 'sputnik_peer_runtime_start_failed', immediate: true });
-      stop('start_failed');
-      return false;
     }
+
+    state.activePeerCount = definitions.length;
+    const failures: string[] = [];
+    let unresolved = [...definitions];
+    const maxPasses = 6;
+    for (let pass = 1; pass <= maxPasses && unresolved.length > 0; pass += 1) {
+      const nextUnresolved: SputnikPeerDefinition[] = [];
+      for (const definition of unresolved) {
+        try {
+          await startPeer(definition, spawnOptions.soundEnabled === true);
+        } catch (error) {
+          if (pass >= maxPasses) {
+            failures.push(`${definition.displayName}: ${error instanceof Error ? error.message : String(error)}`);
+          } else {
+            nextUnresolved.push(definition);
+          }
+        }
+      }
+      unresolved = nextUnresolved;
+      if (unresolved.length > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+    }
+
+    if (failures.length > 0) {
+      state.lastError = `Some peers failed: ${failures.join(' | ')}`;
+    }
+    state.status = 'running';
+    capture({
+      eventType: 'sputnik_peer_runtime_started',
+      message: 'Dev-only Sputnik peers joined the call control plane.',
+      payload: {
+        peer_count: definitions.length,
+        connected_sockets: state.connectedSockets,
+        identity_mode: definitions.some((definition) => String(definition.sessionToken || '').trim() !== '')
+          ? 'real_user_sessions'
+          : 'query_identity_override',
+        gossip_data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+        media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
+      },
+    });
+    return true;
   }
 
   function stop(reason = 'manual'): void {
