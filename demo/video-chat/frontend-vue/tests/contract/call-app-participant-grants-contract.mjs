@@ -258,14 +258,14 @@ assert.match(
 
 assert.match(
   launchTokenSource,
-  /function videochat_call_app_launch_capabilities[\s\S]*if \(\$grantState !== 'allowed'\)[\s\S]*call_apps\.launch[\s\S]*call_apps\.crdt\.read[\s\S]*call_apps\.crdt\.append[\s\S]*call_apps\.crdt\.replay/s,
+  /function videochat_call_app_launch_capabilities[\s\S]*if \(\$grantState !== 'allowed'\)[\s\S]*call_apps\.launch[\s\S]*call_apps\.crdt\.read[\s\S]*call_apps\.crdt\.replay[\s\S]*call_apps\.crdt\.append/s,
   'launch capabilities must collapse to status-only when grants are denied and include read/write CRDT capabilities when allowed',
 );
 
 assert.match(
   crdtDomainSource,
-  /function videochat_call_app_crdt_bootstrap[\s\S]*videochat_call_app_crdt_requires_allowed_grant[\s\S]*function videochat_call_app_crdt_list_ops[\s\S]*videochat_call_app_crdt_requires_allowed_grant[\s\S]*function videochat_call_app_crdt_append_op[\s\S]*videochat_call_app_crdt_requires_allowed_grant/s,
-  'CRDT read, write, and replay surfaces must all re-check current participant grant state',
+  /function videochat_call_app_crdt_bootstrap[\s\S]*videochat_call_app_crdt_requires_allowed_grant[\s\S]*function videochat_call_app_crdt_list_ops[\s\S]*videochat_call_app_crdt_requires_allowed_grant[\s\S]*function videochat_call_app_crdt_append_op[\s\S]*videochat_call_app_crdt_requires_permission\([\s\S]*videochat_call_app_crdt_permission_for_payload_type/s,
+  'CRDT read, write, delete, and replay surfaces must all re-check current participant permissions',
 );
 
 assert.match(
