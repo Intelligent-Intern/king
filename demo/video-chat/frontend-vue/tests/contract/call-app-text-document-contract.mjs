@@ -43,7 +43,7 @@ assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest sch
 assert.equal(manifest.app_key, 'text-document', 'manifest app key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'text-document must advertise runtime readiness');
 assert.equal(manifest.category, 'collaboration', 'text-document category must use the marketplace collaboration enum');
-assert.equal(manifest.default_participant_access, 'blocked_by_default', 'text-document must require explicit grants');
+assert.equal(manifest.default_participant_access, 'allowed_by_default', 'text-document must default to shared call editing');
 assert.equal(manifest.iframe?.receives_primary_session_token, false, 'iframe must not receive primary session tokens');
 assert.equal(manifest.iframe?.bridge_protocol, 'king.call_app.iframe.v1', 'iframe bridge protocol mismatch');
 assert.ok(manifest.iframe?.sandbox?.includes('allow-scripts'), 'iframe sandbox must allow scripts');
@@ -66,6 +66,7 @@ const mcp = readJson('demo/call-app/text-document/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP descriptor schema mismatch');
 assert.equal(mcp.app_key, 'text-document', 'MCP app key mismatch');
 assert.equal(mcp.service_name, 'call_app.text-document.mcp', 'MCP service name mismatch');
+assert.equal(mcp.marketplace_listing?.default_participant_access, 'allowed_by_default', 'MCP listing must expose shared text-document default access');
 assert.equal(mcp.launch_contract?.primary_session_token_allowed, false, 'MCP launch contract must reject primary tokens');
 for (const method of [
   'call_app.describe',

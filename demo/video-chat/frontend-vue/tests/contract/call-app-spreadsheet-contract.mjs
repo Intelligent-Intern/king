@@ -43,7 +43,7 @@ assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest sch
 assert.equal(manifest.app_key, 'spreadsheet', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'spreadsheet must advertise runtime readiness');
 assert.equal(manifest.category, 'collaboration', 'spreadsheet category must fit the existing Call App catalog');
-assert.equal(manifest.default_participant_access, 'blocked_by_default', 'spreadsheet must use explicit participant grants');
+assert.equal(manifest.default_participant_access, 'allowed_by_default', 'spreadsheet must default to shared call editing');
 assert.equal(manifest.iframe?.bridge_protocol, 'king.call_app.iframe.v1', 'spreadsheet bridge protocol mismatch');
 assert.equal(manifest.iframe?.receives_primary_session_token, false, 'spreadsheet iframe must not receive primary session tokens');
 assert.ok(manifest.iframe?.sandbox?.includes('allow-scripts'), 'spreadsheet sandbox must allow scripts');
@@ -69,6 +69,7 @@ const mcp = readJson('demo/call-app/spreadsheet/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'spreadsheet', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.spreadsheet.mcp', 'MCP service name mismatch');
+assert.equal(mcp.marketplace_listing?.default_participant_access, 'allowed_by_default', 'MCP listing must expose shared spreadsheet default access');
 assert.equal(mcp.launch_contract?.primary_session_token_allowed, false, 'MCP launch contract must reject primary tokens');
 for (const method of [
   'call_app.describe',

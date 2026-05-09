@@ -57,6 +57,7 @@
     "name": "Presentation",
     "category": "collaboration",
     "order_scope": "organization",
+    "default_participant_access": "allowed_by_default",
     "summary": "Shared slide editing and PowerPoint-compatible PPTX export inside a call."
   }
 }

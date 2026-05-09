@@ -34,6 +34,9 @@ Included packages:
 
 - `whiteboard`: shared drawing, notes, shapes, cursors, and exports.
 - `planning-image`: shared image upload with pan/zoom canvas review.
+- `text-document`: collaborative document editing with ODT and PDF export.
+- `presentation`: collaborative slide editing with PowerPoint-compatible PPTX
+  export.
 - `spreadsheet`: collaborative cells, formulas, selection presence, and CSV or
   SpreadsheetML export.
 
