@@ -1,0 +1,58 @@
+{
+  "schema_version": "king.call_app.crdt_schema.v1",
+  "app_key": "presentation",
+  "protocol": "king.call_app.crdt.v1",
+  "engine": "adapter",
+  "documents": [
+    {
+      "kind": "presentation_document",
+      "schema_version": "presentation.document.v1",
+      "operation_types": [
+        "presentation.slide.add",
+        "presentation.slide.update",
+        "presentation.slide.delete",
+        "presentation.text.update",
+        "presentation.shape.add",
+        "presentation.shape.update",
+        "presentation.shape.delete",
+        "presentation.image_placeholder.add",
+        "presentation.image_placeholder.update",
+        "presentation.image_placeholder.delete",
+        "presentation.playback.update"
+      ]
+    }
+  ],
+  "envelope": {
+    "required_fields": [
+      "app_id",
+      "app_version",
+      "call_id",
+      "app_session_id",
+      "document_id",
+      "schema_version",
+      "actor_id",
+      "operation_id",
+      "logical_clock",
+      "causal_dependencies",
+      "payload_type",
+      "payload",
+      "server_admission_stamp"
+    ],
+    "idempotency": {
+      "operation_id_required": true,
+      "duplicate_policy": "ignore_after_first_admission"
+    }
+  },
+  "snapshots": {
+    "strategy": "checkpoint",
+    "minimum_ops_before_checkpoint": 120,
+    "replay_after_snapshot": true
+  },
+  "presence": {
+    "persisted": false,
+    "types": []
+  },
+  "exports": [
+    "pptx"
+  ]
+}
