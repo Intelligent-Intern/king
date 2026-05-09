@@ -34,6 +34,8 @@ Included packages:
 
 - `whiteboard`: shared drawing, notes, shapes, cursors, and exports.
 - `planning-image`: shared image upload with pan/zoom canvas review.
+- `spreadsheet`: collaborative cells, formulas, selection presence, and CSV or
+  SpreadsheetML export.
 
 Runtime invariants:
 
