@@ -8,6 +8,8 @@ const repoRoot = path.resolve(frontendRoot, '../../..')
 const callAppRoot = path.join(repoRoot, 'demo/call-app')
 const whiteboardRoot = path.join(callAppRoot, 'whiteboard')
 const planningImageRoot = path.join(callAppRoot, 'planning-image')
+const textDocumentRoot = path.join(callAppRoot, 'text-document')
+const presentationRoot = path.join(callAppRoot, 'presentation')
 const spreadsheetRoot = path.join(callAppRoot, 'spreadsheet')
 
 function read(relativePath) {
@@ -32,6 +34,8 @@ function assertArrayIncludes(array, value, message) {
 assert(fs.existsSync(callAppRoot), 'demo/call-app root must exist')
 assert(fs.existsSync(whiteboardRoot), 'demo/call-app/whiteboard package must exist')
 assert(fs.existsSync(planningImageRoot), 'demo/call-app/planning-image package must exist')
+assert(fs.existsSync(textDocumentRoot), 'demo/call-app/text-document package must exist')
+assert(fs.existsSync(presentationRoot), 'demo/call-app/presentation package must exist')
 assert(fs.existsSync(spreadsheetRoot), 'demo/call-app/spreadsheet package must exist')
 
 const readme = read('demo/call-app/README.md')
@@ -70,6 +74,30 @@ for (const requiredFile of [
   assert(fs.existsSync(path.join(planningImageRoot, requiredFile)), `planning-image package must include ${requiredFile}`)
 }
 assert(readme.includes('planning-image'), 'README must list the planning-image package')
+for (const requiredFile of [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
+  'public/text-document.css',
+  'public/text-document.js',
+]) {
+  assert(fs.existsSync(path.join(textDocumentRoot, requiredFile)), `text-document package must include ${requiredFile}`)
+}
+assert(readme.includes('text-document'), 'README must list the text-document package')
+for (const requiredFile of [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
+  'public/presentation.css',
+  'public/presentation.js',
+]) {
+  assert(fs.existsSync(path.join(presentationRoot, requiredFile)), `presentation package must include ${requiredFile}`)
+}
+assert(readme.includes('presentation'), 'README must list the presentation package')
 for (const requiredFile of [
   'call-app.manifest.json',
   'mcp.descriptor.json',

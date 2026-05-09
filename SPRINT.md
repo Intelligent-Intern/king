@@ -87,7 +87,7 @@ Acceptance criteria:
   all distinct errors before any follow-up deployment is prepared.
 
 Tickets:
-- [ ] OCA-01 Collaborative text document Call App
+- [x] OCA-01 Collaborative text document Call App
   - Owner branch: `agent/office-text-call-app`.
   - Add a package under `demo/call-app/` for multi-user text editing with
     heading, paragraph, list, basic inline formatting, comments or notes where
@@ -96,8 +96,12 @@ Tickets:
   - Export OpenDocument Text and PDF from the app without requiring a new
     service domain.
   - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+  - Loop proof: merged `f373c096 Add text document call app package` locally
+    from `agent/office-text-call-app`, wired the package and text MCP proof into
+    the regular Call App integration gate, and set the package default to shared
+    call editing while preserving backend grants.
 
-- [ ] OCA-02 Collaborative presentation Call App
+- [x] OCA-02 Collaborative presentation Call App
   - Owner branch: `agent/office-presentation-call-app`.
   - Add a package under `demo/call-app/` for collaborative slide editing with
     slide thumbnails, text boxes, simple shapes/images where feasible, presenter
@@ -105,6 +109,10 @@ Tickets:
   - Export a PowerPoint-compatible presentation file from the app without
     requiring a new service domain.
   - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+  - Loop proof: merged `ecf159ca Add collaborative presentation call app`
+    locally from `agent/office-presentation-call-app`, wired the package into
+    the regular Call App integration gate, and set the package default to shared
+    call editing while preserving backend grants.
 
 - [x] OCA-03 Collaborative spreadsheet Call App
   - Owner branch: `agent/office-spreadsheet-call-app`.
@@ -117,6 +125,7 @@ Tickets:
   - Loop proof: merged `8c458121 Add spreadsheet call app package` locally from
     `agent/office-spreadsheet-call-app`, then wired the spreadsheet package into
     the Call App layout README and `test:contract:call-apps` integration gate.
+    The package default is shared call editing while preserving backend grants.
     Local proof must remain green in the deploy loop before OCA-05 closes.
 
 - [ ] OCA-04 Operator feedback chat intake and sprint triage

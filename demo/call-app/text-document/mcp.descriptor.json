@@ -56,6 +56,7 @@
     "name": "Text Document",
     "category": "collaboration",
     "order_scope": "organization",
+    "default_participant_access": "allowed_by_default",
     "summary": "Shared text document editor for office-style call collaboration."
   }
 }

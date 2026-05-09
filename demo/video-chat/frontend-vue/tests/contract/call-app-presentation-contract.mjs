@@ -43,7 +43,7 @@ assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest sch
 assert.equal(manifest.app_key, 'presentation', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'presentation package must advertise runtime readiness');
 assert.equal(manifest.category, 'collaboration', 'presentation category must fit existing marketplace enum');
-assert.equal(manifest.default_participant_access, 'blocked_by_default', 'presentation must require explicit participant grants');
+assert.equal(manifest.default_participant_access, 'allowed_by_default', 'presentation must default to shared call editing');
 assert.equal(manifest.iframe?.entrypoint, 'public/index.html', 'presentation iframe entrypoint mismatch');
 assert.equal(manifest.iframe?.bridge_protocol, 'king.call_app.iframe.v1', 'presentation bridge protocol mismatch');
 assert.equal(manifest.iframe?.receives_primary_session_token, false, 'presentation iframe must not receive primary session tokens');
@@ -76,6 +76,7 @@ const mcp = readJson('demo/call-app/presentation/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'presentation', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.presentation.mcp', 'MCP service name mismatch');
+assert.equal(mcp.marketplace_listing?.default_participant_access, 'allowed_by_default', 'MCP listing must expose shared presentation default access');
 assert.equal(mcp.launch_contract?.primary_session_token_allowed, false, 'MCP launch contract must reject primary tokens');
 for (const method of [
   'call_app.describe',
