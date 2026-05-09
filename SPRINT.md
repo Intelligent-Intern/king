@@ -13,15 +13,167 @@ Rules:
 - Do not grow `CallWorkspaceView.vue` or other oversized files; extract focused
   helpers/components when adding behavior.
 
+## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Active as of 2026-05-09.
+- Highest priority for the next loop. The next implementation loop must ship
+  these fixes and then run a live deploy with diagnostics.
+- This supersedes the Background Segmentation Fallback sprint as the active
+  top-priority sprint. BGF-07 remains open as carryover proof work; do not close
+  it from this sprint unless the real deployed browser smoke exists.
+
+User-facing problem:
+- The call left sidebar is visually broken: top tabs are hard to see,
+  Settings and Call Apps are not clearly split, panel body content overlaps the
+  tabs, and the Call Apps view is only partly visible/responsive.
+- Opening both sidebars makes the call videos shrink or get cut/overlapped by
+  Call Apps content.
+- The right sidebar should combine lobby and present users: lobby requests on
+  top with pagination, present users below with pagination, a divider, and
+  search controls only when the relevant section has more than one page.
+- Participant action icons are too small. The kick/remove-from-call action must
+  have visible separation from the other actions.
+- A gear above the participant table must open a right-sidebar options view for
+  choosing which per-user actions are visible, including Call App permission
+  actions such as read, write, and delete.
+- Call Apps must be usable in fullscreen. Screenshare must behave like a call
+  participant: double-click its mini tile to fullscreen it and allow zoom/pan.
+- Losing call focus or clicking call elements must not trigger reconnect loops;
+  reconnects should happen only for real socket/media failure or intentional
+  foreground recovery conditions.
+
+Sprint goal:
+- Make the call workspace sidebars dense, readable, and responsive without
+  overlaying tabs, videos, or Call App surfaces.
+- Keep media surfaces stable when sidebars are expanded. Video and screenshare
+  tiles must keep usable aspect/framing instead of being pushed under Call Apps.
+- Treat Call Apps, participants, lobby rows, and screenshare as first-class call
+  surfaces with explicit permissions, fullscreen behavior, and diagnostics.
+- Fix focus/click reconnect churn without weakening websocket/SFU recovery.
+
+Contract anchors:
+- `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue`
+- `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html`
+- `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css`
+- `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspacePanels.css`
+- `demo/video-chat/frontend-vue/src/styles/call-settings.css`
+- `demo/video-chat/frontend-vue/src/layouts/CallWorkspaceLeftSidebar.vue`
+- `demo/video-chat/frontend-vue/src/layouts/useCallLeftSidebarTabs.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue`
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.css`
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue`
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppParticipantGrantButton.vue`
+- `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.ts`
+- `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/screenSharePan.js`
+- `demo/video-chat/frontend-vue/src/domain/realtime/local/screenSharePublisher.js`
+- `demo/video-chat/frontend-vue/src/support/foregroundReconnect.ts`
+- `demo/video-chat/frontend-vue/tests/contract/call-mini-strip-responsive-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/call-app-workspace-view-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/call-app-participant-grants-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/foreground-reconnect-contract.mjs`
+- `demo/video-chat/frontend-vue/tests/contract/media-reconnect-screenshare-browser-smoke-contract.mjs`
+
+Execution boundary:
+- Do not grow `CallWorkspaceView.vue`; extract focused components/composables for
+  right-sidebar roster/lobby, user action options, Call App fullscreen, and
+  screenshare fullscreen behavior.
+- Do not add manual refresh/reload UI for realtime state. Roster, lobby, media,
+  and reconnect state must stay websocket/SFU driven.
+- Do not make sidebars overlay or shrink the active media surface as a shortcut;
+  use responsive layout constraints and stable min/max dimensions.
+- Do not hide missing permissions behind disabled UI only. The action-options
+  gear must reflect the real participant/Call App permission model.
+
+Acceptance criteria:
+- Left call sidebar tabs are always visible, visually separated, keyboard
+  focusable, and not covered by panel body content on desktop, tablet, or
+  mobile widths.
+- Settings and Call Apps are distinct tab panels. Call Apps content is fully
+  scrollable/responsive and does not cover the video strip or main call stage.
+- Expanding both sidebars does not cut off local/remote videos or Call App
+  surfaces; media tiles keep a stable usable aspect ratio.
+- Right sidebar shows lobby requests above present users, with a visible
+  divider, independent pagination, and section-specific search controls shown
+  only when that section has more than one page.
+- Participant row action icons are large enough for repeated use; kick/remove
+  is visually separated from non-destructive actions.
+- A gear above the user table opens a right-sidebar action-options view where
+  visible actions can be selected, including Call App permission actions such
+  as read, write, and delete.
+- Call Apps can enter fullscreen and remain usable there.
+- Screenshare behaves as a participant media surface: its mini tile supports
+  double-click fullscreen, zoom, and pan without breaking camera/audio.
+- Clicking call controls or losing focus does not trigger reconnects. Reconnect
+  diagnostics only appear for real transient socket/media failures or explicit
+  foreground recovery after actual backgrounding.
+- The next loop records local proof, deploy proof, and post-deploy diagnostics
+  before closing any ticket.
+
+Tickets:
+- [ ] CWS-01 Left sidebar tabs and Call Apps responsive layout
+  - Split Settings and Call Apps into clear tab panels with visible tab
+    affordances and a non-overlapping scroll body.
+  - Make Call Apps content fully visible/responsive in the left sidebar and in
+    the call workspace layout.
+  - Preserve media tile/stage dimensions when both sidebars are open.
+
+- [ ] CWS-02 Right sidebar lobby plus present-user list
+  - Put lobby requests at the top of the right sidebar with pagination.
+  - Put present users below with separate pagination, divider, and responsive
+    height allocation.
+  - Show section search only when that section has more than one page.
+  - Increase per-user action icon sizes and separate kick/remove from other
+    actions.
+
+- [ ] CWS-03 Participant action options and Call App permissions
+  - Add a gear above the participant table.
+  - Clicking it opens a right-sidebar options view for choosing which per-user
+    actions are shown.
+  - Include Call App permission actions such as read, write, and delete where
+    the permission model allows them.
+
+- [ ] CWS-04 Call Apps fullscreen and media-safe layout
+  - Call Apps must be visible and usable in fullscreen.
+  - Fullscreen Call Apps must not hide, crop, or collapse the call videos.
+  - Add contracts or browser smoke proving the Call Apps panel and fullscreen
+    host stay responsive with both sidebars open.
+
+- [ ] CWS-05 Screenshare as participant fullscreen/zoom surface
+  - Treat screenshare as a participant-like media tile in the videocall.
+  - Double-clicking its mini video opens fullscreen.
+  - Fullscreen screenshare supports zoom/pan and is not cut off by sidebars or
+    Call Apps content.
+
+- [ ] CWS-06 Focus/click reconnect stability
+  - Clicking call UI or focusing inputs/buttons must not cause realtime/SFU
+    reconnects.
+  - Losing browser focus must not recycle media unless the tab actually
+    backgrounds and foreground recovery is required.
+  - Diagnostics must distinguish real websocket/SFU failure from harmless UI
+    focus/blur events.
+
+- [ ] CWS-07 Deploy and post-deploy proof
+  - Run focused contracts, browser screenshots/smoke for desktop and mobile
+    responsive states, build, and deploy.
+  - Deploy in the next deploy loop with no unrelated IAM/call-access files, no
+    push, no unnecessary certbot, and no DNS changes unless a new domain is
+    introduced.
+  - After deploy, run public diagnostics, remote compose status/log checks, and
+    record proof before closing this sprint.
+
 ## Sprint: Browser-Resilient Background Segmentation Fallback
 
 Branch:
 - `develop/1.0.8-beta`
 
 Status:
-- Active as of 2026-05-08.
-- This sprint replaces the completed Whiteboard Call App hardening work as the
-  active top-priority sprint.
+- Active as of 2026-05-08; superseded as top priority on 2026-05-09 by the Call
+  Workspace Sidebars, Call Apps, And Media Stability sprint.
+- BGF-07 remains open as carryover proof work.
 - User-facing problem: Chrome/Chromium can break MediaPipe segmentation init by
   forcing GPU-related internals even when CPU delegation is requested. The
   current fallback can degrade into a matte that swallows the participant.
