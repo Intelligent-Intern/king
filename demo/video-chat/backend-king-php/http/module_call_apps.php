@@ -354,7 +354,7 @@ function videochat_handle_call_app_routes(
 
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_not_in_call', 'participant_grant_denied'], true) ? 403 : 409);
+            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_not_in_call', 'participant_grant_denied', 'participant_permission_denied'], true) ? 403 : 409);
             return $errorResponse($status, 'call_app_crdt_bootstrap_failed', 'Could not bootstrap Call App CRDT state.', ['reason' => $reason]);
         }
 
@@ -411,7 +411,7 @@ function videochat_handle_call_app_routes(
 
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'session_not_found' ? 404 : ($reason === 'validation_failed' ? 422 : ($reason === 'participant_grant_denied' ? 403 : 409));
+            $status = $reason === 'session_not_found' ? 404 : ($reason === 'validation_failed' ? 422 : (in_array($reason, ['participant_grant_denied', 'participant_permission_denied'], true) ? 403 : 409));
             return $errorResponse($status, 'call_app_crdt_ops_failed', 'Could not process Call App CRDT operations.', [
                 'reason' => $reason,
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
@@ -474,7 +474,7 @@ function videochat_handle_call_app_routes(
         }
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_grant_denied' ? 403 : 409);
+            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_grant_denied', 'participant_permission_denied'], true) ? 403 : 409);
             return $errorResponse($status, 'call_app_crdt_snapshot_failed', 'Could not compact Call App CRDT snapshot.', ['reason' => $reason]);
         }
 
