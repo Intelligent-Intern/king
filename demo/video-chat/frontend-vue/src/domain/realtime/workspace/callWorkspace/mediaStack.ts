@@ -21,6 +21,7 @@ import {
 import { createCallWorkspaceRuntimeHealthHelpers } from './runtimeHealth';
 import { createCallWorkspaceVideoLayoutHelpers } from './videoLayout';
 import { createSfuTransportController } from './sfuTransport';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 import { createHybridDecoder } from '../../../../lib/wasm/wasm-codec';
 import { createDecoder as createTsDecoder } from '../../../../lib/wavelet/codec.ts';
 
@@ -210,6 +211,7 @@ export function createCallWorkspaceMediaStack(options) {
     remotePeersRef: refs.remotePeersRef,
     sendMediaSecurityHello: callbacks.sendMediaSecurityHello,
     sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {
+      if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableRemoteVideoStallRecovery')) return false;
       const requestedVideoLayer = String(payload?.requested_video_layer || '').trim().toLowerCase();
       const requestedAction = String(
         payload?.requested_action || (requestedVideoLayer === 'primary'
@@ -314,6 +316,7 @@ export function createCallWorkspaceMediaStack(options) {
       remoteVideoStallCheckIntervalMs: constants.remoteVideoStallCheckIntervalMs,
       remoteVideoStallThresholdMs: constants.remoteVideoStallThresholdMs,
       sfuRuntimeEnabled: constants.sfuRuntimeEnabled,
+      strictStabilityPolicy: constants.strictStabilityPolicy,
     },
     refs: {
       connectedParticipantUsers: refs.connectedParticipantUsers,
@@ -358,6 +361,7 @@ export function createCallWorkspaceMediaStack(options) {
     sfuWlvcSendBufferCriticalBytes: constants.sfuWlvcSendBufferCriticalBytes,
     sfuWlvcSendBufferHighWaterBytes: constants.sfuWlvcSendBufferHighWaterBytes,
     sfuWlvcSendBufferLowWaterBytes: constants.sfuWlvcSendBufferLowWaterBytes,
+    strictStabilityPolicy: constants.strictStabilityPolicy,
     state: refs.sfuTransportState,
   });
 
@@ -568,6 +572,7 @@ export function createCallWorkspaceMediaStack(options) {
       activityMotionSampleMs: constants.activityMotionSampleMs,
       activityPublishIntervalMs: constants.activityPublishIntervalMs,
       sfuRuntimeEnabled: constants.sfuRuntimeEnabled,
+      strictStabilityPolicy: constants.strictStabilityPolicy,
     },
     controlState: refs.controlState,
     refs: {

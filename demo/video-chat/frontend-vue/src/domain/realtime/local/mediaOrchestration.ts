@@ -12,6 +12,7 @@ import { createBackgroundFallbackAudioOnlyStream } from '../background/avatarFal
 import { handleBackgroundReplacementUnavailable } from '../background/unavailablePrompt';
 import { shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
 import { buildDisplayMediaOptions, hasGetDisplayMedia, normalizeDisplayMediaError } from './screenShareCapture';
+import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
@@ -485,6 +486,37 @@ export function createLocalMediaOrchestrationHelpers({
     return controlState.cameraEnabled !== false;
   }
 
+  function strictCaptureOnlyEnabled() {
+    return strictPolicyEnabled(constants.strictStabilityPolicy, 'strictCaptureOnly');
+  }
+
+  async function acquireStrict720p30CaptureFallback(reason, error) {
+    captureDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'strict_720p30_video_capture_unavailable',
+      code: 'strict_720p30_video_capture_unavailable',
+      message: 'Strict 720p30 camera capture is unavailable; lower video capture fallbacks are skipped.',
+      payload: {
+        reason: String(reason || 'strict_720p30_capture_failed'),
+        error_name: String(error?.name || ''),
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+      },
+      immediate: true,
+    });
+    if (wantsLocalAudioCapture()) {
+      try {
+        const stream = await acquireAudioOnlyLocalMediaStream('strict_720p30_video_capture_failed');
+        if (stream instanceof MediaStream) return stream;
+      } catch (audioError) {
+        captureClientDiagnosticError('strict_720p30_audio_fallback_failed', audioError, {
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+        }, { code: 'strict_720p30_audio_fallback_failed', immediate: true });
+      }
+    }
+    return new MediaStream();
+  }
+
   async function acquireAudioOnlyLocalMediaStream(reason = 'video_capture_failed') {
     if (!wantsLocalAudioCapture()) return null;
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
@@ -558,6 +590,9 @@ export function createLocalMediaOrchestrationHelpers({
     } catch (error) {
       if (!shouldRetryWithLooseConstraints(error)) {
         throw error;
+      }
+      if (strictCaptureOnlyEnabled() && wantsLocalVideoCapture()) {
+        return acquireStrict720p30CaptureFallback('strict_constraints_failed', error);
       }
     }
 
@@ -776,11 +811,15 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   function isBackgroundFilterEnabledForOutgoing() {
+    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) return false;
     const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
     return (mode === 'blur' || mode === 'replace') && Boolean(callMediaPrefs.backgroundApplyOutgoing);
   }
 
   function resolveBackgroundFilterOptions(runtimeToken) {
+    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) {
+      return { mode: 'off' };
+    }
     const toFiniteNumber = (value, fallback) => {
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;

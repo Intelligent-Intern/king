@@ -4,6 +4,7 @@ import {
 } from '../../sfu/recoveryReasons';
 import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRelay.js';
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
@@ -84,6 +85,7 @@ export function createCallWorkspaceSocketHelpers({
     callStateSignalTypes,
     mediaSecuritySignalTypes,
     reconnectDelayMs,
+    strictStabilityPolicy,
   } = constants;
   const fallbackSfuTransportState = {
     sfuBrowserEncoderCompatibilityDisabledUntilMs: 0,
@@ -172,6 +174,12 @@ export function createCallWorkspaceSocketHelpers({
   function handleMediaQualityPressure(payloadBody, sender) {
     const kind = String(payloadBody?.kind || '').trim().toLowerCase();
     if (kind !== 'sfu-video-quality-pressure') return false;
+    if (
+      strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery')
+    ) {
+      return true;
+    }
 
     const nowMs = Date.now();
     const senderUserId = Number(sender?.user_id || 0);

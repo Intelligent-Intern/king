@@ -4,6 +4,11 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
 } from './runtimeConfig.ts';
 import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
+import {
+  isStrict720p30Policy,
+  strict720p30VideoProfile,
+  strictPolicyEnabled,
+} from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks,
@@ -35,6 +40,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     sfuAutoQualityDowngradeNext,
     sfuAutoQualityRecoveryProbeDelaysMs,
     sfuRuntimeEnabled,
+    strictStabilityPolicy,
   } = constants;
   const immediateQualityPressureReasons = Object.freeze([
     'sfu_frame_send_failed',
@@ -180,6 +186,9 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function currentSfuVideoProfile() {
+    if (isStrict720p30Policy(strictStabilityPolicy)) {
+      return strict720p30VideoProfile(strictStabilityPolicy);
+    }
     return resolveSfuVideoQualityProfile(refs.callMediaPrefs.outgoingVideoQualityProfile);
   }
 
@@ -232,6 +241,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   function scheduleNextSfuVideoQualityRecoveryProbe() {
     clearSfuVideoQualityRecoveryProbeTimer();
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     if (nextAutomaticRecoveryProfile(currentProfile) === '') {
       resetSfuVideoQualityRecoveryProbeSeries();
@@ -266,6 +279,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function ensureSfuVideoQualityRecoveryProbeSeries(reason = 'automatic_quality_recovery', details = {}) {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     if (nextAutomaticRecoveryProfile(currentProfile) === '') {
       resetSfuVideoQualityRecoveryProbeSeries();
@@ -289,6 +306,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function runScheduledSfuVideoQualityRecoveryProbe() {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const nextProfile = nextAutomaticRecoveryProfile(currentProfile);
     if (nextProfile === '') {
@@ -385,6 +406,13 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function probeSfuVideoQualityAfterStableReadback(reason = 'sfu_source_readback_recovered', details = {}) {
+    if (
+      strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')
+    ) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const normalizedReason = String(reason || 'sfu_source_readback_recovered').trim().toLowerCase();
     const requestedProfile = normalizeRequestedSfuVideoQualityProfile(
@@ -435,6 +463,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure', options = {}) {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
     const qualityDirection = String(options?.direction || options?.qualityDirection || '').trim().toLowerCase();
     if (qualityDirection === 'up') {
       return probeSfuVideoQualityAfterStableReadback(reason, options);

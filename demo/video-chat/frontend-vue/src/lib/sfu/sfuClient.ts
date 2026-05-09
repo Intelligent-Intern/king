@@ -119,6 +119,8 @@ interface PublisherFrameHealth {
 
 interface SFUClientOptions {
   autoSubscribe?: boolean
+  disablePublisherFrameStallRecovery?: boolean
+  disablePublisherMediaRecovery?: boolean
 }
 
 export class SFUClient {
@@ -146,12 +148,16 @@ export class SFUClient {
   private connectAttemptInFlight = false
   private mediaTransport: SfuWebSocketFallbackMediaTransport
   private autoSubscribe: boolean
+  private disablePublisherFrameStallRecovery: boolean
+  private disablePublisherMediaRecovery: boolean
   private joinStartedAtMs = 0
   private sessionAccepted: SfuSessionAcceptedDetails | null = null
 
   constructor(cb: SFUClientCallbacks, options: SFUClientOptions = {}) {
     this.cb = cb
     this.autoSubscribe = options.autoSubscribe !== false
+    this.disablePublisherFrameStallRecovery = options.disablePublisherFrameStallRecovery === true
+    this.disablePublisherMediaRecovery = options.disablePublisherMediaRecovery === true
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
       reportClientDiagnostic({
@@ -543,6 +549,7 @@ export class SFUClient {
   }
 
   requestPublisherMediaRecovery(publisherId: string, details: Record<string, unknown> = {}): boolean {
+    if (this.disablePublisherMediaRecovery) return false
     const normalizedPublisherId = stringField(publisherId)
     if (normalizedPublisherId === '') return false
     const requestedVideoLayer = stringField(details.requested_video_layer, details.requestedVideoLayer).toLowerCase()
@@ -699,6 +706,7 @@ export class SFUClient {
 
   private startPublisherFrameStallTimer(): void {
     this.stopPublisherFrameStallTimer()
+    if (this.disablePublisherFrameStallRecovery) return
     this.publisherFrameStallTimer = setInterval(() => {
       this.checkPublisherFrameStalls()
     }, SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS)
@@ -711,6 +719,7 @@ export class SFUClient {
   }
 
   private checkPublisherFrameStalls(nowMs = Date.now()): void {
+    if (this.disablePublisherFrameStallRecovery) return
     if (!this.isOpen()) return
     for (const [publisherId, health] of this.publisherFrameHealthById.entries()) {
       const referenceAtMs = health.lastFrameAtMs > 0 ? health.lastFrameAtMs : health.subscribedAtMs

@@ -61,6 +61,46 @@ Contract anchors:
 - `demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php`
 - `demo/video-chat/scripts/prod-debug.sh`
 
+## Hotfix: Strict 720p30 Call Stability
+
+Goal:
+- Stop timed video-call experiments in the live call path.
+- Keep the strongest existing code paths available behind policy gates, but run
+  production calls as fixed 1280x720 at 30 fps.
+- Do not push. Deploy locally after proof without DNS or certbot automation.
+
+Tickets:
+- [x] STAB-01 Add a central `strict_720p30` runtime policy and fixed 720p30
+  SFU video profile.
+- [x] STAB-02 Disable automatic quality downgrade, recovery probes, and
+  profile-switch resets while strict mode is active.
+- [x] STAB-03 Disable remote video stall recovery ladders, forced keyframe
+  recovery, and stall-triggered SFU socket reconnects while strict mode is
+  active.
+- [x] STAB-04 Disable outgoing background segmentation/replacement and
+  background-tab media policy side effects while strict mode is active.
+- [x] STAB-05 Disable Gossip media publish/receive recovery and topology
+  repair requests while strict mode is active.
+- [x] STAB-06 Keep local capture strict: 720p30 camera or audio-only/receive-only
+  instead of lower-video fallback.
+- [x] STAB-07 Add focused contracts for strict 720p30 behavior.
+- [ ] STAB-08 Build/test locally and commit on
+  `prod-kingrt-do-not-push-to-github` without pushing.
+- [ ] STAB-09 Deploy without DNS/certbot/push and run post-deploy diagnostics.
+
+Proof so far:
+- `npm run test:contract:strict-720p30`
+- `node tests/contract/sfu-background-tab-policy-contract.mjs`
+- `node tests/contract/sfu-auto-readback-recovery-contract.mjs`
+- `node tests/contract/sfu-capture-constraints-contract.mjs`
+- `node tests/contract/sfu-profile-switch-actuator-contract.mjs`
+- `node tests/contract/gossip-neighbor-health-repair-contract.mjs`
+- `node tests/contract/gossip-outbound-live-publication-contract.mjs`
+- `npm run test:contract:foreground-reconnect`
+- `npm run build`
+- `npm run test:contract:build-size`
+- `git diff --check`
+
 Tickets:
 - [x] VCS-00 Branch/worktree inventory in this sprint
   - Current main checkout remains dirty on `codex/bgf-06-background-diagnostics`
