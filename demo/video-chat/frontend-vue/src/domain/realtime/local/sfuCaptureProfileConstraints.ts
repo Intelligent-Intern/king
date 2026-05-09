@@ -21,9 +21,10 @@ function firstTrack(stream, getterName) {
   return Array.isArray(tracks) ? tracks[0] || null : null;
 }
 
-function resolveCappedConstraint(targetValue, capability = {}) {
+function resolveCappedConstraint(targetValue, capability = {}, options = {}) {
   const target = positiveNumber(targetValue);
   if (target <= 0) return null;
+  if (options?.exact === true) return { exact: target };
 
   const min = positiveNumber(capability?.min);
   const max = positiveNumber(capability?.max);
@@ -59,9 +60,10 @@ function trackCapabilities(videoTrack) {
 export function buildSfuVideoProfileTrackConstraints(videoProfile = {}, videoTrack = null) {
   const capabilities = trackCapabilities(videoTrack);
   const constraints = {};
-  const width = resolveCappedConstraint(videoProfile.captureWidth, capabilities.width);
-  const height = resolveCappedConstraint(videoProfile.captureHeight, capabilities.height);
-  const frameRate = resolveCappedConstraint(videoProfile.captureFrameRate, capabilities.frameRate);
+  const exact = profileId(videoProfile) === 'strict_720p30';
+  const width = resolveCappedConstraint(videoProfile.captureWidth, capabilities.width, { exact });
+  const height = resolveCappedConstraint(videoProfile.captureHeight, capabilities.height, { exact });
+  const frameRate = resolveCappedConstraint(videoProfile.captureFrameRate, capabilities.frameRate, { exact });
 
   if (width) constraints.width = width;
   if (height) constraints.height = height;

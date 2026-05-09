@@ -119,8 +119,17 @@ export function createLocalMediaOrchestrationHelpers({
     const wantsVideo = controlState.cameraEnabled !== false;
     const wantsAudio = controlState.micEnabled !== false;
     const videoProfile = currentSfuVideoProfile();
+    const strictCaptureOnly = strictCaptureOnlyEnabled();
 
     function profileVideoConstraints(extra = {}) {
+      if (strictCaptureOnly) {
+        return {
+          width: { exact: videoProfile.captureWidth },
+          height: { exact: videoProfile.captureHeight },
+          frameRate: { exact: videoProfile.captureFrameRate },
+          ...extra,
+        };
+      }
       return {
         width: { ideal: videoProfile.captureWidth, max: videoProfile.captureWidth },
         height: { ideal: videoProfile.captureHeight, max: videoProfile.captureHeight },
@@ -460,7 +469,7 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   async function enforceSfuVideoCaptureProfile(stream, reason) {
-    return applySfuVideoProfileConstraintsToStream({
+    const result = await applySfuVideoProfileConstraintsToStream({
       stream,
       reason,
       videoProfile: currentSfuVideoProfile(),
@@ -468,6 +477,14 @@ export function createLocalMediaOrchestrationHelpers({
       captureClientDiagnosticError,
       mediaRuntimePath: refs.mediaRuntimePathRef.value,
     });
+    if (strictCaptureOnlyEnabled() && result?.ok !== true) {
+      const error = result?.error instanceof Error
+        ? result.error
+        : new Error(String(result?.reason || 'strict_720p30_capture_constraints_failed'));
+      error.name = error.name || 'OverconstrainedError';
+      throw error;
+    }
+    return result;
   }
 
   function shouldRetryWithLooseConstraints(error) {
@@ -962,6 +979,15 @@ export function createLocalMediaOrchestrationHelpers({
       callMediaPrefs.backgroundFilterActive = false;
       syncBackgroundFallbackControlState(true);
       return createBackgroundFallbackAudioOnlyStream(rawStream);
+    }
+
+    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) {
+      backgroundFilterController.dispose();
+      resetBackgroundRuntimeMetrics('strict_720p30_unfiltered');
+      callMediaPrefs.backgroundFilterBackend = 'none';
+      callMediaPrefs.backgroundFilterActive = false;
+      syncBackgroundFallbackControlState(false);
+      return rawStream;
     }
 
     syncBackgroundFallbackControlState(false);
