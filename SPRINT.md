@@ -483,6 +483,17 @@ Tickets:
   - The real-call smoke must also prove the unavailable-segmentation branch
     exposes only the three allowed choices: standard avatar, uploaded avatar,
     or unfiltered video.
+  - [ ] Loop 10 proof gap: add deployed browser smoke automation that drives
+    the production build in real Google Chrome and Firefox, joins an actual
+    call, and captures proof for camera, audio, screenshare, reconnect,
+    background-filter transitions, and the unavailable-segmentation branch.
+    Exact proof must include the command lines, deployed URL/domain, Chrome and
+    Firefox versions, PASS results, screenshots or trace/video artifacts for
+    the exercised call states, and diagnostics logs showing
+    `local_background_backend_init`, `local_background_matte_rejected`,
+    `local_background_replacement_unavailable`, and
+    `local_background_replacement_modal_choice` with only standard avatar,
+    uploaded avatar, or unfiltered video offered.
   - Diagnostics proof gap 2026-05-09 Loop 4: live-call fallback proof must
     collect `local_background_backend_init`,
     `local_background_matte_rejected`,
