@@ -96,7 +96,7 @@ Tickets:
   quality, gossip, or background recovery is triggered by sender-key mismatch.
 - [x] MSR-11 Add contracts for duplicate stale, duplicate valid, stale cache
   preservation, unknown/future pending, and sync single-flight behavior.
-- [ ] MSR-12 Deploy without push/DNS/certbot and run asset-filtered diagnostics
+- [x] MSR-12 Deploy without push/DNS/certbot and run asset-filtered diagnostics
   for media-security mismatch loops and strict 720p30 regressions.
 
 Proof so far:
@@ -108,6 +108,10 @@ Proof so far:
 - `npm run build`
 - `npm run test:contract:build-size`
 - `git diff --check`
+- Deploy 1 asset `20260509231326`: found fresh repeated
+  `media_security_sender_key_participant_mismatch` during participant churn.
+- Deploy 2 asset `20260509231643`: no asset-filtered sender-key mismatch spam,
+  websocket/SFU reconnect, or strict 720p30 recovery hits in post-deploy logs.
 
 ## Hotfix: Strict 720p30 Call Stability
 
