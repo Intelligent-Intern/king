@@ -82,7 +82,11 @@ try {
 
   const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));
   assert.ok(edge.includes("'X-KingRT-Asset-Version'"), 'edge must expose the asset version header on static responses');
-  assert.ok(edge.includes('use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion)'), 'edge static handler must capture the asset version for response headers');
+  assert.match(
+    edge,
+    /\$serveStatic\s*=\s*static\s+function\s*\([^)]*\)\s*use\s*\([^)]*\$assetVersion[^)]*\)\s*:\s*void\s*\{/s,
+    'edge static handler must capture the asset version for response headers',
+  );
 
   const runtimeModule = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_runtime.php'));
   assert.ok(runtimeModule.includes("$payload['asset_version'] = $assetVersion;"), 'public runtime endpoint must expose current asset version for stale websocket failure recovery');
@@ -92,8 +96,12 @@ try {
   assert.ok(realtimeAssetVersion.includes('function videochat_realtime_disconnect_stale_asset_client'), 'realtime asset version helper must expose a stale-client disconnect helper');
   assert.ok(realtimeAssetVersion.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'stale-client disconnect helper must close stale sockets');
 
+  const realtimeWsReconnect = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket_reconnect.php'));
+  assert.ok(realtimeWsReconnect.includes('function videochat_realtime_websocket_disconnect_stale_asset_client'), 'presence websocket must expose a stale-client disconnect helper');
+  assert.ok(realtimeWsReconnect.includes('videochat_realtime_disconnect_stale_asset_client('), 'presence websocket stale-client helper must use the shared stale-client disconnect helper');
+
   const realtimeWs = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket.php'));
-  assert.ok(realtimeWs.includes('videochat_realtime_disconnect_stale_asset_client('), 'presence websocket must use the shared stale-client disconnect helper');
+  assert.ok(realtimeWs.includes('videochat_realtime_websocket_disconnect_stale_asset_client('), 'presence websocket must use the shared stale-client disconnect helper');
   assert.ok((realtimeWs.match(/\$disconnectStaleAssetClient\(\)/g) || []).length >= 2, 'presence websocket must invalidate stale clients on connect and during the live loop');
 
   const realtimeSfu = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_sfu_gateway.php'));
