@@ -25,6 +25,7 @@ export const IAM_CALL_ACCESS_CONTRACT_COMMANDS = Object.freeze([
   'node tests/contract/iam-king-participants-owner-timeout-contract.mjs',
   'node tests/contract/iam-call-access-e2e-foundation-contract.mjs',
   'node tests/contract/iam-lobby-state-cleanup-proof-contract.mjs',
+  'node tests/contract/iam-ci-artifacts-contract.mjs',
   'node tests/contract/iam-system-admin-edge-cases-contract.mjs',
   'node tests/contract/iam-lobby-concurrency-remaining-contract.mjs',
   'node tests/contract/iam-lobby-timeout-consistency-contract.mjs',
