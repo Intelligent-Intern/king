@@ -1451,8 +1451,10 @@ that registered user, enters lobby, and resolves into the call after admission.
 `call-access-registered-logged-in-invitee-contract` plus the focused
 `call-access-join.spec.js` browser path prove the active registered session is
 preserved, guest takeover input is ignored, no temporary identity data leaks,
-and host admission moves the invitee into the call room. No duplicate browser
-spec was added in the final proof branch.
+and host admission moves the invitee into the call room. Docker PHP 8.4 with
+`pdo_sqlite` passed both registered-invitee backend contracts in the
+post-merge audit; host PHP wrappers skip when `pdo_sqlite` is unavailable. No
+duplicate browser spec was added in the final proof branch.
 
 ## 5. Personalized Link: User Not Logged In
 
