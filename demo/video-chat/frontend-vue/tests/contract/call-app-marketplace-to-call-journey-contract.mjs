@@ -74,7 +74,7 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /denied participant launch must not allow CRDT read[\s\S]*owner should re-allow participant app access[\s\S]*re-allowed participant launch token should return 201/,
+  /denied participant launch must not allow CRDT read[\s\S]*owner should re-allow participant app (?:write )?access[\s\S]*re-allowed participant launch token should return 201/,
   'backend journey must prove grant denial, reconnect-safe private-state blocking, and re-allow',
 );
 
@@ -92,7 +92,7 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /remove should return 200[\s\S]*remove must retire active launch tokens for the collaborative journey[\s\S]*include_removed should expose removed history/,
+  /remove should return 200[\s\S]*remove must retire (?:remaining )?active launch tokens for the collaborative journey[\s\S]*include_removed should expose removed history/,
   'backend journey must remove the Call App session and retain explicit history',
 );
 
