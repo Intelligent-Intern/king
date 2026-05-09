@@ -122,6 +122,7 @@ interface SFUClientOptions {
   disablePublisherFrameStallRecovery?: boolean
   disablePublisherMediaRecovery?: boolean
   suppressPublisherFrameDropDiagnostics?: boolean
+  suppressDisconnectRecoveryDiagnostics?: boolean
 }
 
 export class SFUClient {
@@ -152,6 +153,7 @@ export class SFUClient {
   private disablePublisherFrameStallRecovery: boolean
   private disablePublisherMediaRecovery: boolean
   private suppressPublisherFrameDropDiagnostics: boolean
+  private suppressDisconnectRecoveryDiagnostics: boolean
   private joinStartedAtMs = 0
   private sessionAccepted: SfuSessionAcceptedDetails | null = null
 
@@ -161,8 +163,10 @@ export class SFUClient {
     this.disablePublisherFrameStallRecovery = options.disablePublisherFrameStallRecovery === true
     this.disablePublisherMediaRecovery = options.disablePublisherMediaRecovery === true
     this.suppressPublisherFrameDropDiagnostics = options.suppressPublisherFrameDropDiagnostics === true
+    this.suppressDisconnectRecoveryDiagnostics = options.suppressDisconnectRecoveryDiagnostics === true
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
+      if (this.suppressDisconnectRecoveryDiagnostics) return
       reportClientDiagnostic({
         category: 'media',
         level: change.current === 'lost' ? 'error' : (change.current === 'degraded' ? 'warning' : 'info'),
@@ -396,22 +400,24 @@ export class SFUClient {
       }
       this.stopPublisherFrameStallTimer()
       this.carrierState.socketClosed()
-      reportClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'sfu_socket_closed',
-        code: normalizeSfuIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
-        message: String(event?.reason || 'SFU websocket closed unexpectedly.').trim() || 'SFU websocket closed unexpectedly.',
-        roomId,
-        payload: {
-          room_id: roomId,
-          lane: 'ops',
-          close_code: Number(event?.code || 0),
-          was_clean: Boolean(event?.wasClean),
-          candidate_origin: String(candidates[index] || ''),
-          ...this.carrierState.getDiagnostics(),
-        },
-      })
+      if (!this.suppressDisconnectRecoveryDiagnostics) {
+        reportClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_socket_closed',
+          code: normalizeSfuIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
+          message: String(event?.reason || 'SFU websocket closed unexpectedly.').trim() || 'SFU websocket closed unexpectedly.',
+          roomId,
+          payload: {
+            room_id: roomId,
+            lane: 'ops',
+            close_code: Number(event?.code || 0),
+            was_clean: Boolean(event?.wasClean),
+            candidate_origin: String(candidates[index] || ''),
+            ...this.carrierState.getDiagnostics(),
+          },
+        })
+      }
       this.notifyDisconnectOnce()
     }
 

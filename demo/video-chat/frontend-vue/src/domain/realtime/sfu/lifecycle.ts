@@ -64,6 +64,7 @@ export function createSfuLifecycleHelpers({
 
     const socketCallId = refs.activeSocketCallId.value;
     if (socketCallId === '') return;
+    const disableSfuSocketRecoveryReconnect = strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect');
 
     refs.sfuClientRef.value = new refs.SFUClient({
       onTracks: (event) => handleSFUTracks(event),
@@ -184,6 +185,10 @@ export function createSfuLifecycleHelpers({
           void maybeFallbackToNativeRuntime('sfu_connect_failed');
           return;
         }
+        if (disableSfuSocketRecoveryReconnect) {
+          state.sfuConnectRetryCount = 0;
+          return;
+        }
         captureClientDiagnostic({
           category: 'media',
           level: 'warning',
@@ -206,6 +211,7 @@ export function createSfuLifecycleHelpers({
       disablePublisherFrameStallRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery'),
       disablePublisherMediaRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery'),
       suppressPublisherFrameDropDiagnostics: strictPolicyEnabled(strictStabilityPolicy, 'quietPublisherFrameDrops'),
+      suppressDisconnectRecoveryDiagnostics: disableSfuSocketRecoveryReconnect,
     });
 
     refs.sfuClientRef.value.connect(
