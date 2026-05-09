@@ -76,6 +76,40 @@ function videochat_call_app_module_with_diagnostic(array $result, string $eventT
     return $result;
 }
 
+function videochat_call_app_module_broadcast_room_snapshot(
+    ?callable $broadcastRoomSnapshot,
+    array $result,
+    int $tenantId,
+    string $callId,
+    string $reason
+): array {
+    if ($broadcastRoomSnapshot === null || trim($callId) === '') {
+        return $result;
+    }
+
+    $sentCount = 0;
+    $broadcastOk = true;
+    try {
+        $sentCount = max(0, (int) $broadcastRoomSnapshot(trim($callId), $tenantId, trim($reason) !== '' ? trim($reason) : 'call_app_session_changed'));
+    } catch (Throwable) {
+        $broadcastOk = false;
+    }
+
+    $result['room_snapshot_broadcast'] = [
+        'ok' => $broadcastOk,
+        'call_id' => trim($callId),
+        'reason' => trim($reason) !== '' ? trim($reason) : 'call_app_session_changed',
+        'sent_count' => $sentCount,
+    ];
+
+    return videochat_call_app_module_with_diagnostic($result, 'call_app_room_snapshot_broadcast', [
+        'call_id' => trim($callId),
+        'reason' => trim($reason) !== '' ? trim($reason) : 'call_app_session_changed',
+        'sent_count' => $sentCount,
+        'ok' => $broadcastOk,
+    ]);
+}
+
 function videochat_handle_call_app_routes(
     string $path,
     string $method,
@@ -84,7 +118,8 @@ function videochat_handle_call_app_routes(
     callable $jsonResponse,
     callable $errorResponse,
     callable $openDatabase,
-    ?callable $decodeJsonBody = null
+    ?callable $decodeJsonBody = null,
+    ?callable $broadcastRoomSnapshot = null
 ): ?array {
     $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
     $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
@@ -230,6 +265,14 @@ function videochat_handle_call_app_routes(
             ]);
         }
 
+        $result = videochat_call_app_module_broadcast_room_snapshot(
+            $broadcastRoomSnapshot,
+            $result,
+            $tenantId,
+            $callId,
+            'call_app_session_changed'
+        );
+
         return $jsonResponse((string) ($result['state'] ?? '') === 'created' ? 201 : 200, [
             'status' => 'ok',
             'result' => $result,
@@ -319,6 +362,13 @@ function videochat_handle_call_app_routes(
             'audit_event_count' => count((array) ($result['audit_events'] ?? [])),
             'retired_launch_token_count' => $retiredLaunchTokens,
         ]);
+        $result = videochat_call_app_module_broadcast_room_snapshot(
+            $broadcastRoomSnapshot,
+            $result,
+            $tenantId,
+            (string) ($result['session']['call_id'] ?? $callId),
+            'call_app_grants_changed'
+        );
 
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
     }
@@ -660,6 +710,14 @@ function videochat_handle_call_app_routes(
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
             ]);
         }
+
+        $result = videochat_call_app_module_broadcast_room_snapshot(
+            $broadcastRoomSnapshot,
+            $result,
+            $tenantId,
+            $callId,
+            $method === 'DELETE' ? 'call_app_session_removed' : 'call_app_session_changed'
+        );
 
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
     }
