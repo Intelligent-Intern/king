@@ -765,10 +765,19 @@
 .workspace-grid-video-slot :deep([data-call-screen-share-pan-enabled="1"]),
 .workspace-mini-video-slot :deep([data-call-screen-share-pan-enabled="1"]),
 .workspace-fullscreen-video-slot :deep([data-call-screen-share-pan-enabled="1"]) {
-  object-fit: cover !important;
-  object-position: var(--call-screen-share-object-position, center center) !important;
-  cursor: grab;
+  object-fit: contain !important;
+  object-position: center center !important;
+  transform: translate(var(--call-screen-share-pan-x, 0), var(--call-screen-share-pan-y, 0)) scale(var(--call-screen-share-zoom-scale, 1));
+  transform-origin: center center;
+  cursor: zoom-in;
   touch-action: none;
+}
+
+.video-container :deep([data-call-screen-share-zoomed="1"]),
+.workspace-grid-video-slot :deep([data-call-screen-share-zoomed="1"]),
+.workspace-mini-video-slot :deep([data-call-screen-share-zoomed="1"]),
+.workspace-fullscreen-video-slot :deep([data-call-screen-share-zoomed="1"]) {
+  cursor: grab;
 }
 
 .video-container :deep([data-call-screen-share-pan-dragging="1"]),
