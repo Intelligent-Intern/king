@@ -334,6 +334,20 @@
   gap: 8px;
 }
 
+.call-apps-session-actions {
+  min-width: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-apps-remove-btn {
+  min-height: 34px;
+  border-color: color-mix(in srgb, var(--color-error) 55%, var(--color-border));
+  color: var(--color-error);
+}
+
 .call-apps-access-row {
   min-width: 0;
   display: grid;

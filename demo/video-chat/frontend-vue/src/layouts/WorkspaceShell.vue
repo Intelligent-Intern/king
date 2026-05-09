@@ -31,6 +31,7 @@
           @apply-layout-mode="applySidebarLayoutMode"
           @apply-layout-strategy="applySidebarLayoutStrategy"
           @call-app-session-created="handleCallAppSessionCreated"
+          @call-app-session-removed="handleCallAppSessionRemoved"
         />
 
         <WorkspaceStandardSidebar
@@ -702,6 +703,13 @@ function applySidebarLayoutStrategy(strategy) {
 
 function handleCallAppSessionCreated() {
   applySidebarLayoutMode('call_app_workspace');
+}
+
+function handleCallAppSessionRemoved() {
+  clearCallAppSidebarState();
+  if (callLayoutSidebarState.currentMode === 'call_app_workspace') {
+    applySidebarLayoutMode('main_mini');
+  }
 }
 
 function clearCallAppSidebarState() {

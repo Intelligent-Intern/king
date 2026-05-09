@@ -136,7 +136,7 @@
       <button
         class="btn btn-cyan full"
         type="button"
-        :disabled="!canManage || submitting"
+        :disabled="!canManage || submitting || removing"
         @click="attachSelectedApp"
       >
         {{ submitting ? 'Adding...' : 'Add to call' }}
@@ -154,6 +154,19 @@
         <span>{{ activeSessionName }}</span>
         <span class="call-apps-access-default">{{ activeSessionDefaultAccessLabel }}</span>
       </div>
+      <div v-if="canManage" class="call-apps-session-actions" aria-label="Active Call App actions">
+        <button
+          class="btn call-apps-remove-btn"
+          type="button"
+          :disabled="removing"
+          @click="removeActiveSession"
+        >
+          {{ removing ? 'Removing...' : 'Remove from call' }}
+        </button>
+      </div>
+      <p v-else class="call-apps-hint">
+        Only the call owner or a moderator can remove Call Apps.
+      </p>
       <div v-if="callAppAccessParticipants.length > 0" class="call-apps-access-list">
         <div
           v-for="participant in callAppAccessParticipants"
@@ -220,7 +233,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['session-created']);
+const emit = defineEmits(['session-created', 'session-removed']);
 
 const {
   availableApps,
@@ -235,6 +248,7 @@ const searchDraft = ref('');
 const selectedAppKey = ref('');
 const defaultPolicy = ref('blocked_by_default');
 const submitting = ref(false);
+const removing = ref(false);
 const actionError = ref('');
 const notice = ref('');
 const localGrantOverrides = ref({});
@@ -412,7 +426,7 @@ async function submitSearch() {
 
 async function attachSelectedApp() {
   const appKey = String(selectedApp.value?.app_key || '').trim();
-  if (!hasCallContext.value || appKey === '' || submitting.value) return;
+  if (!hasCallContext.value || appKey === '' || submitting.value || removing.value) return;
 
   actionError.value = '';
   notice.value = '';
@@ -432,6 +446,28 @@ async function attachSelectedApp() {
     actionError.value = attachError instanceof Error ? attachError.message : 'Could not add Call App.';
   } finally {
     submitting.value = false;
+  }
+}
+
+async function removeActiveSession() {
+  const sessionId = String(activeSessionForAccess.value?.id || '').trim();
+  if (!props.canManage || sessionId === '' || removing.value) return;
+
+  actionError.value = '';
+  notice.value = '';
+  removing.value = true;
+  try {
+    const payload = await props.apiRequest(`/api/call-app-sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+    });
+    notice.value = 'Call App removed.';
+    localGrantOverrides.value = {};
+    emit('session-removed', payload?.result || { session_id: sessionId });
+    props.requestRoomSnapshot();
+  } catch (removeError) {
+    actionError.value = removeError instanceof Error ? removeError.message : 'Could not remove Call App.';
+  } finally {
+    removing.value = false;
   }
 }
 

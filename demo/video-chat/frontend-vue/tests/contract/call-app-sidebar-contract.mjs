@@ -18,6 +18,8 @@ const [
   shellSource,
   storeSource,
   sprintSource,
+  backendModuleSource,
+  backendLifecycleContract,
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.css'),
@@ -27,6 +29,8 @@ const [
   read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue'),
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
   read('SPRINT.md'),
+  read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
+  read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
 ]);
 const sidebarCombinedSource = `${sidebarSource}\n${sidebarStyles}`;
 
@@ -109,6 +113,24 @@ assert.match(
 );
 
 assert.match(
+  leftSidebarSource,
+  /@session-removed="\$emit\('call-app-session-removed', \$event\)"/,
+  'CallWorkspaceLeftSidebar must forward Call App remove events from the sidebar panel',
+);
+
+assert.match(
+  shellSource,
+  /@call-app-session-removed="handleCallAppSessionRemoved"/,
+  'WorkspaceShell must listen for Call App remove events',
+);
+
+assert.match(
+  shellSource,
+  /function handleCallAppSessionRemoved\(\)[\s\S]*clearCallAppSidebarState\(\)[\s\S]*callLayoutSidebarState\.currentMode === ['"]call_app_workspace['"][\s\S]*applySidebarLayoutMode\(['"]main_mini['"]\)/,
+  'Removing a Call App must immediately leave call_app_workspace layout while snapshot backfill clears the authoritative session',
+);
+
+assert.match(
   sidebarSource,
   /useCallAppsCatalog\(\)/,
   'Call Apps sidebar must reuse the shared catalog composable',
@@ -154,6 +176,30 @@ assert.match(
   sidebarSource,
   /emit\(['"]session-created['"],\s*payload\?\.result\s*\|\|\s*\{\}\)[\s\S]*props\.requestRoomSnapshot\(\)/,
   'Adding a Call App must immediately request a room snapshot so the workspace shows the active session without reload',
+);
+
+assert.match(
+  sidebarSource,
+  /class="call-apps-session-actions"[\s\S]*Remove from call[\s\S]*Only the call owner or a moderator can remove Call Apps\./,
+  'Call Apps sidebar must expose an owner/moderator remove action for the active Call App session',
+);
+
+assert.match(
+  sidebarSource,
+  /async function removeActiveSession\(\)[\s\S]*\/api\/call-app-sessions\/\$\{encodeURIComponent\(sessionId\)\}[\s\S]*method:\s*['"]DELETE['"][\s\S]*emit\(['"]session-removed['"],\s*payload\?\.result\s*\|\|\s*\{\s*session_id:\s*sessionId\s*\}\)[\s\S]*props\.requestRoomSnapshot\(\)/,
+  'Removing a Call App must use the backend DELETE route, emit removal, and request a room snapshot',
+);
+
+assert.match(
+  backendModuleSource,
+  /if \(\$method === 'DELETE'\)[\s\S]*videochat_call_app_remove_session\([\s\S]*call_app_session_removed/s,
+  'Backend Call App module must remove sessions through the lifecycle service and broadcast call_app_session_removed',
+);
+
+assert.match(
+  backendLifecycleContract,
+  /DELETE['"],\s*'\/api\/call-app-sessions\/'[\s\S]*call_app_session_removed[\s\S]*active_session_count[\s\S]*revoked_at[\s\S]*removed sessions must be hidden by default[\s\S]*removed sessions must not reactivate/s,
+  'Backend lifecycle contract must prove DELETE removes snapshots, revokes launch tokens, hides removed sessions, and blocks reactivation',
 );
 
 assert.match(
