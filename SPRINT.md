@@ -13,6 +13,125 @@ Rules:
 - Do not grow `CallWorkspaceView.vue` or other oversized files; extract focused
   helpers/components when adding behavior.
 
+## Sprint: Collaborative Office Call Apps And Operator Feedback
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Active as of 2026-05-09.
+- Highest priority for the next subagent loop. Keep three worker slots busy on
+  the office Call App sprint and reserve three idle slots for live frontend
+  requests.
+- Deploy every third manager loop after merging completed worker branches into
+  the local dev branch. Do not push. Do not run certbot or DNS automation unless
+  a new domain is explicitly introduced.
+- Background replacement, background tests, Gossip, SFU, and BTGF-07 remain
+  parked for manual work only and are out of scope for this sprint.
+
+User-facing problem:
+- Calls need production-grade collaborative Office-style Call Apps, not only
+  Whiteboard and Planning Image.
+- Users need to co-edit text documents, presentations, and spreadsheets inside
+  a call with the same real-time collaboration model as Whiteboard.
+- Call chat needs an operator feedback path so users can flag missing features
+  or issues while staying in the call; those reports must be persisted and
+  turned into sprint work.
+
+Sprint goal:
+- Add installable, package-described Call Apps for collaborative documents,
+  presentations, and spreadsheets under the existing Call App hosting model.
+- Keep every app iframe sandboxed, grant-aware, CRDT-backed, and path-hostable
+  without introducing new DNS or certificate work.
+- Store operator feedback from the call chat in the backend database and make
+  deployed fixes visible to users through a concise toast:
+  `feature '<requested feature>' deployed`.
+
+Contract anchors:
+- `demo/call-app/whiteboard/`
+- `demo/call-app/planning-image/`
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps/`
+- `demo/video-chat/backend-king-php/http/module_call_apps.php`
+- `demo/video-chat/backend-king-php/domain/call_apps/`
+- `demo/video-chat/frontend-vue/tests/contract/call-app-package-layout-contract.mjs`
+- `demo/video-chat/backend-king-php/tests/call-app-mcp-metadata-contract.sh`
+
+Execution boundary:
+- Do not touch Background Replacement, BTGF-07 proof, Gossip, or SFU code.
+- Do not add app-specific logic to `CallWorkspaceView.vue`; use package
+  metadata, existing Call App host bridges, and focused components/helpers.
+- Do not expose primary user session tokens to iframe apps.
+- Do not replace backend grants with UI-only state. Read, write, delete, and
+  export actions must map to backend-authoritative Call App permissions.
+- Do not add dedicated domains for these apps in this sprint. Serve them through
+  the existing deployed Call App/static asset path unless the user explicitly
+  requests a new domain.
+
+Acceptance criteria:
+- Text, presentation, and spreadsheet Call Apps appear through package metadata,
+  MCP descriptors, health descriptors, CRDT schemas, and Marketplace/Call App
+  availability without manual frontend hardcoding.
+- Multiple call participants can edit the same app session concurrently through
+  King CRDT envelopes, with read-only/revoked users unable to append mutations.
+- The document app exports OpenDocument Text and PDF.
+- The presentation app exports a PowerPoint-compatible presentation file and
+  supports a presenter/playback mode.
+- The spreadsheet app supports collaborative table editing, formulas needed for
+  a first usable calculator workflow, and spreadsheet export.
+- The call chat exposes an Operator feedback checkbox; checked messages are
+  persisted in the database with call/user/session context and can be triaged
+  into sprint tickets.
+- After a feedback-derived fix is deployed, users see
+  `feature '<requested feature>' deployed` once for that deployed request.
+- Each worker branch is merged locally before deploy. Deploy diagnostics collect
+  all distinct errors before any follow-up deployment is prepared.
+
+Tickets:
+- [ ] OCA-01 Collaborative text document Call App
+  - Owner branch: `agent/office-text-call-app`.
+  - Add a package under `demo/call-app/` for multi-user text editing with
+    heading, paragraph, list, basic inline formatting, comments or notes where
+    the existing Call App bridge can support them, and read/write/delete/export
+    permission gates.
+  - Export OpenDocument Text and PDF from the app without requiring a new
+    service domain.
+  - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+
+- [ ] OCA-02 Collaborative presentation Call App
+  - Owner branch: `agent/office-presentation-call-app`.
+  - Add a package under `demo/call-app/` for collaborative slide editing with
+    slide thumbnails, text boxes, simple shapes/images where feasible, presenter
+    playback mode, and read/write/delete/export permission gates.
+  - Export a PowerPoint-compatible presentation file from the app without
+    requiring a new service domain.
+  - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+
+- [ ] OCA-03 Collaborative spreadsheet Call App
+  - Owner branch: `agent/office-spreadsheet-call-app`.
+  - Add a package under `demo/call-app/` for collaborative cells, ranges,
+    sheets, basic formatting, and first-pass formulas for normal table
+    calculation.
+  - Export spreadsheet data in an office-compatible format, plus CSV where that
+    is useful for interoperability.
+  - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+
+- [ ] OCA-04 Operator feedback chat intake and sprint triage
+  - Add an Operator checkbox to the existing call chat composer.
+  - Persist checked feedback messages in the backend database with call ID,
+    organization, sender, session, message text, status, and deployed feature
+    notification state.
+  - Add an operator feedback queue view or diagnostics path that the manager
+    loop can inspect and convert into sprint tickets for a free worker slot.
+  - Emit `feature '<requested feature>' deployed` as a toast after the related
+    feedback fix has been deployed and marked delivered.
+
+- [ ] OCA-05 Local merge, deploy, and diagnostics proof
+  - Merge completed worker branches into the local dev branch only; do not push.
+  - Run focused contracts, build, and deploy on every third manager loop after
+    completed work exists.
+  - Run post-deploy diagnostics, collect all distinct errors, fix them together,
+    and prepare at most one follow-up deployment from the consolidated fix set.
+
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
 Branch:
