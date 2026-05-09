@@ -133,6 +133,10 @@ includes(runtime, 'classifyStage(entry)', 'runtime must map diagnostics onto con
 includes(runtime, 'typ relay', 'runtime must classify TURN relay candidates');
 includes(runtime, 'typ srflx', 'runtime must classify STUN srflx candidates');
 includes(runtime, 'persistLog(entry)', 'runtime must store live diagnostics unless marked non-persistent');
+includes(runtime, 'pausedLogs', 'runtime pause must buffer incoming tail entries');
+includes(runtime, 'flushPausedLogs()', 'runtime pause must flush buffered entries on resume');
+includes(runtime, 'filterMatchesEntry(entry, term)', 'runtime filters must apply through a focused predicate');
+includes(runtime, 'JSON.stringify(summarizePayload(payload), null, 2)', 'runtime details must render jq-style pretty JSON');
 assert.doesNotMatch(bundle, /sessionToken|Authorization|localStorage|XMLHttpRequest|fetch\(/, 'iframe bundle must not access parent auth material or direct APIs');
 
 const tailBridge = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnosticTailBridge.js');

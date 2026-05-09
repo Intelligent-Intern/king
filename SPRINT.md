@@ -287,6 +287,19 @@ Tickets:
     appeared immediately after the install write; retry succeeded and the
     post-stabilization log scan after `2026-05-09T12:16:20Z` had no fatal,
     error, HTTP 50x, or database-lock matches.
+  - Hotfix proof: pause now buffers incoming tail entries until resume,
+    filters run through the same focused predicate as the visible log list, and
+    detail payloads render pretty JSON like `jq`. Local
+    `call-app-call-diagnostics-contract`, `test:contract:call-apps`,
+    `test:contract:build-size`, `npm run build`, and `git diff --check` pass.
+    Deployed the edge asset `20260509122256` without push, DNS, or certbot,
+    then aligned API, WS, and SFU to the same `VIDEOCHAT_ASSET_VERSION` to stop
+    the reload loop caused by mixed runtime asset signals. Public
+    `app.kingrt.com` serves `v=20260509122256`, API health reports
+    `asset_version=20260509122256`, all Compose services are running, and a
+    fresh post-stabilization scan after `2026-05-09T12:26:30Z` had no
+    `asset_version_mismatch`, invalidate, fatal, error, HTTP 50x, or
+    database-lock matches.
 
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 

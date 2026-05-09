@@ -329,6 +329,10 @@ h1 {
 .tail-detail {
   grid-column: 3;
   margin-top: 3px;
+  padding: 6px 8px;
+  border: 1px solid rgba(60, 92, 104, 0.45);
+  border-radius: 6px;
+  background: rgba(3, 12, 16, 0.54);
   color: #91a8b1;
   white-space: pre-wrap;
 }
