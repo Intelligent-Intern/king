@@ -494,6 +494,25 @@ Tickets:
     `local_background_replacement_unavailable`, and
     `local_background_replacement_modal_choice` with only standard avatar,
     uploaded avatar, or unfiltered video offered.
+  - Loop 10 automation proof: added `npm run
+    test:e2e:production-browser-smoke`, production-only Playwright projects for
+    Chrome/Chromium and Firefox, and
+    `tests/e2e/background-production-browser-smoke.spec.js`. The smoke creates
+    a real deployed call through the API, admits a second participant, proves
+    camera/audio/SFU video, drives the BGF unavailable branch with the named
+    smoke query, verifies only standard-avatar/uploaded-avatar/unfiltered
+    choices, starts/stops screenshare, checks focus/click stability, and writes
+    screenshots plus browser/version proof. Local verification PASS:
+    `node --check tests/e2e/background-production-browser-smoke.spec.js`,
+    `node --check tests/contract/bgf-production-browser-smoke-contract.mjs`,
+    `node --check playwright.config.js`, `npm run
+    test:contract:background-runtime`, `npm run
+    test:contract:background-fallback`,
+    `node tests/contract/prod-debug-observability-contract.mjs`, `bash -n
+    ../scripts/prod-debug.sh`, production-project skip smoke without
+    `VIDEOCHAT_PRODUCTION_BROWSER_SMOKE`, `git diff --check`, and `npm run
+    build`. BGF-07 remains open until this automation is deployed and the real
+    Chrome/Firefox production run passes with diagnostics and artifacts.
   - Diagnostics proof gap 2026-05-09 Loop 4: live-call fallback proof must
     collect `local_background_backend_init`,
     `local_background_matte_rejected`,
