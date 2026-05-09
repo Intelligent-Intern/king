@@ -584,6 +584,13 @@ export function createPublisherBackpressureController({
 
   function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
     const nowMs = Date.now();
+    if (strictPolicyEnabled(strictStabilityPolicy, 'quietPublisherFrameDrops')) {
+      state.wlvcBackpressurePauseUntilMs = Math.max(
+        state.wlvcBackpressurePauseUntilMs,
+        nowMs + wlvcBackpressurePauseMs(bufferedAmount)
+      );
+      return;
+    }
     resetWlvcSourceReadbackRecoveryWindow();
     if (state.wlvcBackpressureFirstAtMs <= 0) {
       state.wlvcBackpressureFirstAtMs = nowMs;

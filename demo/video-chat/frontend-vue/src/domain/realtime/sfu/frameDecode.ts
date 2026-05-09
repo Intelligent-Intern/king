@@ -58,6 +58,7 @@ export function createSfuFrameDecodeHelpers({
   remoteSfuFrameDropLogCooldownMs,
   remoteSfuFrameStaleTtlMs,
   remoteVideoKeyframeWaitLogCooldownMs,
+  suppressRemoteFrameDropDiagnostics = false,
   renderCallVideoLayout,
   remotePeersRef,
   sendMediaSecurityHello,
@@ -466,6 +467,7 @@ export function createSfuFrameDecodeHelpers({
   }
 
   function logDroppedRemoteSfuFrame(peer, publisherId, frame, reason, extraPayload = {}, immediate = false) {
+    if (suppressRemoteFrameDropDiagnostics) return;
     const nowMs = Date.now();
     if (!immediate && (nowMs - Number(peer?.lastSfuFrameDropLoggedAtMs || 0)) < remoteSfuFrameDropLogCooldownMs) {
       return;
@@ -948,6 +950,7 @@ export function createSfuFrameDecodeHelpers({
     const layoutMode = String(frame?.layoutMode || 'full_frame').trim().toLowerCase();
     const isSelectiveTileFrame = layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot';
     if (peer.needsKeyframe && frameMetadata.type !== 'keyframe') {
+      if (suppressRemoteFrameDropDiagnostics) return;
       const nowMs = Date.now();
       if (
         !peer.lastDeltaBeforeKeyframeLoggedAtMs

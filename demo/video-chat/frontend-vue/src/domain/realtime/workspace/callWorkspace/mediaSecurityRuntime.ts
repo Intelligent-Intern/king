@@ -160,22 +160,24 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
       state.mediaSecurityHandshakeRetryCountByUserId.set(normalizedTargetId, retryAttempt + 1);
       state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'media_security_handshake_timeout',
-        code: 'media_security_handshake_timeout',
-        message: 'Media security handshake timed out and is being retried.',
-        payload: {
-          target_user_id: normalizedTargetId,
-          peer_state: peerState,
-          retry_attempt: retryAttempt + 1,
-          retry_timeout_ms: retryTimeoutMs,
-          elapsed_ms: nowMs - helloSentAt,
-          media_runtime_path: mediaRuntimePath.value,
-          security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
-        },
-      });
+      if (!strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'media_security_handshake_timeout',
+          code: 'media_security_handshake_timeout',
+          message: 'Media security handshake timed out and is being retried.',
+          payload: {
+            target_user_id: normalizedTargetId,
+            peer_state: peerState,
+            retry_attempt: retryAttempt + 1,
+            retry_timeout_ms: retryTimeoutMs,
+            elapsed_ms: nowMs - helloSentAt,
+            media_runtime_path: mediaRuntimePath.value,
+            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+          },
+        });
+      }
 
       try {
         await sendMediaSecurityHello(normalizedTargetId, true);
@@ -311,19 +313,21 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecuritySyncHintLastAtMs = nowMs;
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
 
-    captureClientDiagnostic({
-      category: 'media',
-      level: 'warning',
-      eventType: 'media_security_sync_hint',
-      code: 'media_security_sync_hint',
-      message: 'Media security sync was requested to recover SFU frame delivery.',
-      payload: {
-        reason: String(reason || 'unspecified'),
-        target_user_ids: targetUserIds,
-        media_runtime_path: mediaRuntimePath.value,
-        ...extraPayload,
-      },
-    });
+    if (!strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'media_security_sync_hint',
+        code: 'media_security_sync_hint',
+        message: 'Media security sync was requested to recover SFU frame delivery.',
+        payload: {
+          reason: String(reason || 'unspecified'),
+          target_user_ids: targetUserIds,
+          media_runtime_path: mediaRuntimePath.value,
+          ...extraPayload,
+        },
+      });
+    }
     void syncMediaSecurityWithParticipants();
     for (const targetUserId of targetUserIds) {
       requestRemoteMediaSecuritySync(targetUserId, 'media_security_sync_hint', {

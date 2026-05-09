@@ -207,6 +207,7 @@ export function createCallWorkspaceMediaStack(options) {
     remoteSfuFrameDropLogCooldownMs: constants.remoteSfuFrameDropLogCooldownMs,
     remoteSfuFrameStaleTtlMs: constants.remoteSfuFrameStaleTtlMs,
     remoteVideoKeyframeWaitLogCooldownMs: constants.remoteVideoKeyframeWaitLogCooldownMs,
+    suppressRemoteFrameDropDiagnostics: strictPolicyEnabled(constants.strictStabilityPolicy, 'quietPublisherFrameDrops'),
     renderCallVideoLayout: () => renderCallVideoLayout(),
     remotePeersRef: refs.remotePeersRef,
     sendMediaSecurityHello: callbacks.sendMediaSecurityHello,
