@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -9,10 +10,6 @@ const repoRoot = path.resolve(frontendRoot, '../../..');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
-}
-
-function readJson(relativePath) {
-  return JSON.parse(read(relativePath));
 }
 
 function requireIncludes(source, needle, message) {
@@ -23,7 +20,6 @@ function requireMatch(source, pattern, message) {
   assert.match(source, pattern, message);
 }
 
-const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const sprint = read('SPRINT.md');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-edge-error-matrix-contract.php');
@@ -35,14 +31,13 @@ const callAccessContract = read('demo/video-chat/backend-king-php/domain/calls/c
 const callManagementQuery = read('demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
 const tenantContext = read('demo/video-chat/backend-king-php/support/tenant_context.php');
 
-const iamContractScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
 requireIncludes(
-  iamContractScript,
+  iamCallAccessContractSuiteText,
   'node tests/contract/call-access-edge-error-matrix-contract.mjs',
   'IAM contract script must run the edge/error matrix static proof',
 );
 requireIncludes(
-  iamContractScript,
+  iamCallAccessContractSuiteText,
   '../backend-king-php/tests/call-access-edge-error-matrix-contract.sh',
   'IAM contract script must run the edge/error matrix backend proof',
 );

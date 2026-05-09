@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -14,7 +15,6 @@ function read(relativePath) {
 const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const confirmationAuditHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php');
 const emailContract = read('demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php');
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 
 const sendFunction = confirmationHelper.slice(
@@ -96,7 +96,7 @@ for (const eventType of [
 }
 
 const contractPath = 'tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs';
-assert.ok(packageJson.scripts['test:contract:iam-call-access'].includes(contractPath), 'IAM contract script must include the email-safe dispatch audit contract');
+assert.ok(iamCallAccessContractSuiteText.includes(contractPath), 'IAM contract script must include the email-safe dispatch audit contract');
 assert.ok(ciGate.includes(contractPath), 'IAM CI gate must include the email-safe dispatch audit contract');
 
 process.stdout.write('[call-access-email-safe-texts-dispatch-audit-contract] PASS\n');
