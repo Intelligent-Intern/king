@@ -1,10 +1,61 @@
 <template>
   <section
     class="call-app-workspace-host"
-    :class="{ fullscreen: isWorkspaceFullscreen }"
+    :class="{ fullscreen: isWorkspaceFullscreen, 'participants-hidden': areWorkspaceParticipantsHidden }"
     :data-call-app-session-id="sessionId"
   >
-    <section class="call-app-workspace-mini-strip" aria-label="Call App participants">
+    <section
+      v-if="isWorkspaceFullscreen && hasActiveSession"
+      class="call-app-workspace-fullscreen-toolbar"
+      aria-label="Call App fullscreen controls"
+    >
+      <button
+        class="call-app-workspace-participants-toggle"
+        type="button"
+        :aria-expanded="areWorkspaceParticipantsHidden ? 'false' : 'true'"
+        aria-controls="call-app-workspace-mini-strip"
+        :aria-label="participantsToggleLabel"
+        :title="participantsToggleLabel"
+        @click.stop="toggleFullscreenParticipants"
+      >
+        <span
+          class="call-app-workspace-participants-icon"
+          :class="{ hidden: areWorkspaceParticipantsHidden }"
+          aria-hidden="true"
+        >
+          <span class="participant-dot"></span>
+          <span class="participant-dot"></span>
+          <span class="participant-dot"></span>
+          <span class="participants-slash"></span>
+        </span>
+      </button>
+      <button
+        class="call-app-workspace-fullscreen-toggle"
+        type="button"
+        :aria-pressed="isWorkspaceFullscreen ? 'true' : 'false'"
+        :aria-label="fullscreenToggleLabel"
+        :title="fullscreenToggleLabel"
+        @click.stop="toggleWorkspaceFullscreen"
+      >
+        <span
+          class="call-app-workspace-fullscreen-icon"
+          :class="{ active: isWorkspaceFullscreen }"
+          aria-hidden="true"
+        >
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-right"></span>
+          <span class="corner bottom-left"></span>
+        </span>
+      </button>
+    </section>
+    <section
+      id="call-app-workspace-mini-strip"
+      v-show="!areWorkspaceParticipantsHidden"
+      class="call-app-workspace-mini-strip"
+      :aria-hidden="areWorkspaceParticipantsHidden ? 'true' : 'false'"
+      aria-label="Call App participants"
+    >
       <article
         v-for="participant in visibleMiniParticipants"
         :key="participant.userId"
@@ -35,7 +86,7 @@
 
     <section class="call-app-workspace-frame-shell">
       <button
-        v-if="hasActiveSession"
+        v-if="hasActiveSession && !isWorkspaceFullscreen"
         class="call-app-workspace-fullscreen-toggle"
         type="button"
         :aria-pressed="isWorkspaceFullscreen ? 'true' : 'false'"
@@ -147,6 +198,7 @@ const props = defineProps({
 
 const iframeRef = ref(null);
 const isWorkspaceFullscreen = ref(false);
+const fullscreenParticipantsHidden = ref(false);
 const hasActiveSession = computed(() => props.activeSession !== null && String(props.activeSession?.id || '').trim() !== '');
 const sessionId = computed(() => String(props.activeSession?.id || '').trim());
 const appKey = computed(() => String(props.activeSession?.app_key || props.activeSession?.appKey || '').trim());
@@ -199,15 +251,26 @@ const accessNoticeLabel = computed(() => {
   return '';
 });
 const fullscreenToggleLabel = computed(() => (isWorkspaceFullscreen.value ? 'Exit Call App fullscreen' : 'Open Call App fullscreen'));
+const areWorkspaceParticipantsHidden = computed(() => isWorkspaceFullscreen.value && fullscreenParticipantsHidden.value);
+const participantsToggleLabel = computed(() => (
+  areWorkspaceParticipantsHidden.value ? 'Show Call App participants' : 'Hide Call App participants'
+));
 
 function toggleWorkspaceFullscreen() {
   isWorkspaceFullscreen.value = !isWorkspaceFullscreen.value;
+  if (!isWorkspaceFullscreen.value) fullscreenParticipantsHidden.value = false;
+}
+
+function toggleFullscreenParticipants() {
+  fullscreenParticipantsHidden.value = !fullscreenParticipantsHidden.value;
 }
 </script>
 
 <style scoped>
 .call-app-workspace-host {
   --call-app-workspace-mini-height: 112px;
+  --call-app-workspace-mini-width: 160px;
+  --call-app-workspace-toolbar-height: 48px;
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -222,12 +285,31 @@ function toggleWorkspaceFullscreen() {
   position: fixed;
   inset: 0;
   z-index: 9990;
+  --call-app-workspace-mini-width: 168px;
   width: 100vw;
   height: 100dvh;
   max-width: none;
   max-height: none;
-  grid-template-rows: var(--call-app-workspace-mini-height) minmax(0, 1fr);
+  grid-template-rows: var(--call-app-workspace-toolbar-height) var(--call-app-workspace-mini-height) minmax(0, 1fr);
   isolation: isolate;
+}
+
+.call-app-workspace-host.fullscreen.participants-hidden {
+  grid-template-rows: var(--call-app-workspace-toolbar-height) minmax(0, 1fr);
+}
+
+.call-app-workspace-fullscreen-toolbar {
+  position: relative;
+  z-index: 3;
+  height: var(--call-app-workspace-toolbar-height);
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 5px max(10px, env(safe-area-inset-right)) 5px max(10px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-navy);
 }
 
 .call-app-workspace-mini-strip {
@@ -237,20 +319,26 @@ function toggleWorkspaceFullscreen() {
   height: var(--call-app-workspace-mini-height);
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(92px, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: var(--call-app-workspace-mini-width);
+  grid-template-columns: none;
+  align-items: center;
   gap: 8px;
   padding: 8px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface-navy);
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-gutter: stable;
 }
 
 .call-app-workspace-mini-tile,
 .call-app-workspace-mini-empty {
   position: relative;
-  min-width: 92px;
-  min-height: 86px;
+  width: var(--call-app-workspace-mini-width);
+  min-width: var(--call-app-workspace-mini-width);
+  height: calc(var(--call-app-workspace-mini-height) - 18px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--color-border);
   background: var(--color-border);
@@ -270,13 +358,15 @@ function toggleWorkspaceFullscreen() {
 
 .call-app-workspace-mini-video-slot :deep(video),
 .call-app-workspace-mini-video-slot :deep(canvas),
+.call-app-workspace-mini-video-slot :deep(img),
+.call-app-workspace-mini-video-slot :deep([data-call-video-framing-mode="cover"]),
 .call-app-workspace-mini-video-slot :deep(.workspace-static-avatar-media) {
   position: absolute;
   inset: 0;
   width: 100% !important;
   height: 100% !important;
   display: block !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
   object-position: center center !important;
 }
 
@@ -346,13 +436,11 @@ function toggleWorkspaceFullscreen() {
   overflow: hidden;
 }
 
+.call-app-workspace-participants-toggle,
 .call-app-workspace-fullscreen-toggle {
-  position: absolute;
-  top: max(10px, env(safe-area-inset-top));
-  right: max(10px, env(safe-area-inset-right));
-  z-index: 3;
   width: 38px;
   height: 38px;
+  flex: 0 0 38px;
   display: grid;
   place-items: center;
   border: 1px solid var(--color-border);
@@ -363,8 +451,70 @@ function toggleWorkspaceFullscreen() {
   cursor: pointer;
 }
 
+.call-app-workspace-fullscreen-toggle {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 3;
+}
+
+.call-app-workspace-fullscreen-toolbar .call-app-workspace-participants-toggle,
+.call-app-workspace-fullscreen-toolbar .call-app-workspace-fullscreen-toggle {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: auto;
+}
+
+.call-app-workspace-participants-toggle:hover,
 .call-app-workspace-fullscreen-toggle:hover {
   background: var(--color-border);
+}
+
+.call-app-workspace-participants-icon {
+  position: relative;
+  width: 22px;
+  height: 18px;
+  display: block;
+}
+
+.call-app-workspace-participants-icon .participant-dot {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.call-app-workspace-participants-icon .participant-dot:nth-child(1) {
+  left: 8px;
+  top: 0;
+}
+
+.call-app-workspace-participants-icon .participant-dot:nth-child(2) {
+  left: 1px;
+  bottom: 1px;
+}
+
+.call-app-workspace-participants-icon .participant-dot:nth-child(3) {
+  right: 1px;
+  bottom: 1px;
+}
+
+.call-app-workspace-participants-icon .participants-slash {
+  position: absolute;
+  left: 1px;
+  top: 8px;
+  width: 22px;
+  height: 2px;
+  display: none;
+  background: currentColor;
+  transform: rotate(-38deg);
+  transform-origin: center;
+}
+
+.call-app-workspace-participants-icon.hidden .participants-slash {
+  display: block;
 }
 
 .call-app-workspace-fullscreen-icon {
@@ -479,17 +629,11 @@ function toggleWorkspaceFullscreen() {
 @media (max-width: 720px) {
   .call-app-workspace-host {
     --call-app-workspace-mini-height: 96px;
+    --call-app-workspace-mini-width: 142px;
   }
 
   .call-app-workspace-mini-strip {
-    grid-template-columns: repeat(5, minmax(120px, 120px));
     padding: 6px;
-  }
-
-  .call-app-workspace-mini-tile,
-  .call-app-workspace-mini-empty {
-    min-width: 120px;
-    min-height: 74px;
   }
 }
 </style>

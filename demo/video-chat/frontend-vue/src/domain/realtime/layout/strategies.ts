@@ -8,6 +8,7 @@ export const ACTIVE_SPEAKER_RELEASE_PAUSE_MS = 2000;
 export const ACTIVITY_TOP_POOL_LIMIT = 20;
 export const ACTIVITY_TOP_POOL_MIN_TENURE_MS = 20_000;
 export const ROUND_ROBIN_REFRESH_MS = 30_000;
+export const CALL_APP_WORKSPACE_PARTICIPANT_LIMIT = 10;
 
 export function normalizeCallLayoutMode(value, fallback = 'main_mini') {
   const normalized = String(value || '').trim().toLowerCase();
@@ -311,7 +312,11 @@ export function selectCallLayoutParticipants({
   const mainRows = rows.filter((row) => !isScreenShareParticipant(row));
   const mainByUserId = new Map(mainRows.map((row) => [row.userId, row]));
   const mode = layout.mode;
-  const limit = mode === 'grid' ? 8 : (mode === 'main_only' ? 1 : 5);
+  const limit = mode === 'grid'
+    ? 8
+    : (mode === 'main_only'
+      ? 1
+      : (mode === 'call_app_workspace' ? CALL_APP_WORKSPACE_PARTICIPANT_LIMIT : 5));
 
   const pinnedFromMap = Object.entries(pinnedUsers || {})
     .filter(([, pinned]) => pinned === true)
