@@ -454,6 +454,9 @@
             >
               <header>
                 <strong>{{ message.sender.display_name }}</strong>
+                <span v-if="message.operator_feedback" class="workspace-chat-operator-badge">
+                  {{ t('calls.workspace.operator_feedback_badge') }}
+                </span>
                 <time>{{ formatTimestamp(message.server_time) }}</time>
               </header>
               <p v-if="message.text !== ''">{{ message.text }}</p>
@@ -492,6 +495,26 @@
             <div v-if="chatAttachmentError !== ''" class="workspace-chat-attachment-error">
               {{ chatAttachmentError }}
             </div>
+            <div
+              v-if="chatRuntimeHelpers.operatorFeedbackState.toastMessage !== ''"
+              class="workspace-chat-operator-toast"
+              role="status"
+              aria-live="polite"
+            >
+              {{ chatRuntimeHelpers.operatorFeedbackState.toastMessage }}
+            </div>
+            <label
+              class="workspace-chat-operator-toggle"
+              :class="{ active: chatRuntimeHelpers.operatorFeedbackState.selected }"
+            >
+              <input
+                v-model="chatRuntimeHelpers.operatorFeedbackState.selected"
+                type="checkbox"
+                :disabled="chatSending"
+                :aria-label="t('calls.workspace.operator_feedback_toggle_label')"
+              />
+              <span>{{ t('calls.workspace.operator_feedback_checkbox') }}</span>
+            </label>
             <div v-if="chatAttachmentDrafts.length > 0" class="workspace-chat-drafts">
               <article
                 v-for="draft in chatAttachmentDrafts"

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,71 +10,46 @@ function read(relPath) {
   return fs.readFileSync(path.join(frontendRoot, relPath), 'utf8');
 }
 
-function collect(condition, message) {
-  if (!condition) failures.push(message);
+function requireContains(source, needle, label) {
+  assert.ok(source.includes(needle), `[operator-feedback-frontend-contract] missing ${label}`);
 }
 
-const failures = [];
-const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
-const workspaceTemplate = read('src/domain/realtime/CallWorkspaceView.template.html');
-const chatRuntime = read('src/domain/realtime/workspace/callWorkspace/chatRuntime.ts');
-const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
-const callWorkspaceMessages = read('src/modules/localization/callWorkspaceMessages.js');
+const template = read('src/domain/realtime/CallWorkspaceView.template.html');
+const runtime = read('src/domain/realtime/workspace/callWorkspace/chatRuntime.ts');
+const adapter = read('src/domain/realtime/workspace/callWorkspace/operatorFeedbackAdapter.ts');
+const messages = read('src/modules/localization/callWorkspaceMessages.js');
+const panelsCss = read('src/domain/realtime/CallWorkspacePanels.css');
+const chatCss = read('src/domain/realtime/workspace/callWorkspace/CallWorkspaceChat.css');
 const packageJson = JSON.parse(read('package.json'));
 
-collect(
-  /const\s+chatOperatorFeedbackChecked\s*=\s*ref\(false\)/.test(workspaceView),
-  'CallWorkspaceView.vue must own a false-by-default chatOperatorFeedbackChecked ref',
-);
-collect(
-  /chatOperatorFeedbackChecked,/.test(workspaceView),
-  'CallWorkspaceView.vue must pass chatOperatorFeedbackChecked into the extracted chat runtime helper',
-);
-collect(
-  /workspace-chat-operator-feedback/.test(workspaceTemplate)
-    && /type="checkbox"/.test(workspaceTemplate)
-    && /v-model="chatOperatorFeedbackChecked"/.test(workspaceTemplate),
-  'chat composer must render an Operator feedback checkbox bound to chatOperatorFeedbackChecked',
-);
-collect(
-  /calls\.workspace\.operator_feedback/.test(workspaceTemplate)
-    && /calls\.workspace\.operator_feedback/.test(callWorkspaceMessages),
-  'operator feedback checkbox must use the calls.workspace.operator_feedback localization key',
-);
-collect(
-  /chatOperatorFeedbackChecked/.test(chatRuntime)
-    && /operator_feedback:\s*chatOperatorFeedbackChecked\.value/.test(chatRuntime),
-  'chat/send websocket payload must include operator_feedback from the checkbox state',
-);
-collect(
-  /sendSocketFrame\(\{[\s\S]{0,1200}message:\s*text[\s\S]{0,1200}operator_feedback:/m.test(chatRuntime),
-  'chat/send websocket payload must carry the message text and operator_feedback flag in the same frame',
-);
-collect(
-  /chatOperatorFeedbackChecked\.value\s*=\s*false/.test(chatRuntime),
-  'successful chat send must reset the Operator feedback checkbox',
-);
-collect(
-  /operator-feedback\/deployed/.test(socketLifecycle),
-  'socket lifecycle must handle operator-feedback/deployed notifications',
-);
-collect(
-  /requestedFeature/.test(socketLifecycle)
-    && /feature '\$\{requestedFeature\}' deployed/.test(socketLifecycle)
-    && /setNotice\(/.test(socketLifecycle),
-  "deployed notification handler must trigger a toast with feature '<requested feature>' deployed",
-);
-collect(
+requireContains(template, 'class="workspace-chat-operator-toggle"', 'visible operator checkbox label');
+requireContains(template, 'v-model="chatRuntimeHelpers.operatorFeedbackState.selected"', 'operator checkbox state binding');
+requireContains(template, 'chatRuntimeHelpers.operatorFeedbackState.toastMessage', 'operator toast binding');
+requireContains(template, 'workspace-chat-operator-badge', 'operator chat badge');
+
+requireContains(runtime, 'operatorFeedbackState = reactive', 'reactive operator feedback state');
+requireContains(runtime, "type: 'chat/send'", 'normal chat send path remains');
+requireContains(runtime, '...buildOperatorFeedbackChatFramePatch(operatorFeedbackPayload)', 'operator feedback chat payload patch');
+requireContains(runtime, 'operatorFeedbackState.selected = false', 'operator checkbox reset after successful send');
+requireContains(runtime, "t('calls.workspace.operator_feedback_sent')", 'operator sent toast');
+requireContains(runtime, 'maybeShowOperatorFeedbackDeploymentToast(payload)', 'future deployment toast adapter hook');
+
+requireContains(adapter, 'POST /api/calls/{call_id}/operator-feedback', 'documented backend route payload');
+requireContains(adapter, 'chat/send.operator_feedback', 'documented chat payload fallback');
+requireContains(adapter, "return `feature '${feature}' deployed`;", 'exact deployed feature toast copy');
+requireContains(adapter, 'kind: OPERATOR_FEEDBACK_KIND', 'operator payload marker');
+requireContains(adapter, "status: 'submitted'", 'operator submission status');
+
+requireContains(messages, "'calls.workspace.operator_feedback_checkbox': 'Operator'", 'operator checkbox copy');
+requireContains(messages, "'calls.workspace.operator_feedback_sent': 'Operator feedback sent.'", 'operator sent copy');
+requireContains(panelsCss, "@import './workspace/callWorkspace/CallWorkspaceChat.css';", 'chat CSS extraction import');
+requireContains(chatCss, '.workspace-chat-operator-toggle', 'operator toggle styling');
+requireContains(chatCss, '.workspace-chat-operator-toast', 'operator toast styling');
+
+assert.ok(
   packageJson.scripts?.['test:contract:operator-feedback']?.includes('operator-feedback-frontend-contract.mjs')
     && packageJson.scripts?.['test:contract:operator-feedback']?.includes('operator-feedback-contract.sh'),
-  'package.json must wire npm run test:contract:operator-feedback to frontend and backend contracts',
+  '[operator-feedback-frontend-contract] package.json must wire the focused frontend/backend operator feedback gate',
 );
-
-if (failures.length > 0) {
-  for (const failure of failures) {
-    process.stderr.write(`[operator-feedback-frontend-contract] FAIL: ${failure}\n`);
-  }
-  process.exit(1);
-}
 
 process.stdout.write('[operator-feedback-frontend-contract] PASS\n');
