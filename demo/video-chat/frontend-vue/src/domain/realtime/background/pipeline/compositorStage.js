@@ -397,7 +397,7 @@ function createCanvasBackgroundCompositorStage({
     const maskTools = createMaskCanvasTools(canvas);
     let backgroundImageCanvas = null;
     let backgroundImageUrl = '';
-    let hasDrawnMask = false;
+    let hasUploadedMask = false;
 
     function setBackgroundImageUrl(url) {
         const nextUrl = String(url || '').trim();
@@ -455,23 +455,20 @@ function createCanvasBackgroundCompositorStage({
             return;
         }
 
-        let hasRenderableMask = false;
         if (maskUpdated) {
-            hasDrawnMask = maskBitmap instanceof ImageBitmap
+            hasUploadedMask = maskBitmap instanceof ImageBitmap
                 ? maskTools.drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
                 : maskTools.drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
-            hasRenderableMask = hasDrawnMask;
-        } else {
-            hasRenderableMask = Boolean(hasMatteMask && hasDrawnMask);
         }
 
+        const hasRenderableMask = hasUploadedMask && hasMatteMask;
         maskTools.drawDebugCanvases(foregroundSource);
 
         if (!hasRenderableMask) {
             ctx.save();
             ctx.globalCompositeOperation = 'copy';
-            ctx.filter = mode === 'replace' ? 'none' : `blur(${blurPx}px)`;
-            drawCoverImage(ctx, video, canvas.width, canvas.height);
+            ctx.filter = 'none';
+            drawContainImage(ctx, video, canvas.width, canvas.height);
             ctx.restore();
             return;
         }
@@ -496,7 +493,7 @@ function createCanvasBackgroundCompositorStage({
         getMatteMaskSnapshot: () => maskTools.getMatteMaskSnapshot(),
         render,
         reset: () => {
-            hasDrawnMask = false;
+            hasUploadedMask = false;
             maskTools.clearMask();
         },
         setBackgroundImageUrl,
@@ -717,7 +714,7 @@ function createWebGlBackgroundCompositorStage({
 
         let backgroundMode = 0;
         let backgroundUvTransform = [1, 1, 0, 0];
-        if (mode === 'replace' && !hasRenderableMask) {
+        if (!hasRenderableMask) {
             backgroundMode = 0;
         } else if (mode === 'replace' && backgroundImageCanvas) {
             backgroundMode = 1;
@@ -727,7 +724,7 @@ function createWebGlBackgroundCompositorStage({
             backgroundMode = 2;
         }
 
-        gl.uniform1i(locations.uEffect, mode === 'off' || (mode === 'replace' && !hasRenderableMask) ? 0 : 1);
+        gl.uniform1i(locations.uEffect, mode === 'off' || !hasRenderableMask ? 0 : 1);
         gl.uniform1i(locations.uBackgroundMode, backgroundMode);
         gl.uniform1i(locations.uHasMask, hasRenderableMask ? 1 : 0);
         gl.uniform1f(locations.uBlurPx, blurPx);

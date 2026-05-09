@@ -37,7 +37,7 @@ export function createBackgroundSegmenterStage({
       maskUpdated,
       maskValues: latestMaskValues,
       maskWidth: latestMaskWidth,
-      sourceFrame: latestSourceFrame,
+      sourceFrame: maskUpdated ? latestSourceFrame : null,
     };
   }
 
@@ -60,7 +60,7 @@ export function createBackgroundSegmenterStage({
         maskUpdated: false,
         maskValues: latestMaskValues,
         maskWidth: latestMaskWidth,
-        sourceFrame: latestSourceFrame,
+        sourceFrame: null,
       };
     },
     reset,

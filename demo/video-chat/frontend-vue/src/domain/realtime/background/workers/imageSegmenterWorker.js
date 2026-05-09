@@ -11,8 +11,8 @@
  *
  *   IN  { type: 'SEGMENT_VIDEO', bitmap: ImageBitmap, timestampMs: number }
  *       (bitmap is transferred - caller must not reuse it)
- *   OUT { type: 'SEGMENT_RESULT', maskBitmap: ImageBitmap|null, maskValues: Float32Array|null, width, height, inferenceMs }
- *       (maskBitmap or maskValues.buffer is transferred)
+ *   OUT { type: 'SEGMENT_RESULT', maskBitmap: ImageBitmap, width, height, inferenceMs }
+ *       (maskBitmap is transferred)
  *   OUT { type: 'SEGMENT_ERROR', error: string }
  *
  *   IN  { type: 'CLEANUP' }
@@ -132,52 +132,6 @@ function sanitizeFilesetPaths(fileset) {
   return fileset;
 }
 
-function clamp01(value) {
-  return Math.max(0, Math.min(1, Number(value) || 0));
-}
-
-function confidenceMaskValues(confidenceMasks) {
-  const masks = Array.isArray(confidenceMasks) ? confidenceMasks : [];
-  const firstMask = masks[0] || null;
-  const width = Math.max(1, Math.round(Number(firstMask?.width) || 0));
-  const height = Math.max(1, Math.round(Number(firstMask?.height) || 0));
-  if (!firstMask || width <= 1 || height <= 1) return null;
-
-  const pixelCount = width * height;
-  const confidenceArrays = [];
-  for (let index = 0; index < masks.length; index += 1) {
-    const label = String(segmenterLabels[index] || '').trim().toLowerCase();
-    if (segmenterLabels.length === 0 && masks.length > 1 && index === 0) continue;
-    if (label === 'background') continue;
-    try {
-      const values = masks[index]?.getAsFloat32Array?.();
-      if (values && values.length >= pixelCount) confidenceArrays.push(values);
-    } catch {
-      // Ignore a failed class mask and keep combining the rest.
-    }
-  }
-
-  if (confidenceArrays.length === 0) return null;
-
-  const values = new Float32Array(pixelCount);
-  let maxAlpha = 0;
-  for (let pixel = 0; pixel < pixelCount; pixel += 1) {
-    let alpha = 0;
-    for (const classValues of confidenceArrays) {
-      alpha = Math.max(alpha, clamp01(classValues[pixel] || 0));
-    }
-    maxAlpha = Math.max(maxAlpha, alpha);
-    values[pixel] = alpha;
-  }
-  if (maxAlpha <= 0) return null;
-
-  return {
-    values,
-    width,
-    height,
-  };
-}
-
 function categoryMaskBitmap(categoryMask) {
   const width = Math.max(1, Math.round(Number(categoryMask?.width) || 0));
   const height = Math.max(1, Math.round(Number(categoryMask?.height) || 0));
@@ -258,7 +212,6 @@ async function initialize({ modelAssetPath, delegate, wasmPath }) {
       canvas: renderCanvas,
       runningMode: 'VIDEO',
       outputCategoryMask: true,
-      outputConfidenceMasks: true,
     });
 
     segmenterLabels = segmenter.getLabels();
@@ -284,14 +237,14 @@ self.onmessage = async (event) => {
     self.postMessage({ type: 'RESET_DONE', sessionId: Math.max(0, Math.round(Number(event.data.sessionId) || 0)) });
 
   } else if (type === 'SEGMENT_VIDEO' || type === 'SEGMENT_IMAGE') {
+    const requestSessionId = Math.max(0, Math.round(Number(event.data.sessionId) || 0));
     if (!segmenter) {
       event.data.bitmap?.close();
-      self.postMessage({ type: 'SEGMENT_ERROR', error: 'Segmenter not initialized' });
+      self.postMessage({ type: 'SEGMENT_ERROR', error: 'segmenter_not_initialized', sessionId: requestSessionId });
       return;
     }
     
-    const { bitmap, sessionId, timestampMs } = event.data;
-    const requestSessionId = Math.max(0, Math.round(Number(sessionId) || 0));
+    const { bitmap, timestampMs } = event.data;
     const ts = timestampMs > lastTimestampMs ? timestampMs : lastTimestampMs + 1;
     lastTimestampMs = ts;
 
@@ -302,39 +255,33 @@ self.onmessage = async (event) => {
         const inferenceTime = performance.now() - startMs;
 
         let maskBitmap = null;
-        let maskValues = null;
         let width = 0;
         let height = 0;
 
         const categoryResult = categoryMaskBitmap(result.categoryMask);
-        if (categoryResult) {
-          maskBitmap = categoryResult.bitmap;
-          width = categoryResult.width;
-          height = categoryResult.height;
-        } else {
-          const fallbackResult = confidenceMaskValues(result.confidenceMasks);
-          if (fallbackResult) {
-            maskValues = fallbackResult.values;
-            width = fallbackResult.width;
-            height = fallbackResult.height;
-          }
+        if (!categoryResult) {
+          result.close?.();
+          self.postMessage({
+            type: 'SEGMENT_ERROR',
+            error: 'production_category_mask_unavailable',
+            sessionId: requestSessionId,
+          });
+          return;
         }
 
+        maskBitmap = categoryResult.bitmap;
+        width = categoryResult.width;
+        height = categoryResult.height;
         result.close?.();
 
-        const transfer = maskBitmap
-          ? [maskBitmap]
-          : maskValues
-            ? [maskValues.buffer]
-            : [];
         self.postMessage(
-          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, maskValues, width, height, inferenceTime, sessionId: requestSessionId },
-          transfer,
+          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, width, height, inferenceTime, sessionId: requestSessionId },
+          [maskBitmap],
         );
       });
     } catch (e) {
       try { bitmap?.close(); } catch { /* ignore */ }
-      self.postMessage({ type: 'SEGMENT_ERROR', error: e?.message || String(e) });
+      self.postMessage({ type: 'SEGMENT_ERROR', error: e?.message || String(e), sessionId: requestSessionId });
     }
 
   } else if (type === 'CLEANUP') {

@@ -38,7 +38,9 @@ try {
   assert.ok(workerBackend.includes('selfie_multiclass_256x256.tflite'), 'worker backend must use the vendored selfie multiclass model');
   assert.ok(worker.includes('ImageSegmenter.createFromOptions'), 'worker must initialize MediaPipe Tasks ImageSegmenter');
   assert.ok(worker.includes('outputCategoryMask: true'), 'worker must request category masks');
-  assert.ok(worker.includes('outputConfidenceMasks: true'), 'worker must keep confidence masks as a local worker fallback');
+  assert.ok(!worker.includes('outputConfidenceMasks'), 'worker must not request confidence masks as a weaker fallback');
+  assert.ok(!worker.includes('confidenceMaskValues'), 'worker must not synthesize a matte from confidence-mask fallback values');
+  assert.ok(worker.includes("error: 'production_category_mask_unavailable'"), 'worker must fail closed when the production category mask is unavailable');
   assert.ok(!worker.includes('cdn.jsdelivr.net'), 'worker must not fetch runtime from jsDelivr');
   assert.ok(!worker.includes('unpkg.com'), 'worker must not fetch runtime from unpkg');
 
