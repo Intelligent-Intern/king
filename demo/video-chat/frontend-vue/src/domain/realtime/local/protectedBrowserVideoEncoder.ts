@@ -27,6 +27,7 @@ import {
   dispatchProtectedBrowserPublisherFrame,
   publisherRequiresSfuBeforeEncode,
 } from './publisherFrameDispatch';
+import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 export const PROTECTED_BROWSER_VIDEO_RUNTIME_ID = 'wlvc_sfu';
@@ -47,6 +48,10 @@ function normalizeVideoLayer(value) {
   if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
   if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
   return '';
+}
+
+function isStrict720p30Profile(videoProfile) {
+  return String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30';
 }
 
 function normalizedFrameKind(value) {
@@ -140,6 +145,9 @@ function browserEncoderTransportMetrics({
 }) {
   const normalizedVideoLayer = normalizeVideoLayer(videoLayer) || 'primary';
   const frameSize = trace?.frameSize && typeof trace.frameSize === 'object' ? trace.frameSize : {};
+  const strictFixedOutputFrame = isStrict720p30Profile(videoProfile);
+  const strictFrameWidth = strictFixedOutputFrame ? positiveInteger(videoProfile?.frameWidth, 0) : 0;
+  const strictFrameHeight = strictFixedOutputFrame ? positiveInteger(videoProfile?.frameHeight, 0) : 0;
   return {
     ...publisherFrameTraceMetrics(trace),
     video_layer: normalizedVideoLayer,
@@ -162,8 +170,10 @@ function browserEncoderTransportMetrics({
     frame_height: positiveInteger(config.height, 0),
     profile_frame_width: positiveInteger(frameSize.profileFrameWidth, 0),
     profile_frame_height: positiveInteger(frameSize.profileFrameHeight, 0),
-    source_frame_width: positiveInteger(frameSize.sourceWidth, 0),
-    source_frame_height: positiveInteger(frameSize.sourceHeight, 0),
+    source_frame_width: strictFrameWidth || positiveInteger(frameSize.sourceWidth, 0),
+    source_frame_height: strictFrameHeight || positiveInteger(frameSize.sourceHeight, 0),
+    raw_source_frame_width: positiveInteger(frameSize.sourceWidth, 0),
+    raw_source_frame_height: positiveInteger(frameSize.sourceHeight, 0),
     source_crop_x: Math.max(0, Number(frameSize.sourceCropX || 0)),
     source_crop_y: Math.max(0, Number(frameSize.sourceCropY || 0)),
     source_crop_width: Math.max(0, Number(frameSize.sourceCropWidth || 0)),
@@ -214,6 +224,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   const captureClientDiagnosticError = callbacks.captureClientDiagnosticError || (() => {});
   const currentSfuVideoProfile = callbacks.currentSfuVideoProfile || (() => videoProfile);
   const onProtectedBrowserEncoderFailure = callbacks.onProtectedBrowserEncoderFailure || (() => {});
+  const quietStrictPublisherDrops = strictPolicyEnabled(constants.strictStabilityPolicy, 'quietPublisherFrameDrops');
   const additionalPublisherFrameMetrics = typeof callbacks.additionalPublisherFrameMetrics === 'function'
     ? callbacks.additionalPublisherFrameMetrics
     : () => ({});
@@ -639,6 +650,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       constants.sfuWlvcMaxDeltaFrameBytes,
     ));
     if (encodedPayloadBytes > maxEncodedPayloadBytes) {
+      if (quietStrictPublisherDrops) return false;
       if (!critical) {
         reportNonCriticalDrop('sfu_browser_thumbnail_payload_pressure', {
           encoded_payload_bytes: encodedPayloadBytes,
@@ -828,6 +840,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       reportNonCriticalDrop,
       critical,
       codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      suppressSfuSendFailures: quietStrictPublisherDrops,
     });
     if (!dispatchResult.ok) return false;
     if (critical && encodedFrameType === 'keyframe') {

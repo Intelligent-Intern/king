@@ -121,6 +121,7 @@ interface SFUClientOptions {
   autoSubscribe?: boolean
   disablePublisherFrameStallRecovery?: boolean
   disablePublisherMediaRecovery?: boolean
+  suppressPublisherFrameDropDiagnostics?: boolean
 }
 
 export class SFUClient {
@@ -150,6 +151,7 @@ export class SFUClient {
   private autoSubscribe: boolean
   private disablePublisherFrameStallRecovery: boolean
   private disablePublisherMediaRecovery: boolean
+  private suppressPublisherFrameDropDiagnostics: boolean
   private joinStartedAtMs = 0
   private sessionAccepted: SfuSessionAcceptedDetails | null = null
 
@@ -158,6 +160,7 @@ export class SFUClient {
     this.autoSubscribe = options.autoSubscribe !== false
     this.disablePublisherFrameStallRecovery = options.disablePublisherFrameStallRecovery === true
     this.disablePublisherMediaRecovery = options.disablePublisherMediaRecovery === true
+    this.suppressPublisherFrameDropDiagnostics = options.suppressPublisherFrameDropDiagnostics === true
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
       reportClientDiagnostic({
@@ -1319,6 +1322,7 @@ export class SFUClient {
     payload: Record<string, unknown>,
     immediate = false,
   ): void {
+    if (this.shouldSuppressFrameSendDiagnostic(eventType, payload)) return
     reportClientDiagnostic({
       category: 'media',
       level,
@@ -1333,6 +1337,21 @@ export class SFUClient {
       },
       immediate,
     })
+  }
+
+  private shouldSuppressFrameSendDiagnostic(eventType: string, payload: Record<string, unknown>): boolean {
+    if (!this.suppressPublisherFrameDropDiagnostics) return false
+    const normalizedEventType = String(eventType || '').trim().toLowerCase()
+    void payload
+    const quietEvents = new Set([
+      'sfu_frame_send_aborted',
+      'sfu_frame_send_queue_pressure',
+      'sfu_frame_send_queue_dropped',
+      'sfu_frame_send_queue_keyframe_blocked',
+      'sfu_frame_send_queue_background_snapshot_dropped',
+      'sfu_frame_send_pressure',
+    ])
+    return quietEvents.has(normalizedEventType)
   }
 
   private reportFrameTransportSampleIfNeeded(payload: Record<string, unknown>): void {

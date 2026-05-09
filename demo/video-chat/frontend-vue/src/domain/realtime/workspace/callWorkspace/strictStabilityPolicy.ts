@@ -42,6 +42,10 @@ const STRICT_720P30_POLICY = Object.freeze({
   disableBackgroundOutgoing: true,
   disableBackgroundTabPolicy: true,
   strictCaptureOnly: true,
+  strictFixedOutputFrame: true,
+  disableSelectiveTileTransport: true,
+  quietPublisherFrameDrops: true,
+  coalesceMediaSecurityHandshakeDiagnostics: true,
 });
 
 const ADAPTIVE_POLICY = Object.freeze({
