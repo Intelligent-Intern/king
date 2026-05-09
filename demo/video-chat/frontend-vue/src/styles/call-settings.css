@@ -113,7 +113,7 @@
 
 .sidebar-content.left.left-call-content {
   min-width: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -128,9 +128,11 @@
 }
 
 .call-left-settings {
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 12px 12px 56px;
   display: grid;
@@ -140,6 +142,7 @@
 }
 
 .call-left-panel-switch {
+  min-height: 40px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1px;
@@ -149,18 +152,44 @@
 .call-left-panel-tab {
   min-width: 0;
   height: 40px;
+  overflow: hidden;
   border: 0;
   border-radius: 0;
   background: var(--bg-surface-strong);
   color: var(--text-muted);
   font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.call-left-panel-tab:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--brand-cyan);
+  outline-offset: -2px;
 }
 
 .call-left-panel-tab:hover,
 .call-left-panel-tab.active {
   background: var(--color-border);
   color: var(--text-primary);
+}
+
+.call-left-panel-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: var(--bg-video);
+}
+
+.call-left-panel-body > .call-left-settings,
+.call-left-panel-body > .call-apps-sidebar {
+  min-width: 0;
+  min-height: 0;
 }
 
 .call-left-settings > * {

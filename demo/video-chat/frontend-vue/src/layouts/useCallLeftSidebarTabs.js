@@ -14,12 +14,22 @@ export function useCallLeftSidebarTabs({
   let probeSeq = 0;
 
   const normalizedCallId = computed(() => asText(activeCallId));
+  const normalizedLayoutMode = computed(() => asText(currentLayoutMode));
   const showTabs = computed(() => normalizedCallId.value !== '');
   const showCallAppsPanel = computed(() => showTabs.value && activePanel.value === 'call_apps');
   const showSettingsPanel = computed(() => !showTabs.value || activePanel.value === 'settings');
 
+  function setActivePanel(panel) {
+    const normalized = panel === 'call_apps' ? 'call_apps' : 'settings';
+    if (normalized === 'call_apps' && !showTabs.value) {
+      activePanel.value = 'settings';
+      return;
+    }
+    activePanel.value = normalized;
+  }
+
   function resetToSettings() {
-    activePanel.value = 'settings';
+    setActivePanel('settings');
   }
 
   watch(normalizedCallId, (callId) => {
@@ -49,6 +59,13 @@ export function useCallLeftSidebarTabs({
     }
   });
 
+  watch(normalizedLayoutMode, (mode, previousMode) => {
+    if (mode === previousMode) return;
+    if (mode === 'call_app_workspace' && showTabs.value) {
+      setActivePanel('call_apps');
+    }
+  });
+
   onBeforeUnmount(() => {
     probeSeq += 1;
     if (asText(callAppsCatalogStore.activeCallId) === normalizedCallId.value) {
@@ -58,6 +75,7 @@ export function useCallLeftSidebarTabs({
 
   return {
     activePanel,
+    setActivePanel,
     showTabs,
     showCallAppsPanel,
     showSettingsPanel,
