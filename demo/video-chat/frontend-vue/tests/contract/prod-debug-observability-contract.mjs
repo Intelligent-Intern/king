@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +15,18 @@ function readText(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
+function extractBashFunction(source, name) {
+  const match = source.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?^\\}`, 'm'));
+  assert.ok(match, `${name} must be defined`);
+  return match[0];
+}
+
+function runBash(input) {
+  const run = spawnSync('bash', ['-s'], { input, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  return run.stdout;
+}
+
 const scriptPath = 'demo/video-chat/scripts/prod-debug.sh';
 const script = readText(scriptPath);
 const deploySmokePath = 'demo/video-chat/scripts/deploy-smoke.sh';
@@ -22,7 +36,13 @@ const readme = readText('README.md');
 assert.match(script, /^#!\/usr\/bin\/env bash/, 'prod-debug must be a bash operator script');
 assert.match(script, /mode: read-only production diagnostics/, 'prod-debug must declare its read-only mode');
 assert.match(script, /no deploy, restart, DB write, DNS change, or admin action/, 'prod-debug must state forbidden production mutations');
-assert.match(script, /LOCAL_ENV_FILE=.*\.env\.local/, 'prod-debug must use existing .env.local as its local source');
+assert.match(script, /LOCAL_ENV_FILE=.*\.env\.local/, 'prod-debug must use existing .env.local as its local env file');
+assert.doesNotMatch(script, /^\s*(?:source|\.)\s+["']?\$\{LOCAL_ENV_FILE\}["']?/m, 'prod-debug must not source or dot-load .env.local');
+assert.doesNotMatch(script, /^\s*set\s+-a\b/m, 'prod-debug must not auto-export by sourcing .env.local');
+assert.doesNotMatch(script, /\beval\b/, 'prod-debug must not evaluate .env.local contents');
+assert.match(script, /parse_local_env_value\(\)[\s\S]*while IFS= read -r line[\s\S]*allowed_env_names/, 'prod-debug must parse .env.local inertly through an allowlist');
+assert.match(script, /VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_SSH_KEY[\s\S]*VIDEOCHAT_PROD_DEBUG_DRY_RUN VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE/, 'prod-debug .env.local allowlist must stay scoped to deploy/debug diagnostics names');
+assert.doesNotMatch(script, /VIDEOCHAT_DEPLOY_ADMIN_PASSWORD|VIDEOCHAT_DEPLOY_TURN_SECRET|VIDEOCHAT_DEPLOY_HCLOUD_TOKEN/, 'prod-debug .env.local parser must not import deploy secrets or provider tokens');
 assert.match(script, /redact_stream\(\)/, 'prod-debug must redact output');
 assert.match(script, /TOKEN\|SECRET\|PASSWORD\|PASS\|KEY\|CREDENTIAL\|COOKIE\|SESSION/, 'prod-debug redaction must cover token/password-like values');
 assert.match(script, /REDACTED_MEDIA_PAYLOAD/, 'prod-debug must redact media payload-like fields before printing logs');
@@ -81,6 +101,87 @@ assert.match(
   /Content-Security-Policy[\s\S]*Allow-CSP-From[\s\S]*X-Frame-Options[\s\S]*nested \*\.\$\{DEPLOY_APP_DOMAIN\} service origins/,
   'prod-debug must prove Whiteboard Call App CSP, Embedded-CSP, frame-option absence, and nested-origin absence',
 );
+
+const parserFunctions = [
+  extractBashFunction(script, 'trim_env_value'),
+  extractBashFunction(script, 'parse_local_env_value'),
+  extractBashFunction(script, 'local_env_group'),
+  extractBashFunction(script, 'local_env_service_domain_group'),
+  extractBashFunction(script, 'load_local_env'),
+].join('\n');
+const parserTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'prod-debug-env-'));
+const parserEnvPath = path.join(parserTempDir, '.env.local');
+const parserMarkerPath = path.join(parserTempDir, 'should-not-exist');
+fs.writeFileSync(parserEnvPath, [
+  '# ignored comment',
+  'VIDEOCHAT_DEPLOY_DOMAIN=local.test',
+  'export VIDEOCHAT_DEPLOY_APP_DOMAIN="app.local.test"',
+  "DEPLOY_API_DOMAIN='api.local.test'",
+  'VIDEOCHAT_PROD_DEBUG_DRY_RUN=1',
+  `VIDEOCHAT_DEPLOY_SSH_KEY="$(touch ${parserMarkerPath})"`,
+  'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD=should-not-load',
+].join('\n'));
+const parserOut = runBash(`${parserFunctions}
+LOCAL_ENV_FILE=${JSON.stringify(parserEnvPath)}
+load_local_env
+printf 'domain=%s\n' "\${VIDEOCHAT_DEPLOY_DOMAIN-unset}"
+printf 'app=%s\n' "\${VIDEOCHAT_DEPLOY_APP_DOMAIN-unset}"
+printf 'api=%s\n' "\${DEPLOY_API_DOMAIN-unset}"
+printf 'dry_run=%s\n' "\${VIDEOCHAT_PROD_DEBUG_DRY_RUN-unset}"
+printf 'ssh_key=%s\n' "\${VIDEOCHAT_DEPLOY_SSH_KEY-unset}"
+printf 'admin=%s\n' "\${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD-unset}"
+`);
+assert.match(parserOut, /domain=local\.test/, 'prod-debug parser must load simple KEY=VALUE entries');
+assert.match(parserOut, /app=app\.local\.test/, 'prod-debug parser must load double-quoted values');
+assert.match(parserOut, /api=api\.local\.test/, 'prod-debug parser must load single-quoted values');
+assert.match(parserOut, /dry_run=1/, 'prod-debug parser must load whitelisted debug flags');
+assert.match(parserOut, /\$\(touch /, 'prod-debug parser must keep command substitutions inert as literal text');
+assert.match(parserOut, /admin=unset/, 'prod-debug parser must ignore non-allowlisted deploy secrets');
+assert.equal(fs.existsSync(parserMarkerPath), false, 'prod-debug parser must not execute .env.local command substitutions');
+const parserOverrideOut = runBash(`${parserFunctions}
+LOCAL_ENV_FILE=${JSON.stringify(parserEnvPath)}
+export DEPLOY_DOMAIN=explicit.test
+load_local_env
+printf 'deploy_domain=%s\n' "\${DEPLOY_DOMAIN-unset}"
+printf 'videochat_domain=%s\n' "\${VIDEOCHAT_DEPLOY_DOMAIN-unset}"
+printf 'app=%s\n' "\${VIDEOCHAT_DEPLOY_APP_DOMAIN-unset}"
+printf 'api=%s\n' "\${DEPLOY_API_DOMAIN-unset}"
+`);
+assert.match(parserOverrideOut, /deploy_domain=explicit\.test/, 'prod-debug parser must preserve explicit root domain overrides');
+assert.match(parserOverrideOut, /videochat_domain=unset/, 'prod-debug parser must not let .env.local root aliases override explicit root domains');
+assert.match(parserOverrideOut, /app=unset/, 'prod-debug parser must not mix .env.local service domains under an explicit root domain');
+assert.match(parserOverrideOut, /api=unset/, 'prod-debug parser must not mix .env.local service aliases under an explicit root domain');
+fs.rmSync(parserTempDir, { recursive: true, force: true });
+
+const redactFunction = extractBashFunction(script, 'redact_stream');
+const redactSample = [
+  'authorization: bearer raw.jwt.value',
+  'SESSION_TOKEN=raw-session-secret',
+  '{"frame_data":"raw-frame-bytes","token":"raw-json-token"}',
+  'https://example.test/call?session=raw-query-session&ok=1',
+  'data:image/png;base64,rawbase64payload',
+].join('\n');
+const redactOut = runBash(`${redactFunction}\nredact_stream <<'EOF'\n${redactSample}\nEOF\n`);
+assert.doesNotMatch(redactOut, /raw\.jwt\.value|raw-session-secret|raw-frame-bytes|raw-json-token|raw-query-session|rawbase64payload/, 'redact_stream must remove sample secrets and media payloads');
+assert.match(redactOut, /\[REDACTED\]/, 'redact_stream must emit secret redaction markers');
+assert.match(redactOut, /\[REDACTED_MEDIA_PAYLOAD\]/, 'redact_stream must emit media redaction markers');
+
+const callAppCspDiagnostics = [
+  extractBashFunction(script, 'dump_call_app_headers'),
+  extractBashFunction(script, 'dump_call_app_body_sample'),
+  extractBashFunction(script, 'call_app_frame_header_probe'),
+].join('\n');
+assert.match(callAppCspDiagnostics, /redact_stream < "\$\{headers\}" >&2 \|\| true/, 'Call-App CSP header dumps must redact before stderr');
+assert.match(callAppCspDiagnostics, /head -c 2000 "\$\{body\}" \| redact_stream >&2 \|\| true/, 'Call-App CSP body dumps must redact before stderr');
+assert.match(callAppCspDiagnostics, /grep -Eia "\$\{nested_pattern\}" "\$\{headers\}" "\$\{body\}" \| redact_stream >&2 \|\| true/, 'Call-App CSP nested-origin matches must redact before stderr');
+for (const line of callAppCspDiagnostics.split('\n')) {
+  if (line.includes('>&2') && (line.includes('${headers}') || line.includes('${body}') || line.includes('${nested_pattern}'))) {
+    assert.match(line, /redact_stream/, `Call-App CSP stderr dump must use redact_stream: ${line.trim()}`);
+  }
+}
+assert.doesNotMatch(callAppCspDiagnostics, /\bcat\s+"\$\{headers\}"\s+>&2/, 'Call-App CSP failures must not cat raw headers to stderr');
+assert.doesNotMatch(callAppCspDiagnostics, /\bhead\s+-c\s+2000\s+"\$\{body\}"\s+>&2/, 'Call-App CSP failures must not head raw body bytes to stderr');
+assert.doesNotMatch(callAppCspDiagnostics, /\bgrep\s+-Eia\s+"\$\{nested_pattern\}"\s+"\$\{headers\}"\s+"\$\{body\}"\s+>&2/, 'Call-App CSP failures must not grep raw nested matches to stderr');
 
 assert.match(script, /docker compose[\s\S]* ps/, 'remote probe must inspect compose container status');
 assert.match(script, /\$\{COMPOSE\[@\]\}" logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
