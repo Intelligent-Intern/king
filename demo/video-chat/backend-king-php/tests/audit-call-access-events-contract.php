@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/call-access-rejoin-kick-membership-helper.php';
 require_once __DIR__ . '/../domain/audit/audit_events.php';
+require_once __DIR__ . '/../domain/audit/audit_lobby_events.php';
 
 $label = 'audit-call-access-events-contract';
 
@@ -86,6 +87,27 @@ try {
         $tenantId,
         $organizationId
     );
+    $lobbyAdmitUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'audit-events-lobby-admit@example.test',
+        'Audit Events Lobby Admit',
+        $tenantId,
+        $organizationId
+    );
+    $lobbyRejectUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'audit-events-lobby-reject@example.test',
+        'Audit Events Lobby Reject',
+        $tenantId,
+        $organizationId
+    );
+    $unauthorizedLobbyUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'audit-events-lobby-unauthorized@example.test',
+        'Audit Events Lobby Unauthorized',
+        $tenantId,
+        $organizationId
+    );
     $wrongUserId = videochat_iam_rejoin_contract_seed_user(
         $pdo,
         'audit-events-wrong-account@example.test',
@@ -97,7 +119,7 @@ try {
     $call = videochat_iam_rejoin_contract_create_active_call(
         $pdo,
         $ownerUserId,
-        [$participantUserId, $nextOwnerUserId],
+        [$participantUserId, $nextOwnerUserId, $waitingUserId, $lobbyAdmitUserId, $lobbyRejectUserId, $unauthorizedLobbyUserId],
         $tenantId,
         'IAM Audit Events Contract'
     );
@@ -142,6 +164,27 @@ try {
         'sess_audit_events_participant',
         $label
     );
+    videochat_iam_rejoin_contract_issue_user_session(
+        $pdo,
+        $lobbyAdmitUserId,
+        $tenantId,
+        'sess_audit_events_lobby_admit',
+        $label
+    );
+    videochat_iam_rejoin_contract_issue_user_session(
+        $pdo,
+        $lobbyRejectUserId,
+        $tenantId,
+        'sess_audit_events_lobby_reject',
+        $label
+    );
+    videochat_iam_rejoin_contract_issue_user_session(
+        $pdo,
+        $unauthorizedLobbyUserId,
+        $tenantId,
+        'sess_audit_events_lobby_unauthorized',
+        $label
+    );
     $wrongAuth = videochat_iam_rejoin_contract_issue_user_session(
         $pdo,
         $wrongUserId,
@@ -171,6 +214,104 @@ try {
         'audit-owner',
         $tenantId
     );
+
+    $lobbyAdmitConnection = videochat_iam_rejoin_contract_waiting_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $callId,
+        $lobbyAdmitUserId,
+        'Audit Events Lobby Admit',
+        'audit-lobby-admit',
+        $tenantId,
+        'sess_audit_events_lobby_admit'
+    );
+    $lobbyAdmitQueue = videochat_iam_rejoin_contract_apply_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $lobbyAdmitConnection,
+        $openDatabase,
+        'lobby/queue/join',
+        $roomId,
+        $lobbyAdmitUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyAdmitQueue['ok'] ?? false), 'lobby admit target should queue before audit', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $lobbyAdmitUserId) === 'pending', 'lobby admit target should be pending before admission audit', $label);
+    $lobbyAdmit = videochat_iam_rejoin_contract_apply_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        $openDatabase,
+        'lobby/allow',
+        $roomId,
+        $lobbyAdmitUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyAdmit['ok'] ?? false), 'owner should admit lobby participant before audit', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $lobbyAdmitUserId) === 'allowed', 'lobby admit target should be allowed before admission audit', $label);
+
+    $lobbyRejectConnection = videochat_iam_rejoin_contract_waiting_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $callId,
+        $lobbyRejectUserId,
+        'Audit Events Lobby Reject',
+        'audit-lobby-reject',
+        $tenantId,
+        'sess_audit_events_lobby_reject'
+    );
+    $lobbyRejectQueue = videochat_iam_rejoin_contract_apply_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $lobbyRejectConnection,
+        $openDatabase,
+        'lobby/queue/join',
+        $roomId,
+        $lobbyRejectUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyRejectQueue['ok'] ?? false), 'lobby reject target should queue before audit', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $lobbyRejectUserId) === 'pending', 'lobby reject target should be pending before rejection audit', $label);
+    $lobbyReject = videochat_iam_rejoin_contract_apply_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        $openDatabase,
+        'lobby/reject',
+        $roomId,
+        $lobbyRejectUserId,
+        $label
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyReject['ok'] ?? false), 'owner should reject lobby participant before audit', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $lobbyRejectUserId) === 'invited', 'lobby reject target should be invited before rejection audit', $label);
+
+    $unauthorizedLobbyConnection = videochat_iam_rejoin_contract_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $callId,
+        $unauthorizedLobbyUserId,
+        'Audit Events Lobby Unauthorized',
+        'user',
+        'audit-lobby-unauthorized',
+        $tenantId,
+        true,
+        'sess_audit_events_lobby_unauthorized'
+    );
+    $unauthorizedLobbyCommand = videochat_iam_rejoin_contract_lobby_command('lobby/allow', $roomId, $lobbyRejectUserId, $label);
+    $unauthorizedLobbyAttempt = videochat_realtime_handle_lobby_websocket_command(
+        $unauthorizedLobbyCommand,
+        $unauthorizedLobbyConnection['socket'] ?? null,
+        $lobbyState,
+        $presenceState,
+        $unauthorizedLobbyConnection,
+        $openDatabase
+    );
+    videochat_iam_rejoin_contract_assert(is_array($unauthorizedLobbyAttempt), 'unauthorized lobby attempt should be handled before audit fetch', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_rejoin_contract_participant_invite_state($pdo, $callId, $lobbyRejectUserId) === 'invited', 'unauthorized lobby attempt must not admit rejected participant', $label);
+
     $participantConnection = videochat_iam_rejoin_contract_connection(
         $pdo,
         $presenceState,
@@ -357,6 +498,10 @@ try {
         'call_access_host_name_verification_failed',
         'call_access_account_update_confirmation_requested',
         'call_access_invitation_invalidated',
+        'call_lobby_entry_created',
+        'call_lobby_admission_granted',
+        'call_lobby_rejection_recorded',
+        'call_lobby_moderation_denied',
         'call_participant_joined',
         'call_participant_left',
         'call_participant_rejoined',
@@ -403,6 +548,31 @@ try {
     videochat_iam_rejoin_contract_assert((bool) ($accountUpdatePayload['manual_reentry_required'] ?? false), 'account-update audit should require manual re-entry', $label);
     videochat_iam_rejoin_contract_assert(!videochat_audit_events_contract_payload_has_key($accountUpdatePayload, 'confirmation_token'), 'account-update audit must not log confirmation token', $label);
 
+    $lobbyEntryEvents = $eventsByType['call_lobby_entry_created'] ?? [];
+    videochat_iam_rejoin_contract_assert(count($lobbyEntryEvents) >= 2, 'lobby entry audit should include admitted and rejected waiting users', $label);
+    $lobbyAdmissionEvent = $eventsByType['call_lobby_admission_granted'][0] ?? [];
+    $lobbyAdmissionPayload = (array) (($lobbyAdmissionEvent['payload'] ?? []) ?: []);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyAdmissionEvent['actor_user_id'] ?? 0) === $ownerUserId, 'lobby admission audit actor mismatch', $label);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyAdmissionEvent['target_user_id'] ?? 0) === $lobbyAdmitUserId, 'lobby admission audit target mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($lobbyAdmissionPayload['action'] ?? '') === 'admit_from_lobby', 'lobby admission audit action mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyAdmissionPayload['moderation_authorized'] ?? false), 'lobby admission audit should mark authorized moderation', $label);
+    $lobbyRejectionEvent = $eventsByType['call_lobby_rejection_recorded'][0] ?? [];
+    $lobbyRejectionPayload = (array) (($lobbyRejectionEvent['payload'] ?? []) ?: []);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyRejectionEvent['actor_user_id'] ?? 0) === $ownerUserId, 'lobby rejection audit actor mismatch', $label);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyRejectionEvent['target_user_id'] ?? 0) === $lobbyRejectUserId, 'lobby rejection audit target mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($lobbyRejectionPayload['action'] ?? '') === 'reject_from_lobby', 'lobby rejection audit action mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyRejectionPayload['moderation_authorized'] ?? false), 'lobby rejection audit should mark authorized moderation', $label);
+    $lobbyDeniedEvent = $eventsByType['call_lobby_moderation_denied'][0] ?? [];
+    $lobbyDeniedPayload = (array) (($lobbyDeniedEvent['payload'] ?? []) ?: []);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyDeniedEvent['actor_user_id'] ?? 0) === $unauthorizedLobbyUserId, 'lobby denied audit actor mismatch', $label);
+    videochat_iam_rejoin_contract_assert((int) ($lobbyDeniedEvent['target_user_id'] ?? 0) === $lobbyRejectUserId, 'lobby denied audit target mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($lobbyDeniedPayload['action'] ?? '') === 'deny_lobby_moderation', 'lobby denied audit action mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($lobbyDeniedPayload['moderation_authorized'] ?? true) === false, 'lobby denied audit must mark unauthorized moderation', $label);
+    videochat_iam_rejoin_contract_assert((string) ($lobbyDeniedPayload['denial_reason'] ?? '') === 'forbidden', 'lobby denied audit reason mismatch', $label);
+    foreach ($eventsByType['call_lobby_admission_granted'] ?? [] as $event) {
+        videochat_iam_rejoin_contract_assert((int) ($event['actor_user_id'] ?? 0) !== $unauthorizedLobbyUserId, 'unauthorized lobby attempt must not create admission audit', $label);
+    }
+
     $rejoinPayload = (array) (($eventsByType['call_participant_rejoined'][0] ?? [])['payload'] ?? []);
     videochat_iam_rejoin_contract_assert((bool) ($rejoinPayload['rejoin'] ?? false), 'rejoin audit should mark rejoin=true', $label);
     $kickEvent = $eventsByType['call_participant_kicked'][0] ?? [];
@@ -438,9 +608,15 @@ try {
         $inviteInvalidationSessionId,
         'sess_audit_events_open_guest',
         'sess_audit_events_matched_link',
+        'sess_audit_events_lobby_admit',
+        'sess_audit_events_lobby_reject',
+        'sess_audit_events_lobby_unauthorized',
         $wrongHostName,
         $correctHostName,
         $openAccessId,
+        'Audit Events Lobby Admit',
+        'Audit Events Lobby Reject',
+        'Audit Events Lobby Unauthorized',
     ] as $forbiddenText) {
         videochat_iam_rejoin_contract_assert(!str_contains($encodedEvents, $forbiddenText), 'audit events leaked raw value: ' . $forbiddenText, $label);
     }
@@ -449,13 +625,18 @@ try {
         videochat_audit_fingerprint($wrongSessionId),
         videochat_audit_fingerprint($inviteInvalidationSessionId),
         videochat_audit_fingerprint($openAccessId),
+        videochat_audit_fingerprint('sess_audit_events_lobby_admit'),
+        videochat_audit_fingerprint('sess_audit_events_lobby_reject'),
+        videochat_audit_fingerprint('sess_audit_events_lobby_unauthorized'),
+        videochat_audit_fingerprint($callId . ':' . $lobbyAdmitUserId),
+        videochat_audit_fingerprint($callId . ':' . $lobbyRejectUserId),
         videochat_audit_fingerprint($callId . ':' . $participantUserId),
     ] as $requiredFingerprint) {
         videochat_iam_rejoin_contract_assert(str_contains($encodedEvents, $requiredFingerprint), 'audit events missing fingerprint: ' . $requiredFingerprint, $label);
     }
     foreach ($events as $event) {
         $payload = (array) ($event['payload'] ?? []);
-        foreach (['access_id', 'session_id', 'token', 'password', 'sdp', 'ice_candidate'] as $forbiddenKey) {
+        foreach (['access_id', 'session_id', 'token', 'password', 'sdp', 'ice_candidate', 'room_id', 'display_name', 'email'] as $forbiddenKey) {
             videochat_iam_rejoin_contract_assert(
                 !videochat_audit_events_contract_payload_has_key($payload, $forbiddenKey),
                 "audit payload should not contain key {$forbiddenKey}",

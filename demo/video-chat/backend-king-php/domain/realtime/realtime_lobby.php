@@ -215,6 +215,7 @@ function videochat_lobby_apply_command(
     $nowMs = videochat_lobby_now_ms($nowUnixMs);
     $nowIso = gmdate('c', (int) floor($nowMs / 1000));
     $action = (string) ($command['type'] ?? '');
+    $requestedAction = $action;
     if (in_array($action, ['lobby/reject', 'lobby/kick'], true)) {
         $action = 'lobby/remove';
     }
@@ -517,6 +518,7 @@ function videochat_lobby_apply_command(
             'changed' => true,
             'sent_count' => $sentCount,
             'action' => $action,
+            'requested_action' => $requestedAction,
             'target_user_id' => $targetUserId,
             'room_id' => $roomId,
             'affected_user_ids' => [$targetUserId],

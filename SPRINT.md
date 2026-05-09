@@ -3408,7 +3408,7 @@ the IAM CI surface.
 - [x] `e2e_audit_005_strong_mismatch_logged`
 - [x] `e2e_audit_006_host_verification_logged`
 - [x] `e2e_audit_007_account_update_logged`
-- [ ] `e2e_audit_008_lobby_events_logged`
+- [x] `e2e_audit_008_lobby_events_logged`
 - [x] `e2e_audit_009_join_leave_rejoin_logged`
 - [x] `e2e_audit_010_kick_logged`
 - [x] `e2e_audit_011_owner_transfer_logged`
@@ -3421,6 +3421,15 @@ the IAM CI surface.
 - [ ] `e2e_audit_018_implicit_end_logged`
 - [ ] `e2e_audit_019_owner_absence_timer_logged`
 - [x] `e2e_audit_020_logs_minimize_sensitive_data`
+
+Proof: `audit-call-access-events-contract.php` now drives persisted lobby queue
+entry, owner admission, owner rejection, and unauthorized moderation denial
+before fetching audit events. It proves `call_lobby_entry_created`,
+`call_lobby_admission_granted`, `call_lobby_rejection_recorded`, and
+`call_lobby_moderation_denied` are recorded only after the matching state
+transition or denial, while hashing session and room identifiers and omitting
+raw credential, room, display-name, and email values. Focused validation passed
+with the Node audit contract and Docker PHP 8.5 SQLite runtime proof.
 
 ## Test Group: Main E2E Journeys
 
