@@ -2,6 +2,14 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { apiRequest } from '../domain/realtime/workspace/api';
 
+const AVAILABILITY_RETRY_DELAYS_MS = Object.freeze([250, 900]);
+
+function availabilityRetryDelay(ms) {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, Math.max(0, Number(ms) || 0));
+  });
+}
+
 function normalizePagination(value = {}) {
   const page = Number.parseInt(String(value.page || 1), 10) || 1;
   const pageSize = Number.parseInt(String(value.page_size || 12), 10) || 12;
@@ -56,6 +64,34 @@ function isSidebarVisibleApp(app) {
   );
 }
 
+function isRetryableAvailabilityLoadError(error) {
+  const status = Number(error?.responseStatus || 0);
+  const code = String(error?.responseCode || '').trim().toLowerCase();
+  const retryable = error?.responseDetails?.retryable === true;
+  return retryable
+    || status === 503
+    || (status === 500 && (code === '' || code === 'call_app_availability_failed'));
+}
+
+async function requestAvailableAppsPayload(normalizedCallId, requestQuery) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= AVAILABILITY_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await apiRequest(
+        `/api/calls/${encodeURIComponent(normalizedCallId)}/call-apps/available`,
+        { query: requestQuery },
+      );
+    } catch (requestError) {
+      lastError = requestError;
+      if (!isRetryableAvailabilityLoadError(requestError) || attempt >= AVAILABILITY_RETRY_DELAYS_MS.length) {
+        throw requestError;
+      }
+      await availabilityRetryDelay(AVAILABILITY_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+  throw lastError || new Error('Could not load Call Apps.');
+}
+
 export const useCallAppsCatalogStore = defineStore('callAppsCatalog', () => {
   const activeCallId = ref('');
   const query = ref('');
@@ -90,17 +126,12 @@ export const useCallAppsCatalogStore = defineStore('callAppsCatalog', () => {
     error.value = '';
 
     try {
-      const payload = await apiRequest(
-        `/api/calls/${encodeURIComponent(normalizedCallId)}/call-apps/available`,
-        {
-          query: {
-            query: query.value,
-            category: category.value,
-            page,
-            page_size: pageSize,
-          },
-        },
-      );
+      const payload = await requestAvailableAppsPayload(normalizedCallId, {
+        query: query.value,
+        category: category.value,
+        page,
+        page_size: pageSize,
+      });
       const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
       const rows = Array.isArray(result.apps) ? result.apps : [];
       apps.value = rows.map(normalizeAvailableApp).filter(isSidebarVisibleApp);

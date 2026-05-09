@@ -241,6 +241,95 @@ function videochat_call_app_refresh_catalog(PDO $pdo, ?string $packageRoot = nul
 }
 
 /**
+ * @return array{count: int, latest_verified_at: string}
+ */
+function videochat_call_app_catalog_snapshot(PDO $pdo): array
+{
+    $statement = $pdo->query(
+        <<<'SQL'
+SELECT COUNT(*) AS catalog_count,
+       COALESCE(MAX(verified_at), '') AS latest_verified_at
+FROM call_app_catalog_entries
+SQL
+    );
+    $row = $statement ? $statement->fetch(PDO::FETCH_ASSOC) : [];
+
+    return [
+        'count' => (int) (($row['catalog_count'] ?? 0)),
+        'latest_verified_at' => (string) (($row['latest_verified_at'] ?? '')),
+    ];
+}
+
+function videochat_call_app_catalog_snapshot_is_warm(array $snapshot, int $ttlSeconds, ?int $nowEpoch = null): bool
+{
+    if ((int) ($snapshot['count'] ?? 0) <= 0) {
+        return false;
+    }
+
+    $latestVerifiedAt = trim((string) ($snapshot['latest_verified_at'] ?? ''));
+    if ($latestVerifiedAt === '') {
+        return false;
+    }
+
+    $latestEpoch = strtotime($latestVerifiedAt);
+    if ($latestEpoch === false) {
+        return false;
+    }
+
+    $now = $nowEpoch ?? time();
+    return ($now - $latestEpoch) <= max(1, $ttlSeconds);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_refresh_catalog_for_availability(PDO $pdo, ?string $packageRoot = null, int $ttlSeconds = 30): array
+{
+    $snapshot = videochat_call_app_catalog_snapshot($pdo);
+    if (videochat_call_app_catalog_snapshot_is_warm($snapshot, $ttlSeconds)) {
+        return [
+            'ok' => true,
+            'entries' => [],
+            'invalid' => [],
+            'refreshed_at' => (string) ($snapshot['latest_verified_at'] ?? ''),
+            'refresh_skipped' => true,
+            'cache_status' => 'warm',
+        ];
+    }
+
+    try {
+        return [
+            ...videochat_call_app_refresh_catalog($pdo, $packageRoot),
+            'refresh_skipped' => false,
+            'cache_status' => 'refreshed',
+        ];
+    } catch (Throwable $error) {
+        $fallbackSnapshot = videochat_call_app_catalog_snapshot($pdo);
+        if ((int) ($fallbackSnapshot['count'] ?? 0) <= 0) {
+            throw $error;
+        }
+
+        $isTransient = function_exists('videochat_sqlite_is_transient_lock')
+            && videochat_sqlite_is_transient_lock($error);
+
+        return [
+            'ok' => false,
+            'entries' => [],
+            'invalid' => [[
+                'app_key' => '',
+                'errors' => [
+                    'catalog_refresh' => $isTransient ? 'transient_unavailable' : 'refresh_failed',
+                ],
+            ]],
+            'refreshed_at' => (string) ($fallbackSnapshot['latest_verified_at'] ?? ''),
+            'refresh_skipped' => true,
+            'cache_status' => 'stale_fallback',
+            'fallback_reason' => $isTransient ? 'transient_refresh_failed' : 'refresh_failed',
+        ];
+    }
+}
+
+/**
  * @return array<int, array<string, mixed>>
  */
 function videochat_call_app_list_catalog(PDO $pdo, string $query = '', string $category = 'all'): array

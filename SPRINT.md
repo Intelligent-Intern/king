@@ -228,6 +228,32 @@ Tickets:
     edge bundle contains `Remove from call`, `/api/call-app-sessions/`, and
     `DELETE`.
 
+- [x] OCA-08 Call App availability 500 hotfix for running call
+  - Fix the sporadic 500 on
+    `GET /api/calls/{call_id}/call-apps/available` seen in the running call
+    `ba3779f5-25a3-479f-874d-831903abdc63`.
+  - Availability no longer performs a write-heavy catalog refresh for every
+    sidebar load when the persisted Semantic-DNS/MCP catalog is warm. If a
+    stale refresh hits a transient SQLite write lock but a persisted catalog is
+    available, the endpoint returns the installed Call Apps with
+    `discovery.cache_status = stale_fallback` instead of 500.
+  - The Call Apps sidebar retries short 500/503 availability failures before
+    clearing the panel state.
+  - Proof: PHP syntax checks PASS,
+    `node tests/contract/call-app-availability-frontend-contract.mjs`,
+    `node tests/contract/call-app-sidebar-contract.mjs`,
+    `node tests/contract/call-app-marketplace-to-call-journey-contract.mjs`,
+    `npm run build`, `npm run test:contract:call-apps:sqlite`, and
+    `git diff --check` PASS. The SQLite proof now covers both warm-catalog
+    no-write behavior and transient stale-catalog fallback under a real SQLite
+    write lock.
+  - Deploy proof: deployed without push, DNS, or certbot as asset
+    `20260509113948`. Public `prod-debug.sh`, public deploy smoke with
+    remote/admin writes skipped, runtime asset check, remote Compose status,
+    and a 5-round/20-user container availability matrix for the running call
+    passed. No Call App availability 500/fatal/error matches appeared in the
+    post-deploy log scan.
+
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
 Branch:
