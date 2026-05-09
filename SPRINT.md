@@ -211,3 +211,22 @@ Tickets:
   Call App grants for view/upload/delete.
 - [x] PI-06 Deployed without push, DNS changes, or Certbot; post-deploy
   diagnostics and Planning Image asset checks passed.
+
+## Hotfix: Guest Join-Link Admission
+
+Tickets:
+- [x] GJL-01 External/personal guest join links resolve to the public join page
+  without leaking private call data on invalid links.
+- [x] GJL-02 Guest link session creation requires a display name, creates a
+  temporary guest identity, and keeps the user in the lobby until an
+  owner/moderator/admin admits them.
+- [x] GJL-03 Right sidebar keeps the user-tab lobby badge; collapsed sidebar
+  shows the main lobby notification for new join requests.
+- [ ] GJL-04 Contract/build proof and no-push deploy without DNS or Certbot,
+  followed by diagnostics.
+  - Local proof before deploy: PHP lint for changed call-access files,
+    `npm run test:contract:iam-call-access`,
+    `npm run test:contract:participant-roster`, `npm run build`,
+    `npm run test:contract:build-size`, and `git diff --check`.
+  - Runtime SQLite call-access session contract is extended for external
+    guest admission but skips locally because `pdo_sqlite` is unavailable.

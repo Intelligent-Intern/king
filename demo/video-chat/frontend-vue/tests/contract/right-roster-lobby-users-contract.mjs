@@ -31,6 +31,18 @@ assert.match(
   'right sidebar must render lobby and present users through the focused roster component',
 );
 
+assert.match(
+  templateSource,
+  /activeTab === 'users'[\s\S]*showLobbyRequestBadge[\s\S]*lobbyRequestBadgeText/s,
+  'right sidebar user tab must show pending lobby request badge when visible',
+);
+
+assert.match(
+  templateSource,
+  /v-if="showLobbyJoinToast"[\s\S]*workspace-lobby-toast[\s\S]*@click="openLobbyRequestsPanel"/s,
+  'collapsed right sidebar must expose a main-stage lobby notification',
+);
+
 assert.doesNotMatch(
   templateSource,
   /class="tab tab-lobby"[\s\S]*setActiveTab\('lobby'\)/,
@@ -91,8 +103,8 @@ assert.match(messagesSource, /calls\.workspace\.action_option_call_app_delete/, 
 
 assert.match(
   sprintSource,
-  /Loop 7 note:[\s\S]*read\/write\/delete[\s\S]*backend grant contract remains binary allow\/deny/,
-  'SPRINT.md must record the remaining backend gap for distinct Call App permission persistence',
+  /GJL-03[\s\S]*Right sidebar keeps the user-tab lobby badge[\s\S]*collapsed sidebar[\s\S]*main lobby notification/s,
+  'SPRINT.md must track the current guest-join lobby badge and notification requirement',
 );
 
 console.log('[right-roster-lobby-users-contract] PASS');

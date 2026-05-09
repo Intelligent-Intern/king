@@ -101,7 +101,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $tenantId,
         false
     );
-    if ($linkKind === 'personal' && !is_array($targetUser)) {
+    if ($linkKind === 'personal' && !is_array($targetUser) && $participantEmail === '') {
         return [
             'ok' => false,
             'reason' => 'not_found',
@@ -135,6 +135,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         'call' => videochat_build_call_payload($pdo, $call, is_array($targetUser) ? (int) ($targetUser['id'] ?? 0) : 0),
         'target_user' => $targetUser,
         'target_hint' => ['participant_email' => $participantEmail === '' ? null : $participantEmail],
+        'requires_guest_name' => videochat_call_access_requires_guest_name($freshLink, $targetUser),
     ];
 }
 

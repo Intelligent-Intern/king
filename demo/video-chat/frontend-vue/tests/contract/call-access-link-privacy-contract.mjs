@@ -29,6 +29,26 @@ assert.match(
 );
 assert.match(
   joinView,
+  /requiresGuestName:\s*false[\s\S]*state\.requiresGuestName = false/s,
+  'public join state must reset the guest-name requirement across link changes',
+);
+assert.match(
+  joinView,
+  /state\.requiresGuestName = Boolean\(payload\?\.result\?\.requires_guest_name\) \|\| state\.linkKind === 'open'/,
+  'public join must honor backend-required guest names for external personal guest links',
+);
+assert.match(
+  joinView,
+  /v-if="state\.requiresGuestName"[\s\S]*v-model\.trim="state\.guestName"/,
+  'public join must show name entry whenever the access link requires a guest name',
+);
+assert.match(
+  joinView,
+  /guestName:\s*state\.requiresGuestName \? state\.guestName : ''/,
+  'public join session creation must send guest_name for external personal guest links as well as open links',
+);
+assert.match(
+  joinView,
   /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*payload = \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\);[\s\S]*return;[\s\S]*\}/s,
   'failed public join resolution must replace backend payloads with a generic invalid-link code',
 );

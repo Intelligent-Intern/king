@@ -28,7 +28,7 @@
           <div class="calls-modal-body calls-enter-body">
             <div class="calls-enter-layout">
               <section class="calls-enter-preview">
-                <section v-if="state.linkKind === 'open'" class="call-access-join-guest-name call-left-settings-block" :aria-label="t('public.join.guest_name')">
+                <section v-if="state.requiresGuestName" class="call-access-join-guest-name call-left-settings-block" :aria-label="t('public.join.guest_name')">
                   <div class="call-left-settings-title">{{ t('public.join.guest_name') }}</div>
                   <input
                     v-model.trim="state.guestName"
@@ -246,6 +246,7 @@ const state = reactive({
   roomId: '',
   callTitle: '',
   linkKind: 'personal',
+  requiresGuestName: false,
   guestName: '',
   joining: false,
   waitingForAdmission: false,
@@ -290,6 +291,7 @@ function resetJoinContextDetails() {
   state.roomId = '';
   state.callTitle = '';
   state.linkKind = 'personal';
+  state.requiresGuestName = false;
   state.guestName = '';
   state.joining = false;
   state.waitingForAdmission = false;
@@ -655,6 +657,7 @@ async function loadJoinContext() {
     state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
     const linkKind = String(payload?.result?.link_kind || '').trim().toLowerCase();
     state.linkKind = linkKind === 'open' ? 'open' : 'personal';
+    state.requiresGuestName = Boolean(payload?.result?.requires_guest_name) || state.linkKind === 'open';
     state.verifiedAccessContext = callAccessVerifiedContextFromSession(sessionState);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
@@ -677,7 +680,7 @@ function goToLogin() {
 
 async function startSessionAndJoin() {
   if (state.joining || state.waitingForAdmission || state.loadingContext || state.contextError) return;
-  if (state.linkKind === 'open' && String(state.guestName || '').trim() === '') {
+  if (state.requiresGuestName && String(state.guestName || '').trim() === '') {
     state.joinError = t('public.join.name_required');
     return;
   }
@@ -687,7 +690,7 @@ async function startSessionAndJoin() {
 
   const accessId = normalizeAccessId(route.params.accessId);
   const result = await loginWithCallAccess(accessId, {
-    guestName: state.linkKind === 'open' ? state.guestName : '',
+    guestName: state.requiresGuestName ? state.guestName : '',
     verifiedContext: state.verifiedAccessContext,
   });
   if (!result.ok) {
