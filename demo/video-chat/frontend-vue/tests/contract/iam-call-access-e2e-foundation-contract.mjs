@@ -17,8 +17,13 @@ function readJson(relativePath) {
   return JSON.parse(readText(relativePath));
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
+const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
@@ -32,6 +37,16 @@ const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls
 const scripts = packageJson.scripts || {};
 const callAccessScript = String(scripts['test:e2e:call-access'] || '');
 const matrixScript = String(scripts['test:e2e:matrix'] || '');
+const directJoinScenarioKeys = [
+  'direct_join_system_admin_alpha_active_allowed',
+  'direct_join_system_admin_beta_active_allowed',
+  'direct_join_system_admin_tenantless_active_allowed',
+  'direct_join_alpha_org_admin_alpha_active_allowed',
+  'direct_join_alpha_org_admin_beta_active_denied',
+  'direct_join_registered_guest_alpha_active_allowed',
+  'direct_join_alpha_normal_user_alpha_active_denied',
+  'direct_join_alpha_call_owner_alpha_active_allowed',
+];
 
 assert.match(
   callAccessScript,
@@ -99,10 +114,52 @@ assert.match(
   /temporary_personalized_guest[\s\S]*temporary_anonymous_guest[\s\S]*tenant_admin[\s\S]*false/s,
   'seed-matrix spec must prove temporary guests do not receive tenant/system admin rights',
 );
+const seedScenarioKeys = new Set((callAccessSeedMatrix.scenarios || []).map((scenario) => scenario?.key));
+for (const scenarioKey of directJoinScenarioKeys) {
+  assert.ok(
+    seedScenarioKeys.has(scenarioKey),
+    `seed matrix must include Direct Join Permissions scenario ${scenarioKey}`,
+  );
+  assert.match(
+    seedMatrixSpec,
+    new RegExp(escapeRegExp(scenarioKey)),
+    `seed-matrix spec must exercise Direct Join Permissions scenario ${scenarioKey}`,
+  );
+}
+assert.match(
+  seedMatrixSpec,
+  /directJoinPermissionCases[\s\S]*createDirectJoinProbePage[\s\S]*fetchDirectJoinResponses/s,
+  'seed-matrix spec must drive Direct Join Permissions through probe-page response checks',
+);
+assert.match(
+  seedMatrixSpec,
+  /result\?\.state\)\.toBe\('forbidden'\)[\s\S]*result\?\.reason\)\.toBe\('calls_forbidden'\)/s,
+  'seed-matrix spec must pin denied direct call resolve as HTTP 200 forbidden with calls_forbidden',
+);
+assert.match(
+  seedMatrixSpec,
+  /status\(\)\)\.toBe\(403\)[\s\S]*error\?\.code\)\.toBe\('calls_forbidden'\)/s,
+  'seed-matrix spec must pin denied direct call GET as HTTP 403 calls_forbidden',
+);
 assert.match(
   seedMatrixHelper,
   /VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON/,
   'seed-matrix helper must support compose smoke injection when contracts/v1 is outside the frontend container mount',
+);
+assert.match(
+  seedMatrixHelper,
+  /canDirectlyResolveCall[\s\S]*authenticatedSeedSessionRecord/s,
+  'seed-matrix helper must keep direct call refs permission-aware from authenticated seed sessions',
+);
+assert.match(
+  seedMatrixHelper,
+  /resolveMatch[\s\S]*\/api\\\/calls\\\/resolve[\s\S]*authenticatedSeedSessionRecord[\s\S]*canDirectlyResolveCall[\s\S]*fulfillJson\(route,\s*200,[\s\S]*state:\s*'forbidden'[\s\S]*reason:\s*'calls_forbidden'[\s\S]*call:\s*null/s,
+  'seed-matrix helper must model denied /api/calls/resolve/{ref} as HTTP 200 forbidden with calls_forbidden',
+);
+assert.match(
+  seedMatrixHelper,
+  /callMatch[\s\S]*\/api\\\/calls\\\/\(\[\^\/\]\+\)[\s\S]*authenticatedSeedSessionRecord[\s\S]*canDirectlyResolveCall[\s\S]*fulfillJson\(route,\s*403,[\s\S]*error:\s*\{[\s\S]*code:\s*'calls_forbidden'/s,
+  'seed-matrix helper must model denied /api/calls/{id} GET as HTTP 403 calls_forbidden',
 );
 assert.match(
   backendContract,
