@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 import { test, expect } from '@playwright/test';
 
 import {
@@ -44,6 +47,52 @@ function productionBaseUrl(testInfo) {
       || process.env.VIDEOCHAT_ONLINE_BASE_URL
       || 'https://app.kingrt.com',
   ).replace(/\/+$/, '');
+}
+
+function serializeError(error) {
+  if (!error) return null;
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    name: error instanceof Error ? error.name : 'Error',
+    stack: error instanceof Error && typeof error.stack === 'string' ? error.stack : '',
+  };
+}
+
+function browserProof(browser) {
+  let browserName = '';
+  let browserVersion = '';
+  try {
+    browserName = String(browser.browserType?.().name?.() || '');
+  } catch {
+    browserName = '';
+  }
+  try {
+    browserVersion = String(browser.version?.() || '');
+  } catch {
+    browserVersion = '';
+  }
+  return {
+    name: browserName,
+    version: browserVersion,
+  };
+}
+
+function projectProof(testInfo) {
+  const use = testInfo.project.use || {};
+  return {
+    name: String(testInfo.project.name || ''),
+    outputDir: String(testInfo.project.outputDir || ''),
+    repeatEach: Number(testInfo.project.repeatEach || 0),
+    retries: Number(testInfo.project.retries || 0),
+    timeout: Number(testInfo.project.timeout || 0),
+    use: {
+      baseURL: String(use.baseURL || ''),
+      browserName: String(use.browserName || ''),
+      channel: String(use.channel || ''),
+      headless: typeof use.headless === 'boolean' ? use.headless : null,
+      viewport: use.viewport || null,
+    },
+  };
 }
 
 function credentialsFor(role) {
@@ -277,6 +326,7 @@ async function smokeSnapshot(page) {
       diagnostics: Array.isArray(smoke.diagnostics) ? smoke.diagnostics : [],
       focusEvents: Array.isArray(smoke.focusEvents) ? smoke.focusEvents : [],
       media: {
+        enumerateDevices: Array.isArray(media.enumerateDevices) ? media.enumerateDevices : [],
         getDisplayMedia: Array.isArray(media.getDisplayMedia) ? media.getDisplayMedia : [],
         getUserMedia: Array.isArray(media.getUserMedia) ? media.getUserMedia : [],
       },
@@ -317,6 +367,126 @@ function diagnosticEntries(snapshot) {
 
 function diagnosticEventTypes(snapshot) {
   return diagnosticEntries(snapshot).map((entry) => String(entry?.event_type || entry?.eventType || ''));
+}
+
+function mediaHookCounts(snapshot) {
+  const media = snapshot?.media || {};
+  return {
+    enumerateDevices: Array.isArray(media.enumerateDevices) ? media.enumerateDevices.length : 0,
+    getDisplayMedia: Array.isArray(media.getDisplayMedia) ? media.getDisplayMedia.length : 0,
+    getUserMedia: Array.isArray(media.getUserMedia) ? media.getUserMedia.length : 0,
+  };
+}
+
+function socketSummaries(snapshot) {
+  return (snapshot?.socketSummary || []).map((socket) => ({
+    closeCount: Array.isArray(socket.closes) ? socket.closes.length : 0,
+    closes: Array.isArray(socket.closes) ? socket.closes : [],
+    errors: Number(socket.errors || 0),
+    opens: Number(socket.opens || 0),
+    sentCount: Array.isArray(socket.sent) ? socket.sent.length : 0,
+    url: String(socket.url || ''),
+  }));
+}
+
+async function captureRoleProof(role, page) {
+  const proof = {
+    captured: false,
+    capturedAt: new Date().toISOString(),
+    diagnosticsEventTypes: [],
+    error: null,
+    mediaHookCounts: {
+      enumerateDevices: 0,
+      getDisplayMedia: 0,
+      getUserMedia: 0,
+    },
+    role,
+    snapshot: null,
+    socketSummaries: [],
+  };
+  if (!page) {
+    proof.error = {
+      message: `${role} page was not created.`,
+      name: 'SnapshotUnavailableError',
+      stack: '',
+    };
+    return proof;
+  }
+  try {
+    const snapshot = await smokeSnapshot(page);
+    proof.captured = true;
+    proof.snapshot = snapshot;
+    proof.diagnosticsEventTypes = diagnosticEventTypes(snapshot);
+    proof.mediaHookCounts = mediaHookCounts(snapshot);
+    proof.socketSummaries = socketSummaries(snapshot);
+  } catch (error) {
+    proof.error = serializeError(error);
+  }
+  return proof;
+}
+
+async function writeJsonArtifact(testInfo, fileName, payload) {
+  const artifactPath = testInfo.outputPath(fileName);
+  await mkdir(dirname(artifactPath), { recursive: true });
+  await writeFile(artifactPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  return artifactPath;
+}
+
+async function writeSmokeProofArtifacts({
+  admin,
+  baseURL,
+  browser,
+  callId,
+  testError,
+  testInfo,
+  user,
+}) {
+  const [adminProof, userProof] = await Promise.all([
+    captureRoleProof('admin', admin?.page),
+    captureRoleProof('user', user?.page),
+  ]);
+  const proof = {
+    baseURL,
+    browser: browserProof(browser),
+    callId,
+    capturedAt: new Date().toISOString(),
+    project: projectProof(testInfo),
+    requiredBackgroundEvents: REQUIRED_BACKGROUND_EVENTS,
+    roles: {
+      admin: adminProof,
+      user: userProof,
+    },
+    status: {
+      expected: testInfo.expectedStatus,
+      retry: testInfo.retry,
+      testError: serializeError(testError),
+      workerIndex: testInfo.workerIndex,
+    },
+    summaries: {
+      admin: {
+        diagnosticsEventTypes: adminProof.diagnosticsEventTypes,
+        mediaHookCounts: adminProof.mediaHookCounts,
+        socketSummaries: adminProof.socketSummaries,
+      },
+      user: {
+        diagnosticsEventTypes: userProof.diagnosticsEventTypes,
+        mediaHookCounts: userProof.mediaHookCounts,
+        socketSummaries: userProof.socketSummaries,
+      },
+    },
+    test: {
+      file: testInfo.file,
+      line: testInfo.line,
+      title: testInfo.title,
+    },
+  };
+
+  const proofPath = await writeJsonArtifact(testInfo, 'bgf-production-browser-smoke-proof.json', proof);
+  await Promise.all([
+    writeJsonArtifact(testInfo, 'bgf-production-admin-final-smoke-snapshot.json', adminProof),
+    writeJsonArtifact(testInfo, 'bgf-production-user-final-smoke-snapshot.json', userProof),
+  ]);
+  return proofPath;
 }
 
 function reconnectDiagnostics(snapshot) {
@@ -384,26 +554,29 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
   }
 
   const baseURL = productionBaseUrl(testInfo);
-  const admin = await createAuthenticatedPage(browser, baseURL, adminCredentials, {
-    audioFrequency: 440,
-    outgoingVideoQualityProfile: 'balanced',
-    videoFrameRate: 12,
-    videoHeight: 360,
-    videoWidth: 640,
-  });
-  const user = await createAuthenticatedPage(browser, baseURL, userCredentials, {
-    audioFrequency: 660,
-    outgoingVideoQualityProfile: 'balanced',
-    videoFrameRate: 12,
-    videoHeight: 360,
-    videoWidth: 640,
-  });
-
-  await installProductionSmokeHooks(admin.context, { forceBackgroundUnavailable: true });
-  await installProductionSmokeHooks(user.context);
-
+  let admin = null;
+  let user = null;
   let callId = '';
+  let testError = null;
   try {
+    admin = await createAuthenticatedPage(browser, baseURL, adminCredentials, {
+      audioFrequency: 440,
+      outgoingVideoQualityProfile: 'balanced',
+      videoFrameRate: 12,
+      videoHeight: 360,
+      videoWidth: 640,
+    });
+    user = await createAuthenticatedPage(browser, baseURL, userCredentials, {
+      audioFrequency: 660,
+      outgoingVideoQualityProfile: 'balanced',
+      videoFrameRate: 12,
+      videoHeight: 360,
+      videoWidth: 640,
+    });
+
+    await installProductionSmokeHooks(admin.context, { forceBackgroundUnavailable: true });
+    await installProductionSmokeHooks(user.context);
+
     const participantUserId = user.storedSession.userId || 2;
     callId = await createInvitedCallViaApi({
       sessionToken: admin.storedSession.sessionToken,
@@ -493,10 +666,26 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
       backgroundEvents: diagnosticEventTypes(await smokeSnapshot(admin.page))
         .filter((eventType) => REQUIRED_BACKGROUND_EVENTS.includes(eventType)),
     }, null, 2));
+  } catch (error) {
+    testError = error;
+    throw error;
   } finally {
+    const artifactError = await writeSmokeProofArtifacts({
+      admin,
+      baseURL,
+      browser,
+      callId,
+      testError,
+      testInfo,
+      user,
+    }).catch((error) => error);
+    if (artifactError) {
+      console.warn('[background-production-browser-smoke] failed to write JSON proof artifacts', serializeError(artifactError));
+    }
     await Promise.allSettled([
-      admin.context.close(),
-      user.context.close(),
+      admin?.context?.close?.(),
+      user?.context?.close?.(),
     ]);
+    if (artifactError && !testError) throw artifactError;
   }
 });
