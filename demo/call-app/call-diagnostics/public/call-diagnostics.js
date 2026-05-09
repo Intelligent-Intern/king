@@ -5,6 +5,7 @@
   const BRIDGE_PROTOCOL = 'king.call_app.iframe.v1';
   const MAX_LOGS = 500;
   const MAX_DETAIL = 900;
+  const MAX_PAUSED_LOGS = 250;
   const POLL_MS = 1800;
 
   const state = {
@@ -19,6 +20,7 @@
     search: '',
     latestClock: 0,
     logs: [],
+    pausedLogs: [],
     staged: new Map(),
     appliedOps: new Set(),
     persistedEventIds: new Set(),
@@ -85,6 +87,15 @@
     if (!payload || !isPlainObject(payload)) return '';
     try {
       return safeString(JSON.stringify(summarizePayload(payload)), '', MAX_DETAIL);
+    } catch {
+      return '';
+    }
+  }
+
+  function payloadPrettyText(payload) {
+    if (!payload || !isPlainObject(payload)) return '';
+    try {
+      return safeString(JSON.stringify(summarizePayload(payload), null, 2), '', MAX_DETAIL * 2);
     } catch {
       return '';
     }
@@ -213,10 +224,29 @@
   function appendLog(entry, options = {}) {
     if (!entry || !entry.id) return;
     if (state.logs.some((row) => row.id === entry.id)) return;
+    if (state.paused && !options.forceAppend) {
+      if (!state.pausedLogs.some((row) => row.id === entry.id)) {
+        state.pausedLogs.push(entry);
+        if (state.pausedLogs.length > MAX_PAUSED_LOGS) {
+          state.pausedLogs.splice(0, state.pausedLogs.length - MAX_PAUSED_LOGS);
+        }
+      }
+      if (!options.skipPersist && entry.persist !== false) persistLog(entry);
+      setConnectionState('paused');
+      return;
+    }
     state.logs.push(entry);
     if (state.logs.length > MAX_LOGS) state.logs.splice(0, state.logs.length - MAX_LOGS);
     updateStage(entry);
     if (!options.skipPersist && entry.persist !== false) persistLog(entry);
+    render();
+  }
+
+  function flushPausedLogs() {
+    const pausedLogs = state.pausedLogs.splice(0);
+    for (const entry of pausedLogs) {
+      appendLog(entry, { skipPersist: true, forceAppend: true });
+    }
     render();
   }
 
@@ -306,13 +336,18 @@
 
   function visibleLogs() {
     const term = state.search.toLowerCase();
-    return state.logs.filter((entry) => {
-      if (state.filter === 'error' && !['error', 'warning'].includes(entry.level)) return false;
-      if (state.filter === 'ice' && !['host', 'stun', 'turn'].includes(entry.stage)) return false;
-      if (!['all', 'error', 'ice'].includes(state.filter) && entry.stage !== state.filter) return false;
-      if (term === '') return true;
-      return `${entry.stage} ${entry.event_type} ${entry.code} ${entry.message} ${payloadText(entry.payload)}`.toLowerCase().includes(term);
-    });
+    return state.logs.filter((entry) => filterMatchesEntry(entry, term));
+  }
+
+  function filterMatchesEntry(entry, term) {
+    const filter = safeIdentifier(state.filter, 'all');
+    const stage = safeIdentifier(entry.stage, 'runtime');
+    const level = safeIdentifier(entry.level, 'info');
+    if (filter === 'error' && !['error', 'warning'].includes(level)) return false;
+    if (filter === 'ice' && !['host', 'stun', 'turn'].includes(stage)) return false;
+    if (!['all', 'error', 'ice'].includes(filter) && stage !== filter) return false;
+    if (term === '') return true;
+    return `${stage} ${entry.event_type} ${entry.code} ${entry.message} ${payloadText(entry.payload)}`.toLowerCase().includes(term);
   }
 
   function render() {
@@ -338,7 +373,7 @@
     message.className = 'tail-message';
     message.textContent = `${entry.event_type}${entry.code ? `:${entry.code}` : ''} ${entry.message}`.trim();
     row.append(time, stage, message);
-    const detail = payloadText(entry.payload);
+    const detail = payloadPrettyText(entry.payload);
     if (detail) {
       const detailNode = document.createElement('span');
       detailNode.className = 'tail-detail';
@@ -370,7 +405,12 @@
     nodes.pauseToggle?.addEventListener('click', () => {
       state.paused = !state.paused;
       nodes.pauseToggle.setAttribute('aria-pressed', state.paused ? 'true' : 'false');
-      setConnectionState(state.paused ? 'paused' : state.launched ? 'live' : 'waiting');
+      if (state.paused) {
+        setConnectionState('paused');
+        return;
+      }
+      flushPausedLogs();
+      setConnectionState(state.launched ? 'live' : 'waiting');
     });
     nodes.exportJson?.addEventListener('click', exportJson);
     nodes.tailSearch?.addEventListener('input', () => {
