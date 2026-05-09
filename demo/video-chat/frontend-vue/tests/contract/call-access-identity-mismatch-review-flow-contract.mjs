@@ -85,6 +85,11 @@ assert.match(
   'public join resolution must sanitize non-strong authenticated mismatch payloads',
 );
 assert.match(
+  identityHelper,
+  /mismatch\['state'\][\s\S]*light_mismatch[\s\S]*videochat_audit_record_call_access_account_compared[\s\S]*'light_mismatch'[\s\S]*'stage'\s*=>\s*'join_opened'/,
+  'public join resolution must optionally audit light mismatches without taking the strong-mismatch path',
+);
+assert.match(
   sessionDomain,
   /videochat_call_access_host_name_matches_call_owner[\s\S]*correct_host_name[\s\S]*videochat_call_access_bind_authenticated_personalized_user/s,
   'session issuance must accept correct host-name verification by binding the current account, not the link-target account',
@@ -98,6 +103,7 @@ assert.match(
 for (const needle of [
   'trimmed matching names should be no mismatch',
   'middle-name drift should be light mismatch',
+  'light mismatch comparison should be audit-logged at join open without foreign account data',
   'first name mismatch should be strong',
   'last name mismatch should be strong',
   'strong mismatch join preview should require warning flow',

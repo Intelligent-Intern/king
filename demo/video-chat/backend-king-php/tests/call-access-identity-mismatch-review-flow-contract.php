@@ -94,6 +94,49 @@ function videochat_identity_mismatch_flow_assert_no_needles(array $response, arr
     }
 }
 
+function videochat_identity_mismatch_flow_audit_payload_for_access(PDO $pdo, string $accessId, string $eventType): array
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT payload_json
+FROM videochat_audit_events
+WHERE event_type = :event_type
+  AND resource_fingerprint = :resource_fingerprint
+ORDER BY id ASC
+SQL
+    );
+    $query->execute([
+        ':event_type' => $eventType,
+        ':resource_fingerprint' => videochat_audit_fingerprint($accessId),
+    ]);
+    $payloads = [];
+    foreach ($query->fetchAll() ?: [] as $row) {
+        $payload = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+        if (is_array($payload)) {
+            $payloads[] = $payload;
+        }
+    }
+
+    return $payloads;
+}
+
+function videochat_identity_mismatch_flow_has_light_mismatch_join_audit(PDO $pdo, string $accessId): bool
+{
+    foreach (videochat_identity_mismatch_flow_audit_payload_for_access($pdo, $accessId, 'call_access_account_compared') as $payload) {
+        if (
+            (string) ($payload['comparison_outcome'] ?? '') === 'light_mismatch'
+            && (string) ($payload['stage'] ?? '') === 'join_opened'
+            && (bool) ($payload['foreign_account_data_logged'] ?? true) === false
+            && (bool) ($payload['raw_link_identifier_logged'] ?? true) === false
+            && (bool) ($payload['raw_credential_identifier_logged'] ?? true) === false
+        ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * @return array<string, mixed>
  */
@@ -213,6 +256,10 @@ try {
     videochat_identity_mismatch_flow_assert((int) ($lightJoin['status'] ?? 0) === 200, 'light mismatch join preview should resolve');
     videochat_identity_mismatch_flow_assert((string) (((($lightPayload['result'] ?? [])['identity_mismatch'] ?? [])['state'] ?? '')) === 'light_mismatch', 'light mismatch should be exposed only as non-strong state');
     videochat_identity_mismatch_flow_assert_no_needles($lightJoin, [(string) $light['target_email']], 'light mismatch join preview');
+    videochat_identity_mismatch_flow_assert(
+        videochat_identity_mismatch_flow_has_light_mismatch_join_audit($pdo, (string) $light['access_id']),
+        'light mismatch comparison should be audit-logged at join open without foreign account data'
+    );
 
     $strong = videochat_identity_mismatch_flow_create_scenario($pdo, $tenantId, $adminRoleId, $userRoleId, 'strong' . bin2hex(random_bytes(3)), 'Mia Example', 'Nora Other');
     $secretNeedles = [(string) $strong['target_name'], (string) $strong['target_email'], (string) $strong['host_name'], (string) $strong['host_email'], (string) $strong['call_id']];
