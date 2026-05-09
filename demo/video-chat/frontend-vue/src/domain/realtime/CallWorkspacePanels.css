@@ -23,7 +23,7 @@
 }
 
 .workspace-context .tabs.tabs-right {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   background: var(--color-surface-navy);
 }
 
@@ -92,7 +92,7 @@
 
 .panel-users.active,
 .panel-lobby.active {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -110,6 +110,123 @@
 
 .lobby-toolbar-actions {
   justify-content: flex-end;
+}
+
+.right-roster-panel.active {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.roster-toolbar {
+  min-height: 44px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  background: var(--color-surface-navy);
+}
+
+.roster-options-toggle.icon-mini-btn,
+.roster-action-btn.icon-mini-btn,
+.right-roster-panel .call-app-grant-btn {
+  width: 38px;
+  height: 38px;
+}
+
+.roster-options-toggle.icon-mini-btn img,
+.roster-action-btn.icon-mini-btn img,
+.right-roster-panel .call-app-grant-btn img {
+  width: 19px;
+  height: 19px;
+}
+
+.roster-action-options {
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--color-surface-navy);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.roster-action-option {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.roster-action-option.disabled {
+  opacity: 0.5;
+}
+
+.roster-action-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.right-roster-sections {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(132px, 0.85fr) auto minmax(180px, 1.15fr);
+  background: var(--color-surface-navy);
+}
+
+.right-roster-sections.without-lobby {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.roster-section {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.roster-section-header {
+  min-height: 42px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.roster-section-divider {
+  height: 1px;
+  background: color-mix(in srgb, var(--brand-cyan) 52%, var(--color-border));
+}
+
+.roster-search-toolbar {
+  padding-top: 0;
+}
+
+.roster-list {
+  min-height: 0;
+}
+
+.roster-row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  max-width: 96px;
+}
+
+.roster-kick-btn {
+  margin-left: 8px;
+  box-shadow: -1px 0 0 color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+}
+
+.lobby-user-row {
+  min-height: 68px;
 }
 
 .search {

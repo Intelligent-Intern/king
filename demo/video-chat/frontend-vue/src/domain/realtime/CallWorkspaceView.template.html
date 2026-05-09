@@ -359,21 +359,8 @@
             :aria-selected="activeTab === 'users'"
             @click="setActiveTab('users')"
           >
-            <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
-          </button>
-          <button
-            v-if="showLobbyTab"
-            class="tab tab-lobby"
-            :class="{ active: activeTab === 'lobby' }"
-            type="button"
-            role="tab"
-            :aria-label="t('calls.workspace.lobby')"
-            :title="t('calls.workspace.lobby')"
-            :aria-selected="activeTab === 'lobby'"
-            @click="setActiveTab('lobby')"
-          >
             <span class="tab-icon-wrap">
-              <img class="tab-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
               <span v-if="showLobbyRequestBadge" class="tab-notice-badge">{{ lobbyRequestBadgeText }}</span>
             </span>
           </button>
@@ -403,248 +390,59 @@
           </button>
         </nav>
 
-        <section class="tab-panel panel-users" :class="{ active: activeTab === 'users' }">
-          <div class="toolbar">
-            <input
-              v-model="usersSearch"
-              class="search"
-              type="search"
-              :placeholder="t('calls.workspace.search_users')"
-              @input="onUsersSearchInput"
-            />
-          </div>
-          <p v-if="usersSourceMode === 'directory' && usersDirectoryLoading" class="workspace-tab-hint">
-            {{ t('calls.workspace.loading_user_directory') }}
-          </p>
-          <p v-if="usersSourceMode === 'directory' && usersDirectoryPagination.error" class="workspace-tab-hint error">
-            {{ usersDirectoryPagination.error }}
-          </p>
-
-          <ul
-            ref="usersListRef"
-            class="user-list"
-            @scroll.passive="onUsersListScroll"
-          >
-            <li
-              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingTop > 0"
-              class="user-list-spacer"
-              :style="{ height: `${usersVirtualWindow.paddingTop}px` }"
-            ></li>
-            <li
-              v-for="row in usersVisibleRows"
-              :key="row.userId"
-              class="user-row"
-              :class="{ self: row.userId === currentUserId, pinned: pinnedUsers[row.userId] === true, pending: rowActionPending(row.userId) }"
-            >
-            <div class="user-preview">{{ initials(row.displayName) }}</div>
-              <div class="user-main">
-                <strong class="user-name">{{ row.displayName }}</strong>
-                <span class="user-role">{{ row.callRole }}</span>
-                <span class="user-status-line">
-                  <span v-if="activityLabelForUser(row.userId)" class="user-activity-pill">
-                    {{ activityLabelForUser(row.userId) }}
-                  </span>
-                  <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
-                  <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
-                </span>
-              </div>
-            <div class="actions-inline">
-              <button
-                class="icon-mini-btn"
-                type="button"
-                :title="mutedUsers[row.userId] ? t('calls.workspace.unmute_peer') : t('calls.workspace.mute_peer')"
-                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
-                @click="toggleUserMuted(row.userId)"
-              >
-                <img
-                  :src="mutedUsers[row.userId]
-                      ? '/assets/orgas/kingrt/icons/micoff.png'
-                      : '/assets/orgas/kingrt/icons/micon.png'"
-                    alt=""
-                  />
-                </button>
-              <button
-                class="icon-mini-btn"
-                type="button"
-                :title="pinnedUsers[row.userId] ? t('calls.workspace.unpin_locally') : t('calls.workspace.pin_locally')"
-                :disabled="!row.isRoomMember"
-                @click="togglePinned(row.userId)"
-              >
-                  <img
-                    :src="pinnedUsers[row.userId]
-                      ? '/assets/orgas/kingrt/icons/adminon.png'
-                      : '/assets/orgas/kingrt/icons/adminoff.png'"
-                    alt=""
-                  />
-                </button>
-              <button
-                class="icon-mini-btn"
-                type="button"
-                :title="row.callRole === 'moderator' ? t('calls.workspace.set_participant_role') : t('calls.workspace.set_moderator_role')"
-                :disabled="!canModerate || !activeCallId || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
-                @click="toggleModeratorRole(row)"
-              >
-                  <img
-                    :src="row.callRole === 'moderator'
-                      ? '/assets/orgas/kingrt/icons/adminon.png'
-                      : '/assets/orgas/kingrt/icons/adminoff.png'"
-                    alt=""
-                  />
-                </button>
-              <CallAppParticipantGrantButton
-                :session="activeCallAppSession"
-                :row="row"
-                :can-manage="canModerate"
-                :api-request="apiRequest"
-                :send-socket-frame="sendSocketFrame"
-                :request-room-snapshot="requestRoomSnapshot"
-              />
-              <button
-                class="icon-mini-btn"
-                type="button"
-                :title="t('calls.workspace.transfer_owner_role')"
-                :disabled="!canManageOwnerRole || !activeCallId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
-                @click="transferOwnerRole(row)"
-              >
-                <img src="/assets/orgas/kingrt/icons/forward.png" alt="" />
-              </button>
-              <button
-                class="icon-mini-btn danger"
-                type="button"
-                :title="t('calls.workspace.remove_from_lobby')"
-                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveFromLobby"
-                @click="removeLobbyUser(row.userId)"
-              >
-                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-                </button>
-              </div>
-            </li>
-            <li
-              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingBottom > 0"
-              class="user-list-spacer"
-              :style="{ height: `${usersVirtualWindow.paddingBottom}px` }"
-            ></li>
-            <li v-if="usersPageRows.length === 0" class="user-list-empty">
-              {{ t('calls.workspace.no_users_match') }}
-            </li>
-          </ul>
-
-          <footer class="footer workspace-tab-footer">
-            <div class="pagination">
-              <button
-                class="pager-btn pager-icon-btn"
-                type="button"
-                :disabled="usersPage <= 1"
-                @click="goToUsersPage(usersPage - 1)"
-              >
-                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" :alt="t('calls.workspace.page_previous_users')" />
-              </button>
-              <div class="page-info">
-                {{ t('calls.workspace.users_page_info', {
-                  page: usersPage,
-                  pageCount: usersPageCount,
-                  total: usersSourceMode === 'directory' ? usersDirectoryPagination.total : filteredUsers.length,
-                }) }}
-              </div>
-              <button
-                class="pager-btn pager-icon-btn"
-                type="button"
-                :disabled="usersPage >= usersPageCount"
-                @click="goToUsersPage(usersPage + 1)"
-              >
-                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" :alt="t('calls.workspace.page_next_users')" />
-              </button>
-            </div>
-          </footer>
-        </section>
-
-        <section v-if="showLobbyTab" class="tab-panel panel-lobby" :class="{ active: activeTab === 'lobby' }">
-          <div class="lobby-toolbar">
-            <div class="actions-inline lobby-toolbar-actions">
-              <button
-                class="icon-mini-btn"
-                type="button"
-                :title="t('calls.workspace.allow_all_queued_users')"
-                :disabled="!isSocketOnline || !canModerate || lobbyQueue.length === 0"
-                @click="allowAllLobbyUsers"
-              >
-                <img src="/assets/orgas/kingrt/icons/add_to_call.png" :alt="t('calls.workspace.allow_all_queued_users')" />
-              </button>
-            </div>
-          </div>
-
-          <ul
-            ref="lobbyListRef"
-            class="lobby-list"
-            @scroll.passive="onLobbyListScroll"
-          >
-            <li
-              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingTop > 0"
-              class="user-list-spacer"
-              :style="{ height: `${lobbyVirtualWindow.paddingTop}px` }"
-            ></li>
-            <li v-for="row in lobbyVisibleRows" :key="`${row.status}-${row.user_id}`" class="user-row">
-              <div class="user-preview">{{ initials(row.display_name) }}</div>
-              <div class="user-main">
-                <strong class="user-name">{{ row.display_name }}</strong>
-                <span class="user-role">{{ row.status }}</span>
-                <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
-              </div>
-              <div class="actions-inline">
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  :title="t('calls.workspace.allow_user')"
-                  :disabled="!canModerate || row.status !== 'queued' || lobbyActionPending(row.user_id)"
-                  @click="allowLobbyUser(row.user_id)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  :title="t('calls.workspace.remove_user')"
-                  :disabled="!canModerate || lobbyActionPending(row.user_id)"
-                  @click="removeLobbyUser(row.user_id)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-                </button>
-              </div>
-            </li>
-            <li
-              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingBottom > 0"
-              class="user-list-spacer"
-              :style="{ height: `${lobbyVirtualWindow.paddingBottom}px` }"
-            ></li>
-            <li v-if="lobbyPageRows.length === 0" class="user-list-empty">
-              {{ t('calls.workspace.lobby_empty') }}
-            </li>
-          </ul>
-
-          <footer class="footer workspace-tab-footer">
-            <div class="pagination">
-              <button
-                class="pager-btn pager-icon-btn"
-                type="button"
-                :disabled="lobbyPage <= 1"
-                @click="goToLobbyPage(lobbyPage - 1)"
-              >
-                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" :alt="t('calls.workspace.page_previous_lobby')" />
-              </button>
-              <div class="page-info">
-                {{ t('calls.workspace.lobby_page_info', { page: lobbyPage, pageCount: lobbyPageCount, total: lobbyRows.length }) }}
-              </div>
-              <button
-                class="pager-btn pager-icon-btn"
-                type="button"
-                :disabled="lobbyPage >= lobbyPageCount"
-                @click="goToLobbyPage(lobbyPage + 1)"
-              >
-                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" :alt="t('calls.workspace.page_next_lobby')" />
-              </button>
-            </div>
-          </footer>
-        </section>
+        <RightRosterPanel
+          :active="activeTab === 'users'"
+          :active-call-app-session="activeCallAppSession"
+          :active-call-id="activeCallId"
+          :activity-label-for-user="activityLabelForUser"
+          :api-request="apiRequest"
+          :can-manage-owner-role="canManageOwnerRole"
+          :can-moderate="canModerate"
+          :current-user-id="currentUserId"
+          :is-socket-online="isSocketOnline"
+          :lobby-action-pending="lobbyActionPending"
+          :lobby-page="lobbyPage"
+          :lobby-page-count="lobbyPageCount"
+          :lobby-page-rows="lobbyPageRows"
+          :lobby-rows="lobbyRows"
+          :lobby-search="lobbySearch"
+          :lobby-virtual-window="lobbyVirtualWindow"
+          :lobby-visible-rows="lobbyVisibleRows"
+          :muted-users="mutedUsers"
+          :pinned-users="pinnedUsers"
+          :request-room-snapshot="requestRoomSnapshot"
+          :row-action-pending="rowActionPending"
+          :send-socket-frame="sendSocketFrame"
+          :set-lobby-list-element="setLobbyListElement"
+          :set-users-list-element="setUsersListElement"
+          :show-lobby="showLobbyTab"
+          :show-lobby-search="showLobbySearch"
+          :show-users-search="showUsersSearch"
+          :t="t"
+          :users-directory-loading="usersDirectoryLoading"
+          :users-directory-pagination="usersDirectoryPagination"
+          :users-page="usersPage"
+          :users-page-count="usersPageCount"
+          :users-page-rows="usersPageRows"
+          :users-search="usersSearch"
+          :users-source-mode="usersSourceMode"
+          :users-total="usersTotal"
+          :users-virtual-window="usersVirtualWindow"
+          :users-visible-rows="usersVisibleRows"
+          @allow-all-lobby-users="allowAllLobbyUsers"
+          @allow-lobby-user="allowLobbyUser"
+          @go-to-lobby-page="goToLobbyPage"
+          @go-to-users-page="goToUsersPage"
+          @lobby-list-scroll="onLobbyListScroll"
+          @remove-lobby-user="removeLobbyUser"
+          @toggle-moderator-role="toggleModeratorRole"
+          @toggle-pinned="togglePinned"
+          @toggle-user-muted="toggleUserMuted"
+          @transfer-owner-role="transferOwnerRole"
+          @update:lobby-search="(value) => { lobbySearch = value; onLobbySearchInput(); }"
+          @update:users-search="(value) => { usersSearch = value; onUsersSearchInput(); }"
+          @users-list-scroll="onUsersListScroll"
+        />
 
         <section class="tab-panel panel-chat" :class="{ active: activeTab === 'chat' }">
           <div ref="chatListRef" class="workspace-chat-list">

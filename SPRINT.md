@@ -140,6 +140,12 @@ Tickets:
   - Include Call App permission actions such as read, write, and delete where
     the permission model allows them, including backend/API persistence and
     realtime sidebar refresh.
+  - Loop 7 note: the right-sidebar options model now names read/write/delete
+    Call App permission actions but keeps them unavailable unless an active
+    Call App session advertises matching permission actions. The existing
+    persisted backend grant contract remains binary allow/deny; closing this
+    ticket still requires backend/API persistence and realtime refresh for
+    distinct read/write/delete grants.
 
 - [ ] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.
