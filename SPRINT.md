@@ -2832,7 +2832,7 @@ state.
 - [x] Audit logs contain time, actor, target, call, and organization
 - [x] Audit logs contain no unnecessary sensitive link data
 - [x] Security-relevant events are visible in monitoring
-- [ ] Failed E2E test artifacts include relevant logs
+- [x] Failed E2E test artifacts include relevant logs
 
 Proof: `iam-call-access-audit-events-contract.mjs` and
 `audit-call-access-events-contract.php` pin audit helpers and event types for
@@ -2864,6 +2864,13 @@ Account-update email audit proof is now completed by
 email dispatch failure, confirmation success, confirmation failure, and the
 separate `call_access_account_data_changed` event without raw link, token,
 recipient email, host, or foreign account data.
+
+Proof 2026-05-09: `smoke.sh` now writes a compose failure artifact directory
+for IAM/browser E2E failures, including `manifest.env`, `compose-ps.txt`,
+aggregate compose logs, backend/ws/sfu/frontend service logs, and copied
+Playwright `test-results`/report output; the GitHub CI workflow uploads
+`video-chat-smoke-e2e-failure-artifacts` on shard-1 smoke failure. Static proof:
+`node tests/contract/iam-ci-artifacts-contract.mjs` PASS.
 
 ## 32. End-to-End Main Paths
 
@@ -3501,11 +3508,11 @@ current owner, and the mutation writes the owner-transfer audit row.
 
 - [x] E2E test suite is implemented or extended
 - [x] Playwright or existing E2E framework is configured for CI
-- [ ] CI job runs E2E suite automatically
+- [x] CI job runs E2E suite automatically
 - [x] CI starts all required services
 - [x] CI starts media/signaling infrastructure if required
 - [ ] CI starts `king` containers for multi-participant tests
-- [ ] CI collects traces, screenshots, videos, and logs on failure
+- [x] CI collects traces, screenshots, videos, and logs on failure
 - [x] Test data is deterministic
 - [x] Test data is isolated per test or safely reset
 - [ ] Tests cover all critical IAM and call-access flows
@@ -3523,7 +3530,7 @@ current owner, and the mutation writes the owner-transfer audit row.
 - [x] Audit-relevant flows are asserted where audit logs exist
 - [x] Test names are stable and mapped to the checklist
 - [ ] Documentation explains how to run tests locally
-- [ ] Documentation explains how to run tests in CI
+- [x] Documentation explains how to run tests in CI
 
 Proof: `iam-call-access-seeding.matrix.json` adds deterministic IAM/call-access
 E2E seed principals, calls, access links, and scenario IDs without replacing the
@@ -3549,3 +3556,14 @@ proofed by `call-access-invalidation-contract`,
 `call-access-duplicate-review-email-contract.mjs`,
 `call-access-security-manipulation-contract`, and
 `call-access-security-manipulation.spec.js`.
+
+CI artifacts proof 2026-05-09: `.github/workflows/ci.yml` runs
+`demo/video-chat/scripts/smoke.sh` automatically on canonical shard 1 with
+`VIDEOCHAT_SMOKE_COMPOSE_ONLY=1`, `VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1`, and
+`VIDEOCHAT_SMOKE_ARTIFACTS_DIR=compat-artifacts/video-chat-smoke`; the smoke
+still executes `npm run test:e2e:call-access` against backend/ws/sfu service
+DNS. On failure, CI uploads `video-chat-smoke-e2e-failure-artifacts`, and
+`playwright.config.js` retains screenshots, retry traces, and CI failure videos.
+Documentation in `documentation/dev/video-chat.md` records the same CI command
+and artifact contents. Static proof: `node tests/contract/iam-ci-artifacts-contract.mjs`
+PASS.
