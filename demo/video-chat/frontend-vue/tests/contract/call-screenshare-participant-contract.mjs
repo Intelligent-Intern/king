@@ -21,6 +21,7 @@ const server = await createServer({
   appType: 'custom',
 });
 const { selectCallLayoutParticipants } = await server.ssrLoadModule('/src/domain/realtime/layout/strategies.ts');
+const { createVideoFullscreenToggle } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.ts');
 await server.close();
 
 const ownerUserId = 42;
@@ -29,6 +30,25 @@ assert.ok(screenUserId > ownerUserId, 'screen share participant uses a synthetic
 assert.ok(isScreenShareUserId(screenUserId), 'synthetic screen share user id is recognized');
 assert.equal(screenShareOwnerOrUserId(screenUserId), ownerUserId, 'synthetic screen share ids resolve back to the real owner id');
 assert.equal(screenShareOwnerOrUserId(ownerUserId), ownerUserId, 'real user ids remain unchanged for signaling targets');
+
+let fullscreenRenderCount = 0;
+const fullscreenLayoutState = { mode: 'main_mini' };
+const fullscreenVideoUserId = { value: 0 };
+const fullscreenToggle = createVideoFullscreenToggle({
+  callLayoutState: fullscreenLayoutState,
+  fullscreenVideoUserId,
+  nextTick: (callback) => callback?.(),
+  renderCallVideoLayout: () => {
+    fullscreenRenderCount += 1;
+  },
+});
+fullscreenToggle.toggleVideoFullscreen(screenUserId);
+assert.equal(fullscreenVideoUserId.value, screenUserId, 'screen-share mini tile double-click can open the synthetic participant fullscreen');
+assert.equal(fullscreenLayoutState.mode, 'main_only', 'screen-share fullscreen uses the local fullscreen layout shell');
+fullscreenToggle.closeVideoFullscreen();
+assert.equal(fullscreenVideoUserId.value, 0, 'screen-share fullscreen can close back to the participant layout');
+assert.equal(fullscreenLayoutState.mode, 'main_mini', 'closing screen-share fullscreen restores the previous participant layout');
+assert.equal(fullscreenRenderCount, 2, 'screen-share fullscreen open and close both schedule video layout renders');
 
 const identity = resolveScreenSharePeerIdentity({
   publisherUserId: ownerUserId,
@@ -277,6 +297,11 @@ assert.match(
   /@dblclick\.stop="toggleVideoFullscreenForEvent\(participant\.userId, \$event\)"/,
   'video tiles pass the double-click event to fullscreen media-surface resolution',
 );
+assert.match(
+  callWorkspaceTemplate,
+  /id="workspace-fullscreen-video-slot"[\s\S]*@click\.stop/,
+  'fullscreen screen-share zoom and pan interactions stay inside the fullscreen media slot',
+);
 assert.match(participantUi, /function replaceLocalPinsWithScreenShare/, 'screen-share start replaces local pins through a dedicated helper');
 assert.match(
   participantUi,
@@ -300,9 +325,20 @@ assert.match(
 );
 assert.match(videoLayout, /applyScreenSharePanSurface\(node, target, \{ userId \}\)/, 'mounted screen-share media surfaces are wired for drag panning');
 assert.match(screenSharePan, /isScreenShareUserId[\s\S]*isScreenShareMediaSource/, 'screen-share pan is gated to screen-share media only');
+assert.match(screenSharePan, /FULLSCREEN_SURFACE_ROLE = 'fullscreen'/, 'screen-share zoom is scoped to the fullscreen render surface');
+assert.match(screenSharePan, /MIN_ZOOM_SCALE = 1[\s\S]*MAX_ZOOM_SCALE = 4/, 'screen-share zoom has explicit bounded scale limits');
+assert.match(screenSharePan, /objectFit = 'contain'/, 'screen-share default fit preserves the full shared surface without cropping');
+assert.doesNotMatch(screenSharePan, /objectFit = 'cover'/, 'screen-share pan must not force cropped camera-style cover fit');
 assert.match(screenSharePan, /addEventListener\('pointerdown'[\s\S]*addEventListener\('pointermove'/, 'screen-share pan uses pointer drag events');
+assert.match(screenSharePan, /addEventListener\('wheel'[\s\S]*passive: false/, 'screen-share fullscreen supports opt-in wheel zoom');
+assert.match(screenSharePan, /addEventListener\('dblclick', onDoubleClick\)/, 'screen-share fullscreen can reset zoom with a double click');
+assert.match(screenSharePan, /clamp\(Number\(state\.offsetX \|\| 0\), -bounds\.maxX, bounds\.maxX\)/, 'screen-share pan clamps horizontal movement to rendered bounds');
+assert.match(screenSharePan, /clamp\(Number\(state\.offsetY \|\| 0\), -bounds\.maxY, bounds\.maxY\)/, 'screen-share pan clamps vertical movement to rendered bounds');
 assert.match(screenSharePan, /node\.dataset\.callScreenSharePanEnabled = '1'/, 'screen-share pan marks only enabled screen-share surfaces');
-assert.match(callWorkspaceStageCss, /\[data-call-screen-share-pan-enabled="1"\][\s\S]*object-fit: cover !important/, 'screen-share pan surfaces use a movable cropped fit');
+assert.match(screenSharePan, /node\.dataset\.callScreenShareFitMode = state\.zoomScale > MIN_ZOOM_SCALE \? 'zoomed' : 'contain'/, 'screen-share surfaces expose fit state for non-clipping default proof');
+assert.match(callWorkspaceStageCss, /\[data-call-screen-share-pan-enabled="1"\][\s\S]*object-fit: contain !important/, 'screen-share surfaces default to non-clipping contain fit');
+assert.doesNotMatch(callWorkspaceStageCss, /\[data-call-screen-share-pan-enabled="1"\][\s\S]*object-fit: cover !important/, 'screen-share zoom styles must not reintroduce cropped cover fit');
+assert.match(callWorkspaceStageCss, /\[data-call-screen-share-zoomed="1"\][\s\S]*cursor: grab/, 'screen-share pan affordance appears only after zoom is active');
 
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const screenShareFrameIdentity = read('src/domain/realtime/sfu/screenShareFrameIdentity.js');

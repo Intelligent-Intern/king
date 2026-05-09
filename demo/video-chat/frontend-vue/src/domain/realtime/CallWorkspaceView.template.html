@@ -151,6 +151,7 @@
             id="workspace-fullscreen-video-slot"
             class="workspace-fullscreen-video-slot"
             :data-user-id="fullscreenVideoUserId"
+            @click.stop
           ></div>
           <div
             v-if="showParticipantMediaOverlay(fullscreenVideoUserId)"
