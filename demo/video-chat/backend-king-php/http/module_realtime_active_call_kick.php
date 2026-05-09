@@ -61,26 +61,36 @@ function videochat_realtime_apply_lobby_remove_result(
     array $presenceConnection,
     callable $openDatabase,
     string $lobbyResultRoomId
-): void {
+): array {
     $removedCallId = videochat_realtime_connection_call_id($presenceConnection);
     $removedUserIds = videochat_realtime_lobby_result_user_ids($lobbyResult, 'affected_user_ids');
     if ($removedCallId === '' || $removedUserIds === []) {
-        return;
+        return [
+            'removed_user_ids' => [],
+            'active_target_user_ids' => [],
+        ];
     }
     $activeTargetUserIds = videochat_realtime_lobby_result_user_ids($lobbyResult, 'active_target_user_ids');
     $activeTargetSet = array_fill_keys($activeTargetUserIds, true);
+    $persistedRemovedUserIds = [];
+    $persistedActiveTargetUserIds = [];
 
     foreach ($removedUserIds as $removedUserId) {
         if (isset($activeTargetSet[$removedUserId])) {
-            videochat_realtime_mark_call_participant_removed_from_active_call($openDatabase, $removedCallId, $removedUserId);
+            if (videochat_realtime_mark_call_participant_removed_from_active_call($openDatabase, $removedCallId, $removedUserId)) {
+                $persistedRemovedUserIds[] = $removedUserId;
+                $persistedActiveTargetUserIds[] = $removedUserId;
+            }
         } else {
-            videochat_realtime_mark_call_participant_invite_state_by_user_id(
+            if (videochat_realtime_mark_call_participant_invite_state_by_user_id(
                 $openDatabase,
                 $removedCallId,
                 $removedUserId,
                 'invited',
                 ['pending', 'allowed', 'accepted']
-            );
+            )) {
+                $persistedRemovedUserIds[] = $removedUserId;
+            }
         }
     }
 
@@ -112,6 +122,11 @@ function videochat_realtime_apply_lobby_remove_result(
         null,
         videochat_realtime_connection_tenant_id($presenceConnection)
     );
+
+    return [
+        'removed_user_ids' => $persistedRemovedUserIds,
+        'active_target_user_ids' => $persistedActiveTargetUserIds,
+    ];
 }
 
 function videochat_realtime_disconnect_removed_call_participants(
