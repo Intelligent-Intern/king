@@ -42,8 +42,14 @@ assert.match(
 
 assert.match(
   sidebarCombinedSource,
-  /\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\.call-apps-item-side[\s\S]*flex-wrap:\s*wrap[\s\S]*\.call-apps-access-row[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-access-row[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/s,
+  /\.call-apps-list-item[\s\S]*box-sizing:\s*border-box;[\s\S]*min-width:\s*0;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\.call-apps-item-side[\s\S]*flex-wrap:\s*wrap[\s\S]*\.call-apps-access-row[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(72px,\s*auto\)[\s\S]*\.call-apps-access-row[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/s,
   'Call Apps sidebar list and access actions must stack at narrow widths and expand at wider sidebar widths',
+);
+
+assert.match(
+  sidebarCombinedSource,
+  /\.call-apps-sidebar[\s\S]*box-sizing:\s*border-box;[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*overflow-x:\s*hidden;[\s\S]*overscroll-behavior:\s*contain;/s,
+  'Call Apps sidebar must contain its own scroll and avoid horizontal overflow inside the left sidebar',
 );
 
 assert.doesNotMatch(

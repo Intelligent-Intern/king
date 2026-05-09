@@ -73,6 +73,18 @@ assert.match(
 );
 
 assert.match(
+  leftSidebarSource,
+  /class="call-left-panel-body"[\s\S]*'showing-settings': showSettingsPanel[\s\S]*'showing-call-apps': showCallAppsPanel[\s\S]*role="tabpanel"[\s\S]*aria-labelledby="call-left-tab-call-apps"[\s\S]*role="tabpanel"[\s\S]*aria-labelledby="call-left-tab-settings"/,
+  'CallWorkspaceLeftSidebar must keep Settings and Call Apps inside one stable non-overlapping panel body',
+);
+
+assert.match(
+  leftSidebarSource,
+  /id="call-left-tab-settings"[\s\S]*aria-controls="call-left-panel-settings"[\s\S]*:tabindex="activePanel === 'settings' \? 0 : -1"[\s\S]*@keydown\.right\.prevent="setActivePanel\('call_apps'\)"[\s\S]*id="call-left-tab-call-apps"[\s\S]*aria-controls="call-left-panel-call-apps"[\s\S]*:tabindex="activePanel === 'call_apps' \? 0 : -1"/,
+  'Call workspace left sidebar tabs must expose stable ARIA controls and roving keyboard focus',
+);
+
+assert.match(
   shellSource,
   /const callAppSidebarState = reactive\([\s\S]*activeSession:\s*null[\s\S]*participants:\s*\[\][\s\S]*sendSocketFrame:\s*null[\s\S]*requestRoomSnapshot:\s*null/s,
   'WorkspaceShell must keep active Call App session and participant grant state for the left sidebar',
@@ -118,6 +130,12 @@ assert.match(
   sidebarCombinedSource,
   /\.call-apps-sidebar[\s\S]*container-type:\s*inline-size[\s\S]*\.call-apps-search[\s\S]*flex-direction:\s*row-reverse[\s\S]*gap:\s*clamp\([\s\S]*padding:\s*clamp\(/s,
   'Call Apps sidebar search must keep the submit icon right-aligned with responsive spacing',
+);
+
+assert.match(
+  sidebarCombinedSource,
+  /\.call-apps-sidebar[\s\S]*height:\s*100%;[\s\S]*overflow-y:\s*auto;[\s\S]*overscroll-behavior:\s*contain;[\s\S]*grid-auto-rows:\s*max-content;/s,
+  'Call Apps sidebar must be a stable contained scroll panel inside the left sidebar body',
 );
 
 assert.match(
@@ -176,7 +194,7 @@ assert.match(
 
 assert.match(
   sidebarCombinedSource,
-  /@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto[\s\S]*\.call-apps-detail-grid[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/s,
+  /@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(72px,\s*auto\)[\s\S]*\.call-apps-detail-grid[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/s,
   'Call Apps sidebar must adapt list and detail grids at wider container sizes',
 );
 
