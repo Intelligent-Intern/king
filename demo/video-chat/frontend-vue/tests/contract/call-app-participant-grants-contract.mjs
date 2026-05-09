@@ -12,6 +12,7 @@ async function read(relativePath) {
 const [
   buttonSource,
   templateSource,
+  rightRosterSource,
   workspaceSource,
   runtimeConfigSource,
   signalingSource,
@@ -23,6 +24,7 @@ const [
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppParticipantGrantButton.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/RightRosterPanel.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts'),
   read('demo/video-chat/backend-king-php/domain/realtime/realtime_signaling.php'),
@@ -35,14 +37,32 @@ const [
 
 assert.match(
   templateSource,
-  /<CallAppParticipantGrantButton[\s\S]*:session="activeCallAppSession"[\s\S]*:row="row"[\s\S]*:send-socket-frame="sendSocketFrame"/,
-  'right participant list must expose the Call App permission control when a session is active',
+  /<RightRosterPanel[\s\S]*:active-call-app-session="activeCallAppSession"[\s\S]*:send-socket-frame="sendSocketFrame"/,
+  'right participant list must pass Call App session and realtime wiring into the focused roster component',
 );
 
 assert.match(
   workspaceSource,
-  /import CallAppParticipantGrantButton from ['"]\.\/callApps\/CallAppParticipantGrantButton\.vue['"]/,
-  'CallWorkspaceView must import only the focused grant-button component',
+  /import RightRosterPanel from ['"]\.\/workspace\/callWorkspace\/RightRosterPanel\.vue['"]/,
+  'CallWorkspaceView must import the focused right roster component instead of owning grant-button markup',
+);
+
+assert.match(
+  rightRosterSource,
+  /import CallAppParticipantGrantButton from ['"]\.\.\/\.\.\/callApps\/CallAppParticipantGrantButton\.vue['"]/,
+  'right roster component must import the focused Call App grant control',
+);
+
+assert.match(
+  rightRosterSource,
+  /<CallAppParticipantGrantButton[\s\S]*:session="activeCallAppSession"[\s\S]*:row="row"[\s\S]*:send-socket-frame="sendSocketFrame"/,
+  'right roster component must expose the Call App permission control when a session is active',
+);
+
+assert.match(
+  rightRosterSource,
+  /callAppRead[\s\S]*calls\.workspace\.action_option_call_app_read[\s\S]*supportedPermissions\.has\('read'\)[\s\S]*callAppWrite[\s\S]*supportedPermissions\.has\('write'\)[\s\S]*callAppDelete[\s\S]*supportedPermissions\.has\('delete'\)/s,
+  'right roster action options must name read/write/delete Call App permissions only when the session advertises support',
 );
 
 assert.match(

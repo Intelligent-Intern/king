@@ -46,6 +46,7 @@ export function createCallWorkspaceOrchestrationHelpers({
     currentLayoutMode,
     currentUserId,
     desiredRoomId,
+    filteredLobbyRows,
     filteredUsers,
     gridVideoParticipants,
     isAloneInCall,
@@ -148,7 +149,7 @@ export function createCallWorkspaceOrchestrationHelpers({
     if (usersPage.value < 1) usersPage.value = 1;
   });
 
-  watch(lobbyRows, () => {
+  watch(filteredLobbyRows || lobbyRows, () => {
     if (lobbyPage.value > lobbyPageCount.value) {
       lobbyPage.value = lobbyPageCount.value;
     }
