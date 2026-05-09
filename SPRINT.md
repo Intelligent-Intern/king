@@ -1556,7 +1556,7 @@ state without issuing a session.
 - [x] User can join if logged-in account is authorized
 - [x] User lands in lobby if logged-in account is not directly authorized
 - [x] Temporary link data does not overwrite account data automatically
-- [ ] Light mismatches are optionally logged
+- [x] Light mismatches are optionally logged
 - [x] No link data is unnecessarily exposed in frontend
 - [x] Same logged-in account can reopen same link without duplicate-link flag
 
@@ -1573,6 +1573,12 @@ first-name/last-name/full-name drift as strong mismatch. The Docker PHP 8.4
 contract proves no/light mismatch resolves without the strong warning contract,
 sanitizes link-target data, and issues the call-access session to the current
 logged-in account.
+
+Additional proof: light-mismatch join-open resolution now records a
+`call_access_account_compared` audit event with `comparison_outcome:
+light_mismatch` and the existing no-foreign-data audit flags, while preserving
+the non-strong join path.
+
 `call-access-duplicate-review-contract.php` proves same-account reuse with the
 assertion `same linked account must not create a duplicate review flag`.
 `call-access-personalized-identity.spec.js` covers the browser path

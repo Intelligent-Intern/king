@@ -233,6 +233,19 @@ function videochat_call_access_public_join_identity_result(
                 'mismatch_state' => (string) ($mismatch['state'] ?? 'unknown'),
             ]
         );
+    } elseif ((string) ($mismatch['state'] ?? '') === 'light_mismatch') {
+        videochat_audit_record_call_access_account_compared(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $authenticatedUserId,
+            'light_mismatch',
+            [
+                'session_id' => $authenticatedSessionId,
+                'stage' => 'join_opened',
+            ]
+        );
     }
     if ((bool) ($mismatch['strong'] ?? false)) {
         videochat_audit_record_call_access_strong_mismatch(
