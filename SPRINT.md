@@ -154,6 +154,12 @@ Tickets:
     persisted backend grant contract remains binary allow/deny; closing this
     ticket still requires backend/API persistence and realtime refresh for
     distinct read/write/delete grants.
+  - Loop 8 note: the right-sidebar frontend now renders real read/write/delete
+    Call App grant buttons and sends an additive grant payload containing the
+    compatible `grant_state` plus `permissions` and `permission_actions`.
+    Current binary backends can continue accepting `grant_state`; the
+    read/write/delete backend agent must persist and echo those additive fields
+    on session grants for exact per-action state after snapshot refresh.
 
 - [x] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.

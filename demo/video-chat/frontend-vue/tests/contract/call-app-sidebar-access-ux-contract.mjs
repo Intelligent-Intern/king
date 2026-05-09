@@ -66,13 +66,13 @@ assert.match(
 
 assert.match(
   grantButtonSource,
-  /effectiveGrantState\.value === 'allowed'[\s\S]*remove_user\.png[\s\S]*add_to_call\.png[\s\S]*effectiveGrantState\.value === 'allowed' \? 'Revoke' : 'Allow'/,
+  /isEffectivelyAllowed\.value[\s\S]*remove_user\.png[\s\S]*add_to_call\.png[\s\S]*const verb = isEffectivelyAllowed\.value \? 'Revoke' : 'Allow'/,
   'Call App grant button must show the next action clearly: allowed means Revoke, denied means Allow',
 );
 
 assert.match(
   grantButtonSource,
-  /Only the call owner or a moderator can change Call App access[\s\S]*buttonLabel\.value\} Call App access for/,
+  /Only the call owner or a moderator can change Call App access[\s\S]*buttonLabel\.value\} Call App \$\{permissionLabel\.value\} for/,
   'Call App grant button titles must explain unavailable controls and name the affected participant',
 );
 
