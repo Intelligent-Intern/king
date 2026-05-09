@@ -7,10 +7,102 @@ import {
   getSeedCall,
   getSeedScenario,
   getSeedUser,
+  installStoredSeedSession,
   seedUserKeys,
   sessionStorageKey,
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+
+const directJoinPermissionCases = [
+  {
+    label: 'system admin alpha',
+    principalUserKey: 'system_admin',
+    callKey: 'alpha_active',
+    allowed: true,
+  },
+  {
+    label: 'system admin beta',
+    principalUserKey: 'system_admin',
+    callKey: 'beta_active',
+    allowed: true,
+  },
+  {
+    label: 'system admin tenantless',
+    principalUserKey: 'system_admin',
+    callKey: 'tenantless_active',
+    allowed: true,
+  },
+  {
+    label: 'alpha org admin alpha',
+    principalUserKey: 'alpha_org_admin',
+    callKey: 'alpha_active',
+    allowed: true,
+  },
+  {
+    label: 'registered guest alpha',
+    principalUserKey: 'registered_guest',
+    callKey: 'alpha_active',
+    allowed: true,
+  },
+  {
+    label: 'alpha call owner alpha',
+    principalUserKey: 'alpha_call_owner',
+    callKey: 'alpha_active',
+    allowed: true,
+  },
+  {
+    label: 'alpha org admin beta',
+    principalUserKey: 'alpha_org_admin',
+    callKey: 'beta_active',
+    allowed: false,
+  },
+  {
+    label: 'alpha normal user alpha',
+    principalUserKey: 'alpha_normal_user',
+    callKey: 'alpha_active',
+    allowed: false,
+  },
+];
+
+async function createDirectJoinProbePage(browser, baseURL, { principalUserKey, callKey }) {
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: 'call_scoped_removed_member_personal_waits_for_host',
+  });
+  await page.close();
+  await installStoredSeedSession(context, principalUserKey, callKey);
+  return { context, page: await context.newPage() };
+}
+
+async function fetchDirectJoinResponses(page, { roomId, callId }) {
+  await page.goto('/');
+  return page.evaluate(async ({ storageKey, roomId: targetRoomId, callId: targetCallId }) => {
+    let storedSession = {};
+    try {
+      storedSession = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    } catch {
+      storedSession = {};
+    }
+    const headers = {
+      accept: 'application/json',
+      authorization: `Bearer ${String(storedSession.sessionToken || '')}`,
+    };
+    const readJson = async (path) => {
+      const response = await fetch(path, { headers });
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      return { status: response.status, payload };
+    };
+    return {
+      storedSession,
+      resolve: await readJson(`/api/calls/resolve/${encodeURIComponent(targetRoomId)}`),
+      call: await readJson(`/api/calls/${encodeURIComponent(targetCallId)}`),
+    };
+  }, { storageKey: sessionStorageKey, roomId, callId });
+}
 
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
@@ -39,6 +131,51 @@ test('IAM call-access seed matrix covers required principals without temporary a
     expect(user.system_admin).toBe(false);
     expect(tenant?.permissions?.platform_admin ?? false).toBe(false);
     expect(tenant?.permissions?.tenant_admin ?? false).toBe(false);
+  }
+});
+
+test('Direct Join Permissions seed matrix enforces direct call-ref API access', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+
+  for (const row of directJoinPermissionCases) {
+    await test.step(row.label, async () => {
+      const call = getSeedCall(row.callKey);
+      const principal = getSeedUser(row.principalUserKey);
+      const { context, page } = await createDirectJoinProbePage(browser, baseURL, {
+        principalUserKey: row.principalUserKey,
+        callKey: row.callKey,
+      });
+
+      try {
+        const responses = await fetchDirectJoinResponses(page, {
+          roomId: call.room_id,
+          callId: call.id,
+        });
+
+        expect.soft(responses.storedSession.userId, `${row.label} stored user id`).toBe(principal.id);
+        expect.soft(responses.storedSession.sessionToken, `${row.label} stored session token`).toMatch(/^sess_iam_seed_/);
+
+        expect.soft(responses.resolve.status, `${row.label} resolve HTTP status`).toBe(200);
+        expect.soft(responses.resolve.payload?.status, `${row.label} resolve envelope`).toBe('ok');
+        if (row.allowed) {
+          expect.soft(responses.resolve.payload?.result?.state, `${row.label} resolve state`).toBe('resolved');
+          expect.soft(responses.resolve.payload?.result?.call?.id, `${row.label} resolved call id`).toBe(call.id);
+          expect.soft(responses.call.status, `${row.label} call HTTP status`).toBe(200);
+          expect.soft(responses.call.payload?.status, `${row.label} call envelope`).toBe('ok');
+          expect.soft(responses.call.payload?.call?.id, `${row.label} fetched call id`).toBe(call.id);
+        } else {
+          expect.soft(responses.resolve.payload?.result?.state, `${row.label} resolve denied state`).toBe('forbidden');
+          expect.soft(responses.resolve.payload?.result?.reason, `${row.label} resolve denied reason`).toBe('calls_forbidden');
+          expect.soft(responses.resolve.payload?.result?.call ?? null, `${row.label} resolve denied call`).toBeNull();
+          expect.soft(responses.call.status, `${row.label} call denied HTTP status`).toBe(403);
+          expect.soft(responses.call.payload?.status, `${row.label} call denied envelope`).toBe('error');
+          expect.soft(responses.call.payload?.error?.code, `${row.label} call denied code`).toBe('calls_forbidden');
+        }
+      } finally {
+        await context.close();
+      }
+    });
   }
 });
 
