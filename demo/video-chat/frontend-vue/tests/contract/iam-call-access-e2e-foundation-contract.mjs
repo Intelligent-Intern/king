@@ -21,6 +21,17 @@ function readJson(relativePath) {
   return JSON.parse(readText(relativePath));
 }
 
+function assertUniqueField(rows, field, label) {
+  const owners = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const value = row?.[field];
+    assert.ok(value !== undefined && value !== null && String(value).trim() !== '', `${label} ${field} must be present for ${row?.key || '<missing key>'}`);
+    const normalized = String(value);
+    assert.ok(!owners.has(normalized), `${label} ${field} must be unique: ${normalized} is used by ${owners.get(normalized)} and ${row?.key || '<missing key>'}`);
+    owners.set(normalized, row?.key || '<missing key>');
+  }
+}
+
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
@@ -192,6 +203,11 @@ const matrixPaths = new Set(matrix.commands?.['frontend:e2e:matrix']?.paths || [
 const callAccessPaths = new Set(matrix.commands?.['frontend:e2e:call-access']?.paths || []);
 const requiredSpecs = new Set(matrix.release_gate?.required_ui_parity_specs || []);
 const removedInvitedMember = callAccessSeedMatrix.users.find((user) => user?.key === 'removed_invited_member');
+assertUniqueField(callAccessSeedMatrix.tenants, 'id', 'tenant seed row');
+assertUniqueField(callAccessSeedMatrix.organizations, 'id', 'organization seed row');
+assertUniqueField(callAccessSeedMatrix.users, 'id', 'user seed row');
+assertUniqueField(callAccessSeedMatrix.calls, 'id', 'call seed row');
+assertUniqueField(callAccessSeedMatrix.access_links, 'id', 'access-link seed row');
 assert.ok(removedInvitedMember, 'call-access seed matrix must include the removed invited member principal');
 assert.deepEqual(removedInvitedMember.memberships || [], [], 'removed invited member must not keep active tenant membership in the deterministic seed');
 assert.deepEqual(removedInvitedMember.organization_memberships || [], [], 'removed invited member must not keep active organization membership in the deterministic seed');
