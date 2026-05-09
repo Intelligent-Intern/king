@@ -1,5 +1,9 @@
 <template>
-  <section class="call-app-workspace-host" :data-call-app-session-id="sessionId">
+  <section
+    class="call-app-workspace-host"
+    :class="{ fullscreen: isWorkspaceFullscreen }"
+    :data-call-app-session-id="sessionId"
+  >
     <section class="call-app-workspace-mini-strip" aria-label="Call App participants">
       <article
         v-for="participant in visibleMiniParticipants"
@@ -30,6 +34,17 @@
     </section>
 
     <section class="call-app-workspace-frame-shell">
+      <button
+        v-if="hasActiveSession"
+        class="call-app-workspace-fullscreen-toggle"
+        type="button"
+        :aria-pressed="isWorkspaceFullscreen ? 'true' : 'false'"
+        :aria-label="fullscreenToggleLabel"
+        :title="fullscreenToggleLabel"
+        @click.stop="toggleWorkspaceFullscreen"
+      >
+        <span aria-hidden="true">{{ isWorkspaceFullscreen ? 'X' : '[]' }}</span>
+      </button>
       <iframe
         v-if="hasActiveSession"
         ref="iframeRef"
@@ -122,6 +137,7 @@ const props = defineProps({
 });
 
 const iframeRef = ref(null);
+const isWorkspaceFullscreen = ref(false);
 const hasActiveSession = computed(() => props.activeSession !== null && String(props.activeSession?.id || '').trim() !== '');
 const sessionId = computed(() => String(props.activeSession?.id || '').trim());
 const appKey = computed(() => String(props.activeSession?.app_key || props.activeSession?.appKey || '').trim());
@@ -173,23 +189,43 @@ const accessNoticeLabel = computed(() => {
   if (accessNoticeState.value === 'read-only') return 'Read-only Call App access. You can view this app but cannot edit it.';
   return '';
 });
+const fullscreenToggleLabel = computed(() => (isWorkspaceFullscreen.value ? 'Exit Call App fullscreen' : 'Open Call App fullscreen'));
+
+function toggleWorkspaceFullscreen() {
+  isWorkspaceFullscreen.value = !isWorkspaceFullscreen.value;
+}
 </script>
 
 <style scoped>
 .call-app-workspace-host {
+  --call-app-workspace-mini-height: 112px;
   width: 100%;
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: 112px minmax(0, 1fr);
+  grid-template-rows: var(--call-app-workspace-mini-height) minmax(0, 1fr);
   background: var(--color-surface-navy);
   color: var(--color-text-primary);
   overflow: hidden;
 }
 
+.call-app-workspace-host.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  grid-template-rows: var(--call-app-workspace-mini-height) minmax(0, 1fr);
+  isolation: isolate;
+}
+
 .call-app-workspace-mini-strip {
+  position: relative;
+  z-index: 2;
   min-width: 0;
-  height: 112px;
+  height: var(--call-app-workspace-mini-height);
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(92px, 1fr));
@@ -300,6 +336,29 @@ const accessNoticeLabel = computed(() => {
   overflow: hidden;
 }
 
+.call-app-workspace-fullscreen-toggle {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 3;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--color-surface-navy) 92%, transparent);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.call-app-workspace-fullscreen-toggle:hover {
+  background: var(--color-border);
+}
+
 .call-app-workspace-frame {
   width: 100%;
   height: 100%;
@@ -352,12 +411,11 @@ const accessNoticeLabel = computed(() => {
 
 @media (max-width: 720px) {
   .call-app-workspace-host {
-    grid-template-rows: 96px minmax(0, 1fr);
+    --call-app-workspace-mini-height: 96px;
   }
 
   .call-app-workspace-mini-strip {
     grid-template-columns: repeat(5, minmax(120px, 120px));
-    height: 96px;
     padding: 6px;
   }
 

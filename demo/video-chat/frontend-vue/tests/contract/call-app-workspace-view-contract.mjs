@@ -51,7 +51,12 @@ assert.match(componentSource, /<iframe[\s\S]*sandbox="allow-scripts allow-forms 
 assert.doesNotMatch(componentSource, /allow-same-origin/, 'Call App iframe sandbox must not include allow-same-origin');
 assert.doesNotMatch(componentSource + stateSource, /sessionToken|Authorization|localStorage/, 'Call App workspace shell must not expose primary auth material to the iframe');
 assert.match(componentSource, /referrerpolicy="no-referrer"/, 'Call App iframe must not leak referrer data');
-assert.match(componentSource, /grid-template-rows:\s*112px\s*minmax\(0,\s*1fr\)[\s\S]*height:\s*112px/, 'Call App workspace must keep mini strip and iframe sizing stable');
+assert.match(componentSource, /--call-app-workspace-mini-height:\s*112px[\s\S]*grid-template-rows:\s*var\(--call-app-workspace-mini-height\)\s*minmax\(0,\s*1fr\)[\s\S]*height:\s*var\(--call-app-workspace-mini-height\)/, 'Call App workspace must keep mini strip and iframe sizing stable');
+assert.match(componentSource, /class="\{ fullscreen: isWorkspaceFullscreen \}"/, 'Call App workspace host must expose a dedicated fullscreen state');
+assert.match(componentSource, /call-app-workspace-fullscreen-toggle[\s\S]*aria-pressed[\s\S]*fullscreenToggleLabel[\s\S]*@click\.stop="toggleWorkspaceFullscreen"/, 'Call App workspace must provide an iframe fullscreen toggle without using participant video fullscreen controls');
+assert.match(componentSource, /\.call-app-workspace-host\.fullscreen\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*z-index:\s*9990;[\s\S]*height:\s*100dvh;[\s\S]*grid-template-rows:\s*var\(--call-app-workspace-mini-height\)\s*minmax\(0,\s*1fr\)/, 'Call App fullscreen must escape sidebars/body clipping while preserving the mini video strip row');
+assert.match(componentSource, /\.call-app-workspace-mini-strip\s*\{[\s\S]*position:\s*relative;[\s\S]*z-index:\s*2;[\s\S]*overflow-x:\s*auto;[\s\S]*overflow-y:\s*hidden;/, 'Call App fullscreen must keep mini video tiles visible and horizontally usable');
+assert.doesNotMatch(componentSource, /requestFullscreen|webkitRequestFullscreen|mozRequestFullScreen|msRequestFullscreen/, 'Call App fullscreen must remain an app workspace layout state, not a browser fullscreen API path');
 assert.match(componentSource, /accessNoticeState[\s\S]*no-access[\s\S]*call_apps\.crdt\.read[\s\S]*call_apps\.crdt\.append[\s\S]*read-only/s, 'Call App workspace must show explicit no-access and read-only states from launch grant capabilities');
 
 console.log('[call-app-workspace-view-contract] PASS');
