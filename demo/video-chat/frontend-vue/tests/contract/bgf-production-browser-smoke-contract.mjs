@@ -4,6 +4,10 @@ function readUtf8(path) {
   return fs.readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 }
 
+function readVideoChatUtf8(path) {
+  return fs.readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8');
+}
+
 function requireContains(source, needle, label) {
   if (!source.includes(needle)) {
     throw new Error(`[bgf-production-browser-smoke-contract] Missing ${label}: ${needle}`);
@@ -16,12 +20,67 @@ function requireMissing(source, needle, label) {
   }
 }
 
+function requireMatches(source, pattern, label) {
+  if (!pattern.test(source)) {
+    throw new Error(`[bgf-production-browser-smoke-contract] Missing ${label}: ${pattern}`);
+  }
+}
+
+function requireNotMatches(source, pattern, label) {
+  if (pattern.test(source)) {
+    throw new Error(`[bgf-production-browser-smoke-contract] Forbidden ${label}: ${pattern}`);
+  }
+}
+
 const packageJson = JSON.parse(readUtf8('package.json'));
 const playwrightConfig = readUtf8('playwright.config.js');
 const smokeSpec = readUtf8('tests/e2e/background-production-browser-smoke.spec.js');
+const runnerScript = readVideoChatUtf8('scripts/bgf-production-browser-smoke.sh');
 
 if (packageJson.scripts['test:e2e:production-browser-smoke'] !== 'PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE=1 VIDEOCHAT_PRODUCTION_BROWSER_SMOKE=1 playwright test tests/e2e/background-production-browser-smoke.spec.js --workers=1 --project=production-chromium --project=production-firefox') {
   throw new Error('[bgf-production-browser-smoke-contract] production browser smoke script must run Chrome/Chromium and Firefox against the deployed smoke spec');
+}
+
+requireMatches(runnerScript, /^#!\/usr\/bin\/env bash/, 'bash runner shebang');
+requireContains(runnerScript, 'set -euo pipefail', 'strict bash runner mode');
+requireContains(runnerScript, 'LOCAL_ENV_FILE="${VIDEOCHAT_DIR}/.env.local"', 'local env file source');
+requireContains(runnerScript, 'preserved_values', 'explicit env override preservation');
+requireContains(runnerScript, 'source "${LOCAL_ENV_FILE}"', 'local env loading');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_DOMAIN:-${DEPLOY_DOMAIN:-${VIDEOCHAT_V1_PUBLIC_HOST:-kingrt.com}}', 'kingrt.com deploy domain default');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_APP_DOMAIN', 'deployed app domain normalization');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_API_DOMAIN', 'deployed API domain normalization');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_WS_DOMAIN', 'deployed websocket domain normalization');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_SFU_DOMAIN', 'deployed SFU domain normalization');
+requireContains(runnerScript, 'PLAYWRIGHT_PRODUCTION_BASE_URL', 'deployed app origin export');
+requireContains(runnerScript, 'VITE_VIDEOCHAT_BACKEND_ORIGIN', 'deployed API origin export');
+requireContains(runnerScript, 'VITE_VIDEOCHAT_WS_ORIGIN', 'deployed websocket origin export');
+requireContains(runnerScript, 'VITE_VIDEOCHAT_SFU_ORIGIN', 'deployed SFU origin export');
+requireContains(runnerScript, 'VIDEOCHAT_PRODUCTION_ADMIN_EMAIL', 'production admin credential support');
+requireContains(runnerScript, 'VIDEOCHAT_PRODUCTION_USER_EMAIL', 'production user credential support');
+requireContains(runnerScript, 'VIDEOCHAT_E2E_ADMIN_PASSWORD', 'E2E admin credential support');
+requireContains(runnerScript, 'VIDEOCHAT_E2E_USER_PASSWORD', 'E2E user credential support');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE', 'deploy admin password file support');
+requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_USER_PASSWORD_FILE', 'deploy user password file support');
+requireContains(runnerScript, 'VIDEOCHAT_PRODUCTION_BROWSER_SMOKE_DRY_RUN', 'dry-run mode');
+requireContains(runnerScript, 'print_dry_run()', 'redacted dry-run config output');
+requireContains(runnerScript, 'redacted_value()', 'secret redaction helper');
+requireContains(runnerScript, 'set_env_var PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE "1"', 'Playwright smoke flag export');
+requireContains(runnerScript, 'set_env_var VIDEOCHAT_PRODUCTION_BROWSER_SMOKE "1"', 'videochat smoke flag export');
+requireContains(runnerScript, 'NPM_SCRIPT="test:e2e:production-browser-smoke"', 'frontend npm smoke script selection');
+requireContains(runnerScript, 'npm run "${NPM_SCRIPT}"', 'frontend npm smoke command');
+
+for (const [pattern, label] of [
+  [/\bdeploy\.sh\b/, 'deploy script invocation'],
+  [/\bdeploy-smoke\.sh\b/, 'deploy smoke invocation'],
+  [/\bprod-debug\.sh\b/, 'prod debug invocation'],
+  [/\bcertbot\b/, 'certificate tooling'],
+  [/\bdocker\s+compose\b/, 'compose mutation tooling'],
+  [/(^|[^\w-])ssh([^\w-]|$)/, 'SSH command'],
+  [/\b(dig|nslookup|hcloud|terraform|kubectl)\b/, 'DNS or infrastructure tooling'],
+  [/\bplaywright\s+test\b/, 'direct Playwright command instead of npm script'],
+  [/\b(curl|wget)\b/, 'direct network probe tooling'],
+]) {
+  requireNotMatches(runnerScript, pattern, label);
 }
 
 requireContains(playwrightConfig, 'PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE', 'production Playwright mode flag');
