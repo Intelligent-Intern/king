@@ -20,8 +20,13 @@
         :class="{ active: activePanel === 'settings' }"
         type="button"
         role="tab"
+        id="call-left-tab-settings"
+        aria-controls="call-left-panel-settings"
         :aria-selected="activePanel === 'settings'"
-        @click="activePanel = 'settings'"
+        :tabindex="activePanel === 'settings' ? 0 : -1"
+        @click="setActivePanel('settings')"
+        @keydown.right.prevent="setActivePanel('call_apps')"
+        @keydown.left.prevent="setActivePanel('call_apps')"
       >
         {{ t('settings.dialog_title') }}
       </button>
@@ -30,27 +35,48 @@
         :class="{ active: activePanel === 'call_apps' }"
         type="button"
         role="tab"
+        id="call-left-tab-call-apps"
+        aria-controls="call-left-panel-call-apps"
         :aria-selected="activePanel === 'call_apps'"
-        @click="activePanel = 'call_apps'"
+        :tabindex="activePanel === 'call_apps' ? 0 : -1"
+        @click="setActivePanel('call_apps')"
+        @keydown.right.prevent="setActivePanel('settings')"
+        @keydown.left.prevent="setActivePanel('settings')"
       >
         {{ t('calls.workspace.call_apps') }}
       </button>
     </div>
 
-    <CallAppsSidebarPanel
-      v-if="showCallAppsPanel"
-      :call-id="activeSidebarCallId"
-      :can-manage="canManageSidebarCallApps"
-      :active-session="callAppSidebarActiveSession"
-      :participants="callAppSidebarParticipants"
-      :api-request="apiRequest"
-      :send-socket-frame="callAppSidebarSendSocketFrame"
-      :request-room-snapshot="callAppSidebarRequestRoomSnapshot"
-      @session-created="$emit('call-app-session-created', $event)"
-    />
+    <div
+      class="call-left-panel-body"
+      :class="{
+        'showing-settings': showSettingsPanel,
+        'showing-call-apps': showCallAppsPanel,
+      }"
+    >
+      <CallAppsSidebarPanel
+        v-if="showCallAppsPanel"
+        id="call-left-panel-call-apps"
+        role="tabpanel"
+        aria-labelledby="call-left-tab-call-apps"
+        :call-id="activeSidebarCallId"
+        :can-manage="canManageSidebarCallApps"
+        :active-session="callAppSidebarActiveSession"
+        :participants="callAppSidebarParticipants"
+        :api-request="apiRequest"
+        :send-socket-frame="callAppSidebarSendSocketFrame"
+        :request-room-snapshot="callAppSidebarRequestRoomSnapshot"
+        @session-created="$emit('call-app-session-created', $event)"
+      />
 
-    <div v-if="showSettingsPanel" class="call-left-settings">
-      <section class="call-left-settings-block" :aria-label="t('calls.enter.camera')">
+      <div
+        v-if="showSettingsPanel"
+        id="call-left-panel-settings"
+        class="call-left-settings"
+        role="tabpanel"
+        aria-labelledby="call-left-tab-settings"
+      >
+        <section class="call-left-settings-block" :aria-label="t('calls.enter.camera')">
         <div class="call-left-settings-title">{{ t('calls.enter.camera') }}</div>
         <div class="call-left-settings-field">
           <AppSelect
@@ -252,7 +278,8 @@
         </template>
       </section>
 
-      <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+        <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -365,6 +392,7 @@ const callAppSidebarRequestRoomSnapshot = computed(() => (
 
 const {
   activePanel,
+  setActivePanel,
   showTabs,
   showCallAppsPanel,
   showSettingsPanel,

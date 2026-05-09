@@ -152,6 +152,7 @@
   .shell.call-workspace-mode.tablet-mode .sidebar-content.left.left-call-content {
     margin: 0;
     height: 100%;
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
 
   .shell.call-workspace-mode.tablet-mode:not(.tablet-left-open) {
@@ -164,7 +165,7 @@
     bottom: 0;
     left: 0;
     width: min(360px, 92vw);
-    z-index: 20;
+    z-index: 80;
     visibility: hidden;
     transform: translateX(-24px);
     pointer-events: none;
@@ -193,7 +194,7 @@
     bottom: 0;
     left: 0;
     width: min(360px, 92vw);
-    z-index: 20;
+    z-index: 80;
   }
 
   .shell.tablet-mode.tablet-left-open .brand-strip {
@@ -441,5 +442,9 @@
   .shell.call-workspace-mode.mobile-mode .sidebar-content.left.left-call-content {
     margin: 0;
     height: 100%;
+  }
+
+  .shell.call-workspace-mode.mobile-mode .sidebar-content.left.left-call-content {
+    grid-template-rows: auto auto minmax(0, 1fr);
   }
 }
