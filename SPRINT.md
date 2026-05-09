@@ -106,7 +106,7 @@ Tickets:
     requiring a new service domain.
   - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
 
-- [ ] OCA-03 Collaborative spreadsheet Call App
+- [x] OCA-03 Collaborative spreadsheet Call App
   - Owner branch: `agent/office-spreadsheet-call-app`.
   - Add a package under `demo/call-app/` for collaborative cells, ranges,
     sheets, basic formatting, and first-pass formulas for normal table
@@ -114,6 +114,10 @@ Tickets:
   - Export spreadsheet data in an office-compatible format, plus CSV where that
     is useful for interoperability.
   - Add focused package, CRDT, health, MCP, and frontend/backend contracts.
+  - Loop proof: merged `8c458121 Add spreadsheet call app package` locally from
+    `agent/office-spreadsheet-call-app`, then wired the spreadsheet package into
+    the Call App layout README and `test:contract:call-apps` integration gate.
+    Local proof must remain green in the deploy loop before OCA-05 closes.
 
 - [ ] OCA-04 Operator feedback chat intake and sprint triage
   - Add an Operator checkbox to the existing call chat composer.

@@ -8,6 +8,7 @@ const repoRoot = path.resolve(frontendRoot, '../../..')
 const callAppRoot = path.join(repoRoot, 'demo/call-app')
 const whiteboardRoot = path.join(callAppRoot, 'whiteboard')
 const planningImageRoot = path.join(callAppRoot, 'planning-image')
+const spreadsheetRoot = path.join(callAppRoot, 'spreadsheet')
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8')
@@ -31,6 +32,7 @@ function assertArrayIncludes(array, value, message) {
 assert(fs.existsSync(callAppRoot), 'demo/call-app root must exist')
 assert(fs.existsSync(whiteboardRoot), 'demo/call-app/whiteboard package must exist')
 assert(fs.existsSync(planningImageRoot), 'demo/call-app/planning-image package must exist')
+assert(fs.existsSync(spreadsheetRoot), 'demo/call-app/spreadsheet package must exist')
 
 const readme = read('demo/call-app/README.md')
 assert(readme.includes('demo/call-app/<app-key>/'), 'README must document the package root convention')
@@ -68,6 +70,18 @@ for (const requiredFile of [
   assert(fs.existsSync(path.join(planningImageRoot, requiredFile)), `planning-image package must include ${requiredFile}`)
 }
 assert(readme.includes('planning-image'), 'README must list the planning-image package')
+for (const requiredFile of [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
+  'public/spreadsheet.css',
+  'public/spreadsheet.js',
+]) {
+  assert(fs.existsSync(path.join(spreadsheetRoot, requiredFile)), `spreadsheet package must include ${requiredFile}`)
+}
+assert(readme.includes('spreadsheet'), 'README must list the spreadsheet package')
 
 const manifest = readJson('demo/call-app/whiteboard/call-app.manifest.json')
 assert(manifest.schema_version === 'king.call_app.manifest.v1', 'manifest schema version mismatch')
