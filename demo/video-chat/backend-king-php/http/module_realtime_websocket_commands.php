@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/module_realtime_gossipmesh_recovery.php';
 require_once __DIR__ . '/module_realtime_media_fanout_guard.php';
+require_once __DIR__ . '/module_realtime_gossip_media_relay.php';
 require_once __DIR__ . '/module_realtime_lobby_security.php';
 require_once __DIR__ . '/module_realtime_chat_commands.php';
 
@@ -48,6 +49,17 @@ function videochat_realtime_handle_secondary_websocket_command(
     );
     if ($mediaFanoutGuardResult !== null) {
         return $mediaFanoutGuardResult;
+    }
+
+    $gossipMediaRelayCommand = videochat_gossip_media_relay_decode_client_frame($frame);
+    $gossipMediaRelayResult = videochat_realtime_handle_gossip_media_relay_command(
+        $gossipMediaRelayCommand,
+        $websocket,
+        $presenceState,
+        $presenceConnection
+    );
+    if ($gossipMediaRelayResult !== null) {
+        return $gossipMediaRelayResult;
     }
 
     $chatCommand = videochat_chat_decode_client_frame($frame);

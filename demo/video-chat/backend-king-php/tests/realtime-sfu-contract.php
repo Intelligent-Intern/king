@@ -45,11 +45,17 @@ try {
     $gatewaySource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
     $storeSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
     $moduleRealtimeSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
+    $websocketCommandsSource = file_get_contents(__DIR__ . '/../http/module_realtime_websocket_commands.php');
+    $mediaFanoutGuardSource = file_get_contents(__DIR__ . '/../http/module_realtime_media_fanout_guard.php');
+    $gossipMediaRelaySource = file_get_contents(__DIR__ . '/../http/module_realtime_gossip_media_relay.php');
     $iibinSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_iibin.php');
     $sessionProtocolSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php');
     videochat_realtime_sfu_assert(is_string($gatewaySource), 'SFU gateway source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($storeSource), 'SFU store source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($moduleRealtimeSource), 'Realtime module source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($websocketCommandsSource), 'Realtime websocket command source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($mediaFanoutGuardSource), 'Realtime media fanout guard source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($gossipMediaRelaySource), 'Realtime Gossip media relay source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($iibinSource), 'SFU IIBIN helper source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($sessionProtocolSource), 'SFU session protocol source should be readable for static contract checks');
     videochat_realtime_sfu_assert(
@@ -58,6 +64,22 @@ try {
         && str_contains($gatewaySource, "case 'sfu/session-hello':")
         && str_contains($gatewaySource, "'join_visible_slo_ms' => videochat_sfu_join_visible_slo_ms()"),
         'SFU fast-join session protocol must be wired into the active King PHP gateway'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($storeSource, 'function videochat_sfu_refresh_active_publisher_presence')
+        && str_contains($gatewaySource, '$nextBrokerPublisherPresenceTouchMs')
+        && str_contains($gatewaySource, 'videochat_sfu_refresh_active_publisher_presence('),
+        'SFU publisher presence must be refreshed from the control loop and not depend on video frames'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($websocketCommandsSource, "module_realtime_gossip_media_relay.php")
+        && str_contains($websocketCommandsSource, 'videochat_gossip_media_relay_decode_client_frame')
+        && str_contains($mediaFanoutGuardSource, "return \$type === 'gossip/server-frame';")
+        && str_contains($gossipMediaRelaySource, "const VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame'")
+        && str_contains($gossipMediaRelaySource, "const VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame'")
+        && str_contains($gossipMediaRelaySource, "videochat_gossip_media_relay_broadcast_call_event(")
+        && str_contains($gossipMediaRelaySource, "videochat_realtime_connection_call_id(\$connection) !== \$normalizedCallId"),
+        'Room-bound Gossip media relay must bypass SFU publisher discovery while remaining scoped to the call websocket room'
     );
     videochat_realtime_sfu_assert(
         str_contains($moduleRealtimeSource, "realtime_sfu_iibin.php")

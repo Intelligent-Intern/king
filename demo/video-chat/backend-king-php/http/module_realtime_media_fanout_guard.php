@@ -43,6 +43,11 @@ function videochat_realtime_normal_media_fanout_fields(): array
     ];
 }
 
+function videochat_realtime_normal_media_fanout_allowed_relay_type(string $type): bool
+{
+    return $type === 'gossip/server-frame';
+}
+
 function videochat_realtime_payload_contains_normal_media_field(mixed $payload): bool
 {
     if (!is_array($payload)) {
@@ -77,6 +82,9 @@ function videochat_realtime_classify_normal_media_fanout_frame(string $frame): a
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
+    if (videochat_realtime_normal_media_fanout_allowed_relay_type($type)) {
+        return ['blocked' => false, 'type' => $type, 'reason' => 'room_bound_gossip_server_relay'];
+    }
     if (in_array($type, videochat_realtime_normal_media_fanout_types(), true)) {
         return ['blocked' => true, 'type' => $type, 'reason' => 'normal_media_command_on_control_socket'];
     }

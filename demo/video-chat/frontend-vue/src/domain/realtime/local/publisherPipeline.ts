@@ -848,6 +848,7 @@ export function createLocalPublisherPipelineHelpers({
             ...(tilePatchTransportMetrics || {}),
           },
           data: encoded.data,
+          relayData: encoded.data,
           type: encodedFrameType,
           codecId: currentSfuCodecId(tilePatchMetadata ? refs.videoPatchEncoderRef.value : refs.videoEncoderRef.value),
           runtimeId: 'wlvc_sfu',
