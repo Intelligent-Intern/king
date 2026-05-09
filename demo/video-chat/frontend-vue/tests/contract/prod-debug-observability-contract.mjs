@@ -55,6 +55,11 @@ for (const label of [
   'call-app whiteboard host CSP',
   'call-app whiteboard path CSP',
   'filtered recent logs',
+  'BGF-07 browser proof: background init',
+  'BGF-07 browser proof: matte rejected',
+  'BGF-07 browser proof: replacement unavailable',
+  'BGF-07 browser proof: modal choice',
+  'BGF-07 browser proof: media/screen reconnect',
   'media reconnect',
   'screen-share reconnect exhaustion',
   'stale local media capture discard',
@@ -82,6 +87,11 @@ assert.match(script, /\$\{COMPOSE\[@\]\}" logs --no-color --tail/, 'remote probe
 assert.match(script, /filter_recent_logs\(\)/, 'remote log filtering must label each investigation category');
 assert.match(script, /stale_local_media_capture_discarded/, 'remote log scan must include stale local media capture discard diagnostics');
 assert.match(script, /local_background_\(backend_init\|matte_rejected\|replacement_unavailable\|replacement_modal_choice\)/, 'remote log scan must include BGF fallback transition event types');
+assert.match(script, /BGF-07 browser proof: background init[\s\S]*local_background_backend_init[\s\S]*background_backend_init_failed[\s\S]*segmentation_backend_init_failed/, 'remote log scan must expose a read-only background-init browser proof bucket');
+assert.match(script, /BGF-07 browser proof: matte rejected[\s\S]*local_background_matte_rejected[\s\S]*background_matte_rejected[\s\S]*production_category_mask_unavailable/, 'remote log scan must expose a read-only matte-rejected browser proof bucket');
+assert.match(script, /BGF-07 browser proof: replacement unavailable[\s\S]*local_background_replacement_unavailable[\s\S]*background_replacement_requires_user_choice[\s\S]*fallback_reason/, 'remote log scan must expose a read-only replacement-unavailable browser proof bucket');
+assert.match(script, /BGF-07 browser proof: modal choice[\s\S]*local_background_replacement_modal_choice[\s\S]*background_modal_choice[\s\S]*user_choice_required/, 'remote log scan must expose a read-only modal-choice browser proof bucket');
+assert.match(script, /BGF-07 browser proof: media\/screen reconnect[\s\S]*media\[_ -\]\?reconnect[\s\S]*screen\[_ -\]\?share[\s\S]*local_screen_share_sfu_reconnect/, 'remote log scan must expose a read-only media/screen reconnect browser proof bucket');
 assert.match(script, /failed_backend\|fallback_reason\|user_choice_required/, 'remote log scan must include BGF fallback diagnostic payload fields');
 assert.match(script, /production_category_mask_unavailable\|worker_segment_errors_repeated/, 'remote log scan must include BGF terminal worker failure reasons');
 assert.match(script, /local_screen_share_sfu_reconnect_exhausted/, 'remote log scan must include screen-share SFU reconnect exhaustion diagnostics');
@@ -153,8 +163,8 @@ assert.match(
 );
 assert.match(
   readme,
-  /read-only[\s\S]*media reconnect[\s\S]*screen-share[\s\S]*stale local media capture[\s\S]*audio\/video track loss[\s\S]*SFU reconnect[\s\S]*Call App frame\/CSP[\s\S]*prod-debug\.sh[\s\S]*does not deploy,\s*restart,\s*write DB data,\s*change DNS,\s*or use admin actions/i,
-  'README must document prod-debug as read-only and non-mutating',
+  /read-only[\s\S]*BGF-07 browser proof buckets[\s\S]*background init[\s\S]*matte rejected[\s\S]*replacement unavailable[\s\S]*modal choice[\s\S]*media\/screen reconnect[\s\S]*stale local media capture[\s\S]*audio\/video track\s+loss[\s\S]*SFU reconnect[\s\S]*Call App frame\/CSP[\s\S]*do not deploy,\s*restart,\s*write DB data,\s*change DNS,\s*or use admin actions/i,
+  'README must document BGF-07 prod-debug buckets as read-only and non-mutating',
 );
 
 assert.match(

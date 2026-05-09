@@ -355,22 +355,23 @@ status, and recent redacted remote logs. Its Call App proof checks both
 `/public/index.html` and `/call-app/whiteboard/public/index.html` on the
 configured Whiteboard host for `https://app.kingrt.com` compatibility, absence
 of `X-Frame-Options`, and absence of nested `*.app.kingrt.com` service origins.
-Remote log sections are labeled for media reconnect, screen-share reconnect
-exhaustion, stale local media capture discard, audio/video track loss, SFU
-reconnect, background fallback transitions, and Call App frame/CSP errors. The
-background fallback bucket looks for the live-call BGF diagnostic event names
-and fields: backend init, matte rejection, replacement-unavailable, modal
-choice, `failed_backend`, `fallback_reason`, and `user_choice_required`. It uses existing
-`demo/video-chat/.env.local` values only for production domains and the SSH
-target. `prod-debug.sh` does not deploy, restart, write DB data, change DNS, or
-use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only public
-HTTP/WebSocket/header probes, or `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1` to prove the
-local read-only flow without network or SSH.
+Remote log sections are labeled for the BGF-07 browser proof event buckets:
+background init, matte rejected, replacement unavailable, modal choice,
+media/screen reconnect, stale local media capture discard, audio/video track
+loss, SFU reconnect, and Call App frame/CSP errors. The background fallback
+bucket also looks for the live-call BGF diagnostic event fields
+`failed_backend`, `fallback_reason`, and `user_choice_required`. It uses
+existing `demo/video-chat/.env.local` values only for production domains and
+the SSH target. `prod-debug.sh` does not deploy, restart, write DB data, change
+DNS, or use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only
+public HTTP/WebSocket/header probes, or `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1` to
+prove the local read-only flow without network or SSH.
 
-Read-only media reconnect, screen-share reconnect exhaustion, stale local media
-capture discard, audio/video track loss, SFU reconnect, and Call App frame/CSP
-checks in prod-debug.sh are non-mutating: prod-debug.sh does not deploy,
-restart, write DB data, change DNS, or use admin actions.
+Read-only BGF-07 browser proof buckets in prod-debug.sh are non-mutating:
+background init, matte rejected, replacement unavailable, modal choice,
+media/screen reconnect, stale local media capture discard, audio/video track
+loss, SFU reconnect, and Call App frame/CSP checks do not deploy, restart,
+write DB data, change DNS, or use admin actions.
 
 ## Public Programming Model
 
