@@ -41,6 +41,8 @@ async function main() {
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
+  const sfuStore = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const sfuSubscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 
   requireContains(policySource, "STRICT_720P30_POLICY_MODE = 'strict_720p30'", 'strict policy mode');
   requireContains(policySource, 'captureWidth: 1280', 'strict capture width');
@@ -98,14 +100,21 @@ async function main() {
   requireContains(socketLifecycle, "strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')", 'socket lifecycle absorbs media quality pressure under strict mode');
   requireContains(sfuLifecycle, 'disablePublisherFrameStallRecovery:', 'SFU lifecycle passes strict stall recovery option');
   requireContains(sfuLifecycle, 'suppressPublisherFrameDropDiagnostics:', 'SFU lifecycle suppresses noisy strict frame drop diagnostics');
+  requireContains(sfuLifecycle, 'suppressDisconnectRecoveryDiagnostics: disableSfuSocketRecoveryReconnect', 'SFU lifecycle suppresses strict disconnect recovery diagnostics');
+  requireContains(sfuLifecycle, 'if (disableSfuSocketRecoveryReconnect)', 'SFU lifecycle does not reconnect after active strict disconnects');
   requireContains(sfuClient, 'disablePublisherFrameStallRecovery', 'SFU client can disable publisher frame stall resubscribe');
   requireContains(sfuClient, 'disablePublisherMediaRecovery', 'SFU client can disable publisher media recovery requests');
   requireContains(sfuClient, 'suppressPublisherFrameDropDiagnostics', 'SFU client can suppress noisy strict frame drop diagnostics');
+  requireContains(sfuClient, 'suppressDisconnectRecoveryDiagnostics', 'SFU client can suppress noisy strict disconnect diagnostics');
   requireContains(mediaSecurityRuntime, "strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')", 'strict mode coalesces sender-key-not-ready churn');
   requireContains(mediaSecurityRuntime, "eventType: 'media_security_sync_hint'", 'media security sync hint remains available outside strict coalescing');
   requireContains(mediaSecurityRuntime, "eventType: 'media_security_handshake_timeout'", 'media security timeout remains available outside strict coalescing');
   requireContains(mediaStack, "suppressRemoteFrameDropDiagnostics: strictPolicyEnabled(constants.strictStabilityPolicy, 'quietPublisherFrameDrops')", 'strict mode suppresses remote continuity-drop diagnostics');
   requireContains(frameDecode, 'suppressRemoteFrameDropDiagnostics = false', 'frame decoder accepts strict remote drop suppression');
+  requireContains(sfuStore, 'videochat_sfu_outbound_payload_uses_strict_720p30', 'SFU store detects strict outbound payloads');
+  requireContains(sfuStore, 'if (!videochat_sfu_outbound_payload_uses_strict_720p30($payload))', 'strict outbound binary send failures are quiet drops');
+  requireContains(sfuSubscriberBudget, 'videochat_sfu_subscriber_frame_uses_strict_720p30', 'subscriber budget detects strict replay frames');
+  requireContains(sfuSubscriberBudget, 'if (!$strict720p30)', 'strict replay slow-subscriber diagnostics are suppressed');
 
   const server = await createServer({
     root: frontendRoot,

@@ -27,6 +27,14 @@ function videochat_sfu_subscriber_replay_max_batch_frames(): int
     return 4;
 }
 
+function videochat_sfu_subscriber_frame_uses_strict_720p30(array $frame): bool
+{
+    $profile = strtolower(trim((string) ($frame['outgoing_video_quality_profile'] ?? ($frame['outgoingVideoQualityProfile'] ?? ''))));
+    $recovery = strtolower(trim((string) ($frame['budget_expected_recovery'] ?? ($frame['budgetExpectedRecovery'] ?? ''))));
+
+    return $profile === 'strict_720p30' || $recovery === 'strict_720p30_drop_without_recovery';
+}
+
 function videochat_sfu_frame_latency_budget_ms(array $frame): int
 {
     $queueBudgetMs = max(0, (int) ($frame['budget_max_queue_age_ms'] ?? 0));
@@ -451,15 +459,18 @@ function videochat_sfu_send_replay_frames_to_subscriber(
     foreach ($framesToSend as $frame) {
         $nowMs = videochat_sfu_now_ms();
         $blockedUntilMs = (int) ($slowSubscriberBlockedUntilMs[$subscriberId] ?? 0);
+        $strict720p30 = videochat_sfu_subscriber_frame_uses_strict_720p30($frame);
         if ($blockedUntilMs > $nowMs) {
-            videochat_sfu_log_runtime_event('sfu_frame_replay_slow_subscriber_skipped', [
-                'room_id' => $roomId,
-                'subscriber_id' => $subscriberId,
-                'blocked_for_ms' => max(0, $blockedUntilMs - $nowMs),
-                'sfu_send_path' => $sendPath,
-                'replay_frame_count' => count($framesToSend),
-                ...videochat_sfu_transport_metric_fields($frame, 0),
-            ], 1000);
+            if (!$strict720p30) {
+                videochat_sfu_log_runtime_event('sfu_frame_replay_slow_subscriber_skipped', [
+                    'room_id' => $roomId,
+                    'subscriber_id' => $subscriberId,
+                    'blocked_for_ms' => max(0, $blockedUntilMs - $nowMs),
+                    'sfu_send_path' => $sendPath,
+                    'replay_frame_count' => count($framesToSend),
+                    ...videochat_sfu_transport_metric_fields($frame, 0),
+                ], 1000);
+            }
             break;
         }
         unset($slowSubscriberBlockedUntilMs[$subscriberId]);
@@ -481,15 +492,17 @@ function videochat_sfu_send_replay_frames_to_subscriber(
         if (!$sendOk || $subscriberSendMs > videochat_sfu_subscriber_replay_video_send_budget_ms()) {
             $slowSubscriberBlockedUntilMs[$subscriberId] = videochat_sfu_now_ms()
                 + videochat_sfu_subscriber_video_send_cooldown_ms();
-            videochat_sfu_log_runtime_event('sfu_frame_replay_slow_subscriber_isolated', [
-                'room_id' => $roomId,
-                'subscriber_id' => $subscriberId,
-                'subscriber_send_ms' => $subscriberSendMs,
-                'subscriber_send_budget_ms' => videochat_sfu_subscriber_replay_video_send_budget_ms(),
-                'subscriber_video_cooldown_ms' => videochat_sfu_subscriber_video_send_cooldown_ms(),
-                'sfu_send_path' => $sendPath,
-                ...videochat_sfu_transport_metric_fields($frame, 0),
-            ], 1000);
+            if (!$strict720p30) {
+                videochat_sfu_log_runtime_event('sfu_frame_replay_slow_subscriber_isolated', [
+                    'room_id' => $roomId,
+                    'subscriber_id' => $subscriberId,
+                    'subscriber_send_ms' => $subscriberSendMs,
+                    'subscriber_send_budget_ms' => videochat_sfu_subscriber_replay_video_send_budget_ms(),
+                    'subscriber_video_cooldown_ms' => videochat_sfu_subscriber_video_send_cooldown_ms(),
+                    'sfu_send_path' => $sendPath,
+                    ...videochat_sfu_transport_metric_fields($frame, 0),
+                ], 1000);
+            }
             break;
         }
     }

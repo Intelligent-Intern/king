@@ -595,6 +595,14 @@ function videochat_sfu_decode_binary_client_frame(string $frame, string $boundRo
     return ['ok' => true, 'payload' => $payload, 'error' => ''];
 }
 
+function videochat_sfu_outbound_payload_uses_strict_720p30(array $payload): bool
+{
+    $profile = strtolower(trim((string) ($payload['outgoing_video_quality_profile'] ?? ($payload['outgoingVideoQualityProfile'] ?? ''))));
+    $recovery = strtolower(trim((string) ($payload['budget_expected_recovery'] ?? ($payload['budgetExpectedRecovery'] ?? ''))));
+
+    return $profile === 'strict_720p30' || $recovery === 'strict_720p30_drop_without_recovery';
+}
+
 function videochat_sfu_send_outbound_message(mixed $socket, array $payload, array $sendContext = []): bool
 {
     $type = strtolower(trim((string) ($payload['type'] ?? '')));
@@ -620,14 +628,16 @@ function videochat_sfu_send_outbound_message(mixed $socket, array $payload, arra
                 }
             } catch (Throwable) {}
         }
-        videochat_sfu_log_runtime_event('sfu_frame_binary_required_send_failed', [
-            'publisher_id' => (string) ($payload['publisher_id'] ?? ''),
-            'track_id' => (string) ($payload['track_id'] ?? ''),
-            'frame_type' => (string) ($payload['frame_type'] ?? 'delta'),
-            'protection_mode' => (string) ($payload['protection_mode'] ?? 'transport_only'),
-            'payload_chars' => (int) ($payload['payload_chars'] ?? 0),
-            ...$transportMetrics,
-        ], 3000);
+        if (!videochat_sfu_outbound_payload_uses_strict_720p30($payload)) {
+            videochat_sfu_log_runtime_event('sfu_frame_binary_required_send_failed', [
+                'publisher_id' => (string) ($payload['publisher_id'] ?? ''),
+                'track_id' => (string) ($payload['track_id'] ?? ''),
+                'frame_type' => (string) ($payload['frame_type'] ?? 'delta'),
+                'protection_mode' => (string) ($payload['protection_mode'] ?? 'transport_only'),
+                'payload_chars' => (int) ($payload['payload_chars'] ?? 0),
+                ...$transportMetrics,
+            ], 3000);
+        }
         return false;
     }
 
