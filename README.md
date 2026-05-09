@@ -357,7 +357,10 @@ configured Whiteboard host for `https://app.kingrt.com` compatibility, absence
 of `X-Frame-Options`, and absence of nested `*.app.kingrt.com` service origins.
 Remote log sections are labeled for media reconnect, screen-share reconnect
 exhaustion, stale local media capture discard, audio/video track loss, SFU
-reconnect, and Call App frame/CSP errors. It uses existing
+reconnect, background fallback transitions, and Call App frame/CSP errors. The
+background fallback bucket looks for the live-call BGF diagnostic event names
+and fields: backend init, matte rejection, replacement-unavailable, modal
+choice, `failed_backend`, `fallback_reason`, and `user_choice_required`. It uses existing
 `demo/video-chat/.env.local` values only for production domains and the SSH
 target. `prod-debug.sh` does not deploy, restart, write DB data, change DNS, or
 use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only public
