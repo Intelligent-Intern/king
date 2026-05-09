@@ -13,10 +13,13 @@ function read(relativePath) {
 }
 
 const auditDomain = read('demo/video-chat/backend-king-php/domain/audit/audit_events.php');
+const lobbyAuditDomain = read('demo/video-chat/backend-king-php/domain/audit/audit_lobby_events.php');
 const callManagementCreate = read('demo/video-chat/backend-king-php/domain/calls/call_management_create.php');
 const callAccessLinks = read('demo/video-chat/backend-king-php/domain/calls/call_access_links.php');
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const callAccessReview = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
+const realtimeLobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
+const realtimeLobbySecurity = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
 const backendAuditContract = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.php');
 const backendAuditWrapper = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.sh');
 const liveFixtureHelper = read('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
@@ -39,6 +42,15 @@ for (const helper of [
   assert.match(auditDomain, new RegExp(`function ${helper}\\(`), `audit domain must expose ${helper}`);
 }
 
+for (const helper of [
+  'videochat_audit_record_call_lobby_entry',
+  'videochat_audit_record_call_lobby_admission',
+  'videochat_audit_record_call_lobby_rejection',
+  'videochat_audit_record_call_lobby_moderation_denied',
+]) {
+  assert.match(lobbyAuditDomain, new RegExp(`function ${helper}\\(`), `lobby audit domain must expose ${helper}`);
+}
+
 for (const eventType of [
   'call_created',
   'call_access_invitation_created',
@@ -53,6 +65,10 @@ for (const eventType of [
   'call_access_host_name_verification_failed',
   'call_access_account_update_confirmation_requested',
   'call_access_invitation_invalidated',
+  'call_lobby_entry_created',
+  'call_lobby_admission_granted',
+  'call_lobby_rejection_recorded',
+  'call_lobby_moderation_denied',
   'call_participant_joined',
   'call_participant_left',
   'call_participant_rejoined',
@@ -71,6 +87,7 @@ for (const actionProof of [
   'videochat_call_access_record_host_verification_attempt',
   'videochat_call_access_request_account_update_confirmation',
   'videochat_realtime_mark_call_participant_left',
+  'videochat_realtime_handle_lobby_websocket_command',
   'videochat_lobby_apply_command',
   'videochat_update_call_participant_role',
   'videochat_issue_session_for_call_access',
@@ -164,16 +181,42 @@ assert.match(
   /videochat_invalidate_call_access_invitation\([\s\S]*invite invalidation should write an audit event[\s\S]*call_access_invitation_invalidated/s,
   'backend audit contract must prove invite invalidation before the invite-invalidation audit event',
 );
+assert.match(
+  realtimeLobbyPersistence,
+  /videochat_realtime_mark_call_participant_pending_for_queue[\s\S]*videochat_realtime_record_lobby_entry_audit/s,
+  'lobby persistence path must persist pending state before lobby-entry audit',
+);
+assert.match(
+  realtimeLobbyPersistence,
+  /videochat_realtime_mark_call_participant_invite_state_by_user_id[\s\S]*'allowed'[\s\S]*\$auditPersistedUserIds\[\] = \$admittedUserId[\s\S]*videochat_realtime_record_lobby_admission_audit/s,
+  'lobby admission path must record admission audit only after the allowed transition persists',
+);
+assert.match(
+  realtimeLobbyPersistence,
+  /videochat_realtime_apply_lobby_remove_result[\s\S]*videochat_realtime_record_lobby_rejection_audit/s,
+  'lobby rejection path must persist removal before lobby-rejection audit',
+);
+assert.match(
+  realtimeLobbySecurity,
+  /videochat_realtime_reject_unauthorized_lobby_moderation_command[\s\S]*videochat_audit_record_call_lobby_moderation_denied/s,
+  'unauthorized lobby moderation attempts must be denied and audited separately',
+);
+assert.match(
+  backendAuditContract,
+  /lobby\/queue\/join[\s\S]*lobby\/allow[\s\S]*lobby\/reject[\s\S]*call_lobby_entry_created[\s\S]*call_lobby_admission_granted[\s\S]*call_lobby_rejection_recorded[\s\S]*call_lobby_moderation_denied/s,
+  'backend audit contract must prove lobby entry, admission, rejection, and unauthorized attempt audits',
+);
 
 for (const sensitiveGuard of [
   'videochat_audit_fingerprint($accessId)',
   'videochat_audit_fingerprint($wrongSessionId)',
+  "videochat_audit_fingerprint('sess_audit_events_lobby_admit')",
   '$wrongHostName',
-  "'access_id', 'session_id', 'token', 'password', 'sdp', 'ice_candidate'",
+  "'access_id', 'session_id', 'token', 'password', 'sdp', 'ice_candidate', 'room_id', 'display_name', 'email'",
 ]) {
   assert.ok(backendAuditContract.includes(sensitiveGuard), `backend audit contract must guard ${sensitiveGuard}`);
 }
-for (const source of [auditDomain, backendAuditContract]) {
+for (const source of [auditDomain, lobbyAuditDomain, realtimeLobbyPersistence, backendAuditContract]) {
   assert.doesNotMatch(
     source,
     /payload' => \[[\s\S]{0,300}'(?:access_id|session_id|token|password)' =>/m,
@@ -255,6 +298,10 @@ assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_reject
 assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_verified'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_host_name_verification_failed'));
 assert.ok(auditProbe.expected_event_types.includes('call_access_account_update_confirmation_requested'));
+assert.ok(auditProbe.expected_event_types.includes('call_lobby_entry_created'));
+assert.ok(auditProbe.expected_event_types.includes('call_lobby_admission_granted'));
+assert.ok(auditProbe.expected_event_types.includes('call_lobby_rejection_recorded'));
+assert.ok(auditProbe.expected_event_types.includes('call_lobby_moderation_denied'));
 assert.equal(
   auditProbe.fingerprints.session_id,
   liveFixtureModule.iamFixtureFingerprint('sess-audit-contract'),
