@@ -137,6 +137,12 @@ Tickets:
     loop can inspect and convert into sprint tickets for a free worker slot.
   - Emit `feature '<requested feature>' deployed` as a toast after the related
     feedback fix has been deployed and marked delivered.
+  - Worker C contract proof branch: `agent/operator-feedback-contracts`.
+    Added `npm run test:contract:operator-feedback` as the focused red/green
+    gate for Worker A/B integration. The backend contract pins flagged-chat
+    persistence, queue auth, delivered notification payload, and non-flagged
+    chat skip behavior; the frontend contract pins checkbox payload wiring and
+    the deployed-feature toast.
 
 - [x] OCA-05 Local merge, deploy, and diagnostics proof
   - Merge completed worker branches into the local dev branch only; do not push.
