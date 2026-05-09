@@ -80,7 +80,7 @@ Contract anchors:
 - `demo/video-chat/frontend-vue/tests/contract/background-king-wasm-contract.mjs`
 - `demo/video-chat/frontend-vue/tests/contract/background-segmentation-harness-contract.mjs`
 - `demo/video-chat/frontend-vue/tests/contract/mediapipe-cdn-contract.mjs`
-- `demo/video-chat/deploy.sh`
+- `demo/video-chat/scripts/deploy.sh`
 - `demo/video-chat/docker-compose.v1.yml`
 - `demo/video-chat/scripts/lib/deploy-hetzner.sh`
 - `demo/video-chat/edge/edge.php`
@@ -128,16 +128,15 @@ Acceptance criteria:
   self-hosted call-app manifests that point at a private mothernode.
 
 Tickets:
-- [x] BGF-01 Browser regression matrix and reproducible failure capture
+- [ ] BGF-01 Browser regression matrix and reproducible failure capture
   - Capture Chrome Stable/Chromium Ubuntu/Firefox behavior for MediaPipe demo
     and King production paths.
   - Record exact browser versions, failing console signatures, backend choice,
     and whether CPU delegation still touches GPU internals.
   - Add a contract fixture for the known Chrome GPU-service init failure shape.
-  - Proof: `background-regression-matrix-fixture.json` records Chrome Stable,
-    Chromium Ubuntu, Firefox, disabled-GPU Chrome failure capture, exact
-    GPU-service signatures, and CPU delegation touching GPU internals; `node
-    tests/contract/background-regression-matrix-contract.mjs` PASS.
+  - Partial proof: `background-regression-matrix-fixture.json` records Chrome
+    Stable `147.0.7727.55` and Chromium Ubuntu `147.0.7727.116`; Firefox
+    evidence is still missing, so BGF-01 stays open.
 
 - [x] BGF-02 Backend selection ladder with quarantine
   - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
@@ -180,10 +179,14 @@ Tickets:
     flashes.
   - Add pixel-level compositor contracts for warmup, backend switch, and
     segmentation-unavailable states.
-  - Proof: `background-compositor-warmup-safety-contract.mjs` pins warmup,
-    stale-mask reuse, backend reset, no blue-background swallow, and
-    segmentation-unavailable source rendering; `npm run
-    test:contract:background-filter` PASS.
+  - Proof: `background-compositor-warmup-safety-contract.mjs` and
+    `background-compositor-warmup-contract.mjs` exercise warmup/no-mask,
+    stale-mask redraw, reset/backend-switch, and segmentation-unavailable
+    states with pixel assertions.
+    `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome-stable npm run
+    test:predeploy:background` passed with the compositor contracts, small
+    avatar/uploaded-avatar/unfiltered fallback contracts, diagnostics,
+    background aspect, build, and build-size gates.
 
 - [x] BGF-06 Runtime diagnostics and field observability
   - Emit throttled diagnostics for backend init, unavailable transition, modal
@@ -191,10 +194,12 @@ Tickets:
   - Include enough local context to debug browser regressions without leaking
     media frames, SDP, ICE, or tokens.
   - Surface concise state in existing diagnostics channels, not new reload UI.
-  - Proof: `runtimeDiagnostics.js` emits throttled safe diagnostics for backend
-    init, unavailable transition, modal choice, and matte rejection without SDP,
-    ICE, token, or media-frame leakage; `node
-    tests/contract/background-runtime-diagnostics-contract.mjs` PASS.
+  - Proof: `background-runtime-diagnostics-contract.mjs`,
+    `background-regression-matrix-contract.mjs`,
+    `npm run test:contract:background-filter`, and
+    `npm run test:contract:client-diagnostics` prove the small fallback
+    contract: failed segmentation never selects a weaker matte backend, and the
+    only user alternatives are standard/uploaded avatar or unfiltered video.
 
 - [ ] BGF-07 Online proof, deploy, and browser smoke
   - Run focused background contracts, build, deploy, and production smoke.

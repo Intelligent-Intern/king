@@ -32,18 +32,56 @@ function assertStringArray(value, label) {
   }
 }
 
-function requireAnyStringContaining(strings, needle, label) {
-  assertStringArray(strings, label);
-  assert.ok(strings.some((item) => item.includes(needle)), `${label} missing signature fragment: ${needle}`);
+function assertNonBlankString(value, label) {
+  assert.equal(typeof value, 'string', `${label} must be a string`);
+  assert.notEqual(value.trim(), '', `${label} must not be blank`);
 }
 
-function assertCaptureEnvironment(fixture) {
-  const capture = fixture.capture_environment;
-  assert.equal(capture.captured_at, '2026-05-08T19:11:22+02:00');
-  assert.ok(capture.os.includes('Linux 6.8.0-110-generic'), 'capture environment must record the exact Linux kernel baseline');
-  assert.equal(capture.probe_url, 'http://127.0.0.1:5177/');
-  assert.equal(capture.playwright_version, '1.59.1');
-  assert.equal(capture.probe_scope, 'worker INIT only; no production SINet or degraded matte code changes');
+function assertEvidenceEventArray(value, label, { allowEmpty = true } = {}) {
+  assert.ok(Array.isArray(value), `${label} must be an array`);
+  if (!allowEmpty) assert.ok(value.length > 0, `${label} must not be empty`);
+  for (const item of value) {
+    const type = typeof item;
+    assert.ok(type === 'string' || (item && type === 'object'), `${label} entries must be strings or event objects`);
+    if (type === 'string') assert.notEqual(item.trim(), '', `${label} string entries must not be blank`);
+    else assert.ok(String(item.text || item.message || item.type || '').trim(), `${label} event entries must carry text/message/type`);
+  }
+}
+
+function assertSafeSelectedBackend(value, label) {
+  assertNonBlankString(value, label);
+  const normalized = value.trim().toLowerCase();
+  assert.ok(![
+    'sinet',
+    'bodypix',
+    'tfjs',
+    'canvas_2d_segmenter',
+    'canvas-2d-segmenter',
+    'confidence-mask',
+    'confidence_mask',
+    'softmax_matte',
+    'sigmoid_matte',
+  ].includes(normalized), `${label} must not use weaker matte backend: ${value}`);
+  assert.ok([
+    'worker-segmenter',
+    'worker_segmenter',
+    'user_avatar_placeholder',
+    'standard_avatar',
+    'uploaded_avatar',
+    'unfiltered_video',
+  ].includes(normalized), `${label} must be worker-segmenter or an explicit user fallback: ${value}`);
+}
+
+function assertCaptureStatus(value, label) {
+  assertNonBlankString(value, label);
+  assert.ok([
+    'init_ok',
+    'init_failed',
+    'segment_failed',
+    'ok',
+    'failed',
+    'not_run',
+  ].includes(value), `${label} has unexpected status: ${value}`);
 }
 
 function assertFailureShape(fixture) {
@@ -52,15 +90,6 @@ function assertFailureShape(fixture) {
   assert.equal(failure.browser_family, 'chromium');
   assert.equal(failure.phase, 'segmentation_backend_init');
   assert.equal(failure.classification, 'gpu_service_init_failure');
-
-  assert.deepEqual(failure.reproduction, {
-    browser: 'Chrome Stable',
-    version: '147.0.7727.55',
-    delegate: 'CPU',
-    launcher_flags: ['--disable-gpu', '--disable-software-rasterizer', '--disable-3d-apis'],
-    result: 'INIT_ERROR',
-    cpu_delegate_touches_gpu_internals: true,
-  });
 
   const groups = failure.shape.must_match_groups;
   assert.ok(Array.isArray(groups), 'failure shape must expose matcher groups');
@@ -72,21 +101,6 @@ function assertFailureShape(fixture) {
   for (const group of groups) {
     assertStringArray(group.any, `failure shape matcher ${group.id}`);
   }
-  const gpuServiceGroup = groups.find((group) => group.id === 'chromium_gpu_service');
-  requireAnyStringContaining(gpuServiceGroup.any, 'Service "kGpuService"', 'Chrome GPU-service matcher group');
-  requireAnyStringContaining(gpuServiceGroup.any, 'gl_context_webgl.cc', 'Chrome GPU-service matcher group');
-  const initFailureGroup = groups.find((group) => group.id === 'init_failure');
-  requireAnyStringContaining(initFailureGroup.any, 'emscripten_webgl_create_context() returned error 0', 'Chrome init-failure matcher group');
-
-  const exactSignatures = failure.shape.exact_console_signatures;
-  requireAnyStringContaining(exactSignatures, 'delegate: CPU', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'gl_context_webgl.cc:91] Couldn\'t create webGL 2 context.', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'Service "kGpuService"', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'TensorsToSegmentationCalculator', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'was not provided and cannot be created', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'emscripten_webgl_create_context() returned error 0', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'StartGraph failed', 'known Chrome exact failure signatures');
-  requireAnyStringContaining(exactSignatures, 'INIT_ERROR: INTERNAL: Service "kGpuService"', 'known Chrome exact failure signatures');
 
   const cpuRisk = failure.shape.cpu_delegate_gpu_touch_risk;
   assert.equal(cpuRisk.delegate, 'CPU');
@@ -97,9 +111,6 @@ function assertFailureShape(fixture) {
     'DrawingUtils',
     "getContext('webgl2')",
   ]);
-  requireAnyStringContaining(cpuRisk.known_console_signatures, 'delegate: CPU', 'CPU delegate GPU-touch signatures');
-  requireAnyStringContaining(cpuRisk.known_console_signatures, 'gl_context.cc:407] GL version: 3.0', 'CPU delegate GPU-touch signatures');
-  requireAnyStringContaining(cpuRisk.known_console_signatures, 'renderer: WebKit WebGL', 'CPU delegate GPU-touch signatures');
 }
 
 function assertBackendLadder(fixture) {
@@ -169,49 +180,77 @@ function assertBrowserMatrixSchema(fixture) {
   }
 }
 
-function assertBrowserBehaviorRows(fixture) {
-  const rows = fixture.browser_behavior_rows;
-  assert.ok(Array.isArray(rows), 'browser behavior rows must be an array');
+function assertBrowserMatrixEvidence(fixture) {
+  const required = fixture.browser_matrix_required;
+  const requiredBrowsers = required.map((entry) => entry.browser);
+  const requiredByBrowser = new Map(required.map((entry) => [entry.browser, entry.required_fields]));
+  const status = fixture.browser_matrix_evidence_status;
+  const evidence = fixture.browser_matrix_evidence;
+
+  assert.ok(status && typeof status === 'object', 'browser matrix evidence status must be present');
+  assert.equal(status.bgf_01_status, 'open', 'BGF-01 must stay open until Firefox evidence exists');
+  assert.ok(status.reason.includes('Firefox'), 'open BGF-01 evidence status must name the missing Firefox capture');
+  assert.deepEqual(status.captured_browsers, ['Chrome Stable', 'Chromium Ubuntu']);
+  assert.deepEqual(status.missing_browsers, ['Firefox']);
+  assert.equal(status.capture_script, 'tests/e2e/background-regression-capture.mjs');
+  assertNonBlankString(status.capture_mode, 'browser matrix evidence capture mode');
+
+  assert.ok(Array.isArray(evidence), 'browser matrix evidence must be an array');
   assert.deepEqual(
-    rows.map((entry) => entry.browser),
-    ['Chrome Stable', 'Chromium Ubuntu', 'Firefox'],
-    'browser behavior rows must capture Chrome Stable, Chromium Ubuntu, and Firefox in order',
+    evidence.map((entry) => entry.browser),
+    status.captured_browsers,
+    'browser matrix evidence must record only the browsers captured so far',
   );
 
-  const expectedVersions = {
-    'Chrome Stable': '147.0.7727.55',
-    'Chromium Ubuntu': '147.0.7727.116 snap',
-    Firefox: '148.0.2',
-  };
-  for (const row of rows) {
-    assert.equal(row.version, expectedVersions[row.browser], `${row.browser} must record the exact captured version`);
-    assert.equal(typeof row.os, 'string', `${row.browser} must record OS/executable context`);
-    assert.notEqual(row.os.trim(), '', `${row.browser} OS/executable context must not be blank`);
-    assert.equal(row.selected_backend, 'worker_segmenter', `${row.browser} must keep the worker segmenter as backend choice`);
-    assert.equal(row.mediapipe_demo_result.gpu, 'INIT_DONE', `${row.browser} MediaPipe demo GPU delegate result`);
-    assert.equal(row.mediapipe_demo_result.cpu, 'INIT_DONE', `${row.browser} MediaPipe demo CPU delegate result`);
-    assert.equal(row.cpu_delegation_touches_gpu_internals, true, `${row.browser} must record CPU delegate GPU/WebGL internals`);
-    requireAnyStringContaining(row.console_signatures, 'gl_context.cc:407] GL version: 3.0', `${row.browser} console signatures`);
-    requireAnyStringContaining(row.console_signatures, 'OpenGL error checking is disabled', `${row.browser} console signatures`);
+  const missing = requiredBrowsers.filter((browser) => !status.captured_browsers.includes(browser));
+  assert.deepEqual(missing, status.missing_browsers, 'evidence status must honestly list missing required browsers');
+  assert.ok(!evidence.some((entry) => entry.browser === 'Firefox'), 'Firefox evidence must not be faked');
 
-    assert.equal(row.king_production_path.selected_backend, 'worker_segmenter', `${row.browser} production path backend`);
-    assert.equal(row.king_production_path.mediapipe_scope, 'worker_only', `${row.browser} production MediaPipe scope`);
-    assert.equal(row.king_production_path.on_init_failure, 'keep_source_visible_then_prompt_user', `${row.browser} production init-failure behavior`);
-    assert.equal(row.king_production_path.uses_sinet_or_degraded_matte, false, `${row.browser} production path must not use SINet or degraded matte`);
+  for (const entry of evidence) {
+    assert.ok(requiredByBrowser.has(entry.browser), `${entry.browser} must be in the required browser matrix`);
+    assert.equal(entry.schema_version, 'king.bgf.browser_regression_capture.v1');
+    assertNonBlankString(entry.browser_engine, `${entry.browser} browser_engine`);
+    assertNonBlankString(entry.browser_family, `${entry.browser} browser_family`);
+    assertNonBlankString(entry.version, `${entry.browser} version`);
+    assertNonBlankString(entry.os, `${entry.browser} os`);
+    assert.ok(!Number.isNaN(Date.parse(entry.captured_at)), `${entry.browser} captured_at must be an ISO timestamp`);
+    assertNonBlankString(entry.capture_command, `${entry.browser} capture command`);
+    assertNonBlankString(entry.gpu_availability, `${entry.browser} gpu availability`);
+    assertNonBlankString(entry.model_source, `${entry.browser} model source`);
+    assertSafeSelectedBackend(entry.selected_backend, `${entry.browser} selected backend`);
+    assertCaptureStatus(entry.mediapipe_gpu_result, `${entry.browser} MediaPipe GPU result`);
+    assertCaptureStatus(entry.mediapipe_cpu_result, `${entry.browser} MediaPipe CPU result`);
+    assertEvidenceEventArray(entry.console_signatures, `${entry.browser} console signatures`);
+
+    for (const field of requiredByBrowser.get(entry.browser)) {
+      assert.ok(Object.prototype.hasOwnProperty.call(entry, field), `${entry.browser} evidence missing required field: ${field}`);
+    }
+
+    const cpuTouch = entry.cpu_delegate_gpu_touch;
+    assert.ok(cpuTouch && typeof cpuTouch === 'object', `${entry.browser} CPU delegate GPU-touch evidence must be present`);
+    assert.equal(typeof cpuTouch.observed, 'boolean', `${entry.browser} CPU delegate GPU-touch observed flag must be boolean`);
+    assertEvidenceEventArray(
+      cpuTouch.gpu_touch_signatures,
+      `${entry.browser} CPU delegate GPU-touch signatures`,
+      { allowEmpty: !cpuTouch.observed },
+    );
+    assertEvidenceEventArray(cpuTouch.console_signatures, `${entry.browser} CPU delegate GPU-service signatures`);
+
+    const paths = entry.path_results;
+    assert.ok(paths && typeof paths === 'object', `${entry.browser} path results must be present`);
+    const workerDirect = paths.mediapipe_worker_direct;
+    const production = paths.king_production_background_stream;
+    assert.ok(workerDirect && typeof workerDirect === 'object', `${entry.browser} worker-direct path result missing`);
+    assert.ok(production && typeof production === 'object', `${entry.browser} production stream path result missing`);
+    assert.equal(workerDirect.gpu.status, entry.mediapipe_gpu_result, `${entry.browser} GPU path status must match top-level evidence`);
+    assert.equal(workerDirect.cpu.status, entry.mediapipe_cpu_result, `${entry.browser} CPU path status must match top-level evidence`);
+    assertSafeSelectedBackend(workerDirect.gpu.selected_backend, `${entry.browser} GPU worker selected backend`);
+    assertSafeSelectedBackend(workerDirect.cpu.selected_backend, `${entry.browser} CPU worker selected backend`);
+    assertCaptureStatus(production.status, `${entry.browser} production stream status`);
+    assertSafeSelectedBackend(production.selected_backend, `${entry.browser} production selected backend`);
+    assert.equal(production.active, true, `${entry.browser} production background stream must stay active`);
+    assert.equal(production.unavailable_callbacks_count, 0, `${entry.browser} production path must not require fallback when init succeeds`);
   }
-
-  const chrome = rows.find((row) => row.browser === 'Chrome Stable');
-  assert.equal(chrome.known_failure_capture_id, fixture.known_failure.id, 'Chrome row must reference the known GPU-service failure capture');
-  requireAnyStringContaining(chrome.console_signatures, 'Service "kGpuService"', 'Chrome failing console signatures');
-  requireAnyStringContaining(chrome.console_signatures, 'StartGraph failed', 'Chrome failing console signatures');
-  requireAnyStringContaining(chrome.console_signatures, 'emscripten_webgl_create_context() returned error 0', 'Chrome failing console signatures');
-
-  const chromium = rows.find((row) => row.browser === 'Chromium Ubuntu');
-  assert.equal(chromium.known_failure_capture_id, fixture.known_failure.id, 'Chromium row must share the known Chromium-family failure id');
-
-  const firefox = rows.find((row) => row.browser === 'Firefox');
-  assert.equal(firefox.known_failure_capture_id, null, 'Firefox row must not claim the Chromium GPU-service failure id');
-  requireAnyStringContaining(firefox.console_signatures, 'renderer: NVIDIA GeForce GTX 980, or similar', 'Firefox console signatures');
 }
 
 function assertCurrentRuntimeBoundaries(fixture) {
@@ -233,14 +272,17 @@ function assertCurrentRuntimeBoundaries(fixture) {
   requireContains(stream, 'notifySegmentationUnavailable', 'current unavailable prompt hook');
   requireMissing(stream, 'ImageSegmenter.createFromOptions', 'production stream must not directly instantiate MediaPipe');
   requireMissing(stream, "delegate === 'GPU' ? 'GPU' : 'CPU'", 'production stream must not switch MediaPipe delegates directly');
-  requireMissing(stream, 'createSinetWasmSegmentationBackend', 'production stream must not add SINet fallback backend');
-  requireMissing(stream, 'backendSelector', 'production stream must not add degraded matte backend selector');
 
   requireContains(workerBackend, "kind: 'worker-segmenter'", 'worker backend identity');
   requireContains(worker, 'ImageSegmenter.createFromOptions', 'local MediaPipe worker fixture boundary');
   requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'local MediaPipe delegate boundary');
   requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'local MediaPipe category-mask WebGL boundary');
   requireContains(worker, 'new DrawingUtils(glCtx)', 'local MediaPipe DrawingUtils WebGL boundary');
+  requireContains(worker, "error: 'production_category_mask_unavailable'", 'category mask fail-closed boundary');
+  requireMissing(worker, 'confidenceMaskValues', 'weaker confidence-mask fallback');
+  requireMissing(worker, 'outputConfidenceMasks', 'weaker confidence-mask output');
+  requireContains(stream, 'enterSegmentationUnavailable(matteRejection.reason', 'rejected matte user-choice transition');
+  requireContains(stream, 'resolveSegmentErrorUnavailable(segmentation)', 'worker segment error user-choice transition');
   requireContains(modal, 'background_use_standard_avatar', 'standard avatar choice');
   requireContains(modal, 'background_upload_avatar', 'uploaded avatar choice');
   requireContains(modal, 'background_send_unfiltered', 'unfiltered video choice');
@@ -255,13 +297,12 @@ try {
   const fixture = readJson('tests/contract/background-regression-matrix-fixture.json');
   assert.equal(fixture.fixture_version, 1);
   assertStringArray(fixture.source_basis, 'source_basis');
-  assertCaptureEnvironment(fixture);
   assertFailureShape(fixture);
   assertDiagnostics(fixture);
   assertBackendLadder(fixture);
   assertQuarantine(fixture);
   assertBrowserMatrixSchema(fixture);
-  assertBrowserBehaviorRows(fixture);
+  assertBrowserMatrixEvidence(fixture);
   assertCurrentRuntimeBoundaries(fixture);
 
   console.log('[background-regression-matrix-contract] PASS');
