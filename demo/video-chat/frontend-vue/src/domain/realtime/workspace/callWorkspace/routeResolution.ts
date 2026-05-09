@@ -36,6 +36,9 @@ export function createCallWorkspaceRouteResolutionHelpers({
     if (refs.routeCallResolve.callId !== '') {
       refs.activeCallId.value = refs.routeCallResolve.callId;
       refs.loadedCallId.value = '';
+    } else {
+      refs.activeCallId.value = '';
+      refs.loadedCallId.value = '';
     }
   }
 
@@ -115,6 +118,21 @@ export function createCallWorkspaceRouteResolutionHelpers({
     return true;
   }
 
+  async function redirectDeniedCallRouteToOverview() {
+    const fallbackRouteName = normalizeRole(refs.sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
+    if (String(refs.route.name || '') !== 'call-workspace' || String(refs.routeCallRef.value || '').trim() === '') {
+      return;
+    }
+    await refs.router.replace({ name: fallbackRouteName });
+  }
+
+  function deniedRouteErrorFor(callResolution) {
+    const stateValue = String(callResolution?.state || '').trim().toLowerCase();
+    if (stateValue === 'expired') return 'route_call_access_expired';
+    if (stateValue === 'forbidden') return 'route_call_access_forbidden';
+    return 'route_call_ref_not_found';
+  }
+
   async function resolveRouteCallRef(callRef) {
     const normalized = String(callRef || '').trim();
     const seq = state.getRouteCallResolveSeq() + 1;
@@ -164,20 +182,17 @@ export function createCallWorkspaceRouteResolutionHelpers({
         return true;
       }
 
-      if (looksLikeUuid) {
-        const isExpired = callResolution.state === 'expired';
+      const deniedCallRoute = callResolution.state === 'forbidden' || looksLikeUuid;
+      if (deniedCallRoute) {
         applyRouteCallResolution({
-          accessId: isExpired ? normalized.toLowerCase() : '',
+          accessId: callResolution.state === 'expired' ? normalized.toLowerCase() : '',
           callId: '',
           roomId: 'lobby',
-          error: isExpired ? 'route_call_access_expired' : 'route_call_ref_not_found',
+          error: deniedRouteErrorFor(callResolution),
           pending: false,
         });
 
-        const fallbackRouteName = normalizeRole(refs.sessionState.role) === 'admin' ? 'admin-calls' : 'user-dashboard';
-        if (String(refs.route.name || '') === 'call-workspace' && String(refs.routeCallRef.value || '').trim() !== '') {
-          void refs.router.replace({ name: fallbackRouteName });
-        }
+        await redirectDeniedCallRouteToOverview();
         return false;
       }
     } catch {

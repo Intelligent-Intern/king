@@ -26,6 +26,7 @@ const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const suite = read('demo/video-chat/frontend-vue/tests/contract/iam-call-access-contract-suite.mjs');
 const seedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const seedMatrixSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
+const routeResolution = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/routeResolution.ts');
 const crossOrgBackend = read('demo/video-chat/backend-king-php/tests/call-access-cross-org-contract.php');
 const staleRoleBackend = read('demo/video-chat/backend-king-php/tests/call-access-stale-organization-role-contract.php');
 
@@ -135,6 +136,16 @@ assert.match(
   seedMatrixSpec,
   /e2e_anon_logged_in_006 org admin cannot direct-join a foreign organization call through anonymous link[\s\S]*anonymous_open_logged_in_org_admin_foreign_org_lobby[\s\S]*alpha_org_admin/s,
   'Playwright seed matrix spec must name the foreign anonymous org-admin denial row',
+);
+assert.match(
+  routeResolution,
+  /callResolution\.state === 'forbidden'[\s\S]*await redirectDeniedCallRouteToOverview\(\)/,
+  'workspace route resolution must redirect forbidden direct call references before the call workspace can connect',
+);
+assert.match(
+  routeResolution,
+  /refs\.activeCallId\.value = ''[\s\S]*refs\.loadedCallId\.value = ''/,
+  'workspace route resolution must clear stale call ids when a direct call reference is denied',
 );
 
 assert.match(
