@@ -45,6 +45,8 @@ assert.match(script, /VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN[\s\S]*VIDEOCHAT_DEPL
 assert.doesNotMatch(script, /VIDEOCHAT_DEPLOY_ADMIN_PASSWORD|VIDEOCHAT_DEPLOY_TURN_SECRET|VIDEOCHAT_DEPLOY_HCLOUD_TOKEN/, 'prod-debug .env.local parser must not import deploy secrets or provider tokens');
 assert.match(script, /redact_stream\(\)/, 'prod-debug must redact output');
 assert.match(script, /TOKEN\|SECRET\|PASSWORD\|PASS\|KEY\|CREDENTIAL\|COOKIE\|SESSION/, 'prod-debug redaction must cover token/password-like values');
+assert.match(script, /authorization:\[\[:space:\]\]\*basic/, 'prod-debug redaction must cover Basic authorization headers');
+assert.match(script, /set-cookie:\[\[:space:\]\]\*/, 'prod-debug redaction must cover Set-Cookie headers');
 assert.match(script, /REDACTED_MEDIA_PAYLOAD/, 'prod-debug must redact media payload-like fields before printing logs');
 assert.match(script, /VIDEOCHAT_PROD_DEBUG_DRY_RUN/, 'prod-debug must expose a dry-run path for local proof without network or SSH');
 assert.match(script, /DEPLOY_TURN_DOMAIN/, 'prod-debug must include the TURN service domain in production diagnostics');

@@ -109,6 +109,7 @@ function sanitizeUrl(value) {
     url.password = '';
     url.hash = '';
     url.pathname = url.pathname.replace(/\/join\/[^/?#]+/i, '/join/[REDACTED]');
+    url.pathname = url.pathname.replace(/\/workspace\/call\/[^/?#]+/i, '/workspace/call/[REDACTED]');
     let redacted = false;
     for (const key of Array.from(url.searchParams.keys())) {
       if (SENSITIVE_KEY_PATTERN.test(key)) {
@@ -127,6 +128,7 @@ function sanitizeUrl(value) {
   } catch {
     return text
       .replace(/\/join\/[^/?#\s]+/gi, '/join/[REDACTED]')
+      .replace(/\/workspace\/call\/[^/?#\s]+/gi, '/workspace/call/[REDACTED]')
       .replace(/([?&][^=&\s]*(?:authorization|bearer|cookie|credential|key|pass|password|secret|session|token|access|invite|link)[^=&\s]*=)[^&\s]+/gi, `$1${REDACTED_VALUE}`)
       .replace(/\?[^#\s]+/g, '?[REDACTED_QUERY]');
   }
@@ -137,7 +139,9 @@ function sanitizeText(value) {
     .replace(/\b(?:https?|wss?):\/\/[^\s"'<>\\]+/gi, (url) => sanitizeUrl(url))
     .replace(/(^|[\s"'(])((?:\/[^\s"'<>\\]+)\?[^\s"'<>\\]*)/g, (_match, prefix, url) => `${prefix}${sanitizeUrl(url)}`)
     .replace(/(authorization:\s*bearer\s+)[^\s]+/gi, `$1${REDACTED_VALUE}`)
+    .replace(/(authorization:\s*basic\s+)[^\s]+/gi, `$1${REDACTED_VALUE}`)
     .replace(/(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, `$1${REDACTED_VALUE}`)
+    .replace(/(set-cookie:\s*)[^\s;]+=[^;\s]+/gi, `$1${REDACTED_VALUE}`)
     .replace(/("(?:token|secret|password|pass|key|credential|cookie|session)[^"]*"\s*:\s*")[^"]+/gi, `$1${REDACTED_VALUE}`)
     .replace(/(data:(?:image|video|audio)\/[A-Za-z0-9.+-]+;base64,)[A-Za-z0-9+/=._~-]+/gi, `$1${REDACTED_MEDIA_PAYLOAD}`);
 }
@@ -185,7 +189,7 @@ function sanitizeArtifactValue(value, key = '') {
   if (value === null || value === undefined) return value;
   const normalizedKey = String(key || '');
   if (normalizedKey === 'body') return sanitizeDiagnosticBody(value);
-  if (/^(?:deviceId|groupId|id|label|publisherId|track_id|track_label|userId)$/i.test(normalizedKey)) {
+  if (/^(?:callId|deviceId|groupId|id|label|publisherId|track_id|track_label|userId)$/i.test(normalizedKey)) {
     return REDACTED_VALUE;
   }
   if (SENSITIVE_KEY_PATTERN.test(normalizedKey)) return REDACTED_VALUE;

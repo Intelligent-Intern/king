@@ -152,6 +152,8 @@ requireContains(smokeSpec, 'function sanitizeArtifactValue', 'artifact payload s
 requireContains(smokeSpec, 'sanitizeDiagnosticBody', 'diagnostics body sanitizer');
 requireContains(smokeSpec, 'REDACTED_MEDIA_PAYLOAD', 'media payload redaction marker');
 requireContains(smokeSpec, 'JSON.stringify(sanitizeArtifactValue(payload), null, 2)', 'artifact writes sanitized JSON');
+requireContains(smokeSpec, '/workspace/call/[REDACTED]', 'call workspace path redaction marker');
+requireMatches(smokeSpec, /callId\|deviceId\|groupId\|id\|label\|publisherId/, 'call id artifact redaction keys');
 requireContains(smokeSpec, 'sentCount: Array.isArray(socket.sent) ? socket.sent.length : 0', 'socket sent count only');
 requireContains(smokeSpec, 'sentCount: Number(socket.sentCount || 0)', 'persisted socket sent count summary');
 requireMatches(smokeSpec, /session\|token\|access\|invite\|link/, 'session and token-like artifact redaction keys');
