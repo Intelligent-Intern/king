@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue';
 
 export const CALL_APP_WORKSPACE_LAYOUT_MODE = 'call_app_workspace';
-export const CALL_APP_WORKSPACE_MINI_LIMIT = 5;
+export const CALL_APP_WORKSPACE_MINI_LIMIT = 10;
 const CALL_APP_IFRAME_ORIGIN = normalizeConfiguredCallAppOrigin(import.meta.env.VITE_VIDEOCHAT_CALL_APP_ORIGIN);
 
 function normalizeConfiguredCallAppOrigin(value) {
