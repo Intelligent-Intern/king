@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="planning-image">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Image Planning Call App</title>
+    <link rel="stylesheet" href="./planning-image.css">
+  </head>
+  <body>
+    <main class="planning-image-app">
+      <header class="planning-toolbar" aria-label="Image planning tools">
+        <label class="upload-button">
+          <span>Upload</span>
+          <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+        </label>
+        <button id="fitImage" type="button">Fit</button>
+        <button id="resetZoom" type="button">100%</button>
+        <button id="zoomOut" type="button">-</button>
+        <button id="zoomIn" type="button">+</button>
+        <button id="exportPng" type="button">PNG</button>
+        <span id="modeBadge" class="mode-badge">Waiting</span>
+      </header>
+
+      <section class="canvas-shell" aria-label="Shared planning image">
+        <canvas id="imageCanvas"></canvas>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status">Waiting for Call App launch.</span>
+        <span id="imageMeta">No image</span>
+      </footer>
+    </main>
+
+    <script src="./planning-image.js"></script>
+  </body>
+</html>

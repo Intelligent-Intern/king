@@ -31,7 +31,7 @@ function callAppOriginForAppKey(appKey) {
   try {
     const parsed = new URL(CALL_APP_IFRAME_ORIGIN);
     const parts = parsed.hostname.split('.');
-    if (parts.length >= 3 && ['app', 'apps', 'whiteboard'].includes(parts[0])) {
+    if (parts.length >= 3 && ['app', 'apps'].includes(parts[0])) {
       parts[0] = hostAppKey;
       parsed.hostname = parts.join('.');
       parsed.pathname = '';

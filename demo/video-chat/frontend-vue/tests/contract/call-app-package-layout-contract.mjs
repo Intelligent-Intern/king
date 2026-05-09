@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(frontendRoot, '../../..')
 const callAppRoot = path.join(repoRoot, 'demo/call-app')
 const whiteboardRoot = path.join(callAppRoot, 'whiteboard')
+const planningImageRoot = path.join(callAppRoot, 'planning-image')
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8')
@@ -29,6 +30,7 @@ function assertArrayIncludes(array, value, message) {
 
 assert(fs.existsSync(callAppRoot), 'demo/call-app root must exist')
 assert(fs.existsSync(whiteboardRoot), 'demo/call-app/whiteboard package must exist')
+assert(fs.existsSync(planningImageRoot), 'demo/call-app/planning-image package must exist')
 
 const readme = read('demo/call-app/README.md')
 assert(readme.includes('demo/call-app/<app-key>/'), 'README must document the package root convention')
@@ -38,12 +40,34 @@ for (const requiredFile of [
   'crdt.schema.json',
   'health.descriptor.json',
   'public/index.html',
+  'public/<app-key>.css',
+  'public/<app-key>.js',
+]) {
+  assert(readme.includes(requiredFile), `README must document ${requiredFile}`)
+}
+for (const requiredFile of [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
   'public/whiteboard.css',
   'public/whiteboard.js',
 ]) {
-  assert(readme.includes(requiredFile), `README must document ${requiredFile}`)
   assert(fs.existsSync(path.join(whiteboardRoot, requiredFile)), `whiteboard package must include ${requiredFile}`)
 }
+for (const requiredFile of [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
+  'public/planning-image.css',
+  'public/planning-image.js',
+]) {
+  assert(fs.existsSync(path.join(planningImageRoot, requiredFile)), `planning-image package must include ${requiredFile}`)
+}
+assert(readme.includes('planning-image'), 'README must list the planning-image package')
 
 const manifest = readJson('demo/call-app/whiteboard/call-app.manifest.json')
 assert(manifest.schema_version === 'king.call_app.manifest.v1', 'manifest schema version mismatch')

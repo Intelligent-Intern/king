@@ -77,8 +77,14 @@ assert.doesNotMatch(
 
 assert.match(
   workspaceStateSource,
-  /normalizeConfiguredCallAppOrigin[\s\S]*VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*\['app', 'apps', 'whiteboard'\]\.includes\(parts\[0\]\)[\s\S]*parts\[0\] = hostAppKey/s,
-  'frontend iframe URL generation must stay aligned with the dedicated Call App host family',
+  /normalizeConfiguredCallAppOrigin[\s\S]*VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*\['app', 'apps'\]\.includes\(parts\[0\]\)[\s\S]*parts\[0\] = hostAppKey/s,
+  'frontend iframe URL generation must derive app-specific hosts only from generic Call App host families',
+);
+
+assert.doesNotMatch(
+  workspaceStateSource,
+  /\['app', 'apps', 'whiteboard'\]/,
+  'frontend iframe URL generation must keep concrete whiteboard hosts path-based to avoid undeclared DNS requirements',
 );
 
 assert.match(
