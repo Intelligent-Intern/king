@@ -236,7 +236,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return nextAllowedAtMs > 0 ? Math.max(0, nextAllowedAtMs - nowMs) : 0;
   }
 
-  function requestSfuSocketRestartForPeer(reason, peer, payload = {}, nowMs = Date.now()) {
+  function requestSfuSocketRestartForPeer(reason, peer, payload = {}, nowMs = Date.now(), options = {}) {
     if (!peer || typeof peer !== 'object') return false;
     if (!canRequestSfuSocketRestartForPeer(peer, nowMs)) return false;
 
@@ -246,7 +246,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       ...payload,
       sfu_socket_restart_attempt: restartAttempt,
       sfu_socket_restart_backoff_ms: restartBackoffMs,
-    });
+    }, options);
     if (!restarted) return false;
 
     peer.sfuSocketRestartCount = restartAttempt;
@@ -602,7 +602,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             frozen_age_ms: frozenAgeMs,
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-          }, nowMs)
+            force_reconnect_reason: 'remote_video_frozen_after_ladder',
+          }, nowMs, { forceReconnect: true })
           : false;
         captureClientDiagnostic({
           category: 'media',

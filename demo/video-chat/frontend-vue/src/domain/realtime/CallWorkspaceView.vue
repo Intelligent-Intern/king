@@ -55,6 +55,7 @@ import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
+import { createWorkspaceForegroundRecoveryController } from './workspace/callWorkspace/foregroundRecovery';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
 import RightRosterPanel from './workspace/callWorkspace/RightRosterPanel.vue';
 import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
@@ -669,6 +670,25 @@ const {
     sendSocketFrame,
   },
 });
+const workspaceForegroundRecovery = createWorkspaceForegroundRecoveryController({
+  connectSocket: () => connectSocket(),
+  getArmed: () => workspaceReconnectAfterForeground, getConnectionState: () => connectionState.value,
+  getDocument: () => document, getLastAt: () => workspaceLastForegroundReconnectAt, getManualSocketClose: () => manualSocketClose,
+  getRouteBusy: () => routeCallResolve.pending || routeCallResolve.redirecting,
+  getSessionToken: () => sessionState.sessionToken,
+  hasLiveLocalMedia: () => hasLiveLocalMedia(), hasRealtimeRoomSync: () => hasRealtimeRoomSync.value,
+  initSfu: () => initSFU(), isSfuClientOpen: () => isSfuClientOpen(), isSfuConnected: () => sfuConnected.value,
+  isSocketOpen: () => socketRef.value instanceof WebSocket && socketRef.value.readyState === WebSocket.OPEN,
+  publishLocalTracks: () => publishLocalTracks(),
+  recycleSfu: () => {
+    sfuClientRef.value?.leave();
+    sfuClientRef.value = null; sfuConnected.value = false;
+  },
+  requestRoomSnapshot: () => requestRoomSnapshotLocal(), resetReconnectAttempt: () => { reconnectAttempt.value = 0; },
+  setArmed: (value) => { workspaceReconnectAfterForeground = value; }, setLastAt: (value) => { workspaceLastForegroundReconnectAt = value; },
+  shouldAcquireLocalMedia: () => controlState.cameraEnabled !== false || controlState.micEnabled !== false,
+  shouldConnectSfu: () => shouldConnectSfu.value,
+});
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
     setNotice(t('calls.workspace.snapshot_request_offline'), 'error');
@@ -693,33 +713,11 @@ function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
 }
 
 function markWorkspaceReconnectAfterForeground() {
-  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
-  workspaceReconnectAfterForeground = true;
+  workspaceForegroundRecovery.mark();
 }
 
 function reconnectWorkspaceAfterForeground() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-  if (!workspaceReconnectAfterForeground) return;
-  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
-  if (routeCallResolve.pending || routeCallResolve.redirecting) return;
-  if (String(sessionState.sessionToken || '').trim() === '') return;
-
-  const now = Date.now();
-  if ((now - workspaceLastForegroundReconnectAt) < 1000) return;
-
-  workspaceReconnectAfterForeground = false; workspaceLastForegroundReconnectAt = now;
-  reconnectAttempt.value = 0;
-
-  if (sfuClientRef.value) {
-    sfuClientRef.value.leave();
-    sfuClientRef.value = null; sfuConnected.value = false;
-  }
-
-  if (!hasLiveLocalMedia() && (controlState.cameraEnabled !== false || controlState.micEnabled !== false)) {
-    void publishLocalTracks();
-  }
-  void connectSocket();
-  if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) initSFU();
+  workspaceForegroundRecovery.recover();
 }
 
 requestRoomSnapshot = requestRoomSnapshotLocal;

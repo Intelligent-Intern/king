@@ -45,12 +45,16 @@ try {
   const workspace = read(root, 'src/domain/realtime/CallWorkspaceView.vue');
   const workspaceTemplate = read(root, 'src/domain/realtime/CallWorkspaceView.template.html');
   const workspaceLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
+  const foregroundRecovery = read(root, 'src/domain/realtime/workspace/callWorkspace/foregroundRecovery.ts');
   assert.match(workspace, /attachForegroundReconnectHandlers/, 'workspace must use foreground reconnect helper');
+  assert.match(workspace, /createWorkspaceForegroundRecoveryController/, 'workspace must delegate foreground recovery policy to the focused helper');
   assert.match(workspace, /function reconnectWorkspaceAfterForeground\(\)/, 'workspace must define foreground reconnect');
-  assert.match(workspace, /workspaceReconnectAfterForeground = true;/, 'workspace must mark reconnect pending');
-  assert.match(workspace, /if \(!hasLiveLocalMedia\(\) && \(controlState\.cameraEnabled !== false \|\| controlState\.micEnabled !== false\)\) \{\s*void publishLocalTracks\(\);/m, 'workspace foreground reconnect must reacquire local media when preview/tracks are gone');
-  assert.match(workspace, /void connectSocket\(\);/, 'workspace foreground reconnect must reconnect the realtime socket');
-  assert.match(workspace, /sfuClientRef\.value\.leave\(\);/, 'workspace foreground reconnect must recycle stale SFU state');
+  assert.match(workspace, /setArmed: \(value\) => \{ workspaceReconnectAfterForeground = value; \}/, 'workspace must mark reconnect pending through the recovery helper');
+  assert.match(foregroundRecovery, /if \(shouldAcquireLocalMedia\?\.\(\) === true && hasLiveLocalMedia\?\.\(\) !== true\) \{[\s\S]*void publishLocalTracks\?\.\(\);/, 'workspace foreground recovery must reacquire local media when preview/tracks are gone');
+  assert.match(foregroundRecovery, /const socketHealthy = isSocketOpen\?\.\(\) === true[\s\S]*hasRealtimeRoomSync\?\.\(\) === true[\s\S]*getConnectionState/, 'workspace foreground recovery must classify healthy sockets before reconnecting');
+  assert.match(foregroundRecovery, /if \(socketHealthy && sfuHealthy\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*action: 'snapshot_only'/, 'healthy foreground recovery must request a snapshot instead of recycling sockets');
+  assert.match(foregroundRecovery, /resetReconnectAttempt\?\.\(\);[\s\S]*void connectSocket\?\.\(\);/, 'unhealthy foreground recovery must still reconnect the realtime socket');
+  assert.match(foregroundRecovery, /if \(sfuExpected && !sfuHealthy\) \{[\s\S]*recycleSfu\?\.\(\);[\s\S]*initSfu\?\.\(\);/, 'unhealthy SFU foreground recovery must recycle stale SFU state');
   assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);/, 'workspace background callback remains the only path that arms foreground reconnect');
   assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
   assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
@@ -186,6 +190,57 @@ try {
     globalThis.window = originalWindow;
     globalThis.document = originalDocument;
   }
+
+  const foregroundRecoveryModule = await import(`data:text/javascript;base64,${Buffer.from(foregroundRecovery).toString('base64')}`);
+  const recoveryEvents = [];
+  let recoveryArmed = false;
+  let lastRecoveryAt = 0;
+  let socketOpen = true;
+  let roomSynced = true;
+  let sfuConnected = true;
+  let sfuOpen = true;
+  const recovery = foregroundRecoveryModule.createWorkspaceForegroundRecoveryController({
+    connectSocket: () => recoveryEvents.push('connect'),
+    getArmed: () => recoveryArmed,
+    getConnectionState: () => 'online',
+    getDocument: () => ({ visibilityState: 'visible' }),
+    getLastAt: () => lastRecoveryAt,
+    getManualSocketClose: () => false,
+    getRouteBusy: () => false,
+    getSessionToken: () => 'session-token',
+    hasLiveLocalMedia: () => true,
+    hasRealtimeRoomSync: () => roomSynced,
+    initSfu: () => recoveryEvents.push('init-sfu'),
+    isSfuClientOpen: () => sfuOpen,
+    isSfuConnected: () => sfuConnected,
+    isSocketOpen: () => socketOpen,
+    minIntervalMs: 0,
+    publishLocalTracks: () => recoveryEvents.push('publish-media'),
+    recycleSfu: () => recoveryEvents.push('recycle-sfu'),
+    requestRoomSnapshot: () => recoveryEvents.push('snapshot'),
+    resetReconnectAttempt: () => recoveryEvents.push('reset-reconnect'),
+    setArmed: (value) => { recoveryArmed = value; },
+    setLastAt: (value) => { lastRecoveryAt = value; },
+    shouldAcquireLocalMedia: () => false,
+    shouldConnectSfu: () => true,
+  });
+  recovery.mark();
+  assert.equal(recoveryArmed, true, 'foreground recovery controller must arm on real background');
+  assert.equal(recovery.recover().action, 'snapshot_only', 'healthy foreground recovery should not reconnect');
+  assert.deepEqual(recoveryEvents, ['snapshot'], 'healthy foreground recovery must only request a snapshot');
+
+  recoveryArmed = true;
+  recoveryEvents.length = 0;
+  socketOpen = false;
+  assert.equal(recovery.recover().action, 'socket_reconnect', 'unhealthy socket foreground recovery should reconnect');
+  assert.deepEqual(recoveryEvents, ['reset-reconnect', 'connect'], 'unhealthy socket recovery must not recycle healthy SFU');
+
+  recoveryArmed = true;
+  recoveryEvents.length = 0;
+  socketOpen = true;
+  sfuConnected = false;
+  assert.equal(recovery.recover().action, 'sfu_recover', 'healthy socket with unhealthy SFU should recover SFU only');
+  assert.deepEqual(recoveryEvents, ['snapshot', 'recycle-sfu', 'init-sfu'], 'SFU-only recovery must keep the realtime socket open');
 
   process.stdout.write('[foreground-reconnect-contract] PASS\n');
 } catch (error) {
