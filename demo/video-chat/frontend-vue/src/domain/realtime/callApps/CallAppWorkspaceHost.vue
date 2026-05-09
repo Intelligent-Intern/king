@@ -43,7 +43,16 @@
         :title="fullscreenToggleLabel"
         @click.stop="toggleWorkspaceFullscreen"
       >
-        <span aria-hidden="true">{{ isWorkspaceFullscreen ? 'X' : '[]' }}</span>
+        <span
+          class="call-app-workspace-fullscreen-icon"
+          :class="{ active: isWorkspaceFullscreen }"
+          aria-hidden="true"
+        >
+          <span class="corner top-left"></span>
+          <span class="corner top-right"></span>
+          <span class="corner bottom-right"></span>
+          <span class="corner bottom-left"></span>
+        </span>
       </button>
       <iframe
         v-if="hasActiveSession"
@@ -329,6 +338,7 @@ function toggleWorkspaceFullscreen() {
 
 .call-app-workspace-frame-shell {
   position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -349,14 +359,71 @@ function toggleWorkspaceFullscreen() {
   border-radius: 0;
   background: color-mix(in srgb, var(--color-surface-navy) 92%, transparent);
   color: var(--color-text-primary);
-  font-size: 13px;
-  font-weight: 900;
   line-height: 1;
   cursor: pointer;
 }
 
 .call-app-workspace-fullscreen-toggle:hover {
   background: var(--color-border);
+}
+
+.call-app-workspace-fullscreen-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.call-app-workspace-fullscreen-icon .corner {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-color: currentColor;
+  border-style: solid;
+}
+
+.call-app-workspace-fullscreen-icon .top-left {
+  top: 0;
+  left: 0;
+  border-width: 2px 0 0 2px;
+}
+
+.call-app-workspace-fullscreen-icon .top-right {
+  top: 0;
+  right: 0;
+  border-width: 2px 2px 0 0;
+}
+
+.call-app-workspace-fullscreen-icon .bottom-right {
+  right: 0;
+  bottom: 0;
+  border-width: 0 2px 2px 0;
+}
+
+.call-app-workspace-fullscreen-icon .bottom-left {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 2px 2px;
+}
+
+.call-app-workspace-fullscreen-icon.active .top-left {
+  top: 3px;
+  left: 3px;
+}
+
+.call-app-workspace-fullscreen-icon.active .top-right {
+  top: 3px;
+  right: 3px;
+}
+
+.call-app-workspace-fullscreen-icon.active .bottom-right {
+  right: 3px;
+  bottom: 3px;
+}
+
+.call-app-workspace-fullscreen-icon.active .bottom-left {
+  bottom: 3px;
+  left: 3px;
 }
 
 .call-app-workspace-frame {
