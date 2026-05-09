@@ -27,6 +27,9 @@ async function main() {
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
   const publisherBackpressure = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
   const backgroundTabPolicy = read('src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
   const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
@@ -62,6 +65,14 @@ async function main() {
   requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'local media disables outgoing background filters');
   requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'strictCaptureOnly')", 'local media enforces strict capture-only fallback');
   requireContains(mediaOrchestration, "eventType: 'strict_720p30_video_capture_unavailable'", 'strict capture fallback diagnostic exists');
+  requireContains(mediaOrchestration, 'width: { exact: videoProfile.captureWidth }', 'strict getUserMedia requests exact capture width');
+  requireContains(mediaOrchestration, "resetBackgroundRuntimeMetrics('strict_720p30_unfiltered')", 'strict mode returns raw camera instead of background compositor');
+  requireContains(captureProfileConstraints, "profileId(videoProfile) === 'strict_720p30'", 'capture track constraints use exact mode for strict 720p30');
+  requireContains(captureProfileConstraints, 'if (options?.exact === true) return { exact: target };', 'strict capture enforcement does not cap down to lower device settings');
+  requireContains(publisherPipeline, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'publisher uses raw track when outgoing background is disabled');
+  requireContains(publisherPipeline, "suppressGossipPrimary: strictPolicyEnabled(constants.strictStabilityPolicy, 'disableGossipPublish')", 'publisher suppresses gossip-primary fallback diagnostics in strict mode');
+  requireContains(publisherFrameDispatch, 'suppressGossipPrimary = false', 'frame dispatch accepts strict gossip suppression');
+  requireContains(publisherFrameDispatch, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true', 'frame dispatch does not enter gossip-primary when strict suppresses it');
 
   requireContains(backgroundTabPolicy, "strictPolicyEnabled(policy, 'disableBackgroundTabPolicy')", 'background tab policy can no-op under strict mode');
   requireContains(gossipDataLane, "strictGossipMediaDisabled('disableGossipPublish')", 'gossip publish is disabled under strict mode');

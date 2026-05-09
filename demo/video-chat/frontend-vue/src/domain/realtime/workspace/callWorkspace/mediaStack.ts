@@ -428,6 +428,7 @@ export function createCallWorkspaceMediaStack(options) {
       sfuWlvcFrameQuality: constants.sfuFrameQuality,
       sfuWlvcMaxDeltaFrameBytes: constants.sfuWlvcMaxDeltaFrameBytes,
       sfuWlvcMaxKeyframeFrameBytes: constants.sfuWlvcMaxKeyframeFrameBytes,
+      strictStabilityPolicy: constants.strictStabilityPolicy,
       wlvcEncodeErrorLogCooldownMs: constants.wlvcEncodeErrorLogCooldownMs,
       wlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
       wlvcEncodeFailureWindowMs: constants.wlvcEncodeFailureWindowMs,

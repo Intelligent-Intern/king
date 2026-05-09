@@ -27,6 +27,7 @@ import {
   publisherRequiresSfuBeforeEncode,
 } from './publisherFrameDispatch';
 import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
+import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export function createLocalPublisherPipelineHelpers({
   backgroundBaselineCollector,
@@ -281,13 +282,25 @@ export function createLocalPublisherPipelineHelpers({
     const activeFilteredVideoTrack = activeFilteredStream?.getVideoTracks?.()[0] || null;
     const activeRawVideoTrack = activeRawStream?.getVideoTracks?.()[0] || null;
     if (
+      strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')
+      && activeRawVideoTrack
+      && videoTrack !== activeRawVideoTrack
+    ) {
+      videoTrack = activeRawVideoTrack;
+    }
+    if (
       activeOutputVideoTrack
       && activeOutputVideoTrack !== videoTrack
       && videoTrack === activeRawVideoTrack
     ) {
       videoTrack = activeOutputVideoTrack;
     }
-    if (activeFilteredVideoTrack && videoTrack === activeFilteredVideoTrack && videoTrack !== activeRawVideoTrack) {
+    if (
+      !strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')
+      && activeFilteredVideoTrack
+      && videoTrack === activeFilteredVideoTrack
+      && videoTrack !== activeRawVideoTrack
+    ) {
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -938,6 +951,7 @@ export function createLocalPublisherPipelineHelpers({
           publishLocalEncodedFrameToGossip,
           captureClientDiagnostic,
           captureClientDiagnosticError,
+          suppressGossipPrimary: strictPolicyEnabled(constants.strictStabilityPolicy, 'disableGossipPublish'),
           trace,
           timestamp,
           paceForcedKeyframeRecovery,

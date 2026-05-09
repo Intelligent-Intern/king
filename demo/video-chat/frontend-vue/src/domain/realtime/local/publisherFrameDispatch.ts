@@ -81,9 +81,10 @@ export async function dispatchPublisherFrame({
   onRequiredSfuUnavailable,
   onRequiredSfuFailure,
   onOptionalSfuFailure,
+  suppressGossipPrimary = false,
 }) {
-  const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
-  const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional;
+  const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true;
+  const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional && suppressGossipPrimary !== true;
   let gossipPublished = false;
 
   if (gossipFirst) {
@@ -227,6 +228,7 @@ export async function dispatchWlvcPublisherFrame({
   trace,
   timestamp,
   paceForcedKeyframeRecovery,
+  suppressGossipPrimary = false,
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -237,6 +239,7 @@ export async function dispatchWlvcPublisherFrame({
     publishLocalEncodedFrameToGossip,
     captureClientDiagnostic,
     captureClientDiagnosticError,
+    suppressGossipPrimary,
     onRequiredSfuUnavailable: () => {
       reportSfuClientUnavailableAfterEncode({
         getSfuClientBufferedAmount,
@@ -282,6 +285,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
   reportNonCriticalDrop,
   critical,
   codecId,
+  suppressGossipPrimary = false,
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -292,6 +296,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
     publishLocalEncodedFrameToGossip,
     captureClientDiagnostic,
     captureClientDiagnosticError,
+    suppressGossipPrimary,
     onRequiredSfuUnavailable: () => {
       if (!critical) {
         reportNonCriticalDrop('sfu_client_unavailable_after_browser_thumbnail_encode', {
