@@ -666,7 +666,7 @@ SQL
         ];
     }
 
-    $updatedCall = videochat_fetch_call_for_update($pdo, (string) ($existingCall['id'] ?? ''), $tenantId);
+    $updatedCall = videochat_fetch_call_for_update($pdo, (string) ($existingCall['id'] ?? ''), $isSystemAdmin ? null : $tenantId);
     if ($updatedCall === null) {
         return [
             'ok' => false,

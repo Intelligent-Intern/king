@@ -1606,9 +1606,9 @@ Proof: Loop 13 (2026-05-09) reran `call-creation-owner-rights-contract`,
 
 ## 3. Join Permissions
 
-- [ ] System admin can join every active call
-- [ ] System admin can join without guest-list entry
-- [ ] System admin can join without invitation
+- [x] System admin can join every active call
+- [x] System admin can join without guest-list entry
+- [x] System admin can join without invitation
 - [ ] System admin cannot join deleted call through normal join flow
 - [ ] System admin cannot join ended call through normal join flow
 - [ ] Organization admin can join every active call of own organization
@@ -1616,7 +1616,7 @@ Proof: Loop 13 (2026-05-09) reran `call-creation-owner-rights-contract`,
 - [ ] Organization admin cannot join another organization’s call through org-admin rights
 - [x] User can join call when on guest list
 - [x] User cannot directly join call when not on guest list
-- [ ] User can join own call as owner
+- [x] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
 - [ ] Deleted / disabled user cannot join
 - [ ] Removed guest-list entry revokes direct join access
@@ -2468,13 +2468,13 @@ unchecked for the separate owner-transfer lane.
 
 ## Test Group: Direct Join Permissions
 
-- [ ] `e2e_join_001_system_admin_can_join_any_active_call`
-- [ ] `e2e_join_002_system_admin_joins_without_guest_list`
+- [x] `e2e_join_001_system_admin_can_join_any_active_call`
+- [x] `e2e_join_002_system_admin_joins_without_guest_list`
 - [ ] `e2e_join_003_org_admin_can_join_own_org_call`
 - [ ] `e2e_join_004_org_admin_cannot_join_foreign_org_call`
 - [x] `e2e_join_005_guest_list_user_can_join`
 - [x] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
-- [ ] `e2e_join_007_owner_can_join_own_call`
+- [x] `e2e_join_007_owner_can_join_own_call`
 - [ ] `e2e_join_008_disabled_user_cannot_join`
 - [ ] `e2e_join_009_removed_guest_list_entry_revokes_join`
 - [ ] `e2e_join_010_added_guest_list_entry_grants_join`
@@ -2490,6 +2490,16 @@ tests/e2e/call-access-seed-matrix.spec.js` (9 passed). The backend
 `php:8.5-cli-trixie`, proving guest-list allow, non-guest denial, and
 call-scoped denial. Admin, owner, deleted/ended, mutation, manipulation, and
 audit direct-join cases remain open.
+
+Proof: Loop 15 (2026-05-09) ran `system-admin-call-rights-contract.php` in
+`php:8.5-cli-trixie`; it passed after preserving system-admin participant-role
+management across foreign-tenant calls without requiring a guest-list row,
+tenant membership, or access-link invitation. The same loop ran
+`call-creation-owner-rights-contract.php` and `call-access-decision-contract.php`
+in `php:8.5-cli-trixie`; both passed, proving the call owner direct-join
+decision path with `source = owner`, `scope = call`, and owner-management
+rights. Organization-admin direct join, deleted/ended calls, disabled users,
+guest-list mutation, manipulated-role/call-id, and audit cases remain open.
 
 ## Test Group: Calendar Invitation
 
