@@ -141,7 +141,7 @@ Tickets:
     `right-roster-lobby-users-contract`, independent review, build, and
     production deploy `20260509072151` PASS.
 
-- [ ] CWS-03 Participant action options and Call App permissions
+- [x] CWS-03 Participant action options and Call App permissions
   - Add a gear above the participant table.
   - Clicking it opens a right-sidebar options view for choosing which per-user
     actions are shown.
@@ -169,7 +169,12 @@ Tickets:
     `npm run test:contract:build-size`,
     `demo/video-chat/backend-king-php/tests/call-app-sqlite-runtime-proof.sh`,
     and `npm run test:e2e:call-app-whiteboard` PASS locally.
-  - Remaining before close: production deploy plus post-deploy diagnostics.
+  - Loop 9 deploy proof: deployed the Loop 8 backend/API, realtime refresh,
+    right-sidebar, and Call App permission runtime changes with asset version
+    `20260509081237`; remote startup reached schema v54. Public
+    `prod-debug.sh`, public `deploy-smoke.sh`, full read-only prod debug, and
+    post-stabilization critical log scans PASS with no critical matches. No
+    push, certbot, or DNS changes were run.
 
 - [x] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.
@@ -181,7 +186,7 @@ Tickets:
     `npm run test:e2e:call-app-fullscreen-smoke` with local Google Chrome PASS
     on desktop and mobile before production deploy `20260509072151`.
 
-- [ ] CWS-08 Loop 9 Call App fullscreen participant strip containment
+- [x] CWS-08 Loop 9 Call App fullscreen participant strip containment
   - In fullscreen Call App mode, provide a clear hide/show control for the
     participant strip.
   - Keep the fullscreen Call App video/content fully contained: no cropping,
@@ -190,6 +195,13 @@ Tickets:
     shrinking the active fullscreen Call App surface.
   - Add responsive contract or browser proof for the strip hidden, strip shown,
     and 10-participant horizontal-scroll states before closing.
+  - Loop 9 proof: fullscreen Call Apps now expose a hide/show participant
+    control, keep mini video/avatar media contained, and cap the strip at 10
+    horizontally scrollable participants. `npm run test:contract:call-apps`,
+    `npm run test:contract:foreground-reconnect`,
+    `node tests/contract/sfu-client-side-framing-crop-contract.mjs`,
+    `npm run build`, and `npm run test:e2e:call-app-fullscreen-smoke` PASS;
+    production deploy `20260509081237` plus post-deploy diagnostics PASS.
 
 - [x] CWS-05 Screenshare as participant fullscreen/zoom surface
   - Treat screenshare as a participant-like media tile in the videocall.
