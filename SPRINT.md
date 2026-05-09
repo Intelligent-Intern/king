@@ -1833,7 +1833,7 @@ they actually queue. Docker PHP 8.4 SQLite passed.
 - [x] Concurrent rejection and admission resolves deterministically
 - [x] Lobby status updates correctly
 - [x] Participant is removed from lobby after admission
-- [ ] Participant is removed from lobby after aborting join attempt
+- [x] Participant is removed from lobby after aborting join attempt
 - [x] Participant is not shown twice in lobby
 - [x] Manipulated lobby-admission request without permission is rejected
 
@@ -1879,6 +1879,14 @@ anonymous logged-out, temporary personalized, and logged-in no-direct-access
 users remain in the lobby pending host approval; host and own-organization admin
 workspaces receive the waiting participant snapshot and management controls;
 and a non-moderating participant sees no lobby tab, badge, or lobby controls.
+`realtime-lobby-timeout-consistency-contract` proves timeout during lobby
+admission leaves the database pending, repairs the local handoff back to one
+queued participant with no admitted state, and a fresh DB sync preserves that
+state. The same backend proof then aborts the waiting join attempt through the
+websocket detach cleanup helpers, proving aborting the waiting connection clears
+the lobby and resets the participant to invited. `iam-lobby-timeout-consistency-contract.mjs`
+binds the runtime deferral/repair path, package script, CI gate, and Sprint
+checkboxes.
 
 ## 12. Rejoin, Leave, Kick
 
@@ -2706,7 +2714,7 @@ integrated frontend build passed.
 - [x] Mail sending failure leaves account unchanged
 - [ ] Database error during join leads to safe abort
 - [ ] Network error during join leads to repeatable state
-- [ ] Timeout during lobby admission leads to consistent state
+- [x] Timeout during lobby admission leads to consistent state
 
 Proof: `call-access-edge-error-matrix-contract` closes call-not-found, disabled
 organization/workspace, disabled host, and deleted invited temporary-account
@@ -2735,6 +2743,12 @@ Additional proof: Docker PHP 8.4 `call-access-email-confirmation-contract.php`
 forces an unqueueable account-update confirmation outbox path and proves the
 request fails as `email_delivery_failed`, leaves account data unchanged, and
 does not leave a confirmable pending payload.
+Additional proof: `realtime-lobby-timeout-consistency-contract` simulates a
+timeout while persisting lobby admission, defers admission snapshots until after
+the pending-only database compare-and-set, repairs the in-memory admitted
+handoff back to the queued state when persistence is unavailable, and verifies a
+fresh database sync remains pending instead of exposing an unpersisted admitted
+state.
 
 ## 31. Audit and Monitoring
 

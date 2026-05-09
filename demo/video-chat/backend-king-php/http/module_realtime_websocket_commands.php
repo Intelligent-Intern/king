@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/module_realtime_gossipmesh_recovery.php';
 require_once __DIR__ . '/module_realtime_media_fanout_guard.php';
 require_once __DIR__ . '/module_realtime_lobby_security.php';
+require_once __DIR__ . '/module_realtime_lobby_persistence.php';
 
 function videochat_realtime_secondary_handled_result(): array
 {
@@ -906,7 +907,13 @@ function videochat_realtime_handle_lobby_websocket_command(
         videochat_realtime_connection_tenant_id($presenceConnection)
     );
 
-    $lobbyResult = videochat_lobby_apply_command($lobbyState, $presenceState, $presenceConnection, $lobbyCommand);
+    $lobbyResult = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $presenceConnection,
+        $lobbyCommand,
+        videochat_realtime_lobby_command_sender($lobbyCommand)
+    );
     $lobbyResult = videochat_realtime_lobby_remove_result_for_active_call_target(
         $lobbyResult,
         $lobbyCommand,
@@ -941,106 +948,6 @@ function videochat_realtime_handle_lobby_websocket_command(
         $openDatabase
     );
     return videochat_realtime_secondary_handled_result();
-}
-
-function videochat_realtime_apply_successful_lobby_command(
-    array $lobbyResult,
-    array &$lobbyState,
-    array &$presenceState,
-    array $presenceConnection,
-    callable $openDatabase
-): void {
-    $lobbyAction = (string) ($lobbyResult['action'] ?? '');
-    $lobbyStateName = (string) ($lobbyResult['state'] ?? '');
-    $lobbyResultRoomId = videochat_presence_normalize_room_id(
-        (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
-    );
-
-    if ($lobbyAction === 'lobby/queue/join' && in_array($lobbyStateName, ['queued', 'already_queued'], true)) {
-        videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $presenceConnection);
-        videochat_realtime_sync_lobby_room_from_database(
-            $lobbyState,
-            $openDatabase,
-            $lobbyResultRoomId,
-            videochat_realtime_connection_call_id($presenceConnection),
-            null,
-            videochat_realtime_connection_tenant_id($presenceConnection)
-        );
-        videochat_lobby_broadcast_room_snapshot(
-            $lobbyState,
-            $presenceState,
-            $lobbyResultRoomId,
-            $lobbyStateName === 'already_queued' ? 'already_queued' : 'queued',
-            null,
-            null,
-            is_numeric($presenceConnection['tenant_id'] ?? null) ? (int) $presenceConnection['tenant_id'] : null
-        );
-    } elseif ($lobbyAction === 'lobby/queue/cancel') {
-        videochat_realtime_mark_call_participant_invite_state($openDatabase, $presenceConnection, 'invited', ['pending']);
-        videochat_realtime_sync_lobby_room_from_database(
-            $lobbyState,
-            $openDatabase,
-            $lobbyResultRoomId,
-            videochat_realtime_connection_call_id($presenceConnection),
-            null,
-            videochat_realtime_connection_tenant_id($presenceConnection)
-        );
-    }
-
-    if ($lobbyAction === 'lobby/remove') {
-        videochat_realtime_apply_lobby_remove_result(
-            $lobbyResult,
-            $lobbyState,
-            $presenceState,
-            $presenceConnection,
-            $openDatabase,
-            $lobbyResultRoomId
-        );
-    }
-
-    if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
-        videochat_realtime_apply_lobby_admission_result($lobbyResult, $lobbyState, $presenceState, $presenceConnection, $openDatabase);
-    }
-}
-
-function videochat_realtime_apply_lobby_admission_result(
-    array $lobbyResult,
-    array &$lobbyState,
-    array &$presenceState,
-    array $presenceConnection,
-    callable $openDatabase
-): void {
-    $admittedRoomId = videochat_presence_normalize_room_id(
-        (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby'))
-    );
-    $admittedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
-        ? array_values(array_filter(array_map('intval', (array) $lobbyResult['affected_user_ids']), static fn (int $id): bool => $id > 0))
-        : [];
-    if ($admittedRoomId === '' || $admittedUserIds === []) {
-        return;
-    }
-
-    $admittedCallId = videochat_realtime_connection_call_id($presenceConnection);
-    if ($admittedCallId !== '') {
-        foreach ($admittedUserIds as $admittedUserId) {
-            videochat_realtime_mark_call_participant_invite_state_by_user_id(
-                $openDatabase,
-                $admittedCallId,
-                $admittedUserId,
-                'allowed',
-                ['pending']
-            );
-        }
-    }
-    videochat_realtime_sync_lobby_room_from_database(
-        $lobbyState,
-        $openDatabase,
-        $admittedRoomId,
-        $admittedCallId,
-        null,
-        videochat_realtime_connection_tenant_id($presenceConnection)
-    );
-    videochat_realtime_send_lobby_snapshot_to_users($presenceState, $lobbyState, $admittedRoomId, $admittedUserIds, 'admitted', null);
 }
 
 function videochat_realtime_handle_admin_sync_websocket_command(
