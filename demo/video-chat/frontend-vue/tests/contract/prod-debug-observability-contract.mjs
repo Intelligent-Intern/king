@@ -58,6 +58,7 @@ for (const label of [
   'media reconnect',
   'screen-share reconnect exhaustion',
   'stale local media capture discard',
+  'background fallback transitions',
   'audio/video track loss',
   'SFU reconnect and websocket transport',
   'Call App frame and CSP errors',
@@ -80,6 +81,9 @@ assert.match(script, /docker compose[\s\S]* ps/, 'remote probe must inspect comp
 assert.match(script, /\$\{COMPOSE\[@\]\}" logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
 assert.match(script, /filter_recent_logs\(\)/, 'remote log filtering must label each investigation category');
 assert.match(script, /stale_local_media_capture_discarded/, 'remote log scan must include stale local media capture discard diagnostics');
+assert.match(script, /local_background_\(backend_init\|matte_rejected\|replacement_unavailable\|replacement_modal_choice\)/, 'remote log scan must include BGF fallback transition event types');
+assert.match(script, /failed_backend\|fallback_reason\|user_choice_required/, 'remote log scan must include BGF fallback diagnostic payload fields');
+assert.match(script, /production_category_mask_unavailable\|worker_segment_errors_repeated/, 'remote log scan must include BGF terminal worker failure reasons');
 assert.match(script, /local_screen_share_sfu_reconnect_exhausted/, 'remote log scan must include screen-share SFU reconnect exhaustion diagnostics');
 assert.match(script, /\(audio\|video\).*track/, 'remote log scan must include audio/video track-loss terms');
 assert.match(script, /Content-Security-Policy\|Allow-CSP-From\|frame-ancestors\|postMessage/, 'remote log scan must include Call App frame and CSP diagnostics');
@@ -131,8 +135,8 @@ for (const smokeLabel of [
 
 assert.match(
   deploySmoke,
-  /BGF-07 proof commands:[^\n]*npm run test:contract:background-filter[^\n]*prod-debug-observability-contract\.mjs[^\n]*npm run build[^\n]*demo\/video-chat\/scripts\/deploy\.sh[^\n]*deploy-smoke\.sh[^\n]*prod-debug\.sh[^\n]*Chrome\/Chromium[^\n]*Firefox[^\n]*background-unavailable modal/,
-  'deploy-smoke must record focused background contract, build, deploy, prod smoke, prod debug, and browser-smoke proof commands',
+  /BGF-07 proof commands:[^\n]*npm run test:predeploy:background[^\n]*prod-debug-observability-contract\.mjs[^\n]*npm run build[^\n]*demo\/video-chat\/scripts\/deploy\.sh[^\n]*routine post-deploy diagnostics[^\n]*VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1[^\n]*optional domain\/certificate smoke[^\n]*DNS\/certbot validation is explicitly required[^\n]*Chrome\/Chromium[^\n]*Firefox[^\n]*background-unavailable modal[^\n]*background fallback transition logs/,
+  'deploy-smoke must record focused background contract, build, deploy, routine prod debug, optional domain/certificate smoke, and browser-smoke proof commands',
 );
 
 const deploySmokeWithoutProofLog = deploySmoke.replace(/log "BGF-07 proof commands:[^\n]+"/, '');
