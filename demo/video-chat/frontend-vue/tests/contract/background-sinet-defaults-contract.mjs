@@ -37,6 +37,9 @@ try {
   assert.ok(modal.includes('accept="image/png,image/jpeg,image/webp"'), 'avatar upload must restrict image types');
   assert.ok(modal.includes('useCallBackgroundFallbackAvatar(DEFAULT_BACKGROUND_FALLBACK_AVATAR_URL)'), 'modal standard avatar button must use default avatar');
   assert.ok(modal.includes('clearCallBackgroundFallbackVideo();'), 'modal unfiltered button must disable replacement');
+  assert.equal((modal.match(/<button\b/g) || []).length, 2, 'modal must expose only standard avatar and unfiltered video buttons');
+  assert.equal((modal.match(/<label class="btn background-unavailable-upload">/g) || []).length, 1, 'modal must expose exactly one uploaded avatar choice');
+  assert.equal((modal.match(/background_(use_standard_avatar|upload_avatar|send_unfiltered)/g) || []).length, 3, 'modal must expose exactly standard avatar, uploaded avatar, and unfiltered choices');
 
   assert.ok(stream.includes("requested: 'worker-segmenter'"), 'production backend remains Pierre worker segmenter');
   assert.ok(!stream.includes('sinet_wasm'), 'production stream must not default to SINet WASM');
