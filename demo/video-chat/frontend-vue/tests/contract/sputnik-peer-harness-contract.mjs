@@ -34,6 +34,7 @@ try {
   requireContains(source, "id: 'sputnik-1'", 'harness must define first fake Sputnik peer');
   requireContains(source, "id: 'sputnik-2'", 'harness must define second fake Sputnik peer');
   requireContains(source, "id: 'sputnik-3'", 'harness must support an additional fake peer for stress');
+  requireContains(source, "id: 'sputnik-10'", 'harness must support ten fake Sputnik peers for stress');
   requireContains(source, 'navigator.mediaDevices.getUserMedia', 'harness must use the real local camera as Alice');
   requireContains(source, 'new RTCPeerConnection', 'harness must create browser-native local peer connections');
   requireContains(source, 'generatedCanvas.captureStream(30)', 'harness must publish generated video using canvas captureStream');
@@ -63,7 +64,7 @@ try {
 
   requireRegex(
     source,
-    /const BOT_DEFINITIONS = Object\.freeze\(\[[\s\S]*sputnik-1[\s\S]*sputnik-2[\s\S]*sputnik-3[\s\S]*\]\)/,
+    /const BOT_DEFINITIONS = Object\.freeze\(\[[\s\S]*sputnik-1[\s\S]*sputnik-2[\s\S]*sputnik-3[\s\S]*sputnik-10[\s\S]*\]\)/,
     'fake peer inventory must be centralized and visible to reviewers',
   );
   requireRegex(

@@ -51,6 +51,13 @@ function videochat_demo_user_blueprint(): array
             ['sputnik-1@sputnik.local', 'Sputnik 1', 'sputnik123'],
             ['sputnik-2@sputnik.local', 'Sputnik 2', 'sputnik223'],
             ['sputnik-3@sputnik.local', 'Sputnik 3', 'sputnik323'],
+            ['sputnik-4@sputnik.local', 'Sputnik 4', 'sputnik423'],
+            ['sputnik-5@sputnik.local', 'Sputnik 5', 'sputnik523'],
+            ['sputnik-6@sputnik.local', 'Sputnik 6', 'sputnik623'],
+            ['sputnik-7@sputnik.local', 'Sputnik 7', 'sputnik723'],
+            ['sputnik-8@sputnik.local', 'Sputnik 8', 'sputnik823'],
+            ['sputnik-9@sputnik.local', 'Sputnik 9', 'sputnik923'],
+            ['sputnik-10@sputnik.local', 'Sputnik 10', 'sputnik1023'],
         ] as [$email, $displayName, $password]) {
             $users[] = [
                 'email' => $email,

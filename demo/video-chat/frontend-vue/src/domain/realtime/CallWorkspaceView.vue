@@ -736,6 +736,13 @@ const sputnikPeerRuntime = createSputnikPeerRuntime({
       'sputnik-1': { email: 'sputnik-1@sputnik.local', password: 'sputnik123' },
       'sputnik-2': { email: 'sputnik-2@sputnik.local', password: 'sputnik223' },
       'sputnik-3': { email: 'sputnik-3@sputnik.local', password: 'sputnik323' },
+      'sputnik-4': { email: 'sputnik-4@sputnik.local', password: 'sputnik423' },
+      'sputnik-5': { email: 'sputnik-5@sputnik.local', password: 'sputnik523' },
+      'sputnik-6': { email: 'sputnik-6@sputnik.local', password: 'sputnik623' },
+      'sputnik-7': { email: 'sputnik-7@sputnik.local', password: 'sputnik723' },
+      'sputnik-8': { email: 'sputnik-8@sputnik.local', password: 'sputnik823' },
+      'sputnik-9': { email: 'sputnik-9@sputnik.local', password: 'sputnik923' },
+      'sputnik-10': { email: 'sputnik-10@sputnik.local', password: 'sputnik1023' },
     };
     const preparedPeers = [];
     for (const peer of peers) {

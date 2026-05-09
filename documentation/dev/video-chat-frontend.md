@@ -72,8 +72,9 @@ Canonical local endpoints:
 The launcher starts:
 
 - backend HTTP mode on `VIDEOCHAT_LOCAL_HTTP_PORT` (`18080` by default), with `VIDEOCHAT_LOCAL_HTTP_WORKERS` (`1` by default)
-- backend WS mode on `VIDEOCHAT_LOCAL_WS_PORT` (`18081` by default), with `VIDEOCHAT_LOCAL_WS_WORKERS` (`12` by default)
+- backend WS mode on `VIDEOCHAT_LOCAL_WS_PORT` (`18081` by default), with `VIDEOCHAT_LOCAL_WS_WORKERS` (`36` by default)
 - Vite on `VIDEOCHAT_LOCAL_FRONTEND_PORT` (`5176` by default)
+- in-call Sputnik control supports `A+1` through `A+10`
 
 Required frontend flags for Sputnik/gossip media:
 

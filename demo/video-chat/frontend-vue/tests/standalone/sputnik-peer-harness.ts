@@ -11,6 +11,13 @@ const BOT_DEFINITIONS = Object.freeze([
   { id: 'sputnik-1', label: 'Sputnik 1', color: '#13b981', toneHz: 330 },
   { id: 'sputnik-2', label: 'Sputnik 2', color: '#16a3b8', toneHz: 392 },
   { id: 'sputnik-3', label: 'Sputnik 3', color: '#8b5cf6', toneHz: 494 },
+  { id: 'sputnik-4', label: 'Sputnik 4', color: '#ef4444', toneHz: 587 },
+  { id: 'sputnik-5', label: 'Sputnik 5', color: '#84cc16', toneHz: 659 },
+  { id: 'sputnik-6', label: 'Sputnik 6', color: '#06b6d4', toneHz: 698 },
+  { id: 'sputnik-7', label: 'Sputnik 7', color: '#ec4899', toneHz: 784 },
+  { id: 'sputnik-8', label: 'Sputnik 8', color: '#64748b', toneHz: 880 },
+  { id: 'sputnik-9', label: 'Sputnik 9', color: '#f97316', toneHz: 988 },
+  { id: 'sputnik-10', label: 'Sputnik 10', color: '#14b8a6', toneHz: 1047 },
 ])
 
 type PeerConnectionPairState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'

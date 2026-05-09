@@ -39,6 +39,7 @@ const SPUTNIK_MEDIA_GENERATION = 1;
 const SPUTNIK_TELEMETRY_INTERVAL_MS = 5000;
 const SPUTNIK_KEYFRAME_INTERVAL = 1;
 const SPUTNIK_AUDIO_CHUNK_MS = 1000;
+const SPUTNIK_MAX_FAKE_PEERS = 10;
 const ALICE_RESPONSE_TONE_HZ = 659;
 const ALICE_RESPONSE_AUDIO_LEVEL_THRESHOLD = 0.05;
 const ALICE_RESPONSE_DELAY_MS = 450;
@@ -191,15 +192,17 @@ function buildPeerDefinitions(count: number, includeAlice: boolean): SputnikPeer
     });
   }
 
-  const normalizedCount = Math.max(0, Math.min(3, Math.floor(Number(count) || 0)));
+  const colors = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#ef4444', '#84cc16', '#06b6d4', '#ec4899', '#64748b', '#f97316', '#14b8a6'];
+  const tones = [349, 440, 554, 587, 659, 698, 784, 880, 988, 1047];
+  const normalizedCount = Math.max(0, Math.min(SPUTNIK_MAX_FAKE_PEERS, Math.floor(Number(count) || 0)));
   for (let index = 1; index <= normalizedCount; index += 1) {
     peers.push({
       logicalPeerId: `sputnik-${index}`,
       peerId: String(SPUTNIK_USER_ID_BASE + index),
       userId: SPUTNIK_USER_ID_BASE + index,
       displayName: `Sputnik ${index}`,
-      color: ['#0ea5e9', '#8b5cf6', '#f59e0b'][index - 1] || '#0ea5e9',
-      toneHz: [349, 440, 554][index - 1] || 349,
+      color: colors[index - 1] || '#0ea5e9',
+      toneHz: tones[index - 1] || 349,
     });
   }
 
