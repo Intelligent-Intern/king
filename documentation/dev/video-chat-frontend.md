@@ -54,6 +54,57 @@ npm install
 npm run dev
 ```
 
+## Local Sputnik Gossip Startup
+
+Use the repo launcher for local Sputnik/gossip media tests:
+
+```bash
+demo/video-chat/scripts/kingrt-sputnik.local.sh
+```
+
+Canonical local endpoints:
+
+- frontend: `http://127.0.0.1:5176/`
+- backend HTTP: `http://127.0.0.1:18080`
+- backend websocket: `ws://127.0.0.1:18081/ws`
+- local sqlite DB: `demo/video-chat/backend-king-php/.local/video-chat-local-sputnik.sqlite`
+
+The launcher starts:
+
+- backend HTTP mode on `VIDEOCHAT_LOCAL_HTTP_PORT` (`18080` by default), with `VIDEOCHAT_LOCAL_HTTP_WORKERS` (`1` by default)
+- backend WS mode on `VIDEOCHAT_LOCAL_WS_PORT` (`18081` by default), with `VIDEOCHAT_LOCAL_WS_WORKERS` (`12` by default)
+- Vite on `VIDEOCHAT_LOCAL_FRONTEND_PORT` (`5176` by default)
+
+Required frontend flags for Sputnik/gossip media:
+
+- `VITE_VIDEOCHAT_ENABLE_SPUTNIK_PEERS=true`
+- `VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active`
+- `VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary`
+- `VITE_VIDEOCHAT_ENABLE_SFU=false`
+- `VITE_VIDEOCHAT_PROTECTED_MEDIA=false`
+- `VITE_VIDEOCHAT_ALLOW_INSECURE_WS=true`
+
+Important: this code reads `VITE_VIDEOCHAT_MEDIA_CARRIER`. Do not use `VITE_VIDEOCHAT_MEDIA_CARRIER_MODE`; that key is ignored here and the frontend falls back to `sfu_first`.
+
+Manual equivalent for the frontend, when not using the launcher:
+
+```bash
+cd demo/video-chat/frontend-vue
+VITE_VIDEOCHAT_BACKEND_ORIGIN=http://127.0.0.1:18080 \
+VITE_VIDEOCHAT_WS_ORIGIN=http://127.0.0.1:18081 \
+VITE_VIDEOCHAT_SFU_ORIGIN=http://127.0.0.1:18082 \
+VITE_VIDEOCHAT_BACKEND_PORT=18080 \
+VITE_VIDEOCHAT_WS_PORT=18081 \
+VITE_VIDEOCHAT_SFU_PORT=18082 \
+VITE_VIDEOCHAT_ALLOW_INSECURE_WS=true \
+VITE_VIDEOCHAT_ENABLE_SFU=false \
+VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active \
+VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary \
+VITE_VIDEOCHAT_PROTECTED_MEDIA=false \
+VITE_VIDEOCHAT_ENABLE_SPUTNIK_PEERS=true \
+npm run dev -- --host 127.0.0.1 --port 5176
+```
+
 Build:
 
 ```bash
@@ -108,6 +159,11 @@ Environment overrides:
 - `VITE_VIDEOCHAT_WS_PORT` (optional WS gateway port override, default `18081`)
 - `VITE_VIDEOCHAT_SFU_PORT` (optional SFU gateway port override, default `18082`)
 - `VITE_VIDEOCHAT_ALLOW_INSECURE_WS` (optional, default `false`; set `true` for plain `ws://` from non-loopback LAN hosts)
+- `VITE_VIDEOCHAT_GOSSIP_DATA_LANE` (optional; set `active` for local Sputnik gossip media)
+- `VITE_VIDEOCHAT_MEDIA_CARRIER` (optional; set `gossip_primary` for local Sputnik gossip media)
+- `VITE_VIDEOCHAT_ENABLE_SFU` (optional; set `false` for local Sputnik gossip media)
+- `VITE_VIDEOCHAT_PROTECTED_MEDIA` (optional; set `false` for local Sputnik gossip media)
+- `VITE_VIDEOCHAT_ENABLE_SPUTNIK_PEERS` (optional; set `true` to enable in-call Sputnik peers)
 - `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE` (optional, default `false`; set `true` to allow MediaPipe segmentation backend)
 - `VITE_VIDEOCHAT_ENABLE_TFJS` (optional, default `false`; set `true` to allow TFJS segmentation backend)
 - `VITE_VIDEOCHAT_DEBUG_LOGS` (optional, default `false`; set `true` to re-enable verbose codec/SFU/debug console output)
