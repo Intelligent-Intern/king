@@ -85,7 +85,7 @@ Tickets:
 - [x] MSR-05 Store pending sender keys by hash/revision/epoch/key instead of
   only sender/device.
 - [x] MSR-06 Treat duplicate valid sender keys as no-op success.
-- [x] MSR-07 Coalesce stale sender-key recovery per sender/stale/current hash;
+- [x] MSR-07 Coalesce stale sender-key recovery per sender/direction window;
   do not clear global Hello/Sender-Key caches or force reconnect/rekey-all.
 - [x] MSR-08 Make participant sync single-flight and merge pending force-rekey
   and reason state while a sync is in flight.

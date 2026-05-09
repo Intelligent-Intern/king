@@ -1,4 +1,4 @@
-export const MEDIA_SECURITY_PARTICIPANT_MISMATCH_RECOVERY_WINDOW_MS = 3000;
+export const MEDIA_SECURITY_PARTICIPANT_MISMATCH_RECOVERY_WINDOW_MS = 60000;
 
 export function normalizeMediaSecurityParticipantSetHash(hash) {
   const normalized = String(hash || '').trim();
@@ -8,17 +8,15 @@ export function normalizeMediaSecurityParticipantSetHash(hash) {
 export function mediaSecurityParticipantMismatchRecoveryKey({
   activeRoomId = '',
   runtimePath = '',
+  direction = '',
   senderUserId = 0,
-  staleHash = '',
-  currentHash = '',
 } = {}) {
   return [
     'participant-set-mismatch',
     activeRoomId,
     runtimePath,
+    String(direction || 'unknown').trim().toLowerCase() || 'unknown',
     Number(senderUserId || 0),
-    normalizeMediaSecurityParticipantSetHash(staleHash),
-    normalizeMediaSecurityParticipantSetHash(currentHash),
   ].join(':');
 }
 
