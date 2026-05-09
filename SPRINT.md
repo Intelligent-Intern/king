@@ -61,6 +61,54 @@ Contract anchors:
 - `demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php`
 - `demo/video-chat/scripts/prod-debug.sh`
 
+## Sprint: MEDIA-SEC-01 Idempotent Sender-Key Participant-Set Recovery
+
+Goal:
+- `media-security/sender-key` participant-set drift must not trigger a
+  recovery, reconnect, or diagnostics loop.
+- Stale, current, and unknown/future participant sets are handled
+  idempotently.
+- A stale sender-key never destroys current valid Hello/Sender-Key caches.
+- Deploy locally after proof without push, DNS, or certbot automation.
+
+Tickets:
+- [x] MSR-01 Map media-security sender-key, participant hash, cache-clearing,
+  pending-key, and sync/retry paths.
+- [x] MSR-02 Define and implement sender-key idempotency keys including room,
+  sender, target, device, participant set, epoch, and sender key id.
+- [x] MSR-03 Decide participant-set revision source: reuse room/snapshot
+  revision if available, otherwise add a client-local monotonic revision for
+  this sprint.
+- [x] MSR-04 Classify incoming sender keys as current, known stale, or
+  unknown/future; current accepts, stale drops idempotently, unknown/future
+  parks pending and requests snapshot/sync.
+- [x] MSR-05 Store pending sender keys by hash/revision/epoch/key instead of
+  only sender/device.
+- [x] MSR-06 Treat duplicate valid sender keys as no-op success.
+- [x] MSR-07 Coalesce stale sender-key recovery per sender/stale/current hash;
+  do not clear global Hello/Sender-Key caches or force reconnect/rekey-all.
+- [x] MSR-08 Make participant sync single-flight and merge pending force-rekey
+  and reason state while a sync is in flight.
+- [x] MSR-09 Coalesce diagnostics so
+  `media_security_sender_key_participant_mismatch` is emitted at most once per
+  sender/stale/current hash window with redacted, human-readable action data.
+- [x] MSR-10 Prove strict-call stability is preserved: no SFU/WS reconnect,
+  quality, gossip, or background recovery is triggered by sender-key mismatch.
+- [x] MSR-11 Add contracts for duplicate stale, duplicate valid, stale cache
+  preservation, unknown/future pending, and sync single-flight behavior.
+- [ ] MSR-12 Deploy without push/DNS/certbot and run asset-filtered diagnostics
+  for media-security mismatch loops and strict 720p30 regressions.
+
+Proof so far:
+- `npm run test:contract:media-security`
+- `npm run test:contract:strict-720p30`
+- `npm run test:contract:foreground-reconnect`
+- `npm run test:contract:realtime-reconnect-browser`
+- `npm run test:contract:client-diagnostics`
+- `npm run build`
+- `npm run test:contract:build-size`
+- `git diff --check`
+
 ## Hotfix: Strict 720p30 Call Stability
 
 Goal:

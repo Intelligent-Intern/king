@@ -44,6 +44,12 @@ import {
   subtleCrypto,
   validateProtectedHeader,
 } from './securityCore.ts';
+import {
+  parseSenderKeyIdentityKey,
+  senderKeyIdentityKey as buildSenderKeyIdentityKey,
+  senderKeyIdentityKeyForPayload,
+  senderKeyIdentityMatchesSender,
+} from './securitySenderKeyIdentity.ts';
 
 export {
   MEDIA_SECURITY_SIGNAL_TYPES,
@@ -97,6 +103,8 @@ export class MediaSecuritySession {
     this.sequence = 0;
     this.participantSignature = '';
     this.participantSetHash = '';
+    this.participantSetRevision = 0;
+    this.knownParticipantSetHashes = new Set();
     this.selectedKexSuite = KEX_SUITE;
     this.lastRekeyReason = 'initial';
     this.keyPair = null;
@@ -107,6 +115,8 @@ export class MediaSecuritySession {
     this.senderKeyId = '';
     this.peers = new Map();
     this.pendingSenderKeys = new Map();
+    this.acceptedSenderKeys = new Set();
+    this.lastSenderKeySignalResult = 'none';
     this.replayBySenderEpoch = new Map();
     this.nativeSenders = new WeakSet();
     this.nativeReceivers = new WeakSet();
@@ -210,10 +220,63 @@ export class MediaSecuritySession {
     }));
   }
 
-  pendingSenderKeyMapKey(senderUserId, deviceId = '') {
+  senderKeyIdentityKey({
+    senderUserId,
+    targetUserId = this.userId,
+    deviceId = '',
+    participantSetHash = '',
+    participantSetRevision = 0,
+    epoch = 0,
+    senderKeyId = '',
+  } = {}) {
+    return buildSenderKeyIdentityKey({
+      senderUserId,
+      targetUserId,
+      deviceId,
+      participantSetHash,
+      participantSetRevision,
+      epoch,
+      senderKeyId,
+    });
+  }
+
+  parseSenderKeyIdentityKey(identityKey) {
+    return parseSenderKeyIdentityKey(identityKey);
+  }
+
+  senderKeyIdentityMatchesSender(identityKey, senderUserId) {
+    return senderKeyIdentityMatchesSender(identityKey, senderUserId);
+  }
+
+  pendingSenderKeyMapKey(senderUserId, payload = {}) {
+    return senderKeyIdentityKeyForPayload(senderUserId, this.userId, payload);
+  }
+
+  rememberParticipantSetHash(hash) {
+    const normalizedHash = asString(hash);
+    if (normalizedHash !== '') this.knownParticipantSetHashes.add(normalizedHash);
+    return normalizedHash;
+  }
+
+  rememberPendingSenderKey(senderUserId, payload = {}) {
+    const identityKey = this.pendingSenderKeyMapKey(senderUserId, payload);
+    this.pendingSenderKeys.set(identityKey, payload);
+    this.lastSenderKeySignalResult = 'pending';
+    return identityKey;
+  }
+
+  pendingSenderKeyEntriesForHello(senderUserId, deviceId = '') {
     const sender = normalizeUserId(senderUserId);
+    const target = normalizeUserId(this.userId);
     const device = asString(deviceId);
-    return `${sender}:${device}`;
+    return Array.from(this.pendingSenderKeys.entries()).filter(([identityKey]) => {
+      const identity = this.parseSenderKeyIdentityKey(identityKey);
+      if (!identity) return false;
+      if (normalizeUserId(identity.sender_user_id) !== sender) return false;
+      if (normalizeUserId(identity.target_user_id) !== target) return false;
+      const pendingDeviceId = asString(identity.device_id);
+      return pendingDeviceId === device || pendingDeviceId === '';
+    });
   }
 
   async transcriptHashForPeer({ sender, selectedKexSuite, payload, participantSetHash }) {
@@ -298,6 +361,7 @@ export class MediaSecuritySession {
     const sharedBits = await subtle.deriveBits({ name: 'X25519', public: peerPublicKey }, this.keyPair.privateKey, 256);
     const participantSetHash = await this.participantHashForPeer(sender);
     this.participantSetHash = participantSetHash;
+    this.rememberParticipantSetHash(participantSetHash);
     const transcriptHash = await this.transcriptHashForPeer({
       sender,
       selectedKexSuite,
@@ -376,13 +440,9 @@ export class MediaSecuritySession {
       devices,
     });
 
-    const pendingKeys = [
-      this.pendingSenderKeyMapKey(sender, deviceId),
-      this.pendingSenderKeyMapKey(sender, ''),
-    ];
-    for (const pendingKey of pendingKeys) {
-      const pending = this.pendingSenderKeys.get(pendingKey);
-      if (!pending) continue;
+    const pendingEntries = this.pendingSenderKeyEntriesForHello(sender, deviceId);
+    for (const [pendingKey, pending] of pendingEntries) {
+      if (!this.pendingSenderKeys.has(pendingKey)) continue;
       this.pendingSenderKeys.delete(pendingKey);
       try {
         await this.handleSenderKeySignal(sender, pending);
@@ -425,6 +485,7 @@ export class MediaSecuritySession {
       participantSetHash,
     });
     this.participantSetHash = participantSetHash;
+    this.rememberParticipantSetHash(participantSetHash);
     if (
       asString(peer.participantSetHash) !== participantSetHash
       || asString(peer.transcriptHash) !== transcriptHash
@@ -460,6 +521,7 @@ export class MediaSecuritySession {
         media_suite: MEDIA_SUITE,
         kex_transcript_hash: transcriptHash,
         participant_set_hash: participantSetHash,
+        participant_set_revision: this.participantSetRevision,
         rekey_reason: this.lastRekeyReason,
         nonce: bytesToBase64Url(nonce),
         encrypted_key: bytesToBase64Url(new Uint8Array(encryptedKey)),
@@ -468,6 +530,7 @@ export class MediaSecuritySession {
   }
 
   async handleSenderKeySignal(senderUserId, payload = {}) {
+    this.lastSenderKeySignalResult = 'ignored';
     if (!(await this.ensureReady())) return false;
     const sender = normalizeUserId(senderUserId);
     if (sender <= 0 || sender === this.userId) return false;
@@ -477,12 +540,13 @@ export class MediaSecuritySession {
     const deviceContext = senderDeviceId !== '' ? devices.get(senderDeviceId) : null;
     const keyContext = deviceContext || (senderDeviceId === '' ? peer : null);
     if (!keyContext?.wrappingKey) {
-      this.pendingSenderKeys.set(this.pendingSenderKeyMapKey(sender, senderDeviceId), payload);
+      this.rememberPendingSenderKey(sender, payload);
       return false;
     }
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
     if (payloadKexSuite === '' || payloadKexSuite !== keyContext.kexSuite || payload.media_suite !== MEDIA_SUITE) {
+      this.lastSenderKeySignalResult = 'rejected';
       throw new Error('KEX/media suite downgrade attempt detected (downgrade_attempt)');
     }
     const participantSetHash = await this.participantHashForPeer(sender);
@@ -497,20 +561,55 @@ export class MediaSecuritySession {
       participantSetHash,
     });
     this.participantSetHash = participantSetHash;
-    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('participant_set_mismatch');
-    if (asString(payload.kex_transcript_hash) !== transcriptHash) throw new Error('downgrade_attempt');
+    this.rememberParticipantSetHash(participantSetHash);
+    const payloadParticipantSetHash = asString(payload.participant_set_hash);
+    if (payloadParticipantSetHash !== participantSetHash) {
+      if (this.knownParticipantSetHashes.has(payloadParticipantSetHash)) {
+        this.lastSenderKeySignalResult = 'stale_participant_set';
+      } else {
+        this.rememberPendingSenderKey(sender, payload);
+        this.lastSenderKeySignalResult = 'future_participant_set_pending';
+      }
+      return false;
+    }
+    if (asString(payload.kex_transcript_hash) !== transcriptHash) {
+      this.lastSenderKeySignalResult = 'rejected';
+      throw new Error('downgrade_attempt');
+    }
     if (
       asString(keyContext.participantSetHash) !== participantSetHash
       || asString(keyContext.transcriptHash) !== transcriptHash
     ) {
-      this.pendingSenderKeys.set(this.pendingSenderKeyMapKey(sender, senderDeviceId), payload);
+      this.rememberPendingSenderKey(sender, payload);
       return false;
     }
 
     const epoch = Number(payload.epoch || 0);
     const senderKeyId = asString(payload.sender_key_id);
-    if (epoch < 1) throw new Error('invalid_epoch');
-    if (senderKeyId === '') throw new Error('missing_sender_key_id');
+    if (epoch < 1) {
+      this.lastSenderKeySignalResult = 'rejected';
+      throw new Error('invalid_epoch');
+    }
+    if (senderKeyId === '') {
+      this.lastSenderKeySignalResult = 'rejected';
+      throw new Error('missing_sender_key_id');
+    }
+    const senderKeyIdentity = this.senderKeyIdentityKey({
+      senderUserId: sender,
+      targetUserId: this.userId,
+      deviceId: senderDeviceId,
+      participantSetHash,
+      participantSetRevision: payload.participant_set_revision,
+      epoch,
+      senderKeyId,
+    });
+    const receiverKeyId = `${epoch}:${senderKeyId}`;
+    const existingReceiverKeys = peer?.receiverKeys instanceof Map ? peer.receiverKeys : new Map();
+    if (this.acceptedSenderKeys.has(senderKeyIdentity) && existingReceiverKeys.has(receiverKeyId)) {
+      this.pendingSenderKeys.delete(senderKeyIdentity);
+      this.lastSenderKeySignalResult = 'duplicate_accepted';
+      return true;
+    }
 
     const subtle = subtleCrypto();
     const nonce = base64UrlToBytes(payload.nonce);
@@ -527,10 +626,16 @@ export class MediaSecuritySession {
       participantSetHash,
       rekeyReason: asString(payload.rekey_reason) || 'sender_key',
     });
-    const mediaKeyBytes = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, keyContext.wrappingKey, encryptedKey);
+    let mediaKeyBytes;
+    try {
+      mediaKeyBytes = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, keyContext.wrappingKey, encryptedKey);
+    } catch (error) {
+      this.lastSenderKeySignalResult = 'rejected';
+      throw error;
+    }
     const receiverKey = await subtle.importKey('raw', mediaKeyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-    const receiverKeys = peer?.receiverKeys instanceof Map ? new Map(peer.receiverKeys) : new Map();
-    receiverKeys.set(`${epoch}:${senderKeyId}`, receiverKey);
+    const receiverKeys = new Map(existingReceiverKeys);
+    receiverKeys.set(receiverKeyId, receiverKey);
     const nextDevices = peer?.devices instanceof Map ? new Map(peer.devices) : new Map();
     if (senderDeviceId !== '') {
       nextDevices.set(senderDeviceId, {
@@ -552,8 +657,11 @@ export class MediaSecuritySession {
       participantSetHash,
       devices: nextDevices,
     });
+    this.acceptedSenderKeys.add(senderKeyIdentity);
+    this.pendingSenderKeys.delete(senderKeyIdentity);
     this.selectedKexSuite = payloadKexSuite;
     this.state = ACTIVE_STATE;
+    this.lastSenderKeySignalResult = 'accepted';
     return true;
   }
 
@@ -570,6 +678,7 @@ export class MediaSecuritySession {
     }
     const changed = this.participantSignature !== nextSignature;
     this.participantSignature = nextSignature;
+    if (changed) this.participantSetRevision += 1;
     return { changed, userIds: normalized };
   }
 
@@ -631,6 +740,10 @@ export class MediaSecuritySession {
       epoch: this.epoch,
       rekey_reason: this.lastRekeyReason,
       participant_set_hash: this.participantSetHash,
+      participant_set_revision: this.participantSetRevision,
+      sender_key_signal_result: this.lastSenderKeySignalResult,
+      pending_sender_key_count: this.pendingSenderKeys.size,
+      accepted_sender_key_count: this.acceptedSenderKeys.size,
     };
   }
 
@@ -642,7 +755,10 @@ export class MediaSecuritySession {
       if (key.startsWith(`${normalized}:`)) this.replayBySenderEpoch.delete(key);
     }
     for (const key of Array.from(this.pendingSenderKeys.keys())) {
-      if (String(key).startsWith(`${normalized}:`)) this.pendingSenderKeys.delete(key);
+      if (this.senderKeyIdentityMatchesSender(key, normalized)) this.pendingSenderKeys.delete(key);
+    }
+    for (const key of Array.from(this.acceptedSenderKeys.keys())) {
+      if (this.senderKeyIdentityMatchesSender(key, normalized)) this.acceptedSenderKeys.delete(key);
     }
   }
 
