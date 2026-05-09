@@ -375,8 +375,24 @@ if [ ! -d "\${VIDEOCHAT_DIR}" ]; then
   exit 0
 fi
 cd "\${VIDEOCHAT_DIR}"
+SANITIZED_ENV_FILE="\$(mktemp)"
+trap 'rm -f "\${SANITIZED_ENV_FILE}"' EXIT
+if [ -f .env.local ]; then
+  while IFS= read -r env_line || [ -n "\${env_line}" ]; do
+    case "\${env_line}" in
+      ''|\#*) continue ;;
+    esac
+    env_key="\${env_line%%=*}"
+    env_key="\${env_key#export }"
+    env_key="\${env_key%%[[:space:]]*}"
+    case "\${env_key}" in
+      *TOKEN*|*SECRET*|*PASSWORD*|*PASS*|*KEY*|*CREDENTIAL*|*COOKIE*|*SESSION*|*HCLOUD*) continue ;;
+      VIDEOCHAT_*|VITE_VIDEOCHAT_*|DEPLOY_*|COMPOSE_*|OTEL_*) printf '%s\n' "\${env_line}" >> "\${SANITIZED_ENV_FILE}" ;;
+    esac
+  done < .env.local
+fi
 if [ -f docker-compose.deploy.local.yml ]; then
-  COMPOSE=(docker compose --env-file .env --env-file .env.local -f docker-compose.v1.yml -f docker-compose.deploy.local.yml --profile edge --profile turn)
+  COMPOSE=(docker compose --env-file .env --env-file "\${SANITIZED_ENV_FILE}" -f docker-compose.v1.yml -f docker-compose.deploy.local.yml --profile edge --profile turn)
 elif [ -f docker-compose.v1.yml ]; then
   COMPOSE=(docker compose --env-file .env -f docker-compose.v1.yml --profile edge --profile turn)
 else

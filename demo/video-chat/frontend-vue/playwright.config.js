@@ -26,6 +26,27 @@ function productionOrigin({ originEnv, domainEnv, protocol, subdomain }) {
   return `${protocol}://${domain}`;
 }
 
+function assertNonLoopbackProductionOrigin(label, origin, expectedProtocols) {
+  let parsed;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    throw new Error(`[playwright-production-smoke] ${label} must be an absolute production origin: ${origin}`);
+  }
+  const protocols = Array.isArray(expectedProtocols) ? expectedProtocols : [expectedProtocols];
+  if (!protocols.includes(parsed.protocol)) {
+    throw new Error(`[playwright-production-smoke] ${label} must use ${protocols.join(' or ')}: ${origin}`);
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '0.0.0.0'
+    || hostname === '::1'
+    || hostname.endsWith('.localhost')) {
+    throw new Error(`[playwright-production-smoke] ${label} must not use a loopback origin in production smoke: ${origin}`);
+  }
+}
+
 function configureProductionOrigins() {
   const baseURL = withoutTrailingSlash(
     process.env.PLAYWRIGHT_PRODUCTION_BASE_URL
@@ -54,6 +75,10 @@ function configureProductionOrigins() {
       subdomain: 'ws',
     }),
   };
+  assertNonLoopbackProductionOrigin('baseURL', origins.baseURL, 'https:');
+  assertNonLoopbackProductionOrigin('backendOrigin', origins.backendOrigin, 'https:');
+  assertNonLoopbackProductionOrigin('sfuOrigin', origins.sfuOrigin, 'wss:');
+  assertNonLoopbackProductionOrigin('wsOrigin', origins.wsOrigin, 'wss:');
   process.env.PLAYWRIGHT_PRODUCTION_BASE_URL ||= origins.baseURL;
   process.env.VIDEOCHAT_ONLINE_BASE_URL ||= origins.baseURL;
   process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN ||= origins.backendOrigin;

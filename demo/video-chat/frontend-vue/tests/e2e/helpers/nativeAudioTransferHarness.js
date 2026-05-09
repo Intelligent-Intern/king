@@ -273,7 +273,7 @@ export async function installOutgoingVideoQualityPreference(context, profile = '
       video_id: 'king-video',
       audio_id: 'king-audio',
       outgoing_video_quality_profile: qualityProfile,
-      outgoing_video_quality_profile_version: 3,
+      outgoing_video_quality_profile_version: 5,
     }));
   }, {
     key: 'ii.videocall.preview_prefs.v1',
@@ -422,13 +422,21 @@ export async function sfuRemoteVideoSnapshot(page) {
 export async function sfuSocketStats(page) {
   return page.evaluate(() => {
     const events = Array.isArray(window.__kingNativeAudioSocketEvents) ? window.__kingNativeAudioSocketEvents : [];
-    const sfuEvents = events.filter((event) => String(event?.url || '').includes('/sfu'));
+    const isSfuUrl = (url) => {
+      try {
+        const parsed = new URL(String(url || ''), window.location.origin);
+        return parsed.hostname.toLowerCase().startsWith('sfu.') || parsed.pathname.replace(/\/+$/, '') === '/sfu';
+      } catch {
+        return false;
+      }
+    };
+    const sfuEvents = events.filter((event) => isSfuUrl(event?.url));
     const binaryIn = sfuEvents.filter((event) => event?.direction === 'in' && event?.frame?.type === '__binary__');
     const binaryOut = sfuEvents.filter((event) => event?.direction === 'out' && event?.frame?.type === '__binary__');
     const maxBinaryOutBytes = binaryOut.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
     const maxBinaryInBytes = binaryIn.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
     const sfuSockets = Array.from(window.__kingNativeAudioSockets || [])
-      .filter((socket) => String(socket?.url || socket?.__kingNativeAudioUrl || '').includes('/sfu'));
+      .filter((socket) => isSfuUrl(socket?.url || socket?.__kingNativeAudioUrl));
     const socketFailures = sfuEvents.filter((event) => event?.direction === 'state'
       && (event?.frame?.type === '__socket_error__' || event?.frame?.type === '__socket_close__'));
     const maxBufferedAmountAfterSend = sfuEvents.reduce((max, event) => Math.max(max, Number(event?.bufferedAmountAfter || 0)), 0);
