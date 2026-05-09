@@ -15,6 +15,7 @@ import {
   installCallAccessFakeRealtime,
   installCallAccessMediaDeviceShim,
 } from './helpers/callAccessSeedRuntime.js';
+import './call-access-calendar-unregistered-main-journey.testcase.js';
 
 function escapeRegExp(input) {
   return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
