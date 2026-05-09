@@ -445,6 +445,32 @@ Tickets:
     post-stabilization logs after deploy `20260509072151` had no fresh
     reconnect/SFU error matches.
 
+- [x] CWS-09 Running call stability hotfix
+  - Prevent foreground recovery from blindly recycling a healthy realtime
+    websocket and SFU socket after true background/foreground transitions. If
+    the socket, room snapshot, and SFU client are healthy, foreground recovery
+    now requests a fresh room snapshot only.
+  - Preserve hard recovery for real failures: missing room sync reconnects the
+    realtime socket, and an unhealthy SFU client is recycled without touching a
+    healthy realtime socket.
+  - Fix the live remote-video freeze loop where `sfu_remote_video_frozen`
+    exhausted targeted ladder recovery but the hard reconnect was still blocked
+    as `lane=data`. After ladder recovery fails, that specific freeze path now
+    passes an explicit force-reconnect reason for the SFU socket.
+  - Live mitigation: operationally restarted `videochat-backend-sfu-v1` once
+    for the running call `ba3779f5-25a3-479f-874d-831903abdc63`, then deployed
+    the code fix as asset `20260509112528`.
+  - Proof: `npm run test:contract:foreground-reconnect`,
+    `npm run test:contract:realtime-reconnect-browser`,
+    `node tests/contract/sfu-video-recovery-timing-contract.mjs`,
+    `npm run build`, and `git diff --check` PASS. Public `prod-debug.sh`,
+    public deploy smoke with remote/admin writes skipped, remote bundle grep
+    for `remote_video_frozen_after_ladder` and `snapshot_only`, and remote
+    compose status PASS. The clean post-stabilization log window after
+    `2026-05-09T11:27:30Z` had no `sfu_remote_video_frozen`,
+    `sfu_video_reconnect_blocked`, RTCDataChannel queue-full, fatal/error, or
+    HTTP 50x matches. No push, DNS, or certbot work was run.
+
 - [x] CWS-07 Deploy and post-deploy proof
   - Run focused contracts, browser screenshots/smoke for desktop and mobile
     responsive states, build, and deploy.

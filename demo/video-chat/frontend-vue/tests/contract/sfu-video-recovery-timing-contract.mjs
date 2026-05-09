@@ -46,6 +46,8 @@ try {
 
   requireContains(runtimeHealth, "setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);", 'remote recovery status update');
   requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_frozen', nowMs", 'frozen video targets publisher recovery ladder before reconnect');
+  requireContains(runtimeHealth, "force_reconnect_reason: 'remote_video_frozen_after_ladder'", 'frozen video hard restart bypasses data-lane carrier gating only after ladder recovery fails');
+  requireContains(runtimeHealth, "}, nowMs, { forceReconnect: true })", 'frozen video hard restart passes an explicit force reconnect option');
   requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs", 'fresh receive/keyframe-wait targets publisher recovery ladder before reconnect');
   requireContains(runtimeHealth, 'resubscribe: (targetPublisherId, recoveryReason, recoveryNowMs) => retrySfuSubscription(', 'publisher recovery ladder starts with resubscribe retry');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
