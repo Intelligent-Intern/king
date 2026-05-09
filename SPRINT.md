@@ -175,7 +175,7 @@ Tickets:
     Call App backend modules, and `git diff --check` PASS locally. No deploy,
     push, DNS, certbot, Background, Gossip, or SFU work was run in this loop.
 
-- [ ] OCA-07 Remove active Call App from a call
+- [x] OCA-07 Remove active Call App from a call
   - Add a clear owner/moderator-only remove action for the active Call App in
     the Call Apps sidebar.
   - Use the existing backend-backed session lifecycle instead of local-only UI
@@ -185,6 +185,14 @@ Tickets:
     broadcast snapshot path; no manual reload or refresh button.
   - Add focused frontend/backend contract proof that attach, remove, and
     removed-session launch denial stay wired.
+  - Proof: Call Apps sidebar now exposes an owner/moderator-only `Remove from
+    call` action for the active session, calls
+    `DELETE /api/call-app-sessions/{session_id}`, emits `session-removed`,
+    requests a fresh room snapshot, and has `WorkspaceShell` leave
+    `call_app_workspace` immediately while backend snapshot backfill clears the
+    authoritative session. `call-app-sidebar-contract`, `npm run build`,
+    `npm run test:contract:call-apps`, `npm run test:contract:call-apps:sqlite`,
+    and `git diff --check` PASS locally.
 
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 

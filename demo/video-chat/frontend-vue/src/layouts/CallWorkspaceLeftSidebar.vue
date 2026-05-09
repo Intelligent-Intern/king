@@ -67,6 +67,7 @@
         :send-socket-frame="callAppSidebarSendSocketFrame"
         :request-room-snapshot="callAppSidebarRequestRoomSnapshot"
         @session-created="$emit('call-app-session-created', $event)"
+        @session-removed="$emit('call-app-session-removed', $event)"
       />
 
       <div
@@ -368,6 +369,7 @@ defineEmits([
   'apply-layout-mode',
   'apply-layout-strategy',
   'call-app-session-created',
+  'call-app-session-removed',
 ]);
 
 const activeSidebarCallId = computed(() => props.activeSidebarCallId);
