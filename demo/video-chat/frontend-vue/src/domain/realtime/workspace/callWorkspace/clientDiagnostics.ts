@@ -1,4 +1,7 @@
-import { configureClientDiagnostics } from '../../../../support/clientDiagnostics';
+import {
+  configureClientDiagnostics,
+  dispatchClientDiagnosticWindowEvent,
+} from '../../../../support/clientDiagnostics';
 
 function extractDiagnosticMessage(value, fallback = 'Client diagnostics event captured.') {
   if (value instanceof Error) {
@@ -30,6 +33,19 @@ export function createClientDiagnosticCapturer({
     immediate = false,
   } = {}) {
     if (String(eventType || '').trim() === '') return;
+    dispatchClientDiagnosticWindowEvent({
+      category,
+      level,
+      event_type: eventType,
+      code,
+      message,
+      call_id: getCallId(),
+      room_id: getRoomId(),
+      payload,
+      repeat_count: 1,
+      client_time: new Date().toISOString(),
+      timestamp_unix_ms: Date.now(),
+    });
     reportClientDiagnostic({
       category,
       level,

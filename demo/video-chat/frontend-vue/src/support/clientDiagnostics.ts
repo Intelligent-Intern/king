@@ -7,6 +7,7 @@ const DIAGNOSTICS_MAX_QUEUE = 60;
 const DIAGNOSTICS_MAX_BATCH = 12;
 const DIAGNOSTICS_FLUSH_INTERVAL_MS = 30000;
 const DIAGNOSTICS_MAX_REPEAT_COUNT = 9999;
+export const CLIENT_DIAGNOSTIC_WINDOW_EVENT = 'king:client-diagnostic';
 
 let diagnosticsContextProvider = null;
 let diagnosticsQueue = loadPersistedDiagnosticsQueue();
@@ -97,6 +98,45 @@ function normalizePayloadObject(value) {
     truncated: true,
     preview: normalizeString(encoded, '', 2000),
   };
+}
+
+function redactClientDiagnosticWindowPayload(value, depth = 0) {
+  if (depth >= 4) return '[depth_limited]';
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (typeof value === 'string') return normalizeString(value, '', 1200);
+  if (Array.isArray(value)) return value.slice(0, 48).map((entry) => redactClientDiagnosticWindowPayload(entry, depth + 1));
+  if (value && typeof value === 'object') {
+    const normalized = {};
+    let count = 0;
+    for (const [key, entry] of Object.entries(value)) {
+      if (count >= 64) {
+        normalized.__truncated__ = true;
+        break;
+      }
+      const normalizedKey = normalizeString(key, 'key', 80);
+      normalized[normalizedKey] = /token|authorization|password|secret|credential|cookie|session/i.test(normalizedKey)
+        ? '[redacted]'
+        : redactClientDiagnosticWindowPayload(entry, depth + 1);
+      count += 1;
+    }
+    return normalized;
+  }
+  return normalizeString(value, '', 400);
+}
+
+export function dispatchClientDiagnosticWindowEvent(entry, repeated = false) {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  try {
+    window.dispatchEvent(new CustomEvent(CLIENT_DIAGNOSTIC_WINDOW_EVENT, {
+      detail: {
+        ...entry,
+        repeated,
+        payload: redactClientDiagnosticWindowPayload(entry.payload),
+      },
+    }));
+  } catch {
+    // Diagnostics observers must never break diagnostic persistence.
+  }
 }
 
 function formatConsoleDiagnosticArg(value) {
@@ -379,6 +419,7 @@ export function reportClientDiagnostic({
     queued.client_time = entry.client_time;
     queued.timestamp_unix_ms = entry.timestamp_unix_ms;
     queued.payload = entry.payload;
+    dispatchClientDiagnosticWindowEvent(queued, true);
     persistDiagnosticsQueue();
     if (immediate) {
       scheduleDiagnosticsFlush(100);
@@ -389,10 +430,12 @@ export function reportClientDiagnostic({
   }
 
   if (diagnosticsSentFingerprints.has(fingerprint)) {
+    dispatchClientDiagnosticWindowEvent(entry, true);
     return null;
   }
 
   diagnosticsQueue.push(entry);
+  dispatchClientDiagnosticWindowEvent(entry, false);
   if (diagnosticsQueue.length > DIAGNOSTICS_MAX_QUEUE) {
     diagnosticsQueue.splice(0, diagnosticsQueue.length - DIAGNOSTICS_MAX_QUEUE);
   }
