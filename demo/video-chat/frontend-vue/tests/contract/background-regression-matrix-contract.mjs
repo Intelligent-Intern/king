@@ -188,10 +188,10 @@ function assertBrowserMatrixEvidence(fixture) {
   const evidence = fixture.browser_matrix_evidence;
 
   assert.ok(status && typeof status === 'object', 'browser matrix evidence status must be present');
-  assert.equal(status.bgf_01_status, 'open', 'BGF-01 must stay open until Firefox evidence exists');
-  assert.ok(status.reason.includes('Firefox'), 'open BGF-01 evidence status must name the missing Firefox capture');
-  assert.deepEqual(status.captured_browsers, ['Chrome Stable', 'Chromium Ubuntu']);
-  assert.deepEqual(status.missing_browsers, ['Firefox']);
+  assert.equal(status.bgf_01_status, 'closed', 'BGF-01 may close only when all required browser evidence exists');
+  assert.ok(status.reason.includes('Firefox'), 'closed BGF-01 evidence status must name the Firefox capture');
+  assert.deepEqual(status.captured_browsers, requiredBrowsers);
+  assert.deepEqual(status.missing_browsers, []);
   assert.equal(status.capture_script, 'tests/e2e/background-regression-capture.mjs');
   assertNonBlankString(status.capture_mode, 'browser matrix evidence capture mode');
 
@@ -204,7 +204,7 @@ function assertBrowserMatrixEvidence(fixture) {
 
   const missing = requiredBrowsers.filter((browser) => !status.captured_browsers.includes(browser));
   assert.deepEqual(missing, status.missing_browsers, 'evidence status must honestly list missing required browsers');
-  assert.ok(!evidence.some((entry) => entry.browser === 'Firefox'), 'Firefox evidence must not be faked');
+  assert.ok(evidence.some((entry) => entry.browser === 'Firefox'), 'Firefox evidence must be recorded before BGF-01 closes');
 
   for (const entry of evidence) {
     assert.ok(requiredByBrowser.has(entry.browser), `${entry.browser} must be in the required browser matrix`);

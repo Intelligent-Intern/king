@@ -271,15 +271,14 @@
     }
   ],
   "browser_matrix_evidence_status": {
-    "bgf_01_status": "open",
-    "reason": "Firefox capture evidence is still missing; Chromium-only evidence must not close BGF-01.",
+    "bgf_01_status": "closed",
+    "reason": "Chrome Stable, Chromium Ubuntu, and Playwright Firefox capture evidence are recorded.",
     "captured_browsers": [
       "Chrome Stable",
-      "Chromium Ubuntu"
-    ],
-    "missing_browsers": [
+      "Chromium Ubuntu",
       "Firefox"
     ],
+    "missing_browsers": [],
     "capture_script": "tests/e2e/background-regression-capture.mjs",
     "capture_mode": "local_vite_no_write_sample_frames_12"
   },
@@ -376,6 +375,56 @@
             "segment_result_count": 4,
             "segment_error_count": 0,
             "matte_bitmap_count": 4,
+            "matte_values_count": 0
+          }
+        },
+        "king_production_background_stream": {
+          "status": "ok",
+          "selected_backend": "worker-segmenter",
+          "active": true,
+          "reason": "ok",
+          "mode": "blur",
+          "unavailable_callbacks_count": 0,
+          "diagnostics_count": 2
+        }
+      }
+    },
+    {
+      "schema_version": "king.bgf.browser_regression_capture.v1",
+      "browser": "Firefox",
+      "browser_engine": "firefox",
+      "browser_family": "firefox",
+      "version": "148.0.2",
+      "os": "Linux 6.8.0-111-generic x64",
+      "captured_at": "2026-05-09T06:35:33.623Z",
+      "capture_command": "node tests/e2e/background-regression-capture.mjs --browser=firefox --label=\"Firefox\" --no-write --timeout-ms=45000 --sample-frames=12",
+      "gpu_availability": "webgl2",
+      "model_source": "same_origin_static",
+      "selected_backend": "worker-segmenter",
+      "mediapipe_gpu_result": "init_ok",
+      "mediapipe_cpu_result": "init_ok",
+      "cpu_delegate_gpu_touch": {
+        "observed": false,
+        "gpu_touch_signatures": [],
+        "console_signatures": []
+      },
+      "console_signatures": [],
+      "path_results": {
+        "mediapipe_worker_direct": {
+          "gpu": {
+            "status": "init_ok",
+            "selected_backend": "worker-segmenter",
+            "segment_result_count": 2,
+            "segment_error_count": 0,
+            "matte_bitmap_count": 2,
+            "matte_values_count": 0
+          },
+          "cpu": {
+            "status": "init_ok",
+            "selected_backend": "worker-segmenter",
+            "segment_result_count": 0,
+            "segment_error_count": 0,
+            "matte_bitmap_count": 0,
             "matte_values_count": 0
           }
         },
