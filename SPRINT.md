@@ -1927,6 +1927,14 @@ temporary account-binding rejoin safety. `npx playwright test
 tests/e2e/call-access-rejoin-kick-membership.spec.js --workers=1
 --reporter=list` passed 6 tests, including browser refresh, same-context tab
 close/reopen, and network reconnect.
+Browser proof: `call-access-authorized-rejoin.spec.js` now covers explicit leave
+and same-session rejoin for a registered guest-list user, a system admin, and an
+own-organization admin through `/workspace/call/:id`, including the expected
+direct-join source, fresh websocket snapshot, preserved session token, and
+moderation state. `npx playwright test
+tests/e2e/call-access-authorized-rejoin.spec.js
+tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
+35 tests.
 
 ## 13. Temporary Moderators
 
