@@ -90,8 +90,8 @@ assert.match(
 
 assert.match(
   whiteboardSource,
-  /document\.querySelectorAll\('\[data-tool\], \.swatch, #width, #undo, #redo'\)[\s\S]*element\.disabled = !canAppend\(\)/,
-  'viewer mode must disable drawing controls in the iframe',
+  /document\.querySelectorAll\('\[data-tool\], \.swatch, #width, #undo, #redo'\)[\s\S]*element\.disabled = tool === 'delete' \? !canDelete\(\) : !canAppend\(\)/,
+  'viewer mode must disable drawing controls and gate delete separately in the iframe',
 );
 
 assert.match(
