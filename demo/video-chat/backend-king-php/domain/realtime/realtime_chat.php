@@ -36,6 +36,47 @@ function videochat_chat_max_bytes(): int
     return $configured;
 }
 
+function videochat_chat_operator_feedback_truthy(mixed $value): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value)) {
+        return $value === 1;
+    }
+    if (is_string($value)) {
+        return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on', 'operator'], true);
+    }
+
+    return false;
+}
+
+function videochat_chat_operator_feedback_requested_from_payload(array $payload): bool
+{
+    foreach (['operator_feedback', 'operatorFeedback', 'feedback_operator', 'send_to_operator'] as $key) {
+        if (array_key_exists($key, $payload) && videochat_chat_operator_feedback_truthy($payload[$key])) {
+            return true;
+        }
+    }
+
+    foreach (['feedback', 'metadata'] as $containerKey) {
+        $container = $payload[$containerKey] ?? null;
+        if (!is_array($container)) {
+            continue;
+        }
+        foreach (['operator', 'operator_feedback', 'operatorFeedback'] as $key) {
+            if (array_key_exists($key, $container) && videochat_chat_operator_feedback_truthy($container[$key])) {
+                return true;
+            }
+        }
+        if (strtolower(trim((string) ($container['type'] ?? ''))) === 'operator') {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function videochat_chat_message_length(string $message): int
 {
     if (function_exists('mb_strlen')) {
@@ -240,6 +281,7 @@ function videochat_chat_deliver_payload(
  *   message: string,
  *   attachments: array<int, string>,
  *   client_message_id: ?string,
+ *   operator_feedback: bool,
  *   error: string
  * }
  */
@@ -253,6 +295,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => false,
             'error' => 'invalid_json',
         ];
     }
@@ -265,6 +308,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => false,
             'error' => 'missing_type',
         ];
     }
@@ -276,10 +320,12 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => false,
             'error' => 'unsupported_type',
         ];
     }
 
+    $operatorFeedback = videochat_chat_operator_feedback_requested_from_payload($decoded);
     $rawMessage = is_string($decoded['message'] ?? null) ? (string) $decoded['message'] : '';
     $message = trim($rawMessage);
     $attachments = videochat_chat_decode_attachment_refs($decoded['attachments'] ?? null);
@@ -290,6 +336,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => $operatorFeedback,
             'error' => (string) ($attachments['error'] ?? 'invalid_attachment_refs'),
         ];
     }
@@ -302,6 +349,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => $operatorFeedback,
             'error' => 'empty_message',
         ];
     }
@@ -313,6 +361,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => $operatorFeedback,
             'error' => 'chat_inline_too_large',
         ];
     }
@@ -324,6 +373,7 @@ function videochat_chat_decode_client_frame(string $frame): array
             'message' => '',
             'attachments' => [],
             'client_message_id' => null,
+            'operator_feedback' => $operatorFeedback,
             'error' => 'chat_inline_too_large',
         ];
     }
@@ -339,6 +389,7 @@ function videochat_chat_decode_client_frame(string $frame): array
                     'message' => '',
                     'attachments' => [],
                     'client_message_id' => null,
+                    'operator_feedback' => $operatorFeedback,
                     'error' => 'invalid_client_message_id',
                 ];
             }
@@ -352,6 +403,7 @@ function videochat_chat_decode_client_frame(string $frame): array
         'message' => $message,
         'attachments' => $attachmentIds,
         'client_message_id' => $clientMessageId,
+        'operator_feedback' => $operatorFeedback,
         'error' => '',
     ];
 }
