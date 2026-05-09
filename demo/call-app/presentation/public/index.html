@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="presentation">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Presentation Call App</title>
+    <link rel="stylesheet" href="./presentation.css">
+  </head>
+  <body>
+    <main class="presentation-app">
+      <header class="presentation-toolbar" aria-label="Presentation tools">
+        <button id="addSlide" type="button">Add slide</button>
+        <button id="deleteSlide" type="button">Delete slide</button>
+        <button id="addRect" type="button">Rect</button>
+        <button id="addEllipse" type="button">Circle</button>
+        <button id="addImagePlaceholder" type="button">Image</button>
+        <button id="deleteObject" type="button">Delete object</button>
+        <button id="presentToggle" type="button">Present</button>
+        <button id="prevSlide" type="button">Prev</button>
+        <button id="nextSlide" type="button">Next</button>
+        <button id="exportPptx" type="button">PPTX</button>
+        <span id="modeBadge" class="mode-badge">Waiting</span>
+      </header>
+
+      <section class="presentation-shell">
+        <aside class="slide-thumbnails" aria-label="Slide thumbnails">
+          <div id="thumbnailList" class="thumbnail-list"></div>
+        </aside>
+
+        <section class="slide-workspace" aria-label="Slide editor">
+          <div id="slideStage" class="slide-stage">
+            <input id="slideTitle" class="slide-title" maxlength="140" placeholder="Slide title">
+            <textarea id="slideBody" class="slide-body" maxlength="1800" placeholder="Add slide body text"></textarea>
+            <div id="objectLayer" class="object-layer" aria-label="Slide objects"></div>
+          </div>
+        </section>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status">Waiting for Call App launch.</span>
+        <span id="slideMeta">0 ops</span>
+      </footer>
+    </main>
+
+    <script src="./presentation.js"></script>
+  </body>
+</html>
