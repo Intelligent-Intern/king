@@ -43,6 +43,7 @@ try {
   assert.match(dashboard, /connectEnterAdmissionSocket\(\)/, 'user dashboard must reconnect the enter-call admission socket');
 
   const workspace = read(root, 'src/domain/realtime/CallWorkspaceView.vue');
+  const workspaceTemplate = read(root, 'src/domain/realtime/CallWorkspaceView.template.html');
   const workspaceLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
   assert.match(workspace, /attachForegroundReconnectHandlers/, 'workspace must use foreground reconnect helper');
   assert.match(workspace, /function reconnectWorkspaceAfterForeground\(\)/, 'workspace must define foreground reconnect');
@@ -53,6 +54,13 @@ try {
   assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);/, 'workspace background callback remains the only path that arms foreground reconnect');
   assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
   assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
+  assert.match(workspaceTemplate, /class="call-control-btn"[\s\S]*@click="toggleCamera"/, 'call controls must remain ordinary visible click targets covered by focus churn proof');
+  assert.match(workspaceTemplate, /class="workspace-video-fullscreen-overlay"[\s\S]*@click\.stop="closeVideoFullscreen"/, 'fullscreen media overlay clicks must stay local to fullscreen handling');
+  assert.match(workspaceTemplate, /id="workspace-fullscreen-video-slot"[\s\S]*class="workspace-fullscreen-video-slot"[\s\S]*@click\.stop/, 'fullscreen media slot clicks must not bubble into reconnect-sensitive workspace handlers');
+
+  const callAppWorkspaceHost = read(root, 'src/domain/realtime/callApps/CallAppWorkspaceHost.vue');
+  assert.match(callAppWorkspaceHost, /class="call-app-workspace-fullscreen-toggle"[\s\S]*@click\.stop="toggleWorkspaceFullscreen"/, 'Call App fullscreen toggle clicks must stay local to the Call App host');
+  assert.match(callAppWorkspaceHost, /<iframe[\s\S]*class="call-app-workspace-frame"/, 'Call App iframe must stay covered by visible iframe focus churn proof');
 
   const socketLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   assert.match(
@@ -124,11 +132,18 @@ try {
     listeners.get('window:focus')?.({ type: 'focus' });
     assert.deepEqual(events, [], 'visible blur/focus must not arm or run reconnect callbacks');
 
-    listeners.get('window:blur')?.({ type: 'blur', target: { tagName: 'IFRAME' } });
-    listeners.get('window:focus')?.({ type: 'focus', target: { tagName: 'IFRAME' } });
-    listeners.get('window:blur')?.({ type: 'blur', target: { tagName: 'BUTTON' } });
-    listeners.get('window:focus')?.({ type: 'focus', target: { tagName: 'BUTTON' } });
-    assert.deepEqual(events, [], 'visible iframe and call-control focus churn must not arm or run reconnect callbacks');
+    const visibleFocusTargets = [
+      { tagName: 'IFRAME', className: 'call-app-workspace-frame' },
+      { tagName: 'BUTTON', className: 'call-control-btn' },
+      { tagName: 'BUTTON', className: 'call-app-workspace-fullscreen-toggle' },
+      { tagName: 'SECTION', className: 'workspace-video-fullscreen-overlay' },
+      { tagName: 'DIV', className: 'workspace-fullscreen-video-slot' },
+    ];
+    for (const target of visibleFocusTargets) {
+      listeners.get('window:blur')?.({ type: 'blur', target });
+      listeners.get('window:focus')?.({ type: 'focus', target });
+    }
+    assert.deepEqual(events, [], 'visible iframe, call controls, Call App fullscreen, and fullscreen media slot focus churn must not arm or run reconnect callbacks');
 
     documentHarness.visibilityState = 'hidden';
     listeners.get('document:visibilitychange')?.();
