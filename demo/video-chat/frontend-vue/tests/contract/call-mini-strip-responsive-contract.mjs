@@ -23,7 +23,8 @@ const root = path.resolve(__dirname, '../..');
 const view = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
 const template = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.template.html'), 'utf8');
 const participantUi = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.ts'), 'utf8');
-const viewSurface = `${view}\n${template}\n${participantUi}`;
+const compactChrome = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/compactChrome.js'), 'utf8');
+const viewSurface = `${view}\n${template}\n${participantUi}\n${compactChrome}`;
 const stageCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceStage.css'), 'utf8');
 const panelsCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspacePanels.css'), 'utf8');
 
@@ -33,7 +34,7 @@ try {
   assert.match(viewSurface, /@click="toggleCompactMiniStripPlacement"/, 'compact mini strip toggle must switch placement');
   assert.match(
     viewSurface,
-    /const isCompactMiniStripAbove = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& compactMiniStripPlacement\.value === 'above'\s*\)\);/,
+    /const isCompactMiniStripAbove = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& compactMiniStripPlacement\??\.value === 'above'\s*\)\);/,
     'above placement must apply to tablet and mobile compact layouts'
   );
   assert.match(
