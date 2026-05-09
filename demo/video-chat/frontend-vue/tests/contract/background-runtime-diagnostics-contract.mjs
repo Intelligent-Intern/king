@@ -20,6 +20,7 @@ function requireMissing(source, needle, label) {
 
 const diagnostics = read('src/domain/realtime/background/diagnostics/runtimeDiagnostics.js');
 const stream = read('src/domain/realtime/background/stream.ts');
+const featureFlags = read('src/domain/realtime/background/pipeline/featureFlags.js');
 const unavailablePrompt = read('src/domain/realtime/background/unavailablePrompt.ts');
 const modal = read('src/domain/realtime/background/BackgroundReplacementUnavailableModal.vue');
 const worker = read('src/domain/realtime/background/workers/imageSegmenterWorker.js');
@@ -72,8 +73,18 @@ requireContains(stream, 'captureBackgroundBackendInitDiagnostic({', 'stream back
 requireContains(stream, "phase: 'starting'", 'backend init starting phase');
 requireContains(stream, "phase: 'ready'", 'backend init ready phase');
 requireContains(stream, "phase: 'failed'", 'backend init failure phase');
+requireContains(stream, 'shouldForceSegmentationUnavailableForSmoke()', 'smoke-only segmentation unavailable hook');
+requireContains(stream, "enterSegmentationUnavailable('smoke_forced_segmentation_unavailable'", 'smoke hook uses production unavailable path');
+requireContains(stream, 'smoke:${SEGMENTATION_UNAVAILABLE_SMOKE_FLAG}', 'smoke hook diagnostic signature');
 requireContains(stream, 'resolveBackgroundMatteRejection(segmentation)', 'stream matte rejection classifier');
 requireContains(stream, 'captureBackgroundMatteRejectionDiagnostic({', 'stream matte rejection diagnostic emit');
+
+requireContains(featureFlags, "SEGMENTATION_UNAVAILABLE_SMOKE_FLAG = 'bgf07-segmentation-unavailable'", 'named BGF-07 smoke flag');
+requireContains(featureFlags, 'hasNamedSegmentationUnavailableSmokeFlag()', 'named smoke flag guard');
+requireContains(featureFlags, "queryParamValue('kingrt_background_smoke')", 'explicit background smoke query flag');
+requireContains(featureFlags, "queryParamValue('kingrt_background_force_segmentation_unavailable')", 'explicit background force query flag');
+requireContains(featureFlags, 'VITE_VIDEOCHAT_BACKGROUND_SMOKE_FLAG', 'explicit background smoke env flag');
+requireContains(featureFlags, 'VITE_VIDEOCHAT_FORCE_SEGMENTATION_UNAVAILABLE_FOR_SMOKE', 'explicit background force env flag');
 
 requireContains(unavailablePrompt, 'createBackgroundRuntimeDiagnosticPayload({', 'unavailable transition payload helper');
 requireContains(unavailablePrompt, 'shouldEmitBackgroundRuntimeDiagnostic(diagnosticThrottleKey', 'unavailable transition throttle');

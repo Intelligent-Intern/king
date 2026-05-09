@@ -7,7 +7,11 @@ import {
 import { toNumber } from './math';
 import { createBackgroundPipelineController } from './pipeline/controller';
 import { createBackgroundCompositorStage } from './pipeline/compositorStage';
-import { shouldUseReactiveBackgroundPipeline } from './pipeline/featureFlags';
+import {
+  SEGMENTATION_UNAVAILABLE_SMOKE_FLAG,
+  shouldForceSegmentationUnavailableForSmoke,
+  shouldUseReactiveBackgroundPipeline,
+} from './pipeline/featureFlags';
 import { BACKGROUND_PIPELINE_MESSAGE_TYPES } from './pipeline/messages';
 import { createVideoFrameScheduler } from './pipeline/scheduler';
 import { createBackgroundSegmenterStage } from './pipeline/segmenterStage';
@@ -294,6 +298,17 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
 
   async function ensureSegmentationBackend() {
     if (segmentationBackend || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) return segmentationBackend;
+    if (shouldForceSegmentationUnavailableForSmoke()) {
+      captureBackgroundBackendInitDiagnostic({
+        backend: 'none',
+        failures: [`smoke:${SEGMENTATION_UNAVAILABLE_SMOKE_FLAG}`],
+        phase: 'failed',
+      });
+      enterSegmentationUnavailable('smoke_forced_segmentation_unavailable', [
+        `smoke:${SEGMENTATION_UNAVAILABLE_SMOKE_FLAG}`,
+      ]);
+      return null;
+    }
     if (segmentationBackendInitPromise) return segmentationBackendInitPromise;
     const initFailures = [];
     segmentationBackendInitPromise = (async () => {
