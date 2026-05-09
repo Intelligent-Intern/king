@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="spreadsheet">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Spreadsheet Call App</title>
+    <link rel="stylesheet" href="./spreadsheet.css">
+  </head>
+  <body>
+    <main class="spreadsheet-app">
+      <header class="spreadsheet-toolbar" aria-label="Spreadsheet tools">
+        <div class="toolbar-group">
+          <button id="addSheet" type="button">+ Sheet</button>
+          <input id="sheetName" type="text" maxlength="40" aria-label="Sheet name">
+          <button id="renameSheet" type="button">Rename</button>
+          <button id="deleteSheet" type="button">Delete</button>
+        </div>
+        <div class="toolbar-group">
+          <button id="boldFormat" type="button" class="format-button">B</button>
+          <button id="italicFormat" type="button" class="format-button">I</button>
+          <select id="fillFormat" aria-label="Cell fill">
+            <option value="">No fill</option>
+            <option value="#dff2ff">Blue</option>
+            <option value="#e8f7df">Green</option>
+            <option value="#fff1c2">Gold</option>
+            <option value="#ffe2dc">Red</option>
+          </select>
+          <button id="clearRange" type="button">Clear</button>
+        </div>
+        <div class="toolbar-group">
+          <button id="exportCsv" type="button">CSV</button>
+          <button id="exportXml" type="button">SpreadsheetML</button>
+          <span id="modeBadge" class="mode-badge">Waiting</span>
+        </div>
+      </header>
+
+      <section class="formula-bar" aria-label="Formula bar">
+        <input id="nameBox" type="text" readonly aria-label="Selected range">
+        <input id="formulaInput" type="text" spellcheck="false" aria-label="Cell value or formula">
+        <button id="commitEdit" type="button">Apply</button>
+      </section>
+
+      <nav id="sheetTabs" class="sheet-tabs" aria-label="Workbook sheets"></nav>
+
+      <section class="grid-shell" aria-label="Shared spreadsheet grid">
+        <table id="grid" class="grid"></table>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status">Waiting for Call App launch.</span>
+        <span id="clock">0 ops</span>
+      </footer>
+    </main>
+
+    <script src="./spreadsheet.js"></script>
+  </body>
+</html>
