@@ -163,6 +163,15 @@ Tickets:
     container `operator-feedback-contract.php`, `realtime-chat-contract.php`,
     and `chat-archive-contract.php` PASS, PHP syntax checks PASS, and
     `git diff --check` PASS.
+  - Deploy proof: deployed the merged backend/frontend state without push, DNS,
+    or certbot as asset `20260509110628`. Public `prod-debug.sh` confirmed the
+    runtime asset, public deploy smoke passed with remote/admin writes skipped,
+    remote Compose status was healthy, and the backend container loaded
+    `operator_feedback.php` with
+    `videochat_operator_feedback_persist_from_chat_event`. Server-only logs
+    after `2026-05-09T11:08:00Z` had no fatal/error/500 matches. The broader
+    client-diagnostic sweep only found parked SFU carrier and Background WebGL
+    fallback entries, so no SFU/Background changes were included in this deploy.
 
 - [x] OCA-05 Local merge, deploy, and diagnostics proof
   - Merge completed worker branches into the local dev branch only; do not push.
