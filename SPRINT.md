@@ -128,17 +128,15 @@ Acceptance criteria:
   self-hosted call-app manifests that point at a private mothernode.
 
 Tickets:
-- [x] BGF-01 Browser regression matrix and reproducible failure capture
-  - Capture Chrome Stable/Chromium Ubuntu/Firefox behavior for MediaPipe demo
-    and King production paths.
-  - Record exact browser versions, failing console signatures, backend choice,
-    and whether CPU delegation still touches GPU internals.
-  - Add a contract fixture for the known Chrome GPU-service init failure shape.
-  - Proof: `background-regression-matrix-fixture.json` records Chrome Stable
-    `147.0.7727.55`, Chromium Ubuntu `147.0.7727.116`, and Playwright Firefox
-    `148.0.2` captures from `background-regression-capture.mjs`, with exact
-    browser version, OS, GPU availability, backend choice, console signatures,
-    and CPU-delegate GPU-touch status for every required browser.
+- [x] BGF-01 Small fallback policy without brittle browser matrix
+  - Remove the background matrix/capture harness and keep the product behavior
+    simple: if segmentation cannot produce a renderable matte, do not select a
+    weaker segmentation path.
+  - Keep the live source visible during warmup/failure and ask the user for one
+    of the real alternatives: standard avatar, uploaded avatar, or unfiltered
+    video.
+  - Proof: the runtime, fallback, and compositor contracts cover the strict
+    unavailable path without a browser evidence matrix.
 
 - [x] BGF-02 Backend selection ladder with quarantine
   - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
@@ -146,9 +144,10 @@ Tickets:
   - When worker init fails, render the source frame and open the user-choice
     modal instead of silently selecting another matte backend.
   - Ensure backend switching is idempotent and cannot trigger reload loops.
-  - Proof: `background-regression-matrix-contract.mjs` and
-    `background-king-wasm-contract.mjs` pin the worker boundary, idempotent init,
-    source-visible unavailable state, and explicit modal alternatives.
+  - Proof: `background-king-wasm-contract.mjs`,
+    `background-runtime-diagnostics-contract.mjs`, and
+    `background-filter-mask-contract.mjs` pin the worker boundary, idempotent
+    init, source-visible unavailable state, and explicit modal alternatives.
 
 - [x] BGF-03 Matte correctness: hard foreground plus contour smoothing
   - Remove any remaining softmax/sigmoid-style probability blending from the
@@ -193,11 +192,10 @@ Tickets:
 - [x] BGF-06 Runtime diagnostics and field observability
   - Emit throttled diagnostics for backend init, unavailable transition, modal
     choice, and matte rejection.
-  - Include enough local context to debug browser regressions without leaking
+  - Include enough local context to debug browser failures without leaking
     media frames, SDP, ICE, or tokens.
   - Surface concise state in existing diagnostics channels, not new reload UI.
   - Proof: `background-runtime-diagnostics-contract.mjs`,
-    `background-regression-matrix-contract.mjs`,
     `npm run test:contract:background-filter`, and
     `npm run test:contract:client-diagnostics` prove the small fallback
     contract: failed segmentation never selects a weaker matte backend, and the
