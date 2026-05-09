@@ -181,6 +181,16 @@ Tickets:
     `npm run test:e2e:call-app-fullscreen-smoke` with local Google Chrome PASS
     on desktop and mobile before production deploy `20260509072151`.
 
+- [ ] CWS-08 Loop 9 Call App fullscreen participant strip containment
+  - In fullscreen Call App mode, provide a clear hide/show control for the
+    participant strip.
+  - Keep the fullscreen Call App video/content fully contained: no cropping,
+    overflow, or overlap with participant-strip controls.
+  - Support up to 10 participants in a horizontal scrolling strip without
+    shrinking the active fullscreen Call App surface.
+  - Add responsive contract or browser proof for the strip hidden, strip shown,
+    and 10-participant horizontal-scroll states before closing.
+
 - [x] CWS-05 Screenshare as participant fullscreen/zoom surface
   - Treat screenshare as a participant-like media tile in the videocall.
   - Double-clicking its mini video opens fullscreen.
