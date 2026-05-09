@@ -160,7 +160,8 @@ SELECT
     calls.id AS resolved_call_id,
     calls.room_id AS resolved_room_id,
     calls.status AS resolved_call_status,
-    users.email AS resolved_user_email
+    users.email AS resolved_user_email,
+    users.password_hash AS resolved_user_password_hash
 FROM call_access_sessions
 LEFT JOIN call_access_links ON call_access_links.id = call_access_sessions.access_id
 LEFT JOIN calls ON calls.id = call_access_sessions.call_id
@@ -280,11 +281,16 @@ SQL
     $userEmail = videochat_normalize_call_access_email(
         is_string($row['resolved_user_email'] ?? null) ? (string) $row['resolved_user_email'] : null
     );
+    $userAccountType = videochat_user_account_type($userEmail, $row['resolved_user_password_hash'] ?? null);
     if ($linkKind === 'personal') {
         if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId) {
             return $fail('call_access_binding_mismatch');
         }
-        if ($linkParticipantEmail !== '' && $linkParticipantEmail !== $userEmail) {
+        if (
+            $linkParticipantEmail !== ''
+            && $linkParticipantEmail !== $userEmail
+            && $userAccountType !== 'guest'
+        ) {
             return $fail('call_access_binding_mismatch');
         }
     } elseif ($linkParticipantUserId > 0 || $linkParticipantEmail !== '') {
@@ -337,6 +343,26 @@ function videochat_call_access_link_kind(?array $accessLink): string
     }
 
     return 'personal';
+}
+
+function videochat_call_access_requires_guest_name(?array $accessLink, ?array $targetUser = null): bool
+{
+    if (!is_array($accessLink)) {
+        return false;
+    }
+
+    if (videochat_call_access_link_kind($accessLink) === 'open') {
+        return true;
+    }
+
+    $linkedUserId = is_numeric($accessLink['participant_user_id'] ?? null)
+        ? (int) $accessLink['participant_user_id']
+        : 0;
+    $participantEmail = videochat_normalize_call_access_email(
+        is_string($accessLink['participant_email'] ?? null) ? (string) $accessLink['participant_email'] : null
+    );
+
+    return $linkedUserId <= 0 && $participantEmail !== '' && !is_array($targetUser);
 }
 
 function videochat_call_access_participant_invite_state(PDO $pdo, array $accessLink): string

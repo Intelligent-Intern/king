@@ -81,6 +81,8 @@ function videochat_issue_session_for_call_access(
     }
 
     $linkKind = videochat_call_access_link_kind($accessLink);
+    $requiresGuestName = videochat_call_access_requires_guest_name($accessLink, $targetUser);
+    $createdPersonalGuest = false;
     $tenantId = is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null;
     $verifiedUserId = videochat_call_access_session_int_option($options, 'verified_user_id');
     $authenticatedUserId = videochat_call_access_session_int_option($options, 'authenticated_user_id');
@@ -109,7 +111,7 @@ function videochat_issue_session_for_call_access(
             'call' => $call,
         ];
     }
-    if ($linkKind === 'open') {
+    if ($requiresGuestName) {
         $guestName = trim((string) ($options['guest_name'] ?? ''));
         $guestCreate = videochat_create_guest_user_for_call_access($pdo, $guestName, $tenantId);
         if (!(bool) ($guestCreate['ok'] ?? false)) {
@@ -124,6 +126,7 @@ function videochat_issue_session_for_call_access(
             ];
         }
         $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
+        $createdPersonalGuest = $linkKind === 'personal';
     }
 
     if (!is_array($targetUser)) {
@@ -152,7 +155,7 @@ function videochat_issue_session_for_call_access(
         ];
     }
 
-    if ($linkKind === 'personal' && $verifiedUserId > 0 && $verifiedUserId !== $userId) {
+    if ($linkKind === 'personal' && !$createdPersonalGuest && $verifiedUserId > 0 && $verifiedUserId !== $userId) {
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -163,7 +166,7 @@ function videochat_issue_session_for_call_access(
             'call' => $call,
         ];
     }
-    if ($linkKind === 'personal' && $authenticatedUserId > 0 && $authenticatedUserId !== $userId) {
+    if ($linkKind === 'personal' && !$createdPersonalGuest && $authenticatedUserId > 0 && $authenticatedUserId !== $userId) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -178,14 +181,14 @@ function videochat_issue_session_for_call_access(
         ];
     }
 
-    if ($linkKind === 'open') {
+    if ($linkKind === 'open' || $createdPersonalGuest) {
         videochat_ensure_internal_call_participant(
             $pdo,
             (string) ($call['id'] ?? ''),
             $userId,
             (string) ($targetUser['email'] ?? ''),
             (string) ($targetUser['display_name'] ?? ''),
-            'allowed'
+            $linkKind === 'open' ? 'allowed' : 'invited'
         );
     }
 
@@ -394,6 +397,7 @@ SQL
         ],
         'access_link' => is_array($freshLink) ? $freshLink : $accessLink,
         'call' => is_array($freshCall['call'] ?? null) ? $freshCall['call'] : $call,
+        'requires_guest_name' => $requiresGuestName,
     ];
 }
 

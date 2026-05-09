@@ -165,6 +165,7 @@ function videochat_handle_call_access_routes(
                 'call' => $resolveResult['call'] ?? null,
                 'target_user' => $resolveResult['target_user'] ?? null,
                 'target_hint' => $resolveResult['target_hint'] ?? ['participant_email' => null],
+                'requires_guest_name' => (bool) ($resolveResult['requires_guest_name'] ?? false),
                 'join_path' => '/join/' . strtolower(trim($accessId)),
             ],
             'time' => gmdate('c'),
@@ -281,6 +282,7 @@ function videochat_handle_call_access_routes(
                 'link_kind' => videochat_call_access_link_kind(
                     is_array($issueResult['access_link'] ?? null) ? $issueResult['access_link'] : null
                 ),
+                'requires_guest_name' => (bool) ($issueResult['requires_guest_name'] ?? false),
                 'call' => $issueResult['call'] ?? null,
                 'join_path' => '/join/' . strtolower(trim($accessId)),
             ],

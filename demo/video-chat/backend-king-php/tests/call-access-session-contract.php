@@ -219,11 +219,131 @@ SQL
     videochat_call_access_session_assert((string) ($mismatchResolution['pending_room_id'] ?? '') === '', 'access-bound session mismatch should not queue secondary room admission');
     videochat_call_access_session_assert((string) ($mismatchResolution['access_session_binding'] ?? '') === 'mismatch', 'access-bound mismatch should be explicit');
 
+    $externalEmail = 'external-lobby-guest@example.test';
+    $createExternal = videochat_create_call($pdo, $adminUserId, [
+        'title' => 'Call Access External Guest',
+        'starts_at' => '2026-09-03T09:00:00Z',
+        'ends_at' => '2026-09-03T10:00:00Z',
+        'internal_participant_user_ids' => [],
+        'external_participants' => [
+            ['email' => $externalEmail, 'display_name' => 'External Lobby Guest'],
+        ],
+    ]);
+    videochat_call_access_session_assert((bool) ($createExternal['ok'] ?? false), 'external guest call should be created');
+    $externalCallId = (string) (($createExternal['call'] ?? [])['id'] ?? '');
+    videochat_call_access_session_assert($externalCallId !== '', 'external call id should be present');
+    $externalAccess = videochat_create_call_access_link_for_user($pdo, $externalCallId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_email' => $externalEmail,
+    ]);
+    videochat_call_access_session_assert((bool) ($externalAccess['ok'] ?? false), 'external personal access link should be created');
+    $externalAccessId = (string) (($externalAccess['access_link'] ?? [])['id'] ?? '');
+    videochat_call_access_session_assert($externalAccessId !== '', 'external access id should be present');
+
+    $externalJoinResponse = videochat_handle_call_routes(
+        '/api/call-access/' . $externalAccessId . '/join',
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/call-access/' . $externalAccessId . '/join', 'headers' => []],
+        [],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_call_access_session_assert(is_array($externalJoinResponse), 'external join response should be an array');
+    videochat_call_access_session_assert((int) ($externalJoinResponse['status'] ?? 0) === 200, 'external join status should be 200');
+    $externalJoinPayload = videochat_call_access_session_decode($externalJoinResponse);
+    videochat_call_access_session_assert((string) ((($externalJoinPayload['result'] ?? [])['call'] ?? [])['id'] ?? '') === $externalCallId, 'external join call id mismatch');
+    videochat_call_access_session_assert((string) (($externalJoinPayload['result'] ?? [])['link_kind'] ?? '') === 'personal', 'external join must stay personal');
+    videochat_call_access_session_assert((($externalJoinPayload['result'] ?? [])['target_user'] ?? 'sentinel') === null, 'external join must not fabricate target user');
+    videochat_call_access_session_assert((bool) (($externalJoinPayload['result'] ?? [])['requires_guest_name'] ?? false), 'external join must require guest name');
+
+    $externalMissingName = videochat_handle_call_routes(
+        '/api/call-access/' . $externalAccessId . '/session',
+        'POST',
+        [
+            'method' => 'POST',
+            'uri' => '/api/call-access/' . $externalAccessId . '/session',
+            'headers' => [],
+            'remote_address' => '127.0.0.1',
+            'body' => '{}',
+        ],
+        [],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase,
+        static fn (): string => 'sess_call_access_external_missing_name'
+    );
+    videochat_call_access_session_assert(is_array($externalMissingName), 'external missing-name response should be an array');
+    videochat_call_access_session_assert((int) ($externalMissingName['status'] ?? 0) === 422, 'external session without guest name should be rejected');
+
+    $externalSessionId = 'sess_call_access_external_guest_bound';
+    $externalSessionResponse = videochat_handle_call_routes(
+        '/api/call-access/' . $externalAccessId . '/session',
+        'POST',
+        [
+            'method' => 'POST',
+            'uri' => '/api/call-access/' . $externalAccessId . '/session',
+            'headers' => ['User-Agent' => 'call-access-session-contract-external'],
+            'remote_address' => '127.0.0.1',
+            'body' => json_encode(['guest_name' => 'Lobby Guest'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ],
+        [],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase,
+        static fn (): string => $externalSessionId
+    );
+    videochat_call_access_session_assert(is_array($externalSessionResponse), 'external guest session response should be an array');
+    videochat_call_access_session_assert((int) ($externalSessionResponse['status'] ?? 0) === 200, 'external guest session should issue');
+    $externalSessionPayload = videochat_call_access_session_decode($externalSessionResponse);
+    $externalGuestUserId = (int) (((($externalSessionPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0));
+    videochat_call_access_session_assert($externalGuestUserId > 0, 'external guest user id should be present');
+    videochat_call_access_session_assert((bool) (((($externalSessionPayload['result'] ?? [])['user'] ?? [])['is_guest'] ?? false)), 'external guest session user should be marked as guest');
+    videochat_call_access_session_assert((bool) (($externalSessionPayload['result'] ?? [])['requires_guest_name'] ?? false), 'external session payload should retain guest-name contract');
+    $externalBinding = videochat_fetch_call_access_session_binding($pdo, $externalSessionId);
+    videochat_call_access_session_assert(is_array($externalBinding), 'external guest session binding should validate');
+    videochat_call_access_session_assert((string) ($externalBinding['link_kind'] ?? '') === 'personal', 'external binding must stay personal');
+
+    $externalParticipant = $pdo->prepare(
+        <<<'SQL'
+SELECT invite_state, source, call_role
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+LIMIT 1
+SQL
+    );
+    $externalParticipant->execute([
+        ':call_id' => $externalCallId,
+        ':user_id' => $externalGuestUserId,
+    ]);
+    $externalParticipantRow = $externalParticipant->fetch();
+    videochat_call_access_session_assert(is_array($externalParticipantRow), 'external guest should be inserted as internal call participant');
+    videochat_call_access_session_assert((string) ($externalParticipantRow['source'] ?? '') === 'internal', 'external guest participant source mismatch');
+    videochat_call_access_session_assert((string) ($externalParticipantRow['invite_state'] ?? '') === 'invited', 'external guest must wait for lobby admission');
+
+    $externalAuth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . $externalSessionId . '&room=' . $externalCallId . '&call_id=' . $externalCallId,
+            'headers' => ['Authorization' => 'Bearer ' . $externalSessionId],
+        ],
+        'websocket'
+    );
+    videochat_call_access_session_assert((bool) ($externalAuth['ok'] ?? false), 'external guest access session should authenticate for websocket');
+    $externalPendingResolution = videochat_realtime_resolve_connection_rooms($externalAuth, $externalCallId, $openDatabase, $externalCallId);
+    videochat_call_access_session_assert((string) ($externalPendingResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'external guest should start in waiting room');
+    videochat_call_access_session_assert((string) ($externalPendingResolution['pending_room_id'] ?? '') === $externalCallId, 'external guest should wait for bound room admission');
+
     $createOpen = videochat_create_call($pdo, $adminUserId, [
         'title' => 'Call Access Session Open Guest',
         'access_mode' => 'free_for_all',
-        'starts_at' => '2026-09-03T09:00:00Z',
-        'ends_at' => '2026-09-03T10:00:00Z',
+        'starts_at' => '2026-09-04T09:00:00Z',
+        'ends_at' => '2026-09-04T10:00:00Z',
         'internal_participant_user_ids' => [],
         'external_participants' => [],
     ]);
