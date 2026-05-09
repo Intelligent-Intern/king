@@ -87,16 +87,35 @@ Tickets:
 - [x] STAB-08 Build/test locally and commit on
   `prod-kingrt-do-not-push-to-github` without pushing.
   - Local commit: `15988481 Add strict 720p30 call stability policy`.
-- [ ] STAB-09 Deploy without DNS/certbot/push and run post-deploy diagnostics.
+  - Follow-up local commits: `1d0039b5`, `1ea04f1b`, `a74193d6`,
+    `d0ea728c`, `ebc77f2b`.
+- [x] STAB-09 Deploy without DNS/certbot/push and run post-deploy diagnostics.
+  - Final deployed runtime asset: `20260509224830`.
+  - Deploys were run from `prod-kingrt-do-not-push-to-github` without pushing,
+    with `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+    `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, and
+    `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`.
+  - HTTP checks returned 200 for app, API runtime, API health, whiteboard host,
+    and Call Diagnostics manifest/HTML/JS/health descriptor.
+  - Fresh asset-filtered logs for `20260509224830` showed no Error-level client
+    diagnostics, websocket retry loop, Auto-Quality/Profile-Switch recovery,
+    Gossip repair, Background outgoing policy, SFU socket recovery,
+    strict binary-send failures, or stale `call/control-state` publish errors.
 
-Proof so far:
+Proof:
 - `npm run test:contract:strict-720p30`
+- `node tests/contract/sfu-replay-pacing-slow-subscriber-contract.mjs`
+- `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`
+- `node tests/contract/sfu-transport-metrics-contract.mjs`
+- `node tests/contract/media-security-contract.mjs`
 - `node tests/contract/sfu-background-tab-policy-contract.mjs`
 - `node tests/contract/sfu-auto-readback-recovery-contract.mjs`
 - `node tests/contract/sfu-capture-constraints-contract.mjs`
 - `node tests/contract/sfu-profile-switch-actuator-contract.mjs`
 - `node tests/contract/gossip-neighbor-health-repair-contract.mjs`
 - `node tests/contract/gossip-outbound-live-publication-contract.mjs`
+- `node tests/contract/gossip-stale-target-pruning-contract.mjs`
+- `node tests/contract/client-diagnostics-contract.mjs`
 - `npm run test:contract:foreground-reconnect`
 - `npm run build`
 - `npm run test:contract:build-size`
@@ -222,23 +241,27 @@ Tickets:
   - Collect all distinct deploy/runtime errors before preparing a second deploy.
   - Close this ticket only after diagnostics are recorded and no new 500/reload
     loop is visible in the checked path.
-  - `prod-debug.sh` completed read-only with containers up and API runtime
-    asset version `20260509181719`.
-  - Call Diagnostics assets returned 200 for iframe HTML, JS, CSS, manifest,
-    and MCP descriptor on `whiteboard.kingrt.com`.
-  - Authenticated admin availability for call
-    `ba3779f5-25a3-479f-874d-831903abdc63` returned 200 with six apps including
-    `call-diagnostics`; unauthenticated availability returned 401 instead of
-    500.
-  - Normal user diagnostics search returned 200 with zero apps; normal user
-    telemetry returned 403 `call_diagnostics_admin_required`.
-  - Admin telemetry snapshot returned 200 with
-    `king.call_diagnostics.telemetry.snapshot.v1`.
-  - Distinct non-blocking diagnostics observed: remote rsync could not delete
-    stale non-empty `.cargo` directories; recent logs still contain old
-    pre-deploy websocket retry warnings for asset version `20260509122256`;
-    TURN logs include normal peer TCP reset noise.
-  - No second deploy needed for this pass.
+  - Latest `prod-debug.sh` completed read-only with containers up and API
+    runtime asset version `20260509224830`.
+  - Call Diagnostics assets returned 200 for manifest, iframe HTML, JS, and
+    health descriptor on `whiteboard.kingrt.com`.
+  - Distinct errors found during deploy diagnostics were bundled before the
+    follow-up deploys: strict binary send failures, strict SFU disconnect
+    diagnostics/reconnect recovery, stale `call/control-state`
+    `target_not_in_room` publish errors, and old asset websocket retry noise.
+  - Follow-up fixes were deployed before closing: strict binary send failures
+    now drop quietly, strict SFU disconnects do not schedule recovery reconnect
+    or noisy diagnostics, and stale `call/control-state` targets prune locally
+    instead of emitting `realtime_signaling_publish_failed`.
+  - Final fresh asset-filtered log check for `20260509224830` was empty for
+    the blocked patterns: Error-level client diagnostics, websocket retry loop,
+    Auto-Quality/Profile-Switch recovery, Gossip repair, Background outgoing
+    policy, SFU recovery/reconnect, binary send failure, and stale control-state
+    publish failure.
+  - Remaining non-blocking deploy noise: remote rsync could not delete stale
+    non-empty `.cargo` directories; Docker Compose reported missing buildx;
+    TURN logs include peer TCP reset noise; Vite reports the known chunk-size
+    warning.
 
 ## Hotfix: Planning Image Multi-Image Controls
 
