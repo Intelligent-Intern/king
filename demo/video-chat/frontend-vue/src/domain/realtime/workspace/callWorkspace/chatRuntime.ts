@@ -1,4 +1,12 @@
+import { reactive } from 'vue';
 import { t } from '../../../../modules/localization/i18nRuntime.js';
+import {
+  buildOperatorFeedbackChatFramePatch,
+  buildOperatorFeedbackChatPayload,
+  formatOperatorFeedbackDeployedToast,
+  normalizeOperatorFeedbackDeployment,
+  normalizeOperatorFeedbackMessageMetadata,
+} from './operatorFeedbackAdapter.ts';
 
 export function createCallWorkspaceChatRuntimeHelpers(context) {
   const {
@@ -47,13 +55,48 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
 
   let typingStopTimer = null;
   let localTypingStarted = false;
+  let operatorFeedbackToastTimer = null;
 
-  function clearTypingStopTimer() {
-    if (typingStopTimer !== null) {
-      clearTimeout(typingStopTimer);
-      typingStopTimer = null;
-    }
+  const operatorFeedbackState = reactive({
+    selected: false,
+    toastMessage: '',
+  });
+
+function clearTypingStopTimer() {
+  if (typingStopTimer !== null) {
+    clearTimeout(typingStopTimer);
+    typingStopTimer = null;
   }
+}
+
+function clearOperatorFeedbackToastTimer() {
+  if (operatorFeedbackToastTimer !== null) {
+    clearTimeout(operatorFeedbackToastTimer);
+    operatorFeedbackToastTimer = null;
+  }
+}
+
+function showOperatorFeedbackToast(message) {
+  const normalizedMessage = String(message || '').trim();
+  if (normalizedMessage === '') return;
+  clearOperatorFeedbackToastTimer();
+  operatorFeedbackState.toastMessage = normalizedMessage;
+  operatorFeedbackToastTimer = setTimeout(() => {
+    operatorFeedbackState.toastMessage = '';
+    operatorFeedbackToastTimer = null;
+  }, 4200);
+}
+
+function showOperatorFeedbackFeatureDeployedToast(requestedFeature) {
+  showOperatorFeedbackToast(formatOperatorFeedbackDeployedToast(requestedFeature));
+}
+
+function maybeShowOperatorFeedbackDeploymentToast(payload) {
+  const deployment = normalizeOperatorFeedbackDeployment(payload);
+  if (!deployment) return false;
+  showOperatorFeedbackFeatureDeployedToast(deployment.requested_feature);
+  return true;
+}
 
 function hasOpenRealtimeSocket() {
   return Boolean(isSocketOnline.value) && connectionState.value === 'online';
@@ -434,6 +477,7 @@ async function sendChatMessage() {
   const text = chatDraft.value.trim();
   const hasAttachments = chatAttachmentDrafts.value.length > 0;
   if ((text === '' && !hasAttachments) || chatSending.value) return;
+  const isOperatorFeedback = Boolean(operatorFeedbackState.selected);
   if (!hasOpenRealtimeSocket()) {
     if (connectionState.value === 'retrying') {
       reconnectAttempt.value = 0;
@@ -455,11 +499,29 @@ async function sendChatMessage() {
     return;
   }
 
+  const nowIso = new Date().toISOString();
+  const operatorFeedbackPayload = isOperatorFeedback
+    ? buildOperatorFeedbackChatPayload({
+      callId: activeCallId.value,
+      roomId: activeRoomId.value,
+      clientMessageId,
+      text,
+      attachments,
+      reporter: {
+        user_id: currentUserId.value,
+        display_name: String(sessionState.displayName || sessionState.email || '').trim(),
+        role: normalizeRole(sessionState.role),
+      },
+      createdAt: nowIso,
+      fallbackFeature: t('calls.workspace.operator_feedback_attachment_feature'),
+    })
+    : null;
   const sent = sendSocketFrame({
     type: 'chat/send',
     message: text,
     attachments: attachments.map((attachment) => ({ id: attachment.id })),
     client_message_id: clientMessageId,
+    ...buildOperatorFeedbackChatFramePatch(operatorFeedbackPayload),
   });
 
   if (!sent) {
@@ -477,20 +539,26 @@ async function sendChatMessage() {
       client_message_id: clientMessageId,
       text,
       attachments,
+      ...(operatorFeedbackPayload ? { operator_feedback: operatorFeedbackPayload } : {}),
       sender: {
         user_id: currentUserId.value,
         display_name: String(sessionState.displayName || sessionState.email || '').trim() || t('calls.workspace.you'),
         role: normalizeRole(sessionState.role),
       },
-      server_time: new Date().toISOString(),
+      server_time: nowIso,
     },
-    time: new Date().toISOString(),
+    ...(operatorFeedbackPayload ? { operator_feedback: operatorFeedbackPayload } : {}),
+    time: nowIso,
   });
 
   chatDraft.value = '';
   chatAttachmentDrafts.value = [];
   chatAttachmentError.value = '';
   chatEmojiTrayOpen.value = false;
+  if (isOperatorFeedback) {
+    operatorFeedbackState.selected = false;
+    showOperatorFeedbackToast(t('calls.workspace.operator_feedback_sent'));
+  }
   chatSending.value = false;
   stopLocalTyping();
 }
@@ -515,8 +583,9 @@ function normalizeChatMessage(payload) {
 
   const idRaw = String(message.id || '').trim();
   const id = idRaw !== '' ? idRaw : `chat_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  const operatorFeedback = normalizeOperatorFeedbackMessageMetadata(payload, message);
 
-  return {
+  const normalizedMessage = {
     id,
     room_id: roomId,
     text: String(message.text || '').trim(),
@@ -529,9 +598,14 @@ function normalizeChatMessage(payload) {
     client_message_id: message.client_message_id ?? null,
     attachments,
   };
+  if (operatorFeedback) {
+    normalizedMessage.operator_feedback = operatorFeedback;
+  }
+  return normalizedMessage;
 }
 
 function appendChatMessage(payload) {
+  maybeShowOperatorFeedbackDeploymentToast(payload);
   const message = normalizeChatMessage(payload);
   if (message.text === '' && message.attachments.length === 0) return;
   if (Number.isInteger(message.sender.user_id) && message.sender.user_id > 0) {
@@ -602,6 +676,7 @@ function normalizeLobbyEntry(entry) {
     addChatAttachmentDraft,
     appendChatMessage,
     applyTypingEvent,
+    clearOperatorFeedbackToastTimer,
     clearTypingStopTimer,
     downloadChatAttachment,
     focusChatInput,
@@ -614,9 +689,11 @@ function normalizeLobbyEntry(entry) {
     normalizeChatMessage,
     normalizeLobbyEntry,
     openChatAttachmentPicker,
+    operatorFeedbackState,
     removeChatAttachmentDraft,
     sendChatMessage,
     setChatAttachmentError,
+    showOperatorFeedbackFeatureDeployedToast,
     stopLocalTyping,
     toggleChatEmojiTray,
     updateChatAttachmentDraftName,
