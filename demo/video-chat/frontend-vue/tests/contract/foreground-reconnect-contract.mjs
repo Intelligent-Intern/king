@@ -18,11 +18,17 @@ const repoRoot = path.resolve(root, '../../..');
 
 try {
   const helper = read(root, 'src/support/foregroundReconnect.ts');
-  assert.match(helper, /window\.addEventListener\('blur', handleBackground\)/, 'foreground helper must track blur');
+  assert.match(helper, /window\.addEventListener\('blur', handleBackground\)/, 'foreground helper must observe blur');
   assert.match(helper, /window\.addEventListener\('focus', handleForeground\)/, 'foreground helper must track focus');
   assert.match(helper, /window\.addEventListener\('pageshow', handleForeground\)/, 'foreground helper must track pageshow');
   assert.match(helper, /window\.addEventListener\('online', handleForeground\)/, 'foreground helper must track online');
   assert.match(helper, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/, 'foreground helper must track visibility changes');
+  assert.match(helper, /function attachForegroundReconnectHandlers/, 'foreground helper must expose the reconnect attachment entrypoint');
+  assert.match(helper, /foregroundRecoveryArmed = false/, 'foreground helper must track an explicit recovery-armed state');
+  assert.match(helper, /const shouldArmForegroundRecovery = \(event = null\) => \{[\s\S]*reason === 'pagehide'[\s\S]*reason === 'document_hidden'/, 'foreground helper must arm recovery only for true background/pagehide states');
+  assert.match(helper, /if \(!shouldArmForegroundRecovery\(event\)\) \{\s*return;\s*\}/, 'visible blur must not arm foreground recovery');
+  assert.match(helper, /if \(!shouldRunForegroundRecovery\(event\)\) \{\s*return;\s*\}/, 'visible focus must not run foreground recovery when no true background was observed');
+  assert.match(helper, /if \(reason === 'online'\) return true;/, 'online events must still trigger recovery even without focus churn');
 
   const joinView = read(root, 'src/domain/calls/access/JoinView.vue');
   assert.match(joinView, /attachForegroundReconnectHandlers/, 'call access join view must use foreground reconnect helper');
@@ -44,6 +50,8 @@ try {
   assert.match(workspace, /if \(!hasLiveLocalMedia\(\) && \(controlState\.cameraEnabled !== false \|\| controlState\.micEnabled !== false\)\) \{\s*void publishLocalTracks\(\);/m, 'workspace foreground reconnect must reacquire local media when preview/tracks are gone');
   assert.match(workspace, /void connectSocket\(\);/, 'workspace foreground reconnect must reconnect the realtime socket');
   assert.match(workspace, /sfuClientRef\.value\.leave\(\);/, 'workspace foreground reconnect must recycle stale SFU state');
+  assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);/, 'workspace background callback remains the only path that arms foreground reconnect');
+  assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
   assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
 
   const socketLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
@@ -70,6 +78,79 @@ try {
   assert.match(realtimeWebsocketReconnect, /Session validation is temporarily unavailable for realtime commands\./, 'backend websocket liveness must send a retryable auth backend message');
   assert.match(router, /authentication backend error transport=%s exception=%s message=%s/, 'backend router must log swallowed auth backend exceptions');
   assert.match(authSession, /session probe failed exception=%s message=%s/, 'session probe must log swallowed auth backend exceptions');
+
+  const originalWindow = globalThis.window;
+  const originalDocument = globalThis.document;
+  const listeners = new Map();
+  const documentRef = { visibilityState: 'visible' };
+  const windowRef = {
+    addEventListener(type, handler) {
+      listeners.set(`window:${type}`, handler);
+    },
+    removeEventListener(type, handler) {
+      if (listeners.get(`window:${type}`) === handler) {
+        listeners.delete(`window:${type}`);
+      }
+    },
+  };
+  const documentHarness = {
+    get visibilityState() {
+      return documentRef.visibilityState;
+    },
+    set visibilityState(value) {
+      documentRef.visibilityState = value;
+    },
+    addEventListener(type, handler) {
+      listeners.set(`document:${type}`, handler);
+    },
+    removeEventListener(type, handler) {
+      if (listeners.get(`document:${type}`) === handler) {
+        listeners.delete(`document:${type}`);
+      }
+    },
+  };
+
+  try {
+    globalThis.window = windowRef;
+    globalThis.document = documentHarness;
+    const helperModule = await import(`data:text/javascript;base64,${Buffer.from(helper).toString('base64')}`);
+    const events = [];
+    const detach = helperModule.attachForegroundReconnectHandlers({
+      onBackground: (context) => events.push(['background', context.reason, context.hidden]),
+      onForeground: (context) => events.push(['foreground', context.reason, context.hidden]),
+    });
+
+    listeners.get('window:blur')?.({ type: 'blur' });
+    listeners.get('window:focus')?.({ type: 'focus' });
+    assert.deepEqual(events, [], 'visible blur/focus must not arm or run reconnect callbacks');
+
+    documentHarness.visibilityState = 'hidden';
+    listeners.get('document:visibilitychange')?.();
+    assert.deepEqual(events, [['background', 'document_hidden', true]], 'hidden visibility change must arm background recovery');
+
+    documentHarness.visibilityState = 'visible';
+    listeners.get('window:focus')?.({ type: 'focus' });
+    assert.deepEqual(
+      events,
+      [
+        ['background', 'document_hidden', true],
+        ['foreground', 'focus', false],
+      ],
+      'focus after true hidden state must run foreground recovery',
+    );
+
+    listeners.get('window:focus')?.({ type: 'focus' });
+    assert.equal(events.length, 2, 'repeated visible focus must not run foreground recovery again');
+
+    listeners.get('window:online')?.({ type: 'online' });
+    assert.equal(events.at(-1)?.[0], 'foreground', 'online event must still run foreground recovery');
+    assert.equal(events.at(-1)?.[1], 'online', 'online foreground recovery must preserve its reason');
+
+    detach();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.document = originalDocument;
+  }
 
   process.stdout.write('[foreground-reconnect-contract] PASS\n');
 } catch (error) {
