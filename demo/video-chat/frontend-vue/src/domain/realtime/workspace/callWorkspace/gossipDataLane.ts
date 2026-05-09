@@ -1219,7 +1219,7 @@ export function createCallWorkspaceGossipDataLane({
       roiNormY: Math.max(0, Number(msg.roiNormY ?? msg.roi_norm_y ?? 0)),
       roiNormWidth: Math.max(0, Number(msg.roiNormWidth ?? msg.roi_norm_width ?? 0)),
       roiNormHeight: Math.max(0, Number(msg.roiNormHeight ?? msg.roi_norm_height ?? 0)),
-      transportPath: 'gossip_direct',
+      transportPath: 'gossip_rtc_datachannel',
     };
   }
 

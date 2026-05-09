@@ -74,6 +74,11 @@ export function createSfuFrameDecodeHelpers({
     return Math.floor(normalized);
   }
 
+  function isGossipDeliveredFrame(frame) {
+    const transportPath = String(frame?.transportPath || frame?.transport_path || '').trim().toLowerCase();
+    return transportPath === 'gossip_direct' || transportPath === 'gossip_rtc_datachannel';
+  }
+
   const receiverFeedback = createSfuReceiverFeedback({
     currentUserId,
     mediaRuntimePathRef,
@@ -697,6 +702,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame) {
     if (!peer || typeof peer !== 'object') return false;
+    if (isGossipDeliveredFrame(frame)) return false;
     ensureRemoteSfuTrackCacheState(peer);
 
     const trackKey = sfuFrameTrackStateKey(frame);
@@ -747,6 +753,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame) {
     if (!peer || typeof peer !== 'object') return false;
+    if (isGossipDeliveredFrame(frame)) return false;
     const trackKey = sfuFrameTrackStateKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
     if (!peer.lastSfuFrameSequenceByTrack || typeof peer.lastSfuFrameSequenceByTrack !== 'object') {
@@ -836,7 +843,7 @@ export function createSfuFrameDecodeHelpers({
     if (Number.isInteger(activityUserId) && activityUserId > 0) {
       markRemoteFrameActivity(activityUserId);
     }
-    if (!options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
+    if (!isGossipDeliveredFrame(frame) && !options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
       return;
     }
     if (shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame)) {
