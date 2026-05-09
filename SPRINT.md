@@ -1545,7 +1545,7 @@ state without issuing a session.
 - [x] Temporary link data does not overwrite account data automatically
 - [ ] Light mismatches are optionally logged
 - [x] No link data is unnecessarily exposed in frontend
-- [ ] Same logged-in account can reopen same link without duplicate-link flag
+- [x] Same logged-in account can reopen same link without duplicate-link flag
 
 Proof: `call-access-verified-context-ui-contract` proves the public join view
 captures a stable verified user/session/token snapshot after link verification,
@@ -1560,6 +1560,12 @@ first-name/last-name/full-name drift as strong mismatch. The Docker PHP 8.4
 contract proves no/light mismatch resolves without the strong warning contract,
 sanitizes link-target data, and issues the call-access session to the current
 logged-in account.
+`call-access-duplicate-review-contract.php` proves same-account reuse with the
+assertion `same linked account must not create a duplicate review flag`.
+`call-access-personalized-identity.spec.js` covers the browser path
+`same-account personalized link sends verified identity proof and adopts only
+its own session`, so the same logged-in account can reopen the link without
+creating a foreign-account review flag or adopting another session.
 
 ## 7. Personalized Link: Logged-In User, Strong Mismatch
 
@@ -2949,7 +2955,15 @@ against duplicate join/session request loops.
 - [x] `e2e_personalized_logged_out_005_temp_guest_no_registered_rights`
 - [x] `e2e_personalized_logged_out_006_temp_guest_no_org_rights`
 - [x] `e2e_personalized_logged_out_007_manipulated_link_rejected`
-- [ ] `e2e_personalized_logged_out_008_invalid_link_safe_error`
+- [x] `e2e_personalized_logged_out_008_invalid_link_safe_error`
+
+Proof: `call-access-privacy-foreign-data.spec.js` covers invalid call-access
+links with no foreign title, host, invitee, call-id, or denied-session data in
+the rendered dialog or captured join response, and no join action. The static
+proofs `call-access-privacy-foreign-data-contract.mjs`,
+`call-access-link-privacy-contract.mjs`, and
+`call-access-safe-screen-final-contract.mjs` pin the safe invalid/not-found
+screen contract and session-suppression behavior.
 
 ## Test Group: Personalized Link Logged In Without Strong Mismatch
 
@@ -2960,7 +2974,14 @@ against duplicate join/session request loops.
 - [x] `e2e_personalized_logged_in_005_logged_in_account_used_for_permission_check`
 - [x] `e2e_personalized_logged_in_006_no_auto_account_data_overwrite`
 - [x] `e2e_personalized_logged_in_007_no_link_data_exposed`
-- [ ] `e2e_personalized_logged_in_008_same_account_reopen_no_duplicate_flag`
+- [x] `e2e_personalized_logged_in_008_same_account_reopen_no_duplicate_flag`
+
+Proof: `call-access-duplicate-review-contract.php` asserts `same linked account
+must not create a duplicate review flag`, while
+`call-access-duplicate-review-email-contract.mjs` pins that backend assertion.
+`call-access-personalized-identity.spec.js` also covers the same-account
+personalized-link browser path, including verified identity proof and adoption
+of only the current account session.
 
 ## Test Group: Personalized Link Strong Mismatch
 
@@ -3003,23 +3024,39 @@ against duplicate join/session request loops.
 - [x] `e2e_anon_logged_in_005_org_admin_can_join_own_org_call`
 - [x] `e2e_anon_logged_in_006_org_admin_cannot_join_foreign_org_call`
 - [x] `e2e_anon_logged_in_007_guest_list_user_can_join`
-- [ ] `e2e_anon_logged_in_008_non_guest_user_lands_in_lobby`
+- [x] `e2e_anon_logged_in_008_non_guest_user_lands_in_lobby`
 - [x] `e2e_anon_logged_in_009_anonymous_link_does_not_overwrite_account`
 - [ ] `e2e_anon_logged_in_010_invalid_anonymous_link_rejected`
 
+Proof: `call-access-seed-matrix.spec.js` drives
+`anonymous_open_logged_in_uses_own_account_waits_for_host` with
+`alpha_normal_user`, keeps the open link bound to the logged-in account, and
+observes lobby wait instead of direct workspace entry. The backend
+`call-access-anonymous-temp-rights-contract.php` independently asserts a
+logged-in anonymous/open link keeps the account user, creates no guest identity,
+and creates no participant row before queueing.
+
 ## Test Group: Anonymous Link Logged Out
 
-- [ ] `e2e_anon_logged_out_001_temp_anonymous_account_created`
+- [x] `e2e_anon_logged_out_001_temp_anonymous_account_created`
 - [x] `e2e_anon_logged_out_002_temp_anonymous_user_lands_in_lobby`
-- [ ] `e2e_anon_logged_out_003_temp_anonymous_has_no_registered_rights`
+- [x] `e2e_anon_logged_out_003_temp_anonymous_has_no_registered_rights`
 - [x] `e2e_anon_logged_out_004_host_can_admit_anonymous_guest`
 - [x] `e2e_anon_logged_out_005_temp_moderator_can_admit_anonymous_guest`
 - [x] `e2e_anon_logged_out_006_admin_can_admit_anonymous_guest`
 - [x] `e2e_anon_logged_out_007_unauthorized_user_cannot_admit_guest`
 - [x] `e2e_anon_logged_out_008_admitted_guest_can_rejoin`
 - [x] `e2e_anon_logged_out_009_kicked_guest_cannot_direct_rejoin`
-- [ ] `e2e_anon_logged_out_010_multiple_anonymous_guests_are_separate`
+- [x] `e2e_anon_logged_out_010_multiple_anonymous_guests_are_separate`
 - [x] `e2e_anon_logged_out_011_disabled_anonymous_link_allows_no_lobby_entry`
+
+Proof: `call-access-anonymous-lobby-contract.php` asserts a logged-out open
+link creates one temporary guest, binds it as a guest account, and waits in the
+lobby. `call-access-anonymous-temp-rights-contract.php` proves that temporary
+anonymous users stay separate from the owner/account user, cannot gain
+registered-account identity, guest-list/direct-join, owner/moderator, or
+lobby-admission rights, and that the same anonymous link allocates separate
+temporary users for multiple logged-out guests.
 
 ## Test Group: Lobby
 
@@ -3031,10 +3068,15 @@ against duplicate join/session request loops.
 - [x] `e2e_lobby_006_host_admits_participant`
 - [x] `e2e_lobby_007_host_rejects_participant`
 - [x] `e2e_lobby_008_rejected_participant_cannot_enter`
-- [ ] `e2e_lobby_009_admission_is_call_scoped`
+- [x] `e2e_lobby_009_admission_is_call_scoped`
 - [x] `e2e_lobby_010_concurrent_admission_idempotent`
 - [x] `e2e_lobby_011_concurrent_admit_reject_deterministic`
 - [x] `e2e_lobby_012_lobby_state_updates_correctly`
+
+Proof: `call-access-session-contract.php` binds access sessions to access ID,
+call ID, room ID, user ID, and link kind. Its secondary-call assertions prove an
+access-bound session mismatch does not enter the secondary room, keeps no
+secondary requested room, and queues no secondary-room admission.
 
 ## Test Group: Rejoin and Kick
 
@@ -3073,7 +3115,7 @@ against duplicate join/session request loops.
 - [x] `e2e_security_004_forged_role_rejected`
 - [x] `e2e_security_005_forged_org_id_rejected`
 - [x] `e2e_security_006_csrf_account_update_protected`
-- [ ] `e2e_security_007_session_fixation_prevented`
+- [x] `e2e_security_007_session_fixation_prevented`
 - [x] `e2e_security_008_parallel_tabs_no_wrong_merge`
 - [x] `e2e_security_009_kick_during_active_call_removes_user`
 
@@ -3095,6 +3137,11 @@ safe-screen paths render without call titles, call ids/rooms, owner or guest
 participant data, session/access tokens, SDP/ICE/TURN material, or Call App
 session/launch/CRDT data. The proof is wired into `test:contract:iam-call-access`
 and the IAM CI static gate.
+Session fixation proof: `call-access-session-fixation-contract.php` rejects
+reuse of an existing session ID for call-access binding, rejects login/account
+switches between verified and authenticated context, and invalidates tampered or
+expired call-access session bindings. `call-access-session-route-guard-contract.php`
+pins the real `/api/call-access/{id}/session` route to the same guard.
 
 ## Test Group: Email Confirmation
 
