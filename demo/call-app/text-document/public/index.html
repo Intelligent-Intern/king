@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="text-document">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Text Document Call App</title>
+    <link rel="stylesheet" href="./text-document.css">
+  </head>
+  <body>
+    <main class="text-document-app">
+      <header class="document-toolbar" aria-label="Text document tools">
+        <section class="tool-group" aria-label="Block type">
+          <select id="blockType" aria-label="Block type">
+            <option value="paragraph">Paragraph</option>
+            <option value="heading1">Heading 1</option>
+            <option value="heading2">Heading 2</option>
+            <option value="bullet">Bullet list</option>
+            <option value="numbered">Numbered list</option>
+            <option value="note">Note</option>
+          </select>
+          <button id="addBlock" type="button">Add</button>
+          <button id="deleteBlock" type="button">Del</button>
+        </section>
+        <section class="tool-group" aria-label="Inline formatting">
+          <button id="bold" type="button" data-format="bold" aria-label="Bold">B</button>
+          <button id="italic" type="button" data-format="italic" aria-label="Italic">I</button>
+          <button id="underline" type="button" data-format="underline" aria-label="Underline">U</button>
+        </section>
+        <section class="tool-group" aria-label="Exports">
+          <button id="exportOdt" type="button">ODT</button>
+          <button id="exportPdf" type="button">PDF</button>
+        </section>
+        <span id="modeBadge" class="mode-badge">Waiting</span>
+      </header>
+
+      <section class="document-shell" aria-label="Shared text document">
+        <div class="paper">
+          <div id="documentTitle" class="document-title">Untitled document</div>
+          <div id="editor" class="editor" aria-label="Collaborative document editor"></div>
+        </div>
+      </section>
+
+      <footer class="statusbar">
+        <span id="status">Waiting for Call App launch.</span>
+        <span id="clock">0 ops</span>
+      </footer>
+    </main>
+
+    <script src="./text-document.js"></script>
+  </body>
+</html>
