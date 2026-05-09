@@ -1,0 +1,58 @@
+{
+  "schema_version": "king.call_app.crdt_schema.v1",
+  "app_key": "spreadsheet",
+  "protocol": "king.call_app.crdt.v1",
+  "engine": "adapter",
+  "documents": [
+    {
+      "kind": "spreadsheet_workbook",
+      "schema_version": "spreadsheet.workbook.v1",
+      "operation_types": [
+        "sheet.add",
+        "sheet.rename",
+        "sheet.delete",
+        "cell.set",
+        "cell.delete",
+        "cell.format",
+        "range.format",
+        "range.delete"
+      ]
+    }
+  ],
+  "envelope": {
+    "required_fields": [
+      "app_id",
+      "app_version",
+      "call_id",
+      "app_session_id",
+      "document_id",
+      "schema_version",
+      "actor_id",
+      "operation_id",
+      "logical_clock",
+      "causal_dependencies",
+      "payload_type",
+      "payload",
+      "server_admission_stamp"
+    ],
+    "idempotency": {
+      "operation_id_required": true,
+      "duplicate_policy": "ignore_after_first_admission"
+    }
+  },
+  "snapshots": {
+    "strategy": "checkpoint",
+    "minimum_ops_before_checkpoint": 50,
+    "replay_after_snapshot": true
+  },
+  "presence": {
+    "persisted": false,
+    "types": [
+      "selection.update"
+    ]
+  },
+  "exports": [
+    "spreadsheetml",
+    "csv"
+  ]
+}
