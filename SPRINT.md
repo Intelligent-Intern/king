@@ -116,7 +116,7 @@ Acceptance criteria:
   before closing any ticket.
 
 Tickets:
-- [ ] CWS-01 Left sidebar tabs and Call Apps responsive layout
+- [x] CWS-01 Left sidebar tabs and Call Apps responsive layout
   - Split Settings and Call Apps into clear tab panels with visible tab
     affordances and a non-overlapping scroll body.
   - Keep tabs visible once a call ref is known, even while owner/moderator or
@@ -124,14 +124,22 @@ Tickets:
   - Make Call Apps content fully visible/responsive in the left sidebar and in
     the call workspace layout.
   - Preserve media tile/stage dimensions when both sidebars are open.
+  - Loop 7 proof: `call-app-sidebar-contract`,
+    `call-app-sidebar-access-ux-contract`,
+    `call-layout-sidebar-controls-contract`, `call-mini-strip-responsive`,
+    `npm run build`, and production deploy `20260509072151` PASS.
 
-- [ ] CWS-02 Right sidebar lobby plus present-user list
+- [x] CWS-02 Right sidebar lobby plus present-user list
   - Put lobby requests at the top of the right sidebar with pagination.
   - Put present users below with separate pagination, divider, and responsive
     height allocation.
   - Show section search only when that section has more than one page.
   - Increase per-user action icon sizes and separate kick/remove from other
     actions.
+  - Loop 7 proof: extracted `RightRosterPanel.vue` keeps lobby above present
+    users; `npm run test:contract:participant-roster`,
+    `right-roster-lobby-users-contract`, independent review, build, and
+    production deploy `20260509072151` PASS.
 
 - [ ] CWS-03 Participant action options and Call App permissions
   - Add a gear above the participant table.
@@ -147,21 +155,29 @@ Tickets:
     ticket still requires backend/API persistence and realtime refresh for
     distinct read/write/delete grants.
 
-- [ ] CWS-04 Call Apps fullscreen and media-safe layout
+- [x] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.
   - Fullscreen Call Apps must not hide, crop, or collapse the call videos.
   - Add contracts or browser smoke proving the Call Apps panel and fullscreen
     host stay responsive with both sidebars open.
+  - Loop 7 proof: `call-app-workspace-view-contract`,
+    `npm run test:contract:call-apps`, and
+    `npm run test:e2e:call-app-fullscreen-smoke` with local Google Chrome PASS
+    on desktop and mobile before production deploy `20260509072151`.
 
-- [ ] CWS-05 Screenshare as participant fullscreen/zoom surface
+- [x] CWS-05 Screenshare as participant fullscreen/zoom surface
   - Treat screenshare as a participant-like media tile in the videocall.
   - Double-clicking its mini video opens fullscreen.
   - Fullscreen screenshare supports zoom/pan and is not cut off by sidebars or
     Call Apps content.
   - Default screenshare fullscreen shows the full shared surface without
     clipping; zoom/pan is opt-in and resettable.
+  - Loop 7 proof: `npm run test:contract:screenshare-fullscreen`,
+    `npm run test:contract:media-reconnect-release-smoke`, and
+    `npm run test:e2e:screenshare-fullscreen` with local Chromium PASS before
+    production deploy `20260509072151`.
 
-- [ ] CWS-06 Focus/click reconnect stability
+- [x] CWS-06 Focus/click reconnect stability
   - Clicking call UI or focusing inputs/buttons must not cause realtime/SFU
     reconnects.
   - Visible `window.blur` or iframe focus must not call workspace foreground
@@ -170,8 +186,13 @@ Tickets:
     backgrounds and foreground recovery is required.
   - Diagnostics must distinguish real websocket/SFU failure from harmless UI
     focus/blur events.
+  - Loop 7 proof: `npm run test:contract:foreground-reconnect` covers visible
+    blur/focus, iframe focus, call controls, Call App fullscreen, media
+    fullscreen, real `pagehide/pageshow`, and `online` recovery; production
+    post-stabilization logs after deploy `20260509072151` had no fresh
+    reconnect/SFU error matches.
 
-- [ ] CWS-07 Deploy and post-deploy proof
+- [x] CWS-07 Deploy and post-deploy proof
   - Run focused contracts, browser screenshots/smoke for desktop and mobile
     responsive states, build, and deploy.
   - Deploy in the next deploy loop with no unrelated IAM/call-access files, no
@@ -179,6 +200,19 @@ Tickets:
     introduced.
   - After deploy, run public diagnostics, remote compose status/log checks, and
     record proof before closing this sprint.
+  - Loop 7 deploy proof: deployed only the 16 scoped `frontend-vue/src/**`
+    runtime files from local `bgf-sprint-integration`, no push, no certbot, no
+    DNS changes, and no IAM/call-access files. Updated remote
+    `VIDEOCHAT_ASSET_VERSION=20260509072151`, rebuilt/restarted
+    backend/ws/sfu/edge via direct `docker compose`, and confirmed public
+    runtime asset version `20260509072151`.
+  - Loop 7 post-deploy diagnostics: public-only `prod-debug.sh` PASS,
+    public-only `deploy-smoke.sh` PASS after exporting env, full read-only
+    `prod-debug.sh` PASS, remote compose showed backend/ws/sfu/edge/frontend/turn
+    up, and a fresh post-stabilization log scan had no new fatal/panic/error,
+    HTTP 50x, reconnect, or SFU disconnect matches. The only log matches in the
+    wider restart window were stale-client SFU diagnostics with old asset
+    version `20260508185724` and unrelated TURN TCP reset noise.
 
 ## Sprint: Browser-Resilient Background Segmentation Fallback
 
