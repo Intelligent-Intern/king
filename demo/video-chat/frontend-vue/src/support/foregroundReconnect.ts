@@ -3,6 +3,8 @@ export function attachForegroundReconnectHandlers({ onBackground = null, onForeg
     return () => {};
   }
 
+  let foregroundRecoveryArmed = false;
+
   const backgroundContextFor = (event = null) => ({
     reason: String(event?.type || 'background'),
     hidden: document.visibilityState === 'hidden',
@@ -15,7 +17,24 @@ export function attachForegroundReconnectHandlers({ onBackground = null, onForeg
     visibility_state: String(document.visibilityState || ''),
   });
 
+  const shouldArmForegroundRecovery = (event = null) => {
+    const reason = String(event?.type || '').trim().toLowerCase();
+    return document.visibilityState === 'hidden'
+      || reason === 'pagehide'
+      || reason === 'document_hidden';
+  };
+
+  const shouldRunForegroundRecovery = (event = null) => {
+    const reason = String(event?.type || '').trim().toLowerCase();
+    if (reason === 'online') return true;
+    return foregroundRecoveryArmed;
+  };
+
   const handleBackground = (event = null) => {
+    if (!shouldArmForegroundRecovery(event)) {
+      return;
+    }
+    foregroundRecoveryArmed = true;
     if (typeof onBackground === 'function') {
       onBackground(backgroundContextFor(event));
     }
@@ -25,6 +44,10 @@ export function attachForegroundReconnectHandlers({ onBackground = null, onForeg
     if (document.visibilityState === 'hidden') {
       return;
     }
+    if (!shouldRunForegroundRecovery(event)) {
+      return;
+    }
+    foregroundRecoveryArmed = false;
     if (typeof onForeground === 'function') {
       onForeground(foregroundContextFor(event));
     }
