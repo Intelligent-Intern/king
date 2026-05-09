@@ -132,6 +132,20 @@ Tickets:
   - Run post-deploy diagnostics, collect all distinct errors, fix them together,
     and prepare at most one follow-up deployment from the consolidated fix set.
 
+- [x] OCA-06 Planning Image shared upload visibility hotfix
+  - Make Planning Image default to shared call access because its core workflow
+    is one participant uploading an image for everyone to discuss together.
+  - Publish the default participant access through MCP/catalog metadata, use it
+    when creating installations without an explicit policy, and preselect it in
+    the Call Apps attach panel.
+  - Re-attaching an existing active Call App session with a new default policy
+    refreshes only default-sourced participant grants and preserves explicit
+    manual grants.
+  - Proof: `npm run test:contract:call-apps`, `npm run build`,
+    `npm run test:contract:call-apps:sqlite`, PHP syntax checks for the touched
+    Call App backend modules, and `git diff --check` PASS locally. No deploy,
+    push, DNS, certbot, Background, Gossip, or SFU work was run in this loop.
+
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
 Branch:

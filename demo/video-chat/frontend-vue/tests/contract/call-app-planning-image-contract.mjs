@@ -39,7 +39,7 @@ assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest sch
 assert.equal(manifest.app_key, 'planning-image', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'planning-image must advertise runtime readiness');
 assert.equal(manifest.category, 'collaboration', 'planning-image category must fit existing marketplace enum');
-assert.equal(manifest.default_participant_access, 'blocked_by_default', 'planning-image must use explicit participant grants');
+assert.equal(manifest.default_participant_access, 'allowed_by_default', 'planning-image must default to shared call access');
 assert.equal(manifest.iframe?.receives_primary_session_token, false, 'planning-image iframe must not receive primary session tokens');
 assert.equal(manifest.iframe?.bridge_protocol, 'king.call_app.iframe.v1', 'planning-image bridge protocol mismatch');
 assert.ok(manifest.iframe?.sandbox?.includes('allow-scripts'), 'planning-image sandbox must allow scripts');
@@ -52,6 +52,7 @@ const mcp = readJson('demo/call-app/planning-image/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'planning-image', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.planning-image.mcp', 'MCP service name mismatch');
+assert.equal(mcp.marketplace_listing?.default_participant_access, 'allowed_by_default', 'MCP listing must expose shared planning default access');
 assert.equal(mcp.launch_contract?.primary_session_token_allowed, false, 'MCP launch contract must reject primary tokens');
 for (const method of [
   'call_app.describe',
@@ -95,6 +96,8 @@ assertIncludes(runtime, "message.type === 'call_app.launch'", 'runtime must wait
 assertIncludes(runtime, "'call_app.ready'", 'runtime must emit ready after launch');
 assertIncludes(runtime, "'call_app.crdt.op.append'", 'runtime must persist image replacements through the Call App CRDT bridge');
 assertIncludes(runtime, "'planning_image.replace'", 'runtime must implement shared image replacement operation');
+assertIncludes(runtime, "message.type === 'call_app.crdt.ops.response'", 'runtime must consume remote CRDT op polling responses');
+assertIncludes(runtime, 'applyImagePayload(envelope.payload || {}, true)', 'runtime must apply shared image replacements from replayed envelopes');
 assertIncludes(runtime, 'FileReader', 'runtime must read uploaded images inside the iframe');
 assertIncludes(runtime, "canvas.addEventListener('wheel'", 'runtime must support wheel zoom');
 assertIncludes(runtime, "canvas.addEventListener('pointerdown'", 'runtime must support pointer pan');
@@ -115,6 +118,21 @@ assert.doesNotMatch(
   /\['app', 'apps', 'whiteboard'\]/,
   'Call App iframe URL generation must keep concrete whiteboard host path-based for additional apps',
 );
+
+const sidebarPanel = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue');
+assertIncludes(sidebarPanel, 'function appDefaultPolicy(app)', 'Call Apps sidebar must derive attach defaults from app metadata');
+assertIncludes(sidebarPanel, 'defaultPolicy.value = attachDefaultPolicy(app)', 'Call Apps sidebar must preselect shared Planning Image access');
+
+const mcpMetadata = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_mcp_metadata.php');
+assertIncludes(mcpMetadata, "'default_participant_access' => (string) ($manifest['default_participant_access'] ?? '')", 'MCP marketplace listing must echo manifest default participant access');
+
+const marketplaceEntitlements = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_marketplace_entitlements.php');
+assertIncludes(marketplaceEntitlements, 'function videochat_call_app_catalog_default_participant_access', 'Marketplace install defaults must read package participant access metadata');
+assertIncludes(marketplaceEntitlements, "videochat_call_app_catalog_default_participant_access($catalogEntry)", 'Marketplace installation must default to package participant access when payload omits a policy');
+
+const callAppSessions = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php');
+assertIncludes(callAppSessions, 'function videochat_call_app_update_default_participant_grants', 'Existing active sessions must be able to refresh default participant grants');
+assertIncludes(callAppSessions, 'videochat_call_app_update_default_participant_grants($pdo, $tenantId', 'Re-attaching an existing Call App must update stale default grants');
 
 const packageJson = read('demo/video-chat/frontend-vue/package.json');
 assertIncludes(packageJson, 'call-app-planning-image-contract.mjs', 'package scripts must include planning-image contract');

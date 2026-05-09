@@ -747,6 +747,34 @@ SQL
     }
 }
 
+function videochat_call_app_update_default_participant_grants(PDO $pdo, int $tenantId, int $sessionRowId, int $actorUserId, string $policy): void
+{
+    $state = videochat_call_app_session_default_grant_state($policy);
+    $now = gmdate('c');
+    $update = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_app_participant_grants
+SET grant_state = :grant_state,
+    permission_actions_json = :permission_actions_json,
+    changed_by_user_id = :changed_by_user_id,
+    changed_at = :changed_at,
+    updated_at = :updated_at
+WHERE tenant_id = :tenant_id
+  AND app_session_id = :app_session_id
+  AND source = 'default'
+SQL
+    );
+    $update->execute([
+        ':grant_state' => $state,
+        ':permission_actions_json' => videochat_call_app_permission_actions_json(videochat_call_app_default_permission_actions()),
+        ':changed_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        ':changed_at' => $now,
+        ':updated_at' => $now,
+        ':tenant_id' => $tenantId,
+        ':app_session_id' => $sessionRowId,
+    ]);
+}
+
 function videochat_call_app_create_session(PDO $pdo, int $tenantId, string $callId, int $actorUserId, string $appKey, string $defaultPolicy): array
 {
     if ($tenantId <= 0 || trim($callId) === '' || $actorUserId <= 0) {
@@ -763,7 +791,7 @@ function videochat_call_app_create_session(PDO $pdo, int $tenantId, string $call
     $app = is_array($available['available_app'] ?? null) ? $available['available_app'] : [];
     $existing = $pdo->prepare(
         <<<'SQL'
-SELECT public_id
+SELECT id, public_id, default_app_policy
 FROM call_app_sessions
 WHERE tenant_id = :tenant_id
   AND call_id = :call_id
@@ -780,8 +808,23 @@ SQL
         ':app_key' => (string) ($app['app_key'] ?? ''),
         ':app_version' => (string) ($app['version'] ?? ''),
     ]);
-    $existingPublicId = (string) $existing->fetchColumn();
+    $existingRow = $existing->fetch(PDO::FETCH_ASSOC);
+    $existingPublicId = is_array($existingRow) ? (string) ($existingRow['public_id'] ?? '') : '';
     if ($existingPublicId !== '') {
+        $existingPolicy = (string) ($existingRow['default_app_policy'] ?? 'blocked_by_default');
+        if ($existingPolicy !== $defaultPolicy) {
+            $now = gmdate('c');
+            $pdo->prepare(
+                'UPDATE call_app_sessions SET default_app_policy = :default_app_policy, updated_at = :updated_at WHERE tenant_id = :tenant_id AND id = :id'
+            )->execute([
+                ':default_app_policy' => $defaultPolicy,
+                ':updated_at' => $now,
+                ':tenant_id' => $tenantId,
+                ':id' => (int) ($existingRow['id'] ?? 0),
+            ]);
+            videochat_call_app_seed_participant_grants($pdo, $tenantId, (int) ($existingRow['id'] ?? 0), trim($callId), $actorUserId, $defaultPolicy);
+            videochat_call_app_update_default_participant_grants($pdo, $tenantId, (int) ($existingRow['id'] ?? 0), $actorUserId, $defaultPolicy);
+        }
         return [
             'ok' => true,
             'state' => 'existing',

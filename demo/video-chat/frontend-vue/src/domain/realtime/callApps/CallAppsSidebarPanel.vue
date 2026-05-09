@@ -277,6 +277,16 @@ function normalizeDefaultPolicy(value) {
   return value === 'allowed_by_default' ? 'allowed_by_default' : 'blocked_by_default';
 }
 
+function appDefaultPolicy(app) {
+  return normalizeDefaultPolicy(app?.default_participant_access || app?.listing?.default_participant_access);
+}
+
+function attachDefaultPolicy(app) {
+  const packageDefault = appDefaultPolicy(app);
+  if (packageDefault === 'allowed_by_default') return packageDefault;
+  return normalizeDefaultPolicy(app?.installation?.default_app_policy);
+}
+
 function availabilityFlag(app, key) {
   return app?.availability && app.availability[key] === true;
 }
@@ -351,7 +361,7 @@ function applyLocalGrantUpdate(event) {
 
 function selectApp(app) {
   selectedAppKey.value = String(app?.app_key || '').trim();
-  defaultPolicy.value = normalizeDefaultPolicy(app?.installation?.default_app_policy);
+  defaultPolicy.value = attachDefaultPolicy(app);
   actionError.value = '';
   notice.value = '';
 }

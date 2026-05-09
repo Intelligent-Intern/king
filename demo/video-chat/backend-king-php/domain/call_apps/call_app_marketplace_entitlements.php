@@ -35,6 +35,15 @@ function videochat_call_app_marketplace_decode_json(string $value, mixed $fallba
     return $decoded === null && strtolower(trim($value)) !== 'null' ? $fallback : $decoded;
 }
 
+function videochat_call_app_catalog_default_participant_access(array $catalogEntry): string
+{
+    $listing = is_array($catalogEntry['listing'] ?? null)
+        ? $catalogEntry['listing']
+        : videochat_call_app_marketplace_decode_json((string) ($catalogEntry['listing_json'] ?? '{}'), []);
+    $policy = strtolower(trim((string) ($listing['default_participant_access'] ?? '')));
+    return in_array($policy, ['allowed_by_default', 'blocked_by_default'], true) ? $policy : 'blocked_by_default';
+}
+
 /**
  * @return array{ok: bool, entry?: array<string, mixed>, errors?: array<string, string>}
  */
@@ -176,6 +185,9 @@ SQL
  */
 function videochat_call_app_catalog_row(array $row): array
 {
+    $listing = videochat_call_app_marketplace_decode_json((string) ($row['listing_json'] ?? '{}'), []);
+    $listing = is_array($listing) ? $listing : [];
+
     return [
         'app_key' => (string) ($row['app_key'] ?? ''),
         'version' => (string) ($row['app_version'] ?? ''),
@@ -190,7 +202,8 @@ function videochat_call_app_catalog_row(array $row): array
         'crdt_protocol' => (string) ($row['crdt_protocol'] ?? ''),
         'health_status' => (string) ($row['health_status'] ?? 'unknown'),
         'metadata_hash' => (string) ($row['metadata_hash'] ?? ''),
-        'listing' => videochat_call_app_marketplace_decode_json((string) ($row['listing_json'] ?? '{}'), []),
+        'listing' => $listing,
+        'default_participant_access' => videochat_call_app_catalog_default_participant_access(['listing' => $listing]),
         'capabilities' => videochat_call_app_marketplace_decode_json((string) ($row['capabilities_json'] ?? '[]'), []),
         'export_formats' => videochat_call_app_marketplace_decode_json((string) ($row['export_formats_json'] ?? '[]'), []),
         'verified_at' => (string) ($row['verified_at'] ?? ''),
@@ -557,7 +570,9 @@ function videochat_call_app_create_organization_installation(PDO $pdo, int $tena
         return ['ok' => false, 'reason' => 'entitlement_required'];
     }
 
-    $policy = (string) ($payload['default_app_policy'] ?? 'blocked_by_default');
+    $policy = array_key_exists('default_app_policy', $payload)
+        ? (string) $payload['default_app_policy']
+        : videochat_call_app_catalog_default_participant_access($catalogEntry);
     if (!in_array($policy, ['allowed_by_default', 'blocked_by_default'], true)) {
         return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['default_app_policy' => 'must_be_known_policy']];
     }
