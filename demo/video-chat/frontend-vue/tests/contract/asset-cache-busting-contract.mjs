@@ -41,6 +41,11 @@ try {
   assert.ok(app.includes("const BUILD_VERSION = String(import.meta.env.VIDEOCHAT_ASSET_VERSION || '').trim();"), 'app must read the current build version');
   assert.ok(app.includes("const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';"), 'app must compare against the edge build-version header');
   assert.ok(app.includes('window.location.reload();'), 'app must hard-reload stale tabs after a deploy');
+  assert.ok(app.includes("function isCallWorkspacePath(path = '')"), 'app must identify active call workspace routes before deploy reloads');
+  assert.ok(app.includes("startsWith('/workspace/call')"), 'app must treat active call workspace routes as reload-deferred');
+  assert.ok(app.includes('function scheduleBuildVersionReload()'), 'app must centralize deploy reload scheduling');
+  assert.ok(app.includes('if (isCallWorkspacePath(route.path))'), 'app must defer build-version reload while a call workspace is active');
+  assert.ok(app.includes('watch(') && app.includes('buildVersionReloadPending && !isCallWorkspacePath(route.path)'), 'app must reload deferred stale builds after leaving the call workspace');
 
   const assetVersionSupport = readUtf8(path.join(frontendRoot, 'src/support/assetVersion.ts'));
   assert.ok(assetVersionSupport.includes("const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);"), 'asset version helper must understand websocket invalidation frames');
@@ -82,7 +87,7 @@ try {
 
   const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));
   assert.ok(edge.includes("'X-KingRT-Asset-Version'"), 'edge must expose the asset version header on static responses');
-  assert.ok(edge.includes('use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion)'), 'edge static handler must capture the asset version for response headers');
+  assert.match(edge, /use \(\$staticRoot,[\s\S]*\$assetVersion/, 'edge static handler must capture the asset version for response headers');
 
   const runtimeModule = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_runtime.php'));
   assert.ok(runtimeModule.includes("$payload['asset_version'] = $assetVersion;"), 'public runtime endpoint must expose current asset version for stale websocket failure recovery');
@@ -93,7 +98,12 @@ try {
   assert.ok(realtimeAssetVersion.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'stale-client disconnect helper must close stale sockets');
 
   const realtimeWs = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket.php'));
-  assert.ok(realtimeWs.includes('videochat_realtime_disconnect_stale_asset_client('), 'presence websocket must use the shared stale-client disconnect helper');
+  const realtimeWsReconnect = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket_reconnect.php'));
+  assert.ok(
+    realtimeWs.includes('videochat_realtime_websocket_disconnect_stale_asset_client(')
+      && realtimeWsReconnect.includes('videochat_realtime_disconnect_stale_asset_client('),
+    'presence websocket must use the shared stale-client disconnect helper through its reconnect wrapper',
+  );
   assert.ok((realtimeWs.match(/\$disconnectStaleAssetClient\(\)/g) || []).length >= 2, 'presence websocket must invalidate stale clients on connect and during the live loop');
 
   const realtimeSfu = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_sfu_gateway.php'));
