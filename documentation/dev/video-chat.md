@@ -230,6 +230,21 @@ VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
 bash demo/video-chat/scripts/smoke.sh
 ```
 
+Canonical CI shard 1 runs that compose smoke automatically with:
+
+```bash
+VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
+VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+VIDEOCHAT_SMOKE_ARTIFACTS_DIR=compat-artifacts/video-chat-smoke \
+bash demo/video-chat/scripts/smoke.sh
+```
+
+On failure, GitHub Actions uploads `video-chat-smoke-e2e-failure-artifacts`.
+The artifact directory includes `playwright-test-results`,
+`playwright-report` when Playwright generated it, `manifest.env`,
+`compose-ps.txt`, `compose-all.log`, and separate backend, websocket, SFU, and
+frontend container logs.
+
 Use `VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1` only for local debugging when the
 host-safe IAM gate has already been run.
 
