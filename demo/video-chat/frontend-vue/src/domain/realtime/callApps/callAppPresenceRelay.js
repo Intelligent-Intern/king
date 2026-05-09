@@ -27,13 +27,30 @@ function normalizeCallAppPresenceGrantState(value) {
   return state === 'allowed' || state === 'denied' ? state : '';
 }
 
+function normalizeCallAppPresencePermissionActions(grant = {}, grantState = 'allowed') {
+  if (grantState !== 'allowed') return [];
+  const rawActions = Array.isArray(grant?.permission_actions)
+    ? grant.permission_actions
+    : (Array.isArray(grant?.permissionActions) ? grant.permissionActions : null);
+  if (rawActions) {
+    return rawActions
+      .map((entry) => plainString(entry).toLowerCase())
+      .filter((entry, index, entries) => ['read', 'write', 'delete'].includes(entry) && entries.indexOf(entry) === index);
+  }
+  const permissions = grant?.permissions && typeof grant.permissions === 'object' ? grant.permissions : null;
+  if (permissions) {
+    return ['read', 'write', 'delete'].filter((action) => permissions[action] === true);
+  }
+  return ['read', 'write', 'delete'];
+}
+
 function defaultGrantStateForSession(session = {}) {
   return plainString(session?.default_app_policy || session?.defaultAppPolicy).toLowerCase() === 'allowed_by_default'
     ? 'allowed'
     : 'denied';
 }
 
-export function callAppPresenceUserAuthorizedForSession(session = {}, userId = 0) {
+export function callAppPresenceUserAuthorizedForSession(session = {}, userId = 0, requiredAction = 'read') {
   const normalizedUserId = Number(userId || 0);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
 
@@ -43,7 +60,9 @@ export function callAppPresenceUserAuthorizedForSession(session = {}, userId = 0
     && Number(row?.user_id || row?.userId || 0) === normalizedUserId
   ));
   const explicitState = normalizeCallAppPresenceGrantState(grant?.grant_state || grant?.grantState);
-  return (explicitState || defaultGrantStateForSession(session)) === 'allowed';
+  const grantState = explicitState || defaultGrantStateForSession(session);
+  const actions = normalizeCallAppPresencePermissionActions(grant, grantState);
+  return grantState === 'allowed' && actions.includes(plainString(requiredAction, 'read').toLowerCase());
 }
 
 export function normalizeCallAppPresenceParticipantRows(rows, currentUserId = 0, session = null) {
@@ -54,7 +73,7 @@ export function normalizeCallAppPresenceParticipantRows(rows, currentUserId = 0,
     const userId = Number(row?.userId || row?.user_id || 0);
     if (!Number.isInteger(userId) || userId <= 0 || userId === localUserId || seen.has(userId)) continue;
     if (row?.isRoomMember === false || row?.is_room_member === false) continue;
-    if (session && !callAppPresenceUserAuthorizedForSession(session, userId)) continue;
+    if (session && !callAppPresenceUserAuthorizedForSession(session, userId, 'read')) continue;
     seen.add(userId);
     participants.push({
       userId,

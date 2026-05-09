@@ -101,6 +101,10 @@ function safePostMessagePayload(session, launch, options = {}) {
   const context = launch.context && typeof launch.context === 'object' ? launch.context : {};
   const contextApp = context.app && typeof context.app === 'object' ? context.app : {};
   const capabilities = plainStringList(context.capabilities);
+  const permissionActions = plainStringList(context.permission_actions || context.permissionActions);
+  const permissions = context.permissions && typeof context.permissions === 'object' && !Array.isArray(context.permissions)
+    ? context.permissions
+    : {};
   const participantDisplayName = options?.participantDisplayName?.value !== undefined
     ? options.participantDisplayName.value
     : options?.participantDisplayName;
@@ -122,6 +126,12 @@ function safePostMessagePayload(session, launch, options = {}) {
       expected_message_origin: CALL_APP_IFRAME_OPAQUE_ORIGIN,
       participant: plainLaunchParticipant(context.participant, participantDisplayName),
       grant_state: String(context.grant_state || '').trim(),
+      permission_actions: permissionActions,
+      permissions: {
+        read: Boolean(permissions.read),
+        write: Boolean(permissions.write),
+        delete: Boolean(permissions.delete),
+      },
       app: {
         name: String(app.name || contextApp.name || '').trim(),
         category: String(app.category || contextApp.category || '').trim(),

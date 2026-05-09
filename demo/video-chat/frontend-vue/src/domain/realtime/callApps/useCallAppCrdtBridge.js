@@ -200,7 +200,7 @@ export function createCallAppCrdtBridge({
   function handlePresencePublish(frameWindow, session, message) {
     const payloadType = normalizeCallAppPresencePayloadType(message?.payload_type);
     const displayName = normalizeCallAppPresenceDisplayName(unrefValue(currentUserDisplayName));
-    const senderAuthorized = callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0));
+    const senderAuthorized = callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0), 'write');
     const payload = normalizeCallAppPresencePayload(payloadType, message?.payload || {}, {
       actorId: message?.actor_id || message?.payload?.actor_id,
       displayName,
@@ -223,7 +223,7 @@ export function createCallAppCrdtBridge({
     const frameWindow = iframeRef?.value?.contentWindow || null;
     const session = activeSession?.value || null;
     if (!frameWindow || !session) return;
-    if (!callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0))) return;
+    if (!callAppPresenceUserAuthorizedForSession(session, Number(unrefValue(currentUserId) || 0), 'read')) return;
     const signal = normalizeRemoteCallAppPresenceSignal(event?.detail?.signal || event?.detail?.payload || {});
     if (!signal) return;
     if (String(signal.app_session_id || '').trim() !== String(session.id || '').trim()) return;
