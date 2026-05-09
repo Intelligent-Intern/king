@@ -43,9 +43,18 @@ if (packageJson.scripts['test:e2e:production-browser-smoke'] !== 'PLAYWRIGHT_PRO
 
 requireMatches(runnerScript, /^#!\/usr\/bin\/env bash/, 'bash runner shebang');
 requireContains(runnerScript, 'set -euo pipefail', 'strict bash runner mode');
-requireContains(runnerScript, 'LOCAL_ENV_FILE="${VIDEOCHAT_DIR}/.env.local"', 'local env file source');
+requireContains(runnerScript, 'LOCAL_ENV_FILE="${VIDEOCHAT_DIR}/.env.local"', 'local env file path');
 requireContains(runnerScript, 'preserved_values', 'explicit env override preservation');
-requireContains(runnerScript, 'source "${LOCAL_ENV_FILE}"', 'local env loading');
+requireContains(runnerScript, 'local local_env_names=(', 'local env allowlist');
+requireContains(runnerScript, 'declare -A allowed_env_names', 'local env allowlist map');
+requireContains(runnerScript, 'parse_local_env_value()', 'inert local env parser');
+requireContains(runnerScript, 'parse_single_quoted_env_value()', 'single-quoted local env value parser');
+requireContains(runnerScript, 'parse_double_quoted_env_value()', 'double-quoted local env value parser');
+requireContains(runnerScript, 'while IFS= read -r raw_line', 'line-by-line local env parsing');
+requireContains(runnerScript, '^export[[:space:]]+(.+)$', 'optional export prefix parsing');
+requireMissing(runnerScript, 'source "${LOCAL_ENV_FILE}"', 'source-based local env loading');
+requireMissing(runnerScript, '. "${LOCAL_ENV_FILE}"', 'dot-source local env loading');
+requireNotMatches(runnerScript, /(^|\n)\s*set\s+-a(\s|$)/, 'set -a env sourcing');
 requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_DOMAIN:-${DEPLOY_DOMAIN:-${VIDEOCHAT_V1_PUBLIC_HOST:-kingrt.com}}', 'kingrt.com deploy domain default');
 requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_APP_DOMAIN', 'deployed app domain normalization');
 requireContains(runnerScript, 'VIDEOCHAT_DEPLOY_API_DOMAIN', 'deployed API domain normalization');
@@ -74,9 +83,9 @@ for (const [pattern, label] of [
   [/\bdeploy-smoke\.sh\b/, 'deploy smoke invocation'],
   [/\bprod-debug\.sh\b/, 'prod debug invocation'],
   [/\bcertbot\b/, 'certificate tooling'],
-  [/\bdocker\s+compose\b/, 'compose mutation tooling'],
+  [/\bdocker(?:\s+compose|-compose)\b/, 'compose mutation tooling'],
   [/(^|[^\w-])ssh([^\w-]|$)/, 'SSH command'],
-  [/\b(dig|nslookup|hcloud|terraform|kubectl)\b/, 'DNS or infrastructure tooling'],
+  [/\b(dig|nslookup|hcloud|terraform|kubectl|doctl|aws|az|gcloud|cloudflare|cfcli)\b/, 'DNS or infrastructure tooling'],
   [/\bplaywright\s+test\b/, 'direct Playwright command instead of npm script'],
   [/\b(curl|wget)\b/, 'direct network probe tooling'],
 ]) {

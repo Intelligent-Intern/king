@@ -90,10 +90,100 @@ origin_from_value() {
   printf '%s://%s' "${protocol}" "$(host_from_value "${value}")"
 }
 
+strip_unquoted_env_comment() {
+  local value="${1:-}"
+  local index char previous
+
+  for ((index = 0; index < ${#value}; index += 1)); do
+    char="${value:index:1}"
+    if [[ "${char}" == "#" && "${index}" -gt 0 ]]; then
+      previous="${value:index-1:1}"
+      if [[ "${previous}" =~ [[:space:]] ]]; then
+        value="${value:0:index}"
+        break
+      fi
+    fi
+  done
+
+  printf '%s' "${value}"
+}
+
+parse_single_quoted_env_value() {
+  local input="${1:1}"
+  local value="" rest index char
+
+  for ((index = 0; index < ${#input}; index += 1)); do
+    char="${input:index:1}"
+    if [[ "${char}" == "'" ]]; then
+      rest="$(trim_value "${input:index+1}")"
+      [[ -z "${rest}" || "${rest}" == \#* ]] || return 1
+      printf '%s' "${value}"
+      return 0
+    fi
+    value+="${char}"
+  done
+
+  return 1
+}
+
+parse_double_quoted_env_value() {
+  local input="${1:1}"
+  local value="" rest index char next
+
+  for ((index = 0; index < ${#input}; index += 1)); do
+    char="${input:index:1}"
+    case "${char}" in
+      "\\")
+        ((index + 1 < ${#input})) || return 1
+        next="${input:index+1:1}"
+        case "${next}" in
+          '"'|\\|'$'|'`')
+            value+="${next}"
+            ;;
+          *)
+            value+="\\${next}"
+            ;;
+        esac
+        index=$((index + 1))
+        ;;
+      '"')
+        rest="$(trim_value "${input:index+1}")"
+        [[ -z "${rest}" || "${rest}" == \#* ]] || return 1
+        printf '%s' "${value}"
+        return 0
+        ;;
+      *)
+        value+="${char}"
+        ;;
+    esac
+  done
+
+  return 1
+}
+
+parse_local_env_value() {
+  local value
+  value="$(trim_value "${1:-}")"
+
+  case "${value:0:1}" in
+    "'")
+      parse_single_quoted_env_value "${value}"
+      ;;
+    '"')
+      parse_double_quoted_env_value "${value}"
+      ;;
+    *)
+      value="$(strip_unquoted_env_comment "${value}")"
+      value="$(trim_value "${value}")"
+      printf '%s' "${value}"
+      ;;
+  esac
+}
+
 load_local_env() {
   [[ -f "${LOCAL_ENV_FILE}" ]] || return 0
 
-  local preserved_names=(
+  local local_env_names=(
     VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN VIDEOCHAT_V1_PUBLIC_HOST
     VIDEOCHAT_DEPLOY_APP_DOMAIN DEPLOY_APP_DOMAIN
     VIDEOCHAT_DEPLOY_API_DOMAIN DEPLOY_API_DOMAIN
@@ -128,17 +218,35 @@ load_local_env() {
   )
   local name
   declare -A preserved_values=()
+  declare -A allowed_env_names=()
 
-  for name in "${preserved_names[@]}"; do
+  for name in "${local_env_names[@]}"; do
+    allowed_env_names["${name}"]=1
     if [[ -n "${!name+x}" ]]; then
       preserved_values["${name}"]="${!name}"
     fi
   done
 
-  set -a
-  # shellcheck source=/dev/null
-  source "${LOCAL_ENV_FILE}"
-  set +a
+  local raw_line line raw_value value line_number
+  line_number=0
+  while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
+    line_number=$((line_number + 1))
+    line="$(trim_value "${raw_line}")"
+    [[ -n "${line}" && "${line}" != \#* ]] || continue
+
+    if [[ "${line}" =~ ^export[[:space:]]+(.+)$ ]]; then
+      line="$(trim_value "${BASH_REMATCH[1]}")"
+    fi
+
+    [[ "${line}" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+    name="${BASH_REMATCH[1]}"
+    raw_value="${BASH_REMATCH[2]}"
+    [[ -n "${allowed_env_names[${name}]+x}" ]] || continue
+
+    value="$(parse_local_env_value "${raw_value}")" \
+      || fail "unsupported ${LOCAL_ENV_FILE}:${line_number} value syntax for ${name}"
+    set_env_var "${name}" "${value}"
+  done < "${LOCAL_ENV_FILE}"
   LOCAL_ENV_LOADED=1
 
   if [[ -n "${preserved_values[VIDEOCHAT_DEPLOY_DOMAIN]+x}" || -n "${preserved_values[DEPLOY_DOMAIN]+x}" || -n "${preserved_values[VIDEOCHAT_V1_PUBLIC_HOST]+x}" ]]; then
