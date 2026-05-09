@@ -328,6 +328,15 @@ function videochat_dispatch_request(
                 $openDatabase
             );
         } elseif ($moduleName === 'call_apps') {
+            $callAppRoomSnapshotBroadcaster = static function (string $callId, int $tenantId, string $reason) use (&$presenceState, $openDatabase): int {
+                return videochat_realtime_broadcast_call_room_snapshots(
+                    $presenceState,
+                    $callId,
+                    $tenantId,
+                    $openDatabase,
+                    $reason
+                );
+            };
             $response = videochat_handle_call_app_routes(
                 $path,
                 $method,
@@ -336,7 +345,8 @@ function videochat_dispatch_request(
                 $jsonResponse,
                 $errorResponse,
                 $openDatabase,
-                $decodeJsonBody
+                $decodeJsonBody,
+                $callAppRoomSnapshotBroadcaster
             );
         } elseif ($moduleName === 'calls') {
             $response = videochat_handle_call_routes(

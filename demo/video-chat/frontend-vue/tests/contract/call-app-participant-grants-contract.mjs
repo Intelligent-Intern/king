@@ -16,6 +16,8 @@ const [
   workspaceSource,
   runtimeConfigSource,
   signalingSource,
+  roomSnapshotSource,
+  routerSource,
   routeSource,
   domainSource,
   migrationsSource,
@@ -28,6 +30,8 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts'),
   read('demo/video-chat/backend-king-php/domain/realtime/realtime_signaling.php'),
+  read('demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php'),
+  read('demo/video-chat/backend-king-php/http/router.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php'),
   read('demo/video-chat/backend-king-php/support/call_app_session_migrations.php'),
@@ -93,15 +97,57 @@ assert.match(runtimeConfigSource, /['"]call-app\/grants-updated['"]/, 'frontend 
 assert.match(signalingSource, /['"]call-app\/grants-updated['"]/, 'backend signaling allowlist must route Call App grant update signals');
 
 assert.match(
+  roomSnapshotSource,
+  /function videochat_realtime_broadcast_call_room_snapshots[\s\S]*active_call_id[\s\S]*requested_call_id[\s\S]*videochat_realtime_broadcast_room_snapshot/s,
+  'backend must be able to broadcast fresh room snapshots for every live room attached to a Call App call',
+);
+
+assert.match(
+  routerSource,
+  /callAppRoomSnapshotBroadcaster[\s\S]*videochat_realtime_broadcast_call_room_snapshots[\s\S]*videochat_handle_call_app_routes[\s\S]*\$callAppRoomSnapshotBroadcaster/s,
+  'router must wire Call App REST mutations to realtime room snapshot broadcasts',
+);
+
+assert.match(
   routeSource,
   /\/api\/call-app-sessions\/\(\[A-Za-z0-9\._:-\]\+\)\/participant-grants[\s\S]*GET[\s\S]*PATCH/s,
   'backend must expose GET/PATCH participant-grants route',
 );
 
 assert.match(
+  routeSource,
+  /function videochat_call_app_module_broadcast_room_snapshot[\s\S]*room_snapshot_broadcast[\s\S]*call_app_room_snapshot_broadcast/s,
+  'Call App route module must expose snapshot broadcast diagnostics for grant/session mutations',
+);
+
+assert.match(
+  routeSource,
+  /videochat_call_app_module_with_diagnostic\(\$result,\s*['"]call_app_grants_changed['"][\s\S]*videochat_call_app_module_broadcast_room_snapshot\([\s\S]*['"]call_app_grants_changed['"]/s,
+  'participant-grants PATCH must broadcast the refreshed active session grant payload',
+);
+
+assert.match(
+  routeSource,
+  /videochat_call_app_create_session[\s\S]*videochat_call_app_module_broadcast_room_snapshot\([\s\S]*['"]call_app_session_changed['"]/s,
+  'Call App session attach must broadcast the new active session payload',
+);
+
+assert.match(
+  routeSource,
+  /videochat_call_app_remove_session[\s\S]*videochat_call_app_module_broadcast_room_snapshot\([\s\S]*call_app_session_removed/s,
+  'Call App session delete must broadcast removal from active session payloads',
+);
+
+assert.match(
   domainSource,
   /function videochat_call_app_update_participant_grants[\s\S]*call_app_participant_grants[\s\S]*videochat_call_app_write_grant_audit_event/s,
   'backend domain must persist explicit grants and audit events',
+);
+
+assert.match(
+  domainSource,
+  /function videochat_call_app_permission_actions_for_grant_state[\s\S]*\['read',\s*'write',\s*'delete'\][\s\S]*'permission_actions'\s*=>\s*videochat_call_app_permission_actions_for_grant_state\(\$grantState\)/s,
+  'backend session grant normalization must expose canonical permission_actions instead of inventing snapshot-only grant shape',
 );
 
 assert.match(
@@ -112,8 +158,14 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /participant-grants[\s\S]*non-owner participant must not update app grants[\s\S]*grant patch should create one audit event/s,
-  'backend lifecycle contract must cover grant authorization and audit persistence',
+  /participant-grants[\s\S]*non-owner participant must not update app grants[\s\S]*grant patch should create one audit event[\s\S]*grant patch should broadcast refreshed room snapshots[\s\S]*grant patch snapshot must expose the updated denied grant[\s\S]*grant patch snapshot must expose canonical permission_actions/s,
+  'backend lifecycle contract must cover grant authorization, audit persistence, canonical permission_actions, and realtime snapshot propagation',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /session attach should broadcast refreshed room snapshots[\s\S]*session delete should broadcast refreshed room snapshots[\s\S]*session delete snapshot must remove active Call App sessions/s,
+  'backend lifecycle contract must prove session attach/delete changes refresh active Call App payloads without manual reload',
 );
 
 assert.match(
