@@ -66,6 +66,7 @@
     "test:e2e:governance-relations": "playwright test tests/e2e/governance-relation-stack.spec.js",
     "test:e2e:call-access": "node tests/e2e/call-access-e2e-suite.mjs",
     "test:e2e:owner-transfer-main-journeys": "playwright test tests/e2e/call-access-owner-transfer-main-journeys.spec.js --workers=1",
+    "test:e2e:lobby-state-cleanup": "playwright test tests/e2e/iam-lobby-state-cleanup.spec.js --workers=1",
     "test:e2e:temp-moderator": "playwright test tests/e2e/iam-owner-transfer-temp-moderator.spec.js --workers=1",
     "test:e2e:realtime-reconnect-websocket": "playwright test tests/e2e/realtime-reconnect-websocket.spec.js --workers=1",
     "test:e2e:lobby-concurrency": "playwright test tests/e2e/lobby-concurrency-ui.spec.js",
