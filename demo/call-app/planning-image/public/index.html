@@ -13,17 +13,21 @@
       <header class="planning-toolbar" aria-label="Image planning tools">
         <label class="upload-button">
           <span>Upload</span>
-          <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
+          <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" multiple>
         </label>
         <button id="fitImage" type="button">Fit</button>
         <button id="resetZoom" type="button">100%</button>
         <button id="zoomOut" type="button">-</button>
         <button id="zoomIn" type="button">+</button>
+        <button id="deleteImage" type="button">Delete</button>
         <button id="exportPng" type="button">PNG</button>
         <span id="modeBadge" class="mode-badge">Waiting</span>
       </header>
 
       <section class="canvas-shell" aria-label="Shared planning image">
+        <div id="imagePicker" class="image-picker empty" aria-label="Planning image picker">
+          <div id="imageThumbList" class="image-thumb-list" role="list"></div>
+        </div>
         <canvas id="imageCanvas"></canvas>
       </section>
 

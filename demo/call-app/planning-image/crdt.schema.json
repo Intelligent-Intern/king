@@ -8,7 +8,10 @@
       "kind": "planning_image_document",
       "schema_version": "planning-image.document.v1",
       "operation_types": [
+        "planning_image.add",
         "planning_image.replace",
+        "planning_image.select",
+        "planning_image.delete",
         "planning_image.clear",
         "planning_image.viewport"
       ]

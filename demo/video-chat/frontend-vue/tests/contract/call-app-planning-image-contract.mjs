@@ -70,7 +70,14 @@ const crdt = readJson('demo/call-app/planning-image/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.app_key, 'planning-image', 'CRDT app_key mismatch');
 assert.equal(crdt.documents?.[0]?.kind, 'planning_image_document', 'planning-image document kind mismatch');
-for (const operationType of ['planning_image.replace', 'planning_image.clear', 'planning_image.viewport']) {
+for (const operationType of [
+  'planning_image.add',
+  'planning_image.replace',
+  'planning_image.select',
+  'planning_image.delete',
+  'planning_image.clear',
+  'planning_image.viewport',
+]) {
   assert.ok(crdt.documents[0].operation_types.includes(operationType), `CRDT schema missing ${operationType}`);
 }
 assert.equal(crdt.presence?.persisted, false, 'planning-image presence must not be persisted');
@@ -85,19 +92,31 @@ for (const healthPath of ['public/index.html', 'public/planning-image.css', 'pub
 const html = read('demo/call-app/planning-image/public/index.html');
 const css = read('demo/call-app/planning-image/public/planning-image.css');
 const runtime = read('demo/call-app/planning-image/public/planning-image.js');
+const crdtDomain = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php');
+const launchTokens = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php');
 const bundle = `${html}\n${css}\n${runtime}`;
 
 assertIncludes(html, 'meta name="king-call-app-key" content="planning-image"', 'HTML must declare planning-image app key');
 assertIncludes(html, '<input id="imageInput" type="file"', 'HTML must expose top image upload control');
+assertIncludes(html, 'multiple', 'HTML upload control must accept multiple planning images');
+assertIncludes(html, 'id="imageThumbList"', 'HTML must expose a thumbnail picker instead of a native select');
+assertIncludes(html, 'id="deleteImage"', 'HTML must expose a delete command for the selected image');
 assertIncludes(html, '<canvas id="imageCanvas"', 'HTML must expose bottom image canvas');
 assertIncludes(html, 'planning-image.css', 'HTML must load extracted stylesheet');
 assertIncludes(html, 'planning-image.js', 'HTML must load extracted runtime');
 assertIncludes(runtime, "message.type === 'call_app.launch'", 'runtime must wait for launch message');
 assertIncludes(runtime, "'call_app.ready'", 'runtime must emit ready after launch');
-assertIncludes(runtime, "'call_app.crdt.op.append'", 'runtime must persist image replacements through the Call App CRDT bridge');
-assertIncludes(runtime, "'planning_image.replace'", 'runtime must implement shared image replacement operation');
+assertIncludes(runtime, "'call_app.crdt.op.append'", 'runtime must persist image mutations through the Call App CRDT bridge');
+assertIncludes(runtime, "'planning_image.add'", 'runtime must implement shared multi-image add operations');
+assertIncludes(runtime, "'planning_image.select'", 'runtime must implement shared selected image operations');
+assertIncludes(runtime, "'planning_image.delete'", 'runtime must implement shared image delete operations');
 assertIncludes(runtime, "message.type === 'call_app.crdt.ops.response'", 'runtime must consume remote CRDT op polling responses');
-assertIncludes(runtime, 'applyImagePayload(envelope.payload || {}, true)', 'runtime must apply shared image replacements from replayed envelopes');
+assertIncludes(runtime, 'imageThumbList.replaceChildren()', 'runtime must render the image picker from CRDT state');
+assertIncludes(runtime, 'window.crypto.randomUUID', 'runtime must assign UUID-backed image ids');
+assertIncludes(runtime, "event.key !== 'Delete'", 'runtime must support Delete-key removal for the selected image');
+assertIncludes(runtime, 'canDeleteImage', 'runtime must gate deletion by image ownership or delete permission');
+assertIncludes(runtime, "permissionActions.has('delete')", 'runtime must read per-participant delete permission');
+assertIncludes(runtime, 'uploaded_by_actor_id: actorId', 'runtime must mark the uploading actor for own-image deletion');
 assertIncludes(runtime, 'FileReader', 'runtime must read uploaded images inside the iframe');
 assertIncludes(runtime, "canvas.addEventListener('wheel'", 'runtime must support wheel zoom');
 assertIncludes(runtime, "canvas.addEventListener('pointerdown'", 'runtime must support pointer pan');
@@ -106,6 +125,16 @@ assertIncludes(runtime, "canvas.toDataURL('image/png')", 'runtime must support P
 assertIncludes(runtime, 'primary_session_token_received: false', 'runtime must explicitly reject primary token delivery');
 assert.ok(!bundle.includes('sessionToken'), 'planning-image bundle must not reference parent session tokens');
 assert.ok(!bundle.includes('Authorization'), 'planning-image bundle must not reference authorization headers');
+
+assertIncludes(crdtDomain, 'function videochat_call_app_crdt_can_bypass_delete_permission', 'backend must allow own-image delete without global delete permission');
+assertIncludes(crdtDomain, "payload_type IN ('planning_image.add', 'planning_image.replace')", 'backend own-delete check must resolve Planning Image upload ownership from CRDT history');
+assertIncludes(crdtDomain, "($payload['uploaded_by_actor_id'] ?? '')", 'backend own-delete check must compare the uploading actor id');
+assertIncludes(crdtDomain, "trim((string) ($normalized['payload_type'] ?? '')) !== 'planning_image.delete'", 'backend delete bypass must apply only to planning image deletes');
+assert.match(
+  launchTokens,
+  /if \(in_array\('delete', \$actions, true\)\) \{[\s\S]*\$allowed\[\] = 'call_apps\.crdt\.append';[\s\S]*call_apps\.permissions\.manage/s,
+  'delete-only grants must still be able to append delete CRDT operations',
+);
 
 const workspaceState = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppWorkspaceState.js');
 assert.match(

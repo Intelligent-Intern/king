@@ -155,6 +155,7 @@ function videochat_call_app_launch_capabilities(array $session, string $grantSta
         $allowed[] = 'call_apps.export.request';
     }
     if (in_array('delete', $actions, true)) {
+        $allowed[] = 'call_apps.crdt.append';
         $allowed[] = 'call_apps.permissions.manage';
         $allowed[] = 'call_apps.permissions.revoke';
     }

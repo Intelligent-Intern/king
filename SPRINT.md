@@ -198,3 +198,14 @@ Tickets:
     pre-deploy websocket retry warnings for asset version `20260509122256`;
     TURN logs include normal peer TCP reset noise.
   - No second deploy needed for this pass.
+
+## Hotfix: Planning Image Multi-Image Controls
+
+Tickets:
+- [x] PI-01 Multi-upload keeps each image as a UUID-addressed CRDT item.
+- [x] PI-02 Top overlay thumbnail picker selects the active shared image.
+- [x] PI-03 Selected image can be deleted by Delete key or toolbar button.
+- [x] PI-04 Delete is allowed for the uploader's own image or participants
+  with the per-app delete action.
+- [x] PI-05 Planning Image uses existing per-participant read/write/delete
+  Call App grants for view/upload/delete.
