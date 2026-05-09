@@ -92,10 +92,14 @@ function membershipForTenant(user, tenantKey) {
     .find((membership) => String(membership?.tenant_key || '') === tenantKey) || null;
 }
 
+function isPlatformAdminUser(user) {
+  return user?.system_admin === true || String(user?.role || '').trim().toLowerCase() === 'admin';
+}
+
 function permissionsFor(user, membershipRole) {
   const normalizedRole = String(membershipRole || 'member').trim().toLowerCase();
   const isTenantAdmin = normalizedRole === 'owner' || normalizedRole === 'admin';
-  const isPlatformAdmin = user?.system_admin === true || String(user?.role || '').trim().toLowerCase() === 'admin';
+  const isPlatformAdmin = isPlatformAdminUser(user);
   const elevated = isTenantAdmin || isPlatformAdmin;
   return {
     platform_admin: isPlatformAdmin,
@@ -166,6 +170,38 @@ function ownerPayload(call) {
     display_name: owner.display_name,
     email: owner.email,
   };
+}
+
+function userMatchesSeedUser(user, seedUser) {
+  return Number(user?.id || 0) > 0 && Number(user?.id || 0) === Number(seedUser?.id || 0);
+}
+
+function isTenantAdminForCall(user, call) {
+  const tenantKey = typeof call?.tenant_key === 'string' ? call.tenant_key : '';
+  if (tenantKey === '') return false;
+  const membership = membershipForTenant(user, tenantKey);
+  const role = String(membership?.role || '').trim().toLowerCase();
+  return role === 'owner' || role === 'admin';
+}
+
+function isCallOwner(user, call) {
+  const owner = requiredRow(userIndex, call.owner_user_key, 'user');
+  return userMatchesSeedUser(user, owner);
+}
+
+function isGuestListUserForCall(user, call) {
+  const guestKeys = Array.isArray(call?.guest_list_user_keys) ? call.guest_list_user_keys : [];
+  const userKey = String(user?.key || '').trim();
+  if (userKey !== '' && guestKeys.includes(userKey)) return true;
+  return guestKeys.some((key) => userMatchesSeedUser(user, requiredRow(userIndex, key, 'user')));
+}
+
+function canDirectlyResolveCall(user, call) {
+  if (!user || !call) return false;
+  return isPlatformAdminUser(user)
+    || isTenantAdminForCall(user, call)
+    || isCallOwner(user, call)
+    || isGuestListUserForCall(user, call);
 }
 
 function participantPayload(user, callRole = 'participant', inviteState = 'allowed') {
@@ -302,6 +338,12 @@ function bearerToken(request) {
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (match) return match[1].trim();
   return String(request.headers()['x-session-id'] || '').trim();
+}
+
+function authenticatedSeedSessionRecord(request, issuedSessions) {
+  const token = bearerToken(request);
+  if (token === '') return null;
+  return issuedSessions.get(token) || seededSessionRecordFromToken(token);
 }
 
 function seededSessionRecordFromToken(token) {
@@ -468,12 +510,35 @@ export async function installCallAccessSeedRoutes(context) {
         });
         return;
       }
+      const record = authenticatedSeedSessionRecord(request, issuedSessions);
+      if (!record) {
+        await fulfillJson(route, 401, {
+          status: 'error',
+          error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      if (!canDirectlyResolveCall(record.user, call)) {
+        await fulfillJson(route, 200, {
+          status: 'ok',
+          result: {
+            state: 'forbidden',
+            resolved_as: 'call_id',
+            reason: 'calls_forbidden',
+            access_link: null,
+            call: null,
+          },
+          time: '2026-05-08T10:00:00.000Z',
+        });
+        return;
+      }
       await fulfillJson(route, 200, {
         status: 'ok',
         result: {
           state: 'resolved',
-          resolved_as: 'call',
-          call: callPayload(call),
+          resolved_as: 'call_id',
+          access_link: null,
+          call: callPayload(call, record.user, 'allowed'),
         },
         time: '2026-05-08T10:00:00.000Z',
       });
@@ -491,9 +556,28 @@ export async function installCallAccessSeedRoutes(context) {
         });
         return;
       }
+      const record = authenticatedSeedSessionRecord(request, issuedSessions);
+      if (!record) {
+        await fulfillJson(route, 401, {
+          status: 'error',
+          error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      if (!canDirectlyResolveCall(record.user, call)) {
+        await fulfillJson(route, 403, {
+          status: 'error',
+          error: {
+            code: 'calls_forbidden',
+            message: 'You are not allowed to view this call.',
+            details: { call_id: call.id },
+          },
+        });
+        return;
+      }
       await fulfillJson(route, 200, {
         status: 'ok',
-        call: callPayload(call),
+        call: callPayload(call, record.user, 'allowed'),
         time: '2026-05-08T10:00:00.000Z',
       });
       return;
