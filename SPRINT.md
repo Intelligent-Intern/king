@@ -2825,8 +2825,8 @@ recipient email, host, or foreign account data.
 - [x] Organization admin cannot join foreign organization call through org-admin rights
 - [ ] Normal user on guest list joins foreign call
 - [x] Normal user without guest-list entry lands in lobby or is denied
-- [ ] User creates own call, becomes owner, transfers ownership, loses call-admin rights
-- [ ] Organization admin creates call, transfers ownership, keeps admin rights
+- [x] User creates own call, becomes owner, transfers ownership, loses call-admin rights
+- [x] Organization admin creates call, transfers ownership, keeps admin rights
 - [x] Temporary user is admitted, then kicked, and cannot rejoin without renewed approval
 - [ ] Invited user is removed from organization before opening link, then joins as call-scoped invited guest
 - [x] Invite link is invalidated before use and cannot be used
@@ -2853,6 +2853,13 @@ without issuing sessions, rescheduled stale links are denied while the fresh
 personalized link uses current least-privilege permissions, deleted calls block
 temporary rejoin and stale links, and explicit owner end delivers an ended
 lifecycle state to multiple participant workspaces.
+`call-access-owner-transfer-main-journeys.spec.js` covers the owner-transfer
+main journeys: a normal user creates a call through the user compose flow,
+becomes the owner, manages the guest list, transfers ownership, receives a
+fresh room snapshot, and is denied further call-admin role changes; an
+organization admin creates a call through the admin compose flow, transfers
+ownership, receives the fresh room snapshot, and keeps call-admin moderation
+rights.
 `call-access-session-route-guard-contract.php` pins the logged-in anonymous
 link path to the authenticated account without temporary-account persistence or
 profile overwrite, and `call-guest-cleanup-lifecycle-remaining-contract.php`
@@ -2880,7 +2887,7 @@ cleanup audit.
 
 - [x] `e2e_owner_001_normal_user_creates_call_and_becomes_owner`
 - [x] `e2e_owner_002_admin_user_creates_call_and_becomes_owner`
-- [ ] `e2e_owner_003_owner_can_manage_guest_list`
+- [x] `e2e_owner_003_owner_can_manage_guest_list`
 - [x] `e2e_owner_004_owner_can_admit_lobby_participant`
 - [x] `e2e_owner_005_owner_can_kick_participant`
 - [x] `e2e_owner_006_normal_user_transfers_owner_and_loses_admin_rights`
@@ -2902,6 +2909,10 @@ normal-user transfer loses admin rights, organization-admin transfer keeps
 admin rights, the new owner receives owner/admin rights, failed target and
 cross-organization transfers are rejected, exactly one owner remains, and the
 successful transfer path writes the owner-transfer audit event.
+`call-access-owner-transfer-main-journeys.spec.js` is the browser proof for
+`e2e_owner_003`: the normal-user owner creates a call, reopens the compose
+modal, adds another registered participant to the guest list, and verifies the
+PATCH payload before proceeding through ownership transfer.
 
 ## Test Group: Direct Join Permissions
 
