@@ -30,6 +30,10 @@ async function main() {
   const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
+  const browserVideoEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
+  const protectedBrowserVideoEncoder = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
   const backgroundTabPolicy = read('src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
   const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
@@ -46,6 +50,10 @@ async function main() {
   requireContains(policySource, 'disableGossipMediaRepair: true', 'strict gossip repair gate');
   requireContains(policySource, 'disableBackgroundTabPolicy: true', 'strict background tab gate');
   requireContains(policySource, 'strictCaptureOnly: true', 'strict capture fallback gate');
+  requireContains(policySource, 'strictFixedOutputFrame: true', 'strict fixed frame output gate');
+  requireContains(policySource, 'disableSelectiveTileTransport: true', 'strict disables selective transport experiments');
+  requireContains(policySource, 'quietPublisherFrameDrops: true', 'strict quietly drops unsupported publisher frames');
+  requireContains(policySource, 'coalesceMediaSecurityHandshakeDiagnostics: true', 'strict coalesces handshake churn diagnostics');
 
   requireContains(callWorkspace, "import { CALL_STABILITY_POLICY } from './workspace/callWorkspace/strictStabilityPolicy';", 'workspace strict policy import');
   requireContains(callWorkspace, 'policy: CALL_STABILITY_POLICY', 'workspace passes strict policy into gossip lane');
@@ -71,8 +79,15 @@ async function main() {
   requireContains(captureProfileConstraints, 'if (options?.exact === true) return { exact: target };', 'strict capture enforcement does not cap down to lower device settings');
   requireContains(publisherPipeline, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'publisher uses raw track when outgoing background is disabled');
   requireContains(publisherPipeline, "suppressGossipPrimary: strictPolicyEnabled(constants.strictStabilityPolicy, 'disableGossipPublish')", 'publisher suppresses gossip-primary fallback diagnostics in strict mode');
+  requireContains(publisherPipeline, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableSelectiveTileTransport')", 'publisher disables selective tile transport in strict mode');
+  requireContains(publisherPipeline, "suppressSfuSendFailures: quietStrictPublisherDrops", 'publisher quietly drops strict SFU send failures');
   requireContains(publisherFrameDispatch, 'suppressGossipPrimary = false', 'frame dispatch accepts strict gossip suppression');
+  requireContains(publisherFrameDispatch, 'suppressSfuSendFailures = false', 'frame dispatch accepts strict SFU send failure suppression');
   requireContains(publisherFrameDispatch, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true', 'frame dispatch does not enter gossip-primary when strict suppresses it');
+  requireContains(browserVideoEncoderConfig, "String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30'", 'browser encoder sizing detects strict profile');
+  requireContains(browserVideoEncoderConfig, "{ mode: 'cover', targetAspectRatio: maxWidth / maxHeight }", 'browser encoder uses fixed 16:9 strict output sizing');
+  requireContains(publisherFrameTrace, 'raw_source_frame_width: frameSize.sourceWidth', 'transport metrics preserve raw source width separately under strict fixed output');
+  requireContains(protectedBrowserVideoEncoder, 'raw_source_frame_width: positiveInteger(frameSize.sourceWidth, 0)', 'browser encoder metrics preserve raw source width separately under strict fixed output');
 
   requireContains(backgroundTabPolicy, "strictPolicyEnabled(policy, 'disableBackgroundTabPolicy')", 'background tab policy can no-op under strict mode');
   requireContains(gossipDataLane, "strictGossipMediaDisabled('disableGossipPublish')", 'gossip publish is disabled under strict mode');
@@ -80,8 +95,11 @@ async function main() {
   requireContains(gossipDataLane, "strictGossipMediaDisabled()) return false;", 'gossip topology repair is disabled under strict mode');
   requireContains(socketLifecycle, "strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')", 'socket lifecycle absorbs media quality pressure under strict mode');
   requireContains(sfuLifecycle, 'disablePublisherFrameStallRecovery:', 'SFU lifecycle passes strict stall recovery option');
+  requireContains(sfuLifecycle, 'suppressPublisherFrameDropDiagnostics:', 'SFU lifecycle suppresses noisy strict frame drop diagnostics');
   requireContains(sfuClient, 'disablePublisherFrameStallRecovery', 'SFU client can disable publisher frame stall resubscribe');
   requireContains(sfuClient, 'disablePublisherMediaRecovery', 'SFU client can disable publisher media recovery requests');
+  requireContains(sfuClient, 'suppressPublisherFrameDropDiagnostics', 'SFU client can suppress noisy strict frame drop diagnostics');
+  requireContains(mediaSecurityRuntime, "strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')", 'strict mode coalesces sender-key-not-ready churn');
 
   const server = await createServer({
     root: frontendRoot,
@@ -102,6 +120,9 @@ async function main() {
     const {
       createSfuBackgroundTabPolicy,
     } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
+    const {
+      resolveBrowserEncoderFrameSize,
+    } = await server.ssrLoadModule('/src/domain/realtime/local/browserVideoEncoderConfig.ts');
 
     const strictPolicy = resolveCallStabilityPolicy({});
     assert.equal(isStrict720p30Policy(strictPolicy), true, 'empty env defaults to strict 720p30');
@@ -114,6 +135,10 @@ async function main() {
     assert.equal(profile.frameWidth, 1280, 'strict frame width must be 1280');
     assert.equal(profile.frameHeight, 720, 'strict frame height must be 720');
     assert.equal(profile.readbackFrameRate, 30, 'strict readback fps must be 30');
+    const portraitFrameSize = resolveBrowserEncoderFrameSize(profile, { displayWidth: 720, displayHeight: 1280 });
+    assert.equal(portraitFrameSize.frameWidth, 1280, 'strict portrait browser frames must encode as fixed 1280 width');
+    assert.equal(portraitFrameSize.frameHeight, 720, 'strict portrait browser frames must encode as fixed 720 height');
+    assert.equal(portraitFrameSize.framingMode, 'cover', 'strict portrait browser frames must use fixed cover framing');
 
     const refs = {
       activeCallId: { value: 'call-1' },

@@ -23,6 +23,10 @@ function normalizeVideoLayer(value) {
   return '';
 }
 
+function isStrict720p30Profile(videoProfile) {
+  return String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30';
+}
+
 function resolveThumbnailDimensions(sourceWidth, sourceHeight) {
   const normalizedWidth = positiveInteger(sourceWidth, 0);
   const normalizedHeight = positiveInteger(sourceHeight, 0);
@@ -67,12 +71,15 @@ export function resolveBrowserEncoderFrameSize(videoProfile, sourceFrame, { fram
   const sourceDimensions = videoFrameSourceDimensions(sourceFrame);
   const maxWidth = positiveInteger(videoProfile?.frameWidth || videoProfile?.captureWidth, 0);
   const maxHeight = positiveInteger(videoProfile?.frameHeight || videoProfile?.captureHeight, 0);
+  const resolvedFramingTarget = isStrict720p30Profile(videoProfile) && maxWidth > 0 && maxHeight > 0
+    ? { mode: 'cover', targetAspectRatio: maxWidth / maxHeight }
+    : framingTarget;
   const frameSize = resolveFramedFrameSizeFromDimensions(
     sourceDimensions.width,
     sourceDimensions.height,
     maxWidth,
     maxHeight,
-    framingTarget,
+    resolvedFramingTarget,
   );
   return {
     ...frameSize,

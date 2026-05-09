@@ -333,6 +333,17 @@ export function createPublisherBackpressureController({
       );
   }
 
+  function isStrictQuietPublisherDrop(reason, details = {}) {
+    if (!strictPolicyEnabled(strictStabilityPolicy, 'quietPublisherFrameDrops')) return false;
+    const normalizedReason = String(reason || details?.reason || '').trim().toLowerCase();
+    const abortReason = String(details?.abort_reason || details?.abortReason || '').trim().toLowerCase();
+    const stage = String(details?.stage || '').trim().toLowerCase();
+    const source = String(details?.source || '').trim().toLowerCase();
+    return /socket_not_open|media_transport|unavailable_after|wire_rate_budget|buffer_budget|queue_age_budget|send_buffer_drain_timeout|binary_envelope|readback_budget|payload_pressure|rate_budget_pressure|frame_send_pressure|frame_send_failed/.test(
+      `${normalizedReason} ${abortReason} ${stage} ${source}`,
+    );
+  }
+
   function resetWlvcMotionDeltaStableWindow() {
     state.wlvcMotionDeltaStableStartedAtMs = 0;
     state.wlvcMotionDeltaStableSampleCount = 0;
@@ -774,6 +785,15 @@ export function createPublisherBackpressureController({
         Math.max(sfuWlvcBackpressureMinPauseMs, retryAfterMs),
       )
       : sfuWlvcBackpressureMinPauseMs;
+    if (isStrictQuietPublisherDrop(normalizedReason, details || {})) {
+      state.wlvcBackpressurePauseUntilMs = Math.max(
+        state.wlvcBackpressurePauseUntilMs,
+        nowMs + sendFailurePauseMs,
+      );
+      resetWlvcSourceReadbackFailureCounters();
+      resetWlvcSourceReadbackRecoveryWindow();
+      return;
+    }
     if (isSourceReadbackBudgetFailure(normalizedReason, details)) {
       handleSourceReadbackBudgetFailure(normalizedBuffered, trackId, normalizedReason, details || {}, nowMs, retryAfterMs, sendFailurePauseMs);
       return;

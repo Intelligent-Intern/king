@@ -205,6 +205,7 @@ export function createSfuLifecycleHelpers({
     }, {
       disablePublisherFrameStallRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery'),
       disablePublisherMediaRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery'),
+      suppressPublisherFrameDropDiagnostics: strictPolicyEnabled(strictStabilityPolicy, 'quietPublisherFrameDrops'),
     });
 
     refs.sfuClientRef.value.connect(

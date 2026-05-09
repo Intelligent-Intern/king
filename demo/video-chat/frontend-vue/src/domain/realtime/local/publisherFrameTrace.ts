@@ -108,6 +108,10 @@ export function publisherFrameTraceMetrics(trace) {
   };
 }
 
+function isStrict720p30Profile(videoProfile) {
+  return String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30';
+}
+
 export function publisherFrameFailureDetails(trace, details) {
   return {
     ...(details || {}),
@@ -135,6 +139,9 @@ export function buildPublisherTransportStageMetrics({
   keyframeRetryDelayMs,
 }) {
   const sourceFrameRate = Math.max(0, Number(trace?.sourceTrackFrameRate || 0));
+  const strictFixedOutputFrame = isStrict720p30Profile(videoProfile);
+  const strictFrameWidth = strictFixedOutputFrame ? Math.max(0, Number(videoProfile.frameWidth || 0)) : 0;
+  const strictFrameHeight = strictFixedOutputFrame ? Math.max(0, Number(videoProfile.frameHeight || 0)) : 0;
   return {
     ...publisherFrameTraceMetrics(trace),
     outgoing_video_quality_profile: pipelineProfileId,
@@ -150,8 +157,10 @@ export function buildPublisherTransportStageMetrics({
     frame_height: frameSize.frameHeight,
     profile_frame_width: frameSize.profileFrameWidth,
     profile_frame_height: frameSize.profileFrameHeight,
-    source_frame_width: frameSize.sourceWidth,
-    source_frame_height: frameSize.sourceHeight,
+    source_frame_width: strictFrameWidth || frameSize.sourceWidth,
+    source_frame_height: strictFrameHeight || frameSize.sourceHeight,
+    raw_source_frame_width: frameSize.sourceWidth,
+    raw_source_frame_height: frameSize.sourceHeight,
     source_crop_x: Math.max(0, Number(frameSize.sourceCropX || 0)),
     source_crop_y: Math.max(0, Number(frameSize.sourceCropY || 0)),
     source_crop_width: Math.max(0, Number(frameSize.sourceCropWidth || 0)),

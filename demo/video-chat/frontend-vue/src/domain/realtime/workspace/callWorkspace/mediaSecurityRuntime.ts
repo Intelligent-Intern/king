@@ -9,6 +9,7 @@ import {
   shouldRecoverMediaSecuritySignalSender,
 } from './mediaSecurityParticipantSet';
 import { createMediaSecuritySfuPublishGate } from './mediaSecuritySfuPublishGate';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -42,6 +43,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     mediaSecuritySfuTargetSettleMs,
     nativeFrameErrorLogCooldownMs,
     sfuRuntimeEnabled,
+    strictStabilityPolicy,
     MediaSecuritySession,
   } = constants;
   const {
@@ -619,21 +621,23 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
         startMediaSecurityHandshakeWatchdog();
       }
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'media_security_sender_key_not_ready',
-        code: 'media_security_sender_key_not_ready',
-        message: 'Media security sender key could not be built for the remote participant.',
-        payload: {
-          target_user_id: normalizedTargetId,
-          peer_state: String(peer?.state || ''),
-          peer_has_wrapping_key: Boolean(peer?.wrappingKey),
-          refreshed_hello: shouldRefreshHello,
-          media_runtime_path: mediaRuntimePath.value,
-          security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
-        },
-      });
+      if (!strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'media_security_sender_key_not_ready',
+          code: 'media_security_sender_key_not_ready',
+          message: 'Media security sender key could not be built for the remote participant.',
+          payload: {
+            target_user_id: normalizedTargetId,
+            peer_state: String(peer?.state || ''),
+            peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+            refreshed_hello: shouldRefreshHello,
+            media_runtime_path: mediaRuntimePath.value,
+            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+          },
+        });
+      }
       return false;
     }
     if (sendSocketFrame(signal)) {

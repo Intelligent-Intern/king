@@ -922,6 +922,7 @@ const mediaSecurityRuntimeState = {
     mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
     nativeFrameErrorLogCooldownMs: NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS,
     sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
     MediaSecuritySession,
   },
   refs: {

@@ -352,6 +352,8 @@ export function createLocalPublisherPipelineHelpers({
 
     const videoProfile = currentSfuVideoProfile();
     const pipelineProfileId = String(videoProfile.id || '').trim() || 'balanced';
+    const quietStrictPublisherDrops = strictPolicyEnabled(constants.strictStabilityPolicy, 'quietPublisherFrameDrops');
+    const strictDisableSelectiveTransport = strictPolicyEnabled(constants.strictStabilityPolicy, 'disableSelectiveTileTransport');
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
     const protectedBrowserPublisher = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
@@ -678,6 +680,7 @@ export function createLocalPublisherPipelineHelpers({
         const matteMaskImageData = backgroundFilterController.getCurrentMatteMaskSnapshot();
         const encodeStartedAtMs = highResolutionNowMs();
         const canAttemptSelectivePatch = constants.selectiveTileEnabled
+          && !strictDisableSelectiveTransport
           && !forcedKeyframeRecoveryPending
           && !remoteKeyframeRequestPending
           && previousFullFrameImageData instanceof ImageData
@@ -781,6 +784,7 @@ export function createLocalPublisherPipelineHelpers({
           keyframeRetryBlockedUntilMs = timestamp + keyframeRetryDelayMs;
         };
         if (encodedPayloadBytes > maxEncodedPayloadBytes) {
+          if (quietStrictPublisherDrops) return;
           paceForcedKeyframeRecovery();
           handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
             layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
@@ -793,6 +797,7 @@ export function createLocalPublisherPipelineHelpers({
         const payloadSoftLimitRatio = Math.max(0.5, Math.min(0.98, Number(videoProfile.payloadSoftLimitRatio || 0.86)));
         const payloadSoftLimitBytes = Math.max(1, Math.floor(maxEncodedPayloadBytes * payloadSoftLimitRatio));
         if (encodedPayloadBytes >= payloadSoftLimitBytes || encodeMs > encodeBudgetMs) {
+          if (quietStrictPublisherDrops) return;
           paceForcedKeyframeRecovery();
           handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
             reason: 'sfu_wlvc_rate_budget_pressure',
@@ -952,6 +957,7 @@ export function createLocalPublisherPipelineHelpers({
           captureClientDiagnostic,
           captureClientDiagnosticError,
           suppressGossipPrimary: strictPolicyEnabled(constants.strictStabilityPolicy, 'disableGossipPublish'),
+          suppressSfuSendFailures: quietStrictPublisherDrops,
           trace,
           timestamp,
           paceForcedKeyframeRecovery,

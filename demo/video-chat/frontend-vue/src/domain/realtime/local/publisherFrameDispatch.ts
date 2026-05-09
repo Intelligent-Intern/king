@@ -69,6 +69,15 @@ function shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished) {
   return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !gossipPublished;
 }
 
+function isQuietSfuSendFailure(reason, details = {}) {
+  const normalizedReason = String(reason || details?.reason || '').trim().toLowerCase();
+  const abortReason = String(details?.abort_reason || details?.abortReason || '').trim().toLowerCase();
+  const stage = String(details?.stage || '').trim().toLowerCase();
+  return /socket_not_open|media_transport|unavailable_after|wire_rate_budget|buffer_budget|queue_age_budget|send_buffer_drain_timeout|binary_envelope|frame_send_failed/.test(
+    `${normalizedReason} ${abortReason} ${stage}`,
+  );
+}
+
 export async function dispatchPublisherFrame({
   frame,
   trackId,
@@ -82,6 +91,7 @@ export async function dispatchPublisherFrame({
   onRequiredSfuFailure,
   onOptionalSfuFailure,
   suppressGossipPrimary = false,
+  suppressSfuSendFailures = false,
 }) {
   const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true;
   const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional && suppressGossipPrimary !== true;
@@ -99,6 +109,16 @@ export async function dispatchPublisherFrame({
 
   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
   if (!sendClient) {
+    if (suppressSfuSendFailures) {
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: false,
+        sfuSendQuietDrop: true,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+      };
+    }
     if (gossipFirst && gossipPublished) {
       return {
         ok: true,
@@ -158,6 +178,17 @@ export async function dispatchPublisherFrame({
   const sent = await sendClient.sendEncodedFrame(frame);
   if (sent === false) {
     const failureDetails = sendClient.getLastSendFailure?.() || null;
+    if (suppressSfuSendFailures && (!failureDetails || isQuietSfuSendFailure('', failureDetails || {}))) {
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: false,
+        sfuSendQuietDrop: true,
+        sfuSendFailureDetails: failureDetails,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+      };
+    }
     if (!sfuOptional) {
       return {
         ok: Boolean(safeFunction(onRequiredSfuFailure)(failureDetails)),
@@ -229,6 +260,7 @@ export async function dispatchWlvcPublisherFrame({
   timestamp,
   paceForcedKeyframeRecovery,
   suppressGossipPrimary = false,
+  suppressSfuSendFailures = false,
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -240,6 +272,7 @@ export async function dispatchWlvcPublisherFrame({
     captureClientDiagnostic,
     captureClientDiagnosticError,
     suppressGossipPrimary,
+    suppressSfuSendFailures,
     onRequiredSfuUnavailable: () => {
       reportSfuClientUnavailableAfterEncode({
         getSfuClientBufferedAmount,
@@ -286,6 +319,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
   critical,
   codecId,
   suppressGossipPrimary = false,
+  suppressSfuSendFailures = false,
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -297,6 +331,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
     captureClientDiagnostic,
     captureClientDiagnosticError,
     suppressGossipPrimary,
+    suppressSfuSendFailures,
     onRequiredSfuUnavailable: () => {
       if (!critical) {
         reportNonCriticalDrop('sfu_client_unavailable_after_browser_thumbnail_encode', {
