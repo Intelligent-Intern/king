@@ -3,8 +3,8 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, watchEffect } from 'vue';
-import { RouterView } from 'vue-router';
+import { onBeforeUnmount, onMounted, watch, watchEffect } from 'vue';
+import { RouterView, useRoute } from 'vue-router';
 import { probeBackendRuntime } from './support/runtime';
 import { sessionState } from './domain/auth/session';
 import {
@@ -27,6 +27,8 @@ let buildVersionGuardTimerId = 0;
 let buildVersionGuardListenerBound = false;
 let buildVersionCheckPromise = null;
 let buildVersionReloadPending = false;
+
+const route = useRoute();
 
 function applyTheme(themeValue) {
   if (typeof document === 'undefined') return;
@@ -78,6 +80,19 @@ async function fetchLiveBuildVersion() {
   return String(response.headers.get(BUILD_VERSION_HEADER) || '').trim();
 }
 
+function isCallWorkspacePath(path = '') {
+  return String(path || '').startsWith('/workspace/call');
+}
+
+function scheduleBuildVersionReload() {
+  if (typeof window === 'undefined') return;
+  buildVersionReloadPending = true;
+  if (isCallWorkspacePath(route.path)) {
+    return;
+  }
+  window.location.reload();
+}
+
 async function checkForBuildVersionMismatch() {
   if (import.meta.env.DEV || buildVersionReloadPending) return;
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -91,8 +106,7 @@ async function checkForBuildVersionMismatch() {
     try {
       const liveBuildVersion = await fetchLiveBuildVersion();
       if (liveBuildVersion !== '' && liveBuildVersion !== BUILD_VERSION) {
-        buildVersionReloadPending = true;
-        window.location.reload();
+        scheduleBuildVersionReload();
       }
     } catch {
       // Ignore transient network failures while the app is already running.
@@ -130,6 +144,15 @@ watchEffect(() => {
   syncI18nDocumentState(sessionState.locale, sessionState.direction);
   applyWorkspaceBrandingDom();
 });
+
+watch(
+  () => route.path,
+  () => {
+    if (buildVersionReloadPending && !isCallWorkspacePath(route.path) && typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  },
+);
 
 onMounted(() => {
   startBuildVersionGuard();
