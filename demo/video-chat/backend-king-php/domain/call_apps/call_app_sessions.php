@@ -89,6 +89,16 @@ function videochat_call_app_default_permission_actions(): array
     return videochat_call_app_permission_action_keys();
 }
 
+function videochat_call_app_default_permission_actions_for_grant_state(string $grantState): array
+{
+    return strtolower(trim($grantState)) === 'allowed' ? videochat_call_app_default_permission_actions() : [];
+}
+
+function videochat_call_app_effective_permission_actions(string $grantState, array $actions): array
+{
+    return strtolower(trim($grantState)) === 'allowed' ? array_values($actions) : [];
+}
+
 function videochat_call_app_decode_permission_actions(string $json): array
 {
     $decoded = videochat_call_app_marketplace_decode_json($json, null);
@@ -223,13 +233,16 @@ SQL
         if (!is_array($row)) {
             continue;
         }
+        $grantState = (string) ($row['grant_state'] ?? 'denied');
+        $storedPermissionActions = videochat_call_app_decode_permission_actions((string) ($row['permission_actions_json'] ?? '["read","write","delete"]'));
+        $effectivePermissionActions = videochat_call_app_effective_permission_actions($grantState, $storedPermissionActions);
         $grants[] = [
             'subject_type' => (string) ($row['subject_type'] ?? ''),
             'user_id' => is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : null,
             'guest_id' => (string) ($row['guest_id'] ?? ''),
-            'grant_state' => (string) ($row['grant_state'] ?? 'denied'),
-            'permission_actions' => videochat_call_app_decode_permission_actions((string) ($row['permission_actions_json'] ?? '["read","write","delete"]')),
-            'permissions' => videochat_call_app_permission_action_map(videochat_call_app_decode_permission_actions((string) ($row['permission_actions_json'] ?? '["read","write","delete"]'))),
+            'grant_state' => $grantState,
+            'permission_actions' => $effectivePermissionActions,
+            'permissions' => videochat_call_app_permission_action_map($effectivePermissionActions),
             'source' => (string) ($row['source'] ?? 'default'),
             'changed_by_user_id' => is_numeric($row['changed_by_user_id'] ?? null) ? (int) $row['changed_by_user_id'] : null,
             'changed_at' => (string) ($row['changed_at'] ?? ''),
@@ -329,7 +342,7 @@ function videochat_call_app_normalize_grant_patch(array $payload): array
         $hasPermissionActions = array_key_exists('permission_actions', $grant)
             || array_key_exists('permissions', $grant);
         $rawPermissionActions = $grant['permission_actions']
-            ?? ($grant['permissions'] ?? videochat_call_app_default_permission_actions());
+            ?? ($grant['permissions'] ?? videochat_call_app_default_permission_actions_for_grant_state($grantState));
         $field = 'grants.' . $index;
 
         if (!in_array($subjectType, ['user', 'guest'], true)) {

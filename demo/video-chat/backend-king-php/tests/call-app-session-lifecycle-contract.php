@@ -47,6 +47,34 @@ function videochat_call_app_session_lifecycle_assert_diagnostic(array $payload, 
     videochat_call_app_session_lifecycle_assert(false, $message);
 }
 
+function videochat_call_app_session_lifecycle_last_frame(array $frames, string $socket, string $type = ''): array
+{
+    $rows = $frames[$socket] ?? [];
+    if (!is_array($rows)) {
+        return [];
+    }
+    for ($index = count($rows) - 1; $index >= 0; $index--) {
+        $frame = $rows[$index] ?? null;
+        if (!is_array($frame)) {
+            continue;
+        }
+        if ($type === '' || (string) ($frame['type'] ?? '') === $type) {
+            return $frame;
+        }
+    }
+    return [];
+}
+
+function videochat_call_app_session_lifecycle_grant_for_user(array $session, int $userId): array
+{
+    foreach ((array) ($session['grants'] ?? []) as $grant) {
+        if (is_array($grant) && (int) ($grant['user_id'] ?? 0) === $userId) {
+            return $grant;
+        }
+    }
+    return [];
+}
+
 function videochat_call_app_session_lifecycle_auth(PDO $pdo, int $userId, string $role): array
 {
     $tenant = videochat_tenant_context_for_user($pdo, $userId);
@@ -173,12 +201,66 @@ SQL
     $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
     $adminAuth = videochat_call_app_session_lifecycle_auth($pdo, $adminUserId, 'admin');
     $userAuth = videochat_call_app_session_lifecycle_auth($pdo, $regularUserId, 'user');
+    $realtimeFrames = [];
+    $sender = static function (mixed $socket, array $payload) use (&$realtimeFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($realtimeFrames[$key]) || !is_array($realtimeFrames[$key])) {
+            $realtimeFrames[$key] = [];
+        }
+        $realtimeFrames[$key][] = $payload;
+        return true;
+    };
+    $presenceState = videochat_presence_state_init();
+    $tenantPayload = ['id' => $tenantId];
+    $adminConnection = videochat_presence_connection_descriptor([
+        'id' => $adminUserId,
+        'display_name' => 'Admin',
+        'role' => 'admin',
+        'tenant' => $tenantPayload,
+    ], 'sess-admin-realtime', 'conn-admin-realtime', 'socket-admin-realtime', $roomId);
+    $adminConnection['active_call_id'] = $callId;
+    $adminConnection['requested_call_id'] = $callId;
+    $adminConnection['call_role'] = 'owner';
+    $adminConnection['effective_call_role'] = 'owner';
+    $adminConnection['can_moderate_call'] = true;
+    $adminJoin = videochat_presence_join_room($presenceState, $adminConnection, $roomId, $sender);
+    $adminConnection = (array) ($adminJoin['connection'] ?? $adminConnection);
+
+    $userConnection = videochat_presence_connection_descriptor([
+        'id' => $regularUserId,
+        'display_name' => 'User',
+        'role' => 'user',
+        'tenant' => $tenantPayload,
+    ], 'sess-user-realtime', 'conn-user-realtime', 'socket-user-realtime', $roomId);
+    $userConnection['active_call_id'] = $callId;
+    $userConnection['requested_call_id'] = $callId;
+    $userConnection['call_role'] = 'participant';
+    $userConnection['effective_call_role'] = 'participant';
+    $userJoin = videochat_presence_join_room($presenceState, $userConnection, $roomId, $sender);
+    $userConnection = (array) ($userJoin['connection'] ?? $userConnection);
+
+    $broadcastRoomSnapshot = static function (string $broadcastCallId, int $broadcastTenantId, string $reason) use (
+        &$presenceState,
+        $openDatabase,
+        $sender
+    ): int {
+        return videochat_realtime_broadcast_call_room_snapshots(
+            $presenceState,
+            $broadcastCallId,
+            $broadcastTenantId,
+            $openDatabase,
+            $reason,
+            '',
+            $sender
+        );
+    };
 
     $dispatch = static function (string $method, string $uri, array $auth, ?array $payload = null) use (
         $jsonResponse,
         $errorResponse,
         $decodeJsonBody,
-        $openDatabase
+        $openDatabase,
+        $broadcastRoomSnapshot
     ): array {
         $routePath = (string) (parse_url($uri, PHP_URL_PATH) ?: $uri);
         $request = [
@@ -195,7 +277,8 @@ SQL
             $jsonResponse,
             $errorResponse,
             $openDatabase,
-            $decodeJsonBody
+            $decodeJsonBody,
+            $broadcastRoomSnapshot
         );
         videochat_call_app_session_lifecycle_assert(is_array($response), 'route should return a response for ' . $uri);
         return $response;
@@ -224,6 +307,7 @@ SQL
     ]);
     videochat_call_app_session_lifecycle_assert((int) ($forbiddenCreate['status'] ?? 0) === 403, 'non-owner participant must not attach Call App');
 
+    $realtimeFrames = [];
     $created = $dispatch('POST', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth, [
         'app_key' => 'whiteboard',
         'default_app_policy' => 'allowed_by_default',
@@ -243,6 +327,11 @@ SQL
         videochat_call_app_session_lifecycle_assert((bool) (($seededGrant['permissions'] ?? [])['write'] ?? false) === true, 'seeded grants must expose write permission map');
         videochat_call_app_session_lifecycle_assert((bool) (($seededGrant['permissions'] ?? [])['delete'] ?? false) === true, 'seeded grants must expose delete permission map');
     }
+    videochat_call_app_session_lifecycle_assert((array) (videochat_call_app_session_lifecycle_grant_for_user($session, $regularUserId)['permission_actions'] ?? []) === ['read', 'write', 'delete'], 'default allowed grant must expose canonical permission_actions');
+    videochat_call_app_session_lifecycle_assert((int) ((($createdPayload['result'] ?? [])['room_snapshot_broadcast'] ?? [])['sent_count'] ?? 0) === 2, 'session attach should broadcast refreshed room snapshots to connected call participants');
+    $createdSnapshot = videochat_call_app_session_lifecycle_last_frame($realtimeFrames, 'socket-user-realtime', 'room/snapshot');
+    videochat_call_app_session_lifecycle_assert((string) ($createdSnapshot['reason'] ?? '') === 'call_app_session_changed', 'session attach snapshot reason mismatch');
+    videochat_call_app_session_lifecycle_assert((int) (($createdSnapshot['call_apps'] ?? [])['active_session_count'] ?? 0) === 1, 'session attach snapshot must expose active Call App session');
 
     $listed = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth);
     $listedPayload = videochat_call_app_session_lifecycle_decode($listed);
@@ -286,6 +375,7 @@ SQL
     ]);
     videochat_call_app_session_lifecycle_assert((int) ($forbiddenGrantPatch['status'] ?? 0) === 403, 'non-owner participant must not update app grants');
 
+    $realtimeFrames = [];
     $grantPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
         'grants' => [[
             'subject_type' => 'user',
@@ -300,9 +390,16 @@ SQL
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['changed_grants'] ?? [])[0] ?? [])['retired_launch_tokens'] ?? 0) === 1, 'denying a participant must revoke their active launch token');
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant audit must record retired launch tokens');
     $patchedSession = is_array(($grantPatchPayload['result'] ?? [])['session'] ?? null) ? ($grantPatchPayload['result'] ?? [])['session'] : [];
-    $regularGrant = array_values(array_filter((array) ($patchedSession['grants'] ?? []), static fn (array $grant): bool => (int) ($grant['user_id'] ?? 0) === $regularUserId))[0] ?? [];
+    $regularGrant = videochat_call_app_session_lifecycle_grant_for_user($patchedSession, $regularUserId);
     videochat_call_app_session_lifecycle_assert((string) ($regularGrant['grant_state'] ?? '') === 'denied', 'regular user grant should be denied after patch');
-    videochat_call_app_session_lifecycle_assert(((array) ($regularGrant['permission_actions'] ?? [])) === ['read', 'write', 'delete'], 'binary deny patch without actions must preserve default action set');
+    videochat_call_app_session_lifecycle_assert((array) ($regularGrant['permission_actions'] ?? ['unexpected']) === [], 'denied grant must expose empty canonical permission_actions');
+    videochat_call_app_session_lifecycle_assert((int) ((($grantPatchPayload['result'] ?? [])['room_snapshot_broadcast'] ?? [])['sent_count'] ?? 0) === 2, 'grant patch should broadcast refreshed room snapshots to connected call participants');
+    $grantPatchSnapshot = videochat_call_app_session_lifecycle_last_frame($realtimeFrames, 'socket-user-realtime', 'room/snapshot');
+    $grantPatchSnapshotSession = (($grantPatchSnapshot['call_apps'] ?? [])['active_sessions'] ?? [])[0] ?? [];
+    $regularSnapshotGrant = is_array($grantPatchSnapshotSession) ? videochat_call_app_session_lifecycle_grant_for_user($grantPatchSnapshotSession, $regularUserId) : [];
+    videochat_call_app_session_lifecycle_assert((string) ($grantPatchSnapshot['reason'] ?? '') === 'call_app_grants_changed', 'grant patch snapshot reason mismatch');
+    videochat_call_app_session_lifecycle_assert((string) ($regularSnapshotGrant['grant_state'] ?? '') === 'denied', 'grant patch snapshot must expose the updated denied grant');
+    videochat_call_app_session_lifecycle_assert((array) ($regularSnapshotGrant['permission_actions'] ?? ['unexpected']) === [], 'grant patch snapshot must expose canonical permission_actions from fetched session grants');
     $regularTokenRevokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = " . $pdo->quote($regularAllowedLaunchTokenId) . " LIMIT 1")->fetchColumn();
     videochat_call_app_session_lifecycle_assert($regularTokenRevokedAt !== '', 'denied participant active launch token must be revoked');
     $revokedRegularValidate = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
@@ -526,10 +623,15 @@ SQL
     $activeSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($activeSnapshot['active_session_count'] ?? 0) === 1, 'reactivated session must return to active room snapshot');
 
+    $realtimeFrames = [];
     $removed = $dispatch('DELETE', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth);
     $removedPayload = videochat_call_app_session_lifecycle_decode($removed);
     videochat_call_app_session_lifecycle_assert((int) ($removed['status'] ?? 0) === 200, 'remove should return 200');
     videochat_call_app_session_lifecycle_assert((int) (($removedPayload['result'] ?? [])['retired_launch_tokens'] ?? 0) === 2, 'remove must retire remaining active launch tokens for the collaborative journey');
+    videochat_call_app_session_lifecycle_assert((int) ((($removedPayload['result'] ?? [])['room_snapshot_broadcast'] ?? [])['sent_count'] ?? 0) === 2, 'session delete should broadcast refreshed room snapshots');
+    $removedRealtimeSnapshot = videochat_call_app_session_lifecycle_last_frame($realtimeFrames, 'socket-user-realtime', 'room/snapshot');
+    videochat_call_app_session_lifecycle_assert((string) ($removedRealtimeSnapshot['reason'] ?? '') === 'call_app_session_removed', 'session delete snapshot reason mismatch');
+    videochat_call_app_session_lifecycle_assert((int) (($removedRealtimeSnapshot['call_apps'] ?? [])['active_session_count'] ?? 0) === 0, 'session delete snapshot must remove active Call App sessions');
     $removedSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($removedSnapshot['active_session_count'] ?? 0) === 0, 'removed session must leave active room snapshot');
     $revokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = " . $pdo->quote($launchTokenId) . " LIMIT 1")->fetchColumn();

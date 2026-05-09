@@ -423,3 +423,57 @@ function videochat_realtime_broadcast_room_snapshot(
 
     return $sentCount;
 }
+
+function videochat_realtime_broadcast_call_room_snapshots(
+    array $presenceState,
+    string $callId,
+    int $tenantId,
+    callable $openDatabase,
+    string $reason,
+    string $excludeConnectionId = '',
+    ?callable $sender = null
+): int {
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    if ($normalizedCallId === '') {
+        return 0;
+    }
+
+    $rooms = [];
+    foreach (($presenceState['connections'] ?? []) as $connection) {
+        if (!is_array($connection)) {
+            continue;
+        }
+        if ($tenantId > 0 && (int) ($connection['tenant_id'] ?? 0) !== $tenantId) {
+            continue;
+        }
+
+        $connectionCallId = videochat_realtime_normalize_call_id(
+            (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
+            ''
+        );
+        if ($connectionCallId !== $normalizedCallId) {
+            continue;
+        }
+
+        $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+        if ($roomId === '') {
+            continue;
+        }
+        $rooms[$roomId] = true;
+    }
+
+    $sentCount = 0;
+    foreach (array_keys($rooms) as $roomId) {
+        $sentCount += videochat_realtime_broadcast_room_snapshot(
+            $presenceState,
+            $roomId,
+            $openDatabase,
+            $reason,
+            $excludeConnectionId,
+            $sender,
+            $tenantId > 0 ? $tenantId : null
+        );
+    }
+
+    return $sentCount;
+}
