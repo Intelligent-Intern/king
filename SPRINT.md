@@ -199,6 +199,12 @@ Tickets:
     authoritative session. `call-app-sidebar-contract`, `npm run build`,
     `npm run test:contract:call-apps`, `npm run test:contract:call-apps:sqlite`,
     and `git diff --check` PASS locally.
+  - Deploy proof: deployed without push, DNS, or certbot as asset
+    `20260509110149`. Public `prod-debug.sh`, public deploy smoke with
+    remote/admin writes skipped, public Call App asset probes, remote Compose
+    status, and remote logs since `2026-05-09T11:02:00Z` passed. The running
+    edge bundle contains `Remove from call`, `/api/call-app-sessions/`, and
+    `DELETE`.
 
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
