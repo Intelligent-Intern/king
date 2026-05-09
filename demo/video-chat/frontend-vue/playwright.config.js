@@ -37,7 +37,7 @@ function assertNonLoopbackProductionOrigin(label, origin, expectedProtocols) {
   if (!protocols.includes(parsed.protocol)) {
     throw new Error(`[playwright-production-smoke] ${label} must use ${protocols.join(' or ')}: ${origin}`);
   }
-  const hostname = parsed.hostname.toLowerCase();
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
   if (hostname === 'localhost'
     || hostname === '127.0.0.1'
     || hostname === '0.0.0.0'

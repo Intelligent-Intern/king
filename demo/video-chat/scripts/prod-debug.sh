@@ -31,7 +31,9 @@ regex_escape() {
 redact_stream() {
   sed -E \
     -e 's/(authorization:[[:space:]]*bearer[[:space:]]+)[^[:space:]]+/\1[REDACTED]/Ig' \
+    -e 's/(authorization:[[:space:]]*basic[[:space:]]+)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's/(bearer[[:space:]]+)[A-Za-z0-9._~+\/=-]+/\1[REDACTED]/Ig' \
+    -e 's/(set-cookie:[[:space:]]*)[^[:space:];]+=[^;[:space:]]+/\1[REDACTED]/Ig' \
     -e 's/([A-Za-z_][A-Za-z0-9_]*(TOKEN|SECRET|PASSWORD|PASS|KEY|CREDENTIAL|COOKIE|SESSION)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
     -e 's/("(token|secret|password|pass|key|credential|cookie|session)[^"]*"[[:space:]]*:[[:space:]]*")[^"]+/\1[REDACTED]/Ig' \
     -e 's/(([?&][^=&[:space:]]*(token|secret|password|pass|key|credential|cookie|session)[^=&[:space:]]*=))[^&[:space:]]+/\1[REDACTED]/Ig' \
