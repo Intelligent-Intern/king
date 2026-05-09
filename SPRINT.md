@@ -138,12 +138,21 @@ Tickets:
   - Emit `feature '<requested feature>' deployed` as a toast after the related
     feedback fix has been deployed and marked delivered.
 
-- [ ] OCA-05 Local merge, deploy, and diagnostics proof
+- [x] OCA-05 Local merge, deploy, and diagnostics proof
   - Merge completed worker branches into the local dev branch only; do not push.
   - Run focused contracts, build, and deploy on every third manager loop after
     completed work exists.
   - Run post-deploy diagnostics, collect all distinct errors, fix them together,
     and prepare at most one follow-up deployment from the consolidated fix set.
+  - Proof: deployed merged local branch without pushing as asset
+    `20260509104337`. `npm run test:contract:call-apps`,
+    `npm run build`, `npm run test:contract:call-apps:sqlite`, public
+    `prod-debug.sh`, public deploy smoke with remote/admin writes skipped, and
+    remote Compose/log diagnostics passed. Planning Image, Text Document,
+    Presentation, and Spreadsheet call-app HTML/manifest assets all returned
+    HTTP 200 on the public call-app host. The only filtered diagnostic entry was
+    a pre-deploy client SFU carrier event from old asset `20260509101811`; logs
+    after `2026-05-09T10:45:00Z` had no fatal/error/500 matches.
 
 - [x] OCA-06 Planning Image shared upload visibility hotfix
   - Make Planning Image default to shared call access because its core workflow
