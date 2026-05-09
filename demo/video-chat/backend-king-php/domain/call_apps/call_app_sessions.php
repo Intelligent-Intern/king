@@ -24,6 +24,11 @@ function videochat_call_app_session_default_grant_state(string $policy): string
     return $policy === 'allowed_by_default' ? 'allowed' : 'denied';
 }
 
+function videochat_call_app_permission_actions_for_grant_state(string $grantState): array
+{
+    return strtolower(trim($grantState)) === 'allowed' ? ['read', 'write', 'delete'] : [];
+}
+
 function videochat_call_app_session_guest_id(string $email): string
 {
     return 'guest_' . substr(hash('sha256', strtolower(trim($email))), 0, 32);
@@ -129,11 +134,13 @@ SQL
         if (!is_array($row)) {
             continue;
         }
+        $grantState = (string) ($row['grant_state'] ?? 'denied');
         $grants[] = [
             'subject_type' => (string) ($row['subject_type'] ?? ''),
             'user_id' => is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : null,
             'guest_id' => (string) ($row['guest_id'] ?? ''),
-            'grant_state' => (string) ($row['grant_state'] ?? 'denied'),
+            'grant_state' => $grantState,
+            'permission_actions' => videochat_call_app_permission_actions_for_grant_state($grantState),
             'source' => (string) ($row['source'] ?? 'default'),
             'changed_by_user_id' => is_numeric($row['changed_by_user_id'] ?? null) ? (int) $row['changed_by_user_id'] : null,
             'changed_at' => (string) ($row['changed_at'] ?? ''),
