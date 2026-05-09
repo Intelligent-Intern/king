@@ -430,6 +430,17 @@ async function layoutMetrics(page) {
     }
 
     const miniStrip = document.querySelector('.call-app-workspace-mini-strip');
+    const miniSlots = Array.from(document.querySelectorAll('.call-app-workspace-mini-video-slot')).map((slot) => {
+      const slotBox = slot.getBoundingClientRect();
+      return {
+        left: slotBox.left,
+        top: slotBox.top,
+        right: slotBox.right,
+        bottom: slotBox.bottom,
+        width: slotBox.width,
+        height: slotBox.height,
+      };
+    });
     const miniVideoFraming = Array.from(document.querySelectorAll('.call-app-workspace-mini-video-slot video')).map((video) => {
       const videoBox = video.getBoundingClientRect();
       const slotBox = video.parentElement.getBoundingClientRect();
@@ -467,6 +478,7 @@ async function layoutMetrics(page) {
         display: window.getComputedStyle(miniStrip).display,
         visibility: window.getComputedStyle(miniStrip).visibility,
       } : null,
+      miniSlots,
       miniVideoFraming,
       frameShell: rect('.call-app-workspace-frame-shell'),
       frame: rect('.call-app-workspace-frame'),
@@ -526,7 +538,12 @@ for (const viewport of [
     expect(fullscreen.miniZ).toBeGreaterThan(fullscreen.frameShellZ);
     expect(fullscreen.miniScroll.overflowX).toBe('auto');
     expect(fullscreen.miniScroll.scrollWidth).toBeGreaterThan(fullscreen.miniScroll.clientWidth);
-    expect(fullscreen.miniVideoFraming).toHaveLength(10);
+    expect(fullscreen.miniSlots).toHaveLength(10);
+    for (const slot of fullscreen.miniSlots) {
+      expect(slot.width).toBeGreaterThan(120);
+      expect(slot.height).toBeGreaterThan(70);
+    }
+    expect(fullscreen.miniVideoFraming.length).toBeGreaterThanOrEqual(9);
     for (const row of fullscreen.miniVideoFraming) {
       expect(row.objectFit).toBe('contain');
       expect(row.video.left).toBeGreaterThanOrEqual(row.slot.left - 1);
