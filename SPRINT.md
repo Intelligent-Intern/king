@@ -160,6 +160,16 @@ Tickets:
     Current binary backends can continue accepting `grant_state`; the
     read/write/delete backend agent must persist and echo those additive fields
     on session grants for exact per-action state after snapshot refresh.
+  - Loop 8 integration proof: backend/API now persists `permission_actions_json`,
+    PATCH accepts `permission_actions` plus `permissions`, GET/session snapshots
+    echo effective `permission_actions` and `permissions`, launch tokens and
+    CRDT gates enforce read/write/delete separately, and grant/session changes
+    broadcast fresh room snapshots. `npm run build`,
+    `npm run test:contract:call-apps`, `npm run test:contract:participant-roster`,
+    `npm run test:contract:build-size`,
+    `demo/video-chat/backend-king-php/tests/call-app-sqlite-runtime-proof.sh`,
+    and `npm run test:e2e:call-app-whiteboard` PASS locally.
+  - Remaining before close: production deploy plus post-deploy diagnostics.
 
 - [x] CWS-04 Call Apps fullscreen and media-safe layout
   - Call Apps must be visible and usable in fullscreen.
