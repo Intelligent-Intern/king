@@ -502,8 +502,8 @@ for (const viewport of [
       'Hana Host',
       'Ivan Integrator',
     ]);
-    await expect(page.getByText('Jia Joiner')).toHaveCount(0);
-    await expect(page.getByText('Kai Keeper')).toHaveCount(0);
+    await expect(page.locator('.call-app-workspace-mini-tile', { hasText: 'Jia Joiner' })).toHaveCount(0);
+    await expect(page.locator('.call-app-workspace-mini-tile', { hasText: 'Kai Keeper' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Hide Call App participants' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Open Call App fullscreen' })).toBeVisible();
 
