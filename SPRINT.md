@@ -3473,17 +3473,17 @@ current owner, and the mutation writes the owner-transfer audit row.
 - [x] Test data is deterministic
 - [x] Test data is isolated per test or safely reset
 - [ ] Tests cover all critical IAM and call-access flows
-- [ ] Tests cover invitation invalidation
+- [x] Tests cover invitation invalidation
 - [x] Tests cover guest account cleanup
 - [x] Tests cover call rescheduling
 - [x] Tests cover call deletion
 - [ ] Tests cover explicit call ending
 - [x] Tests cover implicit owner-absence ending
 - [x] Owner timeout tests do not wait 15 real minutes
-- [ ] Duplicate personalized-link abuse detection is tested
+- [x] Duplicate personalized-link abuse detection is tested
 - [x] Membership removal after invitation is tested with call-scoped guest access behavior
 - [x] Privacy and data minimization assertions are included
-- [ ] Security manipulation cases are covered
+- [x] Security manipulation cases are covered
 - [x] Audit-relevant flows are asserted where audit logs exist
 - [x] Test names are stable and mapped to the checklist
 - [ ] Documentation explains how to run tests locally
@@ -3504,3 +3504,12 @@ backend/ws/sfu service-DNS origins. Integrated reruns passed
 `npm run test:e2e:call-access`, `npm run test:e2e:matrix`,
 `npm run test:e2e:release-gate`, and `npm run test:contract:iam-call-access`
 with host-PHP `pdo_sqlite` unavailable.
+
+Post-checkbox cleanup: the invitation invalidation, duplicate personalized-link
+abuse-detection, and security-manipulation DoD items are checked here because
+the corresponding dedicated SPRINT sections above are already checked and
+proofed by `call-access-invalidation-contract`,
+`call-access-duplicate-review-contract.php`,
+`call-access-duplicate-review-email-contract.mjs`,
+`call-access-security-manipulation-contract`, and
+`call-access-security-manipulation.spec.js`.
