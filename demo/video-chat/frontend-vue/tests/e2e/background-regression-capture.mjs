@@ -668,10 +668,11 @@ async function runCapture(options) {
     server = startedServer.server;
     const baseURL = startedServer.baseURL;
     browser = await launcher.launch(launchOptions);
-    context = await browser.newContext({
-      baseURL,
-      permissions: ['camera', 'microphone'],
-    });
+    const contextOptions = { baseURL };
+    if (options.browser === 'chromium') {
+      contextOptions.permissions = ['camera', 'microphone'];
+    }
+    context = await browser.newContext(contextOptions);
     const page = await context.newPage();
     installNodePageMonitors(page, nodeEvents);
     await installBrowserSideMonitor(page);

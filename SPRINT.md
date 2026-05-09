@@ -128,19 +128,17 @@ Acceptance criteria:
   self-hosted call-app manifests that point at a private mothernode.
 
 Tickets:
-- [ ] BGF-01 Browser regression matrix and reproducible failure capture
+- [x] BGF-01 Browser regression matrix and reproducible failure capture
   - Capture Chrome Stable/Chromium Ubuntu/Firefox behavior for MediaPipe demo
     and King production paths.
   - Record exact browser versions, failing console signatures, backend choice,
     and whether CPU delegation still touches GPU internals.
   - Add a contract fixture for the known Chrome GPU-service init failure shape.
-  - Partial proof: `background-regression-matrix-fixture.json` records Chrome
-    Stable `147.0.7727.55` and Chromium Ubuntu `147.0.7727.116`; Firefox
-    evidence is still missing, so BGF-01 stays open.
-  - Close only after Firefox evidence is captured with the same schema and the
-    matrix records exact browser version, OS, GPU availability, backend choice,
-    console signatures, and CPU-delegate GPU-touch status for every required
-    browser. Do not close from Chromium-only evidence.
+  - Proof: `background-regression-matrix-fixture.json` records Chrome Stable
+    `147.0.7727.55`, Chromium Ubuntu `147.0.7727.116`, and Playwright Firefox
+    `148.0.2` captures from `background-regression-capture.mjs`, with exact
+    browser version, OS, GPU availability, backend choice, console signatures,
+    and CPU-delegate GPU-touch status for every required browser.
 
 - [x] BGF-02 Backend selection ladder with quarantine
   - Keep production on Pierre's worker segmenter pipeline, with MediaPipe scoped
