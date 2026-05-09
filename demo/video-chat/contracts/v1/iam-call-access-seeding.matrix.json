@@ -204,7 +204,7 @@
     },
     {
       "key": "disabled_registered_user",
-      "id": 6108,
+      "id": 6111,
       "email": "iam-disabled-user@example.test",
       "display_name": "Disabled Registered User",
       "role": "user",
@@ -341,7 +341,7 @@
     },
     {
       "key": "alpha_explicit_ended",
-      "id": "20000000-0000-4000-8000-000000000104",
+      "id": "20000000-0000-4000-8000-000000000107",
       "room_id": "iam-alpha-explicit-ended-room",
       "tenant_key": "alpha",
       "organization_key": "alpha_org",
