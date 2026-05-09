@@ -6,7 +6,7 @@
   "status": "runtime_ready",
   "category": "collaboration",
   "manufacturer": "KINGRT",
-  "description": "Collaborative image review call app with shared upload, pan, zoom, fit, and PNG export.",
+  "description": "Collaborative image review call app with shared multi-image upload, thumbnails, pan, zoom, delete, and PNG export.",
   "entrypoints": {
     "iframe": "public/index.html",
     "mcp_descriptor": "mcp.descriptor.json",

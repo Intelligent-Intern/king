@@ -177,16 +177,31 @@
             <span class="call-apps-access-name">{{ participant.displayName }}</span>
             <span class="call-apps-access-state" :class="grantStateClass(participant)">{{ grantStateLabel(participant) }}</span>
           </span>
-          <CallAppParticipantGrantButton
-            :session="activeSessionForAccess"
-            :row="participant"
-            :can-manage="canManage"
-            :api-request="apiRequest"
-            :send-socket-frame="sendSocketFrame"
-            :request-room-snapshot="requestRoomSnapshot"
-            variant="label"
-            @grant-updated="applyLocalGrantUpdate"
-          />
+          <span class="call-apps-access-actions">
+            <CallAppParticipantGrantButton
+              :session="activeSessionForAccess"
+              :row="participant"
+              :can-manage="canManage"
+              :api-request="apiRequest"
+              :send-socket-frame="sendSocketFrame"
+              :request-room-snapshot="requestRoomSnapshot"
+              variant="label"
+              @grant-updated="applyLocalGrantUpdate"
+            />
+            <CallAppParticipantGrantButton
+              v-for="action in activeSessionPermissionActions"
+              :key="`${participant.userId}:${action}`"
+              :session="activeSessionForAccess"
+              :row="participant"
+              :can-manage="canManage"
+              :api-request="apiRequest"
+              :send-socket-frame="sendSocketFrame"
+              :request-room-snapshot="requestRoomSnapshot"
+              :permission-action="action"
+              variant="label"
+              @grant-updated="applyLocalGrantUpdate"
+            />
+          </span>
         </div>
       </div>
       <div v-else class="call-apps-empty">
@@ -200,6 +215,7 @@
 import { computed, ref, watch } from 'vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import CallAppParticipantGrantButton from './CallAppParticipantGrantButton.vue';
+import { supportedCallAppPermissionActions } from './callAppParticipantGrantHelpers.js';
 import { useCallAppsCatalog } from './useCallAppsCatalog.js';
 
 const props = defineProps({
@@ -339,6 +355,7 @@ function defaultGrantState() {
 const activeSessionDefaultAccessLabel = computed(() => (
   defaultGrantState() === 'allowed' ? 'Default: allowed' : 'Default: blocked'
 ));
+const activeSessionPermissionActions = computed(() => supportedCallAppPermissionActions(activeSessionForAccess.value || {}));
 
 function grantStateForParticipant(participant) {
   const userId = Number(participant?.userId || participant?.user_id || 0);

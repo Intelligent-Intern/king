@@ -57,6 +57,6 @@
     "category": "collaboration",
     "order_scope": "organization",
     "default_participant_access": "allowed_by_default",
-    "summary": "Shared image upload with zoomable review canvas for planning calls."
+    "summary": "Shared multi-image upload with thumbnail picker, delete controls, and zoomable review canvas for planning calls."
   }
 }

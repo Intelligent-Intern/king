@@ -124,6 +124,89 @@ label.upload-button.disabled {
   background-size: 24px 24px;
 }
 
+.image-picker {
+  position: absolute;
+  z-index: 2;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.image-picker.empty {
+  display: none;
+}
+
+.image-thumb-list {
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 13, 20, 0.84);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  scrollbar-width: thin;
+}
+
+.image-thumb {
+  position: relative;
+  width: 92px;
+  height: 68px;
+  flex: 0 0 92px;
+  min-height: 68px;
+  padding: 4px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 14px;
+  gap: 3px;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.image-thumb.active {
+  border-color: #22c55e;
+  background: #14251d;
+}
+
+.image-thumb img {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.image-thumb-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 12px;
+  color: #d7e3f0;
+}
+
+.image-thumb-delete-marker {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-height: 16px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(127, 29, 29, 0.86);
+  color: #fee2e2;
+  font-size: 9px;
+  line-height: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 #imageCanvas {
   width: 100%;
   height: 100%;

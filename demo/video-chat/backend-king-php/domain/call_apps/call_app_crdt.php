@@ -92,6 +92,58 @@ function videochat_call_app_crdt_permission_for_payload_type(string $payloadType
     return str_ends_with(strtolower(trim($payloadType)), '.delete') ? 'delete' : 'write';
 }
 
+function videochat_call_app_crdt_actor_owns_planning_image(PDO $pdo, int $tenantId, array $document, string $imageId, string $actorId): bool
+{
+    $normalizedImageId = trim($imageId);
+    $normalizedActorId = trim($actorId);
+    if ($normalizedImageId === '' || $normalizedActorId === '') {
+        return false;
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT payload_json
+FROM call_app_crdt_ops
+WHERE tenant_id = :tenant_id
+  AND document_row_id = :document_row_id
+  AND payload_type IN ('planning_image.add', 'planning_image.replace')
+ORDER BY logical_clock DESC, id DESC
+LIMIT 500
+SQL
+    );
+    $statement->execute([
+        ':tenant_id' => $tenantId,
+        ':document_row_id' => (int) ($document['id'] ?? 0),
+    ]);
+
+    foreach ($statement->fetchAll(PDO::FETCH_COLUMN) ?: [] as $payloadJson) {
+        $payload = videochat_call_app_crdt_decode_json((string) $payloadJson, []);
+        if (!is_array($payload)) {
+            continue;
+        }
+        if (trim((string) ($payload['image_id'] ?? '')) !== $normalizedImageId) {
+            continue;
+        }
+        return trim((string) ($payload['uploaded_by_actor_id'] ?? '')) === $normalizedActorId;
+    }
+    return false;
+}
+
+function videochat_call_app_crdt_can_bypass_delete_permission(PDO $pdo, int $tenantId, array $document, array $normalized): bool
+{
+    if (trim((string) ($normalized['payload_type'] ?? '')) !== 'planning_image.delete') {
+        return false;
+    }
+    $payload = is_array($normalized['payload'] ?? null) ? $normalized['payload'] : [];
+    return videochat_call_app_crdt_actor_owns_planning_image(
+        $pdo,
+        $tenantId,
+        $document,
+        (string) ($payload['image_id'] ?? ''),
+        (string) ($normalized['actor_id'] ?? '')
+    );
+}
+
 function videochat_call_app_crdt_presence_payload_types(array $session): array
 {
     $appKey = (string) ($session['app_key'] ?? (($session['app'] ?? [])['app_key'] ?? ''));
@@ -293,15 +345,19 @@ function videochat_call_app_crdt_append_op(PDO $pdo, int $tenantId, string $sess
     if (!(bool) ($normalized['ok'] ?? false)) {
         return $normalized;
     }
+    $document = videochat_call_app_crdt_ensure_document($pdo, $tenantId, $resolved['record'], $resolved['session']);
     $grantDenied = videochat_call_app_crdt_requires_permission(
         $resolved,
         videochat_call_app_crdt_permission_for_payload_type((string) ($normalized['payload_type'] ?? ''))
     );
     if ($grantDenied !== null) {
-        return $grantDenied;
+        $canBypass = (string) ($grantDenied['reason'] ?? '') === 'participant_permission_denied'
+            && videochat_call_app_crdt_can_bypass_delete_permission($pdo, $tenantId, $document, $normalized);
+        if (!$canBypass) {
+            return $grantDenied;
+        }
     }
 
-    $document = videochat_call_app_crdt_ensure_document($pdo, $tenantId, $resolved['record'], $resolved['session']);
     $existing = $pdo->prepare('SELECT * FROM call_app_crdt_ops WHERE document_row_id = :document_row_id AND operation_id = :operation_id LIMIT 1');
     $existing->execute([':document_row_id' => (int) ($document['id'] ?? 0), ':operation_id' => (string) $normalized['operation_id']]);
     $duplicate = $existing->fetch(PDO::FETCH_ASSOC);

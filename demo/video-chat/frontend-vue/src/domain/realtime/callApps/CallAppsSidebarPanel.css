@@ -357,6 +357,14 @@
   padding-block: 4px;
 }
 
+.call-apps-access-actions {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .call-apps-access-main {
   min-width: 0;
   display: grid;
