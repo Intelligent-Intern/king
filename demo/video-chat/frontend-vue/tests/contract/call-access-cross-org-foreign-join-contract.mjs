@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -16,7 +20,6 @@ function readJson(relativePath) {
   return JSON.parse(read(relativePath));
 }
 
-const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const sprint = read('SPRINT.md');
@@ -24,12 +27,12 @@ const backendContract = read('demo/video-chat/backend-king-php/tests/call-access
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-cross-org-foreign-join.spec.js');
 
 assert.match(
-  String(packageJson.scripts['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /call-access-cross-org-foreign-join-contract\.mjs/,
   'IAM call-access contract script must include the cross-org foreign join static proof',
 );
 assert.match(
-  String(packageJson.scripts['test:e2e:call-access'] || ''),
+  callAccessE2eSuiteText,
   /call-access-cross-org-foreign-join\.spec\.js/,
   'focused call-access Playwright suite must include the cross-org foreign join E2E proof',
 );

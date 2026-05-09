@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -11,15 +12,10 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-function readJson(relativePath) {
-  return JSON.parse(read(relativePath));
-}
-
 const joinSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const seedSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const privacySpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-privacy-foreign-data.spec.js');
 const privacyContract = read('demo/video-chat/frontend-vue/tests/contract/call-access-privacy-foreign-data-contract.mjs');
-const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 
 for (const sentinel of [
@@ -85,9 +81,8 @@ assert.match(
   'privacy contract must pin backend denied/no-leak behavior',
 );
 
-const iamScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
 assert.ok(
-  iamScript.includes('node tests/contract/call-access-safe-screen-final-contract.mjs'),
+  iamCallAccessContractSuiteText.includes('node tests/contract/call-access-safe-screen-final-contract.mjs'),
   'IAM contract script must run the safe-screen final contract',
 );
 assert.ok(

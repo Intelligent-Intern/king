@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '..', '..');
@@ -15,7 +16,6 @@ const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-privacy
 const backendPrivacy = read('demo/video-chat/backend-king-php/tests/call-access-privacy-contract.php');
 const backendStrongMismatch = read('demo/video-chat/backend-king-php/tests/call-access-strong-mismatch-privacy-contract.php');
 const auditPrivacy = read('demo/video-chat/backend-king-php/tests/audit-call-access-privacy-minimization-contract.php');
-const packageJson = read('demo/video-chat/frontend-vue/package.json');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 
 for (const id of [
@@ -104,7 +104,7 @@ for (const contract of [
   'tests/contract/call-access-privacy-foreign-data-contract.mjs',
   'tests/audit-call-access-privacy-minimization-contract.sh',
 ]) {
-  assert.ok(packageJson.includes(contract), `package IAM contract script must include ${contract}`);
+  assert.ok(iamCallAccessContractSuiteText.includes(contract), `package IAM contract script must include ${contract}`);
   assert.ok(ciGate.includes(contract), `IAM CI gate must include ${contract}`);
 }
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { callAccessE2eSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -14,7 +15,6 @@ function read(relativePath) {
 
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js');
 const raceE2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-race.spec.js');
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const confirmationAuditHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php');
@@ -107,7 +107,7 @@ assert.match(
   'confirmation E2E must prove the temporary/link target session is not adopted',
 );
 assert.match(
-  packageJson.scripts['test:e2e:call-access'],
+  callAccessE2eSuiteText,
   /call-access-duplicate-race\.spec\.js/,
   'IAM call-access E2E script must include the duplicate-link race spec',
 );

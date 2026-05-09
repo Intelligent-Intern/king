@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -22,7 +23,6 @@ const contractShell = read('demo/video-chat/backend-king-php/tests/call-access-k
 const proofScript = read('demo/video-chat/scripts/king-participant-container-proof.sh');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const smoke = read('demo/video-chat/scripts/smoke.sh');
-const packageJson = read('demo/video-chat/frontend-vue/package.json');
 
 const testIds = [
   'e2e_king_001_king_can_join_as_owner',
@@ -72,7 +72,7 @@ requireContains(proofScript, 'call-access-king-container-contract.sh', 'proof sc
 requireContains(ciGate, 'tests/contract/iam-king-container-ci-contract.mjs', 'static CI gate includes king container contract');
 requireContains(ciGate, 'tests/call-access-king-container-contract.sh', 'SQLite CI gate includes king container backend proof');
 requireContains(smoke, 'king-participant-container-proof.sh', 'compose smoke wires king container proof');
-requireContains(packageJson, 'tests/contract/iam-king-container-ci-contract.mjs', 'package IAM contract includes static king container proof');
-requireContains(packageJson, '../scripts/king-participant-container-proof.sh', 'package IAM contract includes backend king container proof');
+requireContains(iamCallAccessContractSuiteText, 'tests/contract/iam-king-container-ci-contract.mjs', 'package IAM contract includes static king container proof');
+requireContains(iamCallAccessContractSuiteText, '../scripts/king-participant-container-proof.sh', 'package IAM contract includes backend king container proof');
 
 process.stdout.write('[iam-king-container-ci-contract] PASS\n');

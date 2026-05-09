@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -12,7 +16,6 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const realtimeModule = read('demo/video-chat/backend-king-php/http/module_realtime.php');
 const activeKickModule = read('demo/video-chat/backend-king-php/http/module_realtime_active_call_kick.php');
@@ -29,12 +32,12 @@ const matrixHarness = read('demo/video-chat/frontend-vue/tests/e2e/helpers/video
 const lobbyCommandPersistence = `${websocketCommands}\n${lobbyPersistence}`;
 
 assert.match(
-  String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /iam-active-call-kick-contract\.mjs/,
   'IAM contract gate must include the active-call kick static contract',
 );
 assert.match(
-  String(packageJson.scripts?.['test:e2e:call-access'] || ''),
+  callAccessE2eSuiteText,
   /call-access-rejoin-kick-membership\.spec\.js/,
   'Call Access Playwright gate must include the focused rejoin/kick browser spec',
 );

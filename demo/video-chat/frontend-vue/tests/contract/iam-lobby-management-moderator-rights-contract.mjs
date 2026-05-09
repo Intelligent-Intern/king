@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -15,7 +16,6 @@ function readJson(relativePath) {
   return JSON.parse(read(relativePath));
 }
 
-const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const sprint = read('SPRINT.md');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const anonymousLobbyContract = read('demo/video-chat/backend-king-php/tests/call-access-anonymous-lobby-contract.php');
@@ -26,8 +26,6 @@ const workspaceView = read('demo/video-chat/frontend-vue/src/domain/realtime/Cal
 const workspaceTemplate = read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html');
 const participantUi = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/participantUi.ts');
 const lobbyAdmissionSpec = read('demo/video-chat/frontend-vue/tests/e2e/lobby-admission.spec.js');
-
-const iamContractScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
 
 assert.match(
   anonymousLobbyContract,
@@ -136,12 +134,12 @@ assert.match(
   'SPRINT.md proof text must name this static contract and the backend lobby proof',
 );
 assert.match(
-  iamContractScript,
+  iamCallAccessContractSuiteText,
   /iam-lobby-management-moderator-rights-contract\.mjs/,
   'IAM contract script must include the lobby-management moderator-rights static contract',
 );
 assert.match(
-  iamContractScript,
+  iamCallAccessContractSuiteText,
   /call-access-anonymous-lobby-contract\.sh/,
   'IAM contract script must include the anonymous lobby backend proof',
 );

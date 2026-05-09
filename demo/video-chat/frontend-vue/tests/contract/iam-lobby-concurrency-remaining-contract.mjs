@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,7 +41,6 @@ const lobbyCommandPersistence = `${websocketCommands}\n${lobbyPersistence}\n${ac
 
 const scripts = packageJson.scripts || {};
 const lobbyScript = String(scripts['test:e2e:lobby-concurrency'] || '');
-const contractScript = String(scripts['test:contract:iam-call-access'] || '');
 const lobbyMatrixCommand = matrix.commands?.['frontend:e2e:lobby-concurrency'] || {};
 
 for (const e2eCase of [
@@ -83,7 +83,7 @@ assert.ok(
   'UI parity matrix must list the lobby concurrency browser proof spec',
 );
 requireIncludes(
-  contractScript,
+  iamCallAccessContractSuiteText,
   'node tests/contract/iam-lobby-concurrency-remaining-contract.mjs',
   'IAM call-access contract script must execute this lobby concurrency proof binding',
 );

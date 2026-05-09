@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -12,7 +16,6 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-invalidation-contract.php');
 const backendHelper = read('demo/video-chat/backend-king-php/tests/call-access-invitation-invalidation-helper.php');
@@ -20,13 +23,13 @@ const backendShell = read('demo/video-chat/backend-king-php/tests/call-access-in
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-invite-invalidation.spec.js');
 
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-link-invalidation-durability-contract\.mjs/,
   'IAM call-access contract script must include the link invalidation durability contract',
 );
 
 assert.match(
-  packageJson.scripts['test:e2e:call-access'],
+  callAccessE2eSuiteText,
   /call-access-invite-invalidation\.spec\.js/,
   'call-access E2E script must run the invite invalidation browser proof',
 );

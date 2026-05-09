@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { callAccessE2eSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -15,7 +16,6 @@ const e2eSpec = [
   read('tests/e2e/call-access-personalized-identity.spec.js'),
   read('tests/e2e/call-access-strong-mismatch-host-verification.spec.js'),
 ].join('\n');
-const packageJson = read('package.json');
 const joinView = read('src/domain/calls/access/JoinView.vue');
 const hostVerificationModal = read('src/domain/calls/access/StrongMismatchHostVerificationModal.vue');
 const callAccessSession = read('src/domain/calls/access/callAccessSession.ts');
@@ -101,7 +101,7 @@ assert.match(
   'declining update must leave logged-in account data unchanged and skip account-update request',
 );
 assert.match(
-  packageJson,
+  callAccessE2eSuiteText,
   /call-access-strong-mismatch-host-verification\.spec\.js/,
   'call-access E2E script must include the host-verification browser proof',
 );
