@@ -56,7 +56,7 @@ import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaSt
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
-import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
+import RightRosterPanel from './workspace/callWorkspace/RightRosterPanel.vue';
 import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
 import { dispatchCallAppPresenceSignal } from './callApps/callAppPresenceRelay.js';
 import {
@@ -241,6 +241,7 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const activeTab = ref('users');
 const usersSearch = ref('');
+const lobbySearch = ref('');
 const usersPage = ref(1);
 const lobbyPage = ref(1);
 const chatDraft = ref('');
@@ -1712,6 +1713,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   lobbyNotificationState,
   lobbyPage,
   lobbyQueue,
+  lobbySearch,
   localReactionEchoes,
   mediaRenderVersion,
   mediaRuntimeCapabilities,
@@ -1848,6 +1850,7 @@ const {
   ensureAloneIdleWatchTimer,
   evaluateAloneIdlePrompt,
   consumeQueuedModerationSyncEntries,
+  filteredLobbyRows,
   filteredUsers,
   flushQueuedModerationSync,
   flushQueuedReactions,
@@ -1871,6 +1874,7 @@ const {
   lobbyVirtualWindow,
   markChatUnread,
   onLobbyListScroll,
+  onLobbySearchInput,
   onUsersListScroll,
   onUsersSearchInput,
   openChatPanel,
@@ -1891,15 +1895,19 @@ const {
   scheduleUsersRefresh,
   setCallLayoutMode,
   setCallLayoutStrategy,
+  setLobbyListElement,
+  setUsersListElement,
   shouldShowWorkspaceAdmissionNotice,
   showChatUnreadBadge,
   showChatUnreadToast,
   showCompactMiniStripToggle,
   showLobbyJoinToast,
   showLobbyRequestBadge,
+  showLobbySearch,
   showMiniParticipantStrip,
   showParticipantMediaOverlay,
   showRightSidebar,
+  showUsersSearch,
   snapshotUsersRows,
   stripParticipants,
   syncCallLayoutSidebarControls,
@@ -1922,6 +1930,7 @@ const {
   userRowSnapshot,
   usersPageCount,
   usersPageRows,
+  usersTotal,
   usersVisibleRows,
   usersVirtualWindow,
 } = participantUiHelpers;
@@ -2077,6 +2086,7 @@ const {
     currentMediaSecurityRuntimePath,
     currentUserId,
     desiredRoomId,
+    filteredLobbyRows,
     filteredUsers,
     gridVideoParticipants,
     hasRealtimeRoomSync,
