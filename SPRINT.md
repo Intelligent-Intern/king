@@ -220,6 +220,20 @@ Tickets:
     PASS; `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
     VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
     PASS.
+  - Proof 2026-05-09 Loop 3 deploy: BGF-only direct `rsync` from local
+    `bgf-sprint-integration` merge `37995aea` synced the 16 scoped background
+    files only, with no push, no certbot, and no DNS changes. Remote
+    `docker compose ... up -d --build --remove-orphans` exited 0 and restarted
+    backend, websocket, SFU, and edge containers. Public-only
+    `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1
+    VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`
+    PASS; public-only `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1
+    demo/video-chat/scripts/prod-debug.sh` PASS; remote compose diagnostics
+    showed backend/ws/sfu/edge/turn running with restart count 0, and remote
+    logs since deploy had no `fatal`, `panic`, `uncaught`, `exception`,
+    `error`, `failed`, `unhealthy`, `502`, or `500` matches. BGF-07 remains
+    open until real Chrome/Chromium/Firefox call smoke covers camera, audio,
+    screenshare, reconnect, and background transitions.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
