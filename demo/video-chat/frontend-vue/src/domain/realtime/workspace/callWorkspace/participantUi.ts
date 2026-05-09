@@ -51,6 +51,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     lobbyNotificationState,
     lobbyPage,
     lobbyQueue,
+    lobbySearch,
     localReactionEchoes,
     mediaRenderVersion,
     moderationActionState,
@@ -526,6 +527,18 @@ const usersPageCount = computed(() => {
 
   return Math.max(1, Math.ceil(filteredUsers.value.length / USERS_PAGE_SIZE));
 });
+const usersUnfilteredPageCount = computed(() => {
+  if (usersSourceMode.value === 'directory') {
+    return Math.max(1, Math.ceil(Number(usersDirectoryPagination.total || 0) / USERS_PAGE_SIZE));
+  }
+  return Math.max(1, Math.ceil(snapshotUsersRows.value.length / USERS_PAGE_SIZE));
+});
+const showUsersSearch = computed(() => usersUnfilteredPageCount.value > 1 || usersSearch.value.trim() !== '');
+const usersTotal = computed(() => (
+  usersSourceMode.value === 'directory'
+    ? Number(usersDirectoryPagination.total || 0)
+    : filteredUsers.value.length
+));
 const usersPageRows = computed(() => {
   if (usersSourceMode.value === 'directory') {
     return usersDirectoryRows.value.map((row) => userRowSnapshot(row));
@@ -589,10 +602,22 @@ const lobbyRows = computed(() => {
   });
 });
 
-const lobbyPageCount = computed(() => Math.max(1, Math.ceil(lobbyRows.value.length / LOBBY_PAGE_SIZE)));
+const filteredLobbyRows = computed(() => {
+  const query = String(lobbySearch.value || '').trim().toLowerCase();
+  if (query === '') return lobbyRows.value;
+  return lobbyRows.value.filter((row) => (
+    String(row.display_name || '').toLowerCase().includes(query)
+    || String(row.status || '').toLowerCase().includes(query)
+    || String(row.user_id || '').includes(query)
+    || String(row.feedback || '').toLowerCase().includes(query)
+  ));
+});
+const lobbyUnfilteredPageCount = computed(() => Math.max(1, Math.ceil(lobbyRows.value.length / LOBBY_PAGE_SIZE)));
+const showLobbySearch = computed(() => lobbyUnfilteredPageCount.value > 1 || String(lobbySearch.value || '').trim() !== '');
+const lobbyPageCount = computed(() => Math.max(1, Math.ceil(filteredLobbyRows.value.length / LOBBY_PAGE_SIZE)));
 const lobbyPageRows = computed(() => {
   const offset = (lobbyPage.value - 1) * LOBBY_PAGE_SIZE;
-  return lobbyRows.value.slice(offset, offset + LOBBY_PAGE_SIZE).map((row) => lobbyRowSnapshot(row));
+  return filteredLobbyRows.value.slice(offset, offset + LOBBY_PAGE_SIZE).map((row) => lobbyRowSnapshot(row));
 });
 
 const lobbyVirtualWindow = computed(() => computeVirtualWindow(lobbyPageRows.value, lobbyListViewport));
@@ -1553,6 +1578,10 @@ function onUsersSearchInput() {
   }
 }
 
+function onLobbySearchInput() {
+  lobbyPage.value = 1;
+}
+
 function goToUsersPage(nextPage) {
   const normalizedPage = Number(nextPage);
   if (!Number.isInteger(normalizedPage) || normalizedPage < 1) return;
@@ -1576,6 +1605,16 @@ function syncUsersListViewport() {
 
 function syncLobbyListViewport() {
   updateListViewportMetrics(lobbyListRef.value, lobbyListViewport);
+}
+
+function setUsersListElement(node) {
+  usersListRef.value = node instanceof HTMLElement ? node : null;
+  syncUsersListViewport();
+}
+
+function setLobbyListElement(node) {
+  lobbyListRef.value = node instanceof HTMLElement ? node : null;
+  syncLobbyListViewport();
 }
 
 function resetUsersListScroll() {
@@ -1740,7 +1779,7 @@ function notifyLobbyJoinRequests(entries) {
 function openLobbyRequestsPanel() {
   if (!showLobbyTab.value) return;
   showRightSidebar();
-  setActiveTab('lobby');
+  setActiveTab('users');
   hideLobbyJoinToast();
 }
 
@@ -1770,20 +1809,17 @@ function openChatPanel() {
 
 function setActiveTab(tab) {
   const requestedTab = ['users', 'lobby', 'chat'].includes(tab) ? tab : 'users';
-  const nextTab = requestedTab === 'lobby' && !showLobbyTab.value ? 'users' : requestedTab;
+  const nextTab = requestedTab === 'lobby' ? 'users' : requestedTab;
   activeTab.value = nextTab;
   if (nextTab === 'users') {
     nextTick(() => syncUsersListViewport());
-  } else if (nextTab === 'lobby') {
-    hideLobbyJoinToast();
-    nextTick(() => syncLobbyListViewport());
   } else if (nextTab === 'chat') {
     clearChatUnread();
   }
   if (nextTab !== 'chat') {
     chatEmojiTrayOpen.value = false;
   }
-  if (isSocketOnline.value && (nextTab === 'users' || nextTab === 'lobby')) {
+  if (isSocketOnline.value && nextTab === 'users') {
     requestRoomSnapshot();
   }
   if (nextTab === 'users' && usersSourceMode.value === 'directory') {
@@ -1852,6 +1888,7 @@ function openLeftSidebarOverlay(event) {
     evaluateAloneIdlePrompt,
     consumeQueuedModerationSyncEntries,
     filteredUsers,
+    filteredLobbyRows,
     flushQueuedModerationSync,
     flushQueuedReactions,
     goToLobbyPage,
@@ -1880,6 +1917,7 @@ function openLeftSidebarOverlay(event) {
     normalizedCallLayout,
     notifyLobbyJoinRequests,
     onLobbyListScroll,
+    onLobbySearchInput,
     onUsersListScroll,
     onUsersSearchInput,
     openChatPanel,
@@ -1906,6 +1944,8 @@ function openLeftSidebarOverlay(event) {
     rowActionPending,
     scheduleUsersRefresh,
     setActiveTab,
+    setLobbyListElement,
+    setUsersListElement,
     setAdmissionGate,
     setCallLayoutMode,
     setCallLayoutStrategy,
@@ -1919,8 +1959,10 @@ function openLeftSidebarOverlay(event) {
     showParticipantMediaOverlay,
     showLobbyJoinToast,
     showLobbyRequestBadge,
+    showLobbySearch,
     showMiniParticipantStrip,
     showRightSidebar,
+    showUsersSearch,
     snapshotUsersRows,
     stripParticipants,
     syncCallLayoutSidebarControls,
@@ -1945,6 +1987,7 @@ function openLeftSidebarOverlay(event) {
     userRowSnapshot,
     usersPageCount,
     usersPageRows,
+    usersTotal,
     usersVisibleRows,
     usersVirtualWindow,
   };
