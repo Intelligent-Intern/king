@@ -1,9 +1,15 @@
 .call-apps-sidebar {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 0 0 56px;
   display: grid;
+  grid-auto-rows: max-content;
   gap: 1px;
   align-content: start;
   container-type: inline-size;
@@ -11,10 +17,13 @@
 }
 
 .call-apps-sidebar > * {
+  min-width: 0;
+  box-sizing: border-box;
   direction: var(--app-content-direction);
 }
 
 .call-apps-search {
+  min-width: 0;
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
@@ -44,6 +53,7 @@
 }
 
 .call-apps-picker {
+  min-width: 0;
   display: grid;
   gap: 6px;
   padding: 10px;
@@ -58,6 +68,8 @@
 .call-apps-list {
   display: grid;
   gap: 1px;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -66,7 +78,9 @@
 }
 
 .call-apps-list-item {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   border: 0;
   background: var(--bg-surface-strong);
   color: var(--text-primary);
@@ -86,12 +100,14 @@
 }
 
 .call-apps-item-main {
+  width: 100%;
   min-width: 0;
   display: grid;
   gap: 6px;
 }
 
 .call-apps-item-name {
+  min-width: 0;
   font-size: 13px;
   font-weight: 800;
   color: var(--text-primary);
@@ -147,6 +163,7 @@
 }
 
 .call-apps-status-badge {
+  max-width: 100%;
   min-height: 20px;
   padding: 3px 7px;
   border: 1px solid var(--color-border);
@@ -170,6 +187,7 @@
 }
 
 .call-apps-pagination {
+  min-width: 0;
   display: flex;
   flex-direction: row;
   justify-content: flex-end;
@@ -182,6 +200,7 @@
 
 .call-apps-detail,
 .call-apps-access {
+  min-width: 0;
   background: var(--bg-surface-strong);
   padding: clamp(12px, 5cqi, 20px);
   display: grid;
@@ -190,6 +209,7 @@
 
 .call-apps-detail-head,
 .call-apps-access-head {
+  min-width: 0;
   display: grid;
   gap: 4px;
 }
@@ -309,6 +329,7 @@
 }
 
 .call-apps-access-list {
+  min-width: 0;
   display: grid;
   gap: 8px;
 }
@@ -362,7 +383,7 @@
 
 @container (min-width: 380px) {
   .call-apps-list-item {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(72px, auto);
   }
 
   .call-apps-detail-grid {
