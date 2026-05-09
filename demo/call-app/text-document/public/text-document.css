@@ -1,0 +1,271 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e7ebef;
+  color: #161b22;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+select {
+  min-height: 34px;
+  border: 1px solid #9aa7b5;
+  border-radius: 6px;
+  background: #f7fafc;
+  color: #111827;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+button {
+  min-width: 38px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+select {
+  max-width: 150px;
+  padding: 0 28px 0 10px;
+}
+
+button:hover,
+button.active,
+select:hover {
+  border-color: #0f766e;
+  background: #e9fbf7;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.text-document-app {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: #e7ebef;
+}
+
+.document-toolbar,
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #c8d0d9;
+  background: #ffffff;
+}
+
+.document-toolbar {
+  flex-wrap: wrap;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-badge {
+  margin-left: auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #0f766e;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #064e3b;
+  background: #dff7ed;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.document-shell {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px;
+  background:
+    linear-gradient(90deg, rgba(22, 27, 34, 0.05) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(22, 27, 34, 0.05) 1px, transparent 1px),
+    #e7ebef;
+  background-size: 28px 28px;
+}
+
+.paper {
+  width: min(860px, 100%);
+  min-height: min(980px, calc(100vh - 136px));
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 64px);
+  background: #ffffff;
+  border: 1px solid #d6dde5;
+  box-shadow: 0 14px 34px rgba(20, 28, 38, 0.14);
+}
+
+.document-title {
+  min-height: 30px;
+  margin-bottom: 18px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.editor {
+  display: grid;
+  gap: 8px;
+}
+
+.block-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 5px;
+}
+
+.block-row.active {
+  border-color: #5eead4;
+  background: #f0fdfa;
+}
+
+.block-marker {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.block-text {
+  min-height: 30px;
+  outline: 0;
+  border-radius: 6px;
+  padding: 2px 4px;
+  color: #111827;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.block-text:focus {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 2px #14b8a6;
+}
+
+.block-text[contenteditable="false"] {
+  cursor: default;
+}
+
+.block-row[data-type="heading1"] .block-text {
+  font-size: 30px;
+  font-weight: 850;
+  line-height: 1.18;
+}
+
+.block-row[data-type="heading2"] .block-text {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.block-row[data-type="note"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.block-row[data-type="note"] .block-text {
+  color: #713f12;
+}
+
+.block-row.deleted {
+  display: none;
+}
+
+.run-bold {
+  font-weight: 800;
+}
+
+.run-italic {
+  font-style: italic;
+}
+
+.run-underline {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+}
+
+.empty-message {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #b7c2cf;
+  border-radius: 8px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.statusbar {
+  min-height: 42px;
+  justify-content: space-between;
+  border-top: 1px solid #c8d0d9;
+  border-bottom: 0;
+  color: #526070;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#status,
+#clock {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 620px) {
+  .document-shell {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .paper {
+    min-height: 100%;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .tool-group {
+    flex: 1 1 auto;
+  }
+
+  .mode-badge {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
+}

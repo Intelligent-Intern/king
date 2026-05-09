@@ -1,0 +1,60 @@
+{
+  "schema_version": "king.call_app.crdt_schema.v1",
+  "app_key": "text-document",
+  "protocol": "king.call_app.crdt.v1",
+  "engine": "adapter",
+  "documents": [
+    {
+      "kind": "text_document",
+      "schema_version": "text-document.document.v1",
+      "block_types": [
+        "heading1",
+        "heading2",
+        "paragraph",
+        "bullet",
+        "numbered",
+        "note"
+      ],
+      "operation_types": [
+        "text_document.block.upsert",
+        "text_document.block.delete",
+        "text_document.format.update",
+        "text_document.note.upsert"
+      ]
+    }
+  ],
+  "envelope": {
+    "required_fields": [
+      "app_id",
+      "app_version",
+      "call_id",
+      "app_session_id",
+      "document_id",
+      "schema_version",
+      "actor_id",
+      "operation_id",
+      "logical_clock",
+      "causal_dependencies",
+      "payload_type",
+      "payload",
+      "server_admission_stamp"
+    ],
+    "idempotency": {
+      "operation_id_required": true,
+      "duplicate_policy": "ignore_after_first_admission"
+    }
+  },
+  "snapshots": {
+    "strategy": "checkpoint",
+    "minimum_ops_before_checkpoint": 120,
+    "replay_after_snapshot": true
+  },
+  "presence": {
+    "persisted": false,
+    "types": []
+  },
+  "exports": [
+    "odt",
+    "pdf"
+  ]
+}
