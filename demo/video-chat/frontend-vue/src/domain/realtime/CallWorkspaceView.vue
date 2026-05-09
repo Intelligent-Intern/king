@@ -55,6 +55,7 @@ import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
+import { CALL_STABILITY_POLICY } from './workspace/callWorkspace/strictStabilityPolicy';
 import { createWorkspaceForegroundRecoveryController } from './workspace/callWorkspace/foregroundRecovery';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
 import RightRosterPanel from './workspace/callWorkspace/RightRosterPanel.vue';
@@ -669,6 +670,7 @@ const {
     defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
     sendSocketFrame,
   },
+  policy: CALL_STABILITY_POLICY,
 });
 const workspaceForegroundRecovery = createWorkspaceForegroundRecoveryController({
   connectSocket: () => connectSocket(),
@@ -1150,6 +1152,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     sfuWlvcSendBufferCriticalBytes: SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES,
     sfuWlvcSendBufferHighWaterBytes: SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES,
     sfuWlvcSendBufferLowWaterBytes: SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
     wlvcEncodeErrorLogCooldownMs: WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS,
     wlvcEncodeFailureThreshold: WLVC_ENCODE_FAILURE_THRESHOLD,
     wlvcEncodeFailureWindowMs: WLVC_ENCODE_FAILURE_WINDOW_MS,
@@ -1326,6 +1329,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     sfuPublishMaxRetries: SFU_PUBLISH_MAX_RETRIES,
     sfuPublishRetryDelayMs: SFU_PUBLISH_RETRY_DELAY_MS,
     sfuTrackAnnounceIntervalMs: SFU_TRACK_ANNOUNCE_INTERVAL_MS,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
   },
   refs: {
     SFUClient,
@@ -1563,6 +1567,7 @@ const {
     callStateSignalTypes: CALL_STATE_SIGNAL_TYPES,
     mediaSecuritySignalTypes: MEDIA_SECURITY_SIGNAL_TYPES,
     reconnectDelayMs: RECONNECT_DELAYS_MS,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
   },
   refs: {
     activeCallId,
@@ -1634,6 +1639,7 @@ const {
     sfuAutoQualityDowngradeNext: SFU_AUTO_QUALITY_DOWNGRADE_NEXT,
     sfuAutoQualityRecoveryProbeDelaysMs: SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
     sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
   },
   refs: {
     activeCallId,
@@ -2230,6 +2236,7 @@ registerCallWorkspaceLifecycleHelpers({
     compactBreakpoint: COMPACT_BREAKPOINT,
     mediaSecuritySessionClass: MediaSecuritySession,
     sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
+    strictStabilityPolicy: CALL_STABILITY_POLICY,
     typingSweepMs: TYPING_SWEEP_MS,
   },
 });

@@ -1,3 +1,5 @@
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
+
 function documentIsHidden(documentRef) {
   return documentRef?.visibilityState === 'hidden';
 }
@@ -31,6 +33,7 @@ export function createSfuBackgroundTabPolicy({
   callbacks = {},
   refs = {},
   documentRef = typeof document !== 'undefined' ? document : null,
+  policy = null,
 } = {}) {
   const {
     captureClientDiagnostic = () => {},
@@ -50,6 +53,10 @@ export function createSfuBackgroundTabPolicy({
   } = refs;
 
   let backgroundVideoPausedAtMs = 0;
+
+  function strictBackgroundTabPolicyDisabled() {
+    return strictPolicyEnabled(policy, 'disableBackgroundTabPolicy');
+  }
 
   function mediaRuntimeIsSfu() {
     return String(mediaRuntimePath.value || '').trim() === 'wlvc_wasm';
@@ -131,6 +138,7 @@ export function createSfuBackgroundTabPolicy({
   }
 
   function pauseVideoForBackground(context = {}) {
+    if (strictBackgroundTabPolicyDisabled()) return false;
     if (!shouldPauseSfuVideoForBackground(context, documentRef)) return false;
     if (!mediaRuntimeIsSfu()) return false;
 
@@ -143,6 +151,10 @@ export function createSfuBackgroundTabPolicy({
   }
 
   async function resumeVideoAfterForeground(context = {}) {
+    if (strictBackgroundTabPolicyDisabled()) {
+      backgroundVideoPausedAtMs = 0;
+      return false;
+    }
     if (backgroundVideoPausedAtMs <= 0) return false;
     const videoTrack = firstLiveVideoTrack(localStreamRef.value);
     if (!videoTrack) return false;
@@ -173,6 +185,8 @@ export function createSfuBackgroundTabPolicy({
   return {
     pauseVideoForBackground,
     resumeVideoAfterForeground,
-    shouldPauseSfuVideoForBackground: (context = {}) => shouldPauseSfuVideoForBackground(context, documentRef),
+    shouldPauseSfuVideoForBackground: (context = {}) => (
+      strictBackgroundTabPolicyDisabled() ? false : shouldPauseSfuVideoForBackground(context, documentRef)
+    ),
   };
 }

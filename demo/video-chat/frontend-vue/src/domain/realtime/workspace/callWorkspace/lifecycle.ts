@@ -1,5 +1,6 @@
 import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
 import { shouldArmWorkspaceForegroundRecovery } from './foregroundRecovery.ts';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function registerCallWorkspaceLifecycleHelpers({
   vue,
@@ -114,6 +115,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     sfuRuntimeEnabled,
     typingSweepMs,
     mediaSecuritySessionClass,
+    strictStabilityPolicy,
   } = constants;
   const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
     callbacks: {
@@ -131,6 +133,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       mediaRuntimePath,
       sfuClientRef,
     },
+    policy: strictStabilityPolicy,
   });
 
   function isNativeAudioSecurityWaitingMessage(message) {
@@ -195,6 +198,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     () => callMediaPrefs.outgoingVideoQualityProfile,
     (nextValue, previousValue) => {
       if (nextValue === previousValue) return;
+      if (strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')) return;
       resetSfuOutboundMediaForAutomaticProfileSwitch(nextValue, previousValue);
       void reconfigureLocalTracksFromSelectedDevices();
       ensureSfuVideoQualityRecoveryProbeSeries?.('outgoing_video_profile_changed', {
@@ -233,6 +237,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       ) {
         return;
       }
+      if (strictPolicyEnabled(strictStabilityPolicy, 'disableBackgroundOutgoing')) return;
       void reconfigureLocalBackgroundFilterOnly();
     }
   );

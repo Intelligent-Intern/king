@@ -11,6 +11,7 @@ import {
 } from './runtimeConfig.ts';
 import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 import { resolveSfuReceiverCountAwareSendBudget } from '../../sfu/sendBudget.ts';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
@@ -288,6 +289,7 @@ export function createPublisherBackpressureController({
   sfuWlvcSendBufferCriticalBytes,
   sfuWlvcSendBufferHighWaterBytes,
   sfuWlvcSendBufferLowWaterBytes,
+  strictStabilityPolicy,
   state,
 }) {
   const qualityRecoveryProbe = typeof probeSfuVideoQualityAfterStableReadback === 'function'
@@ -1108,6 +1110,7 @@ export function createPublisherBackpressureController({
   }
 
   function requestWlvcFullFrameKeyframe(reason = 'sfu_remote_keyframe_request', details = {}) {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery')) return false;
     const nowMs = Date.now();
     const normalizedReason = String(reason || 'sfu_remote_keyframe_request').trim().toLowerCase();
     const senderUserId = Math.max(0, Number(details?.senderUserId || details?.sender_user_id || 0));
@@ -1167,6 +1170,7 @@ export function createPublisherBackpressureController({
   }
 
   function restartSfuAfterVideoStall(reason, payload = {}, options = {}) {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
     const nowMs = Date.now();
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {
       return false;

@@ -15,6 +15,7 @@ import {
   isScreenShareUserId,
   screenShareOwnerOrUserId,
 } from '../../screenShareIdentity.js';
+import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
@@ -36,6 +37,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     remoteVideoStallCheckIntervalMs,
     remoteVideoStallThresholdMs,
     sfuRuntimeEnabled,
+    strictStabilityPolicy,
   } = constants;
   const {
     connectedParticipantUsers,
@@ -56,6 +58,18 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     setRemoteVideoStallTimer,
   } = state;
   const remoteSfuQualityPressureLastByKey = new Map();
+
+  function strictRemoteVideoRecoveryDisabled() {
+    return strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery');
+  }
+
+  function strictStallRecoveryResult() {
+    return {
+      recovered: false,
+      step: 'strict_720p30_disabled',
+      steps: [],
+    };
+  }
 
   function remoteSfuQualityPressureThrottleKey(targetUserId, reason) {
     return [
@@ -164,6 +178,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function recoverSfuPublisherBeforeReconnect(publisherId, peer, reason, nowMs = Date.now(), payload = {}) {
+    if (strictRemoteVideoRecoveryDisabled()) return strictStallRecoveryResult();
     return runSfuPublisherStallRecoveryLadder({
       captureClientDiagnostic,
       peer,
@@ -238,6 +253,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function requestSfuSocketRestartForPeer(reason, peer, payload = {}, nowMs = Date.now(), options = {}) {
     if (!peer || typeof peer !== 'object') return false;
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
     if (!canRequestSfuSocketRestartForPeer(peer, nowMs)) return false;
 
     const restartAttempt = Math.max(1, Number(peer.sfuSocketRestartCount || 0) + 1);
@@ -258,6 +274,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function requestSfuSubscriberLayerPreference(peer, publisherId, requestedVideoLayer, reason, nowMs = Date.now(), payload = {}) {
+    if (strictRemoteVideoRecoveryDisabled()) return false;
     if (!peer || typeof peer !== 'object') return false;
     const normalizedPublisherId = String(publisherId || '').trim();
     const layer = String(requestedVideoLayer || '').trim().toLowerCase();
@@ -313,6 +330,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
+    if (
+      strictRemoteVideoRecoveryDisabled()
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery')
+    ) {
+      return false;
+    }
     const payloadBody = payload && typeof payload === 'object' ? { ...payload } : {};
     const bypassRecoveryThrottle = Boolean(payloadBody.bypass_recovery_throttle);
     delete payloadBody.bypass_recovery_throttle;
@@ -382,6 +405,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function requestPublisherCompatibilityCodecFallback(peer, publisherId, reason, nowMs = Date.now(), payload = {}) {
+    if (strictRemoteVideoRecoveryDisabled()) return false;
     if (!peer || typeof peer !== 'object') return false;
     const fallbackBackoffMs = Math.max(remoteVideoStallThresholdMs * 2, 8000);
     const lastAtMs = Number(peer.sfuCompatibilityCodecFallbackLastAtMs || 0);
@@ -426,6 +450,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function checkRemoteVideoStalls() {
+    if (strictRemoteVideoRecoveryDisabled()) return;
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
     const nowMs = Date.now();
@@ -770,7 +795,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     if (timer !== null) {
       clearInterval(timer);
     }
+    if (strictRemoteVideoRecoveryDisabled()) {
+      setRemoteVideoStallTimer(null);
+      return false;
+    }
     setRemoteVideoStallTimer(setInterval(checkRemoteVideoStalls, remoteVideoStallCheckIntervalMs));
+    return true;
   }
 
   function clearRemoteVideoStallTimer() {

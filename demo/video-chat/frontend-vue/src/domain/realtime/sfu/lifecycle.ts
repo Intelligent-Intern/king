@@ -1,5 +1,6 @@
 import { closeProtectedBrowserVideoDecoders } from './remoteBrowserEncodedVideo';
 import { shouldRequestSfuCompatibilityCodecFallback } from './recoveryReasons';
+import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export function createSfuLifecycleHelpers({
   callbacks,
@@ -41,6 +42,7 @@ export function createSfuLifecycleHelpers({
     sfuPublishMaxRetries,
     sfuPublishRetryDelayMs,
     sfuTrackAnnounceIntervalMs,
+    strictStabilityPolicy,
   } = constants;
 
   function scheduleLocalTrackPublish(attempt = 0) {
@@ -200,6 +202,9 @@ export function createSfuLifecycleHelpers({
       },
       onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
       onPublisherPressure: (details) => handleSfuPublisherPressureMessage(details),
+    }, {
+      disablePublisherFrameStallRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery'),
+      disablePublisherMediaRecovery: strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery'),
     });
 
     refs.sfuClientRef.value.connect(
@@ -211,6 +216,7 @@ export function createSfuLifecycleHelpers({
   }
 
   function handleSfuPublisherPressureMessage(details = {}) {
+    if (strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery')) return false;
     const requestedAction = String(details?.requested_action || details?.requestedAction || '').trim().toLowerCase();
     const compatibilityCodecRequested = shouldRequestSfuCompatibilityCodecFallback(requestedAction, details);
     const requestFullKeyframe = Boolean(details?.request_full_keyframe || details?.requestFullKeyframe)
