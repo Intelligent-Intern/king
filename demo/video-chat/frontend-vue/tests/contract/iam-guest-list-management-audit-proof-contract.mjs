@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +14,6 @@ function read(relativePath) {
 }
 
 const sprint = read('SPRINT.md');
-const packageJson = read('demo/video-chat/frontend-vue/package.json');
 const iamCiGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const guestListContract = read('demo/video-chat/backend-king-php/tests/call-guest-list-direct-join-contract.php');
 const guestListDomain = read('demo/video-chat/backend-king-php/domain/calls/call_management_guest_list.php');
@@ -85,7 +85,7 @@ assert.match(
   'guest-list audit helper must persist scoped, sanitized guest-list event payloads',
 );
 assert.ok(
-  JSON.parse(packageJson).scripts['test:contract:iam-call-access'].includes('iam-guest-list-management-audit-proof-contract.mjs'),
+  iamCallAccessContractSuiteText.includes('iam-guest-list-management-audit-proof-contract.mjs'),
   'IAM contract suite must include the guest-list management audit proof contract',
 );
 assert.ok(

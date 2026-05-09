@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +33,12 @@ const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_real
 const backendContract = read('demo/video-chat/backend-king-php/tests/realtime-lobby-timeout-consistency-contract.php');
 const backendShell = read('demo/video-chat/backend-king-php/tests/realtime-lobby-timeout-consistency-contract.sh');
 
-const iamContractScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamContractScript = iamCallAccessContractSuiteText;
+requireIncludes(
+  String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
+  'iam-call-access-contract-suite.mjs',
+  'IAM contract package script must run the suite helper',
+);
 requireIncludes(
   iamContractScript,
   'node tests/contract/iam-lobby-timeout-consistency-contract.mjs',

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -16,7 +17,6 @@ function readJson(relativePath) {
   return JSON.parse(read(relativePath));
 }
 
-const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const seedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const seedSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const reviewDomain = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
@@ -123,12 +123,12 @@ assert.match(
 );
 
 assert.match(
-  String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /iam-system-admin-edge-cases-contract\.mjs/,
   'IAM contract script must include the system-admin edge-cases static contract',
 );
 assert.match(
-  String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /system-admin-call-rights-contract\.php/,
   'IAM contract script must include the backend system-admin edge-cases proof',
 );

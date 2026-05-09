@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -12,7 +16,6 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const routeModule = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
 const callsModule = read('demo/video-chat/backend-king-php/http/module_calls.php');
@@ -20,17 +23,17 @@ const backendContract = read('demo/video-chat/backend-king-php/tests/call-access
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-security-manipulation.spec.js');
 
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-security-manipulation-contract\.mjs/,
   'IAM call-access contract script must include the security manipulation static contract',
 );
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-security-manipulation-contract\.sh/,
   'IAM call-access contract script must include the backend security manipulation contract',
 );
 assert.match(
-  packageJson.scripts['test:e2e:call-access'],
+  callAccessE2eSuiteText,
   /call-access-security-manipulation\.spec\.js/,
   'call-access Playwright suite must include the focused security manipulation E2E',
 );

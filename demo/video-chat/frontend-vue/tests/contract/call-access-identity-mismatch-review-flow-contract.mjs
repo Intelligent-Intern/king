@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -19,7 +20,6 @@ const identityHelper = read('demo/video-chat/backend-king-php/domain/calls/call_
 const sessionDomain = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const reviewDomain = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.php');
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 
 assert.match(
   joinView,
@@ -109,7 +109,7 @@ for (const needle of [
 }
 
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-identity-mismatch-review-flow-contract\.mjs/,
   'IAM call-access contract script must include the identity mismatch review-flow contract',
 );

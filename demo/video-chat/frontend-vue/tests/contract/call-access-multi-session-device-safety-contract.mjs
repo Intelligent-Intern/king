@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -12,13 +13,12 @@ function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-multi-session-device-safety.spec.js');
 const callAccessContract = read('demo/video-chat/backend-king-php/domain/calls/call_access_contract.php');
 const backendSessionContract = read('demo/video-chat/backend-king-php/tests/call-access-session-contract.php');
 
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-multi-session-device-safety-contract\.mjs/,
   'IAM call-access contract script must include the multi-session/device safety contract',
 );
@@ -140,8 +140,8 @@ assert.match(
 );
 assert.match(
   backendSessionContract,
-  /same user concurrent devices must not create duplicate participant rows/,
-  'backend session contract must prove same-user devices leave one participant row',
+  /same user concurrent devices must not create participant rows before queueing/,
+  'backend session contract must prove same-user devices do not create participant rows before queueing',
 );
 assert.match(
   backendSessionContract,
