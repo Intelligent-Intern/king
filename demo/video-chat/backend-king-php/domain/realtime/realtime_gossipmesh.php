@@ -1233,6 +1233,22 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string 
         }
     }
 
+    $admittedPeers = [];
+    foreach (is_array($topologyPlan['members'] ?? null) ? $topologyPlan['members'] : [] as $member) {
+        if (!is_array($member)) {
+            continue;
+        }
+        $memberId = videochat_gossipmesh_safe_id($member['id'] ?? ($member['peer_id'] ?? ''));
+        if ($memberId === '' || $memberId === $safePeerId) {
+            continue;
+        }
+        $admittedPeers[] = [
+            'peer_id' => $memberId,
+            'transport' => 'rtc_datachannel',
+            'data_transports' => ['rtc_datachannel'],
+        ];
+    }
+
     return [
         'lane' => 'ops',
         'type' => VIDEOCHAT_GOSSIPMESH_TOPOLOGY_HINT_TYPE,
@@ -1242,6 +1258,7 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string 
         'call_id' => (string) ($topologyPlan['call_id'] ?? ''),
         'peer_id' => $safePeerId,
         'topology_epoch' => $epochMs ?? (int) floor(microtime(true) * 1000),
+        'admitted_peers' => $admittedPeers,
         'neighbors' => $neighbors,
         'reconnect_reason' => trim($reason) === '' ? 'topology_repair' : trim($reason),
     ];

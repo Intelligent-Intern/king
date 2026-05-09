@@ -1,3 +1,5 @@
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+
 function documentIsHidden(documentRef) {
   return documentRef?.visibilityState === 'hidden';
 }
@@ -105,6 +107,7 @@ export function createSfuBackgroundTabPolicy({
   }
 
   function pauseVideoForBackground(context = {}) {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
     if (!shouldPauseSfuVideoForBackground(context, documentRef)) return false;
     if (!mediaRuntimeIsSfu()) return false;
     if (backgroundVideoPaused) return false;
@@ -141,6 +144,7 @@ export function createSfuBackgroundTabPolicy({
   }
 
   async function resumeVideoAfterForeground(context = {}) {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
     if (!backgroundVideoPaused) return false;
     const videoTrack = firstLiveVideoTrack(localStreamRef.value);
     const pausedForMs = Math.max(0, Date.now() - backgroundVideoPausedAtMs);

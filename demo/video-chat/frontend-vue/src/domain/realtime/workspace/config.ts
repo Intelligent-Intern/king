@@ -255,7 +255,8 @@ function buildDefaultNativeIceServers() {
 }
 
 export const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || buildDefaultNativeIceServers();
-export const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, false);
+export const SFU_RUNTIME_ENABLED = false;
+export const SPUTNIK_PEERS_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SPUTNIK_PEERS, false);
 
 export function mediaDebugLog(...args) {
   debugLog(...args);

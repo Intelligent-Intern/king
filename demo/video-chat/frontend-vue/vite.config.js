@@ -233,6 +233,8 @@ const callAppStaticPlugin = () => ({
 
 const allowedHosts = parseAllowedHosts(process.env.VIDEOCHAT_VUE_ALLOWED_HOSTS || '');
 const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
+const devBackendOrigin = String(process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080').trim();
+const devWebSocketOrigin = String(process.env.VITE_VIDEOCHAT_WS_ORIGIN || devBackendOrigin).trim();
 const callWorkspaceChunkForId = (id) => {
   const normalized = id.replace(/\\/g, '/');
   if (normalized.includes('/node_modules/')) {
@@ -294,6 +296,21 @@ export default defineConfig({
   server: {
     host: process.env.VIDEOCHAT_VUE_HOST || '127.0.0.1',
     port: Number.parseInt(process.env.VIDEOCHAT_VUE_PORT || '5176', 10),
+    proxy: {
+      '/api': {
+        target: devBackendOrigin,
+        changeOrigin: true,
+      },
+      '/health': {
+        target: devBackendOrigin,
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: devWebSocketOrigin,
+        changeOrigin: true,
+        ws: true,
+      },
+    },
     ...hostOptions,
   },
   preview: {

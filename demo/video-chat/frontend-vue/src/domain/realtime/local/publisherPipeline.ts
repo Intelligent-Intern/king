@@ -291,9 +291,15 @@ export function createLocalPublisherPipelineHelpers({
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
-        eventType: 'local_background_stream_publisher_active',
-        code: 'local_background_stream_publisher_active',
-        message: 'Local preview and SFU publisher are using the processed background compositor video track.',
+        eventType: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+          ? 'local_background_stream_gossip_publisher_active'
+          : 'local_background_stream_publisher_active',
+        code: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+          ? 'local_background_stream_gossip_publisher_active'
+          : 'local_background_stream_publisher_active',
+        message: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+          ? 'Local preview and Gossip publisher are using the processed background compositor video track.'
+          : 'Local preview and SFU publisher are using the processed background compositor video track.',
         payload: {
           track_id: videoTrack.id,
           raw_track_id: activeRawVideoTrack?.id || '',

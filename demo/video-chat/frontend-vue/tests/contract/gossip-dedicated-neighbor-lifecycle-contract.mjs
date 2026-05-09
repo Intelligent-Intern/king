@@ -39,9 +39,10 @@ assert(
 )
 assert(
   /function applyAssignedNeighbors\(topologyHint,\s*assignedPeerIds\)/.test(lifecycle)
-    && /ensurePeer\(peerId,\s*true,\s*'server_assigned_neighbor'\)/.test(lifecycle)
+    && /function shouldInitiatePeer\(peerId\)/.test(lifecycle)
+    && /ensurePeer\(peerId,\s*shouldInitiatePeer\(peerId\),\s*'server_assigned_neighbor'\)/.test(lifecycle)
     && /if \(!assigned\.has\(peerId\)\) closePeer\(peerId,\s*'retired_by_topology'\)/.test(lifecycle),
-  'assigned neighbors must create dedicated links and retired assignments must close their edge',
+  'assigned neighbors must create deterministic dedicated links and retired assignments must close their edge',
 )
 assert(
   /function handleGossipNeighborSignal\(type,\s*senderPeerId,\s*payload\)/.test(lifecycle)

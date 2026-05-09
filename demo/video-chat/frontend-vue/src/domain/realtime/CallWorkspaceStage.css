@@ -957,6 +957,73 @@
   background: var(--color-error);
 }
 
+.sputnik-peer-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 6px;
+  border: 1px solid rgba(105, 156, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(6, 17, 44, 0.72);
+}
+
+.sputnik-peer-button {
+  width: 44px;
+}
+
+.sputnik-peer-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sputnik-peer-button.stopping .sputnik-peer-icon {
+  background: var(--color-error);
+}
+
+.sputnik-peer-select,
+.sputnik-peer-stop {
+  height: 32px;
+  border: 1px solid rgba(105, 156, 255, 0.36);
+  border-radius: 8px;
+  background: rgba(7, 18, 48, 0.94);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.sputnik-peer-select {
+  width: 62px;
+  padding: 0 6px;
+}
+
+.sputnik-peer-stop {
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.sputnik-peer-sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sputnik-peer-sound input {
+  width: 14px;
+  height: 14px;
+}
+
 .ctrl-icon-image {
   width: 20px;
   height: 20px;

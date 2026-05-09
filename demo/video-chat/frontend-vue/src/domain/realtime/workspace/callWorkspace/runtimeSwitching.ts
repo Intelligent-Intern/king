@@ -4,6 +4,7 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
 } from './runtimeConfig.ts';
 import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 export function createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks,
@@ -175,6 +176,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   async function maybeFallbackToNativeRuntime(reason) {
     if (sfuRuntimeEnabled) return false;
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
     if (!refs.mediaRuntimeCapabilities.value.stageB) return false;
     return switchMediaRuntimePath('webrtc_native', reason);
   }

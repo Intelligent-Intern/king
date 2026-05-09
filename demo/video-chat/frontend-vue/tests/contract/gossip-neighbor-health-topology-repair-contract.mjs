@@ -66,8 +66,8 @@ assert(
   'assigned-neighbor loss must request topology repair over the existing ops WebSocket lane',
 )
 assert(
-  /onStateChange:\s*\(peerId,\s*state,\s*(eventType|reason)\)\s*=>\s*\{[\s\S]*if \(\(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
-  'RTCDataChannel close/error for an assigned neighbor must trigger a topology repair request',
+  !/if \(!hasOpenReplacement && \(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
+  'RTCDataChannel close/error must not directly trigger topology repair; peer-connection failed/closed owns repair',
 )
 assert(
   /onPeerConnectionState = \(\) => false/.test(gossipNeighborLifecycle)

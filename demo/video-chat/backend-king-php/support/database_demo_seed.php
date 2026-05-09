@@ -42,6 +42,28 @@ function videochat_demo_user_blueprint(): array
         ],
     ];
 
+    if (function_exists('videochat_realtime_sputnik_dev_peers_enabled')
+        ? videochat_realtime_sputnik_dev_peers_enabled()
+        : strtolower(trim((string) getenv('VIDEOCHAT_ENABLE_SPUTNIK_PEERS'))) === 'true'
+    ) {
+        foreach ([
+            ['alice@sputnik.local', 'Alice', 'alice123'],
+            ['sputnik-1@sputnik.local', 'Sputnik 1', 'sputnik123'],
+            ['sputnik-2@sputnik.local', 'Sputnik 2', 'sputnik223'],
+            ['sputnik-3@sputnik.local', 'Sputnik 3', 'sputnik323'],
+        ] as [$email, $displayName, $password]) {
+            $users[] = [
+                'email' => $email,
+                'display_name' => $displayName,
+                'role' => 'admin',
+                'password' => $password,
+                'time_format' => '24h',
+                'date_format' => 'dmy_dot',
+                'theme' => 'dark',
+            ];
+        }
+    }
+
     $deduplicated = [];
     $seenByEmail = [];
     foreach ($users as $user) {

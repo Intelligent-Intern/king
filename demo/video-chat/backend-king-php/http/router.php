@@ -366,6 +366,7 @@ function videochat_dispatch_request(
                 $path,
                 $request,
                 $wsPath,
+                $apiAuthContext,
                 $activeWebsocketsBySession,
                 $presenceState,
                 $lobbyState,
@@ -376,7 +377,8 @@ function videochat_dispatch_request(
                 $rbacFailureResponse,
                 $jsonResponse,
                 $errorResponse,
-                $openDatabase
+                $openDatabase,
+                $issueSessionId
             );
         }
 

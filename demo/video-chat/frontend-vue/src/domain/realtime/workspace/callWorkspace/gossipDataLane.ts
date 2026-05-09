@@ -2,8 +2,7 @@ import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/
 import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
-import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
-import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
+import { GossipDirectTransport } from '../../../../lib/gossipmesh/directGossipTransport';
 import { createGossipRecoveryState } from './gossipRecoveryState';
 
 export function createCallWorkspaceGossipDataLane({
@@ -17,18 +16,29 @@ export function createCallWorkspaceGossipDataLane({
     activeCallId,
     defaultNativeIceServers = [],
     dynamicIceServers = null,
+    getConnectedParticipantCount = () => 0,
+    getLocalAudioLevel = () => null,
+    getLocalAudioStream = () => null,
     handleSFUEncodedFrame,
     sendSocketFrame,
   } = callbacks;
-  let gossipDataChannelTransport = null;
-  let gossipNeighborLifecycle = null;
+  let gossipDirectTransport = null;
+  let gossipAudioDirectTransport = null;
   let liveGossipController = null;
   let liveGossipControllerKey = '';
   let unsubscribeLiveGossipDelivery = null;
   const assignedGossipNeighborIds = new Set();
   const liveGossipFrameSequenceByTrack = new Map();
+  const liveGossipAudioSequenceByTrack = new Map();
+  const liveGossipAudioSinks = new Map();
   const gossipTopologyRepairRequestedAtByPeerId = new Map();
   const gossipRecoveryState = createGossipRecoveryState();
+  let gossipAudioUnlockBound = false;
+  let gossipAudioPingContext = null;
+  let gossipAudioRecorder = null;
+  let gossipAudioRecorderTrackId = '';
+  let gossipAudioRecorderMimeType = '';
+  let gossipAudioMediaGeneration = 1;
   let lastGossipTelemetrySnapshotSentAtMs = 0;
   let lastGossipRolloutGateState = null;
   let lastGossipPrimaryTopologyAdmissionDiagnosticAtMs = 0;
@@ -46,6 +56,178 @@ export function createCallWorkspaceGossipDataLane({
     };
   }
 
+  function supportedGossipAudioMimeType() {
+    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+    ];
+    return candidates.find((entry) => MediaRecorder.isTypeSupported(entry)) || '';
+  }
+
+  function playGossipAudioPing(msg, fromPeerId) {
+    const publisherId = String(msg?.publisherId || msg?.publisher_id || msg?.publisher_user_id || '').trim();
+    if (publisherId === '' || publisherId === localPeerId()) return false;
+    if (typeof window === 'undefined') return false;
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return false;
+    if (!gossipAudioPingContext) gossipAudioPingContext = new AudioContextCtor();
+    const context = gossipAudioPingContext;
+    const schedule = () => {
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const durationSeconds = Math.max(0.05, Math.min(1, Number(msg?.duration_ms || 250) / 1000));
+      const peakGain = Math.max(0.01, Math.min(0.6, Number(msg?.gain || 0.16)));
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(Math.max(80, Math.min(2000, Number(msg?.frequency_hz || 440))), now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(peakGain, now + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSeconds);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + durationSeconds + 0.03);
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'gossip_audio_ping_played',
+        code: 'gossip_audio_ping_played',
+        message: 'Gossip audio ping played with Web Audio.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          from_peer_id: String(fromPeerId || ''),
+          publisher_id: publisherId,
+          frequency_hz: Math.max(80, Math.min(2000, Number(msg?.frequency_hz || 440))),
+          duration_ms: Math.round(durationSeconds * 1000),
+          reason: String(msg?.reason || ''),
+        },
+      });
+    };
+    if (context.state === 'suspended' && typeof context.resume === 'function') {
+      context.resume().then(schedule).catch(() => undefined);
+      return true;
+    }
+    schedule();
+    return true;
+  }
+
+  function currentLocalAudioTrack() {
+    const stream = getLocalAudioStream?.();
+    if (!(stream instanceof MediaStream)) return null;
+    return stream.getAudioTracks().find((track) => track?.readyState === 'live') || null;
+  }
+
+  function stopGossipAudioPublisher(reason = 'stopped') {
+    const recorder = gossipAudioRecorder;
+    gossipAudioRecorder = null;
+    gossipAudioRecorderTrackId = '';
+    gossipAudioRecorderMimeType = '';
+    if (recorder && String(recorder.state || '') !== 'inactive') {
+      try { recorder.stop(); } catch {}
+    }
+    if (recorder) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'gossip_audio_publisher_stopped',
+        code: 'gossip_audio_publisher_stopped',
+        message: 'Gossip audio publisher stopped.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          reason: String(reason || 'stopped'),
+        },
+      });
+    }
+  }
+
+  function syncGossipAudioPublisher(reason = 'sync') {
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || !GOSSIP_DATA_LANE_CONFIG.publish) {
+      stopGossipAudioPublisher('gossip_audio_disabled');
+      return false;
+    }
+    if (!gossipPrimaryTopologyReady()) return false;
+    const track = currentLocalAudioTrack();
+    if (!track) {
+      stopGossipAudioPublisher('no_live_audio_track');
+      return false;
+    }
+    if (gossipAudioRecorder && gossipAudioRecorderTrackId === track.id && String(gossipAudioRecorder.state || '') === 'recording') {
+      return true;
+    }
+    stopGossipAudioPublisher('audio_track_changed');
+    if (typeof MediaRecorder === 'undefined') {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_recorder_unavailable',
+        code: 'gossip_audio_recorder_unavailable',
+        message: 'Gossip audio could not start because MediaRecorder is unavailable.',
+        payload: mediaCarrierDiagnosticPayload(),
+      });
+      return false;
+    }
+    const mimeType = supportedGossipAudioMimeType();
+    if (mimeType === '') {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_codec_unavailable',
+        code: 'gossip_audio_codec_unavailable',
+        message: 'Gossip audio could not start because Opus recording is unavailable.',
+        payload: mediaCarrierDiagnosticPayload(),
+      });
+      return false;
+    }
+    try {
+      const stream = new MediaStream([track]);
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 32000,
+      });
+      gossipAudioRecorder = recorder;
+      gossipAudioRecorderTrackId = track.id;
+      gossipAudioRecorderMimeType = mimeType;
+      gossipAudioMediaGeneration += 1;
+      recorder.addEventListener('dataavailable', (event) => {
+        if (!event?.data || event.data.size <= 0) return;
+        void publishLocalGossipAudioChunk(event.data, track.id, mimeType, getLocalAudioLevel?.());
+      });
+      recorder.addEventListener('error', () => {
+        stopGossipAudioPublisher('recorder_error');
+      });
+      recorder.start(250);
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'gossip_audio_publisher_started',
+        code: 'gossip_audio_publisher_started',
+        message: 'Gossip audio publisher started using browser Opus encoding over the data lane.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          reason: String(reason || 'sync'),
+          track_id: track.id,
+          codec_id: mimeType,
+        },
+      });
+      return true;
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_publisher_failed',
+        code: 'gossip_audio_publisher_failed',
+        message: 'Gossip audio publisher failed to start.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          reason: String(reason || 'sync'),
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return false;
+    }
+  }
+
   function roomId() {
     return String(activeRoomId() || '').trim() || 'lobby';
   }
@@ -54,19 +236,15 @@ export function createCallWorkspaceGossipDataLane({
     return String(activeSocketCallId() || activeCallId() || '').trim() || 'call';
   }
 
-  function currentGossipIceServers() {
-    const dynamicServers = Array.isArray(dynamicIceServers?.value) ? dynamicIceServers.value : [];
-    if (dynamicServers.length > 0) return dynamicServers;
-    return Array.isArray(defaultNativeIceServers) ? defaultNativeIceServers : [];
-  }
-
-  function ensureGossipDataChannelTransport() {
+  function ensureGossipDirectTransport() {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
     const peerId = localPeerId();
     if (peerId === '' || peerId === '0') return null;
-    if (gossipDataChannelTransport) return gossipDataChannelTransport;
+    if (gossipDirectTransport) return gossipDirectTransport;
 
-    gossipDataChannelTransport = new GossipRtcDataChannelTransport({
+    gossipDirectTransport = new GossipDirectTransport({
+      roomId: roomId(),
+      callId: callId(),
       localPeerId: peerId,
       onDataMessage: (msg, fromPeerId) => {
         if (!GOSSIP_DATA_LANE_CONFIG.receive) {
@@ -110,20 +288,24 @@ export function createCallWorkspaceGossipDataLane({
       },
       onStateChange: (peerId, state, eventType) => {
         const normalizedPeerId = String(peerId || '');
+        const hasOpenReplacement = eventType !== 'open'
+          && typeof gossipDirectTransport?.hasOpenChannel === 'function'
+          && gossipDirectTransport.hasOpenChannel(normalizedPeerId);
         const controller = ensureLiveGossipController();
         if (controller && assignedGossipNeighborIds.has(normalizedPeerId)) {
           ensureLiveGossipPeer(normalizedPeerId);
-          controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
-        }
-        if ((state === 'closed' || eventType === 'error') && assignedGossipNeighborIds.has(normalizedPeerId)) {
-          requestGossipTopologyRepair(peerId, eventType);
+          if (hasOpenReplacement) {
+            controller.updateCarrierStateFromDataChannel(normalizedPeerId, 'open', 'open');
+          } else {
+            controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
+          }
         }
         captureClientDiagnostic({
           category: 'media',
-          level: 'info',
-          eventType: 'gossip_data_channel_state',
-          code: 'gossip_data_channel_state',
-          message: 'Gossip data channel state changed.',
+          level: 'warning',
+          eventType: 'gossip_direct_link_state',
+          code: 'gossip_direct_link_state',
+          message: 'Gossip direct link state changed.',
           payload: {
             data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
             diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
@@ -131,6 +313,7 @@ export function createCallWorkspaceGossipDataLane({
             state: String(state || ''),
             event_type: String(eventType || ''),
           },
+          immediate: true,
         });
       },
       onTelemetry: (event) => {
@@ -142,41 +325,37 @@ export function createCallWorkspaceGossipDataLane({
         emitGossipTelemetrySnapshot('transport_telemetry');
       },
     });
-    return gossipDataChannelTransport;
+    return gossipDirectTransport;
   }
 
-  function ensureGossipNeighborLifecycle() {
+  function ensureGossipAudioDirectTransport() {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
-    if (gossipNeighborLifecycle) return gossipNeighborLifecycle;
-    gossipNeighborLifecycle = createGossipNeighborLifecycle({
-      callbacks: {
-        activeCallId: callId,
-        activeRoomId: roomId,
-        captureClientDiagnostic,
-        currentUserId: localPeerId,
-        getDataTransport: ensureGossipDataChannelTransport,
-        getIceServers: currentGossipIceServers,
-        onPeerConnectionState: handleGossipNeighborPeerConnectionState,
-        sendSocketFrame,
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return null;
+    if (gossipAudioDirectTransport) return gossipAudioDirectTransport;
+
+    gossipAudioDirectTransport = new GossipDirectTransport({
+      roomId: roomId(),
+      callId: `${callId()}:audio`,
+      localPeerId: peerId,
+      onDataMessage: (msg, fromPeerId) => {
+        if (!GOSSIP_DATA_LANE_CONFIG.receive || !gossipDataPlaneAllowed()) return;
+        routeLiveGossipDeliveryToAudio({
+          receiving_peer_id: localPeerId(),
+          from_peer_id: String(fromPeerId || '').trim(),
+          frame_id: String(msg?.frame_id || msg?.frameId || ''),
+          message: msg,
+        });
+      },
+      onTelemetry: (event) => {
+        const controller = liveGossipController;
+        const peerId = String(event?.peerId || localPeerId()).trim();
+        const counter = String(event?.counter || '').trim();
+        if (!controller || peerId === '' || counter === '') return;
+        controller.recordTransportTelemetry?.(peerId, counter, Math.max(1, Number(event?.increment || 1)));
       },
     });
-    return gossipNeighborLifecycle;
-  }
-
-  function handleGossipNeighborPeerConnectionState(peerId, state, eventType) {
-    const normalizedPeerId = String(peerId || '').trim();
-    if (!assignedGossipNeighborIds.has(normalizedPeerId)) return false;
-    const normalizedState = String(state || '').trim().toLowerCase();
-    const controller = ensureLiveGossipController();
-    ensureLiveGossipPeer(normalizedPeerId);
-    const carrierState = normalizedState === 'connected'
-      ? 'connected'
-      : (normalizedState === 'failed' || normalizedState === 'closed' || normalizedState === 'disconnected' ? 'lost' : 'degraded');
-    controller?.setCarrierState?.(normalizedPeerId, carrierState, `gossip_peer_${String(eventType || normalizedState || 'state')}`);
-    if (carrierState === 'lost') {
-      requestGossipTopologyRepair(normalizedPeerId, `gossip_peer_${normalizedState || 'lost'}`);
-    }
-    return true;
+    return gossipAudioDirectTransport;
   }
 
   function ensureLiveGossipController() {
@@ -197,17 +376,19 @@ export function createCallWorkspaceGossipDataLane({
       assignedGossipNeighborIds.clear();
       gossipTopologyRepairRequestedAtByPeerId.clear();
       gossipRecoveryState.clear();
-      gossipNeighborLifecycle?.teardown?.();
-      gossipNeighborLifecycle = null;
+      stopGossipAudioPublisher('controller_changed');
       lastGossipTelemetrySnapshotSentAtMs = 0;
-      gossipDataChannelTransport?.close();
-      gossipDataChannelTransport = null;
+      gossipDirectTransport?.close();
+      gossipDirectTransport = null;
+      gossipAudioDirectTransport?.close();
+      gossipAudioDirectTransport = null;
     }
     liveGossipFrameSequenceByTrack.clear();
+    liveGossipAudioSequenceByTrack.clear();
 
     const controller = new GossipController(roomId(), callId());
     controller.setDataLaneConfig(GOSSIP_DATA_LANE_CONFIG);
-    const transport = ensureGossipDataChannelTransport();
+    const transport = ensureGossipDirectTransport();
     if (transport) {
       controller.setDataTransport(transport);
     }
@@ -274,55 +455,18 @@ export function createCallWorkspaceGossipDataLane({
     return Array.from(retiredPeerIds);
   }
 
-  function bindAssignedGossipNeighbors(topologyHint) {
+  function bindAssignedGossipNeighbors() {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return 0;
+    const controller = ensureLiveGossipController();
+    const transport = ensureGossipDirectTransport();
+    const audioTransport = ensureGossipAudioDirectTransport();
     for (const peerId of assignedGossipNeighborIds) {
       ensureLiveGossipPeer(peerId);
+      controller?.setCarrierState?.(peerId, 'connected', 'gossip_direct_neighbor_bound');
+      transport?.connectPeer?.(peerId);
+      audioTransport?.connectPeer?.(peerId);
     }
-    return ensureGossipNeighborLifecycle()?.applyAssignedNeighbors(topologyHint, assignedGossipNeighborIds) || 0;
-  }
-
-  function requestGossipTopologyRepair(peerId, reason) {
-    if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;
-    if (!assignedGossipNeighborIds.has(String(peerId || ''))) return false;
-    const normalizedPeerId = String(peerId || '').trim();
-    if (normalizedPeerId === '') return false;
-    const nowMs = Date.now();
-    const lastRequestedAtMs = Number(gossipTopologyRepairRequestedAtByPeerId.get(normalizedPeerId) || 0);
-    if ((nowMs - lastRequestedAtMs) < 3000) return false;
-    gossipTopologyRepairRequestedAtByPeerId.set(normalizedPeerId, nowMs);
-    const controller = ensureLiveGossipController();
-    controller?.recordTransportTelemetry?.(localPeerId(), 'topology_repairs_requested', 1);
-    const sent = sendSocketFrame({
-      type: 'gossip/topology-repair/request',
-      lane: 'ops',
-      payload: {
-        kind: 'gossip_topology_repair_request',
-        room_id: String(activeRoomId() || '').trim(),
-        call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
-        peer_id: localPeerId(),
-        lost_peer_id: String(peerId || ''),
-        lost_neighbor_peer_id: normalizedPeerId,
-        reason: String(reason || ''),
-        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
-        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
-      },
-    });
-    captureClientDiagnostic({
-      category: 'media',
-      level: sent ? 'warning' : 'info',
-      eventType: 'gossip_topology_repair_requested',
-      code: 'gossip_topology_repair_requested',
-      message: 'Gossip topology repair was requested after an assigned data-channel neighbor changed carrier state.',
-      payload: {
-        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
-        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
-        peer_id: normalizedPeerId,
-        reason: String(reason || 'gossip_data_channel_lost'),
-        sent,
-      },
-    });
-    return sent;
+    return assignedGossipNeighborIds.size;
   }
 
   function emitGossipTelemetrySnapshot(reason = 'periodic') {
@@ -374,7 +518,7 @@ export function createCallWorkspaceGossipDataLane({
     const repairRetiredPeerIds = topologyRepairRetiredPeerIdsForLocalPeer(topologyHint, peerId);
     for (const retiredPeerId of repairRetiredPeerIds) {
       assignedGossipNeighborIds.delete(retiredPeerId);
-      gossipNeighborLifecycle?.closePeer?.(retiredPeerId, 'repair_retired_edge');
+      gossipDirectTransport?.close?.(retiredPeerId);
     }
 
     controller.addPeer(peerId);
@@ -389,25 +533,32 @@ export function createCallWorkspaceGossipDataLane({
     const peer = controller.getPeer(peerId);
     const previousAssignedNeighborIds = new Set(assignedGossipNeighborIds);
     assignedGossipNeighborIds.clear();
+    const transport = ensureGossipDirectTransport();
+    const audioTransport = ensureGossipAudioDirectTransport();
     for (const neighborId of peer?.neighbor_set || []) {
       const normalizedNeighborId = String(neighborId || '').trim();
       if (gossipTopologyNeighborUsesRtcDataChannel(topologyHint, normalizedNeighborId)) {
         assignedGossipNeighborIds.add(normalizedNeighborId);
+        transport?.connectPeer?.(normalizedNeighborId);
+        audioTransport?.connectPeer?.(normalizedNeighborId);
+        controller.setCarrierState?.(normalizedNeighborId, 'connected', 'gossip_direct_topology_neighbor');
       }
     }
     for (const previousPeerId of previousAssignedNeighborIds) {
       if (!assignedGossipNeighborIds.has(previousPeerId)) {
-        gossipNeighborLifecycle?.closePeer?.(previousPeerId, 'retired_by_topology');
+        gossipDirectTransport?.close?.(previousPeerId);
+        gossipAudioDirectTransport?.close?.(previousPeerId);
       }
     }
-    const boundCount = bindAssignedGossipNeighbors(topologyHint);
+    const boundCount = bindAssignedGossipNeighbors();
+    syncGossipAudioPublisher('topology_hint_applied');
     emitGossipTelemetrySnapshot('topology_hint_applied');
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
       eventType: 'gossip_topology_hint_applied',
       code: 'gossip_topology_hint_applied',
-      message: 'Gossip topology hint applied to dedicated data-channel neighbor bindings.',
+      message: 'Gossip topology hint applied to direct peer neighbor bindings.',
       payload: {
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
@@ -425,7 +576,8 @@ export function createCallWorkspaceGossipDataLane({
     if (!GOSSIP_DATA_LANE_CONFIG.receive) return false;
     if (!gossipDataPlaneAllowed()) return false;
     const msg = delivery?.message || null;
-    if (!msg || msg.type !== 'sfu/frame') return false;
+    if (!msg) return false;
+    if (msg.type !== 'sfu/frame') return false;
     const frame = sfuFrameFromGossipMessage(msg, delivery);
     if (!frame) return false;
     requestGossipRecoveryForReceivedFrame(frame, delivery);
@@ -442,12 +594,219 @@ export function createCallWorkspaceGossipDataLane({
         publisher_id: String(frame.publisherId || ''),
         publisher_user_id: String(frame.publisherUserId || ''),
         track_id: String(frame.trackId || ''),
+        frame_type: String(frame.type || '').trim() === 'keyframe' ? 'keyframe' : 'delta',
         frame_sequence: Number(frame.frameSequence || 0),
         media_generation: Number(frame.mediaGeneration || 0),
+        protection_mode: String(frame.protectionMode || ''),
+        layout_mode: String(frame.layoutMode || ''),
       },
     });
     handleSFUEncodedFrame(frame);
     return true;
+  }
+
+  function routeLiveGossipDeliveryToAudio(delivery) {
+    const msg = delivery?.message || null;
+    if (!msg) return false;
+    if (msg.type === 'gossip/audio-ping') {
+      return playGossipAudioPing(msg, delivery?.from_peer_id);
+    }
+    if (msg.type !== 'gossip/audio-chunk') return false;
+    const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
+    if (publisherId === '' || publisherId === localPeerId()) return false;
+    const dataBase64 = String(msg.dataBase64 || msg.data_base64 || '').trim();
+    if (dataBase64 === '') return false;
+    const codecId = String(msg.codecId || msg.codec_id || 'audio/webm;codecs=opus').trim() || 'audio/webm;codecs=opus';
+    const dataBuffer = base64UrlToArrayBuffer(dataBase64);
+    if (!(dataBuffer instanceof ArrayBuffer) || dataBuffer.byteLength <= 0) return false;
+    const sink = ensureGossipAudioSink(publisherId, codecId);
+    if (!sink) return false;
+    sink.queue.push(dataBuffer);
+    drainGossipAudioSink(sink);
+    maybePlayGossipAudioSink(sink, 'audio_chunk');
+    const nowMs = Date.now();
+    if ((nowMs - Number(sink.lastDiagnosticAtMs || 0)) > 5000) {
+      sink.lastDiagnosticAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'gossip_audio_chunk_routed',
+        code: 'gossip_audio_chunk_routed',
+        message: 'Gossip audio chunk routed to the browser audio decoder.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          from_peer_id: String(delivery?.from_peer_id || ''),
+          publisher_id: publisherId,
+          track_id: String(msg.track_id || ''),
+          codec_id: codecId,
+          frame_sequence: Math.max(0, Number(msg.frame_sequence || 0)),
+          payload_bytes: dataBuffer.byteLength,
+        },
+      });
+    }
+    return true;
+  }
+
+  function ensureGossipAudioSink(publisherId, codecId) {
+    if (typeof window === 'undefined' || typeof MediaSource === 'undefined' || typeof document === 'undefined') return null;
+    bindGossipAudioUnlockHandlers();
+    const normalizedPublisherId = String(publisherId || '').trim();
+    if (normalizedPublisherId === '') return null;
+    const normalizedCodecId = String(codecId || 'audio/webm;codecs=opus').trim() || 'audio/webm;codecs=opus';
+    if (typeof MediaSource.isTypeSupported === 'function' && !MediaSource.isTypeSupported(normalizedCodecId)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_sink_codec_unsupported',
+        code: 'gossip_audio_sink_codec_unsupported',
+        message: 'Gossip audio sink could not start because the browser rejected the codec.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          publisher_id: normalizedPublisherId,
+          codec_id: normalizedCodecId,
+        },
+      });
+      return null;
+    }
+    const existing = liveGossipAudioSinks.get(normalizedPublisherId);
+    if (existing && existing.codecId === normalizedCodecId) return existing;
+    if (existing) closeGossipAudioSink(existing);
+
+    const mediaSource = new MediaSource();
+    const objectUrl = URL.createObjectURL(mediaSource);
+    const audio = new Audio();
+    audio.autoplay = true;
+    audio.muted = false;
+    audio.volume = 1;
+    audio.playsInline = true;
+    audio.preload = 'auto';
+    audio.dataset.gossipAudioPublisherId = normalizedPublisherId;
+    audio.style.display = 'none';
+    audio.src = objectUrl;
+    document.body.appendChild(audio);
+
+    const sink = {
+      publisherId: normalizedPublisherId,
+      codecId: normalizedCodecId,
+      mediaSource,
+      sourceBuffer: null as SourceBuffer | null,
+      audio,
+      objectUrl,
+      queue: [] as ArrayBuffer[],
+      lastPlayAttemptAtMs: 0,
+      lastDiagnosticAtMs: 0,
+    };
+    mediaSource.addEventListener('sourceopen', () => {
+      try {
+        sink.sourceBuffer = mediaSource.addSourceBuffer(normalizedCodecId);
+        sink.sourceBuffer.mode = 'sequence';
+        sink.sourceBuffer.addEventListener('updateend', () => {
+          trimGossipAudioSinkBuffer(sink);
+          drainGossipAudioSink(sink);
+        });
+        drainGossipAudioSink(sink);
+        maybePlayGossipAudioSink(sink, 'sourceopen');
+      } catch (error) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'gossip_audio_sink_failed',
+          code: 'gossip_audio_sink_failed',
+          message: 'Gossip audio sink failed to attach the browser decoder.',
+          payload: {
+            ...mediaCarrierDiagnosticPayload(),
+            publisher_id: normalizedPublisherId,
+            codec_id: normalizedCodecId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    }, { once: true });
+    liveGossipAudioSinks.set(normalizedPublisherId, sink);
+    return sink;
+  }
+
+  function bindGossipAudioUnlockHandlers() {
+    if (gossipAudioUnlockBound || typeof document === 'undefined') return;
+    gossipAudioUnlockBound = true;
+    const unlock = () => {
+      for (const sink of liveGossipAudioSinks.values()) {
+        maybePlayGossipAudioSink(sink, 'user_gesture');
+      }
+    };
+    document.addEventListener('pointerdown', unlock, { passive: true });
+    document.addEventListener('keydown', unlock);
+    document.addEventListener('touchstart', unlock, { passive: true });
+  }
+
+  function drainGossipAudioSink(sink) {
+    if (!sink?.sourceBuffer || sink.sourceBuffer.updating || sink.queue.length <= 0) return false;
+    if (sink.mediaSource?.readyState !== 'open') return false;
+    const next = sink.queue.shift();
+    try {
+      sink.sourceBuffer.appendBuffer(next);
+      return true;
+    } catch (error) {
+      sink.queue.length = 0;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_append_failed',
+        code: 'gossip_audio_append_failed',
+        message: 'Gossip audio chunk could not be appended to the browser decoder.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          publisher_id: String(sink.publisherId || ''),
+          codec_id: String(sink.codecId || ''),
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      return false;
+    }
+  }
+
+  function trimGossipAudioSinkBuffer(sink) {
+    const sourceBuffer = sink?.sourceBuffer;
+    const audio = sink?.audio;
+    if (!sourceBuffer || sourceBuffer.updating || !audio) return;
+    try {
+      if (sourceBuffer.buffered.length <= 0) return;
+      const currentTime = Number(audio.currentTime || 0);
+      const start = sourceBuffer.buffered.start(0);
+      const removeEnd = Math.max(0, currentTime - 8);
+      if (removeEnd > start) sourceBuffer.remove(start, removeEnd);
+    } catch {}
+  }
+
+  function maybePlayGossipAudioSink(sink, reason) {
+    if (!sink?.audio || typeof sink.audio.play !== 'function') return false;
+    const nowMs = Date.now();
+    if ((nowMs - Number(sink.lastPlayAttemptAtMs || 0)) < 1000) return false;
+    sink.lastPlayAttemptAtMs = nowMs;
+    sink.audio.play().catch((error) => {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_audio_play_blocked',
+        code: 'gossip_audio_play_blocked',
+        message: 'Browser blocked Gossip audio playback.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          publisher_id: String(sink.publisherId || ''),
+          reason: String(reason || 'play'),
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    });
+    return true;
+  }
+
+  function closeGossipAudioSink(sink) {
+    try { sink?.audio?.pause?.(); } catch {}
+    try { if (sink?.audio) sink.audio.src = ''; } catch {}
+    try { sink?.audio?.remove?.(); } catch {}
+    try { if (sink?.objectUrl) URL.revokeObjectURL(sink.objectUrl); } catch {}
+    sink.queue = [];
   }
 
   function publishLocalEncodedFrameToGossip(frame) {
@@ -505,7 +864,59 @@ export function createCallWorkspaceGossipDataLane({
     };
     gossipRecoveryState.rememberPublishedFrame(msg);
     controller.publishFrame(peerId, msg);
+    syncGossipAudioPublisher('video_frame_publish');
     emitGossipTelemetrySnapshot('local_publish');
+    return true;
+  }
+
+  async function publishLocalGossipAudioChunk(blob, trackId, codecId, audioLevel = null) {
+    if (!gossipDataPlaneAllowed()) return false;
+    const dataBuffer = await blob.arrayBuffer();
+    if (!(dataBuffer instanceof ArrayBuffer) || dataBuffer.byteLength <= 0) return false;
+    return publishGossipAudioChunk({
+      trackId,
+      codecId,
+      dataBuffer,
+      timestamp: Date.now(),
+      durationMs: 250,
+      audioLevel,
+    });
+  }
+
+  function publishGossipAudioChunk({ trackId, codecId, dataBuffer, timestamp, durationMs, audioLevel = null }) {
+    if (!GOSSIP_DATA_LANE_CONFIG.publish || !gossipDataPlaneAllowed()) return false;
+    const transport = ensureGossipAudioDirectTransport();
+    const peerId = localPeerId();
+    const normalizedTrackId = String(trackId || '').trim();
+    if (!transport || peerId === '' || peerId === '0' || normalizedTrackId === '') return false;
+    const sequenceKey = `${peerId}:${normalizedTrackId}:audio`;
+    const frameSequence = Math.max(1, Number(liveGossipAudioSequenceByTrack.get(sequenceKey) || 0) + 1);
+    liveGossipAudioSequenceByTrack.set(sequenceKey, frameSequence);
+    const dataBase64 = arrayBufferToBase64Url(dataBuffer);
+    const msg = {
+      type: 'gossip/audio-chunk',
+      protocol_version: 1,
+      publisher_id: peerId,
+      publisher_user_id: peerId,
+      track_id: normalizedTrackId,
+      timestamp: Number(timestamp || Date.now()),
+      frame_sequence: frameSequence,
+      media_generation: gossipAudioMediaGeneration,
+      sender_sent_at_ms: Date.now(),
+      codec_id: String(codecId || 'audio/webm;codecs=opus'),
+      protection_mode: 'transport_only',
+      data_base64: dataBase64,
+      payload_chars: dataBase64.length,
+      duration_ms: Math.max(1, Number(durationMs || 250)),
+      ttl: 1,
+      route_id: `${callId()}:audio:${peerId}:${Date.now()}:${frameSequence}`,
+    };
+    const normalizedAudioLevel = Number(audioLevel);
+    if (Number.isFinite(normalizedAudioLevel)) {
+      msg.audio_level = Math.max(0, Math.min(1, normalizedAudioLevel));
+    }
+    transport.broadcastData?.(msg, peerId);
+    emitGossipTelemetrySnapshot('local_audio_publish');
     return true;
   }
   function requestGossipRecoveryForReceivedFrame(frame, delivery) {
@@ -654,7 +1065,10 @@ export function createCallWorkspaceGossipDataLane({
     const peer = controller.getPeer(peerId);
     const assignedNeighborCount = assignedGossipNeighborIds.size;
     const controllerNeighborCount = Array.isArray(peer?.neighbor_set) ? peer.neighbor_set.length : 0;
-    return assignedNeighborCount > 0 || controllerNeighborCount > 0;
+    const participantCount = Math.max(0, Number(getConnectedParticipantCount?.() || 0));
+    if (assignedNeighborCount > 0 || controllerNeighborCount > 0 || participantCount > 1) return true;
+    return typeof gossipDirectTransport?.hasAnyOpenChannel === 'function'
+      && gossipDirectTransport.hasAnyOpenChannel();
   }
 
   function diagnoseGossipPrimaryTopologyAdmission() {
@@ -685,6 +1099,17 @@ export function createCallWorkspaceGossipDataLane({
 
   function gossipDataPlaneAllowed() {
     if (gossipActiveDataLaneAllowed()) return true;
+    if (
+      VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+      && GOSSIP_DATA_LANE_CONFIG.mode === 'active'
+      && GOSSIP_DATA_LANE_CONFIG.publish
+      && GOSSIP_DATA_LANE_CONFIG.receive
+      && localPeerId() !== ''
+      && localPeerId() !== '0'
+    ) {
+      diagnoseGossipPrimaryTopologyAdmission();
+      return true;
+    }
     if (!gossipPrimaryTopologyReady()) return false;
     diagnoseGossipPrimaryTopologyAdmission();
     return true;
@@ -702,7 +1127,9 @@ export function createCallWorkspaceGossipDataLane({
       level: backendVisibleBacktrace ? 'warning' : 'info',
       eventType: 'gossip_data_lane_shadow_would_publish',
       code: 'gossip_data_lane_shadow_would_publish',
-      message: 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
+      message: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+        ? 'Gossip data lane deferred a frame until assigned neighbors are ready.'
+        : 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
       payload: {
         ...mediaCarrierDiagnosticPayload(),
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
@@ -792,7 +1219,7 @@ export function createCallWorkspaceGossipDataLane({
       roiNormY: Math.max(0, Number(msg.roiNormY ?? msg.roi_norm_y ?? 0)),
       roiNormWidth: Math.max(0, Number(msg.roiNormWidth ?? msg.roi_norm_width ?? 0)),
       roiNormHeight: Math.max(0, Number(msg.roiNormHeight ?? msg.roi_norm_height ?? 0)),
-      transportPath: 'gossip_rtc_datachannel',
+      transportPath: 'gossip_direct',
     };
   }
 
@@ -804,7 +1231,8 @@ export function createCallWorkspaceGossipDataLane({
     assignedGossipNeighborIds.delete(peerId);
     gossipTopologyRepairRequestedAtByPeerId.delete(peerId);
     liveGossipController?.updateCarrierStateFromDataChannel?.(peerId, 'lost', String(reason || 'target_not_in_room'));
-    gossipNeighborLifecycle?.closePeer?.(peerId, String(reason || 'target_not_in_room'));
+    gossipDirectTransport?.close?.(peerId);
+    gossipAudioDirectTransport?.close?.(peerId);
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -854,6 +1282,7 @@ export function createCallWorkspaceGossipDataLane({
   }
 
   function teardownGossipDataLane() {
+    stopGossipAudioPublisher('teardown');
     if (typeof unsubscribeLiveGossipDelivery === 'function') {
       unsubscribeLiveGossipDelivery();
       unsubscribeLiveGossipDelivery = null;
@@ -862,15 +1291,22 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipController = null;
     liveGossipControllerKey = '';
     liveGossipFrameSequenceByTrack.clear();
+    liveGossipAudioSequenceByTrack.clear();
     gossipRecoveryState.clear();
     assignedGossipNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();
     lastGossipRolloutGateState = null;
     lastGossipTelemetrySnapshotSentAtMs = 0;
-    gossipNeighborLifecycle?.teardown?.();
-    gossipNeighborLifecycle = null;
-    gossipDataChannelTransport?.close();
-    gossipDataChannelTransport = null;
+    gossipDirectTransport?.close();
+    gossipDirectTransport = null;
+    gossipAudioDirectTransport?.close();
+    gossipAudioDirectTransport = null;
+    for (const sink of liveGossipAudioSinks.values()) {
+      closeGossipAudioSink(sink);
+    }
+    liveGossipAudioSinks.clear();
+    gossipAudioPingContext?.close?.().catch?.(() => undefined);
+    gossipAudioPingContext = null;
   }
 
   return {
@@ -878,7 +1314,7 @@ export function createCallWorkspaceGossipDataLane({
     applyGossipTopologyHint,
     getAssignedGossipNeighborCount,
     getGossipRolloutGateState,
-    handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
+    handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args),
     pruneGossipNeighborForUserId,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,

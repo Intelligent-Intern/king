@@ -71,8 +71,16 @@ export function createGossipNeighborLifecycle({
     };
   }
 
-  function peerAllowed(peerId) {
-    return admittedPeerIds.has(peerId) || peers.has(peerId);
+  function shouldInitiatePeer(peerId) {
+    const local = localPeerId();
+    const remote = safePeerId(peerId);
+    if (local === '' || remote === '') return false;
+    const localNumber = Number(local);
+    const remoteNumber = Number(remote);
+    if (Number.isFinite(localNumber) && Number.isFinite(remoteNumber)) {
+      return localNumber < remoteNumber;
+    }
+    return local < remote;
   }
 
   function ensurePeer(peerId, initiator, reason) {
@@ -82,7 +90,16 @@ export function createGossipNeighborLifecycle({
 
     const existing = peers.get(normalizedPeerId);
     if (existing?.pc && existing.pc.signalingState !== 'closed') {
-      return existing;
+      if (existing.initiator !== Boolean(initiator)) {
+        closePeer(normalizedPeerId, 'initiator_role_changed');
+      } else {
+        return existing;
+      }
+    }
+
+    const current = peers.get(normalizedPeerId);
+    if (current?.pc && current.pc.signalingState !== 'closed') {
+      return current;
     }
 
     const pc = new RTCPeerConnection(peerConnectionConfig());
@@ -93,6 +110,7 @@ export function createGossipNeighborLifecycle({
       pendingIce: [],
       negotiating: false,
       needsRenegotiate: false,
+      renegotiateTimer: null,
     };
     peers.set(normalizedPeerId, peer);
 
@@ -123,7 +141,7 @@ export function createGossipNeighborLifecycle({
       onPeerConnectionState(normalizedPeerId, state, 'connectionstatechange');
       captureClientDiagnostic({
         category: 'media',
-        level: state === 'failed' ? 'warning' : 'info',
+        level: 'warning',
         eventType: 'gossip_neighbor_peer_connection_state',
         code: 'gossip_neighbor_peer_connection_state',
         message: 'Dedicated Gossip neighbor peer connection state changed.',
@@ -132,6 +150,7 @@ export function createGossipNeighborLifecycle({
           connection_state: state,
           topology_epoch: topologyEpoch,
         },
+        immediate: true,
       });
       if (state === 'closed' || state === 'failed') {
         closePeer(normalizedPeerId, state === 'failed' ? 'peer_connection_failed' : 'peer_connection_closed');
@@ -142,7 +161,7 @@ export function createGossipNeighborLifecycle({
     transport?.bindPeerConnection?.(normalizedPeerId, pc, peer.initiator);
     captureClientDiagnostic({
       category: 'media',
-      level: 'info',
+      level: 'warning',
       eventType: 'gossip_neighbor_link_assigned',
       code: 'gossip_neighbor_link_assigned',
       message: 'Dedicated Gossip neighbor link was assigned by server topology.',
@@ -152,6 +171,7 @@ export function createGossipNeighborLifecycle({
         reason: String(reason || 'assigned'),
         topology_epoch: topologyEpoch,
       },
+      immediate: true,
     });
 
     if (peer.initiator) {
@@ -176,7 +196,7 @@ export function createGossipNeighborLifecycle({
       await peer.pc.setLocalDescription(offer);
       const local = peer.pc.localDescription;
       if (!local?.sdp) return false;
-      return sendSocketFrame({
+      const sent = sendSocketFrame({
         type: 'call/offer',
         target_user_id: Number(peer.peerId),
         payload: {
@@ -193,6 +213,21 @@ export function createGossipNeighborLifecycle({
           },
         },
       });
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_neighbor_offer_sent',
+        code: 'gossip_neighbor_offer_sent',
+        message: 'Dedicated Gossip neighbor offer was sent.',
+        payload: {
+          peer_id: safePeerId(peer?.peerId),
+          reason: String(reason || 'offer'),
+          topology_epoch: topologyEpoch,
+          sent,
+        },
+        immediate: true,
+      });
+      return sent;
     } catch (error) {
       captureClientDiagnostic({
         category: 'media',
@@ -211,9 +246,25 @@ export function createGossipNeighborLifecycle({
       peer.negotiating = false;
       if (peer.needsRenegotiate) {
         peer.needsRenegotiate = false;
-        void negotiatePeer(peer, 'queued_renegotiate');
+        scheduleRenegotiate(peer, 'queued_renegotiate');
       }
     }
+  }
+
+  function scheduleRenegotiate(peer, reason) {
+    if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+    if (peer.renegotiateTimer) return;
+    peer.renegotiateTimer = setTimeout(() => {
+      peer.renegotiateTimer = null;
+      if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+      const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
+      if (signalingState !== 'stable' && signalingState !== '') {
+        peer.needsRenegotiate = true;
+        scheduleRenegotiate(peer, reason);
+        return;
+      }
+      void negotiatePeer(peer, reason);
+    }, 150);
   }
 
   async function flushPendingIce(peer) {
@@ -230,7 +281,7 @@ export function createGossipNeighborLifecycle({
 
   async function handleOffer(senderPeerId, payload) {
     const normalizedPeerId = safePeerId(senderPeerId);
-    if (!peerAllowed(normalizedPeerId)) return;
+    if (normalizedPeerId === '' || normalizedPeerId === localPeerId()) return;
     const remote = normalizeSdp(payload);
     if (!remote || remote.type !== 'offer') return;
 
@@ -249,7 +300,16 @@ export function createGossipNeighborLifecycle({
       await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
       await flushPendingIce(peer);
       const answer = await peer.pc.createAnswer();
-      await peer.pc.setLocalDescription(answer);
+      const readyForAnswer = String(peer.pc.signalingState || '').trim().toLowerCase();
+      if (readyForAnswer !== 'have-remote-offer' && readyForAnswer !== 'have-local-pranswer') {
+        return;
+      }
+      try {
+        await peer.pc.setLocalDescription(answer);
+      } catch (error) {
+        if (String(error?.message || error || '').toLowerCase().includes('wrong state: stable')) return;
+        throw error;
+      }
       const local = peer.pc.localDescription;
       if (!local?.sdp) return;
       sendSocketFrame({
@@ -269,6 +329,18 @@ export function createGossipNeighborLifecycle({
           },
         },
       });
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_neighbor_answer_sent',
+        code: 'gossip_neighbor_answer_sent',
+        message: 'Dedicated Gossip neighbor answer was sent.',
+        payload: {
+          peer_id: normalizedPeerId,
+          topology_epoch: topologyEpoch,
+        },
+        immediate: true,
+      });
     } catch (error) {
       captureClientDiagnostic({
         category: 'media',
@@ -280,6 +352,7 @@ export function createGossipNeighborLifecycle({
           peer_id: normalizedPeerId,
           error: String(error?.message || error || ''),
         },
+        immediate: true,
       });
     }
   }
@@ -289,15 +362,54 @@ export function createGossipNeighborLifecycle({
     const peer = peers.get(normalizedPeerId);
     const remote = normalizeSdp(payload);
     if (!peer?.pc || !remote || remote.type !== 'answer') return;
+    const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
+    if (signalingState === 'stable' || signalingState === '') {
+      return;
+    }
+    if (signalingState !== 'have-local-offer') {
+      peer.needsRenegotiate = true;
+      scheduleRenegotiate(peer, 'answer_arrived_during_unexpected_state');
+      return;
+    }
     try {
-      await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
+      try {
+        await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
+      } catch (error) {
+        if (String(error?.message || error || '').toLowerCase().includes('wrong state: stable')) return;
+        throw error;
+      }
       await flushPendingIce(peer);
-    } catch {}
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_neighbor_answer_applied',
+        code: 'gossip_neighbor_answer_applied',
+        message: 'Dedicated Gossip neighbor answer was applied.',
+        payload: {
+          peer_id: normalizedPeerId,
+          topology_epoch: topologyEpoch,
+        },
+        immediate: true,
+      });
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_neighbor_answer_apply_failed',
+        code: 'gossip_neighbor_answer_apply_failed',
+        message: 'Dedicated Gossip neighbor answer could not be applied.',
+        payload: {
+          peer_id: normalizedPeerId,
+          error: String(error?.message || error || ''),
+        },
+        immediate: true,
+      });
+    }
   }
 
   async function handleIce(senderPeerId, payload) {
     const normalizedPeerId = safePeerId(senderPeerId);
-    if (!peerAllowed(normalizedPeerId)) return;
+    if (normalizedPeerId === '' || normalizedPeerId === localPeerId()) return;
     const candidate = payload?.candidate && typeof payload.candidate === 'object' ? payload.candidate : null;
     if (!candidate) return;
     const peer = peers.get(normalizedPeerId) || ensurePeer(normalizedPeerId, false, 'remote_ice');
@@ -344,7 +456,7 @@ export function createGossipNeighborLifecycle({
     );
     for (const peerId of assigned) {
       admittedPeerIds.add(peerId);
-      ensurePeer(peerId, true, 'server_assigned_neighbor');
+      ensurePeer(peerId, shouldInitiatePeer(peerId), 'server_assigned_neighbor');
     }
     for (const peerId of Array.from(peers.keys())) {
       if (!assigned.has(peerId)) closePeer(peerId, 'retired_by_topology');
@@ -357,6 +469,10 @@ export function createGossipNeighborLifecycle({
     const peer = peers.get(normalizedPeerId);
     if (!peer) return false;
     peers.delete(normalizedPeerId);
+    if (peer.renegotiateTimer) {
+      clearTimeout(peer.renegotiateTimer);
+      peer.renegotiateTimer = null;
+    }
     try {
       peer.pc?.close?.();
     } catch {}

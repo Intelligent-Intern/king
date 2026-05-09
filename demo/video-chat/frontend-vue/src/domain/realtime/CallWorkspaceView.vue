@@ -39,7 +39,6 @@ import {
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
 } from './native/audioBridgeHelpers';
-import { createSfuLifecycleHelpers } from './sfu/lifecycle';
 import { createCallWorkspaceSocketHelpers } from './workspace/callWorkspace/socketLifecycle';
 import { createCallWorkspaceRouteResolutionHelpers } from './workspace/callWorkspace/routeResolution';
 import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWorkspace/runtimeSwitching';
@@ -53,6 +52,7 @@ import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
+import { createSputnikPeerRuntime } from './testing/sputnikPeerRuntime';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
 import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
 import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
@@ -66,7 +66,6 @@ import {
   streamHasLiveTrackKind,
   streamHasTracks,
 } from './native/peerMedia';
-import { SFUClient } from '../../lib/sfu/sfuClient';
 import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './media/security';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
@@ -97,6 +96,7 @@ import {
   SFU_CONNECT_RETRY_DELAY_MS,
   SFU_PUBLISH_MAX_RETRIES,
   SFU_PUBLISH_RETRY_DELAY_MS,
+  SPUTNIK_PEERS_ENABLED,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
   SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
@@ -273,7 +273,7 @@ const socketLifecycleState = {
   get reconnectTimer() { return reconnectTimer; },
   set reconnectTimer(value) { reconnectTimer = value; },
 };
-const connectedParticipantUsersRef = ref(computed(() => []));
+const connectedParticipantUsersRef = { value: computed(() => []) };
 const participantsRaw = ref([]);
 let participantsRawSignature = '';
 const currentUserConnectedAt = new Date().toISOString();
@@ -553,7 +553,8 @@ const showLobbyTab = computed(() => canModerate.value);
 const usersSourceMode = computed(() => 'snapshot');
 const isSocketOnline = computed(() => connectionState.value === 'online');
 const shouldConnectSfu = computed(() => (
-  isWlvcRuntimePath()
+  SFU_RUNTIME_ENABLED
+  && isWlvcRuntimePath()
   && isSocketOnline.value
   && hasRealtimeRoomSync.value
   && !routeCallResolve.pending
@@ -622,7 +623,7 @@ let currentSfuVideoProfile = computed(() => 'quality'); let downgradeSfuVideoQua
 let clearSfuVideoQualityRecoveryProbeTimer = () => {}; let ensureSfuVideoQualityRecoveryProbeSeries = () => false;
 let initSFU = () => {};
 let maybeFallbackToNativeRuntime = async () => false;
-let removeSfuRemotePeersForUserId;
+let removeSfuRemotePeersForUserId = () => {};
 let setMediaRuntimePath;
 let stopSfuTrackAnnounceTimer = () => {};
 let switchMediaRuntimePath = async () => false;
@@ -647,6 +648,20 @@ function sendSocketFrame(payload) {
     return false;
   }
 }
+function currentLocalAudioLevel() {
+  if (!activityAudioAnalyser || !(activityAudioData instanceof Uint8Array)) return 0;
+  try {
+    activityAudioAnalyser.getByteTimeDomainData(activityAudioData);
+  } catch {
+    return 0;
+  }
+  let sum = 0;
+  for (const value of activityAudioData) {
+    const centered = (value - 128) / 128;
+    sum += centered * centered;
+  }
+  return Math.max(0, Math.min(1, Math.sqrt(sum / Math.max(1, activityAudioData.length)) * 3.2));
+}
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
@@ -660,6 +675,9 @@ const {
     activeCallId: () => activeCallId.value, activeRoomId: () => activeRoomId.value,
     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
+    getConnectedParticipantCount: () => connectedParticipantUsers.value.length,
+    getLocalAudioLevel: currentLocalAudioLevel,
+    getLocalAudioStream: () => localFilteredStreamRef.value || localStreamRef.value,
     defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
     sendSocketFrame,
   },
@@ -686,6 +704,100 @@ function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
   clearAdmissionGate(targetRoomId);
   return sendRoomJoinLocal(targetRoomId);
 }
+
+const sputnikPeerCount = ref(2);
+const sputnikSoundEnabled = ref(true);
+const sputnikPeersEnabled = SPUTNIK_PEERS_ENABLED;
+const sputnikPeerRuntime = createSputnikPeerRuntime({
+  enabled: sputnikPeersEnabled,
+  getRoomId: () => activeRoomId.value || desiredRoomId.value || 'lobby',
+  getCallId: () => activeSocketCallId.value || activeCallId.value || '',
+  getSocketOrigins: () => resolveBackendWebSocketOriginCandidates(),
+  buildSocketUrl: socketUrlForRoom,
+  preparePeerSessions: async ({ peers }) => {
+    const credentialsByPeerId = {
+      alice: { email: 'alice@sputnik.local', password: 'alice123' },
+      'sputnik-1': { email: 'sputnik-1@sputnik.local', password: 'sputnik123' },
+      'sputnik-2': { email: 'sputnik-2@sputnik.local', password: 'sputnik223' },
+      'sputnik-3': { email: 'sputnik-3@sputnik.local', password: 'sputnik323' },
+    };
+    const preparedPeers = [];
+    for (const peer of peers) {
+      const credentials = credentialsByPeerId[peer.logicalPeerId];
+      if (!credentials) {
+        preparedPeers.push(peer);
+        continue;
+      }
+      const { response } = await fetchBackend('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+        timeoutMs: 15000,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.status !== 'ok') {
+        throw new Error(`Sputnik login failed for ${peer.displayName}.`);
+      }
+      const userId = Number(payload?.user?.id || 0);
+      const sessionToken = String(payload?.session?.token || payload?.session?.id || '').trim();
+      if (!Number.isFinite(userId) || userId <= 0 || sessionToken === '') {
+        throw new Error(`Sputnik login returned an invalid session for ${peer.displayName}.`);
+      }
+      preparedPeers.push({
+        ...peer,
+        peerId: String(userId),
+        userId,
+        displayName: String(payload?.user?.display_name || peer.displayName),
+        sessionToken,
+      });
+    }
+    return preparedPeers;
+  },
+  getIceServers: () => {
+    const dynamicServers = Array.isArray(dynamicIceServers.value) ? dynamicIceServers.value : [];
+    return dynamicServers.length > 0 ? dynamicServers : DEFAULT_NATIVE_ICE_SERVERS;
+  },
+  captureClientDiagnostic,
+  captureClientDiagnosticError,
+});
+const sputnikPeerState = sputnikPeerRuntime.state;
+const sputnikPeersActive = computed(() => sputnikPeerState.running || sputnikPeerState.activePeerCount > 0 || sputnikPeerState.status === 'starting');
+let lastSputnikSpawnClickAtMs = 0;
+
+function spawnSputnikPeers() {
+  if (!sputnikPeersEnabled) return;
+  lastSputnikSpawnClickAtMs = Date.now();
+  void sputnikPeerRuntime.spawn(sputnikPeerCount.value, {
+    includeAlice: true,
+    soundEnabled: sputnikSoundEnabled.value,
+  });
+}
+
+function stopSputnikPeers(reason = 'manual') {
+  sputnikPeerRuntime.stop(reason);
+}
+
+function toggleSputnikPeers() {
+  if (sputnikPeersActive.value) {
+    if (Date.now() - lastSputnikSpawnClickAtMs < 1500) return;
+    stopSputnikPeers('manual_stop');
+    return;
+  }
+  spawnSputnikPeers();
+}
+
+watch(activeSocketCallId, () => {
+  if (sputnikPeerState.running) stopSputnikPeers('call_changed');
+});
+watch(activeRoomId, () => {
+  if (sputnikPeerState.running) stopSputnikPeers('room_changed');
+});
+onBeforeUnmount(() => {
+  stopSputnikPeers('workspace_unmount');
+});
 
 function markWorkspaceReconnectAfterForeground() {
   if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
@@ -1151,7 +1263,7 @@ const mediaStack = createCallWorkspaceMediaStack({
   refs: {
     activeRoomId,
     activeSocketCallId,
-    SFUClient,
+    SFUClient: null,
     backgroundBaselineCollector,
     backgroundFilterController,
     callMediaPrefs,
@@ -1274,69 +1386,10 @@ const {
 applyCallOutputPreferences = applyCallOutputPreferencesHelper; renderCallVideoLayout = renderCallVideoLayoutHelper;
 resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuAfterVideoStall = restartSfuAfterVideoStallHelper; stopActivityMonitor = stopActivityMonitorHelper;
 
-({
-  initSFU,
-  removeSfuRemotePeersForUserId,
-  stopSfuTrackAnnounceTimer,
-  teardownRemotePeer,
-} = createSfuLifecycleHelpers({
-  callbacks: {
-    captureClientDiagnostic,
-    captureClientDiagnosticError,
-    createOrUpdateSfuRemotePeer,
-    currentUserId: () => currentUserId.value,
-    deleteSfuRemotePeer,
-    handleSFUEncodedFrame,
-    handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(
-      getSfuClientBufferedAmount(),
-      String(details?.trackId || details?.track_id || ''),
-      String(details?.reason || 'sfu_publisher_pressure'),
-      details,
-    ),
-    isWlvcRuntimePath: () => isWlvcRuntimePath(),
-    maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
-    mediaDebugLog,
-    normalizeSfuPublisherId,
-    clearMediaSecuritySfuPublisherSeen,
-    noteMediaSecuritySfuPublisherSeen,
-    publishLocalTracks: (...args) => publishLocalTracks(...args),
-    publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),
-    renderCallVideoLayout: () => renderCallVideoLayout(),
-    requestWlvcFullFrameKeyframe: (...args) => requestWlvcFullFrameKeyframe(...args),
-    requestSfuConnect: () => initSFU(),
-    resetWlvcBackpressureCounters,
-    scheduleMediaSecurityParticipantSync,
-    setSfuRemotePeer,
-    sfuTrackListHasVideo,
-    sfuTrackRows,
-    stopLocalEncodingPipeline,
-    teardownSfuRemotePeers: (...args) => teardownSfuRemotePeers(...args),
-  },
-  constants: {
-    mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
-    sfuConnectMaxRetries: SFU_CONNECT_MAX_RETRIES,
-    sfuConnectRetryDelayMs: SFU_CONNECT_RETRY_DELAY_MS,
-    sfuPublishMaxRetries: SFU_PUBLISH_MAX_RETRIES,
-    sfuPublishRetryDelayMs: SFU_PUBLISH_RETRY_DELAY_MS,
-    sfuTrackAnnounceIntervalMs: SFU_TRACK_ANNOUNCE_INTERVAL_MS,
-  },
-  refs: {
-    SFUClient,
-    activeRoomId,
-    activeSocketCallId,
-    connectionState,
-    isManualSocketClose: () => manualSocketClose,
-    localStreamRef,
-    mediaRuntimePath,
-    pendingSfuRemotePeerInitializers,
-    remotePeersRef,
-    sessionState, sfuTransportState,
-    sfuClientRef,
-    sfuConnected,
-    shouldConnectSfu,
-  },
-  state: sfuLifecycleState,
-}));
+initSFU = () => false;
+removeSfuRemotePeersForUserId = () => {};
+stopSfuTrackAnnounceTimer = () => {};
+teardownRemotePeer = () => {};
 
 const nativeStack = createCallWorkspaceNativeStack({
   callbacks: {
@@ -2065,6 +2118,11 @@ const {
     setManualSocketClose: (value) => { manualSocketClose = value; },
   },
 }));
+const hangupCallWithoutSputnikTeardown = hangupCall;
+hangupCall = (...args) => {
+  stopSputnikPeers('local_hangup');
+  return hangupCallWithoutSputnikTeardown(...args);
+};
 registerCallWorkspaceLifecycleHelpers({
   vue: { watch, onMounted, onBeforeUnmount, nextTick },
   callbacks: {

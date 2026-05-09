@@ -1,4 +1,5 @@
 import { isScreenShareUserId } from '../../screenShareIdentity.js';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 export function defaultNativeAudioBridgeFailureMessage() {
   return 'Audio is unavailable because protected audio transform setup failed on this device.';
@@ -15,15 +16,25 @@ export function createMediaSecurityTargetHelpers({
   sfuRuntimeEnabled,
   supportsNativeTransforms,
 }) {
+  function isTransportOnlyDevParticipant(row) {
+    const email = String(row?.email || row?.user?.email || '').trim().toLowerCase();
+    const displayName = String(row?.displayName || row?.display_name || row?.user?.display_name || '').trim().toLowerCase();
+    return email.endsWith('@sputnik.local')
+      || displayName === 'alice'
+      || /^sputnik\s+\d+$/.test(displayName);
+  }
+
   function mediaSecurityTargetIds() {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return [];
     return connectedParticipantUsers.value
+      .filter((row) => !isTransportOnlyDevParticipant(row))
       .map((row) => Number(row?.userId || 0))
       .filter((userId) => (
-        Number.isInteger(userId)
-        && userId > 0
-        && userId !== currentUserId.value
-        && !isScreenShareUserId(userId)
-      ));
+          Number.isInteger(userId)
+          && userId > 0
+          && userId !== currentUserId.value
+          && !isScreenShareUserId(userId)
+        ));
   }
 
   function noteMediaSecuritySfuPublisherSeen(userId) {

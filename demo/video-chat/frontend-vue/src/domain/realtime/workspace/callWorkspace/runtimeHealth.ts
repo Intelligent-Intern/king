@@ -15,6 +15,7 @@ import {
   isScreenShareUserId,
   screenShareOwnerOrUserId,
 } from '../../screenShareIdentity.js';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
@@ -96,7 +97,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function shouldUseNativeAudioBridge() {
-    if (!mediaSecuritySessionClass.supportsNativeTransforms()) {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
+      return false;
+    }
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !mediaSecuritySessionClass.supportsNativeTransforms()) {
       return false;
     }
     return sfuRuntimeEnabled
@@ -684,6 +688,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function startRemoteVideoStallTimer() {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
     const timer = getRemoteVideoStallTimer();
     if (timer !== null) {
       clearInterval(timer);

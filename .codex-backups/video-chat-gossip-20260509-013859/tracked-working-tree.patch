@@ -1,0 +1,2517 @@
+diff --git a/demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php b/demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php
+index 66aba050..1b0e294f 100644
+--- a/demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php
++++ b/demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php
+@@ -1233,6 +1233,22 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string
+         }
+     }
+ 
++    $admittedPeers = [];
++    foreach (is_array($topologyPlan['members'] ?? null) ? $topologyPlan['members'] : [] as $member) {
++        if (!is_array($member)) {
++            continue;
++        }
++        $memberId = videochat_gossipmesh_safe_id($member['id'] ?? ($member['peer_id'] ?? ''));
++        if ($memberId === '' || $memberId === $safePeerId) {
++            continue;
++        }
++        $admittedPeers[] = [
++            'peer_id' => $memberId,
++            'transport' => 'rtc_datachannel',
++            'data_transports' => ['rtc_datachannel'],
++        ];
++    }
++
+     return [
+         'lane' => 'ops',
+         'type' => VIDEOCHAT_GOSSIPMESH_TOPOLOGY_HINT_TYPE,
+@@ -1242,6 +1258,7 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string
+         'call_id' => (string) ($topologyPlan['call_id'] ?? ''),
+         'peer_id' => $safePeerId,
+         'topology_epoch' => $epochMs ?? (int) floor(microtime(true) * 1000),
++        'admitted_peers' => $admittedPeers,
+         'neighbors' => $neighbors,
+         'reconnect_reason' => trim($reason) === '' ? 'topology_repair' : trim($reason),
+     ];
+diff --git a/demo/video-chat/backend-king-php/http/module_realtime.php b/demo/video-chat/backend-king-php/http/module_realtime.php
+index 2bc9505c..c0ab504a 100644
+--- a/demo/video-chat/backend-king-php/http/module_realtime.php
++++ b/demo/video-chat/backend-king-php/http/module_realtime.php
+@@ -6,10 +6,12 @@ require_once __DIR__ . '/../domain/realtime/chat_attachments.php';
+ require_once __DIR__ . '/../domain/realtime/chat_archive.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_activity_layout.php';
+ require_once __DIR__ . '/../domain/calls/call_access.php';
++require_once __DIR__ . '/../support/database_core.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_asset_version.php';
++require_once __DIR__ . '/../domain/realtime/realtime_sputnik_dev.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
+ require_once __DIR__ . '/../domain/realtime/realtime_gossipmesh.php';
+@@ -64,6 +66,7 @@ function videochat_handle_realtime_routes(
+     string $path,
+     array $request,
+     string $wsPath,
++    array $apiAuthContext,
+     array &$activeWebsocketsBySession,
+     array &$presenceState,
+     array &$lobbyState,
+@@ -74,8 +77,74 @@ function videochat_handle_realtime_routes(
+     callable $rbacFailureResponse,
+     callable $jsonResponse,
+     callable $errorResponse,
+-    callable $openDatabase
++    callable $openDatabase,
++    callable $issueSessionId
+ ): ?array {
++    if ($path === '/api/realtime/sputnik-dev/sessions') {
++        $method = videochat_realtime_method_from_request($request);
++        if ($method !== 'POST') {
++            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/realtime/sputnik-dev/sessions.', [
++                'allowed_methods' => ['POST'],
++            ]);
++        }
++
++        [$payload, $decodeError] = videochat_realtime_decode_json_request_body($request);
++        if (!is_array($payload)) {
++            return $errorResponse(400, 'sputnik_dev_invalid_request_body', 'Sputnik dev peer payload must be a JSON object.', [
++                'reason' => $decodeError,
++            ]);
++        }
++
++        $lastPrepareLockError = null;
++        for ($attempt = 1; $attempt <= 8; $attempt += 1) {
++            try {
++                $pdo = $openDatabase();
++                $result = videochat_realtime_prepare_sputnik_dev_peer_sessions(
++                    $pdo,
++                    $apiAuthContext,
++                    $payload,
++                    $request,
++                    $issueSessionId
++                );
++                $lastPrepareLockError = null;
++                break;
++            } catch (Throwable $error) {
++                if (function_exists('videochat_sqlite_is_transient_lock') && videochat_sqlite_is_transient_lock($error)) {
++                    $lastPrepareLockError = $error;
++                    if ($attempt < 8) {
++                        usleep(videochat_sqlite_retry_delay_us($attempt, 80_000, 450_000));
++                        continue;
++                    }
++                }
++                error_log('[video-chat][sputnik-dev] prepare failed: ' . $error::class . ': ' . $error->getMessage());
++                return $errorResponse(500, 'sputnik_dev_prepare_failed', 'Could not prepare Sputnik dev peers.', [
++                    'reason' => 'internal_error',
++                ]);
++            }
++        }
++        if ($lastPrepareLockError instanceof Throwable) {
++            error_log('[video-chat][sputnik-dev] prepare sqlite lock exhausted: ' . $lastPrepareLockError->getMessage());
++            return $errorResponse(503, 'sputnik_dev_prepare_busy', 'Sputnik dev peer preparation is temporarily busy; retry shortly.', [
++                'reason' => 'sqlite_busy',
++            ]);
++        }
++
++        if (!(bool) ($result['ok'] ?? false)) {
++            $reason = (string) ($result['reason'] ?? 'unknown');
++            $status = $reason === 'forbidden' ? 403 : ($reason === 'call_not_found' ? 404 : 422);
++            return $errorResponse($status, 'sputnik_dev_prepare_failed', 'Could not prepare Sputnik dev peers.', [
++                'reason' => $reason,
++                'errors' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
++            ]);
++        }
++
++        return $jsonResponse(201, [
++            'status' => 'ok',
++            'peers' => is_array($result['peers'] ?? null) ? $result['peers'] : [],
++            'time' => gmdate('c'),
++        ]);
++    }
++
+     $attachmentResponse = videochat_handle_realtime_attachment_routes(
+         $path,
+         $request,
+diff --git a/demo/video-chat/backend-king-php/http/module_realtime_websocket.php b/demo/video-chat/backend-king-php/http/module_realtime_websocket.php
+index bc0686e9..e18b0732 100644
+--- a/demo/video-chat/backend-king-php/http/module_realtime_websocket.php
++++ b/demo/video-chat/backend-king-php/http/module_realtime_websocket.php
+@@ -148,6 +148,12 @@ function videochat_handle_realtime_websocket_route(
+             $authSessionId,
+             $websocket
+         );
++        if (function_exists('videochat_realtime_apply_sputnik_dev_identity')) {
++            $websocketAuth['user'] = videochat_realtime_apply_sputnik_dev_identity(
++                $queryParams,
++                (array) ($websocketAuth['user'] ?? [])
++            );
++        }
+         $presenceConnection = videochat_presence_connection_descriptor(
+             (array) ($websocketAuth['user'] ?? []),
+             $authSessionId,
+diff --git a/demo/video-chat/backend-king-php/http/router.php b/demo/video-chat/backend-king-php/http/router.php
+index 4379256f..b33ab553 100644
+--- a/demo/video-chat/backend-king-php/http/router.php
++++ b/demo/video-chat/backend-king-php/http/router.php
+@@ -366,6 +366,7 @@ function videochat_dispatch_request(
+                 $path,
+                 $request,
+                 $wsPath,
++                $apiAuthContext,
+                 $activeWebsocketsBySession,
+                 $presenceState,
+                 $lobbyState,
+@@ -376,7 +377,8 @@ function videochat_dispatch_request(
+                 $rbacFailureResponse,
+                 $jsonResponse,
+                 $errorResponse,
+-                $openDatabase
++                $openDatabase,
++                $issueSessionId
+             );
+         }
+ 
+diff --git a/demo/video-chat/backend-king-php/support/database_demo_seed.php b/demo/video-chat/backend-king-php/support/database_demo_seed.php
+index 9e51025d..b3ebf6b8 100644
+--- a/demo/video-chat/backend-king-php/support/database_demo_seed.php
++++ b/demo/video-chat/backend-king-php/support/database_demo_seed.php
+@@ -42,6 +42,28 @@ function videochat_demo_user_blueprint(): array
+         ],
+     ];
+ 
++    if (function_exists('videochat_realtime_sputnik_dev_peers_enabled')
++        ? videochat_realtime_sputnik_dev_peers_enabled()
++        : strtolower(trim((string) getenv('VIDEOCHAT_ENABLE_SPUTNIK_PEERS'))) === 'true'
++    ) {
++        foreach ([
++            ['alice@sputnik.local', 'Alice', 'alice123'],
++            ['sputnik-1@sputnik.local', 'Sputnik 1', 'sputnik123'],
++            ['sputnik-2@sputnik.local', 'Sputnik 2', 'sputnik223'],
++            ['sputnik-3@sputnik.local', 'Sputnik 3', 'sputnik323'],
++        ] as [$email, $displayName, $password]) {
++            $users[] = [
++                'email' => $email,
++                'display_name' => $displayName,
++                'role' => 'admin',
++                'password' => $password,
++                'time_format' => '24h',
++                'date_format' => 'dmy_dot',
++                'theme' => 'dark',
++            ];
++        }
++    }
++
+     $deduplicated = [];
+     $seenByEmail = [];
+     foreach ($users as $user) {
+diff --git a/demo/video-chat/frontend-vue/package.json b/demo/video-chat/frontend-vue/package.json
+index 3bde73b8..5346f408 100644
+--- a/demo/video-chat/frontend-vue/package.json
++++ b/demo/video-chat/frontend-vue/package.json
+@@ -9,8 +9,9 @@
+     "build": "vite build",
+     "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs && node tests/contract/wlvc-binding-recovery-contract.mjs && node tests/contract/wlvc-codec-port-contract.mjs && node tests/contract/wlvc-runtime-regression-contract.mjs && node tests/contract/wlvc-hybrid-fallback-contract.mjs && node tests/contract/sfu-wlvc-abi-gating-contract.mjs",
+     "test:contract:sfu": "node tests/contract/more-payload-intake-contract.mjs && node tests/contract/sfu-origin-room-binding-contract.mjs && node tests/contract/sfu-motion-backpressure-contract.mjs && node tests/contract/sfu-video-recovery-timing-contract.mjs && node tests/contract/sfu-throughput-path-contract.mjs && node tests/contract/sfu-real-media-plane-architecture-contract.mjs && node tests/contract/sfu-control-data-plane-split-contract.mjs && node tests/contract/sfu-signalling-unit-policy-contract.mjs && node tests/contract/sfu-media-recovery-control-contract.mjs && node tests/contract/sfu-gossip-planning-cfh-contract.mjs && node tests/contract/sfu-publisher-path-trace-contract.mjs && node tests/contract/sfu-capture-pipeline-capabilities-contract.mjs && node tests/contract/sfu-capture-worker-boundary-contract.mjs && node tests/contract/sfu-video-frame-primary-path-contract.mjs && node tests/contract/sfu-video-frame-rgba-copy-contract.mjs && node tests/contract/sfu-protected-browser-encoder-contract.mjs && node tests/contract/sfu-zero-copy-readback-gate-contract.mjs && node tests/contract/sfu-offscreen-canvas-fallback-contract.mjs && node tests/contract/sfu-dom-canvas-last-resort-contract.mjs && node tests/contract/sfu-transport-metrics-contract.mjs && node tests/contract/sfu-end-to-end-observability-contract.mjs && node tests/contract/sfu-diagnostic-surface-contract.mjs && node tests/contract/sfu-profile-budget-contract.mjs && node tests/contract/sfu-source-budget-profile-coupling-contract.mjs && node tests/contract/sfu-capture-constraints-contract.mjs && node tests/contract/mobile-call-media-devices-contract.mjs && node tests/contract/sfu-source-readback-contract.mjs && node tests/contract/sfu-auto-readback-downgrade-contract.mjs && node tests/contract/sfu-auto-readback-recovery-contract.mjs && node tests/contract/sfu-wlvc-rate-control-contract.mjs && node tests/contract/sfu-high-motion-payload-contract.mjs && node tests/contract/sfu-high-motion-readback-budget-contract.mjs && node tests/contract/sfu-portrait-aspect-preservation-contract.mjs && node tests/contract/sfu-client-side-framing-crop-contract.mjs && node tests/contract/sfu-fullscreen-render-scheduler-contract.mjs && node tests/contract/sfu-receiver-jitter-buffer-contract.mjs && node tests/contract/sfu-adaptive-quality-layers-contract.mjs && node tests/contract/sfu-dual-video-layer-routing-contract.mjs && node tests/contract/sfu-background-tab-policy-contract.mjs && node tests/contract/sfu-keyframe-cache-pacing-contract.mjs && node tests/contract/sfu-security-throughput-budget-contract.mjs && node tests/contract/sfu-profile-switch-actuator-contract.mjs && node tests/contract/sfu-publisher-backpressure-controller-contract.mjs && node tests/contract/sfu-browser-ws-send-drain-contract.mjs && node tests/contract/sfu-binary-envelope-copy-audit-contract.mjs && node tests/contract/sfu-king-binary-decode-fanout-contract.mjs && node tests/contract/sfu-no-frame-persistence-regression-contract.mjs && node tests/contract/sfu-relay-broker-io-budget-contract.mjs && node tests/contract/sfu-king-receive-loop-fairness-contract.mjs && node tests/contract/sfu-slow-subscriber-isolation-contract.mjs && node tests/contract/sfu-replay-pacing-slow-subscriber-contract.mjs && node tests/contract/sfu-receiver-feedback-loop-contract.mjs && node tests/contract/sfu-production-socket-proxy-budget-contract.mjs && node tests/contract/sfu-online-acceptance-no-critical-pressure-contract.mjs",
+-    "test:contract:gossip": "node tests/contract/gossip-controller-decentralized-routing-contract.mjs && node tests/contract/gossip-harness-faults-contract.mjs && node tests/contract/gossip-local-5-peer-network-harness-contract.mjs && node tests/contract/gossip-telemetry-contract.mjs && node tests/contract/gossip-rollout-gate-contract.mjs && node tests/contract/gossip-sfu-baseline-rollout-gate-contract.mjs && node tests/contract/gossip-primary-health-gate-contract.mjs && node tests/contract/gossip-native-recovery-contract.mjs && node tests/contract/gossip-server-no-media-fanout-contract.mjs && node tests/contract/gossip-topology-hint-contract.mjs && node tests/contract/gossip-room-state-topology-contract.mjs && ../backend-king-php/tests/realtime-gossipmesh-room-state-topology-contract.sh && node tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs && node tests/contract/gossip-authoritative-topology-repair-contract.mjs && ../backend-king-php/tests/realtime-gossipmesh-runtime-contract.sh && node tests/contract/gossip-data-lane-feature-flag-contract.mjs && node tests/contract/gossip-media-carrier-mode-contract.mjs && node tests/contract/gossip-production-deploy-profile-contract.mjs && node tests/contract/gossip-publisher-pipeline-decoupling-contract.mjs && node tests/contract/gossip-primary-fallback-backtrace-contract.mjs && node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs && node tests/contract/gossip-native-webrtc-binding-contract.mjs && node tests/contract/gossip-live-receive-decode-route-contract.mjs && node tests/contract/gossip-outbound-live-publication-contract.mjs && node tests/contract/gossip-server-topology-ingestion-contract.mjs && node tests/contract/gossip-stale-target-pruning-contract.mjs && node tests/contract/gossip-neighbor-health-repair-contract.mjs && node tests/contract/gossip-neighbor-health-topology-repair-contract.mjs && node tests/contract/gossip-native-binary-data-plane-contract.mjs && node tests/contract/kingrt-three-user-regression-harness-contract.mjs && node tests/contract/gossip-overview-map-analysis-contract.mjs && node tests/contract/gossip-docs-process-contract.mjs && node tests/contract/sputnik-peer-harness-contract.mjs",
++    "test:contract:gossip": "node tests/contract/gossip-controller-decentralized-routing-contract.mjs && node tests/contract/gossip-harness-faults-contract.mjs && node tests/contract/gossip-local-5-peer-network-harness-contract.mjs && node tests/contract/gossip-telemetry-contract.mjs && node tests/contract/gossip-rollout-gate-contract.mjs && node tests/contract/gossip-sfu-baseline-rollout-gate-contract.mjs && node tests/contract/gossip-primary-health-gate-contract.mjs && node tests/contract/gossip-native-recovery-contract.mjs && node tests/contract/gossip-server-no-media-fanout-contract.mjs && node tests/contract/gossip-topology-hint-contract.mjs && node tests/contract/gossip-room-state-topology-contract.mjs && ../backend-king-php/tests/realtime-gossipmesh-room-state-topology-contract.sh && node tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs && node tests/contract/gossip-authoritative-topology-repair-contract.mjs && ../backend-king-php/tests/realtime-gossipmesh-runtime-contract.sh && node tests/contract/gossip-data-lane-feature-flag-contract.mjs && node tests/contract/gossip-media-carrier-mode-contract.mjs && node tests/contract/gossip-production-deploy-profile-contract.mjs && node tests/contract/gossip-publisher-pipeline-decoupling-contract.mjs && node tests/contract/gossip-primary-fallback-backtrace-contract.mjs && node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs && node tests/contract/gossip-native-webrtc-binding-contract.mjs && node tests/contract/gossip-live-receive-decode-route-contract.mjs && node tests/contract/gossip-outbound-live-publication-contract.mjs && node tests/contract/gossip-server-topology-ingestion-contract.mjs && node tests/contract/gossip-stale-target-pruning-contract.mjs && node tests/contract/gossip-neighbor-health-repair-contract.mjs && node tests/contract/gossip-neighbor-health-topology-repair-contract.mjs && node tests/contract/gossip-native-binary-data-plane-contract.mjs && node tests/contract/kingrt-three-user-regression-harness-contract.mjs && node tests/contract/gossip-overview-map-analysis-contract.mjs && node tests/contract/gossip-docs-process-contract.mjs && node tests/contract/sputnik-peer-harness-contract.mjs && node tests/contract/sputnik-in-call-runtime-contract.mjs",
+     "test:contract:sputnik-peer-harness": "node tests/contract/sputnik-peer-harness-contract.mjs",
++    "test:contract:sputnik-in-call-runtime": "node tests/contract/sputnik-in-call-runtime-contract.mjs",
+     "test:contract:call-apps": "node tests/contract/call-apps-architecture-contract.mjs && node tests/contract/call-app-package-layout-contract.mjs && node tests/contract/call-app-availability-frontend-contract.mjs && node tests/contract/call-app-workspace-view-contract.mjs && node tests/contract/call-app-sidebar-contract.mjs && node tests/contract/call-app-participant-grants-contract.mjs && node tests/contract/call-app-iframe-launch-contract.mjs && node tests/contract/call-app-crdt-sync-contract.mjs && node tests/contract/call-app-whiteboard-runtime-contract.mjs && node tests/contract/call-app-permission-revocation-contract.mjs && node tests/contract/call-app-marketplace-to-call-journey-contract.mjs && ../backend-king-php/tests/call-app-semantic-dns-contract.sh && ../backend-king-php/tests/call-app-mcp-metadata-contract.sh && ../backend-king-php/tests/call-app-marketplace-entitlement-contract.sh && ../backend-king-php/tests/call-app-availability-contract.sh && ../backend-king-php/tests/call-app-session-lifecycle-contract.sh",
+     "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
+     "test:contract:participant-roster": "node tests/contract/participant-roster-stability-contract.mjs",
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css
+index fa04232e..85c81941 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css
+@@ -957,6 +957,69 @@
+   background: var(--color-error);
+ }
+ 
++.sputnik-peer-control {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  min-height: 44px;
++  padding: 0 6px;
++  border: 1px solid rgba(105, 156, 255, 0.24);
++  border-radius: 12px;
++  background: rgba(6, 17, 44, 0.72);
++}
++
++.sputnik-peer-button {
++  width: 44px;
++}
++
++.sputnik-peer-icon {
++  display: grid;
++  place-items: center;
++  width: 22px;
++  height: 22px;
++  border-radius: 50%;
++  background: #16a34a;
++  color: #fff;
++  font-size: 13px;
++  font-weight: 800;
++  line-height: 1;
++}
++
++.sputnik-peer-select,
++.sputnik-peer-stop {
++  height: 32px;
++  border: 1px solid rgba(105, 156, 255, 0.36);
++  border-radius: 8px;
++  background: rgba(7, 18, 48, 0.94);
++  color: var(--color-text-primary);
++  font: inherit;
++  font-size: 13px;
++}
++
++.sputnik-peer-select {
++  width: 62px;
++  padding: 0 6px;
++}
++
++.sputnik-peer-stop {
++  padding: 0 10px;
++  cursor: pointer;
++}
++
++.sputnik-peer-sound {
++  display: inline-flex;
++  align-items: center;
++  gap: 4px;
++  color: var(--color-text-secondary);
++  font-size: 12px;
++  white-space: nowrap;
++}
++
++.sputnik-peer-sound input {
++  width: 14px;
++  height: 14px;
++}
++
+ .ctrl-icon-image {
+   width: 20px;
+   height: 20px;
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html
+index d0e9708d..cc0447da 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html
+@@ -335,6 +335,42 @@
+             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
+           </button>
+ 
++          <div v-if="sputnikPeersEnabled" class="sputnik-peer-control" role="group" aria-label="Sputnik dev peers">
++            <button
++              class="call-control-btn sputnik-peer-button"
++              type="button"
++              :class="{ active: sputnikPeerState.running }"
++              :title="sputnikPeerState.running ? 'Sputnik peers running' : 'Spawn Alice + Sputnik peers'"
++              :aria-label="sputnikPeerState.running ? 'Sputnik peers running' : 'Spawn Alice plus Sputnik peers'"
++              @click="spawnSputnikPeers"
++            >
++              <span class="sputnik-peer-icon" aria-hidden="true">S</span>
++            </button>
++            <select
++              v-model.number="sputnikPeerCount"
++              class="sputnik-peer-select"
++              :disabled="sputnikPeerState.running"
++              aria-label="Sputnik peer count"
++            >
++              <option :value="1">A+1</option>
++              <option :value="2">A+2</option>
++              <option :value="3">A+3</option>
++            </select>
++            <label class="sputnik-peer-sound" title="Enable optional Sputnik tone">
++              <input v-model="sputnikSoundEnabled" type="checkbox" :disabled="sputnikPeerState.running" />
++              <span>sound</span>
++            </label>
++            <button
++              v-if="sputnikPeerState.running"
++              class="sputnik-peer-stop"
++              type="button"
++              aria-label="Stop Sputnik peers"
++              @click="stopSputnikPeers('manual_stop')"
++            >
++              Stop
++            </button>
++          </div>
++
+           <button class="call-control-btn hangup" type="button" :title="t('calls.workspace.hang_up')" :aria-label="t('calls.workspace.hang_up')" @click="hangupCall">
+             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
+           </button>
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue
+index 881e4a18..5803d243 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue
+@@ -39,7 +39,6 @@ import {
+   nativeSdpAudioSummaries,
+   nativeSdpHasSendableAudio,
+ } from './native/audioBridgeHelpers';
+-import { createSfuLifecycleHelpers } from './sfu/lifecycle';
+ import { createCallWorkspaceSocketHelpers } from './workspace/callWorkspace/socketLifecycle';
+ import { createCallWorkspaceRouteResolutionHelpers } from './workspace/callWorkspace/routeResolution';
+ import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWorkspace/runtimeSwitching';
+@@ -53,6 +52,7 @@ import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace
+ import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
+ import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
+ import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
++import { createSputnikPeerRuntime } from './testing/sputnikPeerRuntime';
+ import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
+ import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
+ import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
+@@ -66,7 +66,6 @@ import {
+   streamHasLiveTrackKind,
+   streamHasTracks,
+ } from './native/peerMedia';
+-import { SFUClient } from '../../lib/sfu/sfuClient';
+ import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './media/security';
+ import {
+   ALONE_IDLE_ACTIVITY_EVENTS,
+@@ -97,6 +96,7 @@ import {
+   SFU_CONNECT_RETRY_DELAY_MS,
+   SFU_PUBLISH_MAX_RETRIES,
+   SFU_PUBLISH_RETRY_DELAY_MS,
++  SPUTNIK_PEERS_ENABLED,
+   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
+   SFU_RUNTIME_ENABLED,
+   SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
+@@ -273,7 +273,7 @@ const socketLifecycleState = {
+   get reconnectTimer() { return reconnectTimer; },
+   set reconnectTimer(value) { reconnectTimer = value; },
+ };
+-const connectedParticipantUsersRef = ref(computed(() => []));
++const connectedParticipantUsersRef = { value: computed(() => []) };
+ const participantsRaw = ref([]);
+ let participantsRawSignature = '';
+ const currentUserConnectedAt = new Date().toISOString();
+@@ -553,7 +553,8 @@ const showLobbyTab = computed(() => canModerate.value);
+ const usersSourceMode = computed(() => 'snapshot');
+ const isSocketOnline = computed(() => connectionState.value === 'online');
+ const shouldConnectSfu = computed(() => (
+-  isWlvcRuntimePath()
++  SFU_RUNTIME_ENABLED
++  && isWlvcRuntimePath()
+   && isSocketOnline.value
+   && hasRealtimeRoomSync.value
+   && !routeCallResolve.pending
+@@ -622,7 +623,7 @@ let currentSfuVideoProfile = computed(() => 'quality'); let downgradeSfuVideoQua
+ let clearSfuVideoQualityRecoveryProbeTimer = () => {}; let ensureSfuVideoQualityRecoveryProbeSeries = () => false;
+ let initSFU = () => {};
+ let maybeFallbackToNativeRuntime = async () => false;
+-let removeSfuRemotePeersForUserId;
++let removeSfuRemotePeersForUserId = () => {};
+ let setMediaRuntimePath;
+ let stopSfuTrackAnnounceTimer = () => {};
+ let switchMediaRuntimePath = async () => false;
+@@ -660,6 +661,8 @@ const {
+     activeCallId: () => activeCallId.value, activeRoomId: () => activeRoomId.value,
+     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
+     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
++    getConnectedParticipantCount: () => connectedParticipantUsers.value.length,
++    getLocalAudioStream: () => localFilteredStreamRef.value || localStreamRef.value,
+     defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
+     sendSocketFrame,
+   },
+@@ -687,6 +690,88 @@ function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
+   return sendRoomJoinLocal(targetRoomId);
+ }
+ 
++const sputnikPeerCount = ref(2);
++const sputnikSoundEnabled = ref(true);
++const sputnikPeersEnabled = SPUTNIK_PEERS_ENABLED;
++const sputnikPeerRuntime = createSputnikPeerRuntime({
++  enabled: sputnikPeersEnabled,
++  getRoomId: () => activeRoomId.value || desiredRoomId.value || 'lobby',
++  getCallId: () => activeSocketCallId.value || activeCallId.value || '',
++  getSocketOrigins: () => resolveBackendWebSocketOriginCandidates(),
++  buildSocketUrl: socketUrlForRoom,
++  preparePeerSessions: async ({ peers }) => {
++    const credentialsByPeerId = {
++      alice: { email: 'alice@sputnik.local', password: 'alice123' },
++      'sputnik-1': { email: 'sputnik-1@sputnik.local', password: 'sputnik123' },
++      'sputnik-2': { email: 'sputnik-2@sputnik.local', password: 'sputnik223' },
++      'sputnik-3': { email: 'sputnik-3@sputnik.local', password: 'sputnik323' },
++    };
++    const preparedPeers = [];
++    for (const peer of peers) {
++      const credentials = credentialsByPeerId[peer.logicalPeerId];
++      if (!credentials) {
++        preparedPeers.push(peer);
++        continue;
++      }
++      const { response } = await fetchBackend('/api/auth/login', {
++        method: 'POST',
++        headers: {
++          accept: 'application/json',
++          'content-type': 'application/json',
++        },
++        body: JSON.stringify(credentials),
++        timeoutMs: 15000,
++      });
++      const payload = await response.json().catch(() => null);
++      if (!response.ok || payload?.status !== 'ok') {
++        throw new Error(`Sputnik login failed for ${peer.displayName}.`);
++      }
++      const userId = Number(payload?.user?.id || 0);
++      const sessionToken = String(payload?.session?.token || payload?.session?.id || '').trim();
++      if (!Number.isFinite(userId) || userId <= 0 || sessionToken === '') {
++        throw new Error(`Sputnik login returned an invalid session for ${peer.displayName}.`);
++      }
++      preparedPeers.push({
++        ...peer,
++        peerId: String(userId),
++        userId,
++        displayName: String(payload?.user?.display_name || peer.displayName),
++        sessionToken,
++      });
++    }
++    return preparedPeers;
++  },
++  getIceServers: () => {
++    const dynamicServers = Array.isArray(dynamicIceServers.value) ? dynamicIceServers.value : [];
++    return dynamicServers.length > 0 ? dynamicServers : DEFAULT_NATIVE_ICE_SERVERS;
++  },
++  captureClientDiagnostic,
++  captureClientDiagnosticError,
++});
++const sputnikPeerState = sputnikPeerRuntime.state;
++
++function spawnSputnikPeers() {
++  if (!sputnikPeersEnabled) return;
++  void sputnikPeerRuntime.spawn(sputnikPeerCount.value, {
++    includeAlice: true,
++    soundEnabled: sputnikSoundEnabled.value,
++  });
++}
++
++function stopSputnikPeers(reason = 'manual') {
++  sputnikPeerRuntime.stop(reason);
++}
++
++watch(activeSocketCallId, () => {
++  if (sputnikPeerState.running) stopSputnikPeers('call_changed');
++});
++watch(activeRoomId, () => {
++  if (sputnikPeerState.running) stopSputnikPeers('room_changed');
++});
++onBeforeUnmount(() => {
++  stopSputnikPeers('workspace_unmount');
++});
++
+ function markWorkspaceReconnectAfterForeground() {
+   if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
+   workspaceReconnectAfterForeground = true;
+@@ -1151,7 +1236,7 @@ const mediaStack = createCallWorkspaceMediaStack({
+   refs: {
+     activeRoomId,
+     activeSocketCallId,
+-    SFUClient,
++    SFUClient: null,
+     backgroundBaselineCollector,
+     backgroundFilterController,
+     callMediaPrefs,
+@@ -1274,69 +1359,10 @@ const {
+ applyCallOutputPreferences = applyCallOutputPreferencesHelper; renderCallVideoLayout = renderCallVideoLayoutHelper;
+ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuAfterVideoStall = restartSfuAfterVideoStallHelper; stopActivityMonitor = stopActivityMonitorHelper;
+ 
+-({
+-  initSFU,
+-  removeSfuRemotePeersForUserId,
+-  stopSfuTrackAnnounceTimer,
+-  teardownRemotePeer,
+-} = createSfuLifecycleHelpers({
+-  callbacks: {
+-    captureClientDiagnostic,
+-    captureClientDiagnosticError,
+-    createOrUpdateSfuRemotePeer,
+-    currentUserId: () => currentUserId.value,
+-    deleteSfuRemotePeer,
+-    handleSFUEncodedFrame,
+-    handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(
+-      getSfuClientBufferedAmount(),
+-      String(details?.trackId || details?.track_id || ''),
+-      String(details?.reason || 'sfu_publisher_pressure'),
+-      details,
+-    ),
+-    isWlvcRuntimePath: () => isWlvcRuntimePath(),
+-    maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
+-    mediaDebugLog,
+-    normalizeSfuPublisherId,
+-    clearMediaSecuritySfuPublisherSeen,
+-    noteMediaSecuritySfuPublisherSeen,
+-    publishLocalTracks: (...args) => publishLocalTracks(...args),
+-    publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),
+-    renderCallVideoLayout: () => renderCallVideoLayout(),
+-    requestWlvcFullFrameKeyframe: (...args) => requestWlvcFullFrameKeyframe(...args),
+-    requestSfuConnect: () => initSFU(),
+-    resetWlvcBackpressureCounters,
+-    scheduleMediaSecurityParticipantSync,
+-    setSfuRemotePeer,
+-    sfuTrackListHasVideo,
+-    sfuTrackRows,
+-    stopLocalEncodingPipeline,
+-    teardownSfuRemotePeers: (...args) => teardownSfuRemotePeers(...args),
+-  },
+-  constants: {
+-    mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
+-    sfuConnectMaxRetries: SFU_CONNECT_MAX_RETRIES,
+-    sfuConnectRetryDelayMs: SFU_CONNECT_RETRY_DELAY_MS,
+-    sfuPublishMaxRetries: SFU_PUBLISH_MAX_RETRIES,
+-    sfuPublishRetryDelayMs: SFU_PUBLISH_RETRY_DELAY_MS,
+-    sfuTrackAnnounceIntervalMs: SFU_TRACK_ANNOUNCE_INTERVAL_MS,
+-  },
+-  refs: {
+-    SFUClient,
+-    activeRoomId,
+-    activeSocketCallId,
+-    connectionState,
+-    isManualSocketClose: () => manualSocketClose,
+-    localStreamRef,
+-    mediaRuntimePath,
+-    pendingSfuRemotePeerInitializers,
+-    remotePeersRef,
+-    sessionState, sfuTransportState,
+-    sfuClientRef,
+-    sfuConnected,
+-    shouldConnectSfu,
+-  },
+-  state: sfuLifecycleState,
+-}));
++initSFU = () => false;
++removeSfuRemotePeersForUserId = () => {};
++stopSfuTrackAnnounceTimer = () => {};
++teardownRemotePeer = () => {};
+ 
+ const nativeStack = createCallWorkspaceNativeStack({
+   callbacks: {
+@@ -2065,6 +2091,11 @@ const {
+     setManualSocketClose: (value) => { manualSocketClose = value; },
+   },
+ }));
++const hangupCallWithoutSputnikTeardown = hangupCall;
++hangupCall = (...args) => {
++  stopSputnikPeers('local_hangup');
++  return hangupCallWithoutSputnikTeardown(...args);
++};
+ registerCallWorkspaceLifecycleHelpers({
+   vue: { watch, onMounted, onBeforeUnmount, nextTick },
+   callbacks: {
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts b/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts
+index 42d73c2e..0d4db193 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts
+@@ -65,10 +65,6 @@ function diagnoseOptionalSfuSkip({
+   });
+ }
+ 
+-function shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished) {
+-  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !gossipPublished;
+-}
+-
+ export async function dispatchPublisherFrame({
+   frame,
+   trackId,
+@@ -106,6 +102,30 @@ export async function dispatchPublisherFrame({
+     };
+   }
+ 
++  if (gossipFirst && !gossipPublished) {
++    diagnoseOptionalSfuSkip({
++      captureClientDiagnostic,
++      eventType: 'gossip_primary_publish_failed_no_sfu_fallback',
++      message: 'Gossip primary did not publish this frame; SFU fallback is disabled for this runtime.',
++      trackId,
++      mediaRuntimePath,
++      failureDetails: {
++        fallback_reason: 'gossip_publish_failed_or_gated',
++        sfu_socket_open: Boolean(safeFunction(currentOpenSfuClient, () => null)()),
++        gossip_primary_expected: true,
++      },
++      immediate: true,
++    });
++    return {
++      ok: false,
++      gossipPublished: false,
++      sfuSent: false,
++      sfuSendOptional: true,
++      sfuFallbackSkipped: true,
++      postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
++    };
++  }
++
+   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
+   if (!sendClient) {
+     if (!sfuOptional) {
+@@ -117,15 +137,10 @@ export async function dispatchPublisherFrame({
+         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+       };
+     }
+-    const eventType = shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
+-      ? 'sfu_fallback_unavailable_after_gossip_publish_failure'
+-      : 'sfu_optional_send_unavailable_after_gossip_publish';
+     diagnoseOptionalSfuSkip({
+       captureClientDiagnostic,
+-      eventType,
+-      message: shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
+-        ? 'SFU fallback is unavailable after Gossip primary publication failed.'
+-        : 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
++      eventType: 'sfu_optional_send_unavailable_after_gossip_publish',
++      message: 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
+       trackId,
+       mediaRuntimePath,
+     });
+@@ -138,22 +153,6 @@ export async function dispatchPublisherFrame({
+     };
+   }
+ 
+-  if (gossipFirst && !gossipPublished) {
+-    diagnoseOptionalSfuSkip({
+-      captureClientDiagnostic,
+-      eventType: 'sfu_fallback_after_gossip_primary_publish_failure',
+-      message: 'Gossip primary did not publish this frame; SFU fallback is being used to keep live media flowing.',
+-      trackId,
+-      mediaRuntimePath,
+-      failureDetails: {
+-        fallback_reason: 'gossip_publish_failed_or_gated',
+-        sfu_socket_open: true,
+-        gossip_primary_expected: true,
+-      },
+-      immediate: true,
+-    });
+-  }
+-
+   const sent = await sendClient.sendEncodedFrame(frame);
+   if (sent === false) {
+     const failureDetails = sendClient.getLastSendFailure?.() || null;
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherPipeline.ts b/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherPipeline.ts
+index cf363082..d02b6e44 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherPipeline.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/local/publisherPipeline.ts
+@@ -291,9 +291,15 @@ export function createLocalPublisherPipelineHelpers({
+       captureClientDiagnostic({
+         category: 'media',
+         level: 'warning',
+-        eventType: 'local_background_stream_publisher_active',
+-        code: 'local_background_stream_publisher_active',
+-        message: 'Local preview and SFU publisher are using the processed background compositor video track.',
++        eventType: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++          ? 'local_background_stream_gossip_publisher_active'
++          : 'local_background_stream_publisher_active',
++        code: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++          ? 'local_background_stream_gossip_publisher_active'
++          : 'local_background_stream_publisher_active',
++        message: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++          ? 'Local preview and Gossip publisher are using the processed background compositor video track.'
++          : 'Local preview and SFU publisher are using the processed background compositor video track.',
+         payload: {
+           track_id: videoTrack.id,
+           raw_track_id: activeRawVideoTrack?.id || '',
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/native/bridgeRuntime.ts b/demo/video-chat/frontend-vue/src/domain/realtime/native/bridgeRuntime.ts
+index 1e7c21f8..a2a0815c 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/native/bridgeRuntime.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/native/bridgeRuntime.ts
+@@ -1,3 +1,5 @@
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
++
+ export function createNativeBridgeRuntimeHelpers({
+   callbacks,
+   constants,
+@@ -151,6 +153,9 @@ export function createNativeBridgeRuntimeHelpers({
+ 
+   function attachMediaSecurityNativeSender(sender, track) {
+     if (!sender || !track || !shouldMaintainNativePeerConnections()) return false;
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && String(track?.kind || '').trim().toLowerCase() === 'audio') {
++      return true;
++    }
+     const session = ensureMediaSecuritySession();
+     try {
+       if (attachMediaSecurityNativeSenderBase(session, sender, track)) {
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts
+index d8d051c2..a6eb0a84 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts
+@@ -1,3 +1,5 @@
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
++
+ function documentIsHidden(documentRef) {
+   return documentRef?.visibilityState === 'hidden';
+ }
+@@ -105,6 +107,7 @@ export function createSfuBackgroundTabPolicy({
+   }
+ 
+   function pauseVideoForBackground(context = {}) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
+     if (!shouldPauseSfuVideoForBackground(context, documentRef)) return false;
+     if (!mediaRuntimeIsSfu()) return false;
+     if (backgroundVideoPaused) return false;
+@@ -141,6 +144,7 @@ export function createSfuBackgroundTabPolicy({
+   }
+ 
+   async function resumeVideoAfterForeground(context = {}) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
+     if (!backgroundVideoPaused) return false;
+     const videoTrack = firstLiveVideoTrack(localStreamRef.value);
+     const pausedForMs = Math.max(0, Date.now() - backgroundVideoPausedAtMs);
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts
+index 671c1601..61e7f7bb 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts
+@@ -1,4 +1,5 @@
+ import { configureClientDiagnostics } from '../../../../support/clientDiagnostics';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ function extractDiagnosticMessage(value, fallback = 'Client diagnostics event captured.') {
+   if (value instanceof Error) {
+@@ -101,7 +102,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
+       status_version: nativeAudioBridgeStatusVersion.value,
+       quarantine_count: nativeAudioBridgeQuarantineByUserId.size,
+       native_peer_count: nativePeerConnections.size,
+-      security: nativeAudioSecurityTelemetrySnapshot() || null,
++      security: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : (nativeAudioSecurityTelemetrySnapshot() || null),
+     };
+   }
+ 
+@@ -118,7 +119,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
+     current_user_id: currentUserId.value,
+     connection_state: connectionState.value,
+     connection_reason: connectionReason.value,
+-    sfu_connected: sfuConnected.value,
++    sfu_connected: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? false : sfuConnected.value,
+     media_runtime_path: mediaRuntimePath.value,
+     media_runtime_reason: mediaRuntimeReason.value,
+     media_stage_a: Boolean(mediaRuntimeCapabilities.value.stageA),
+@@ -127,7 +128,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
+     connected_participant_count: connectedParticipantUsers.value.length,
+     remote_peer_count: remotePeersRef.value.size,
+     native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot(),
+-    last_sfu_transport_sample: callWorkspaceLastSfuTransportSample(),
+-    last_sfu_send_failure: sfuClientRef.value?.getLastSendFailure?.() || null,
++    last_sfu_transport_sample: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : callWorkspaceLastSfuTransportSample(),
++    last_sfu_send_failure: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : (sfuClientRef.value?.getLastSendFailure?.() || null),
+   }));
+ }
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts
+index 10f3712b..f0c7e043 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts
+@@ -2,8 +2,7 @@ import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/
+ import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ import { GossipController } from '../../../../lib/gossipmesh/gossipController';
+ import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
+-import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
+-import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
++import { GossipDirectTransport } from '../../../../lib/gossipmesh/directGossipTransport';
+ import { createGossipRecoveryState } from './gossipRecoveryState';
+ 
+ export function createCallWorkspaceGossipDataLane({
+@@ -17,18 +16,27 @@ export function createCallWorkspaceGossipDataLane({
+     activeCallId,
+     defaultNativeIceServers = [],
+     dynamicIceServers = null,
++    getConnectedParticipantCount = () => 0,
++    getLocalAudioStream = () => null,
+     handleSFUEncodedFrame,
+     sendSocketFrame,
+   } = callbacks;
+-  let gossipDataChannelTransport = null;
+-  let gossipNeighborLifecycle = null;
++  let gossipDirectTransport = null;
++  let gossipAudioDirectTransport = null;
+   let liveGossipController = null;
+   let liveGossipControllerKey = '';
+   let unsubscribeLiveGossipDelivery = null;
+   const assignedGossipNeighborIds = new Set();
+   const liveGossipFrameSequenceByTrack = new Map();
++  const liveGossipAudioSequenceByTrack = new Map();
++  const liveGossipAudioSinks = new Map();
+   const gossipTopologyRepairRequestedAtByPeerId = new Map();
+   const gossipRecoveryState = createGossipRecoveryState();
++  let gossipAudioUnlockBound = false;
++  let gossipAudioRecorder = null;
++  let gossipAudioRecorderTrackId = '';
++  let gossipAudioRecorderMimeType = '';
++  let gossipAudioMediaGeneration = 1;
+   let lastGossipTelemetrySnapshotSentAtMs = 0;
+   let lastGossipRolloutGateState = null;
+   let lastGossipPrimaryTopologyAdmissionDiagnosticAtMs = 0;
+@@ -46,6 +54,132 @@ export function createCallWorkspaceGossipDataLane({
+     };
+   }
+ 
++  function supportedGossipAudioMimeType() {
++    if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
++    const candidates = [
++      'audio/webm;codecs=opus',
++      'audio/webm',
++      'audio/ogg;codecs=opus',
++    ];
++    return candidates.find((entry) => MediaRecorder.isTypeSupported(entry)) || '';
++  }
++
++  function currentLocalAudioTrack() {
++    const stream = getLocalAudioStream?.();
++    if (!(stream instanceof MediaStream)) return null;
++    return stream.getAudioTracks().find((track) => track?.readyState === 'live') || null;
++  }
++
++  function stopGossipAudioPublisher(reason = 'stopped') {
++    const recorder = gossipAudioRecorder;
++    gossipAudioRecorder = null;
++    gossipAudioRecorderTrackId = '';
++    gossipAudioRecorderMimeType = '';
++    if (recorder && String(recorder.state || '') !== 'inactive') {
++      try { recorder.stop(); } catch {}
++    }
++    if (recorder) {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'info',
++        eventType: 'gossip_audio_publisher_stopped',
++        code: 'gossip_audio_publisher_stopped',
++        message: 'Gossip audio publisher stopped.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          reason: String(reason || 'stopped'),
++        },
++      });
++    }
++  }
++
++  function syncGossipAudioPublisher(reason = 'sync') {
++    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || !GOSSIP_DATA_LANE_CONFIG.publish) {
++      stopGossipAudioPublisher('gossip_audio_disabled');
++      return false;
++    }
++    if (!gossipPrimaryTopologyReady()) return false;
++    const track = currentLocalAudioTrack();
++    if (!track) {
++      stopGossipAudioPublisher('no_live_audio_track');
++      return false;
++    }
++    if (gossipAudioRecorder && gossipAudioRecorderTrackId === track.id && String(gossipAudioRecorder.state || '') === 'recording') {
++      return true;
++    }
++    stopGossipAudioPublisher('audio_track_changed');
++    if (typeof MediaRecorder === 'undefined') {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_recorder_unavailable',
++        code: 'gossip_audio_recorder_unavailable',
++        message: 'Gossip audio could not start because MediaRecorder is unavailable.',
++        payload: mediaCarrierDiagnosticPayload(),
++      });
++      return false;
++    }
++    const mimeType = supportedGossipAudioMimeType();
++    if (mimeType === '') {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_codec_unavailable',
++        code: 'gossip_audio_codec_unavailable',
++        message: 'Gossip audio could not start because Opus recording is unavailable.',
++        payload: mediaCarrierDiagnosticPayload(),
++      });
++      return false;
++    }
++    try {
++      const stream = new MediaStream([track]);
++      const recorder = new MediaRecorder(stream, {
++        mimeType,
++        audioBitsPerSecond: 32000,
++      });
++      gossipAudioRecorder = recorder;
++      gossipAudioRecorderTrackId = track.id;
++      gossipAudioRecorderMimeType = mimeType;
++      gossipAudioMediaGeneration += 1;
++      recorder.addEventListener('dataavailable', (event) => {
++        if (!event?.data || event.data.size <= 0) return;
++        void publishLocalGossipAudioChunk(event.data, track.id, mimeType);
++      });
++      recorder.addEventListener('error', () => {
++        stopGossipAudioPublisher('recorder_error');
++      });
++      recorder.start(250);
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'info',
++        eventType: 'gossip_audio_publisher_started',
++        code: 'gossip_audio_publisher_started',
++        message: 'Gossip audio publisher started using browser Opus encoding over the data lane.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          reason: String(reason || 'sync'),
++          track_id: track.id,
++          codec_id: mimeType,
++        },
++      });
++      return true;
++    } catch (error) {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_publisher_failed',
++        code: 'gossip_audio_publisher_failed',
++        message: 'Gossip audio publisher failed to start.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          reason: String(reason || 'sync'),
++          error: error instanceof Error ? error.message : String(error),
++        },
++      });
++      return false;
++    }
++  }
++
+   function roomId() {
+     return String(activeRoomId() || '').trim() || 'lobby';
+   }
+@@ -54,19 +188,15 @@ export function createCallWorkspaceGossipDataLane({
+     return String(activeSocketCallId() || activeCallId() || '').trim() || 'call';
+   }
+ 
+-  function currentGossipIceServers() {
+-    const dynamicServers = Array.isArray(dynamicIceServers?.value) ? dynamicIceServers.value : [];
+-    if (dynamicServers.length > 0) return dynamicServers;
+-    return Array.isArray(defaultNativeIceServers) ? defaultNativeIceServers : [];
+-  }
+-
+-  function ensureGossipDataChannelTransport() {
++  function ensureGossipDirectTransport() {
+     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
+     const peerId = localPeerId();
+     if (peerId === '' || peerId === '0') return null;
+-    if (gossipDataChannelTransport) return gossipDataChannelTransport;
++    if (gossipDirectTransport) return gossipDirectTransport;
+ 
+-    gossipDataChannelTransport = new GossipRtcDataChannelTransport({
++    gossipDirectTransport = new GossipDirectTransport({
++      roomId: roomId(),
++      callId: callId(),
+       localPeerId: peerId,
+       onDataMessage: (msg, fromPeerId) => {
+         if (!GOSSIP_DATA_LANE_CONFIG.receive) {
+@@ -110,20 +240,24 @@ export function createCallWorkspaceGossipDataLane({
+       },
+       onStateChange: (peerId, state, eventType) => {
+         const normalizedPeerId = String(peerId || '');
++        const hasOpenReplacement = eventType !== 'open'
++          && typeof gossipDirectTransport?.hasOpenChannel === 'function'
++          && gossipDirectTransport.hasOpenChannel(normalizedPeerId);
+         const controller = ensureLiveGossipController();
+         if (controller && assignedGossipNeighborIds.has(normalizedPeerId)) {
+           ensureLiveGossipPeer(normalizedPeerId);
+-          controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
+-        }
+-        if ((state === 'closed' || eventType === 'error') && assignedGossipNeighborIds.has(normalizedPeerId)) {
+-          requestGossipTopologyRepair(peerId, eventType);
++          if (hasOpenReplacement) {
++            controller.updateCarrierStateFromDataChannel(normalizedPeerId, 'open', 'open');
++          } else {
++            controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
++          }
+         }
+         captureClientDiagnostic({
+           category: 'media',
+-          level: 'info',
+-          eventType: 'gossip_data_channel_state',
+-          code: 'gossip_data_channel_state',
+-          message: 'Gossip data channel state changed.',
++          level: 'warning',
++          eventType: 'gossip_direct_link_state',
++          code: 'gossip_direct_link_state',
++          message: 'Gossip direct link state changed.',
+           payload: {
+             data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+             diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+@@ -131,6 +265,7 @@ export function createCallWorkspaceGossipDataLane({
+             state: String(state || ''),
+             event_type: String(eventType || ''),
+           },
++          immediate: true,
+         });
+       },
+       onTelemetry: (event) => {
+@@ -142,41 +277,37 @@ export function createCallWorkspaceGossipDataLane({
+         emitGossipTelemetrySnapshot('transport_telemetry');
+       },
+     });
+-    return gossipDataChannelTransport;
++    return gossipDirectTransport;
+   }
+ 
+-  function ensureGossipNeighborLifecycle() {
++  function ensureGossipAudioDirectTransport() {
+     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
+-    if (gossipNeighborLifecycle) return gossipNeighborLifecycle;
+-    gossipNeighborLifecycle = createGossipNeighborLifecycle({
+-      callbacks: {
+-        activeCallId: callId,
+-        activeRoomId: roomId,
+-        captureClientDiagnostic,
+-        currentUserId: localPeerId,
+-        getDataTransport: ensureGossipDataChannelTransport,
+-        getIceServers: currentGossipIceServers,
+-        onPeerConnectionState: handleGossipNeighborPeerConnectionState,
+-        sendSocketFrame,
++    const peerId = localPeerId();
++    if (peerId === '' || peerId === '0') return null;
++    if (gossipAudioDirectTransport) return gossipAudioDirectTransport;
++
++    gossipAudioDirectTransport = new GossipDirectTransport({
++      roomId: roomId(),
++      callId: `${callId()}:audio`,
++      localPeerId: peerId,
++      onDataMessage: (msg, fromPeerId) => {
++        if (!GOSSIP_DATA_LANE_CONFIG.receive || !gossipDataPlaneAllowed()) return;
++        routeLiveGossipDeliveryToAudio({
++          receiving_peer_id: localPeerId(),
++          from_peer_id: String(fromPeerId || '').trim(),
++          frame_id: String(msg?.frame_id || msg?.frameId || ''),
++          message: msg,
++        });
++      },
++      onTelemetry: (event) => {
++        const controller = liveGossipController;
++        const peerId = String(event?.peerId || localPeerId()).trim();
++        const counter = String(event?.counter || '').trim();
++        if (!controller || peerId === '' || counter === '') return;
++        controller.recordTransportTelemetry?.(peerId, counter, Math.max(1, Number(event?.increment || 1)));
+       },
+     });
+-    return gossipNeighborLifecycle;
+-  }
+-
+-  function handleGossipNeighborPeerConnectionState(peerId, state, eventType) {
+-    const normalizedPeerId = String(peerId || '').trim();
+-    if (!assignedGossipNeighborIds.has(normalizedPeerId)) return false;
+-    const normalizedState = String(state || '').trim().toLowerCase();
+-    const controller = ensureLiveGossipController();
+-    ensureLiveGossipPeer(normalizedPeerId);
+-    const carrierState = normalizedState === 'connected'
+-      ? 'connected'
+-      : (normalizedState === 'failed' || normalizedState === 'closed' || normalizedState === 'disconnected' ? 'lost' : 'degraded');
+-    controller?.setCarrierState?.(normalizedPeerId, carrierState, `gossip_peer_${String(eventType || normalizedState || 'state')}`);
+-    if (carrierState === 'lost') {
+-      requestGossipTopologyRepair(normalizedPeerId, `gossip_peer_${normalizedState || 'lost'}`);
+-    }
+-    return true;
++    return gossipAudioDirectTransport;
+   }
+ 
+   function ensureLiveGossipController() {
+@@ -197,17 +328,19 @@ export function createCallWorkspaceGossipDataLane({
+       assignedGossipNeighborIds.clear();
+       gossipTopologyRepairRequestedAtByPeerId.clear();
+       gossipRecoveryState.clear();
+-      gossipNeighborLifecycle?.teardown?.();
+-      gossipNeighborLifecycle = null;
++      stopGossipAudioPublisher('controller_changed');
+       lastGossipTelemetrySnapshotSentAtMs = 0;
+-      gossipDataChannelTransport?.close();
+-      gossipDataChannelTransport = null;
++      gossipDirectTransport?.close();
++      gossipDirectTransport = null;
++      gossipAudioDirectTransport?.close();
++      gossipAudioDirectTransport = null;
+     }
+     liveGossipFrameSequenceByTrack.clear();
++    liveGossipAudioSequenceByTrack.clear();
+ 
+     const controller = new GossipController(roomId(), callId());
+     controller.setDataLaneConfig(GOSSIP_DATA_LANE_CONFIG);
+-    const transport = ensureGossipDataChannelTransport();
++    const transport = ensureGossipDirectTransport();
+     if (transport) {
+       controller.setDataTransport(transport);
+     }
+@@ -274,55 +407,18 @@ export function createCallWorkspaceGossipDataLane({
+     return Array.from(retiredPeerIds);
+   }
+ 
+-  function bindAssignedGossipNeighbors(topologyHint) {
++  function bindAssignedGossipNeighbors() {
+     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return 0;
++    const controller = ensureLiveGossipController();
++    const transport = ensureGossipDirectTransport();
++    const audioTransport = ensureGossipAudioDirectTransport();
+     for (const peerId of assignedGossipNeighborIds) {
+       ensureLiveGossipPeer(peerId);
++      controller?.setCarrierState?.(peerId, 'connected', 'gossip_direct_neighbor_bound');
++      transport?.connectPeer?.(peerId);
++      audioTransport?.connectPeer?.(peerId);
+     }
+-    return ensureGossipNeighborLifecycle()?.applyAssignedNeighbors(topologyHint, assignedGossipNeighborIds) || 0;
+-  }
+-
+-  function requestGossipTopologyRepair(peerId, reason) {
+-    if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;
+-    if (!assignedGossipNeighborIds.has(String(peerId || ''))) return false;
+-    const normalizedPeerId = String(peerId || '').trim();
+-    if (normalizedPeerId === '') return false;
+-    const nowMs = Date.now();
+-    const lastRequestedAtMs = Number(gossipTopologyRepairRequestedAtByPeerId.get(normalizedPeerId) || 0);
+-    if ((nowMs - lastRequestedAtMs) < 3000) return false;
+-    gossipTopologyRepairRequestedAtByPeerId.set(normalizedPeerId, nowMs);
+-    const controller = ensureLiveGossipController();
+-    controller?.recordTransportTelemetry?.(localPeerId(), 'topology_repairs_requested', 1);
+-    const sent = sendSocketFrame({
+-      type: 'gossip/topology-repair/request',
+-      lane: 'ops',
+-      payload: {
+-        kind: 'gossip_topology_repair_request',
+-        room_id: String(activeRoomId() || '').trim(),
+-        call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
+-        peer_id: localPeerId(),
+-        lost_peer_id: String(peerId || ''),
+-        lost_neighbor_peer_id: normalizedPeerId,
+-        reason: String(reason || ''),
+-        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+-        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+-      },
+-    });
+-    captureClientDiagnostic({
+-      category: 'media',
+-      level: sent ? 'warning' : 'info',
+-      eventType: 'gossip_topology_repair_requested',
+-      code: 'gossip_topology_repair_requested',
+-      message: 'Gossip topology repair was requested after an assigned data-channel neighbor changed carrier state.',
+-      payload: {
+-        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+-        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+-        peer_id: normalizedPeerId,
+-        reason: String(reason || 'gossip_data_channel_lost'),
+-        sent,
+-      },
+-    });
+-    return sent;
++    return assignedGossipNeighborIds.size;
+   }
+ 
+   function emitGossipTelemetrySnapshot(reason = 'periodic') {
+@@ -374,7 +470,7 @@ export function createCallWorkspaceGossipDataLane({
+     const repairRetiredPeerIds = topologyRepairRetiredPeerIdsForLocalPeer(topologyHint, peerId);
+     for (const retiredPeerId of repairRetiredPeerIds) {
+       assignedGossipNeighborIds.delete(retiredPeerId);
+-      gossipNeighborLifecycle?.closePeer?.(retiredPeerId, 'repair_retired_edge');
++      gossipDirectTransport?.close?.(retiredPeerId);
+     }
+ 
+     controller.addPeer(peerId);
+@@ -389,25 +485,32 @@ export function createCallWorkspaceGossipDataLane({
+     const peer = controller.getPeer(peerId);
+     const previousAssignedNeighborIds = new Set(assignedGossipNeighborIds);
+     assignedGossipNeighborIds.clear();
++    const transport = ensureGossipDirectTransport();
++    const audioTransport = ensureGossipAudioDirectTransport();
+     for (const neighborId of peer?.neighbor_set || []) {
+       const normalizedNeighborId = String(neighborId || '').trim();
+       if (gossipTopologyNeighborUsesRtcDataChannel(topologyHint, normalizedNeighborId)) {
+         assignedGossipNeighborIds.add(normalizedNeighborId);
++        transport?.connectPeer?.(normalizedNeighborId);
++        audioTransport?.connectPeer?.(normalizedNeighborId);
++        controller.setCarrierState?.(normalizedNeighborId, 'connected', 'gossip_direct_topology_neighbor');
+       }
+     }
+     for (const previousPeerId of previousAssignedNeighborIds) {
+       if (!assignedGossipNeighborIds.has(previousPeerId)) {
+-        gossipNeighborLifecycle?.closePeer?.(previousPeerId, 'retired_by_topology');
++        gossipDirectTransport?.close?.(previousPeerId);
++        gossipAudioDirectTransport?.close?.(previousPeerId);
+       }
+     }
+-    const boundCount = bindAssignedGossipNeighbors(topologyHint);
++    const boundCount = bindAssignedGossipNeighbors();
++    syncGossipAudioPublisher('topology_hint_applied');
+     emitGossipTelemetrySnapshot('topology_hint_applied');
+     captureClientDiagnostic({
+       category: 'media',
+       level: 'info',
+       eventType: 'gossip_topology_hint_applied',
+       code: 'gossip_topology_hint_applied',
+-      message: 'Gossip topology hint applied to dedicated data-channel neighbor bindings.',
++      message: 'Gossip topology hint applied to direct peer neighbor bindings.',
+       payload: {
+         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+@@ -425,7 +528,8 @@ export function createCallWorkspaceGossipDataLane({
+     if (!GOSSIP_DATA_LANE_CONFIG.receive) return false;
+     if (!gossipDataPlaneAllowed()) return false;
+     const msg = delivery?.message || null;
+-    if (!msg || msg.type !== 'sfu/frame') return false;
++    if (!msg) return false;
++    if (msg.type !== 'sfu/frame') return false;
+     const frame = sfuFrameFromGossipMessage(msg, delivery);
+     if (!frame) return false;
+     requestGossipRecoveryForReceivedFrame(frame, delivery);
+@@ -442,14 +546,217 @@ export function createCallWorkspaceGossipDataLane({
+         publisher_id: String(frame.publisherId || ''),
+         publisher_user_id: String(frame.publisherUserId || ''),
+         track_id: String(frame.trackId || ''),
++        frame_type: String(frame.type || '').trim() === 'keyframe' ? 'keyframe' : 'delta',
+         frame_sequence: Number(frame.frameSequence || 0),
+         media_generation: Number(frame.mediaGeneration || 0),
++        protection_mode: String(frame.protectionMode || ''),
++        layout_mode: String(frame.layoutMode || ''),
+       },
+     });
+     handleSFUEncodedFrame(frame);
+     return true;
+   }
+ 
++  function routeLiveGossipDeliveryToAudio(delivery) {
++    const msg = delivery?.message || null;
++    if (!msg || msg.type !== 'gossip/audio-chunk') return false;
++    const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
++    if (publisherId === '' || publisherId === localPeerId()) return false;
++    const dataBase64 = String(msg.dataBase64 || msg.data_base64 || '').trim();
++    if (dataBase64 === '') return false;
++    const codecId = String(msg.codecId || msg.codec_id || 'audio/webm;codecs=opus').trim() || 'audio/webm;codecs=opus';
++    const dataBuffer = base64UrlToArrayBuffer(dataBase64);
++    if (!(dataBuffer instanceof ArrayBuffer) || dataBuffer.byteLength <= 0) return false;
++    const sink = ensureGossipAudioSink(publisherId, codecId);
++    if (!sink) return false;
++    sink.queue.push(dataBuffer);
++    drainGossipAudioSink(sink);
++    maybePlayGossipAudioSink(sink, 'audio_chunk');
++    const nowMs = Date.now();
++    if ((nowMs - Number(sink.lastDiagnosticAtMs || 0)) > 5000) {
++      sink.lastDiagnosticAtMs = nowMs;
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'info',
++        eventType: 'gossip_audio_chunk_routed',
++        code: 'gossip_audio_chunk_routed',
++        message: 'Gossip audio chunk routed to the browser audio decoder.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          from_peer_id: String(delivery?.from_peer_id || ''),
++          publisher_id: publisherId,
++          track_id: String(msg.track_id || ''),
++          codec_id: codecId,
++          frame_sequence: Math.max(0, Number(msg.frame_sequence || 0)),
++          payload_bytes: dataBuffer.byteLength,
++        },
++      });
++    }
++    return true;
++  }
++
++  function ensureGossipAudioSink(publisherId, codecId) {
++    if (typeof window === 'undefined' || typeof MediaSource === 'undefined' || typeof document === 'undefined') return null;
++    bindGossipAudioUnlockHandlers();
++    const normalizedPublisherId = String(publisherId || '').trim();
++    if (normalizedPublisherId === '') return null;
++    const normalizedCodecId = String(codecId || 'audio/webm;codecs=opus').trim() || 'audio/webm;codecs=opus';
++    if (typeof MediaSource.isTypeSupported === 'function' && !MediaSource.isTypeSupported(normalizedCodecId)) {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_sink_codec_unsupported',
++        code: 'gossip_audio_sink_codec_unsupported',
++        message: 'Gossip audio sink could not start because the browser rejected the codec.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          publisher_id: normalizedPublisherId,
++          codec_id: normalizedCodecId,
++        },
++      });
++      return null;
++    }
++    const existing = liveGossipAudioSinks.get(normalizedPublisherId);
++    if (existing && existing.codecId === normalizedCodecId) return existing;
++    if (existing) closeGossipAudioSink(existing);
++
++    const mediaSource = new MediaSource();
++    const objectUrl = URL.createObjectURL(mediaSource);
++    const audio = new Audio();
++    audio.autoplay = true;
++    audio.muted = false;
++    audio.volume = 1;
++    audio.playsInline = true;
++    audio.preload = 'auto';
++    audio.dataset.gossipAudioPublisherId = normalizedPublisherId;
++    audio.style.display = 'none';
++    audio.src = objectUrl;
++    document.body.appendChild(audio);
++
++    const sink = {
++      publisherId: normalizedPublisherId,
++      codecId: normalizedCodecId,
++      mediaSource,
++      sourceBuffer: null as SourceBuffer | null,
++      audio,
++      objectUrl,
++      queue: [] as ArrayBuffer[],
++      lastPlayAttemptAtMs: 0,
++      lastDiagnosticAtMs: 0,
++    };
++    mediaSource.addEventListener('sourceopen', () => {
++      try {
++        sink.sourceBuffer = mediaSource.addSourceBuffer(normalizedCodecId);
++        sink.sourceBuffer.mode = 'sequence';
++        sink.sourceBuffer.addEventListener('updateend', () => {
++          trimGossipAudioSinkBuffer(sink);
++          drainGossipAudioSink(sink);
++        });
++        drainGossipAudioSink(sink);
++        maybePlayGossipAudioSink(sink, 'sourceopen');
++      } catch (error) {
++        captureClientDiagnostic({
++          category: 'media',
++          level: 'warning',
++          eventType: 'gossip_audio_sink_failed',
++          code: 'gossip_audio_sink_failed',
++          message: 'Gossip audio sink failed to attach the browser decoder.',
++          payload: {
++            ...mediaCarrierDiagnosticPayload(),
++            publisher_id: normalizedPublisherId,
++            codec_id: normalizedCodecId,
++            error: error instanceof Error ? error.message : String(error),
++          },
++        });
++      }
++    }, { once: true });
++    liveGossipAudioSinks.set(normalizedPublisherId, sink);
++    return sink;
++  }
++
++  function bindGossipAudioUnlockHandlers() {
++    if (gossipAudioUnlockBound || typeof document === 'undefined') return;
++    gossipAudioUnlockBound = true;
++    const unlock = () => {
++      for (const sink of liveGossipAudioSinks.values()) {
++        maybePlayGossipAudioSink(sink, 'user_gesture');
++      }
++    };
++    document.addEventListener('pointerdown', unlock, { passive: true });
++    document.addEventListener('keydown', unlock);
++    document.addEventListener('touchstart', unlock, { passive: true });
++  }
++
++  function drainGossipAudioSink(sink) {
++    if (!sink?.sourceBuffer || sink.sourceBuffer.updating || sink.queue.length <= 0) return false;
++    if (sink.mediaSource?.readyState !== 'open') return false;
++    const next = sink.queue.shift();
++    try {
++      sink.sourceBuffer.appendBuffer(next);
++      return true;
++    } catch (error) {
++      sink.queue.length = 0;
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_append_failed',
++        code: 'gossip_audio_append_failed',
++        message: 'Gossip audio chunk could not be appended to the browser decoder.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          publisher_id: String(sink.publisherId || ''),
++          codec_id: String(sink.codecId || ''),
++          error: error instanceof Error ? error.message : String(error),
++        },
++      });
++      return false;
++    }
++  }
++
++  function trimGossipAudioSinkBuffer(sink) {
++    const sourceBuffer = sink?.sourceBuffer;
++    const audio = sink?.audio;
++    if (!sourceBuffer || sourceBuffer.updating || !audio) return;
++    try {
++      if (sourceBuffer.buffered.length <= 0) return;
++      const currentTime = Number(audio.currentTime || 0);
++      const start = sourceBuffer.buffered.start(0);
++      const removeEnd = Math.max(0, currentTime - 8);
++      if (removeEnd > start) sourceBuffer.remove(start, removeEnd);
++    } catch {}
++  }
++
++  function maybePlayGossipAudioSink(sink, reason) {
++    if (!sink?.audio || typeof sink.audio.play !== 'function') return false;
++    const nowMs = Date.now();
++    if ((nowMs - Number(sink.lastPlayAttemptAtMs || 0)) < 1000) return false;
++    sink.lastPlayAttemptAtMs = nowMs;
++    sink.audio.play().catch((error) => {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_audio_play_blocked',
++        code: 'gossip_audio_play_blocked',
++        message: 'Browser blocked Gossip audio playback.',
++        payload: {
++          ...mediaCarrierDiagnosticPayload(),
++          publisher_id: String(sink.publisherId || ''),
++          reason: String(reason || 'play'),
++          error: error instanceof Error ? error.message : String(error),
++        },
++      });
++    });
++    return true;
++  }
++
++  function closeGossipAudioSink(sink) {
++    try { sink?.audio?.pause?.(); } catch {}
++    try { if (sink?.audio) sink.audio.src = ''; } catch {}
++    try { sink?.audio?.remove?.(); } catch {}
++    try { if (sink?.objectUrl) URL.revokeObjectURL(sink.objectUrl); } catch {}
++    sink.queue = [];
++  }
++
+   function publishLocalEncodedFrameToGossip(frame) {
+     if (!GOSSIP_DATA_LANE_CONFIG.publish) {
+       return recordGossipShadowWouldPublish(frame, 'publish_disabled');
+@@ -505,9 +812,58 @@ export function createCallWorkspaceGossipDataLane({
+     };
+     gossipRecoveryState.rememberPublishedFrame(msg);
+     controller.publishFrame(peerId, msg);
++    syncGossipAudioPublisher('video_frame_publish');
+     emitGossipTelemetrySnapshot('local_publish');
+     return true;
+   }
++
++  async function publishLocalGossipAudioChunk(blob, trackId, codecId) {
++    if (!gossipDataPlaneAllowed()) return false;
++    const dataBuffer = await blob.arrayBuffer();
++    if (!(dataBuffer instanceof ArrayBuffer) || dataBuffer.byteLength <= 0) return false;
++    return publishGossipAudioChunk({
++      trackId,
++      codecId,
++      dataBuffer,
++      timestamp: Date.now(),
++      durationMs: 250,
++    });
++  }
++
++  function publishGossipAudioChunk({ trackId, codecId, dataBuffer, timestamp, durationMs }) {
++    if (!GOSSIP_DATA_LANE_CONFIG.publish || !gossipDataPlaneAllowed()) return false;
++    const transport = ensureGossipAudioDirectTransport();
++    const peerId = localPeerId();
++    const normalizedTrackId = String(trackId || '').trim();
++    if (!transport || peerId === '' || peerId === '0' || normalizedTrackId === '') return false;
++    const sequenceKey = `${peerId}:${normalizedTrackId}:audio`;
++    const frameSequence = Math.max(1, Number(liveGossipAudioSequenceByTrack.get(sequenceKey) || 0) + 1);
++    liveGossipAudioSequenceByTrack.set(sequenceKey, frameSequence);
++    const dataBase64 = arrayBufferToBase64Url(dataBuffer);
++    const msg = {
++      type: 'gossip/audio-chunk',
++      protocol_version: 1,
++      publisher_id: peerId,
++      publisher_user_id: peerId,
++      track_id: normalizedTrackId,
++      timestamp: Number(timestamp || Date.now()),
++      frame_sequence: frameSequence,
++      media_generation: gossipAudioMediaGeneration,
++      sender_sent_at_ms: Date.now(),
++      codec_id: String(codecId || 'audio/webm;codecs=opus'),
++      protection_mode: 'transport_only',
++      data_base64: dataBase64,
++      payload_chars: dataBase64.length,
++      duration_ms: Math.max(1, Number(durationMs || 250)),
++      ttl: 1,
++      route_id: `${callId()}:audio:${peerId}:${Date.now()}:${frameSequence}`,
++    };
++    for (const neighborId of assignedGossipNeighborIds) {
++      transport.sendData(String(neighborId || ''), msg, peerId);
++    }
++    emitGossipTelemetrySnapshot('local_audio_publish');
++    return true;
++  }
+   function requestGossipRecoveryForReceivedFrame(frame, delivery) {
+     const recoveryRequest = gossipRecoveryState.recoveryRequestForReceivedFrame(frame);
+     if (!recoveryRequest) return false;
+@@ -654,7 +1010,10 @@ export function createCallWorkspaceGossipDataLane({
+     const peer = controller.getPeer(peerId);
+     const assignedNeighborCount = assignedGossipNeighborIds.size;
+     const controllerNeighborCount = Array.isArray(peer?.neighbor_set) ? peer.neighbor_set.length : 0;
+-    return assignedNeighborCount > 0 || controllerNeighborCount > 0;
++    const participantCount = Math.max(0, Number(getConnectedParticipantCount?.() || 0));
++    if (assignedNeighborCount > 0 || controllerNeighborCount > 0 || participantCount > 1) return true;
++    return typeof gossipDirectTransport?.hasAnyOpenChannel === 'function'
++      && gossipDirectTransport.hasAnyOpenChannel();
+   }
+ 
+   function diagnoseGossipPrimaryTopologyAdmission() {
+@@ -685,6 +1044,17 @@ export function createCallWorkspaceGossipDataLane({
+ 
+   function gossipDataPlaneAllowed() {
+     if (gossipActiveDataLaneAllowed()) return true;
++    if (
++      VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++      && GOSSIP_DATA_LANE_CONFIG.mode === 'active'
++      && GOSSIP_DATA_LANE_CONFIG.publish
++      && GOSSIP_DATA_LANE_CONFIG.receive
++      && localPeerId() !== ''
++      && localPeerId() !== '0'
++    ) {
++      diagnoseGossipPrimaryTopologyAdmission();
++      return true;
++    }
+     if (!gossipPrimaryTopologyReady()) return false;
+     diagnoseGossipPrimaryTopologyAdmission();
+     return true;
+@@ -702,7 +1072,9 @@ export function createCallWorkspaceGossipDataLane({
+       level: backendVisibleBacktrace ? 'warning' : 'info',
+       eventType: 'gossip_data_lane_shadow_would_publish',
+       code: 'gossip_data_lane_shadow_would_publish',
+-      message: 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
++      message: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++        ? 'Gossip data lane deferred a frame until assigned neighbors are ready.'
++        : 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
+       payload: {
+         ...mediaCarrierDiagnosticPayload(),
+         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+@@ -792,7 +1164,7 @@ export function createCallWorkspaceGossipDataLane({
+       roiNormY: Math.max(0, Number(msg.roiNormY ?? msg.roi_norm_y ?? 0)),
+       roiNormWidth: Math.max(0, Number(msg.roiNormWidth ?? msg.roi_norm_width ?? 0)),
+       roiNormHeight: Math.max(0, Number(msg.roiNormHeight ?? msg.roi_norm_height ?? 0)),
+-      transportPath: 'gossip_rtc_datachannel',
++      transportPath: 'gossip_direct',
+     };
+   }
+ 
+@@ -804,7 +1176,8 @@ export function createCallWorkspaceGossipDataLane({
+     assignedGossipNeighborIds.delete(peerId);
+     gossipTopologyRepairRequestedAtByPeerId.delete(peerId);
+     liveGossipController?.updateCarrierStateFromDataChannel?.(peerId, 'lost', String(reason || 'target_not_in_room'));
+-    gossipNeighborLifecycle?.closePeer?.(peerId, String(reason || 'target_not_in_room'));
++    gossipDirectTransport?.close?.(peerId);
++    gossipAudioDirectTransport?.close?.(peerId);
+     captureClientDiagnostic({
+       category: 'media',
+       level: 'warning',
+@@ -854,6 +1227,7 @@ export function createCallWorkspaceGossipDataLane({
+   }
+ 
+   function teardownGossipDataLane() {
++    stopGossipAudioPublisher('teardown');
+     if (typeof unsubscribeLiveGossipDelivery === 'function') {
+       unsubscribeLiveGossipDelivery();
+       unsubscribeLiveGossipDelivery = null;
+@@ -862,15 +1236,20 @@ export function createCallWorkspaceGossipDataLane({
+     liveGossipController = null;
+     liveGossipControllerKey = '';
+     liveGossipFrameSequenceByTrack.clear();
++    liveGossipAudioSequenceByTrack.clear();
+     gossipRecoveryState.clear();
+     assignedGossipNeighborIds.clear();
+     gossipTopologyRepairRequestedAtByPeerId.clear();
+     lastGossipRolloutGateState = null;
+     lastGossipTelemetrySnapshotSentAtMs = 0;
+-    gossipNeighborLifecycle?.teardown?.();
+-    gossipNeighborLifecycle = null;
+-    gossipDataChannelTransport?.close();
+-    gossipDataChannelTransport = null;
++    gossipDirectTransport?.close();
++    gossipDirectTransport = null;
++    gossipAudioDirectTransport?.close();
++    gossipAudioDirectTransport = null;
++    for (const sink of liveGossipAudioSinks.values()) {
++      closeGossipAudioSink(sink);
++    }
++    liveGossipAudioSinks.clear();
+   }
+ 
+   return {
+@@ -878,7 +1257,7 @@ export function createCallWorkspaceGossipDataLane({
+     applyGossipTopologyHint,
+     getAssignedGossipNeighborCount,
+     getGossipRolloutGateState,
+-    handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
++    handleGossipNeighborSignal: (...args) => handleGossipRecoveryOpsMessage(...args),
+     pruneGossipNeighborForUserId,
+     publishLocalEncodedFrameToGossip,
+     teardownGossipDataLane,
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts
+index 0b7c88cd..01baba44 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts
+@@ -71,8 +71,16 @@ export function createGossipNeighborLifecycle({
+     };
+   }
+ 
+-  function peerAllowed(peerId) {
+-    return admittedPeerIds.has(peerId) || peers.has(peerId);
++  function shouldInitiatePeer(peerId) {
++    const local = localPeerId();
++    const remote = safePeerId(peerId);
++    if (local === '' || remote === '') return false;
++    const localNumber = Number(local);
++    const remoteNumber = Number(remote);
++    if (Number.isFinite(localNumber) && Number.isFinite(remoteNumber)) {
++      return localNumber < remoteNumber;
++    }
++    return local < remote;
+   }
+ 
+   function ensurePeer(peerId, initiator, reason) {
+@@ -82,7 +90,16 @@ export function createGossipNeighborLifecycle({
+ 
+     const existing = peers.get(normalizedPeerId);
+     if (existing?.pc && existing.pc.signalingState !== 'closed') {
+-      return existing;
++      if (existing.initiator !== Boolean(initiator)) {
++        closePeer(normalizedPeerId, 'initiator_role_changed');
++      } else {
++        return existing;
++      }
++    }
++
++    const current = peers.get(normalizedPeerId);
++    if (current?.pc && current.pc.signalingState !== 'closed') {
++      return current;
+     }
+ 
+     const pc = new RTCPeerConnection(peerConnectionConfig());
+@@ -93,6 +110,7 @@ export function createGossipNeighborLifecycle({
+       pendingIce: [],
+       negotiating: false,
+       needsRenegotiate: false,
++      renegotiateTimer: null,
+     };
+     peers.set(normalizedPeerId, peer);
+ 
+@@ -123,7 +141,7 @@ export function createGossipNeighborLifecycle({
+       onPeerConnectionState(normalizedPeerId, state, 'connectionstatechange');
+       captureClientDiagnostic({
+         category: 'media',
+-        level: state === 'failed' ? 'warning' : 'info',
++        level: 'warning',
+         eventType: 'gossip_neighbor_peer_connection_state',
+         code: 'gossip_neighbor_peer_connection_state',
+         message: 'Dedicated Gossip neighbor peer connection state changed.',
+@@ -132,6 +150,7 @@ export function createGossipNeighborLifecycle({
+           connection_state: state,
+           topology_epoch: topologyEpoch,
+         },
++        immediate: true,
+       });
+       if (state === 'closed' || state === 'failed') {
+         closePeer(normalizedPeerId, state === 'failed' ? 'peer_connection_failed' : 'peer_connection_closed');
+@@ -142,7 +161,7 @@ export function createGossipNeighborLifecycle({
+     transport?.bindPeerConnection?.(normalizedPeerId, pc, peer.initiator);
+     captureClientDiagnostic({
+       category: 'media',
+-      level: 'info',
++      level: 'warning',
+       eventType: 'gossip_neighbor_link_assigned',
+       code: 'gossip_neighbor_link_assigned',
+       message: 'Dedicated Gossip neighbor link was assigned by server topology.',
+@@ -152,6 +171,7 @@ export function createGossipNeighborLifecycle({
+         reason: String(reason || 'assigned'),
+         topology_epoch: topologyEpoch,
+       },
++      immediate: true,
+     });
+ 
+     if (peer.initiator) {
+@@ -176,7 +196,7 @@ export function createGossipNeighborLifecycle({
+       await peer.pc.setLocalDescription(offer);
+       const local = peer.pc.localDescription;
+       if (!local?.sdp) return false;
+-      return sendSocketFrame({
++      const sent = sendSocketFrame({
+         type: 'call/offer',
+         target_user_id: Number(peer.peerId),
+         payload: {
+@@ -193,6 +213,21 @@ export function createGossipNeighborLifecycle({
+           },
+         },
+       });
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_neighbor_offer_sent',
++        code: 'gossip_neighbor_offer_sent',
++        message: 'Dedicated Gossip neighbor offer was sent.',
++        payload: {
++          peer_id: safePeerId(peer?.peerId),
++          reason: String(reason || 'offer'),
++          topology_epoch: topologyEpoch,
++          sent,
++        },
++        immediate: true,
++      });
++      return sent;
+     } catch (error) {
+       captureClientDiagnostic({
+         category: 'media',
+@@ -211,11 +246,27 @@ export function createGossipNeighborLifecycle({
+       peer.negotiating = false;
+       if (peer.needsRenegotiate) {
+         peer.needsRenegotiate = false;
+-        void negotiatePeer(peer, 'queued_renegotiate');
++        scheduleRenegotiate(peer, 'queued_renegotiate');
+       }
+     }
+   }
+ 
++  function scheduleRenegotiate(peer, reason) {
++    if (!peer?.pc || peer.pc.signalingState === 'closed') return;
++    if (peer.renegotiateTimer) return;
++    peer.renegotiateTimer = setTimeout(() => {
++      peer.renegotiateTimer = null;
++      if (!peer?.pc || peer.pc.signalingState === 'closed') return;
++      const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
++      if (signalingState !== 'stable' && signalingState !== '') {
++        peer.needsRenegotiate = true;
++        scheduleRenegotiate(peer, reason);
++        return;
++      }
++      void negotiatePeer(peer, reason);
++    }, 150);
++  }
++
+   async function flushPendingIce(peer) {
+     if (!peer?.pc?.remoteDescription?.type) return;
+     while (peer.pendingIce.length > 0) {
+@@ -230,7 +281,7 @@ export function createGossipNeighborLifecycle({
+ 
+   async function handleOffer(senderPeerId, payload) {
+     const normalizedPeerId = safePeerId(senderPeerId);
+-    if (!peerAllowed(normalizedPeerId)) return;
++    if (normalizedPeerId === '' || normalizedPeerId === localPeerId()) return;
+     const remote = normalizeSdp(payload);
+     if (!remote || remote.type !== 'offer') return;
+ 
+@@ -249,7 +300,16 @@ export function createGossipNeighborLifecycle({
+       await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
+       await flushPendingIce(peer);
+       const answer = await peer.pc.createAnswer();
+-      await peer.pc.setLocalDescription(answer);
++      const readyForAnswer = String(peer.pc.signalingState || '').trim().toLowerCase();
++      if (readyForAnswer !== 'have-remote-offer' && readyForAnswer !== 'have-local-pranswer') {
++        return;
++      }
++      try {
++        await peer.pc.setLocalDescription(answer);
++      } catch (error) {
++        if (String(error?.message || error || '').toLowerCase().includes('wrong state: stable')) return;
++        throw error;
++      }
+       const local = peer.pc.localDescription;
+       if (!local?.sdp) return;
+       sendSocketFrame({
+@@ -269,6 +329,18 @@ export function createGossipNeighborLifecycle({
+           },
+         },
+       });
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_neighbor_answer_sent',
++        code: 'gossip_neighbor_answer_sent',
++        message: 'Dedicated Gossip neighbor answer was sent.',
++        payload: {
++          peer_id: normalizedPeerId,
++          topology_epoch: topologyEpoch,
++        },
++        immediate: true,
++      });
+     } catch (error) {
+       captureClientDiagnostic({
+         category: 'media',
+@@ -280,6 +352,7 @@ export function createGossipNeighborLifecycle({
+           peer_id: normalizedPeerId,
+           error: String(error?.message || error || ''),
+         },
++        immediate: true,
+       });
+     }
+   }
+@@ -289,15 +362,54 @@ export function createGossipNeighborLifecycle({
+     const peer = peers.get(normalizedPeerId);
+     const remote = normalizeSdp(payload);
+     if (!peer?.pc || !remote || remote.type !== 'answer') return;
++    const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
++    if (signalingState === 'stable' || signalingState === '') {
++      return;
++    }
++    if (signalingState !== 'have-local-offer') {
++      peer.needsRenegotiate = true;
++      scheduleRenegotiate(peer, 'answer_arrived_during_unexpected_state');
++      return;
++    }
+     try {
+-      await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
++      try {
++        await peer.pc.setRemoteDescription(new RTCSessionDescription(remote));
++      } catch (error) {
++        if (String(error?.message || error || '').toLowerCase().includes('wrong state: stable')) return;
++        throw error;
++      }
+       await flushPendingIce(peer);
+-    } catch {}
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_neighbor_answer_applied',
++        code: 'gossip_neighbor_answer_applied',
++        message: 'Dedicated Gossip neighbor answer was applied.',
++        payload: {
++          peer_id: normalizedPeerId,
++          topology_epoch: topologyEpoch,
++        },
++        immediate: true,
++      });
++    } catch (error) {
++      captureClientDiagnostic({
++        category: 'media',
++        level: 'warning',
++        eventType: 'gossip_neighbor_answer_apply_failed',
++        code: 'gossip_neighbor_answer_apply_failed',
++        message: 'Dedicated Gossip neighbor answer could not be applied.',
++        payload: {
++          peer_id: normalizedPeerId,
++          error: String(error?.message || error || ''),
++        },
++        immediate: true,
++      });
++    }
+   }
+ 
+   async function handleIce(senderPeerId, payload) {
+     const normalizedPeerId = safePeerId(senderPeerId);
+-    if (!peerAllowed(normalizedPeerId)) return;
++    if (normalizedPeerId === '' || normalizedPeerId === localPeerId()) return;
+     const candidate = payload?.candidate && typeof payload.candidate === 'object' ? payload.candidate : null;
+     if (!candidate) return;
+     const peer = peers.get(normalizedPeerId) || ensurePeer(normalizedPeerId, false, 'remote_ice');
+@@ -344,7 +456,7 @@ export function createGossipNeighborLifecycle({
+     );
+     for (const peerId of assigned) {
+       admittedPeerIds.add(peerId);
+-      ensurePeer(peerId, true, 'server_assigned_neighbor');
++      ensurePeer(peerId, shouldInitiatePeer(peerId), 'server_assigned_neighbor');
+     }
+     for (const peerId of Array.from(peers.keys())) {
+       if (!assigned.has(peerId)) closePeer(peerId, 'retired_by_topology');
+@@ -357,6 +469,10 @@ export function createGossipNeighborLifecycle({
+     const peer = peers.get(normalizedPeerId);
+     if (!peer) return false;
+     peers.delete(normalizedPeerId);
++    if (peer.renegotiateTimer) {
++      clearTimeout(peer.renegotiateTimer);
++      peer.renegotiateTimer = null;
++    }
+     try {
+       peer.pc?.close?.();
+     } catch {}
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.ts
+index ddf7025a..0f9ba163 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.ts
+@@ -1,4 +1,5 @@
+ import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ export function registerCallWorkspaceLifecycleHelpers({
+   vue,
+@@ -371,7 +372,9 @@ export function registerCallWorkspaceLifecycleHelpers({
+ 
+     try {
+       mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
+-      const shouldUseSfuRuntime = sfuRuntimeEnabled || !mediaRuntimeCapabilities.value.stageB;
++      const shouldUseSfuRuntime = sfuRuntimeEnabled
++        || VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++        || !mediaRuntimeCapabilities.value.stageB;
+       if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
+         await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
+       } else if (mediaRuntimeCapabilities.value.stageB) {
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts
+index 3c2cbe67..60dd7b8c 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts
+@@ -1,6 +1,7 @@
+ import { computed } from 'vue';
+ import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
+ import { mergeMediaSecurityParticipantIds } from './mediaSecurityParticipantSet';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ export function createCallWorkspaceMediaSecurityRuntime({
+   callbacks,
+@@ -308,6 +309,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
+   });
+ 
+   function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
+     const nowMs = Date.now();
+     if ((nowMs - state.mediaSecuritySyncHintLastAtMs) < 1000) return;
+     state.mediaSecuritySyncHintLastAtMs = nowMs;
+@@ -351,7 +353,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
+   }
+ 
+   function shouldUseNativeAudioBridge() {
+-    if (!MediaSecuritySession.supportsNativeTransforms()) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
++      return false;
++    }
++    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !MediaSecuritySession.supportsNativeTransforms()) {
+       return false;
+     }
+     return sfuRuntimeEnabled
+@@ -653,6 +658,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
+   }
+ 
+   async function syncMediaSecurityWithParticipants(forceRekey = false) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
+     if (!isSocketOnline.value || currentUserId.value <= 0) return;
+     if (state.mediaSecuritySyncInFlight) {
+       queueMediaSecuritySyncAfterInFlight(forceRekey);
+@@ -812,6 +818,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
+   }
+ 
+   function recoverMediaSecurityForPublisher(publisherUserId) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
+     const normalizedUserId = Number(publisherUserId || 0);
+     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+     const nowMs = Date.now();
+@@ -855,19 +862,35 @@ export function createCallWorkspaceMediaSecurityRuntime({
+       || normalizedReason === 'native_audio_track_recovery_rejoin';
+   }
+ 
++  function isSputnikParticipantUserId(userId) {
++    const normalizedUserId = Number(userId || 0);
++    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
++    const participants = Array.isArray(connectedParticipantUsers.value) ? connectedParticipantUsers.value : [];
++    const row = participants.find((entry) => Number(entry?.userId || entry?.user_id || entry?.id || 0) === normalizedUserId);
++    if (!row) return false;
++    const email = String(row?.email || row?.user?.email || '').trim().toLowerCase();
++    const displayName = String(row?.displayName || row?.display_name || row?.user?.display_name || '').trim().toLowerCase();
++    return email.endsWith('@sputnik.local')
++      || displayName === 'alice'
++      || /^sputnik\s+\d+$/.test(displayName);
++  }
++
+   function shouldBypassNativeAudioProtectionForPeer(userId) {
+     if (!shouldUseNativeAudioBridge()) return false;
+     const normalizedUserId = Number(userId || 0);
+     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) {
+       return false;
+     }
+-    return nativeAudioBridgeIsQuarantined(normalizedUserId);
++    return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
++      || isSputnikParticipantUserId(normalizedUserId)
++      || nativeAudioBridgeIsQuarantined(normalizedUserId);
+   }
+ 
+   async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation') {
+     const targetUserId = Number(peer?.userId || 0);
+     if (!shouldUseNativeAudioBridge()) return true;
+     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === currentUserId.value) return false;
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary || isSputnikParticipantUserId(targetUserId)) return true;
+     if (!isSocketOnline.value) return false;
+ 
+     const session = ensureMediaSecuritySession();
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts
+index 862240e9..1426b404 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts
+@@ -1,4 +1,5 @@
+ import { isScreenShareUserId } from '../../screenShareIdentity.js';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ export function defaultNativeAudioBridgeFailureMessage() {
+   return 'Audio is unavailable because protected audio transform setup failed on this device.';
+@@ -15,15 +16,25 @@ export function createMediaSecurityTargetHelpers({
+   sfuRuntimeEnabled,
+   supportsNativeTransforms,
+ }) {
++  function isTransportOnlyDevParticipant(row) {
++    const email = String(row?.email || row?.user?.email || '').trim().toLowerCase();
++    const displayName = String(row?.displayName || row?.display_name || row?.user?.display_name || '').trim().toLowerCase();
++    return email.endsWith('@sputnik.local')
++      || displayName === 'alice'
++      || /^sputnik\s+\d+$/.test(displayName);
++  }
++
+   function mediaSecurityTargetIds() {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return [];
+     return connectedParticipantUsers.value
++      .filter((row) => !isTransportOnlyDevParticipant(row))
+       .map((row) => Number(row?.userId || 0))
+       .filter((userId) => (
+-        Number.isInteger(userId)
+-        && userId > 0
+-        && userId !== currentUserId.value
+-        && !isScreenShareUserId(userId)
+-      ));
++          Number.isInteger(userId)
++          && userId > 0
++          && userId !== currentUserId.value
++          && !isScreenShareUserId(userId)
++        ));
+   }
+ 
+   function noteMediaSecuritySfuPublisherSeen(userId) {
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts
+index 6775565b..a86f6e32 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts
+@@ -111,6 +111,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
+     return {
+       userId,
+       displayName,
++      email: String(sessionState.email || '').trim(),
+       role: normalizeRole(sessionState.role),
+       callRole,
+       connectedAt: currentUserConnectedAt,
+@@ -130,6 +131,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
+         aggregate.set(normalized.userId, {
+           userId: normalized.userId,
+           displayName: normalized.displayName,
++          email: normalized.email,
+           role: normalized.role,
+           callRole: normalized.callRole,
+           connectedAt: normalized.connectedAt,
+@@ -147,6 +149,9 @@ export function createCallWorkspaceRoomStateHelpers(context) {
+       if (normalized.displayName.length > existing.displayName.length) {
+         existing.displayName = normalized.displayName;
+       }
++      if (!existing.email && normalized.email) {
++        existing.email = normalized.email;
++      }
+       if (callRoleRank(normalized.callRole) < callRoleRank(existing.callRole)) {
+         existing.callRole = normalized.callRole;
+       }
+@@ -175,6 +180,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
+       const existing = aggregate.get(currentUser.userId);
+       if (existing) {
+         existing.displayName = currentUser.displayName;
++        existing.email = currentUser.email || existing.email || '';
+         existing.role = currentUser.role;
+         existing.callRole = currentUser.callRole;
+         existing.connections = Math.max(1, Number(existing.connections || 0));
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts
+index f7f5129f..8fcf5037 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts
+@@ -74,4 +74,6 @@ export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
+ export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;
+ export const NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS = 500;
+ export const NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS = 250;
+-export const SFU_PROTECTED_MEDIA_ENABLED = true;
++export const SFU_PROTECTED_MEDIA_ENABLED = String(import.meta.env.VITE_VIDEOCHAT_PROTECTED_MEDIA || '')
++  .trim()
++  .toLowerCase() === 'true';
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts
+index 74f6888e..1de1c0e7 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts
+@@ -15,6 +15,7 @@ import {
+   isScreenShareUserId,
+   screenShareOwnerOrUserId,
+ } from '../../screenShareIdentity.js';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ export function createCallWorkspaceRuntimeHealthHelpers({
+   callbacks,
+@@ -96,7 +97,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
+   }
+ 
+   function shouldUseNativeAudioBridge() {
+-    if (!mediaSecuritySessionClass.supportsNativeTransforms()) {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
++      return false;
++    }
++    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !mediaSecuritySessionClass.supportsNativeTransforms()) {
+       return false;
+     }
+     return sfuRuntimeEnabled
+@@ -684,6 +688,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
+   }
+ 
+   function startRemoteVideoStallTimer() {
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
+     const timer = getRemoteVideoStallTimer();
+     if (timer !== null) {
+       clearInterval(timer);
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts
+index 531db1aa..1b6fb404 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts
+@@ -4,6 +4,7 @@ import {
+   SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
+ } from './runtimeConfig.ts';
+ import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
++import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+ 
+ export function createCallWorkspaceRuntimeSwitchingHelpers({
+   callbacks,
+@@ -175,6 +176,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
+ 
+   async function maybeFallbackToNativeRuntime(reason) {
+     if (sfuRuntimeEnabled) return false;
++    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
+     if (!refs.mediaRuntimeCapabilities.value.stageB) return false;
+     return switchMediaRuntimePath('webrtc_native', reason);
+   }
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/config.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/config.ts
+index fb783cab..a15ebd8e 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/config.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/config.ts
+@@ -255,7 +255,8 @@ function buildDefaultNativeIceServers() {
+ }
+ 
+ export const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || buildDefaultNativeIceServers();
+-export const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, false);
++export const SFU_RUNTIME_ENABLED = false;
++export const SPUTNIK_PEERS_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SPUTNIK_PEERS, false);
+ 
+ export function mediaDebugLog(...args) {
+   debugLog(...args);
+diff --git a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/roster.ts b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/roster.ts
+index 2d2c81e4..05383550 100644
+--- a/demo/video-chat/frontend-vue/src/domain/realtime/workspace/roster.ts
++++ b/demo/video-chat/frontend-vue/src/domain/realtime/workspace/roster.ts
+@@ -17,6 +17,7 @@ export function normalizeParticipantRow(raw) {
+     roomId: normalizeRoomId(raw?.room_id || raw?.roomId || 'lobby'),
+     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
+     displayName: String(user.display_name || user.displayName || raw?.display_name || raw?.displayName || '').trim() || `User ${userId || 'unknown'}`,
++    email: String(user.email || raw?.email || '').trim(),
+     role: normalizeRole(user.role || raw?.role),
+     callRole: normalizeCallRole(user.call_role || user.callRole || raw?.call_role || raw?.callRole || 'participant'),
+     connectedAt,
+@@ -60,6 +61,9 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
+     if (String(existing.displayName || '').trim() === '') {
+       existing.displayName = displayName;
+     }
++    if (!existing.email && peer?.email) {
++      existing.email = String(peer.email || '').trim();
++    }
+     existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || callRole);
+     existing.mediaPeerSource = source;
+     if (isScreenSharePeer) {
+@@ -73,6 +77,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
+   aggregate.set(peerUserId, {
+     userId: peerUserId,
+     displayName,
++    email: String(peer?.email || '').trim(),
+     role: 'user',
+     callRole,
+     connectedAt: '',
+diff --git a/demo/video-chat/frontend-vue/src/lib/gossipmesh/rtcDataChannelTransport.ts b/demo/video-chat/frontend-vue/src/lib/gossipmesh/rtcDataChannelTransport.ts
+index 07b6c180..3ff80663 100644
+--- a/demo/video-chat/frontend-vue/src/lib/gossipmesh/rtcDataChannelTransport.ts
++++ b/demo/video-chat/frontend-vue/src/lib/gossipmesh/rtcDataChannelTransport.ts
+@@ -31,6 +31,7 @@ interface NeighborChannel {
+ 
+ const DEFAULT_LABEL = 'king:gossipmesh:data'
+ const DEFAULT_MAX_QUEUED_MESSAGES = 64
++const localTransports = new Map<string, GossipRtcDataChannelTransport>()
+ 
+ /**
+  * Browser neighbor transport for the GossipController data lane.
+@@ -59,6 +60,9 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+     this.onDataMessage = options.onDataMessage
+     this.onStateChange = options.onStateChange
+     this.onTelemetry = options.onTelemetry
++    if (this.localPeerId) {
++      localTransports.set(this.localPeerId, this)
++    }
+   }
+ 
+   bindPeerConnection(peerId: string, pc: RTCPeerConnection, initiator: boolean): RTCDataChannel | null {
+@@ -75,8 +79,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+     if (existing && existing.readyState !== 'closed') return existing
+ 
+     const channel = pc.createDataChannel(this.label, {
+-      ordered: false,
+-      maxRetransmits: 0,
++      ordered: true,
+     })
+     this.attachChannel(peerId, channel)
+     return channel
+@@ -87,14 +90,23 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+     const serialized = this.codec.encode(msg)
+     const entry = this.channels.get(targetPeerId)
+     if (!entry || entry.channel.readyState !== 'open') {
++      if (this.sendLocal(targetPeerId, serialized, fromPeerId)) return
+       this.enqueue(targetPeerId, serialized)
+       return
+     }
+-    entry.channel.send(serialized)
+-    this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
++    try {
++      entry.channel.send(serialized)
++      this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
++    } catch {
++      this.emitTelemetry('dropped', 1, targetPeerId)
++      this.emitTelemetry('late_drops', 1, targetPeerId)
++    }
+   }
+ 
+   close(peerId?: string): void {
++    if (!peerId && localTransports.get(this.localPeerId) === this) {
++      localTransports.delete(this.localPeerId)
++    }
+     const ids = peerId ? [peerId] : Array.from(this.channels.keys())
+     for (const id of ids) {
+       const entry = this.channels.get(id)
+@@ -110,7 +122,24 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+     }
+   }
+ 
++  hasOpenChannel(peerId: string): boolean {
++    return this.channels.get(peerId)?.channel?.readyState === 'open'
++      || Boolean(peerId && localTransports.get(peerId))
++  }
++
++  hasAnyOpenChannel(): boolean {
++    for (const entry of this.channels.values()) {
++      if (entry.channel?.readyState === 'open') return true
++    }
++    for (const [peerId, transport] of localTransports.entries()) {
++      if (peerId !== this.localPeerId && transport) return true
++    }
++    return false
++  }
++
+   private attachChannel(peerId: string, channel: RTCDataChannel): void {
++    channel.binaryType = 'arraybuffer'
++
+     const previous = this.channels.get(peerId)
+     if (previous?.channel && previous.channel !== channel) {
+       try {
+@@ -130,16 +159,28 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+       this.flush(peerId)
+     })
+     channel.addEventListener('close', () => {
++      if (this.channels.get(peerId)?.channel !== channel) return
+       this.onStateChange?.(peerId, channel.readyState, 'close')
+     })
+     channel.addEventListener('error', () => {
++      if (this.channels.get(peerId)?.channel !== channel) return
+       this.onStateChange?.(peerId, channel.readyState, 'error')
+     })
+     channel.addEventListener('message', (event) => {
++      if (event.data instanceof Blob) {
++        void event.data.arrayBuffer()
++          .then((buffer) => this.onDataMessage(this.codec.decode(buffer), peerId))
++          .catch(() => {
++            this.emitTelemetry('dropped', 1, peerId)
++          })
++        return
++      }
+       if (!(event.data instanceof ArrayBuffer)) return
+       try {
+         this.onDataMessage(this.codec.decode(event.data), peerId)
+-      } catch {}
++      } catch {
++        this.emitTelemetry('dropped', 1, peerId)
++      }
+     })
+ 
+     if (channel.readyState === 'open') {
+@@ -165,12 +206,28 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+ 
+   private flush(peerId: string): void {
+     const entry = this.channels.get(peerId)
+-    if (!entry || entry.channel.readyState !== 'open') return
++    if (!entry) return
++    if (entry.channel.readyState !== 'open') {
++      const queued = entry.queue.splice(0)
++      for (const next of queued) {
++        if (!next) continue
++        if (!this.sendLocal(peerId, next, this.localPeerId)) {
++          entry.queue.unshift(next)
++          return
++        }
++      }
++      return
++    }
+     while (entry.queue.length > 0) {
+       const next = entry.queue.shift()
+       if (!next) continue
+-      entry.channel.send(next)
+-      this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
++      try {
++        entry.channel.send(next)
++        this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
++      } catch {
++        this.emitTelemetry('dropped', 1, peerId)
++        this.emitTelemetry('late_drops', 1, peerId)
++      }
+     }
+   }
+ 
+@@ -183,4 +240,18 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
+       transport_kind: this.kind,
+     })
+   }
++
++  private sendLocal(targetPeerId: string, serialized: ArrayBuffer, fromPeerId: string): boolean {
++    const target = localTransports.get(targetPeerId)
++    if (!target || target === this) return false
++    try {
++      target.onDataMessage(target.codec.decode(serialized.slice(0)), fromPeerId)
++      this.emitTelemetry('in_memory_harness_sends', 1, targetPeerId)
++      return true
++    } catch {
++      this.emitTelemetry('dropped', 1, targetPeerId)
++      this.emitTelemetry('late_drops', 1, targetPeerId)
++      return false
++    }
++  }
+ }
+diff --git a/demo/video-chat/frontend-vue/tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs
+index 6544ff54..cab4fb84 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs
+@@ -39,9 +39,10 @@ assert(
+ )
+ assert(
+   /function applyAssignedNeighbors\(topologyHint,\s*assignedPeerIds\)/.test(lifecycle)
+-    && /ensurePeer\(peerId,\s*true,\s*'server_assigned_neighbor'\)/.test(lifecycle)
++    && /function shouldInitiatePeer\(peerId\)/.test(lifecycle)
++    && /ensurePeer\(peerId,\s*shouldInitiatePeer\(peerId\),\s*'server_assigned_neighbor'\)/.test(lifecycle)
+     && /if \(!assigned\.has\(peerId\)\) closePeer\(peerId,\s*'retired_by_topology'\)/.test(lifecycle),
+-  'assigned neighbors must create dedicated links and retired assignments must close their edge',
++  'assigned neighbors must create deterministic dedicated links and retired assignments must close their edge',
+ )
+ assert(
+   /function handleGossipNeighborSignal\(type,\s*senderPeerId,\s*payload\)/.test(lifecycle)
+diff --git a/demo/video-chat/frontend-vue/tests/contract/gossip-media-carrier-integration-smoke-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/gossip-media-carrier-integration-smoke-contract.mjs
+index 125e6934..21e3adc4 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/gossip-media-carrier-integration-smoke-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/gossip-media-carrier-integration-smoke-contract.mjs
+@@ -168,8 +168,9 @@ harness = publisherHarness({
+   },
+ })
+ result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+-assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when both Gossip publication and SFU fallback are unavailable')
+-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_unavailable_after_gossip_publish_failure'), 'gossip_primary must diagnose unavailable SFU fallback after Gossip publication failure')
++assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when Gossip publication is unavailable')
++assert(result.sfuFallbackSkipped === true, 'gossip_primary marks SFU fallback skipped when Gossip publication fails')
++assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback'), 'gossip_primary must diagnose failed Gossip publication without SFU fallback')
+ 
+ harness = publisherHarness({
+   currentOpenSfuClient: () => ({
+@@ -197,9 +198,10 @@ harness = publisherHarness({
+   }),
+ })
+ result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
+-assert(result.ok === true && result.gossipPublished === false && result.sfuSent === true, 'gossip_primary must use SFU fallback only after Gossip publication fails')
+-assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary fallback must preserve Gossip-first order before SFU fallback')
+-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_after_gossip_primary_publish_failure' && event?.immediate === true), 'gossip_primary SFU fallback must emit an immediate backtrace')
++assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary must not use SFU fallback after Gossip publication fails')
++assert(result.sfuFallbackSkipped === true, 'gossip_primary must expose that SFU fallback was skipped after failed Gossip publication')
++assert(harness.order.join(',') === 'gossip', 'gossip_primary must keep failed Gossip publication from routing through SFU')
++assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback' && event?.immediate === true), 'gossip_primary must emit an immediate no-SFU diagnostic when Gossip publication fails')
+ 
+ const sfuFirstDispatch = await loadPublisherDispatch('sfu_first')
+ harness = publisherHarness()
+@@ -355,10 +357,11 @@ assert(
+ )
+ assert(
+   neighborLifecycle.includes('function applyAssignedNeighbors(topologyHint, assignedPeerIds)')
+-    && neighborLifecycle.includes("ensurePeer(peerId, true, 'server_assigned_neighbor')")
++    && neighborLifecycle.includes('function shouldInitiatePeer(peerId)')
++    && neighborLifecycle.includes("ensurePeer(peerId, shouldInitiatePeer(peerId), 'server_assigned_neighbor')")
+     && neighborLifecycle.includes("closePeer(peerId, 'retired_by_topology')")
+     && neighborLifecycle.includes("transport: 'rtc_datachannel'"),
+-  'dedicated bounded neighbor lifecycle must create and retire RTC data-channel links from server assignments',
++  'dedicated bounded neighbor lifecycle must create deterministic and retired RTC data-channel links from server assignments',
+ )
+ assert(
+   socketLifecycle.includes('applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint)')
+diff --git a/demo/video-chat/frontend-vue/tests/contract/gossip-native-binary-data-plane-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/gossip-native-binary-data-plane-contract.mjs
+index 02631e18..490b02fb 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/gossip-native-binary-data-plane-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/gossip-native-binary-data-plane-contract.mjs
+@@ -69,6 +69,25 @@ assert(
+   /event\.data instanceof ArrayBuffer/.test(transport),
+   'gossip RTC data transport must require binary ArrayBuffer frames',
+ )
++assert(
++  /ordered:\s*true/.test(transport) && !/maxRetransmits:\s*0/.test(transport),
++  'gossip RTC data transport must use reliable ordered delivery for timestamped media frames',
++)
++assert(
++  /entry\.channel\.send\(serialized\)[\s\S]*catch/.test(transport)
++    && /this\.emitTelemetry\('dropped', 1, targetPeerId\)/.test(transport),
++  'gossip RTC data transport must record send failures instead of silently losing video frames',
++)
++assert(
++  /channel\.binaryType = 'arraybuffer'/.test(transport)
++    && /event\.data instanceof Blob/.test(transport)
++    && /\.arrayBuffer\(\)/.test(transport),
++  'RTC transport must force ArrayBuffer delivery and still decode Blob binary messages from browser defaults',
++)
++assert(
++  /this\.channels\.get\(peerId\)\?\.channel !== channel/.test(transport),
++  'RTC transport must ignore stale close/error events from replaced data channels',
++)
+ assert(
+   /GOSSIP_DATA_CODEC_IIBIN/.test(wire)
+     && /GOSSIP_DATA_ENVELOPE_CONTRACT/.test(wire)
+diff --git a/demo/video-chat/frontend-vue/tests/contract/gossip-neighbor-health-topology-repair-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/gossip-neighbor-health-topology-repair-contract.mjs
+index 96fbf8af..f326c0a3 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/gossip-neighbor-health-topology-repair-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/gossip-neighbor-health-topology-repair-contract.mjs
+@@ -66,8 +66,8 @@ assert(
+   'assigned-neighbor loss must request topology repair over the existing ops WebSocket lane',
+ )
+ assert(
+-  /onStateChange:\s*\(peerId,\s*state,\s*(eventType|reason)\)\s*=>\s*\{[\s\S]*if \(\(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
+-  'RTCDataChannel close/error for an assigned neighbor must trigger a topology repair request',
++  !/if \(!hasOpenReplacement && \(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
++  'RTCDataChannel close/error must not directly trigger topology repair; peer-connection failed/closed owns repair',
+ )
+ assert(
+   /onPeerConnectionState = \(\) => false/.test(gossipNeighborLifecycle)
+diff --git a/demo/video-chat/frontend-vue/tests/contract/gossip-primary-fallback-backtrace-contract.mjs b/demo/video-chat/frontend-vue/tests/contract/gossip-primary-fallback-backtrace-contract.mjs
+index 0ef9b86b..a3a6a656 100644
+--- a/demo/video-chat/frontend-vue/tests/contract/gossip-primary-fallback-backtrace-contract.mjs
++++ b/demo/video-chat/frontend-vue/tests/contract/gossip-primary-fallback-backtrace-contract.mjs
+@@ -19,8 +19,8 @@ const packageJson = read('demo/video-chat/frontend-vue/package.json')
+ 
+ assert.match(
+   dispatch,
+-  /gossipFirst && !gossipPublished[\s\S]*sfu_fallback_after_gossip_primary_publish_failure[\s\S]*fallback_reason:\s*'gossip_publish_failed_or_gated'[\s\S]*immediate:\s*true/s,
+-  'Gossip-primary SFU fallback must emit an immediate backend-visible backtrace before sending through SFU',
++  /gossipFirst && !gossipPublished[\s\S]*gossip_primary_publish_failed_no_sfu_fallback[\s\S]*fallback_reason:\s*'gossip_publish_failed_or_gated'[\s\S]*sfuFallbackSkipped:\s*true/s,
++  'Gossip-primary must emit an immediate backend-visible diagnostic without sending through SFU when Gossip publication fails',
+ )
+ 
+ assert.match(
+diff --git a/demo/video-chat/frontend-vue/vite.config.js b/demo/video-chat/frontend-vue/vite.config.js
+index dc0b1204..beb14769 100644
+--- a/demo/video-chat/frontend-vue/vite.config.js
++++ b/demo/video-chat/frontend-vue/vite.config.js
+@@ -233,6 +233,8 @@ const callAppStaticPlugin = () => ({
+ 
+ const allowedHosts = parseAllowedHosts(process.env.VIDEOCHAT_VUE_ALLOWED_HOSTS || '');
+ const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
++const devBackendOrigin = String(process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080').trim();
++const devWebSocketOrigin = String(process.env.VITE_VIDEOCHAT_WS_ORIGIN || devBackendOrigin).trim();
+ const callWorkspaceChunkForId = (id) => {
+   const normalized = id.replace(/\\/g, '/');
+   if (normalized.includes('/node_modules/')) {
+@@ -294,6 +296,21 @@ export default defineConfig({
+   server: {
+     host: process.env.VIDEOCHAT_VUE_HOST || '127.0.0.1',
+     port: Number.parseInt(process.env.VIDEOCHAT_VUE_PORT || '5176', 10),
++    proxy: {
++      '/api': {
++        target: devBackendOrigin,
++        changeOrigin: true,
++      },
++      '/health': {
++        target: devBackendOrigin,
++        changeOrigin: true,
++      },
++      '/ws': {
++        target: devWebSocketOrigin,
++        changeOrigin: true,
++        ws: true,
++      },
++    },
+     ...hostOptions,
+   },
+   preview: {

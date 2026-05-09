@@ -148,6 +148,12 @@ function videochat_handle_realtime_websocket_route(
             $authSessionId,
             $websocket
         );
+        if (function_exists('videochat_realtime_apply_sputnik_dev_identity')) {
+            $websocketAuth['user'] = videochat_realtime_apply_sputnik_dev_identity(
+                $queryParams,
+                (array) ($websocketAuth['user'] ?? [])
+            );
+        }
         $presenceConnection = videochat_presence_connection_descriptor(
             (array) ($websocketAuth['user'] ?? []),
             $authSessionId,

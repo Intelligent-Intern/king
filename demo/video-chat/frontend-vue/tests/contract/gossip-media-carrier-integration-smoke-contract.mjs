@@ -168,8 +168,9 @@ harness = publisherHarness({
   },
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when both Gossip publication and SFU fallback are unavailable')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_unavailable_after_gossip_publish_failure'), 'gossip_primary must diagnose unavailable SFU fallback after Gossip publication failure')
+assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when Gossip publication is unavailable')
+assert(result.sfuFallbackSkipped === true, 'gossip_primary marks SFU fallback skipped when Gossip publication fails')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback'), 'gossip_primary must diagnose failed Gossip publication without SFU fallback')
 
 harness = publisherHarness({
   currentOpenSfuClient: () => ({
@@ -197,9 +198,10 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === false && result.sfuSent === true, 'gossip_primary must use SFU fallback only after Gossip publication fails')
-assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary fallback must preserve Gossip-first order before SFU fallback')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_after_gossip_primary_publish_failure' && event?.immediate === true), 'gossip_primary SFU fallback must emit an immediate backtrace')
+assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary must not use SFU fallback after Gossip publication fails')
+assert(result.sfuFallbackSkipped === true, 'gossip_primary must expose that SFU fallback was skipped after failed Gossip publication')
+assert(harness.order.join(',') === 'gossip', 'gossip_primary must keep failed Gossip publication from routing through SFU')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback' && event?.immediate === true), 'gossip_primary must emit an immediate no-SFU diagnostic when Gossip publication fails')
 
 const sfuFirstDispatch = await loadPublisherDispatch('sfu_first')
 harness = publisherHarness()
@@ -355,10 +357,11 @@ assert(
 )
 assert(
   neighborLifecycle.includes('function applyAssignedNeighbors(topologyHint, assignedPeerIds)')
-    && neighborLifecycle.includes("ensurePeer(peerId, true, 'server_assigned_neighbor')")
+    && neighborLifecycle.includes('function shouldInitiatePeer(peerId)')
+    && neighborLifecycle.includes("ensurePeer(peerId, shouldInitiatePeer(peerId), 'server_assigned_neighbor')")
     && neighborLifecycle.includes("closePeer(peerId, 'retired_by_topology')")
     && neighborLifecycle.includes("transport: 'rtc_datachannel'"),
-  'dedicated bounded neighbor lifecycle must create and retire RTC data-channel links from server assignments',
+  'dedicated bounded neighbor lifecycle must create deterministic and retired RTC data-channel links from server assignments',
 )
 assert(
   socketLifecycle.includes('applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint)')

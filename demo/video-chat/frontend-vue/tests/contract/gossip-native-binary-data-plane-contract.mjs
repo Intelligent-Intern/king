@@ -70,6 +70,25 @@ assert(
   'gossip RTC data transport must require binary ArrayBuffer frames',
 )
 assert(
+  /ordered:\s*true/.test(transport) && !/maxRetransmits:\s*0/.test(transport),
+  'gossip RTC data transport must use reliable ordered delivery for timestamped media frames',
+)
+assert(
+  /entry\.channel\.send\(serialized\)[\s\S]*catch/.test(transport)
+    && /this\.emitTelemetry\('dropped', 1, targetPeerId\)/.test(transport),
+  'gossip RTC data transport must record send failures instead of silently losing video frames',
+)
+assert(
+  /channel\.binaryType = 'arraybuffer'/.test(transport)
+    && /event\.data instanceof Blob/.test(transport)
+    && /\.arrayBuffer\(\)/.test(transport),
+  'RTC transport must force ArrayBuffer delivery and still decode Blob binary messages from browser defaults',
+)
+assert(
+  /this\.channels\.get\(peerId\)\?\.channel !== channel/.test(transport),
+  'RTC transport must ignore stale close/error events from replaced data channels',
+)
+assert(
   /GOSSIP_DATA_CODEC_IIBIN/.test(wire)
     && /GOSSIP_DATA_ENVELOPE_CONTRACT/.test(wire)
     && /GOSSIP_CONTROL_OBJECT_STORE_CONTRACT/.test(wire)

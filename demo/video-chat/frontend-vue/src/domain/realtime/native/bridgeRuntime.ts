@@ -1,3 +1,5 @@
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
+
 export function createNativeBridgeRuntimeHelpers({
   callbacks,
   constants,
@@ -151,6 +153,9 @@ export function createNativeBridgeRuntimeHelpers({
 
   function attachMediaSecurityNativeSender(sender, track) {
     if (!sender || !track || !shouldMaintainNativePeerConnections()) return false;
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && String(track?.kind || '').trim().toLowerCase() === 'audio') {
+      return true;
+    }
     const session = ensureMediaSecuritySession();
     try {
       if (attachMediaSecurityNativeSenderBase(session, sender, track)) {

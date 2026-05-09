@@ -31,6 +31,7 @@ interface NeighborChannel {
 
 const DEFAULT_LABEL = 'king:gossipmesh:data'
 const DEFAULT_MAX_QUEUED_MESSAGES = 64
+const localTransports = new Map<string, GossipRtcDataChannelTransport>()
 
 /**
  * Browser neighbor transport for the GossipController data lane.
@@ -59,6 +60,9 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     this.onDataMessage = options.onDataMessage
     this.onStateChange = options.onStateChange
     this.onTelemetry = options.onTelemetry
+    if (this.localPeerId) {
+      localTransports.set(this.localPeerId, this)
+    }
   }
 
   bindPeerConnection(peerId: string, pc: RTCPeerConnection, initiator: boolean): RTCDataChannel | null {
@@ -75,8 +79,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     if (existing && existing.readyState !== 'closed') return existing
 
     const channel = pc.createDataChannel(this.label, {
-      ordered: false,
-      maxRetransmits: 0,
+      ordered: true,
     })
     this.attachChannel(peerId, channel)
     return channel
@@ -87,14 +90,23 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     const serialized = this.codec.encode(msg)
     const entry = this.channels.get(targetPeerId)
     if (!entry || entry.channel.readyState !== 'open') {
+      if (this.sendLocal(targetPeerId, serialized, fromPeerId)) return
       this.enqueue(targetPeerId, serialized)
       return
     }
-    entry.channel.send(serialized)
-    this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
+    try {
+      entry.channel.send(serialized)
+      this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
+    } catch {
+      this.emitTelemetry('dropped', 1, targetPeerId)
+      this.emitTelemetry('late_drops', 1, targetPeerId)
+    }
   }
 
   close(peerId?: string): void {
+    if (!peerId && localTransports.get(this.localPeerId) === this) {
+      localTransports.delete(this.localPeerId)
+    }
     const ids = peerId ? [peerId] : Array.from(this.channels.keys())
     for (const id of ids) {
       const entry = this.channels.get(id)
@@ -110,7 +122,24 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     }
   }
 
+  hasOpenChannel(peerId: string): boolean {
+    return this.channels.get(peerId)?.channel?.readyState === 'open'
+      || Boolean(peerId && localTransports.get(peerId))
+  }
+
+  hasAnyOpenChannel(): boolean {
+    for (const entry of this.channels.values()) {
+      if (entry.channel?.readyState === 'open') return true
+    }
+    for (const [peerId, transport] of localTransports.entries()) {
+      if (peerId !== this.localPeerId && transport) return true
+    }
+    return false
+  }
+
   private attachChannel(peerId: string, channel: RTCDataChannel): void {
+    channel.binaryType = 'arraybuffer'
+
     const previous = this.channels.get(peerId)
     if (previous?.channel && previous.channel !== channel) {
       try {
@@ -130,16 +159,28 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       this.flush(peerId)
     })
     channel.addEventListener('close', () => {
+      if (this.channels.get(peerId)?.channel !== channel) return
       this.onStateChange?.(peerId, channel.readyState, 'close')
     })
     channel.addEventListener('error', () => {
+      if (this.channels.get(peerId)?.channel !== channel) return
       this.onStateChange?.(peerId, channel.readyState, 'error')
     })
     channel.addEventListener('message', (event) => {
+      if (event.data instanceof Blob) {
+        void event.data.arrayBuffer()
+          .then((buffer) => this.onDataMessage(this.codec.decode(buffer), peerId))
+          .catch(() => {
+            this.emitTelemetry('dropped', 1, peerId)
+          })
+        return
+      }
       if (!(event.data instanceof ArrayBuffer)) return
       try {
         this.onDataMessage(this.codec.decode(event.data), peerId)
-      } catch {}
+      } catch {
+        this.emitTelemetry('dropped', 1, peerId)
+      }
     })
 
     if (channel.readyState === 'open') {
@@ -165,12 +206,28 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
 
   private flush(peerId: string): void {
     const entry = this.channels.get(peerId)
-    if (!entry || entry.channel.readyState !== 'open') return
+    if (!entry) return
+    if (entry.channel.readyState !== 'open') {
+      const queued = entry.queue.splice(0)
+      for (const next of queued) {
+        if (!next) continue
+        if (!this.sendLocal(peerId, next, this.localPeerId)) {
+          entry.queue.unshift(next)
+          return
+        }
+      }
+      return
+    }
     while (entry.queue.length > 0) {
       const next = entry.queue.shift()
       if (!next) continue
-      entry.channel.send(next)
-      this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
+      try {
+        entry.channel.send(next)
+        this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
+      } catch {
+        this.emitTelemetry('dropped', 1, peerId)
+        this.emitTelemetry('late_drops', 1, peerId)
+      }
     }
   }
 
@@ -182,5 +239,19 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       increment,
       transport_kind: this.kind,
     })
+  }
+
+  private sendLocal(targetPeerId: string, serialized: ArrayBuffer, fromPeerId: string): boolean {
+    const target = localTransports.get(targetPeerId)
+    if (!target || target === this) return false
+    try {
+      target.onDataMessage(target.codec.decode(serialized.slice(0)), fromPeerId)
+      this.emitTelemetry('in_memory_harness_sends', 1, targetPeerId)
+      return true
+    } catch {
+      this.emitTelemetry('dropped', 1, targetPeerId)
+      this.emitTelemetry('late_drops', 1, targetPeerId)
+      return false
+    }
   }
 }

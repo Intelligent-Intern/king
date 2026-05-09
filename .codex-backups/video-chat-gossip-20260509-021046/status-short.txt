@@ -1,0 +1,37 @@
+ M demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php
+ M demo/video-chat/backend-king-php/http/module_realtime.php
+ M demo/video-chat/backend-king-php/http/module_realtime_websocket.php
+ M demo/video-chat/backend-king-php/http/router.php
+ M demo/video-chat/backend-king-php/support/database_demo_seed.php
+ M demo/video-chat/frontend-vue/package.json
+ M demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceStage.css
+ M demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html
+ M demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue
+ M demo/video-chat/frontend-vue/src/domain/realtime/local/publisherFrameDispatch.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/local/publisherPipeline.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/native/bridgeRuntime.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/config.ts
+ M demo/video-chat/frontend-vue/src/domain/realtime/workspace/roster.ts
+ M demo/video-chat/frontend-vue/src/lib/gossipmesh/rtcDataChannelTransport.ts
+ M demo/video-chat/frontend-vue/tests/contract/gossip-dedicated-neighbor-lifecycle-contract.mjs
+ M demo/video-chat/frontend-vue/tests/contract/gossip-media-carrier-integration-smoke-contract.mjs
+ M demo/video-chat/frontend-vue/tests/contract/gossip-native-binary-data-plane-contract.mjs
+ M demo/video-chat/frontend-vue/tests/contract/gossip-neighbor-health-topology-repair-contract.mjs
+ M demo/video-chat/frontend-vue/tests/contract/gossip-primary-fallback-backtrace-contract.mjs
+ M demo/video-chat/frontend-vue/vite.config.js
+?? demo/video-chat/backend-king-php/domain/realtime/realtime_sputnik_dev.php
+?? demo/video-chat/backend-king-php/tests/realtime-sputnik-dev-peer-contract.php
+?? demo/video-chat/frontend-vue/src/domain/realtime/testing/
+?? demo/video-chat/frontend-vue/src/lib/gossipmesh/directGossipTransport.ts
+?? demo/video-chat/frontend-vue/tests/contract/sputnik-in-call-runtime-contract.mjs

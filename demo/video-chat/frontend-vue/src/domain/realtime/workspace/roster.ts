@@ -17,6 +17,7 @@ export function normalizeParticipantRow(raw) {
     roomId: normalizeRoomId(raw?.room_id || raw?.roomId || 'lobby'),
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     displayName: String(user.display_name || user.displayName || raw?.display_name || raw?.displayName || '').trim() || `User ${userId || 'unknown'}`,
+    email: String(user.email || raw?.email || '').trim(),
     role: normalizeRole(user.role || raw?.role),
     callRole: normalizeCallRole(user.call_role || user.callRole || raw?.call_role || raw?.callRole || 'participant'),
     connectedAt,
@@ -60,6 +61,9 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     if (String(existing.displayName || '').trim() === '') {
       existing.displayName = displayName;
     }
+    if (!existing.email && peer?.email) {
+      existing.email = String(peer.email || '').trim();
+    }
     existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || callRole);
     existing.mediaPeerSource = source;
     if (isScreenSharePeer) {
@@ -73,6 +77,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
   aggregate.set(peerUserId, {
     userId: peerUserId,
     displayName,
+    email: String(peer?.email || '').trim(),
     role: 'user',
     callRole,
     connectedAt: '',

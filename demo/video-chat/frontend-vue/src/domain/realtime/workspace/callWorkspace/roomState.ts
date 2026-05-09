@@ -111,6 +111,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     return {
       userId,
       displayName,
+      email: String(sessionState.email || '').trim(),
       role: normalizeRole(sessionState.role),
       callRole,
       connectedAt: currentUserConnectedAt,
@@ -130,6 +131,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
         aggregate.set(normalized.userId, {
           userId: normalized.userId,
           displayName: normalized.displayName,
+          email: normalized.email,
           role: normalized.role,
           callRole: normalized.callRole,
           connectedAt: normalized.connectedAt,
@@ -146,6 +148,9 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       }
       if (normalized.displayName.length > existing.displayName.length) {
         existing.displayName = normalized.displayName;
+      }
+      if (!existing.email && normalized.email) {
+        existing.email = normalized.email;
       }
       if (callRoleRank(normalized.callRole) < callRoleRank(existing.callRole)) {
         existing.callRole = normalized.callRole;
@@ -175,6 +180,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       const existing = aggregate.get(currentUser.userId);
       if (existing) {
         existing.displayName = currentUser.displayName;
+        existing.email = currentUser.email || existing.email || '';
         existing.role = currentUser.role;
         existing.callRole = currentUser.callRole;
         existing.connections = Math.max(1, Number(existing.connections || 0));

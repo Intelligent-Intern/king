@@ -1,4 +1,5 @@
 import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 export function registerCallWorkspaceLifecycleHelpers({
   vue,
@@ -371,7 +372,9 @@ export function registerCallWorkspaceLifecycleHelpers({
 
     try {
       mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
-      const shouldUseSfuRuntime = sfuRuntimeEnabled || !mediaRuntimeCapabilities.value.stageB;
+      const shouldUseSfuRuntime = sfuRuntimeEnabled
+        || VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+        || !mediaRuntimeCapabilities.value.stageB;
       if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
         await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
       } else if (mediaRuntimeCapabilities.value.stageB) {

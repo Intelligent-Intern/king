@@ -335,6 +335,33 @@
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
           </button>
 
+          <div v-if="sputnikPeersEnabled" class="sputnik-peer-control" role="group" aria-label="Sputnik dev peers">
+            <button
+              class="call-control-btn sputnik-peer-button"
+              type="button"
+              :class="{ active: sputnikPeersActive, stopping: sputnikPeersActive }"
+              :title="sputnikPeersActive ? 'Stop Sputnik peers' : 'Spawn Alice + Sputnik peers'"
+              :aria-label="sputnikPeersActive ? 'Stop Sputnik peers' : 'Spawn Alice plus Sputnik peers'"
+              @click="toggleSputnikPeers"
+            >
+              <span class="sputnik-peer-icon" aria-hidden="true">{{ sputnikPeersActive ? 'X' : 'S' }}</span>
+            </button>
+            <select
+              v-model.number="sputnikPeerCount"
+              class="sputnik-peer-select"
+              :disabled="sputnikPeersActive"
+              aria-label="Sputnik peer count"
+            >
+              <option :value="1">A+1</option>
+              <option :value="2">A+2</option>
+              <option :value="3">A+3</option>
+            </select>
+            <label class="sputnik-peer-sound" title="Enable optional Sputnik tone">
+              <input v-model="sputnikSoundEnabled" type="checkbox" :disabled="sputnikPeersActive" />
+              <span>sound</span>
+            </label>
+          </div>
+
           <button class="call-control-btn hangup" type="button" :title="t('calls.workspace.hang_up')" :aria-label="t('calls.workspace.hang_up')" @click="hangupCall">
             <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
           </button>

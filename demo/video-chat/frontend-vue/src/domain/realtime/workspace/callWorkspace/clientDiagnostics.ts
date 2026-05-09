@@ -1,4 +1,5 @@
 import { configureClientDiagnostics } from '../../../../support/clientDiagnostics';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 function extractDiagnosticMessage(value, fallback = 'Client diagnostics event captured.') {
   if (value instanceof Error) {
@@ -101,7 +102,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
       status_version: nativeAudioBridgeStatusVersion.value,
       quarantine_count: nativeAudioBridgeQuarantineByUserId.size,
       native_peer_count: nativePeerConnections.size,
-      security: nativeAudioSecurityTelemetrySnapshot() || null,
+      security: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : (nativeAudioSecurityTelemetrySnapshot() || null),
     };
   }
 
@@ -118,7 +119,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
     current_user_id: currentUserId.value,
     connection_state: connectionState.value,
     connection_reason: connectionReason.value,
-    sfu_connected: sfuConnected.value,
+    sfu_connected: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? false : sfuConnected.value,
     media_runtime_path: mediaRuntimePath.value,
     media_runtime_reason: mediaRuntimeReason.value,
     media_stage_a: Boolean(mediaRuntimeCapabilities.value.stageA),
@@ -127,7 +128,7 @@ export function configureCallWorkspaceClientDiagnosticsContext({
     connected_participant_count: connectedParticipantUsers.value.length,
     remote_peer_count: remotePeersRef.value.size,
     native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot(),
-    last_sfu_transport_sample: callWorkspaceLastSfuTransportSample(),
-    last_sfu_send_failure: sfuClientRef.value?.getLastSendFailure?.() || null,
+    last_sfu_transport_sample: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : callWorkspaceLastSfuTransportSample(),
+    last_sfu_send_failure: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary ? null : (sfuClientRef.value?.getLastSendFailure?.() || null),
   }));
 }
