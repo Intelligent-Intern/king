@@ -234,6 +234,7 @@ createCallAppDiagnosticTailBridge({
   activeSession: activeSessionRef,
   iframeRef,
   postToIframe: callAppCrdtBridge.postToIframe,
+  apiRequest: props.apiRequest,
 });
 const launchStatusLabel = computed(() => {
   if (launchState.value.status === 'error') return launchState.value.error || 'Call App launch failed.';

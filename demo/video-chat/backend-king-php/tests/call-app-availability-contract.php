@@ -49,7 +49,8 @@ try {
 
     $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
     $adminUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('admin@intelligent-intern.com') LIMIT 1")->fetchColumn();
-    videochat_call_app_availability_assert($tenantId > 0 && $adminUserId > 0, 'fixture ids missing');
+    $regularUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('user@intelligent-intern.com') LIMIT 1")->fetchColumn();
+    videochat_call_app_availability_assert($tenantId > 0 && $adminUserId > 0 && $regularUserId > 0, 'fixture ids missing');
     $callId = 'call_app_availability_contract_call';
     $roomId = 'room_call_app_availability_contract';
     $now = gmdate('c');
@@ -89,6 +90,24 @@ SQL
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
+    $participantInsert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'accepted')
+SQL
+    );
+    $participantInsert->execute([
+        ':call_id' => $callId,
+        ':user_id' => $adminUserId,
+        ':email' => 'admin@intelligent-intern.com',
+        ':display_name' => 'Admin',
+    ]);
+    $participantInsert->execute([
+        ':call_id' => $callId,
+        ':user_id' => $regularUserId,
+        ':email' => 'user@intelligent-intern.com',
+        ':display_name' => 'User',
+    ]);
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [
@@ -110,6 +129,7 @@ SQL
     };
     $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
     $adminAuth = videochat_call_app_availability_auth($pdo, $adminUserId, 'admin');
+    $userAuth = videochat_call_app_availability_auth($pdo, $regularUserId, 'user');
 
     $dispatch = static function (string $method, string $uri, array $auth, ?callable $databaseOpener = null) use (
         $jsonResponse,
@@ -136,6 +156,30 @@ SQL
         return $response;
     };
 
+    $coldLockedOpenDatabase = static function () use ($databasePath): PDO {
+        $lockedPdo = videochat_open_sqlite_pdo($databasePath);
+        $lockedPdo->exec('PRAGMA busy_timeout = 50');
+        return $lockedPdo;
+    };
+    $coldWriteLock = videochat_open_sqlite_pdo($databasePath);
+    $coldWriteLock->exec('BEGIN IMMEDIATE');
+    try {
+        $coldUnavailable = $dispatch(
+            'GET',
+            '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=white&page=1&page_size=6',
+            $adminAuth,
+            $coldLockedOpenDatabase
+        );
+    } finally {
+        $coldWriteLock->exec('ROLLBACK');
+    }
+    $coldUnavailablePayload = videochat_call_app_availability_decode($coldUnavailable);
+    $coldDiscovery = is_array(($coldUnavailablePayload['result'] ?? [])['discovery'] ?? null) ? ($coldUnavailablePayload['result'] ?? [])['discovery'] : [];
+    videochat_call_app_availability_assert((int) ($coldUnavailable['status'] ?? 0) === 200, 'cold catalog refresh failure should still return 200');
+    videochat_call_app_availability_assert(((array) (($coldUnavailablePayload['result'] ?? [])['apps'] ?? [])) === [], 'cold catalog refresh failure should return empty availability');
+    videochat_call_app_availability_assert((bool) ($coldDiscovery['ok'] ?? true) === false, 'cold catalog refresh failure should report discovery failure');
+    videochat_call_app_availability_assert((string) ($coldDiscovery['cache_status'] ?? '') === 'unavailable', 'cold catalog refresh failure should report unavailable cache status');
+
     $empty = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available', $adminAuth);
     $emptyPayload = videochat_call_app_availability_decode($empty);
     videochat_call_app_availability_assert((int) ($empty['status'] ?? 0) === 200, 'empty availability should return 200');
@@ -161,6 +205,26 @@ SQL
     videochat_call_app_availability_assert((bool) (($app['availability'] ?? [])['healthy'] ?? false), 'available app must be marked healthy');
     videochat_call_app_availability_assert((string) (($app['installation'] ?? [])['status'] ?? '') === 'enabled', 'available app installation must be enabled');
     videochat_call_app_availability_assert((string) (($app['installation'] ?? [])['default_app_policy'] ?? '') === 'allowed_by_default', 'available app policy mismatch');
+
+    $diagnosticsOrder = videochat_call_app_create_organization_order($pdo, $tenantId, $adminUserId, 'call-diagnostics');
+    videochat_call_app_availability_assert((bool) ($diagnosticsOrder['ok'] ?? false), 'admin should be able to order internal diagnostics app');
+    $diagnosticsInstall = videochat_call_app_create_organization_installation($pdo, $tenantId, $adminUserId, 'call-diagnostics', [
+        'default_app_policy' => 'blocked_by_default',
+    ]);
+    videochat_call_app_availability_assert((bool) ($diagnosticsInstall['ok'] ?? false), 'admin should be able to install internal diagnostics app');
+
+    $adminDiagnostics = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=diagnostics&page=1&page_size=6', $adminAuth);
+    $adminDiagnosticsPayload = videochat_call_app_availability_decode($adminDiagnostics);
+    $adminDiagnosticsApps = is_array(($adminDiagnosticsPayload['result'] ?? [])['apps'] ?? null) ? ($adminDiagnosticsPayload['result'] ?? [])['apps'] : [];
+    videochat_call_app_availability_assert((int) ($adminDiagnostics['status'] ?? 0) === 200, 'admin diagnostics availability should return 200');
+    videochat_call_app_availability_assert(count($adminDiagnosticsApps) === 1 && (string) ($adminDiagnosticsApps[0]['app_key'] ?? '') === 'call-diagnostics', 'admin should see installed internal diagnostics app');
+    videochat_call_app_availability_assert((string) (($adminDiagnosticsApps[0]['installation'] ?? [])['default_app_policy'] ?? '') === 'blocked_by_default', 'diagnostics app should stay blocked by default');
+
+    $userDiagnostics = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=diagnostics&page=1&page_size=6', $userAuth);
+    $userDiagnosticsPayload = videochat_call_app_availability_decode($userDiagnostics);
+    $userDiagnosticsApps = is_array(($userDiagnosticsPayload['result'] ?? [])['apps'] ?? null) ? ($userDiagnosticsPayload['result'] ?? [])['apps'] : [];
+    videochat_call_app_availability_assert((int) ($userDiagnostics['status'] ?? 0) === 200, 'user diagnostics availability should return 200');
+    videochat_call_app_availability_assert($userDiagnosticsApps === [], 'normal users must not see internal diagnostics app');
 
     $sentinelVerifiedAt = '2099-01-01T00:00:00+00:00';
     $pdo->prepare("UPDATE call_app_catalog_entries SET verified_at = :verified_at, updated_at = :verified_at")

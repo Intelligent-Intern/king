@@ -43,7 +43,12 @@ assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest sch
 assert.equal(manifest.app_key, 'call-diagnostics', 'manifest app key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'call-diagnostics must advertise runtime readiness');
 assert.equal(manifest.category, 'utility', 'call-diagnostics category must use the existing utility marketplace enum');
-assert.equal(manifest.default_participant_access, 'allowed_by_default', 'diagnostic tail must be shared by default inside the call');
+assert.equal(manifest.visibility?.internal_only, true, 'call-diagnostics must be marked internal-only');
+assert.equal(manifest.visibility?.public_marketplace, false, 'call-diagnostics must not be public marketplace visible');
+assert.ok(manifest.visibility?.admin_roles?.includes('admin'), 'call-diagnostics must be admin visible');
+assert.equal(manifest.marketplace?.public_listing, false, 'call-diagnostics marketplace listing must stay private');
+assert.equal(manifest.marketplace?.internal_only, true, 'call-diagnostics marketplace metadata must stay internal');
+assert.equal(manifest.default_participant_access, 'blocked_by_default', 'diagnostic tail must not be shared by default inside the call');
 assert.equal(manifest.iframe?.receives_primary_session_token, false, 'iframe must not receive primary session tokens');
 assert.equal(manifest.iframe?.bridge_protocol, 'king.call_app.iframe.v1', 'iframe bridge protocol mismatch');
 assert.ok(manifest.iframe?.sandbox?.includes('allow-scripts'), 'iframe sandbox must allow scripts');
@@ -65,7 +70,11 @@ const mcp = readJson('demo/call-app/call-diagnostics/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'call-diagnostics', 'MCP app key mismatch');
 assert.equal(mcp.service_name, 'call_app.call-diagnostics.mcp', 'MCP service name mismatch');
-assert.equal(mcp.marketplace_listing?.default_participant_access, 'allowed_by_default', 'MCP listing must expose shared diagnostic default access');
+assert.equal(mcp.visibility?.internal_only, true, 'MCP descriptor must mark diagnostics internal-only');
+assert.equal(mcp.visibility?.public_marketplace, false, 'MCP descriptor must not expose diagnostics publicly');
+assert.equal(mcp.marketplace_listing?.default_participant_access, 'blocked_by_default', 'MCP listing must expose blocked diagnostic default access');
+assert.equal(mcp.marketplace_listing?.public_listing, false, 'MCP listing must be private');
+assert.equal(mcp.marketplace_listing?.internal_only, true, 'MCP listing must be internal');
 assert.equal(mcp.launch_contract?.primary_session_token_allowed, false, 'MCP launch contract must reject primary tokens');
 for (const method of [
   'call_app.describe',
@@ -120,6 +129,9 @@ includes(html, 'king.call_app.iframe.v1', 'HTML must declare bridge protocol');
 for (const label of ['WebSocket', 'ICE host', 'STUN', 'TURN', 'SFU', 'Call App']) {
   includes(html, label, `HTML must expose station ${label}`);
 }
+for (const label of ['Live Tail', 'Instances', 'Calls', 'Telemetry', 'Raw']) {
+  includes(html, `>${label}</button>`, `HTML must expose ${label} diagnostics tab`);
+}
 includes(runtime, "message.type === 'call_app.launch'", 'runtime must wait for launch messages');
 includes(runtime, 'primary_session_token_received: false', 'runtime must explicitly reject primary token delivery');
 includes(runtime, "'call_app.ready'", 'runtime must emit ready after launch');
@@ -135,22 +147,34 @@ includes(runtime, 'typ srflx', 'runtime must classify STUN srflx candidates');
 includes(runtime, 'persistLog(entry)', 'runtime must store live diagnostics unless marked non-persistent');
 includes(runtime, 'pausedLogs', 'runtime pause must buffer incoming tail entries');
 includes(runtime, 'flushPausedLogs()', 'runtime pause must flush buffered entries on resume');
+includes(runtime, 'setPaused(true)', 'runtime pause control must use a focused paused-state transition');
 includes(runtime, 'filterMatchesEntry(entry, term)', 'runtime filters must apply through a focused predicate');
+includes(runtime, 'visibleTelemetryEntries()', 'runtime filters must apply to telemetry snapshots');
 includes(runtime, 'JSON.stringify(summarizePayload(payload), null, 2)', 'runtime details must render jq-style pretty JSON');
+includes(runtime, "'call_app.diagnostics.telemetry.snapshot'", 'runtime must handle telemetry snapshot messages');
+includes(runtime, "'call_app.diagnostics.stage.update'", 'runtime must handle stage update messages');
+includes(runtime, 'renderRawView(rows, telemetryRows)', 'runtime must expose redacted raw JSON for the active filter');
+includes(runtime, "REDACTED = '[redacted]'", 'runtime output must visibly redact sensitive fields');
 assert.doesNotMatch(bundle, /sessionToken|Authorization|localStorage|XMLHttpRequest|fetch\(/, 'iframe bundle must not access parent auth material or direct APIs');
 
 const tailBridge = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnosticTailBridge.js');
 includes(tailBridge, "CALL_DIAGNOSTICS_APP_KEY = 'call-diagnostics'", 'host tail bridge must gate the diagnostics app key');
 includes(tailBridge, "CALL_APP_DIAGNOSTIC_TAIL_MESSAGE_TYPE = 'call_app.diagnostics.tail.event'", 'host tail bridge must use a dedicated message type');
+includes(tailBridge, "CALL_APP_DIAGNOSTIC_TELEMETRY_SNAPSHOT_TYPE = 'call_app.diagnostics.telemetry.snapshot'", 'host tail bridge must route telemetry snapshots');
+includes(tailBridge, "CALL_APP_DIAGNOSTIC_STAGE_UPDATE_TYPE = 'call_app.diagnostics.stage.update'", 'host tail bridge must route stage updates');
 includes(tailBridge, "CLIENT_DIAGNOSTIC_WINDOW_EVENT = 'king:client-diagnostic'", 'host tail bridge must subscribe to client diagnostics');
 includes(tailBridge, "CALL_APP_DIAGNOSTIC_WINDOW_EVENT = 'king:call-app-diagnostic'", 'host tail bridge must subscribe to Call App diagnostics');
 includes(tailBridge, 'redactDiagnosticPayload', 'host tail bridge must redact diagnostic payloads before iframe delivery');
-includes(tailBridge, 'postToIframe(frameWindow, session, CALL_APP_DIAGNOSTIC_TAIL_MESSAGE_TYPE', 'host tail bridge must use the existing iframe post bridge');
+includes(tailBridge, 'diagnosticMessageType(raw)', 'host tail bridge must preserve first-class diagnostic message types');
+includes(tailBridge, 'apiRequest(endpoint)', 'host tail bridge must fetch telemetry through the parent API client');
+includes(tailBridge, "call-apps/call-diagnostics/telemetry-snapshot", 'host tail bridge must use the call-scoped diagnostics telemetry endpoint');
+includes(tailBridge, 'postToIframe(frameWindow, session, messageType', 'host tail bridge must use the existing iframe post bridge');
 includes(tailBridge, "entry.event_type.startsWith('call_app_crdt_')", 'host tail bridge must avoid persisting its own CRDT feedback loop');
 
 const workspaceHost = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue');
 includes(workspaceHost, 'createCallAppDiagnosticTailBridge', 'workspace host must install the diagnostic tail bridge');
 includes(workspaceHost, 'postToIframe: callAppCrdtBridge.postToIframe', 'diagnostic tail bridge must share the existing parent->iframe sender');
+includes(workspaceHost, 'apiRequest: props.apiRequest', 'diagnostic tail bridge must share the parent API client');
 
 const clientDiagnostics = read('demo/video-chat/frontend-vue/src/support/clientDiagnostics.ts');
 includes(clientDiagnostics, "CLIENT_DIAGNOSTIC_WINDOW_EVENT = 'king:client-diagnostic'", 'client diagnostics must expose the live tail window event');
@@ -164,7 +188,21 @@ const packageJson = read('demo/video-chat/frontend-vue/package.json');
 includes(packageJson, 'call-app-call-diagnostics-contract.mjs', 'package scripts must include call-diagnostics contract');
 const readme = read('demo/call-app/README.md');
 includes(readme, 'call-diagnostics', 'README must list the call-diagnostics package');
+
+const backendDiagnostics = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_diagnostics.php');
+includes(backendDiagnostics, 'videochat_call_diagnostics_handle_telemetry_snapshot_route', 'backend must expose a dedicated call-scoped telemetry route handler');
+includes(backendDiagnostics, '/api/calls/([A-Za-z0-9._-]{1,200})/call-apps/call-diagnostics/telemetry-snapshot', 'backend telemetry route must be scoped to the call');
+includes(backendDiagnostics, 'videochat_call_app_actor_can_use_internal_admin_apps', 'backend telemetry route must require admin/system-admin context');
+includes(backendDiagnostics, 'videochat_call_diagnostics_redact_value', 'backend telemetry payloads must be redacted before delivery');
+const backendModule = read('demo/video-chat/backend-king-php/http/module_call_apps.php');
+includes(backendModule, 'videochat_call_diagnostics_handle_telemetry_snapshot_route', 'call-app module must delegate diagnostics telemetry before generic session routes');
+includes(backendModule, 'videochat_call_app_internal_only_error_response', 'call-app module must enforce internal-only diagnostics access on session routes');
+assert.doesNotMatch(backendModule, /\/api\/admin\/call-diagnostics\/telemetry/, 'diagnostics telemetry must not use a broad public admin endpoint');
+const availability = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_availability.php');
+includes(availability, 'include_internal', 'availability query must support admin-only internal app visibility');
+includes(availability, "catalog.app_key <> :internal_app_key", 'availability query must hide diagnostics from normal users');
 const sprint = read('SPRINT.md');
-includes(sprint, 'OCA-09 Call Diagnostics live tail Call App', 'SPRINT must track the diagnostic tail sprint ticket');
+includes(sprint, 'VCS-06 Make Call Diagnostics internal/admin-only', 'SPRINT must track diagnostics access hardening');
+includes(sprint, 'VCS-09 Add sanitized instance telemetry', 'SPRINT must track diagnostics telemetry');
 
 console.log('[call-app-call-diagnostics-contract] PASS');

@@ -39,7 +39,7 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
 
 const whiteboardBundleSource = `${whiteboardSource}\n${whiteboardRuntimeSource}`;

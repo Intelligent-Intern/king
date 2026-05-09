@@ -1,4 +1,5 @@
 import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
+import { shouldArmWorkspaceForegroundRecovery } from './foregroundRecovery.ts';
 
 export function registerCallWorkspaceLifecycleHelpers({
   vue,
@@ -349,8 +350,10 @@ export function registerCallWorkspaceLifecycleHelpers({
     setAloneIdleLastActiveMs(Date.now());
     setDetachForegroundReconnect(attachForegroundReconnectHandlers({
       onBackground: (context) => {
-        markWorkspaceReconnectAfterForeground();
-        sfuBackgroundTabPolicy.pauseVideoForBackground(context);
+        if (shouldArmWorkspaceForegroundRecovery(context, typeof document !== 'undefined' ? document : null)) {
+          markWorkspaceReconnectAfterForeground();
+          sfuBackgroundTabPolicy.pauseVideoForBackground(context);
+        }
       },
       onForeground: (context) => {
         reconnectWorkspaceAfterForeground();

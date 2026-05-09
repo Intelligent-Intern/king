@@ -24,7 +24,7 @@ const [
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('WHITEBOARD_CHECK.md'),
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
 
 const observabilityEvents = [

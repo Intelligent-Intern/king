@@ -65,6 +65,11 @@ function videochat_client_diagnostics_contract_decode_response(array $response):
     return is_array($decoded) ? $decoded : [];
 }
 
+if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+    fwrite(STDOUT, "[client-diagnostics-contract] SKIP: PDO sqlite driver is not available\n");
+    exit(0);
+}
+
 $databasePath = tempnam(sys_get_temp_dir(), 'videochat-client-diagnostics-');
 videochat_client_diagnostics_contract_assert(is_string($databasePath) && $databasePath !== '', 'temporary database path should be created');
 

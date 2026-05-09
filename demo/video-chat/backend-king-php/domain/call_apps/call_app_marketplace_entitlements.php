@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_app_diagnostics.php';
 require_once __DIR__ . '/call_app_mcp_metadata.php';
 
 function videochat_call_app_marketplace_generate_public_id(string $prefix): string
@@ -203,6 +204,7 @@ function videochat_call_app_catalog_row(array $row): array
         'health_status' => (string) ($row['health_status'] ?? 'unknown'),
         'metadata_hash' => (string) ($row['metadata_hash'] ?? ''),
         'listing' => $listing,
+        'internal' => videochat_call_app_catalog_entry_is_internal_admin($row + ['listing' => $listing]),
         'default_participant_access' => videochat_call_app_catalog_default_participant_access(['listing' => $listing]),
         'capabilities' => videochat_call_app_marketplace_decode_json((string) ($row['capabilities_json'] ?? '[]'), []),
         'export_formats' => videochat_call_app_marketplace_decode_json((string) ($row['export_formats_json'] ?? '[]'), []),
@@ -305,12 +307,19 @@ function videochat_call_app_refresh_catalog_for_availability(PDO $pdo, ?string $
         ];
     } catch (Throwable $error) {
         $fallbackSnapshot = videochat_call_app_catalog_snapshot($pdo);
-        if ((int) ($fallbackSnapshot['count'] ?? 0) <= 0) {
-            throw $error;
-        }
-
         $isTransient = function_exists('videochat_sqlite_is_transient_lock')
             && videochat_sqlite_is_transient_lock($error);
+        if ((int) ($fallbackSnapshot['count'] ?? 0) <= 0) {
+            return [
+                'ok' => false,
+                'entries' => [],
+                'invalid' => [['app_key' => '', 'errors' => ['catalog_refresh' => $isTransient ? 'transient_unavailable' : 'refresh_failed']]],
+                'refreshed_at' => '',
+                'refresh_skipped' => true,
+                'cache_status' => 'unavailable',
+                'fallback_reason' => $isTransient ? 'transient_refresh_failed' : 'refresh_failed',
+            ];
+        }
 
         return [
             'ok' => false,
@@ -332,10 +341,14 @@ function videochat_call_app_refresh_catalog_for_availability(PDO $pdo, ?string $
 /**
  * @return array<int, array<string, mixed>>
  */
-function videochat_call_app_list_catalog(PDO $pdo, string $query = '', string $category = 'all'): array
+function videochat_call_app_list_catalog(PDO $pdo, string $query = '', string $category = 'all', bool $includeInternal = false): array
 {
     $where = [];
     $params = [];
+    if (!$includeInternal) {
+        $where[] = 'app_key <> :internal_app_key';
+        $params[':internal_app_key'] = videochat_call_diagnostics_app_key();
+    }
     if ($category !== '' && $category !== 'all') {
         $where[] = 'category = :category';
         $params[':category'] = $category;
@@ -353,7 +366,7 @@ function videochat_call_app_list_catalog(PDO $pdo, string $query = '', string $c
     return array_map(static fn (array $row): array => videochat_call_app_catalog_row($row), is_array($rows) ? $rows : []);
 }
 
-function videochat_call_app_fetch_catalog_entry(PDO $pdo, string $appKey, string $version = ''): ?array
+function videochat_call_app_fetch_catalog_entry(PDO $pdo, string $appKey, string $version = '', bool $includeInternal = false): ?array
 {
     $params = [':app_key' => strtolower(trim($appKey))];
     $versionWhere = '';
@@ -373,6 +386,9 @@ SQL
     );
     $statement->execute($params);
     $row = $statement->fetch(PDO::FETCH_ASSOC);
+    if (is_array($row) && !$includeInternal && videochat_call_app_catalog_entry_is_internal_admin($row)) {
+        return null;
+    }
     return is_array($row) ? videochat_call_app_catalog_row($row) : null;
 }
 
@@ -424,7 +440,7 @@ function videochat_call_app_create_organization_order(PDO $pdo, int $tenantId, i
         }
     }
 
-    $catalogEntry = videochat_call_app_fetch_catalog_entry($pdo, $appKey);
+    $catalogEntry = videochat_call_app_fetch_catalog_entry($pdo, $appKey, '', videochat_call_app_user_can_use_internal_admin_apps($pdo, $actorUserId));
     if (!is_array($catalogEntry)) {
         return ['ok' => false, 'reason' => 'app_not_found'];
     }
@@ -650,7 +666,7 @@ function videochat_call_app_create_organization_installation(PDO $pdo, int $tena
             return ['ok' => false, 'reason' => 'validation_failed', 'errors' => [$forbiddenField => 'not_client_selectable']];
         }
     }
-    $catalogEntry = videochat_call_app_fetch_catalog_entry($pdo, $appKey);
+    $catalogEntry = videochat_call_app_fetch_catalog_entry($pdo, $appKey, '', videochat_call_app_user_can_use_internal_admin_apps($pdo, $actorUserId));
     if (!is_array($catalogEntry)) {
         return ['ok' => false, 'reason' => 'app_not_found'];
     }

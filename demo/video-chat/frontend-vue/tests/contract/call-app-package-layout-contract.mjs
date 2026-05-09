@@ -244,7 +244,7 @@ assert(iframeRuntime.includes('primary_session_token_received: false'), 'iframe 
 assert(!iframeBundle.includes('sessionToken'), 'iframe bundle must not reference parent session tokens')
 assert(!iframeBundle.includes('Authorization'), 'iframe bundle must not reference authorization headers')
 
-const sprint = read('SPRINT.md')
+const sprint = `${read('SPRINT.md')}\n${read('BACKLOG.md')}`
 assert(sprint.includes('- [x] WCA-01 Sprint/backlog hygiene and package contract'), 'SPRINT.md must track the active Whiteboard package sprint ticket')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 assert(packageJson.includes('call-app-package-layout-contract.mjs'), 'package scripts must include package layout contract')

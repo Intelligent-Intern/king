@@ -11,6 +11,22 @@ function read(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
+function section(source, start, end, label) {
+  const startIndex = source.indexOf(start);
+  assert.notEqual(startIndex, -1, `${label} start missing`);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  assert.notEqual(endIndex, -1, `${label} end missing`);
+  return source.slice(startIndex, endIndex);
+}
+
+function assertNoReconnectOrMediaRecycle(source, label) {
+  assert.doesNotMatch(
+    source,
+    /\b(connectSocket|closeSocket|closeSocketLocal|scheduleReconnect|initSFU|initSfu|recycleSfu|restartSfuAfterVideoStall|publishLocalTracks|teardownLocalPublisher)\b/,
+    `${label} must not reconnect websocket/media sessions`,
+  );
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
@@ -29,6 +45,7 @@ try {
   assert.match(helper, /if \(!shouldArmForegroundRecovery\(event\)\) \{\s*return;\s*\}/, 'visible blur must not arm foreground recovery');
   assert.match(helper, /if \(!shouldRunForegroundRecovery\(event\)\) \{\s*return;\s*\}/, 'visible focus must not run foreground recovery when no true background was observed');
   assert.match(helper, /if \(reason === 'online'\) return true;/, 'online events must still trigger recovery even without focus churn');
+  assert.doesNotMatch(helper, /addEventListener\('(?:click|mousedown|pointerdown)'/, 'ordinary element interactions must not be foreground reconnect triggers');
 
   const joinView = read(root, 'src/domain/calls/access/JoinView.vue');
   assert.match(joinView, /attachForegroundReconnectHandlers/, 'call access join view must use foreground reconnect helper');
@@ -46,25 +63,39 @@ try {
   const workspaceTemplate = read(root, 'src/domain/realtime/CallWorkspaceView.template.html');
   const workspaceLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
   const foregroundRecovery = read(root, 'src/domain/realtime/workspace/callWorkspace/foregroundRecovery.ts');
+  const participantUi = read(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   assert.match(workspace, /attachForegroundReconnectHandlers/, 'workspace must use foreground reconnect helper');
   assert.match(workspace, /createWorkspaceForegroundRecoveryController/, 'workspace must delegate foreground recovery policy to the focused helper');
   assert.match(workspace, /function reconnectWorkspaceAfterForeground\(\)/, 'workspace must define foreground reconnect');
   assert.match(workspace, /setArmed: \(value\) => \{ workspaceReconnectAfterForeground = value; \}/, 'workspace must mark reconnect pending through the recovery helper');
+  assert.match(foregroundRecovery, /export function shouldArmWorkspaceForegroundRecovery\(context = null, documentRef = null\)/, 'workspace foreground recovery must expose a call-workspace visibility guard');
+  assert.match(foregroundRecovery, /reason === 'pagehide'[\s\S]*reason === 'document_hidden'/, 'workspace foreground recovery guard must preserve true pagehide/document-hidden recovery');
   assert.match(foregroundRecovery, /if \(shouldAcquireLocalMedia\?\.\(\) === true && hasLiveLocalMedia\?\.\(\) !== true\) \{[\s\S]*void publishLocalTracks\?\.\(\);/, 'workspace foreground recovery must reacquire local media when preview/tracks are gone');
   assert.match(foregroundRecovery, /const socketHealthy = isSocketOpen\?\.\(\) === true[\s\S]*hasRealtimeRoomSync\?\.\(\) === true[\s\S]*getConnectionState/, 'workspace foreground recovery must classify healthy sockets before reconnecting');
   assert.match(foregroundRecovery, /if \(socketHealthy && sfuHealthy\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*action: 'snapshot_only'/, 'healthy foreground recovery must request a snapshot instead of recycling sockets');
   assert.match(foregroundRecovery, /resetReconnectAttempt\?\.\(\);[\s\S]*void connectSocket\?\.\(\);/, 'unhealthy foreground recovery must still reconnect the realtime socket');
   assert.match(foregroundRecovery, /if \(sfuExpected && !sfuHealthy\) \{[\s\S]*recycleSfu\?\.\(\);[\s\S]*initSfu\?\.\(\);/, 'unhealthy SFU foreground recovery must recycle stale SFU state');
-  assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);/, 'workspace background callback remains the only path that arms foreground reconnect');
+  assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*if \(shouldArmWorkspaceForegroundRecovery\(context, typeof document !== 'undefined' \? document : null\)\) \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);[\s\S]*\}/, 'workspace background callback must guard reconnect arming against visible focus churn');
   assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
   assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
   assert.match(workspaceTemplate, /class="call-control-btn"[\s\S]*@click="toggleCamera"/, 'call controls must remain ordinary visible click targets covered by focus churn proof');
   assert.match(workspaceTemplate, /class="workspace-video-fullscreen-overlay"[\s\S]*@click\.stop="closeVideoFullscreen"/, 'fullscreen media overlay clicks must stay local to fullscreen handling');
   assert.match(workspaceTemplate, /id="workspace-fullscreen-video-slot"[\s\S]*class="workspace-fullscreen-video-slot"[\s\S]*@click\.stop/, 'fullscreen media slot clicks must not bubble into reconnect-sensitive workspace handlers');
+  assert.match(workspaceTemplate, /@click="setActiveTab\('users'\)"[\s\S]*@click="setActiveTab\('chat'\)"/, 'workspace tab switches must remain ordinary button clicks');
+
+  const setActiveTabBlock = section(participantUi, 'function setActiveTab(tab) {', '\nfunction hideRightSidebar()', 'setActiveTab handler');
+  assert.match(setActiveTabBlock, /activeTab\.value = nextTab;/, 'tab switches must stay local to tab state');
+  assert.match(setActiveTabBlock, /if \(isSocketOnline\.value && nextTab === 'users'\) \{\s*requestRoomSnapshot\(\);/, 'users tab may backfill state with a snapshot without reconnecting');
+  assertNoReconnectOrMediaRecycle(setActiveTabBlock, 'tab switch handler');
 
   const callAppWorkspaceHost = read(root, 'src/domain/realtime/callApps/CallAppWorkspaceHost.vue');
   assert.match(callAppWorkspaceHost, /class="call-app-workspace-fullscreen-toggle"[\s\S]*@click\.stop="toggleWorkspaceFullscreen"/, 'Call App fullscreen toggle clicks must stay local to the Call App host');
+  assert.match(callAppWorkspaceHost, /class="call-app-workspace-participants-toggle"[\s\S]*@click\.stop="toggleFullscreenParticipants"/, 'Call App participant strip toggle clicks must stay local to the Call App host');
   assert.match(callAppWorkspaceHost, /<iframe[\s\S]*class="call-app-workspace-frame"/, 'Call App iframe must stay covered by visible iframe focus churn proof');
+  const callAppFullscreenToggleBlock = section(callAppWorkspaceHost, 'function toggleWorkspaceFullscreen() {', '\n\nfunction toggleFullscreenParticipants()', 'Call App fullscreen toggle handler');
+  const callAppParticipantsToggleBlock = section(callAppWorkspaceHost, 'function toggleFullscreenParticipants() {', '\n</script>', 'Call App participants toggle handler');
+  assertNoReconnectOrMediaRecycle(callAppFullscreenToggleBlock, 'Call App fullscreen toggle');
+  assertNoReconnectOrMediaRecycle(callAppParticipantsToggleBlock, 'Call App participants toggle');
 
   const socketLifecycle = read(root, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   assert.match(
@@ -192,6 +223,28 @@ try {
   }
 
   const foregroundRecoveryModule = await import(`data:text/javascript;base64,${Buffer.from(foregroundRecovery).toString('base64')}`);
+  const visibleDocument = { visibilityState: 'visible' };
+  assert.equal(
+    foregroundRecoveryModule.shouldArmWorkspaceForegroundRecovery({ reason: 'blur', hidden: false, visibility_state: 'visible' }, visibleDocument),
+    false,
+    'workspace guard must not arm recovery for visible blur',
+  );
+  assert.equal(
+    foregroundRecoveryModule.shouldArmWorkspaceForegroundRecovery({ reason: 'click', hidden: false, visibility_state: 'visible' }, visibleDocument),
+    false,
+    'workspace guard must not arm recovery for ordinary clicks',
+  );
+  assert.equal(
+    foregroundRecoveryModule.shouldArmWorkspaceForegroundRecovery({ reason: 'document_hidden', hidden: true, visibility_state: 'hidden' }, visibleDocument),
+    true,
+    'workspace guard must arm recovery for hidden documents',
+  );
+  assert.equal(
+    foregroundRecoveryModule.shouldArmWorkspaceForegroundRecovery({ reason: 'pagehide', hidden: false, visibility_state: 'visible' }, visibleDocument),
+    true,
+    'workspace guard must arm recovery for pagehide lifecycle transitions',
+  );
+
   const recoveryEvents = [];
   let recoveryArmed = false;
   let lastRecoveryAt = 0;
@@ -224,6 +277,27 @@ try {
     shouldAcquireLocalMedia: () => false,
     shouldConnectSfu: () => true,
   });
+
+  const visibleInteractionContexts = [
+    ['Call App iframe click', { reason: 'click', hidden: false, visibility_state: 'visible' }],
+    ['Call App iframe focus loss', { reason: 'blur', hidden: false, visibility_state: 'visible' }],
+    ['workspace tab switch', { reason: 'tab_switch', hidden: false, visibility_state: 'visible' }],
+    ['normal control click', { reason: 'button_click', hidden: false, visibility_state: 'visible' }],
+  ];
+  for (const [label, context] of visibleInteractionContexts) {
+    recoveryArmed = false;
+    recoveryEvents.length = 0;
+    socketOpen = true;
+    roomSynced = true;
+    sfuConnected = true;
+    sfuOpen = true;
+    if (foregroundRecoveryModule.shouldArmWorkspaceForegroundRecovery(context, visibleDocument)) {
+      recovery.mark();
+    }
+    assert.deepEqual(recovery.recover(), { recovered: false, reason: 'not_ready' }, `${label} must not arm workspace recovery`);
+    assert.deepEqual(recoveryEvents, [], `${label} must not reconnect websocket/media sessions`);
+  }
+
   recovery.mark();
   assert.equal(recoveryArmed, true, 'foreground recovery controller must arm on real background');
   assert.equal(recovery.recover().action, 'snapshot_only', 'healthy foreground recovery should not reconnect');

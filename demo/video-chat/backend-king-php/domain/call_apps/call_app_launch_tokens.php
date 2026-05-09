@@ -200,11 +200,14 @@ function videochat_call_app_launch_context(array $session, int $userId, string $
     ];
 }
 
-function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId): array
+function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, bool $actorCanUseInternalAdminApps = false): array
 {
     $record = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
     if (!is_array($record)) {
         return ['ok' => false, 'reason' => 'session_not_found'];
+    }
+    if (videochat_call_app_is_internal_admin_app_key((string) ($record['app_key'] ?? '')) && !$actorCanUseInternalAdminApps) {
+        return ['ok' => false, 'reason' => 'internal_admin_required'];
     }
     if ((string) ($record['status'] ?? '') !== 'active') {
         return ['ok' => false, 'reason' => 'session_not_active'];
@@ -308,6 +311,9 @@ SQL
     $session = videochat_call_app_fetch_session($pdo, $tenantId, $sessionId);
     if (!is_array($record) || !is_array($session)) {
         return ['ok' => false, 'reason' => 'session_not_found'];
+    }
+    if (videochat_call_app_is_internal_admin_app_key((string) ($record['app_key'] ?? '')) && !videochat_call_app_user_can_use_internal_admin_apps($pdo, $userId)) {
+        return ['ok' => false, 'reason' => 'internal_admin_required'];
     }
 
     $grant = videochat_call_app_launch_subject_grant($pdo, $tenantId, $record, 'user', $userId, '');

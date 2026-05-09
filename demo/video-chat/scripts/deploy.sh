@@ -43,6 +43,8 @@ Optional environment:
                                   Sync generated remote secrets into .env.local, default: 1.
   VIDEOCHAT_DEPLOY_PUBLIC_IP       Optional expected DNS target IP for preflight.
   VIDEOCHAT_DEPLOY_COMPOSE_URL     Override Compose v2 plugin fallback download URL.
+  VIDEOCHAT_DEPLOY_SKIP_CERTBOT    Skip certificate obtain/renewal during deploy/prepare
+                                  when existing certificates are already valid, default: 0.
   VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS
                               Remove stale SSH known_hosts entries before connecting.
                               Default: auto-enabled when VIDEOCHAT_DEPLOY_PUBLIC_IP is known.
@@ -707,6 +709,18 @@ fi
 restore_certbot_stopped_services
 trap - EXIT
 REMOTE
+}
+
+certbot_standalone_if_needed() {
+  case "${VIDEOCHAT_DEPLOY_SKIP_CERTBOT:-0}" in
+    1|true|TRUE|yes|YES)
+      log "Certbot skipped by VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1; existing certificate mounts are expected."
+      return 0
+      ;;
+    *)
+      certbot_standalone
+      ;;
+  esac
 }
 
 write_remote_runtime_files() {
@@ -1544,7 +1558,7 @@ prepare() {
   bootstrap_remote
   sync_checkout
   write_remote_runtime_files
-  certbot_standalone
+  certbot_standalone_if_needed
   sync_remote_secrets_to_local
 }
 
@@ -1585,7 +1599,7 @@ case "${ACTION}" in
     refresh_known_hosts_for_target
     bootstrap_remote
     write_remote_runtime_files
-    certbot_standalone
+    certbot_standalone_if_needed
     ;;
   sync)
     refresh_known_hosts_for_target

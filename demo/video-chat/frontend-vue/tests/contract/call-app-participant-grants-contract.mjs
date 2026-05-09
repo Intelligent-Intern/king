@@ -46,7 +46,7 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/video-chat/backend-king-php/support/call_app_session_migrations.php'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
-  read('SPRINT.md'),
+  Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
 
 assert.match(
@@ -294,8 +294,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /## Sprint: Whiteboard Call App Hardening And Production Integration/,
-  'SPRINT.md must keep Call App grant hardening under the active Whiteboard sprint',
+  /Prior sprint: Whiteboard Call App Hardening And Production Integration/,
+  'planning sources must keep Call App grant hardening under the migrated Whiteboard sprint',
 );
 
 console.log('[call-app-participant-grants-contract] PASS');

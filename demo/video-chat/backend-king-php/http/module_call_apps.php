@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/call_apps/call_app_crdt.php';
+require_once __DIR__ . '/../domain/call_apps/call_app_diagnostics.php';
 require_once __DIR__ . '/../support/tenant_context.php';
 
 function videochat_call_app_module_json_body(array $request, ?callable $decodeJsonBody): array
@@ -123,7 +124,13 @@ function videochat_handle_call_app_routes(
 ): ?array {
     $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
     $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+    $authenticatedInternalRole = videochat_call_app_actor_can_use_internal_admin_apps($apiAuthContext) ? 'admin' : $authenticatedUserRole;
     $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+
+    $diagnosticsRoute = videochat_call_diagnostics_handle_telemetry_snapshot_route($path, $method, $apiAuthContext, $jsonResponse, $errorResponse, $openDatabase);
+    if ($diagnosticsRoute !== null) {
+        return $diagnosticsRoute;
+    }
 
     if (preg_match('#^/api/calls/([A-Za-z0-9._-]{1,200})/call-apps/available$#', $path, $availabilityMatch) === 1) {
         if ($method !== 'GET') {
@@ -153,6 +160,7 @@ function videochat_handle_call_app_routes(
                 return $callError;
             }
 
+            $filters['include_internal'] = videochat_call_app_actor_can_use_internal_admin_apps($apiAuthContext);
             $refresh = videochat_call_app_refresh_catalog_for_availability($pdo);
             $available = videochat_call_app_list_available_for_tenant($pdo, $tenantId, $filters);
         } catch (Throwable $error) {
@@ -167,15 +175,14 @@ function videochat_handle_call_app_routes(
                 $error->getMessage()
             ));
 
-            return $errorResponse(
-                $isTransient ? 503 : 500,
-                $isTransient ? 'call_app_availability_temporarily_unavailable' : 'call_app_availability_failed',
-                $isTransient ? 'Call App availability is temporarily unavailable.' : 'Could not load Call App availability.',
-                [
-                    'reason' => $isTransient ? 'transient_storage_error' : 'internal_error',
-                    'retryable' => $isTransient,
-                ]
-            );
+            if ($isTransient) {
+                return $errorResponse(503, 'call_app_availability_temporarily_unavailable', 'Call App availability is temporarily unavailable.', [
+                    'reason' => 'transient_storage_error',
+                    'retryable' => true,
+                ]);
+            }
+
+            return videochat_call_app_availability_runtime_fallback_response($callId, $tenantId, $filters, $jsonResponse);
         }
 
         $refreshSkipped = (bool) ($refresh['refresh_skipped'] ?? false);
@@ -283,6 +290,7 @@ function videochat_handle_call_app_routes(
                     'reason' => $decodeError,
                 ]);
             }
+            if (($internalError = videochat_call_app_internal_only_error_response((string) ($payload['app_key'] ?? ''), $authenticatedInternalRole, '', $errorResponse)) !== null) return $internalError;
             $result = videochat_call_app_create_session(
                 $pdo,
                 $tenantId,
@@ -341,6 +349,7 @@ function videochat_handle_call_app_routes(
                     'session_id' => $sessionId,
                 ]);
             }
+            if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
 
             $callId = (string) ($sessionRecord['call_id'] ?? '');
             $callResolution = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $tenantId);
@@ -429,6 +438,10 @@ function videochat_handle_call_app_routes(
         $sessionId = rawurldecode((string) ($crdtBootstrapMatch[1] ?? ''));
         try {
             $pdo = $openDatabase();
+            $sessionRecord = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+            if (is_array($sessionRecord)) {
+                if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
+            }
             $result = videochat_call_app_crdt_bootstrap(
                 $pdo,
                 $tenantId,
@@ -470,6 +483,10 @@ function videochat_handle_call_app_routes(
         $limit = 250;
         try {
             $pdo = $openDatabase();
+            $sessionRecord = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+            if (is_array($sessionRecord)) {
+                if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
+            }
             if ($method === 'GET') {
                 $query = videochat_request_query_params($request);
                 $afterClock = videochat_call_app_crdt_positive_int($query['after_clock'] ?? 0, 0, 0, 1_000_000_000);
@@ -556,6 +573,10 @@ function videochat_handle_call_app_routes(
         $startedAt = videochat_call_app_module_now_ms();
         try {
             $pdo = $openDatabase();
+            $sessionRecord = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+            if (is_array($sessionRecord)) {
+                if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
+            }
             $result = videochat_call_app_crdt_compact_snapshot($pdo, $tenantId, $sessionId, $authenticatedUserId);
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_crdt_snapshot_failed', 'Could not compact Call App CRDT snapshot.', [
@@ -615,7 +636,7 @@ function videochat_handle_call_app_routes(
 
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'validation_failed' ? 422 : ($reason === 'session_not_found' ? 404 : 401);
+            $status = $reason === 'validation_failed' ? 422 : ($reason === 'session_not_found' ? 404 : ($reason === 'internal_admin_required' ? 403 : 401));
             return $errorResponse($status, 'call_app_launch_token_validation_failed', 'Call App launch token is not valid.', [
                 'reason' => $reason,
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
@@ -656,6 +677,7 @@ function videochat_handle_call_app_routes(
                     ]),
                 ]);
             }
+            if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
             $callId = (string) ($sessionRecord['call_id'] ?? '');
             $callResolution = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $tenantId);
             $callError = videochat_call_app_module_call_response_error($callResolution, $callId, $errorResponse);
@@ -663,7 +685,13 @@ function videochat_handle_call_app_routes(
                 return $callError;
             }
 
-            $result = videochat_call_app_mint_launch_token($pdo, $tenantId, $sessionId, $authenticatedUserId);
+            $result = videochat_call_app_mint_launch_token(
+                $pdo,
+                $tenantId,
+                $sessionId,
+                $authenticatedUserId,
+                videochat_call_app_actor_can_use_internal_admin_apps($apiAuthContext)
+            );
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
                 'reason' => 'internal_error',
@@ -677,7 +705,7 @@ function videochat_handle_call_app_routes(
 
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_grant_denied' ? 403 : 409);
+            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_grant_denied', 'internal_admin_required'], true) ? 403 : 409);
             return $errorResponse($status, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
                 'reason' => $reason,
                 'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
@@ -712,6 +740,7 @@ function videochat_handle_call_app_routes(
                     'session_id' => $sessionId,
                 ]);
             }
+            if (($internalError = videochat_call_app_internal_only_error_response((string) ($sessionRecord['app_key'] ?? ''), $authenticatedInternalRole, $sessionId, $errorResponse)) !== null) return $internalError;
             $callId = (string) ($sessionRecord['call_id'] ?? '');
             $callResolution = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $tenantId);
             $callError = videochat_call_app_module_call_response_error($callResolution, $callId, $errorResponse);

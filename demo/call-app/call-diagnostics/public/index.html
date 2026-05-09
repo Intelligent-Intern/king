@@ -14,7 +14,7 @@
       <header class="diagnostics-header">
         <div>
           <p class="eyebrow">Call Diagnostics</p>
-          <h1>Live Tail</h1>
+          <h1 id="viewTitle">Live Tail</h1>
         </div>
         <div class="header-actions">
           <span id="connectionBadge" class="status-pill state-waiting">Waiting</span>
@@ -60,6 +60,14 @@
         </article>
       </section>
 
+      <section class="diagnostic-tabs" role="tablist" aria-label="Diagnostic views">
+        <button class="tab-button active" type="button" role="tab" aria-selected="true" data-view="tail">Live Tail</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-view="instances">Instances</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-view="calls">Calls</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-view="telemetry">Telemetry</button>
+        <button class="tab-button" type="button" role="tab" aria-selected="false" data-view="raw">Raw</button>
+      </section>
+
       <section class="tail-controls" aria-label="Tail filters">
         <input id="tailSearch" type="search" autocomplete="off" placeholder="Filter">
         <div class="filter-row" role="group" aria-label="Diagnostic filters">
@@ -69,11 +77,16 @@
           <button class="filter-button" type="button" data-filter="signaling">WS</button>
           <button class="filter-button" type="button" data-filter="sfu">SFU</button>
           <button class="filter-button" type="button" data-filter="callapp">Apps</button>
+          <button class="filter-button" type="button" data-filter="telemetry">Telemetry</button>
         </div>
       </section>
 
       <section class="tail-shell" aria-label="Diagnostic log">
-        <ol id="tailList" class="tail-list"></ol>
+        <ol id="tailList" class="tail-list diagnostic-view" data-view="tail"></ol>
+        <div id="instancesView" class="summary-list diagnostic-view" data-view="instances" hidden></div>
+        <div id="callsView" class="summary-list diagnostic-view" data-view="calls" hidden></div>
+        <div id="telemetryView" class="summary-list diagnostic-view" data-view="telemetry" hidden></div>
+        <pre id="rawView" class="raw-json diagnostic-view" data-view="raw" hidden></pre>
         <div id="emptyState" class="empty-state">Waiting for diagnostics</div>
       </section>
     </main>

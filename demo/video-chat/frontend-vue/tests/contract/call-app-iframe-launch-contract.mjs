@@ -224,8 +224,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /iframe never receives[\s\S]*primary session token/,
-  'SPRINT.md must keep the no-primary-token iframe contract in the active Whiteboard sprint',
+  /Do not expose tokens[\s\S]*media\s+frame data in diagnostics/,
+  'SPRINT.md must keep the no-token/no-media-data iframe diagnostics boundary in the active stabilization sprint',
 );
 
 console.log('[call-app-iframe-launch-contract] PASS');
