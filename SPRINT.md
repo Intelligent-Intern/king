@@ -254,6 +254,40 @@ Tickets:
     passed. No Call App availability 500/fatal/error matches appeared in the
     post-deploy log scan.
 
+- [x] OCA-09 Call Diagnostics live tail Call App
+  - Add an installable `call-diagnostics` Call App that shows WebSocket, ICE
+    host, STUN, TURN, SFU, and Call App bridge diagnostics as a live `tail -f`
+    surface inside the call.
+  - Feed the app from sanitized parent diagnostics through the existing
+    `king.call_app.iframe.v1` bridge and persist replayable log entries through
+    the Call App CRDT path so other participants see the same stream.
+  - Keep the app path-hosted under the existing Call App static route; do not
+    add DNS, certbot, SFU, Gossip, or Background work.
+  - Proof: added `demo/call-app/call-diagnostics` with manifest, MCP, health,
+    CRDT schema, sandboxed iframe runtime, JSON export, station cards, and a
+    live tail that persists replayable `diagnostic.log.append` ops through the
+    Call App CRDT bridge. The parent host now streams sanitized
+    `king:client-diagnostic` and `king:call-app-diagnostic` events through a
+    focused `callAppDiagnosticTailBridge` helper without growing
+    `CallWorkspaceView.vue`, exposing tokens, or touching SFU/Gossip/Background.
+  - Local proof: `node tests/contract/call-app-call-diagnostics-contract.mjs`,
+    `node tests/contract/call-app-package-layout-contract.mjs`,
+    `npm run test:contract:client-diagnostics`,
+    `npm run test:contract:call-apps`, `npm run build`,
+    `npm run test:contract:call-apps:sqlite`,
+    `npm run test:contract:build-size`, and `git diff --check` PASS.
+  - Deploy proof: deployed without push, DNS changes, or certbot as asset
+    `20260509121133` via sync plus direct remote Compose rebuild/restart.
+    Public runtime reports asset `20260509121133`, the app shell and
+    `/call-app/call-diagnostics/public/index.html` return HTTP 200, remote
+    Compose shows backend/ws/sfu/edge/turn running, and the running call
+    `ba3779f5-25a3-479f-874d-831903abdc63` availability returns
+    `call-diagnostics`, `planning-image`, `presentation`, `spreadsheet`,
+    `text-document`, and `whiteboard`. A transient SQLite login/catalog lock
+    appeared immediately after the install write; retry succeeded and the
+    post-stabilization log scan after `2026-05-09T12:16:20Z` had no fatal,
+    error, HTTP 50x, or database-lock matches.
+
 ## Sprint: Call Workspace Sidebars, Call Apps, And Media Stability
 
 Branch:

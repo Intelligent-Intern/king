@@ -138,6 +138,7 @@
 import { computed, ref } from 'vue';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import { CALL_APP_WORKSPACE_MINI_LIMIT, callAppWorkspaceIframeUrl } from './callAppWorkspaceState.js';
+import { createCallAppDiagnosticTailBridge } from './callAppDiagnosticTailBridge.js';
 import { createCallAppCrdtBridge } from './useCallAppCrdtBridge.js';
 import { createCallAppIframeBridge } from './useCallAppIframeBridge.js';
 
@@ -220,7 +221,7 @@ const { launchState, handleIframeLoad } = createCallAppIframeBridge({
   apiRequest: props.apiRequest,
   participantDisplayName: currentUserDisplayNameRef,
 });
-createCallAppCrdtBridge({
+const callAppCrdtBridge = createCallAppCrdtBridge({
   activeSession: activeSessionRef,
   iframeRef,
   apiRequest: props.apiRequest,
@@ -228,6 +229,11 @@ createCallAppCrdtBridge({
   currentUserId: currentUserIdRef,
   currentUserDisplayName: currentUserDisplayNameRef,
   sendSocketFrame: sendSocketFrameRef,
+});
+createCallAppDiagnosticTailBridge({
+  activeSession: activeSessionRef,
+  iframeRef,
+  postToIframe: callAppCrdtBridge.postToIframe,
 });
 const launchStatusLabel = computed(() => {
   if (launchState.value.status === 'error') return launchState.value.error || 'Call App launch failed.';

@@ -39,6 +39,8 @@ Included packages:
   export.
 - `spreadsheet`: collaborative cells, formulas, selection presence, and CSV or
   SpreadsheetML export.
+- `call-diagnostics`: shared live diagnostic tail for WebSocket, ICE, STUN,
+  TURN, SFU, and Call App bridge events.
 
 Runtime invariants:
 

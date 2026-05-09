@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="call-diagnostics">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Call Diagnostics</title>
+    <link rel="stylesheet" href="./call-diagnostics.css">
+    <script src="./call-diagnostics.js" defer></script>
+  </head>
+  <body>
+    <main class="diagnostics-shell">
+      <header class="diagnostics-header">
+        <div>
+          <p class="eyebrow">Call Diagnostics</p>
+          <h1>Live Tail</h1>
+        </div>
+        <div class="header-actions">
+          <span id="connectionBadge" class="status-pill state-waiting">Waiting</span>
+          <button id="pauseToggle" class="icon-button" type="button" aria-pressed="false" title="Pause tail">
+            <span class="pause-icon" aria-hidden="true"></span>
+          </button>
+          <button id="exportJson" class="icon-button" type="button" title="Export JSON">
+            <span class="download-icon" aria-hidden="true"></span>
+          </button>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Connection stages">
+        <article class="stage-card" data-stage="signaling">
+          <span class="stage-dot"></span>
+          <strong>WebSocket</strong>
+          <small id="stage-signaling">idle</small>
+        </article>
+        <article class="stage-card" data-stage="host">
+          <span class="stage-dot"></span>
+          <strong>ICE host</strong>
+          <small id="stage-host">idle</small>
+        </article>
+        <article class="stage-card" data-stage="stun">
+          <span class="stage-dot"></span>
+          <strong>STUN</strong>
+          <small id="stage-stun">idle</small>
+        </article>
+        <article class="stage-card" data-stage="turn">
+          <span class="stage-dot"></span>
+          <strong>TURN</strong>
+          <small id="stage-turn">idle</small>
+        </article>
+        <article class="stage-card" data-stage="sfu">
+          <span class="stage-dot"></span>
+          <strong>SFU</strong>
+          <small id="stage-sfu">idle</small>
+        </article>
+        <article class="stage-card" data-stage="callapp">
+          <span class="stage-dot"></span>
+          <strong>Call App</strong>
+          <small id="stage-callapp">idle</small>
+        </article>
+      </section>
+
+      <section class="tail-controls" aria-label="Tail filters">
+        <input id="tailSearch" type="search" autocomplete="off" placeholder="Filter">
+        <div class="filter-row" role="group" aria-label="Diagnostic filters">
+          <button class="filter-button active" type="button" data-filter="all">All</button>
+          <button class="filter-button" type="button" data-filter="error">Errors</button>
+          <button class="filter-button" type="button" data-filter="ice">ICE</button>
+          <button class="filter-button" type="button" data-filter="signaling">WS</button>
+          <button class="filter-button" type="button" data-filter="sfu">SFU</button>
+          <button class="filter-button" type="button" data-filter="callapp">Apps</button>
+        </div>
+      </section>
+
+      <section class="tail-shell" aria-label="Diagnostic log">
+        <ol id="tailList" class="tail-list"></ol>
+        <div id="emptyState" class="empty-state">Waiting for diagnostics</div>
+      </section>
+    </main>
+  </body>
+</html>
