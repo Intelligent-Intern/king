@@ -551,6 +551,24 @@ Tickets:
     remain standard avatar, uploaded avatar, or unfiltered video. The next
     deploy loop must run predeploy, deploy, prod-debug diagnostics, and
     production Chrome/Firefox browser smoke before closing.
+  - Loop 11 hardening proof: added
+    `demo/video-chat/scripts/bgf-production-browser-smoke.sh` as an
+    operator-safe runner with inert `.env.local` parsing, redacted dry-run, and
+    no deploy/certbot/DNS/SSH/compose/probe calls; hardened prod-debug so local
+    and remote read-only diagnostics avoid sourcing or passing full
+    `.env.local` secrets; hardened production browser smoke to require
+    explicit credentials, reject loopback production origins, count only 2xx
+    diagnostics posts, use actual screen-share participant diagnostics, mask
+    screenshots, redact JSON proof artifacts, and keep media prefs version 5.
+    Local proof PASS: `git diff --check`; `bash -n` for `prod-debug.sh`,
+    `deploy-smoke.sh`, and `bgf-production-browser-smoke.sh`; `node --check`
+    for Playwright config, smoke spec, harness, and contracts;
+    `bgf-production-browser-smoke-contract.mjs`;
+    `prod-debug-observability-contract.mjs`; runner dry-run with dummy deploy
+    passwords; `npm run test:predeploy:background`; and production-project
+    skip proof with `PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE=1` and no
+    `VIDEOCHAT_PRODUCTION_BROWSER_SMOKE`. BGF-07 remains open until Loop 12
+    deploy and real deployed Chrome/Firefox smoke pass.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and
