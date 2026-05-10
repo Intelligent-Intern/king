@@ -118,8 +118,20 @@ Sprint Checkboxen:
     `call-access-audit-redaction-contract.mjs`,
     `call-access-strong-mismatch-audit-redaction-contract.mjs`, and
     `git diff --check` passed.
-- [ ] IAM4-06 Extract deleted/ended/disabled terminal-state proof value from the
+- [x] IAM4-06 Extract deleted/ended/disabled terminal-state proof value from the
   deleted/disabled `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-06-deleted-disabled-extract`.
+  - Added backend terminal join runtime proof
+    `call-access-terminal-join-contract.php` / `.sh` and wired it into
+    `iam-call-access-sqlite-runtime-proof.sh`.
+  - Backend now rejects ended/disabled calls before owner, participant,
+    system-admin, or free-for-all role grants, rejects inactive registered users
+    before direct call role decisions, and keeps disabled personalized links as
+    redacted `not_found`.
+  - Proof: focused terminal SQLite proof, full
+    `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`,
+    frontend terminal contracts, PHP syntax checks, and `git diff --check`
+    passed.
 - [ ] IAM4-07 Extract duplicate-abuse device/browser proof value from
   `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
 - [ ] IAM4-08 Extract guest-list revocation proof value from
