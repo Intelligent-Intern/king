@@ -66,7 +66,7 @@ Sprint Checkboxen:
 - [ ] UX6-01 Classify dirty worktree `agent/call-app-remove-session`; prove
   whether its uncommitted remove-session UI diff is already integrated,
   extract only missing non-media value, or preserve it with evidence.
-- [ ] UX6-02 Classify dirty worktree `agent/planning-image-call-app`; compare
+- [x] UX6-02 Classify dirty worktree `agent/planning-image-call-app`; compare
   its uncommitted `image-planning` package/test diff with the integrated
   package and preserve any still-relevant non-media value.
 - [ ] UX6-03 Classify dirty worktree `agent/l15-org-admin-join-proof`; extract
