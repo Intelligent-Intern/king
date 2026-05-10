@@ -89,7 +89,7 @@ Sprint Checkboxen:
   `local/iam-e2e-cross-org-foreign-join-edges`.
 - [ ] IAM9-09 Extract or prove remaining cross-org IAM rows from
   `local/iam-e2e-cross-org-remaining-proof-2`.
-- [ ] IAM9-10 Extract or prove adjacent terminal join denials from
+- [x] IAM9-10 Extract or prove adjacent terminal join denials from
   `local/iam-e2e-deleted-ended-disabled-followup-proof-3`.
 - [ ] IAM9-11 Extract or prove deleted/ended/disabled join denials from
   `local/iam-e2e-deleted-ended-disabled-join`.
