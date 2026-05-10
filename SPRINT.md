@@ -68,7 +68,7 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [ ] IAM7-01 Extract or prove anonymous open-link lobby split from
+- [x] IAM7-01 Extract or prove anonymous open-link lobby split from
   `agent/iam-e2e-anonymous-lobby`.
 - [ ] IAM7-02 Extract or prove duplicate review email/account confirmation from
   `agent/iam-e2e-duplicate-review-email`.

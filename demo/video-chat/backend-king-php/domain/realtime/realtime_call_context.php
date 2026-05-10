@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/tenant_context.php';
+require_once __DIR__ . '/../calls/call_access_contract.php';
 require_once __DIR__ . '/../calls/call_management_contract.php';
 require_once __DIR__ . '/../calls/invite_code_contract.php';
 require_once __DIR__ . '/realtime_connection_contract.php';
@@ -176,10 +177,78 @@ SQL
             ':user_id' => $userId,
         ]);
 
-        return $statement->rowCount() > 0;
+        if ($statement->rowCount() > 0) {
+            return true;
+        }
+
+        return videochat_realtime_insert_open_access_pending_participant($pdo, $connection, $callId, $userId);
     } catch (Throwable) {
         return false;
     }
+}
+
+function videochat_realtime_insert_open_access_pending_participant(
+    PDO $pdo,
+    array $connection,
+    string $callId,
+    int $userId
+): bool {
+    $sessionId = trim((string) ($connection['session_id'] ?? ''));
+    if ($sessionId === '') {
+        return false;
+    }
+    $binding = videochat_fetch_call_access_session_binding($pdo, $sessionId);
+    if (!is_array($binding)
+        || (string) ($binding['link_kind'] ?? '') !== 'open'
+        || (string) ($binding['call_id'] ?? '') !== $callId
+        || (int) ($binding['user_id'] ?? 0) !== $userId) {
+        return false;
+    }
+
+    $identityQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT email, display_name
+FROM users
+WHERE id = :user_id
+LIMIT 1
+SQL
+    );
+    $identityQuery->execute([':user_id' => $userId]);
+    $identity = $identityQuery->fetch();
+    if (!is_array($identity)) {
+        return false;
+    }
+
+    $email = strtolower(trim((string) ($identity['email'] ?? '')));
+    if ($email === '') {
+        return false;
+    }
+    $displayName = trim((string) ($identity['display_name'] ?? ''));
+    if ($displayName === '') {
+        $displayName = $email;
+    }
+
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', 'pending', NULL, NULL)
+ON CONFLICT(call_id, email) DO UPDATE SET
+    user_id = excluded.user_id,
+    display_name = excluded.display_name,
+    source = 'internal',
+    invite_state = CASE WHEN call_participants.invite_state IN ('invited', 'pending') THEN 'pending' ELSE call_participants.invite_state END,
+    joined_at = CASE WHEN call_participants.invite_state IN ('invited', 'pending') THEN NULL ELSE call_participants.joined_at END,
+    left_at = CASE WHEN call_participants.invite_state IN ('invited', 'pending') THEN NULL ELSE call_participants.left_at END
+SQL
+    );
+    $insert->execute([
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+        ':email' => $email,
+        ':display_name' => $displayName,
+    ]);
+
+    return true;
 }
 
 function videochat_realtime_mark_call_participant_joined(callable $openDatabase, array $connection): void
