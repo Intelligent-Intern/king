@@ -63,8 +63,18 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/http/module_call_apps.php`
 
 Tickets:
-- [ ] IAM3-01 Inventory remaining IAM abuse/security-manipulation branches and
+- [x] IAM3-01 Inventory remaining IAM abuse/security-manipulation branches and
   map clean candidates to this sprint without wholesale merges.
+  - Merged worker branch `agent/iam-s3-01-inventory`.
+  - Added `iam-sprint-03-inventory-contract.mjs` pinning 22 clean,
+    not-contained IAM candidate worktrees for IAM3-02..IAM3-12, seven
+    runtime/wiring/cleanup planning sources for IAM3-13..IAM3-20, and two
+    dirty/manual IAM3-18 candidates.
+  - Dirty/manual candidates remain parked: `codex/iam-call-access-e2e-foundation`
+    is contained but dirty; `codex/iam-duplicate-cleanup-reaudit-20260509` is
+    dirty, not-contained, and conflict-marked.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM3-02 Prove forged call-access IDs, invite IDs, and call IDs are rejected
   with redacted safe states across API and browser UI.
 - [ ] IAM3-03 Prove tampered verified-context payloads cannot rebind a session,
