@@ -35,9 +35,13 @@ function assertAllDeclaredGaps20(file, selector, message) {
 }
 
 const adminFrame = await source('src/components/admin/AdminPageFrame.vue');
+const adminActionBar = await source('src/components/admin/AdminPageActionBar.vue');
+const adminSearchToolbar = await source('src/components/admin/AdminSearchToolbar.vue');
 const usersStyles = await source('src/modules/users/pages/admin/UsersView.css');
-const marketplaceStyles = await source('src/modules/marketplace/pages/AdminMarketplaceView.css');
+const usersView = await source('src/modules/users/pages/admin/UsersView.vue');
+const marketplaceView = await source('src/modules/marketplace/pages/AdminMarketplaceView.vue');
 const governanceRelationStack = await source('src/modules/governance/components/CrudRelationStack.vue');
+const governanceToolbar = await source('src/modules/governance/components/GovernanceCrudToolbar.vue');
 const calendarView = await source('src/modules/calendar/pages/CalendarView.vue');
 const appConfigEmailTexts = await source('src/modules/administration/components/AppConfigurationEmailTextsTab.vue');
 const callsAdminStyles = await source('src/domain/calls/admin/CallsView.css');
@@ -48,8 +52,8 @@ const settingsStyles = await source('src/styles/settings.css');
 const themePreviewApp = await source('src/layouts/settings/WorkspaceThemePreviewApp.vue');
 
 assertGap20(adminFrame, '.admin-page-frame-toolbar', 'shared admin search toolbar');
+assertAllDeclaredGaps20(adminActionBar, '.admin-page-action-bar', 'shared admin page action bar');
 assertGap20(usersStyles, '.search-field', 'users search field');
-assertGap20(marketplaceStyles, '.search-field', 'marketplace search field');
 assertGap20(governanceRelationStack, '.crud-relation-toolbar', 'relation picker search toolbar');
 assertGap20(appConfigEmailTexts, '.app-config-toolbar', 'app configuration email text search toolbar');
 assertGap20(callsAdminStyles, '.calls-toolbar', 'admin calls search toolbar shell');
@@ -65,8 +69,14 @@ assertGap20(themePreviewApp, '.theme-preview-toolbar', 'interactive theme previe
 assertGap20(themePreviewApp, '.theme-preview-app.compact .theme-preview-toolbar', 'compact interactive theme preview toolbar');
 assert.match(
   calendarView,
-  /\.calendar-toolbar,\s*\.calendar-directory-search\s*\{[\s\S]*?(?:^|[;\s])gap:\s*20px;/m,
+  /\.calendar-header,[\s\S]*?\.calendar-directory-search,[\s\S]*?\{[\s\S]*?(?:^|[;\s])gap:\s*20px;/m,
   'calendar search toolbars must keep 20px control spacing'
 );
+assert.match(adminActionBar, /STANDARD_SUBMIT_ICON\s*=\s*'\/assets\/orgas\/kingrt\/icons\/send\.png'/, 'shared admin action bar must default to the standard submit icon');
+assert.match(adminSearchToolbar, /AppIconButton[\s\S]*icons\/send\.png/, 'shared admin search toolbar must use the standard submit icon');
+assert.match(marketplaceView, /<AdminSearchToolbar[\s\S]*@submit="applySearchNow"/, 'marketplace CRUD toolbar must inherit the shared 20px search spacing and submit icon');
+assert.match(governanceToolbar, /AppIconButton[\s\S]*icons\/send\.png/, 'governance CRUD toolbar must use the standard submit icon');
+assert.match(usersView, /AppIconButton[\s\S]*icons\/send\.png/, 'users CRUD toolbar must use the standard submit icon');
+assert.match(appConfigEmailTexts, /AppIconButton[\s\S]*icons\/send\.png/, 'app configuration email texts toolbar must use the standard submit icon');
 
 console.log('[search-toolbar-spacing-contract] PASS');

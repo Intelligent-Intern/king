@@ -10,7 +10,7 @@
       :aria-label="actionTitle(action)"
       @click="$emit('select', action)"
     >
-      <img v-if="action.icon" class="admin-page-action-icon" :src="action.icon" alt="" />
+      <img class="admin-page-action-icon" :src="actionIcon(action)" alt="" />
       <span>{{ actionTitle(action) }}</span>
     </button>
   </nav>
@@ -37,8 +37,15 @@ const props = defineProps({
 
 defineEmits(['select']);
 
+const STANDARD_SUBMIT_ICON = '/assets/orgas/kingrt/icons/send.png';
+
 function actionTitle(action) {
   return actionBarLabel(action, t, String(action?.key || ''), props.labelParams);
+}
+
+function actionIcon(action) {
+  const icon = String(action?.icon || '').trim();
+  return icon !== '' ? icon : STANDARD_SUBMIT_ICON;
 }
 </script>
 
@@ -48,7 +55,7 @@ function actionTitle(action) {
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 20px;
 }
 
 .admin-page-action-bar .btn {
