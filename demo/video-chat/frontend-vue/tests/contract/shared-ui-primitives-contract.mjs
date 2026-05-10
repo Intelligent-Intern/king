@@ -26,6 +26,7 @@ try {
   ].join('\n');
   const callTable = readSource('src/domain/calls/components/ListTable.vue');
   const chatArchive = readSource('src/domain/calls/components/ChatArchiveModal.vue');
+  const appointmentSettings = readSource('src/domain/calls/appointment/AppointmentSettingsModal.vue');
   const adminUserEditor = readSource('src/modules/users/pages/components/UserEditorModal.vue');
   const adminUsers = readSource('src/modules/users/pages/admin/UsersView.vue');
   const shellStyles = readSource('src/styles/shell.css');
@@ -47,6 +48,10 @@ try {
   }
 
   assert.match(chatArchive, /<AppModalShell/, 'chat archive modal must stay on the shared modal shell');
+  assert.doesNotMatch(chatArchive, /common\.close/, 'chat archive modal must rely on the shared modal close affordance instead of a footer close button');
+  assert.match(appointmentSettings, /<AppModalShell/, 'appointment settings must stay on the shared modal shell');
+  assert.doesNotMatch(appointmentSettings, /common\.cancel/, 'appointment settings must rely on the shared modal close affordance instead of a footer cancel button');
+  assert.doesNotMatch(appointmentSettings, /@click="\$emit\('close'\)"/, 'appointment settings must not duplicate close handling in the footer');
   assert.match(adminUserEditor, /<AppSidePanelShell/, 'admin user editor must use the shared CRUD side panel shell');
   assert.doesNotMatch(adminUserEditor, /<AppModalShell/, 'admin user editor must not open as a centered modal');
   assert.match(adminUsers, /<AdminPageFrame/, 'admin user management must stay on the shared admin page frame');

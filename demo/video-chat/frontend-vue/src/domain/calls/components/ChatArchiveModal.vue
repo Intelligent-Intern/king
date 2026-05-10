@@ -121,7 +121,6 @@
 
     <template #footer>
       <span class="chat-archive-readonly">{{ t('chat_archive.readonly_notice') }}</span>
-      <button class="btn" type="button" @click="closeArchive">{{ t('common.close') }}</button>
     </template>
   </AppModalShell>
 </template>
@@ -628,10 +627,6 @@ watch(
   :deep(.chat-archive-footer) {
     flex-wrap: wrap;
     gap: 8px;
-  }
-
-  :deep(.chat-archive-footer .btn) {
-    width: 100%;
   }
 }
 

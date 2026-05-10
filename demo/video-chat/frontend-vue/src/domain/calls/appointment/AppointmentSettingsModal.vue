@@ -30,7 +30,6 @@
     </template>
 
     <template #footer>
-      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn btn-cyan" type="button" :disabled="saving" @click="confirm">
         {{ saving ? t('common.saving') : t('common.save') }}
       </button>
