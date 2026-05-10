@@ -16,14 +16,13 @@ Rules:
 - Do not push. Deploy only when the active sprint proof is green.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: Backlog Cleanup, Admin UX, And Governance Refactor 06
+## Sprint: IAM Remaining Proof And Branch Cleanup 07
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Completed on 2026-05-10 after local proof, no-push deploy, and post-deploy
-  diagnostics.
+- Active as of 2026-05-10 after Sprint 06 deploy.
 - Local-only integration branch. Do not push to GitHub.
 - Worker branches/worktrees must use short-lived non-`codex` names and merge
   back into the local no-push branch after proof.
@@ -31,17 +30,18 @@ Status:
   unless the user explicitly reopens them.
 
 User-facing problem:
-- The previous IAM sprint closed, but several dirty historical worktrees still
-  need classification before cleanup.
-- Governance/Admin UX backlog items remain broad and inconsistent: action bars,
-  authorization semantics, relation flows, sidebars, token styling, and page
-  headings need focused implementation/proof slices.
+- Several remaining IAM/call-access proof branches still exist locally with
+  useful test ideas, but their historical diffs are broad and stale.
+- The active branch must absorb only current missing IAM/runtime proof value,
+  keep stale branch artifacts out, and remove branch/worktree clutter only when
+  containment and clean state are proven.
 
 Sprint goal:
-- Classify the remaining dirty worktree/branch cleanup candidates without
-  losing user work.
-- Move the next Governance/Admin UX backlog batch into an active 20-checkbox
-  sprint and implement it in focused, testable slices.
+- Restore the next 20 IAM call-access test/proof candidates as focused active
+  tickets.
+- For each historical branch, classify whether the current integration already
+  contains the behavior; if not, extract the smallest current proof/runtime
+  change needed.
 - Keep video media internals and parked background work untouched.
 - Close exactly 20 tickets, then build/deploy locally without push/DNS/certbot.
 
@@ -49,6 +49,8 @@ Execution boundary:
 - No pushes.
 - No DNS or certbot automation.
 - No Background/Gossip/SFU/MediaSecurity/BTGF implementation or tests.
+- Do not merge whole historical IAM branches blindly; inspect and extract only
+  current value.
 - Do not discard dirty worktrees unless their changes are proven merged or the
   user explicitly approves removal.
 - Use worker branches/worktrees that do not start with `codex/`.
@@ -57,85 +59,52 @@ Proof anchors:
 - `BACKLOG.md`
 - `READYNESS_TRACKER.md`
 - `documentation/`
+- `demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json`
 - `demo/video-chat/frontend-vue/package.json`
 - `demo/video-chat/frontend-vue/tests/contract/`
 - `demo/video-chat/frontend-vue/tests/e2e/`
-- Governance/Admin frontend modules under `demo/video-chat/frontend-vue/src/`
-- Governance/Admin backend modules under `demo/video-chat/backend-king-php/`
+- `demo/video-chat/backend-king-php/domain/calls/`
+- `demo/video-chat/backend-king-php/domain/realtime/`
+- `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [x] UX6-01 Classify dirty worktree `agent/call-app-remove-session`; prove
-  whether its uncommitted remove-session UI diff is already integrated,
-  extract only missing non-media value, or preserve it with evidence.
-- [x] UX6-02 Classify dirty worktree `agent/planning-image-call-app`; compare
-  its uncommitted `image-planning` package/test diff with the integrated
-  package and preserve any still-relevant non-media value.
-- [x] UX6-03 Classify dirty worktree `agent/l15-org-admin-join-proof`; extract
-  only current org-admin realtime role proof that is needed for Admin/Governance
-  correctness, otherwise preserve it as parked evidence.
-- [x] UX6-04 Classify dirty worktree `codex/iam-call-access-e2e-foundation`;
-  keep it outside active implementation unless it contains deploy-smoke proof
-  needed by the current branch.
-- [x] UX6-05 Reconcile `codex/iam-duplicate-cleanup-reaudit-20260509`; clean
-  it up only if the conflict state is proven redundant with already integrated
-  IAM evidence.
-- [x] UX6-06 Implement descriptor-driven page action bars for the first
-  Governance/Admin proof surfaces: create/edit/delete/import/export/save actions
-  must be described, permission-filtered, and locally named per entity.
-- [x] UX6-07 Wire backend route authorization proof for tenant/resource grant
-  evaluation on Governance/Admin resource actions beyond simple role/path
-  checks.
-- [x] UX6-08 Normalize Governance entity semantics for Groups, Organizations,
-  Roles, Grants, Policies, Export/Import, Audit Log, Compliance, Modules, and
-  Permissions with entity-specific fields, validation, and action names.
-- [x] UX6-09 Implement the first recursive relation flow proof for User ->
-  Group -> Module -> Permission and similar entity references without stacked
-  modals.
-- [x] UX6-10 Replace row-by-row relation label fetching on the proof surfaces
-  with normalized rows, included summaries, batch summary endpoints, and
-  frontend entity caches.
-- [x] UX6-11 Harden Navigation/i18n descriptors so localized keys and structured
-  localized fields are the source of truth instead of concatenated English
-  descriptions.
-- [x] UX6-12 Add onboarding tour registry/persistence proof for per-area `?`
-  entry points, completed-tour badges, and profile display.
-- [x] UX6-13 Add profile expansion proof through the intended settings/profile
-  architecture for about, social, and contact fields.
-- [x] UX6-14 Keep CRUD search/action bars right-aligned with exactly 20px
-  spacing and the standard submit icon across the first migrated Admin
-  surfaces.
-- [x] UX6-15 Remove redundant cancel/close buttons where a right-sidebar or
-  modal already has the standard close affordance.
-- [x] UX6-16 Normalize right-sidebar forms: no border radius, no top/bottom
-  border, non-resizable body, and sticky bottom-right submit.
-- [x] UX6-17 Normalize inputs/selects to the 12 King styleguide color tokens and
-  remove hard-coded non-token colors on the migrated surfaces.
-- [x] UX6-18 Replace wrong generic create actions on readonly/system catalog
-  pages with correct entity-specific actions or no action.
-- [x] UX6-19 Prove page headings use the standard `h1` size and avoid
-  unreachable/overlapping content on the migrated Admin/Governance routes.
-- [x] UX6-20 Run final proof, build, deploy without push/DNS/certbot, collect
-  post-deploy diagnostics, and update readiness evidence.
-
-UX6-20 closure evidence:
-- Local proof passed: Governance/Admin/Profile/Onboarding/i18n contracts,
-  backend PHP syntax checks, Docker PHP user-settings/onboarding/tenant-grant
-  contracts, focused Governance/Admin Playwright proofs, `npm run build`, and
-  `npm run test:contract:build-size`.
-- One final proof finding was fixed before deploy:
-  `CrudRelationStack.vue` now uses the standard `var(--bg-input)` token for
-  the relation-stack search input.
-- Deploy command ran from `demo/video-chat` with
-  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
-  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
-  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`; no push, DNS write, or Certbot issuance was
-  performed.
-- Post-deploy diagnostics: runtime/asset version `20260510050435`, production
-  app/API/CDN/call-app hosts reachable, planning-image and call-diagnostics
-  Call-App assets HTTP 200, authenticated
-  `/api/calls/{id}/call-apps/available` HTTP 200 with six apps, and recent
-  Backend/WS/Edge logs showed no Fatal/Exception/HTTP 500/Call-App
-  availability errors.
-- Expected parked-boundary diagnostics remain unchanged: unauthenticated
-  protected APIs return auth failures, `sfu.kingrt.com/sfu` returns 404 because
-  SFU is disabled/manual, and TURN logs contain external peer TCP resets.
+- [ ] IAM7-01 Extract or prove anonymous open-link lobby split from
+  `agent/iam-e2e-anonymous-lobby`.
+- [ ] IAM7-02 Extract or prove duplicate review email/account confirmation from
+  `agent/iam-e2e-duplicate-review-email`.
+- [ ] IAM7-03 Extract or prove owner-transfer and temporary-moderator call
+  management from `agent/iam-e2e-owner-transfer-temp-mods`.
+- [ ] IAM7-04 Extract or prove personalized call-access identity handling from
+  `agent/iam-e2e-personalized-identity`.
+- [ ] IAM7-05 Extract or prove IAM audit-log completeness from
+  `local/iam-e2e-audit-log-completeness`.
+- [ ] IAM7-06 Extract or prove calendar invitation edge safe states from
+  `local/iam-e2e-calendar-edge-safe-states`.
+- [ ] IAM7-07 Extract or prove call-access safe-screen privacy from
+  `local/iam-e2e-call-access-safe-screen-final`.
+- [ ] IAM7-08 Extract or prove Call App entitlement revocation from
+  `local/iam-e2e-call-app-entitlement-revocation`.
+- [ ] IAM7-09 Extract or prove Call App launch-token reconnect validation from
+  `local/iam-e2e-call-app-launch-token-reconnect`.
+- [ ] IAM7-10 Extract or prove cross-organization foreign join edges from
+  `local/iam-e2e-cross-org-foreign-join-edges`.
+- [ ] IAM7-11 Extract or prove deleted/ended call join hardening from
+  `local/iam-e2e-deleted-ended-join-hardening`.
+- [ ] IAM7-12 Extract or prove account update/email confirmation race hardening
+  from `local/iam-e2e-email-confirmation-race-hardening`.
+- [ ] IAM7-13 Extract or prove foreign link review audit scoping from
+  `local/iam-e2e-foreign-link-review-audit`.
+- [ ] IAM7-14 Extract or prove identity mismatch review flow from
+  `local/iam-e2e-identity-mismatch-review-flow`.
+- [ ] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
+  `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
+- [ ] IAM7-16 Extract or prove link invalidation active states from
+  `local/iam-e2e-link-invalidation-active-state`.
+- [ ] IAM7-17 Extract or prove lobby management moderator rights from
+  `local/iam-e2e-lobby-management-moderator-rights`.
+- [ ] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
+  from `local/iam-e2e-local-run-docs-proof-20260509`.
+- [ ] IAM7-19 Extract or prove organization-removal active privilege downgrade
+  from `local/iam-e2e-org-removal-active-privilege-downgrade`.
+- [ ] IAM7-20 Extract or prove owner-absence realtime sync from
+  `local/iam-e2e-owner-absence-realtime-sync`.
