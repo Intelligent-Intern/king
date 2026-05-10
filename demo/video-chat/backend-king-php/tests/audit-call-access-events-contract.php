@@ -124,6 +124,38 @@ try {
     videochat_audit_call_access_events_assert(!(bool) ($wrongSession['ok'] ?? true), 'wrong account should be denied');
     videochat_audit_call_access_events_assert((string) ($wrongSession['reason'] ?? '') === 'forbidden', 'wrong account denial should be forbidden');
     videochat_audit_call_access_events_assert($wrongSessionIssuerCalls === 0, 'wrong account must not allocate a session id');
+    foreach ([
+        'call_access_host_verification_succeeded' => 'correct_host_name',
+        'call_access_host_verification_failed' => 'wrong_host_name',
+        'call_access_host_name_rejected' => 'wrong_host_name',
+    ] as $legacyHostEventType => $hostOutcome) {
+        $hostNameVerified = $hostOutcome === 'correct_host_name';
+        $canonicalHostEventType = $hostNameVerified
+            ? 'call_access_host_name_verified'
+            : 'call_access_host_name_verification_failed';
+        $hostAliasAudit = videochat_audit_record_event($pdo, [
+            'tenant_id' => $tenantId,
+            'event_type' => $legacyHostEventType,
+            'actor_user_id' => $adminUserId,
+            'target_user_id' => $standardUserId,
+            'call_id' => $personalCallId,
+            'resource_type' => 'call_access_host_verification',
+            'resource_fingerprint' => videochat_audit_fingerprint($personalAccessId),
+            'payload' => [
+                'audit_scope' => 'iam_call_access',
+                'action' => 'verify_host_name',
+                'outcome' => $hostOutcome,
+                'host_name_verified' => $hostNameVerified,
+                'canonical_event_type' => $canonicalHostEventType,
+                'legacy_event_types' => [$legacyHostEventType],
+                'host_name_logged' => false,
+                'raw_link_identifier_logged' => false,
+                'raw_session_identifier_logged' => false,
+                'foreign_account_data_logged' => false,
+            ],
+        ]);
+        videochat_audit_call_access_events_assert((bool) ($hostAliasAudit['ok'] ?? false), "host alias audit should record {$legacyHostEventType}");
+    }
 
     $openTitle = 'Audit Log Completeness Open Link Title';
     $createOpen = videochat_create_call($pdo, $adminUserId, [
@@ -163,6 +195,8 @@ try {
         'call_access_link_opened',
         'temporary_account_created',
         'call_access_account_compared',
+        'call_access_host_name_verified',
+        'call_access_host_name_verification_failed',
     ] as $eventType) {
         videochat_audit_call_access_events_assert(isset($eventsByType[$eventType]), "audit event missing: {$eventType}");
     }
@@ -194,6 +228,25 @@ try {
     }
     videochat_audit_call_access_events_assert(isset($comparisonOutcomes['matched']), 'matched account comparison audit missing');
     videochat_audit_call_access_events_assert(isset($comparisonOutcomes['strong_mismatch']), 'strong mismatch account comparison audit missing');
+    $hostVerifiedPayload = (array) ((($eventsByType['call_access_host_name_verified'][0] ?? [])['payload'] ?? []));
+    videochat_audit_call_access_events_assert((string) ($hostVerifiedPayload['canonical_event_type'] ?? '') === 'call_access_host_name_verified', 'host success alias should persist canonical event marker');
+    videochat_audit_call_access_events_assert((bool) ($hostVerifiedPayload['host_name_logged'] ?? true) === false, 'host success alias must not log host name');
+    $hostFailedPayload = (array) ((($eventsByType['call_access_host_name_verification_failed'][0] ?? [])['payload'] ?? []));
+    videochat_audit_call_access_events_assert((string) ($hostFailedPayload['canonical_event_type'] ?? '') === 'call_access_host_name_verification_failed', 'host failure alias should persist canonical event marker');
+    videochat_audit_call_access_events_assert((bool) ($hostFailedPayload['host_name_logged'] ?? true) === false, 'host failure alias must not log host name');
+    foreach ([
+        'call_access_host_verification_succeeded' => 'call_access_host_name_verified',
+        'call_access_host_verification_failed' => 'call_access_host_name_verification_failed',
+        'call_access_host_name_rejected' => 'call_access_host_name_verification_failed',
+    ] as $legacyHostEventType => $canonicalHostEventType) {
+        $aliasEvents = videochat_audit_fetch_events($pdo, [
+            'tenant_id' => $tenantId,
+            'event_type' => $legacyHostEventType,
+            'limit' => 20,
+        ]);
+        $aliasTypes = array_map(static fn (array $event): string => (string) ($event['event_type'] ?? ''), $aliasEvents);
+        videochat_audit_call_access_events_assert(in_array($canonicalHostEventType, $aliasTypes, true), "host alias filter {$legacyHostEventType} should read canonical {$canonicalHostEventType}");
+    }
 
     $encodedEvents = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     videochat_audit_call_access_events_assert(is_string($encodedEvents), 'audit events should JSON encode');
