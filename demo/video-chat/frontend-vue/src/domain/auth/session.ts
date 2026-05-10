@@ -89,6 +89,8 @@ export const sessionState = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
+  profileContactEmail: '',
+  profileContactPhone: '',
   webAppNotificationsEnabled: false,
   webAppNotificationSoundEnabled: true,
   webAppNotificationCallInvitesEnabled: true,
@@ -150,6 +152,8 @@ function resetUserFields() {
   sessionState.linkedinUrl = '';
   sessionState.xUrl = '';
   sessionState.youtubeUrl = '';
+  sessionState.profileContactEmail = '';
+  sessionState.profileContactPhone = '';
   sessionState.webAppNotificationsEnabled = false;
   sessionState.webAppNotificationSoundEnabled = true;
   sessionState.webAppNotificationCallInvitesEnabled = true;
@@ -201,6 +205,8 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.linkedinUrl = normalizeString(user.linkedin_url);
   sessionState.xUrl = normalizeString(user.x_url);
   sessionState.youtubeUrl = normalizeString(user.youtube_url);
+  sessionState.profileContactEmail = normalizeString(user.profile_contact_email);
+  sessionState.profileContactPhone = normalizeString(user.profile_contact_phone);
   sessionState.webAppNotificationsEnabled = normalizeBooleanPreference(user.web_app_notifications_enabled, false);
   sessionState.webAppNotificationSoundEnabled = normalizeBooleanPreference(user.web_app_notification_sound_enabled, true);
   sessionState.webAppNotificationCallInvitesEnabled = normalizeBooleanPreference(user.web_app_notification_call_invites_enabled, true);

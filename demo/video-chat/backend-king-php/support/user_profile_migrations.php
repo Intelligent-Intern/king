@@ -58,5 +58,12 @@ SQL,
                 'ALTER TABLE users ADD COLUMN web_app_notification_chat_mentions_enabled INTEGER NOT NULL DEFAULT 1 CHECK (web_app_notification_chat_mentions_enabled IN (0, 1))',
             ],
         ],
+        56 => [
+            'name' => '0056_user_profile_contact_fields',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN profile_contact_email TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN profile_contact_phone TEXT NOT NULL DEFAULT ''",
+            ],
+        ],
     ];
 }

@@ -22,6 +22,8 @@ function videochat_allowed_user_settings_patch_fields(): array
         'linkedin_url',
         'x_url',
         'youtube_url',
+        'profile_contact_email',
+        'profile_contact_phone',
         'web_app_notifications_enabled',
         'web_app_notification_sound_enabled',
         'web_app_notification_call_invites_enabled',
@@ -162,6 +164,47 @@ function videochat_validate_profile_url(mixed $value, array $allowedHosts): arra
     return ['ok' => false, 'url' => '', 'reason' => 'host_not_allowed'];
 }
 
+function videochat_validate_profile_contact_email(mixed $value): array
+{
+    if ($value === null) {
+        return ['ok' => true, 'email' => '', 'reason' => 'empty'];
+    }
+    if (!is_string($value)) {
+        return ['ok' => false, 'email' => '', 'reason' => 'must_be_string_or_null'];
+    }
+
+    $email = strtolower(trim($value));
+    if ($email === '') {
+        return ['ok' => true, 'email' => '', 'reason' => 'empty'];
+    }
+    if (strlen($email) > 320) {
+        return ['ok' => false, 'email' => '', 'reason' => 'too_long'];
+    }
+    if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        return ['ok' => false, 'email' => '', 'reason' => 'must_be_valid_email'];
+    }
+
+    return ['ok' => true, 'email' => $email, 'reason' => 'ok'];
+}
+
+function videochat_validate_profile_contact_phone(mixed $value): array
+{
+    $phone = videochat_clean_profile_text($value, 80);
+    if (!(bool) ($phone['ok'] ?? false)) {
+        return ['ok' => false, 'phone' => '', 'reason' => (string) ($phone['reason'] ?? 'invalid')];
+    }
+
+    $normalized = (string) ($phone['value'] ?? '');
+    if ($normalized === '') {
+        return ['ok' => true, 'phone' => '', 'reason' => 'empty'];
+    }
+    if (preg_match('/^[0-9+().\- ]{3,80}$/', $normalized) !== 1) {
+        return ['ok' => false, 'phone' => '', 'reason' => 'must_be_phone_text'];
+    }
+
+    return ['ok' => true, 'phone' => $normalized, 'reason' => 'ok'];
+}
+
 /**
  * @return array<int, string>
  */
@@ -200,6 +243,8 @@ function videochat_supported_user_date_formats(): array
  *   linkedin_url: string,
  *   x_url: string,
  *   youtube_url: string,
+ *   profile_contact_email: string,
+ *   profile_contact_phone: string,
  *   web_app_notifications_enabled: bool,
  *   web_app_notification_sound_enabled: bool,
  *   web_app_notification_call_invites_enabled: bool,
@@ -232,6 +277,8 @@ SELECT
     users.linkedin_url,
     users.x_url,
     users.youtube_url,
+    users.profile_contact_email,
+    users.profile_contact_phone,
     users.web_app_notifications_enabled,
     users.web_app_notification_sound_enabled,
     users.web_app_notification_call_invites_enabled,
@@ -273,6 +320,8 @@ SQL
         'linkedin_url' => is_string($row['linkedin_url'] ?? null) ? (string) $row['linkedin_url'] : '',
         'x_url' => is_string($row['x_url'] ?? null) ? (string) $row['x_url'] : '',
         'youtube_url' => is_string($row['youtube_url'] ?? null) ? (string) $row['youtube_url'] : '',
+        'profile_contact_email' => is_string($row['profile_contact_email'] ?? null) ? (string) $row['profile_contact_email'] : '',
+        'profile_contact_phone' => is_string($row['profile_contact_phone'] ?? null) ? (string) $row['profile_contact_phone'] : '',
         'web_app_notifications_enabled' => ((int) ($row['web_app_notifications_enabled'] ?? 0)) === 1,
         'web_app_notification_sound_enabled' => ((int) ($row['web_app_notification_sound_enabled'] ?? 1)) === 1,
         'web_app_notification_call_invites_enabled' => ((int) ($row['web_app_notification_call_invites_enabled'] ?? 1)) === 1,
@@ -420,6 +469,24 @@ function videochat_validate_user_settings_patch(array $payload, ?PDO $pdo = null
         }
     }
 
+    if (array_key_exists('profile_contact_email', $payload)) {
+        $contactEmail = videochat_validate_profile_contact_email($payload['profile_contact_email']);
+        if (!(bool) ($contactEmail['ok'] ?? false)) {
+            $errors['profile_contact_email'] = (string) ($contactEmail['reason'] ?? 'invalid');
+        } else {
+            $data['profile_contact_email'] = (string) ($contactEmail['email'] ?? '');
+        }
+    }
+
+    if (array_key_exists('profile_contact_phone', $payload)) {
+        $contactPhone = videochat_validate_profile_contact_phone($payload['profile_contact_phone']);
+        if (!(bool) ($contactPhone['ok'] ?? false)) {
+            $errors['profile_contact_phone'] = (string) ($contactPhone['reason'] ?? 'invalid');
+        } else {
+            $data['profile_contact_phone'] = (string) ($contactPhone['phone'] ?? '');
+        }
+    }
+
     foreach ([
         'web_app_notifications_enabled',
         'web_app_notification_sound_enabled',
@@ -503,6 +570,8 @@ SET display_name = :display_name,
     linkedin_url = :linkedin_url,
     x_url = :x_url,
     youtube_url = :youtube_url,
+    profile_contact_email = :profile_contact_email,
+    profile_contact_phone = :profile_contact_phone,
     web_app_notifications_enabled = :web_app_notifications_enabled,
     web_app_notification_sound_enabled = :web_app_notification_sound_enabled,
     web_app_notification_call_invites_enabled = :web_app_notification_call_invites_enabled,
@@ -526,6 +595,12 @@ SQL
         ':linkedin_url' => array_key_exists('linkedin_url', $data) ? (string) $data['linkedin_url'] : (string) ($existing['linkedin_url'] ?? ''),
         ':x_url' => array_key_exists('x_url', $data) ? (string) $data['x_url'] : (string) ($existing['x_url'] ?? ''),
         ':youtube_url' => array_key_exists('youtube_url', $data) ? (string) $data['youtube_url'] : (string) ($existing['youtube_url'] ?? ''),
+        ':profile_contact_email' => array_key_exists('profile_contact_email', $data)
+            ? (string) $data['profile_contact_email']
+            : (string) ($existing['profile_contact_email'] ?? ''),
+        ':profile_contact_phone' => array_key_exists('profile_contact_phone', $data)
+            ? (string) $data['profile_contact_phone']
+            : (string) ($existing['profile_contact_phone'] ?? ''),
         ':web_app_notifications_enabled' => array_key_exists('web_app_notifications_enabled', $data)
             ? ((bool) $data['web_app_notifications_enabled'] ? 1 : 0)
             : (((bool) ($existing['web_app_notifications_enabled'] ?? false)) ? 1 : 0),
@@ -730,6 +805,8 @@ function videochat_user_settings_payload(array $userSettings): array
         'linkedin_url' => (string) ($userSettings['linkedin_url'] ?? ''),
         'x_url' => (string) ($userSettings['x_url'] ?? ''),
         'youtube_url' => (string) ($userSettings['youtube_url'] ?? ''),
+        'profile_contact_email' => (string) ($userSettings['profile_contact_email'] ?? ''),
+        'profile_contact_phone' => (string) ($userSettings['profile_contact_phone'] ?? ''),
         'web_app_notifications_enabled' => (bool) ($userSettings['web_app_notifications_enabled'] ?? false),
         'web_app_notification_sound_enabled' => (bool) ($userSettings['web_app_notification_sound_enabled'] ?? true),
         'web_app_notification_call_invites_enabled' => (bool) ($userSettings['web_app_notification_call_invites_enabled'] ?? true),

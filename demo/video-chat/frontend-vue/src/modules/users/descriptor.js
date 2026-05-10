@@ -39,6 +39,28 @@ export default {
       roles: ['admin', 'user'],
       order: 10,
       required_permissions: [],
+      source_path: 'layouts/settings/WorkspaceAboutSettings.vue',
+      loader: () => import('../../layouts/settings/WorkspaceAboutSettings.vue'),
+      profile_field_groups: [
+        {
+          key: 'about',
+          label: 'About',
+          label_key: 'settings.profile_about_section',
+          fields: ['display_name', 'avatar_path', 'about_me'],
+        },
+        {
+          key: 'social',
+          label: 'Social',
+          label_key: 'settings.profile_social_section',
+          fields: ['linkedin_url', 'x_url', 'youtube_url'],
+        },
+        {
+          key: 'contact',
+          label: 'Contact',
+          label_key: 'settings.profile_contact_section',
+          fields: ['profile_contact_email', 'profile_contact_phone'],
+        },
+      ],
     },
     {
       key: 'personal.credentials',
@@ -46,6 +68,8 @@ export default {
       roles: ['admin', 'user'],
       order: 20,
       required_permissions: [],
+      source_path: 'layouts/settings/WorkspaceCredentialsSettings.vue',
+      loader: () => import('../../layouts/settings/WorkspaceCredentialsSettings.vue'),
     },
     {
       key: 'personal.notifications',

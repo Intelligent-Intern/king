@@ -15,7 +15,9 @@ export function normalizeModuleDescriptor(descriptor) {
     catalog: normalizeCatalogMetadata(source.catalog, moduleKey),
     routes: Array.isArray(source.routes) ? [...source.routes] : [],
     navigation: Array.isArray(source.navigation) ? [...source.navigation] : [],
-    settings_panels: Array.isArray(source.settings_panels) ? [...source.settings_panels] : [],
+    settings_panels: Array.isArray(source.settings_panels)
+      ? source.settings_panels.map(normalizeSettingsPanelMetadata)
+      : [],
     i18n_namespaces: Array.isArray(source.i18n_namespaces) ? [...source.i18n_namespaces] : [],
   });
 }
@@ -51,6 +53,34 @@ function normalizeAccessMetadata(access) {
     supports_time_limited_grants: source.supports_time_limited_grants !== false,
     default_expires_at: typeof source.default_expires_at === 'string' ? source.default_expires_at.trim() : null,
   });
+}
+
+function normalizeProfileFieldGroups(groups) {
+  if (!Array.isArray(groups)) return [];
+  return groups
+    .map((group) => {
+      const source = group && typeof group === 'object' ? group : {};
+      const key = typeof source.key === 'string' ? source.key.trim() : '';
+      const fields = Array.isArray(source.fields)
+        ? [...new Set(source.fields.map((field) => String(field || '').trim()).filter(Boolean))]
+        : [];
+      if (key === '' || fields.length === 0) return null;
+      return Object.freeze({
+        key,
+        label: typeof source.label === 'string' ? source.label.trim() : '',
+        label_key: typeof source.label_key === 'string' ? source.label_key.trim() : '',
+        fields,
+      });
+    })
+    .filter(Boolean);
+}
+
+function normalizeSettingsPanelMetadata(panel) {
+  const source = panel && typeof panel === 'object' ? panel : {};
+  return {
+    ...source,
+    profile_field_groups: normalizeProfileFieldGroups(source.profile_field_groups),
+  };
 }
 
 export function createModuleRegistry(descriptors = []) {
