@@ -59,14 +59,20 @@ requireMatch(
 
 requireMatch(
   appointmentBooking,
-  /INSERT INTO call_participants[\s\S]*:source' => 'external'[\s\S]*:invite_state' => 'invited'/,
-  'calendar invitee must start as an external invited participant, not as a tenant member',
+  /function videochat_create_calendar_invitation_guest_user[\s\S]*videochat_create_guest_user_for_call_access[\s\S]*DELETE FROM tenant_memberships[\s\S]*videochat_fetch_active_user_for_call_access\(\$pdo, \$userId, null, \$tenantId, false\)/,
+  'calendar invitee must be isolated into a temporary guest account without tenant membership',
 );
 
 requireMatch(
   appointmentBooking,
-  /INSERT INTO call_access_links\([\s\S]*id, call_id, participant_user_id, participant_email[\s\S]*:id' => \$accessId[\s\S]*:call_id' => \$callId[\s\S]*:participant_email' => \(string\) \$data\['email'\]/,
-  'calendar invite join links must bind the generated access id to exactly the generated call and invitee email',
+  /INSERT INTO call_participants[\s\S]*':user_id' => \$temporaryUserId[\s\S]*':email' => \$bookingEmail[\s\S]*':source' => 'internal'[\s\S]*':invite_state' => 'invited'/,
+  'calendar invitee must start as an internalized temporary invited participant, not as a tenant member',
+);
+
+requireMatch(
+  appointmentBooking,
+  /INSERT INTO call_access_links\([\s\S]*id, call_id, participant_user_id, participant_email[\s\S]*:id' => \$accessId[\s\S]*:call_id' => \$callId[\s\S]*:participant_user_id' => \$temporaryUserId[\s\S]*:participant_email' => \$bookingEmail/,
+  'calendar invite join links must bind the generated access id to the generated call, temporary user, and invitee email metadata',
 );
 
 requireMatch(

@@ -128,6 +128,26 @@ assert.match(
   /active organization switch must not mint organization B membership[\s\S]*tenant_membership_inactive/s,
   'backend cross-org contract must prove active-org switch does not create membership',
 );
+assert.match(
+  backendCrossOrgContract,
+  /organization A admin should access same-organization call[\s\S]*organization A admin rights must not cross into organization B calls/s,
+  'backend cross-org contract must prove organization-admin rights stay inside the owning organization',
+);
+assert.match(
+  backendCrossOrgContract,
+  /stale organization admin membership must be re-read before call administration[\s\S]*stale organization admin must not keep invite-only call access/s,
+  'backend cross-org contract must prove stale organization membership does not keep call administration rights',
+);
+assert.match(
+  backendCrossOrgContract,
+  /foreign verified context should conflict[\s\S]*foreign verified context response[\s\S]*foreign verified context denial must not persist a call access session/s,
+  'backend cross-org contract must prove foreign verified context fails closed without persisting a session',
+);
+assert.match(
+  backendCrossOrgContract,
+  /Organization B Invite Only[\s\S]*cross-org-b-owner@example\.test[\s\S]*Org B Owner[\s\S]*foreign verified context response/s,
+  'backend cross-org contract must prove foreign verified context responses do not leak private target data',
+);
 assert.ok(
   (seedMatrix.scenarios || []).some((scenario) => scenario?.key === crossOrgDenied.key),
   'seed matrix must publish the cross-org denial scenario for downstream E2E use',

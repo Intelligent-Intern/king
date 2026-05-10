@@ -108,7 +108,9 @@ function lobbyCommand(state, actorUserId, payload) {
 }
 
 try {
-  const callManagement = readText('demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
+  const callManagementEntrypoint = readText('demo/video-chat/backend-king-php/domain/calls/call_management.php');
+  const callManagementQuery = readText('demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
+  const callManagementOwnerTransfer = readText('demo/video-chat/backend-king-php/domain/calls/call_management_owner_transfer.php');
   const realtimeContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
   const realtimeLobby = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby.php');
   const realtimeLobbySecurity = readText('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
@@ -147,14 +149,20 @@ try {
     'call-access admin-prevention proof must keep link-issued users from gaining tenant/admin powers',
   );
 
-  const canAdministerBody = functionBody(callManagement, 'videochat_can_administer_call');
+  assert.match(
+    callManagementEntrypoint,
+    /require_once __DIR__ \. '\/call_management_owner_transfer\.php';/,
+    'call management entrypoint must load the focused owner-transfer extraction',
+  );
+
+  const canAdministerBody = functionBody(callManagementQuery, 'videochat_can_administer_call');
   assert.match(
     canAdministerBody,
     /videochat_can_edit_call\(\$authRole, \$authUserId, \$ownerUserId, \$pdo\)[\s\S]*videochat_user_is_call_moderator\(\$pdo, \$callId, \$authUserId\)[\s\S]*videochat_user_is_organization_admin_for_call\(\$pdo, \$callId, \$authUserId, \$tenantId\)/,
     'call administration must include owner, call-moderator, and organization-admin sources without conflating them',
   );
 
-  const updateRoleBody = functionBody(callManagement, 'videochat_update_call_participant_role');
+  const updateRoleBody = functionBody(callManagementOwnerTransfer, 'videochat_update_call_participant_role');
   assert.match(
     updateRoleBody,
     /\$normalizedTargetRole = videochat_normalize_call_participant_role\(\$targetRole, ''\);[\s\S]*must_be_owner_or_moderator_or_participant/,
@@ -162,7 +170,7 @@ try {
   );
   assert.match(
     updateRoleBody,
-    /if \(\$normalizedTargetRole === 'owner'\) \{[\s\S]*if \(!\$isOwner && !\$isAdmin\)[\s\S]*owner_transfer_requires_current_owner[\s\S]*\} elseif \(\$targetUserId === \$currentOwnerUserId\) \{[\s\S]*cannot_change_current_owner_role/s,
+    /if \(\$normalizedTargetRole === 'owner'\) \{[\s\S]*if \(!\$isOwner && !\$isSystemAdmin\)[\s\S]*owner_transfer_requires_current_owner[\s\S]*\} elseif \(\$targetUserId === \$currentOwnerUserId\) \{[\s\S]*cannot_change_current_owner_role/s,
     'temporary moderators must not be able to transfer ownership or demote the current owner',
   );
   assert.match(
