@@ -178,6 +178,17 @@ function videochat_issue_session_for_call_access(
             'session_id' => $verifiedSessionId,
             'stage' => 'verified_context',
         ]);
+        if (function_exists('videochat_call_access_record_duplicate_personalized_link_review')) {
+            videochat_call_access_record_duplicate_personalized_link_review(
+                $pdo,
+                $accessLink,
+                $call,
+                $targetUser,
+                $verifiedUserId,
+                'session_verified_context',
+                ['session_id' => $verifiedSessionId]
+            );
+        }
 
         return [
             'ok' => false,
@@ -195,6 +206,40 @@ function videochat_issue_session_for_call_access(
             'stage' => 'session_authentication',
             'host_name_verified' => false,
         ]);
+        if (function_exists('videochat_call_access_record_duplicate_personalized_link_review')) {
+            videochat_call_access_record_duplicate_personalized_link_review(
+                $pdo,
+                $accessLink,
+                $call,
+                $targetUser,
+                $authenticatedUserId,
+                'session_host_verification',
+                ['session_id' => $authenticatedSessionId]
+            );
+        }
+
+        if ($hostName !== '' && function_exists('videochat_call_access_host_verification_rate_limit')) {
+            $hostRate = videochat_call_access_host_verification_rate_limit($pdo, $accessLink, $call, $authenticatedUserId);
+            if (!(bool) ($hostRate['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'reason' => 'rate_limited',
+                    'errors' => ['host_name' => 'rate_limited'],
+                    'session' => null,
+                    'user' => null,
+                    'access_link' => null,
+                    'call' => null,
+                ];
+            }
+            videochat_call_access_record_host_verification_attempt(
+                $pdo,
+                $accessLink,
+                $call,
+                $authenticatedUserId,
+                $hostName,
+                'wrong_host_name'
+            );
+        }
 
         return [
             'ok' => false,
