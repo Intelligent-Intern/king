@@ -342,6 +342,17 @@ Current Loop Notes:
   `iam-call-access-seeding.matrix.json`, unrelated to the deploy fatal and not
   folded into this emergency deploy fix. GSP01-20 remains open until the
   second deploy and 5 to 10 diagnostics loops pass.
+- GSP01-20 deploy attempt 2: containers started and public runtime/version were
+  healthy, but the deploy failed at the `ice-servers` probe with HTTP 500
+  `auth_backend_error`. Remote logs showed the grouped root cause as
+  `Undefined variable $hostVerifiedSelect` in
+  `domain/calls/call_access_contract.php:167`, producing malformed SQL
+  `near ","` and breaking REST/session/WebSocket auth. The fix defines the
+  optional `host_verified_at` select fragment for both schemas with and without
+  that column. Verified with PHP lint, `module_realtime.php` load,
+  `call-access-binding-host-verified-select-contract.mjs`, and a Docker
+  `pdo_sqlite` SQL smoke that prepares and executes
+  `videochat_validate_call_access_session_binding()` against minimal tables.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
