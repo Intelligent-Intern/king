@@ -676,6 +676,7 @@ const {
   applyGossipTopologyHint,
   getAssignedGossipNeighborCount,
   handleGossipNeighborSignal,
+  ensureGossipServerRelaySocket,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -690,6 +691,14 @@ const {
   },
   policy: CALL_STABILITY_POLICY,
 });
+watch(
+  () => [connectionState.value, activeRoomId.value, activeSocketCallId.value, currentUserId.value],
+  () => {
+    if (connectionState.value !== 'online') return;
+    ensureGossipServerRelaySocket();
+  },
+  { immediate: true }
+);
 const workspaceForegroundRecovery = createWorkspaceForegroundRecoveryController({
   connectSocket: () => connectSocket(),
   getArmed: () => workspaceReconnectAfterForeground, getConnectionState: () => connectionState.value,
