@@ -595,6 +595,7 @@ function normalizeChatMessage(payload) {
       role: normalizeRole(sender.role),
     },
     server_time: String(message.server_time || payload?.time || new Date().toISOString()),
+    seq: Number(message.seq || payload?.seq || 0) || 0,
     client_message_id: message.client_message_id ?? null,
     attachments,
   };
@@ -629,6 +630,12 @@ function appendChatMessage(payload) {
   }
 
   bucket.push(message);
+  bucket.sort((left, right) => {
+    const leftSeq = Number(left.seq || 0) || 0;
+    const rightSeq = Number(right.seq || 0) || 0;
+    if (leftSeq > 0 && rightSeq > 0) return leftSeq - rightSeq;
+    return String(left.server_time || '').localeCompare(String(right.server_time || ''));
+  });
   if (bucket.length > 240) {
     bucket.splice(0, bucket.length - 240);
   }
