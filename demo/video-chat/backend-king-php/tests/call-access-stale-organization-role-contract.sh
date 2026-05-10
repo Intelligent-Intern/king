@@ -8,8 +8,9 @@ CONTRACT="${SCRIPT_DIR}/call-access-stale-organization-role-contract.php"
 "${PHP_BIN}" -l "${CONTRACT}" >/dev/null
 
 if ! "${PHP_BIN}" -m | grep -qi "pdo_sqlite"; then
-  echo "[call-access-stale-organization-role-contract] SKIP: pdo_sqlite is not available for ${PHP_BIN}" >&2
-  exit 0
+  echo "[call-access-stale-organization-role-contract] Host PHP lacks pdo_sqlite; using IAM3-15 Docker runtime proof" >&2
+  IAM3_15_CONTRACTS="call-access-stale-organization-role-contract.php" "${SCRIPT_DIR}/call-access-cross-org-stale-role-docker-proof.sh"
+  exit $?
 fi
 
 "${PHP_BIN}" "${CONTRACT}"
