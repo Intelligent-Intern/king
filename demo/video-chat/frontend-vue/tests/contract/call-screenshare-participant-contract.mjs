@@ -11,6 +11,7 @@ import {
   screenShareOwnerOrUserId,
   screenShareUserIdForOwner,
 } from '../../src/domain/realtime/screenShareIdentity.js';
+import { screenShareGossipFrameFromEncodedFrame } from '../../src/domain/realtime/local/screenShareGossipFrame.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -22,10 +23,16 @@ const server = await createServer({
 });
 const { selectCallLayoutParticipants } = await server.ssrLoadModule('/src/domain/realtime/layout/strategies.ts');
 const { createVideoFullscreenToggle } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.ts');
+const { mergeScreenShareParticipantRows } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/screenShareParticipants.ts');
+const {
+  gossipFrameMessageFromEncodedFrame,
+  sfuFrameFromGossipMessage,
+} = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/gossipMediaFrameEnvelope.ts');
 await server.close();
 
 const ownerUserId = 42;
 const screenUserId = screenShareUserIdForOwner(ownerUserId);
+const nowMs = 1_000_000;
 assert.ok(screenUserId > ownerUserId, 'screen share participant uses a synthetic positive user id');
 assert.ok(isScreenShareUserId(screenUserId), 'synthetic screen share user id is recognized');
 assert.equal(screenShareOwnerOrUserId(screenUserId), ownerUserId, 'synthetic screen share ids resolve back to the real owner id');
@@ -68,7 +75,50 @@ assert.equal(alreadySyntheticIdentity.isScreenShare, true, 'already synthetic sc
 assert.equal(alreadySyntheticIdentity.ownerUserId, ownerUserId, 'already synthetic screen-share publisher ids resolve to the real owner');
 assert.equal(alreadySyntheticIdentity.userId, screenUserId, 'already synthetic screen-share publisher ids must not be offset twice');
 
-const nowMs = 1_000_000;
+const screenShareGossipFrame = screenShareGossipFrameFromEncodedFrame({
+  publisherId: String(ownerUserId),
+  publisherUserId: String(ownerUserId),
+  trackId: 'screen-track',
+  timestamp: nowMs,
+  type: 'keyframe',
+  codecId: 'wlvc_v1',
+  runtimeId: 'wlvc_sfu',
+  data: new Uint8Array([1, 2, 3]).buffer,
+}, ownerUserId);
+assert.equal(screenShareGossipFrame.publisherId, `screen_share:${ownerUserId}`, 'screen-share gossip publisher id is stream-scoped');
+assert.equal(screenShareGossipFrame.publisherUserId, String(ownerUserId), 'screen-share gossip recovery keeps the real owner as publisher user id');
+assert.equal(screenShareGossipFrame.publisherMediaSource, 'screen_share', 'screen-share gossip frames carry media source before envelope encoding');
+assert.equal(screenShareGossipFrame.screenShareParticipantUserId, screenUserId, 'screen-share gossip frames carry the synthetic participant id');
+const gossipMessage = gossipFrameMessageFromEncodedFrame(screenShareGossipFrame, new Map(), {
+  peerId: String(ownerUserId),
+  callId: 'call-screen',
+  roomId: 'room-screen',
+});
+assert.equal(gossipMessage.publisher_id, `screen_share:${ownerUserId}`, 'gossip envelope preserves stream-scoped screen publisher id');
+assert.equal(gossipMessage.publisher_user_id, String(ownerUserId), 'gossip envelope preserves real owner id for recovery');
+assert.equal(gossipMessage.publisher_media_source, 'screen_share', 'gossip envelope preserves screen-share media source');
+assert.equal(gossipMessage.screen_share_participant_user_id, screenUserId, 'gossip envelope preserves synthetic screen participant id');
+const gossipDecodedFrame = sfuFrameFromGossipMessage(gossipMessage, { frame_id: gossipMessage.frame_id });
+assert.equal(gossipDecodedFrame.publisherMediaSource, 'screen_share', 'gossip decode restores screen-share media source for remote peer identity');
+const gossipDecodedIdentity = resolveScreenSharePeerIdentity({
+  publisherUserId: gossipDecodedFrame.publisherUserId,
+  mediaSource: gossipDecodedFrame.publisherMediaSource,
+});
+assert.equal(gossipDecodedIdentity.userId, screenUserId, 'gossip-decoded screen-share media maps to the synthetic participant');
+
+const screenShareLayoutRows = mergeScreenShareParticipantRows([
+  { userId: ownerUserId, displayName: 'Alex', role: 'user', callRole: 'participant' },
+], [{
+  userId: screenUserId,
+  publisherUserId: ownerUserId,
+  displayName: 'Alex screen',
+  mediaSource: 'screen_share',
+}]);
+assert.ok(
+  screenShareLayoutRows.some((row) => row.userId === screenUserId && row.mediaSource === 'screen_share'),
+  'screen-share media peers are exposed to participant layout as media participants',
+);
+
 const participants = [
   { userId: 1, displayName: 'Speaker', role: 'user', callRole: 'participant' },
   { userId: screenUserId, displayName: 'Alex screen', role: 'user', callRole: 'participant', mediaSource: 'screen_share' },
@@ -175,8 +225,15 @@ assert.ok(
 );
 
 const screenSharePublisher = read('src/domain/realtime/local/screenSharePublisher.js');
+const screenShareGossipFrameSource = read('src/domain/realtime/local/screenShareGossipFrame.js');
+const gossipMediaFrameEnvelope = read('src/domain/realtime/workspace/callWorkspace/gossipMediaFrameEnvelope.ts');
 assert.match(screenSharePublisher, /publishTracks\?\.\(\[\{[\s\S]*label: SCREEN_SHARE_TRACK_LABEL/, 'screen publisher announces a screen-share video track');
 assert.match(screenSharePublisher, /publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE/, 'screen publisher tags outbound frames with media source');
+assert.match(screenSharePublisher, /publishScreenShareEncodedFrameToGossip/, 'screen publisher sends gossip frames through the screen-share participant identity mapper');
+assert.match(screenShareGossipFrameSource, /screen_share:\$\{normalizedOwnerUserId\}/, 'screen-share gossip publisher id is scoped separately from camera media');
+assert.match(screenShareGossipFrameSource, /publisherMediaSource: SCREEN_SHARE_MEDIA_SOURCE/, 'screen-share gossip frame mapper carries media source at the frame root');
+assert.match(gossipMediaFrameEnvelope, /publisher_media_source: publisherMediaSource/, 'gossip media envelope carries screen-share media source');
+assert.match(gossipMediaFrameEnvelope, /publisherMediaSource: normalizeScreenShareMediaSource/, 'gossip media decode restores screen-share source for peer identity');
 assert.match(screenSharePublisher, /autoSubscribe: false/, 'screen publisher does not subscribe to other call media');
 assert.match(screenSharePublisher, /function screenShareProfileFrom/, 'screen publisher derives a bounded transport profile');
 assert.match(screenSharePublisher, /SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960/, 'screen-share capture width is capped below camera quality mode');
@@ -286,11 +343,15 @@ assert.match(screenSharePublisher, /ensureLocalScreenSharePreviewVideo/, 'screen
 assert.match(screenSharePublisher, /callbacks\.unregisterLocalScreenSharePeer\?\.\(\{ reason \}\);/, 'local screen-share preview unregisters during stop cleanup');
 
 const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
+const screenShareParticipants = read('src/domain/realtime/workspace/callWorkspace/screenShareParticipants.ts');
 const callWorkspaceTemplate = read('src/domain/realtime/CallWorkspaceView.template.html');
 const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
 const screenSharePan = read('src/domain/realtime/workspace/callWorkspace/screenSharePan.js');
 const callWorkspaceStageCss = read('src/domain/realtime/CallWorkspaceStage.css');
 assert.match(participantUi, /function toggleVideoFullscreenForEvent/, 'fullscreen toggle can resolve the concrete media surface from the click event');
+assert.match(participantUi, /mergeScreenShareParticipantRows\(connectedParticipantUsers\.value, remotePeers/, 'layout participants include screen-share media peers without growing CallWorkspaceView');
+assert.match(screenShareParticipants, /screenShareParticipantRowFromMediaPeer/, 'screen-share media peers have a focused participant-row helper');
+assert.match(screenShareParticipants, /mediaSource: SCREEN_SHARE_MEDIA_SOURCE/, 'screen-share participant rows preserve media source identity');
 assert.match(participantUi, /dataset\?\.callVideoSurfaceUserId[\s\S]*dataset\?\.userId/, 'fullscreen event resolution can select screen media surfaces by dataset user id');
 assert.match(
   callWorkspaceTemplate,

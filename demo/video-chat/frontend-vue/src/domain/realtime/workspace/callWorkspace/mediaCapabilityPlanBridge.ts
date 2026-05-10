@@ -3,6 +3,7 @@ import {
   buildClientCapabilitiesV1,
 } from '../../media/clientCapabilities.ts';
 import {
+  findMediaSessionPlanParticipant,
   mediaSessionPlanAllowsLocalPublication,
   mediaSessionPlanDiagnosticPayload,
   normalizeMediaSessionPlanFromSnapshot,
@@ -16,6 +17,15 @@ function refValue(value: any): any {
 function stringValue(value: any, fallback = ''): string {
   const text = String(refValue(value) ?? '').trim();
   return text === '' ? fallback : text.slice(0, 128);
+}
+
+function intValue(value: any, fallback = 0): number {
+  const numeric = Number(refValue(value));
+  return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : fallback;
+}
+
+function planEpochValue(value: any, fallback = 1): number {
+  return Math.max(1, intValue(value, fallback));
 }
 
 function firstStringValue(...values: any[]): string {
@@ -45,6 +55,11 @@ function payloadType(payload: Record<string, any> = {}): string {
   return stringValue(payload.type).toLowerCase();
 }
 
+function payloadClientCapabilities(payload: Record<string, any> = {}) {
+  const capabilities = payload.client_capabilities ?? payload.clientCapabilities ?? {};
+  return capabilities && typeof capabilities === 'object' ? capabilities : {};
+}
+
 function isAdmittedWebsocketJoinPayload(payload: Record<string, any> = {}): boolean {
   const type = payloadType(payload);
   if (type !== 'system/welcome') return false;
@@ -58,6 +73,46 @@ function stableJson(value: any): string {
   return `{${Object.keys(value).sort().map((key) => (
     `${JSON.stringify(key)}:${stableJson(value[key])}`
   )).join(',')}}`;
+}
+
+let activeMediaCapabilityPlanBridge: any = null;
+let activeLocalMediaPublicationCallbacks: Record<string, any> = {
+  publishLocalTracks: null,
+  stopPlanBlockedLocalMedia: null,
+};
+
+export function registerMediaPlanLocalPublicationCallbacks(callbacks: Record<string, any> = {}) {
+  activeLocalMediaPublicationCallbacks = {
+    publishLocalTracks: typeof callbacks.publishLocalTracks === 'function' ? callbacks.publishLocalTracks : null,
+    stopPlanBlockedLocalMedia: typeof callbacks.stopPlanBlockedLocalMedia === 'function'
+      ? callbacks.stopPlanBlockedLocalMedia
+      : null,
+  };
+  return () => {
+    if (activeLocalMediaPublicationCallbacks.publishLocalTracks === callbacks.publishLocalTracks) {
+      activeLocalMediaPublicationCallbacks = {
+        publishLocalTracks: null,
+        stopPlanBlockedLocalMedia: null,
+      };
+    }
+  };
+}
+
+export function canPublishLocalMediaForActivePlan(sourcePayload: Record<string, any> = {}) {
+  return activeMediaCapabilityPlanBridge?.canPublishLocalMediaForLastPlan?.(sourcePayload) === true;
+}
+
+export function requestLocalMediaPublicationForActivePlan(
+  reason = 'media_session_plan_gate',
+  sourcePayload: Record<string, any> = {},
+  publishLocalMediaOverride: any = null,
+) {
+  if (!activeMediaCapabilityPlanBridge) return Promise.resolve(false);
+  return activeMediaCapabilityPlanBridge.requestLocalMediaPublicationForLastPlan(
+    reason,
+    sourcePayload,
+    publishLocalMediaOverride,
+  );
 }
 
 export function resolveClientCapabilitiesContext(refs: Record<string, any> = {}, payload: Record<string, any> = {}) {
@@ -96,10 +151,18 @@ export function createCallWorkspaceMediaCapabilityBridge({
   const captureClientDiagnostic = typeof callbacks.captureClientDiagnostic === 'function'
     ? callbacks.captureClientDiagnostic
     : () => {};
+  const publishLocalTracks = typeof callbacks.publishLocalTracks === 'function'
+    ? callbacks.publishLocalTracks
+    : null;
+  const stopPlanBlockedLocalMedia = typeof callbacks.stopPlanBlockedLocalMedia === 'function'
+    ? callbacks.stopPlanBlockedLocalMedia
+    : null;
   let admittedWebsocketJoin = false;
   let admittedWebsocketJoinKey = '';
   let capabilitySendInFlightKey = '';
   let lastCapabilitySendAttemptKey = '';
+  let lastCapabilityAckStoredKey = '';
+  let lastCapabilityAckPlanEpoch = 0;
   let lastMediaSessionPlan = normalizeMediaSessionPlanV1({});
   let lastMediaSessionPlanDiagnostic = mediaSessionPlanDiagnosticPayload(lastMediaSessionPlan);
   let lastCapabilityPlanGateContext = {
@@ -108,6 +171,11 @@ export function createCallWorkspaceMediaCapabilityBridge({
     participantSessionId: '',
     minPlanEpoch: 1,
   };
+  let pendingLocalMediaPublication = false;
+  let localMediaPublicationInFlight = false;
+  let localMediaPublicationStarted = false;
+  let lastLocalPublicationBlockedDiagnosticKey = '';
+  let lastLocalPublicationStateDiagnosticKey = '';
 
   function capabilitySendKey(context: Record<string, string>): string {
     return [
@@ -149,6 +217,78 @@ export function createCallWorkspaceMediaCapabilityBridge({
     });
   }
 
+  function localMediaGateContext(sourcePayload: Record<string, any> = {}) {
+    const resolvedContext = resolveClientCapabilitiesContext(refs, sourcePayload);
+    return {
+      ...lastCapabilityPlanGateContext,
+      ...Object.fromEntries(
+        Object.entries(resolvedContext)
+          .filter(([, value]) => stringValue(value) !== ''),
+      ),
+      minPlanEpoch: Math.max(
+        planEpochValue(lastCapabilityPlanGateContext.minPlanEpoch),
+        planEpochValue(lastCapabilityAckPlanEpoch || 1),
+      ),
+    };
+  }
+
+  function localMediaGateDiagnosticPayload(context: Record<string, any>, reason = '') {
+    const participant = findMediaSessionPlanParticipant(lastMediaSessionPlan, context.participantSessionId);
+    const key = capabilitySendKey(context);
+    return {
+      schema_version: lastMediaSessionPlan.schema_version,
+      call_id: context.callId,
+      room_id: context.roomId,
+      participant_session_id: context.participantSessionId,
+      plan_epoch: lastMediaSessionPlan.plan_epoch,
+      min_plan_epoch: context.minPlanEpoch,
+      participant_media_state: participant?.media_state || '',
+      socket_online: !('isSocketOnline' in refs) || refValue(refs.isSocketOnline) === true,
+      admitted_websocket_join: admittedWebsocketJoin && admittedWebsocketJoinKey === key,
+      capability_ack_stored: lastCapabilityAckStoredKey === key,
+      pending_local_media_publication: pendingLocalMediaPublication,
+      reason: stringValue(reason, 'media_session_plan_gate'),
+    };
+  }
+
+  function captureLocalPublicationGateDiagnostic({
+    context,
+    eventType,
+    level = 'info',
+    message,
+    reason,
+    immediate = false,
+  }: Record<string, any>) {
+    const diagnosticKey = [
+      eventType,
+      context.callId,
+      context.roomId,
+      context.participantSessionId,
+      context.minPlanEpoch,
+      lastMediaSessionPlan.plan_epoch,
+      lastCapabilityAckStoredKey,
+      admittedWebsocketJoinKey,
+    ].join('|');
+    if (eventType === 'media_session_plan_local_publication_blocked') {
+      if (lastLocalPublicationBlockedDiagnosticKey === diagnosticKey) return;
+      lastLocalPublicationBlockedDiagnosticKey = diagnosticKey;
+    } else if (lastLocalPublicationStateDiagnosticKey === diagnosticKey) {
+      return;
+    } else {
+      lastLocalPublicationStateDiagnosticKey = diagnosticKey;
+    }
+
+    captureClientDiagnostic({
+      category: 'media',
+      level,
+      eventType,
+      code: eventType,
+      message,
+      payload: localMediaGateDiagnosticPayload(context, reason),
+      immediate,
+    });
+  }
+
   async function sendClientCapabilities(reason = 'capability_probe', sourcePayload: Record<string, any> = {}) {
     if (typeof refs.sendSocketFrame !== 'function') return false;
     const context = resolveClientCapabilitiesContext(refs, sourcePayload);
@@ -182,6 +322,8 @@ export function createCallWorkspaceMediaCapabilityBridge({
           ...context,
           minPlanEpoch: lastMediaSessionPlan.plan_epoch,
         };
+        lastCapabilityAckStoredKey = '';
+        lastCapabilityAckPlanEpoch = 0;
         captureCapabilityDiagnostic(frame, reason);
       }
       return sent;
@@ -205,6 +347,49 @@ export function createCallWorkspaceMediaCapabilityBridge({
         capabilitySendInFlightKey = '';
       }
     }
+  }
+
+  function handleClientCapabilitiesAck(payload: Record<string, any> = {}) {
+    if (payloadType(payload) !== 'client.capabilities.v1/ack') return false;
+    const capabilities = payloadClientCapabilities(payload);
+    const context = localMediaGateContext({
+      ...payload,
+      participant_session_id: capabilities.participant_session_id ?? payload.participant_session_id,
+    });
+    const key = capabilitySendKey(context);
+    const stored = payload.ok === true && payload.stored === true;
+    const ackPlanEpoch = planEpochValue(payload.plan_epoch, lastCapabilityPlanGateContext.minPlanEpoch);
+    if (stored) {
+      lastCapabilityAckStoredKey = key;
+      lastCapabilityAckPlanEpoch = ackPlanEpoch;
+      lastCapabilityPlanGateContext = {
+        ...context,
+        minPlanEpoch: Math.max(context.minPlanEpoch, ackPlanEpoch),
+      };
+    } else if (lastCapabilityAckStoredKey === key) {
+      lastCapabilityAckStoredKey = '';
+      lastCapabilityAckPlanEpoch = 0;
+    }
+    captureClientDiagnostic({
+      category: 'media',
+      level: stored ? 'info' : 'warning',
+      eventType: stored ? 'client_capabilities_ack_stored' : 'client_capabilities_ack_failed',
+      code: stored ? 'client_capabilities_ack_stored' : 'client_capabilities_ack_failed',
+      message: stored
+        ? 'Client media capabilities were stored by realtime.'
+        : 'Client media capabilities were not stored by realtime.',
+      payload: {
+        schema_version: stringValue(payload.schema_version, 'king.video.client_capabilities.v1'),
+        call_id: context.callId,
+        room_id: context.roomId,
+        participant_session_id: context.participantSessionId,
+        plan_epoch: ackPlanEpoch,
+        ok: payload.ok === true,
+        stored,
+      },
+      immediate: true,
+    });
+    return stored;
   }
 
   function handleRoomSnapshotMediaSessionPlan(snapshot: Record<string, any> = {}) {
@@ -237,13 +422,11 @@ export function createCallWorkspaceMediaCapabilityBridge({
   }
 
   function canPublishLocalMediaForLastPlan(sourcePayload: Record<string, any> = {}) {
-    const context = {
-      ...lastCapabilityPlanGateContext,
-      ...Object.fromEntries(
-        Object.entries(resolveClientCapabilitiesContext(refs, sourcePayload))
-          .filter(([, value]) => stringValue(value) !== ''),
-      ),
-    };
+    const context = localMediaGateContext(sourcePayload);
+    const key = capabilitySendKey(context);
+    if ('isSocketOnline' in refs && refValue(refs.isSocketOnline) !== true) return false;
+    if (!admittedWebsocketJoin || admittedWebsocketJoinKey !== key) return false;
+    if (lastCapabilityAckStoredKey !== key) return false;
     return mediaSessionPlanAllowsLocalPublication(lastMediaSessionPlan, {
       callId: context.callId,
       roomId: context.roomId,
@@ -252,11 +435,85 @@ export function createCallWorkspaceMediaCapabilityBridge({
     });
   }
 
-  return {
+  async function requestLocalMediaPublicationForLastPlan(
+    reason = 'media_session_plan_gate',
+    sourcePayload: Record<string, any> = {},
+    publishLocalMediaOverride: any = null,
+  ) {
+    const context = localMediaGateContext(sourcePayload);
+    if (!canPublishLocalMediaForLastPlan(sourcePayload)) {
+      pendingLocalMediaPublication = true;
+      captureLocalPublicationGateDiagnostic({
+        context,
+        eventType: 'media_session_plan_local_publication_blocked',
+        level: 'info',
+        message: 'Local media publication is waiting for an admitted websocket join and matching media session plan.',
+        reason,
+        immediate: false,
+      });
+      return false;
+    }
+    const publisher = typeof publishLocalMediaOverride === 'function'
+      ? publishLocalMediaOverride
+      : (publishLocalTracks || activeLocalMediaPublicationCallbacks.publishLocalTracks);
+    if (typeof publisher !== 'function') return false;
+    if (localMediaPublicationInFlight) return false;
+
+    localMediaPublicationInFlight = true;
+    pendingLocalMediaPublication = false;
+    try {
+      const published = await publisher();
+      localMediaPublicationStarted = published === true;
+      if (published === true) {
+        captureLocalPublicationGateDiagnostic({
+          context,
+          eventType: 'media_session_plan_local_publication_started',
+          level: 'info',
+          message: 'Local media publication started from the active media session plan.',
+          reason,
+          immediate: true,
+        });
+      }
+      return published === true;
+    } finally {
+      localMediaPublicationInFlight = false;
+    }
+  }
+
+  async function applyLocalMediaStateForLastPlan(reason = 'media_session_plan', sourcePayload: Record<string, any> = {}) {
+    const context = localMediaGateContext(sourcePayload);
+    if (canPublishLocalMediaForLastPlan(sourcePayload)) {
+      return requestLocalMediaPublicationForLastPlan(reason, sourcePayload);
+    }
+
+    pendingLocalMediaPublication = true;
+    const stopLocalMedia = stopPlanBlockedLocalMedia
+      || activeLocalMediaPublicationCallbacks.stopPlanBlockedLocalMedia;
+    if (localMediaPublicationStarted && typeof stopLocalMedia === 'function') {
+      stopLocalMedia();
+      localMediaPublicationStarted = false;
+      captureLocalPublicationGateDiagnostic({
+        context,
+        eventType: 'media_session_plan_local_publication_stopped',
+        level: 'warning',
+        message: 'Local media publication stopped because the active media session plan no longer allows it.',
+        reason,
+        immediate: true,
+      });
+    }
+    return false;
+  }
+
+  const bridgeApi = {
+    applyLocalMediaStateForLastPlan,
     canPublishLocalMediaForLastPlan,
     getLastMediaSessionPlan,
     getLastMediaSessionPlanDiagnostic,
+    handleClientCapabilitiesAck,
     handleRoomSnapshotMediaSessionPlan,
+    requestLocalMediaPublicationForLastPlan,
     sendClientCapabilities,
   };
+  activeMediaCapabilityPlanBridge = bridgeApi;
+  return bridgeApi;
 }

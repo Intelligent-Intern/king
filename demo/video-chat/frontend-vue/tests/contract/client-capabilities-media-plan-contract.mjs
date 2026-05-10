@@ -50,6 +50,9 @@ try {
   assert.match(capabilitiesSource, /export async function buildClientCapabilitiesV1/);
   assert.match(capabilitiesSource, /export function redactClientCapabilitiesV1/);
   assert.match(capabilitiesSource, /export function buildClientCapabilitiesFrame/);
+  assert.match(capabilitiesSource, /strict720p30Constraints/);
+  assert.match(capabilitiesSource, /strict720p30CapabilitySupported/);
+  assert.match(capabilitiesSource, /capture\?\.hasWorkerCapturePath && runtime\?\.stageA/);
   assert.match(planSource, /MEDIA_SESSION_PLAN_SCHEMA_VERSION = 'king\.video\.media_session_plan\.v1'/);
   assert.match(planSource, /CALL_MEDIA_STATE_VALUES/);
   assert.match(planSource, /export function normalizeMediaSessionPlanFromSnapshot/);
@@ -59,11 +62,15 @@ try {
   assert.match(bridgeSource, /export function hasSnapshotMediaSessionPlan/);
   assert.match(bridgeSource, /isAdmittedWebsocketJoinPayload/);
   assert.match(bridgeSource, /capabilityChangeKey/);
+  assert.match(bridgeSource, /handleClientCapabilitiesAck/);
   assert.match(bridgeSource, /canPublishLocalMediaForLastPlan/);
+  assert.match(bridgeSource, /requestLocalMediaPublicationForLastPlan/);
   assert.match(socketLifecycleSource, /createCallWorkspaceMediaCapabilityBridge/);
   assert.match(socketLifecycleSource, /sendClientCapabilities\('system_welcome', payload\)/);
   assert.match(socketLifecycleSource, /handleRoomSnapshotMediaSessionPlan\(payload\)/);
   assert.match(socketLifecycleSource, /sendClientCapabilities\('room_snapshot', payload\)/);
+  assert.match(socketLifecycleSource, /handleClientCapabilitiesAck\(payload\)/);
+  assert.match(socketLifecycleSource, /applyLocalMediaStateForLastPlan\('room_snapshot', payload\)/);
   assert.match(wrapperSource, /export \{ detectMediaRuntimeCapabilities \} from '\.\/media\/runtimeCapabilities\.ts';/);
   assert.doesNotMatch(wrapperSource, /return c\(\)/);
 
@@ -173,6 +180,69 @@ try {
   assert.equal(normalizedCapabilityFrame.runtime.wlvc_encoder, true);
   assert.equal(normalizedCapabilityFrame.constraints.video_width, 1280);
   assertNoForbiddenData(normalizedCapabilityFrame, 'normalized client.capabilities.v1 frame');
+
+  const previousWebSocket = globalThis.WebSocket;
+  globalThis.WebSocket = class ContractWebSocket {};
+  try {
+    const strictBuiltCapabilities = await capabilitiesModule.buildClientCapabilitiesV1({
+      participantSessionId: 'strict-session',
+      runtimeCapabilities: {
+        stageA: true,
+        stageB: true,
+        webRtcNative: true,
+        wlvcWasm: {
+          webAssembly: true,
+          encoder: true,
+          decoder: true,
+        },
+      },
+      captureCapabilities: {
+        hasWorkerCapturePath: true,
+        hasAnyCapturePath: true,
+        supportsDomCanvasFallback: true,
+      },
+    });
+    assert.equal(strictBuiltCapabilities.media.camera, true);
+    assert.equal(strictBuiltCapabilities.media.camera_720p30, true);
+    assert.equal(strictBuiltCapabilities.runtime.wlvc_encoder, true);
+    assert.deepEqual(strictBuiltCapabilities.constraints, {
+      video_width: 1280,
+      video_height: 720,
+      video_fps: 30,
+    });
+
+    const domFallbackOnlyCapabilities = await capabilitiesModule.buildClientCapabilitiesV1({
+      participantSessionId: 'fallback-only-session',
+      runtimeCapabilities: {
+        stageA: true,
+        stageB: true,
+        webRtcNative: true,
+        wlvcWasm: {
+          webAssembly: true,
+          encoder: true,
+          decoder: true,
+        },
+      },
+      captureCapabilities: {
+        hasWorkerCapturePath: false,
+        hasAnyCapturePath: true,
+        supportsDomCanvasFallback: true,
+      },
+    });
+    assert.equal(domFallbackOnlyCapabilities.media.camera, false);
+    assert.equal(domFallbackOnlyCapabilities.media.camera_720p30, false);
+    assert.deepEqual(domFallbackOnlyCapabilities.constraints, {
+      video_width: 1280,
+      video_height: 720,
+      video_fps: 30,
+    });
+  } finally {
+    if (previousWebSocket === undefined) {
+      delete globalThis.WebSocket;
+    } else {
+      globalThis.WebSocket = previousWebSocket;
+    }
+  }
 
   assert.deepEqual(
     bridgeModule.resolveClientCapabilitiesContext({
@@ -448,6 +518,21 @@ try {
     call_id: 'call-alpha',
     room_id: 'room-alpha',
     participant_session_id: 'call-session-alpha',
+  }), false);
+  assert.equal(bridge.handleClientCapabilitiesAck({
+    type: 'client.capabilities.v1/ack',
+    ok: true,
+    stored: true,
+    schema_version: 'king.video.client_capabilities.v1',
+    plan_epoch: 3,
+    client_capabilities: {
+      participant_session_id: 'call-session-alpha',
+    },
+  }), true);
+  assert.equal(bridge.canPublishLocalMediaForLastPlan({
+    call_id: 'call-alpha',
+    room_id: 'room-alpha',
+    participant_session_id: 'call-session-alpha',
   }), true);
   assert.equal(bridge.canPublishLocalMediaForLastPlan({
     call_id: 'call-alpha',
@@ -463,6 +548,7 @@ try {
   assertNoForbiddenData(handledPlan, 'bridge media_session_plan.v1');
   assertNoForbiddenData(bridge.getLastMediaSessionPlanDiagnostic(), 'bridge media plan diagnostic');
   assert.ok(diagnostics.some((diagnostic) => diagnostic.eventType === 'client_capabilities_sent'));
+  assert.ok(diagnostics.some((diagnostic) => diagnostic.eventType === 'client_capabilities_ack_stored'));
   assert.ok(diagnostics.some((diagnostic) => diagnostic.eventType === 'media_session_plan_received'));
   for (const diagnostic of diagnostics) {
     assertNoForbiddenData(diagnostic.payload, `diagnostic ${diagnostic.eventType}`);

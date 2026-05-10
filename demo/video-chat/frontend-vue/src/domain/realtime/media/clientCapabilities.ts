@@ -1,5 +1,9 @@
 import { detectPublisherCapturePipelineCapabilities } from '../local/capturePipelineCapabilities.ts';
 import { detectMediaRuntimeCapabilities } from './runtimeCapabilities.ts';
+import {
+  strict720p30CapabilitySupported,
+  strict720p30Constraints,
+} from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export const CLIENT_CAPABILITIES_SCHEMA_VERSION = 'king.video.client_capabilities.v1';
 export const CLIENT_CAPABILITIES_COMMAND_TYPE = 'client/capabilities.v1';
@@ -80,17 +84,14 @@ export async function buildClientCapabilitiesV1({
   const capture = captureCapabilities && typeof captureCapabilities === 'object'
     ? captureCapabilities
     : detectPublisherCapturePipelineCapabilities({ globalScope, documentRef });
-  const constraints = {
-    video_width: 1280,
-    video_height: 720,
-    video_fps: 30,
-  };
+  const constraints = strict720p30Constraints();
+  const hasStrict720p30CapturePath = Boolean(capture?.hasWorkerCapturePath && runtime?.stageA);
 
-  return redactClientCapabilitiesV1({
+  const capabilities = redactClientCapabilitiesV1({
     participant_session_id: participantSessionId,
     media: {
-      camera: Boolean(capture?.hasAnyCapturePath || capture?.supportsDomCanvasFallback || runtime?.stageB),
-      camera_720p30: Boolean(capture?.hasAnyCapturePath || runtime?.stageA),
+      camera: hasStrict720p30CapturePath,
+      camera_720p30: hasStrict720p30CapturePath,
       microphone: Boolean(runtime?.stageB),
       screen_share: Boolean(runtime?.stageB),
     },
@@ -105,6 +106,11 @@ export async function buildClientCapabilitiesV1({
     },
     constraints,
   });
+
+  if (!strict720p30CapabilitySupported(capabilities)) {
+    capabilities.media.camera_720p30 = false;
+  }
+  return capabilities;
 }
 
 export function buildClientCapabilitiesFrame(payload: Record<string, any>, {

@@ -3,6 +3,7 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_NEXT,
   SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
 } from './runtimeConfig.ts';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 import {
   isStrict720p30Policy,
@@ -84,6 +85,38 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   };
   const qualityRecoveryProbePrerequisiteRetryMs = 1000;
 
+  function strictAutoQualityDisabled() {
+    return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableRegressionImprovementProbes');
+  }
+
+  function strictNativeRuntimeFallbackDisabled() {
+    return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+      && strictStabilityPolicy?.disableNativeRuntimeFallback !== false;
+  }
+
+  function blockNativeRuntimeFallback(reason = 'strict_720p30_gossip_native_fallback_blocked') {
+    setMediaRuntimePath('unsupported', reason);
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'strict_720p30_gossip_native_fallback_blocked',
+      code: 'strict_720p30_gossip_native_fallback_blocked',
+      message: 'Strict Gossip v1 requires the fixed 1280x720@30 WLVC publisher path; native WebRTC fallback is blocked.',
+      payload: {
+        media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
+        media_runtime_path: refs.mediaRuntimePath.value,
+        stage_a: Boolean(refs.mediaRuntimeCapabilities.value.stageA),
+        stage_b: Boolean(refs.mediaRuntimeCapabilities.value.stageB),
+        preferred_path: String(refs.mediaRuntimeCapabilities.value.preferredPath || ''),
+        reason,
+      },
+      immediate: true,
+    });
+    return false;
+  }
+
   function setMediaRuntimePath(nextPath, reason) {
     const previousPath = refs.mediaRuntimePath.value;
     const normalizedPath = String(nextPath || '').trim() || 'unsupported';
@@ -117,6 +150,9 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     }
     if (state.getRuntimeSwitchInFlight()) return false;
     if (normalizedNextPath === refs.mediaRuntimePath.value) return true;
+    if (normalizedNextPath === 'webrtc_native' && strictNativeRuntimeFallbackDisabled()) {
+      return blockNativeRuntimeFallback('strict_720p30_gossip_blocks_native_runtime');
+    }
 
     if (normalizedNextPath === 'wlvc_wasm' && !refs.mediaRuntimeCapabilities.value.stageA) {
       return false;
@@ -180,6 +216,9 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   async function maybeFallbackToNativeRuntime(reason) {
+    if (strictNativeRuntimeFallbackDisabled()) {
+      return blockNativeRuntimeFallback(String(reason || 'strict_720p30_gossip_native_fallback_blocked'));
+    }
     if (sfuRuntimeEnabled) return false;
     if (!refs.mediaRuntimeCapabilities.value.stageB) return false;
     return switchMediaRuntimePath('webrtc_native', reason);
@@ -241,7 +280,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   function scheduleNextSfuVideoQualityRecoveryProbe() {
     clearSfuVideoQualityRecoveryProbeTimer();
-    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+    if (
+      strictAutoQualityDisabled()
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')
+    ) {
       resetSfuVideoQualityRecoveryProbeSeries();
       return false;
     }
@@ -279,7 +321,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function ensureSfuVideoQualityRecoveryProbeSeries(reason = 'automatic_quality_recovery', details = {}) {
-    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+    if (
+      strictAutoQualityDisabled()
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')
+    ) {
       resetSfuVideoQualityRecoveryProbeSeries();
       return false;
     }
@@ -306,7 +351,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function runScheduledSfuVideoQualityRecoveryProbe() {
-    if (strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')) {
+    if (
+      strictAutoQualityDisabled()
+      || strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')
+    ) {
       resetSfuVideoQualityRecoveryProbeSeries();
       return false;
     }
@@ -407,7 +455,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   function probeSfuVideoQualityAfterStableReadback(reason = 'sfu_source_readback_recovered', details = {}) {
     if (
-      strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')
+      strictAutoQualityDisabled()
       || strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')
     ) {
       resetSfuVideoQualityRecoveryProbeSeries();
@@ -463,7 +511,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure', options = {}) {
-    if (strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')) {
+    if (strictAutoQualityDisabled()) {
       resetSfuVideoQualityRecoveryProbeSeries();
       return false;
     }

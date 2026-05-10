@@ -4,6 +4,7 @@ import {
   SCREEN_SHARE_MEDIA_SOURCE,
   SCREEN_SHARE_TRACK_LABEL,
 } from '../screenShareIdentity.js';
+import { screenShareGossipFrameFromEncodedFrame } from './screenShareGossipFrame';
 
 const SCREEN_SHARE_CONNECT_TIMEOUT_MS = 10_000;
 const SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960;
@@ -316,6 +317,9 @@ export function createScreenShareParticipantPublisher({
   const currentScreenShareSfuVideoProfile = () => screenShareProfileFrom(
     callbacks.currentSfuVideoProfile?.() || {},
   );
+  const publishScreenShareEncodedFrameToGossip = (frame) => callbacks.publishLocalEncodedFrameToGossip?.(
+    screenShareGossipFrameFromEncodedFrame(frame, refs.sessionState.userId),
+  );
 
   const pipeline = createLocalPublisherPipelineHelpers({
     backgroundBaselineCollector: noBackgroundBaselineCollector,
@@ -341,7 +345,7 @@ export function createScreenShareParticipantPublisher({
       mediaDebugLog: callbacks.mediaDebugLog,
       mountLocalPreview: false,
       noteWlvcSourceReadbackSuccess: callbacks.noteWlvcSourceReadbackSuccess,
-      publishLocalEncodedFrameToGossip: callbacks.publishLocalEncodedFrameToGossip,
+      publishLocalEncodedFrameToGossip: publishScreenShareEncodedFrameToGossip,
       reconfigureLocalTracksFromSelectedDevices: async () => false,
       renderCallVideoLayout: callbacks.renderCallVideoLayout,
       resetBackgroundRuntimeMetrics: () => {},

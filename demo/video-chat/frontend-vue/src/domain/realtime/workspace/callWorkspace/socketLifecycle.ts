@@ -363,7 +363,8 @@ export function createCallWorkspaceSocketHelpers({
         }
       }
       clearAdmissionGate();
-      void mediaCapabilityPlanBridge.sendClientCapabilities('system_welcome', payload);
+      void mediaCapabilityPlanBridge.sendClientCapabilities('system_welcome', payload)
+        .then(() => mediaCapabilityPlanBridge.requestLocalMediaPublicationForLastPlan('system_welcome', payload));
       requestRoomSnapshot();
       if (refs.desiredRoomId.value !== welcomeRoom) {
         void sendRoomJoin(refs.desiredRoomId.value);
@@ -374,8 +375,15 @@ export function createCallWorkspaceSocketHelpers({
     if (type === 'room/snapshot') {
       applyRoomSnapshot(payload);
       mediaCapabilityPlanBridge.handleRoomSnapshotMediaSessionPlan(payload);
-      void mediaCapabilityPlanBridge.sendClientCapabilities('room_snapshot', payload);
+      void mediaCapabilityPlanBridge.sendClientCapabilities('room_snapshot', payload)
+        .then(() => mediaCapabilityPlanBridge.applyLocalMediaStateForLastPlan('room_snapshot', payload));
       applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
+      return;
+    }
+
+    if (type === 'client.capabilities.v1/ack') {
+      mediaCapabilityPlanBridge.handleClientCapabilitiesAck(payload);
+      void mediaCapabilityPlanBridge.applyLocalMediaStateForLastPlan('client_capabilities_ack', payload);
       return;
     }
 

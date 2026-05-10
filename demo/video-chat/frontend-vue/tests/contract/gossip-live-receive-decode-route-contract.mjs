@@ -6,10 +6,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspace = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8')
 const gossipDataLane = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
+const gossipMediaFrameEnvelope = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipMediaFrameEnvelope.ts'), 'utf8')
 const publisherFrameDispatch = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/local/publisherFrameDispatch.ts'), 'utf8')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}\n${gossipMediaFrameEnvelope}`
 const controller = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/gossipController.ts'), 'utf8')
 const lifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts'), 'utf8')
+const frameDecode = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/sfu/frameDecode.ts'), 'utf8')
+const browserRenderer = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts'), 'utf8')
 const packageJson = fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8')
 
 function assert(condition, message) {
@@ -52,17 +55,32 @@ assert(
   'active inbound RTCDataChannel messages must enter GossipController.handleData() as local receives',
 )
 assert(
-  /const GOSSIP_MEDIA_FRAME_TYPE = 'gossip\.media\.frame\.v1';/.test(gossipDataLane)
-    && /function routeLiveGossipDeliveryToRemoteFrame\(delivery\)[\s\S]*if \(!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*isGossipMediaFrameMessage\(msg\)[\s\S]*handleSFUEncodedFrame\(directGossipPrimary/.test(workspaceGossipSurface),
+  /const GOSSIP_MEDIA_FRAME_TYPE = 'gossip\.media\.frame\.v1';/.test(gossipMediaFrameEnvelope)
+    && /function routeLiveGossipDeliveryToRemoteFrame\(delivery\)[\s\S]*if \(!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*isGossipMediaFrameMessage\(msg\)[\s\S]*routeGossipMediaFrameToRenderer\(frame,\s*directGossipPrimary\)/.test(workspaceGossipSurface),
   'accepted gossip.media.frame.v1 gossip deliveries must route to the existing remote decode entry point only in active receive mode',
 )
 assert(
-  /function isGossipMediaFrameMessage\(msg\)[\s\S]*type === GOSSIP_MEDIA_FRAME_TYPE \|\| type === 'sfu\/frame'/.test(gossipDataLane)
-    && /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*base64UrlToArrayBuffer\(dataBase64\)[\s\S]*transportPath:\s*'gossip_rtc_datachannel'/.test(workspaceGossipSurface),
+  /function isGossipMediaFrameMessage\(msg\)[\s\S]*type === GOSSIP_MEDIA_FRAME_TYPE \|\| type === 'sfu\/frame'/.test(gossipMediaFrameEnvelope)
+    && /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*msg\.payload[\s\S]*base64UrlToArrayBuffer\(dataBase64\)[\s\S]*transportPath:\s*runtimePath/.test(workspaceGossipSurface)
+    && gossipMediaFrameEnvelope.includes('msg.frame_kind')
+    && gossipMediaFrameEnvelope.includes('msg.sequence')
+    && gossipMediaFrameEnvelope.includes('msg.timestamp_unix_ms')
+    && gossipMediaFrameEnvelope.includes('msg.runtime_path'),
   'gossip.media.frame.v1 messages must be adapted into SFU frame objects with explicit gossip transport provenance while legacy inbound sfu/frame remains decodable',
 )
 assert(
-  /function gossipFrameMessageFromEncodedFrame\(frame,\s*sequenceMap,\s*plainRelay = false\)[\s\S]*type:\s*GOSSIP_MEDIA_FRAME_TYPE[\s\S]*envelope_contract:\s*GOSSIP_MEDIA_FRAME_TYPE/.test(gossipDataLane),
+  /function routeGossipMediaFrameToRenderer\(frame,\s*directGossipPrimary\)[\s\S]*handleSFUEncodedFrame\(directGossipPrimary[\s\S]*transportPath:\s*'gossip_primary_direct'[\s\S]*protected:\s*null[\s\S]*protectedFrame:\s*null[\s\S]*protectionMode:\s*'transport_only'/.test(gossipDataLane),
+  'active gossip_primary receive must hand transport-only frames to the renderer without SFU fallback state',
+)
+assert(
+  /renderer_path:\s*'remote_decoded_canvas'/.test(gossipDataLane)
+    && /renderer_entry:\s*'handleSFUEncodedFrame'/.test(gossipDataLane)
+    && /decoded_pixels_required:\s*true/.test(gossipDataLane)
+    && /frame_count_min:\s*1/.test(gossipDataLane),
+  'gossip receive diagnostics must require decoded pixels and frameCount proof for the active renderer path',
+)
+assert(
+  /function gossipFrameMessageFromEncodedFrame\(frame,\s*sequenceMap,[\s\S]*type:\s*GOSSIP_MEDIA_FRAME_TYPE[\s\S]*envelope_contract:\s*GOSSIP_MEDIA_FRAME_TYPE/.test(gossipMediaFrameEnvelope),
   'active outbound Gossip envelopes must publish gossip.media.frame.v1 instead of external sfu/frame messages',
 )
 assert(
@@ -103,6 +121,24 @@ assert(
 assert(
   !/gossip_data_lane_frame_received_unrouted/.test(workspaceGossipSurface),
   'the live active path must no longer stop at the previous unrouted diagnostic',
+)
+const wlvcImageDataIndex = frameDecode.indexOf('const imageData = new ImageData(decoded.data, decoded.width, decoded.height);')
+const wlvcCanvasWriteIndex = frameDecode.indexOf('ctx.putImageData(imageData, 0, 0);', wlvcImageDataIndex)
+const wlvcFrameCountIndex = frameDecode.indexOf('peer.frameCount = Number(peer.frameCount || 0) + 1;', wlvcCanvasWriteIndex)
+assert(
+  frameDecode.includes('const decodedHasPixels = decoded && decoded.data && Number(decoded.data.length || 0) > 0;')
+    && wlvcImageDataIndex >= 0
+    && wlvcCanvasWriteIndex > wlvcImageDataIndex
+    && wlvcFrameCountIndex > wlvcCanvasWriteIndex,
+  'WLVC receiver proof must require decoded pixels, write them to canvas, and then increment frameCount',
+)
+const browserCanvasWriteIndex = browserRenderer.indexOf('ctx.drawImage(videoFrame, 0, 0, width, height);')
+const browserFrameCountIndex = browserRenderer.indexOf('peer.frameCount = Number(peer.frameCount || 0) + 1;', browserCanvasWriteIndex)
+assert(
+  browserCanvasWriteIndex >= 0
+    && browserFrameCountIndex > browserCanvasWriteIndex
+    && browserRenderer.includes('noteSfuRemoteVideoFrameStable(peer, frame'),
+  'WebCodecs receiver branch must also draw decoded pixels before frameCount/stability updates',
 )
 assert(
   packageJson.includes('gossip-live-receive-decode-route-contract.mjs'),

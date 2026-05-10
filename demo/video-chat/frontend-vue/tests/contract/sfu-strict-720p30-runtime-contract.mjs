@@ -45,15 +45,21 @@ async function main() {
   const sfuSubscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 
   requireContains(policySource, "STRICT_720P30_POLICY_MODE = 'strict_720p30'", 'strict policy mode');
-  requireContains(policySource, 'captureWidth: 1280', 'strict capture width');
-  requireContains(policySource, 'captureHeight: 720', 'strict capture height');
-  requireContains(policySource, 'captureFrameRate: 30', 'strict capture fps');
-  requireContains(policySource, 'frameWidth: 1280', 'strict frame width');
-  requireContains(policySource, 'frameHeight: 720', 'strict frame height');
+  requireContains(policySource, 'video_width: 1280', 'strict capture width');
+  requireContains(policySource, 'video_height: 720', 'strict capture height');
+  requireContains(policySource, 'video_fps: 30', 'strict capture fps');
+  requireContains(policySource, 'captureWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict capture width profile binding');
+  requireContains(policySource, 'captureHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict capture height profile binding');
+  requireContains(policySource, 'captureFrameRate: STRICT_720P30_CONSTRAINTS.video_fps', 'strict capture fps profile binding');
+  requireContains(policySource, 'frameWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict frame width profile binding');
+  requireContains(policySource, 'frameHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict frame height profile binding');
   requireContains(policySource, 'disableAutoQuality: true', 'strict auto quality gate');
   requireContains(policySource, 'disableGossipMediaRepair: true', 'strict gossip repair gate');
   requireContains(policySource, 'disableGossipPublish: false', 'strict allows the browser gossip publish path');
   requireContains(policySource, 'disableBackgroundTabPolicy: true', 'strict background tab gate');
+  requireContains(policySource, 'disableNativeRuntimeFallback: true', 'strict native runtime fallback gate');
+  requireContains(policySource, 'disableRegressionImprovementProbes: true', 'strict regression improvement probe gate');
+  requireContains(policySource, 'requireStrict720p30Capability: true', 'strict capability gate');
   requireContains(policySource, 'strictCaptureOnly: true', 'strict capture fallback gate');
   requireContains(policySource, 'strictFixedOutputFrame: true', 'strict fixed frame output gate');
   requireContains(policySource, 'disableSelectiveTileTransport: true', 'strict disables selective transport experiments');
@@ -65,8 +71,11 @@ async function main() {
   requireContains(callWorkspace, 'strictStabilityPolicy: CALL_STABILITY_POLICY', 'workspace passes strict policy into runtime helpers');
 
   requireContains(runtimeSwitching, 'return strict720p30VideoProfile(strictStabilityPolicy);', 'runtime switching returns fixed strict video profile');
+  requireContains(runtimeSwitching, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary', 'runtime switching keys strict active path off gossip-primary mode');
+  requireContains(runtimeSwitching, "eventType: 'strict_720p30_gossip_native_fallback_blocked'", 'runtime switching blocks native fallback on active gossip path');
   requireContains(runtimeSwitching, "strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')", 'runtime switching disables quality recovery probes');
   requireContains(runtimeSwitching, "strictPolicyEnabled(strictStabilityPolicy, 'disableAutoQuality')", 'runtime switching disables auto quality churn');
+  requireContains(runtimeSwitching, "strictPolicyEnabled(strictStabilityPolicy, 'disableRegressionImprovementProbes')", 'runtime switching disables regression-improvement probes');
 
   requireContains(runtimeHealth, "strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery')", 'runtime health disables remote stall recovery');
   requireContains(runtimeHealth, "step: 'strict_720p30_disabled'", 'runtime health returns a non-recovery strict result');
@@ -117,6 +126,9 @@ async function main() {
   requireContains(sfuSubscriberBudget, 'videochat_sfu_subscriber_frame_uses_strict_720p30', 'subscriber budget detects strict replay frames');
   requireContains(sfuSubscriberBudget, 'if (!$strict720p30)', 'strict replay slow-subscriber diagnostics are suppressed');
 
+  const previousCarrierMode = process.env.VITE_VIDEOCHAT_MEDIA_CARRIER;
+  process.env.VITE_VIDEOCHAT_MEDIA_CARRIER = 'gossip_primary';
+
   const server = await createServer({
     root: frontendRoot,
     logLevel: 'error',
@@ -128,6 +140,8 @@ async function main() {
       resolveCallStabilityPolicy,
       strict720p30VideoProfile,
       strictPolicyEnabled,
+      strict720p30CapabilitySupported,
+      strict720p30Constraints,
       isStrict720p30Policy,
     } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/strictStabilityPolicy.ts');
     const {
@@ -143,6 +157,29 @@ async function main() {
     const strictPolicy = resolveCallStabilityPolicy({});
     assert.equal(isStrict720p30Policy(strictPolicy), true, 'empty env defaults to strict 720p30');
     assert.equal(strictPolicyEnabled(strictPolicy, 'disableAutoQuality'), true, 'strict policy disables auto quality');
+    assert.equal(strictPolicyEnabled(strictPolicy, 'disableNativeRuntimeFallback'), true, 'strict policy disables native runtime fallback');
+    assert.equal(strictPolicyEnabled(strictPolicy, 'disableRegressionImprovementProbes'), true, 'strict policy disables regression improvement probes');
+    assert.equal(strictPolicyEnabled(strictPolicy, 'requireStrict720p30Capability'), true, 'strict policy requires exact 720p30 capability');
+    assert.deepEqual(strict720p30Constraints(), {
+      video_width: 1280,
+      video_height: 720,
+      video_fps: 30,
+    }, 'strict constraints must be exactly 1280x720@30');
+    assert.equal(strict720p30CapabilitySupported({
+      media: { camera: true, camera_720p30: true },
+      runtime: { websocket: true, wlvc_encoder: true },
+      constraints: { video_width: 1280, video_height: 720, video_fps: 30 },
+    }), true, 'strict capability accepts exact 720p30 WLVC gossip sender');
+    assert.equal(strict720p30CapabilitySupported({
+      media: { camera: true, camera_720p30: true },
+      runtime: { websocket: true, wlvc_encoder: false },
+      constraints: { video_width: 1280, video_height: 720, video_fps: 30 },
+    }), false, 'strict capability rejects missing WLVC encoder');
+    assert.equal(strict720p30CapabilitySupported({
+      media: { camera: true, camera_720p30: true },
+      runtime: { websocket: true, wlvc_encoder: true },
+      constraints: { video_width: 960, video_height: 540, video_fps: 30 },
+    }), false, 'strict capability rejects lower profiles');
 
     const profile = strict720p30VideoProfile(strictPolicy);
     assert.equal(profile.captureWidth, 1280, 'strict capture width must be 1280');
@@ -156,6 +193,7 @@ async function main() {
     assert.equal(portraitFrameSize.frameHeight, 720, 'strict portrait browser frames must encode as fixed 720 height');
     assert.equal(portraitFrameSize.framingMode, 'cover', 'strict portrait browser frames must use fixed cover framing');
 
+    const runtimeDiagnostics = [];
     const refs = {
       activeCallId: { value: 'call-1' },
       activeRoomId: { value: 'room-1' },
@@ -171,7 +209,7 @@ async function main() {
     const helpers = createCallWorkspaceRuntimeSwitchingHelpers({
       callbacks: {
         appendMediaRuntimeTransitionEvent: () => {},
-        captureClientDiagnostic: () => {},
+        captureClientDiagnostic: (diagnostic) => runtimeDiagnostics.push(diagnostic),
         mediaDebugLog: () => {},
         resetSfuOutboundMediaAfterProfileSwitch: () => fail('strict mode must not reset outbound media for profile switch'),
         resolveSfuVideoQualityProfile: (value) => ({ id: value, captureWidth: 1, captureHeight: 1, captureFrameRate: 1 }),
@@ -206,6 +244,12 @@ async function main() {
     assert.equal(helpers.ensureSfuVideoQualityRecoveryProbeSeries(), false, 'strict mode must not schedule quality recovery probes');
     assert.equal(helpers.probeSfuVideoQualityAfterStableReadback(), false, 'strict mode must not upshift after readback success');
     assert.equal(helpers.downgradeSfuVideoQualityAfterEncodePressure(), false, 'strict mode must not downshift after pressure');
+    assert.equal(await helpers.maybeFallbackToNativeRuntime('stage_a_unavailable'), false, 'active strict gossip must not fall back to native runtime');
+    assert.equal(refs.mediaRuntimePath.value, 'unsupported', 'blocked native fallback must leave the sender explicitly unsupported');
+    assert.ok(
+      runtimeDiagnostics.some((diagnostic) => diagnostic.eventType === 'strict_720p30_gossip_native_fallback_blocked'),
+      'blocked native fallback must emit an explicit diagnostic',
+    );
 
     const backgroundPolicy = createSfuBackgroundTabPolicy({
       policy: strictPolicy,
@@ -216,6 +260,11 @@ async function main() {
     assert.equal(backgroundPolicy.pauseVideoForBackground({ hidden: true }), false, 'strict mode must not pause SFU video in background');
   } finally {
     await server.close();
+    if (previousCarrierMode === undefined) {
+      delete process.env.VITE_VIDEOCHAT_MEDIA_CARRIER;
+    } else {
+      process.env.VITE_VIDEOCHAT_MEDIA_CARRIER = previousCarrierMode;
+    }
   }
 
   console.log('[sfu-strict-720p30-runtime-contract] PASS');
