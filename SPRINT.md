@@ -71,7 +71,7 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [ ] IAM9-01 Extract or prove audit log completeness from
+- [x] IAM9-01 Extract or prove audit log completeness from
   `local/iam-e2e-audit-log-completeness`.
 - [ ] IAM9-02 Extract or prove calendar invitation edge safe states from
   `local/iam-e2e-calendar-edge-safe-states`.
