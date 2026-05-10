@@ -74,6 +74,7 @@ try {
     $guestUserId = 9203;
     $adminUserId = 9204;
     $roomId = 'room-chat-archive-contract';
+    $otherRoomId = 'room-chat-archive-contract-breakout';
     $callId = 'call-chat-archive-contract';
 
     $insertUser = $pdo->prepare(
@@ -107,6 +108,17 @@ VALUES(:id, 'Archive Contract Room', 'private', 'active', :owner_user_id, :creat
 SQL
     )->execute([
         ':id' => $roomId,
+        ':owner_user_id' => $ownerUserId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $pdo->prepare(
+        <<<'SQL'
+INSERT OR REPLACE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+VALUES(:id, 'Archive Contract Breakout Room', 'private', 'active', :owner_user_id, :created_at, :updated_at)
+SQL
+    )->execute([
+        ':id' => $otherRoomId,
         ':owner_user_id' => $ownerUserId,
         ':created_at' => $now,
         ':updated_at' => $now,
@@ -289,6 +301,52 @@ SQL
     videochat_chat_archive_contract_assert((bool) ($nextPage['ok'] ?? false), 'next archive page should load');
     videochat_chat_archive_contract_assert(count(($nextPage['archive']['messages'] ?? [])) === 1, 'next page should return second message');
     videochat_chat_archive_contract_assert((int) (($nextPage['archive']['messages'][0] ?? [])['seq'] ?? 0) > $nextCursor, 'next page should advance monotonic seq');
+
+    $tailArchive = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', [
+        'room_id' => $roomId,
+        'tail' => '1',
+        'limit' => 1,
+    ]);
+    videochat_chat_archive_contract_assert((bool) ($tailArchive['ok'] ?? false), 'tail archive fetch should succeed');
+    $tailMessages = ($tailArchive['archive']['messages'] ?? []);
+    videochat_chat_archive_contract_assert(count($tailMessages) === 1, 'tail archive should honor limit');
+    videochat_chat_archive_contract_assert((string) (($tailMessages[0] ?? [])['id'] ?? '') === 'chat_archive_msg_002', 'tail archive should return latest room message first page');
+    videochat_chat_archive_contract_assert((string) (($tailArchive['archive']['pagination'] ?? [])['direction'] ?? '') === 'latest', 'tail archive pagination direction mismatch');
+    videochat_chat_archive_contract_assert((bool) (($tailArchive['archive']['pagination'] ?? [])['has_next'] ?? false), 'tail archive should expose older page');
+    videochat_chat_archive_contract_assert((string) (($tailArchive['archive']['filters'] ?? [])['room_id'] ?? '') === $roomId, 'tail archive should echo room filter');
+    $tailCursor = (int) (($tailArchive['archive']['pagination'] ?? [])['next_cursor'] ?? 0);
+    $tailOlder = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', [
+        'room_id' => $roomId,
+        'tail' => '1',
+        'cursor' => $tailCursor,
+        'limit' => 1,
+    ]);
+    videochat_chat_archive_contract_assert((bool) ($tailOlder['ok'] ?? false), 'older tail archive page should load');
+    videochat_chat_archive_contract_assert((string) ((($tailOlder['archive']['messages'] ?? [])[0] ?? [])['id'] ?? '') === 'chat_archive_msg_001', 'older tail page should return previous room message');
+
+    $otherRoomEvent = $secondEvent;
+    $otherRoomEvent['room_id'] = $otherRoomId;
+    $otherRoomEvent['message']['id'] = 'chat_archive_msg_003';
+    $otherRoomEvent['message']['client_message_id'] = 'client-3';
+    $otherRoomEvent['message']['text'] = 'breakout room message';
+    $otherRoomEvent['message']['attachments'] = [];
+    $otherRoomEvent['message']['server_unix_ms'] = 1776600000003;
+    $otherRoomEvent['message']['server_time'] = '2026-04-19T12:00:03Z';
+    $otherRoomEvent['time'] = '2026-04-19T12:00:03Z';
+    $appendOtherRoom = videochat_chat_archive_append_message($pdo, $callId, $otherRoomId, $otherRoomEvent);
+    videochat_chat_archive_contract_assert((bool) ($appendOtherRoom['ok'] ?? false), 'other room archive append should succeed');
+    $roomFiltered = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', [
+        'room_id' => $roomId,
+        'tail' => '1',
+        'limit' => 50,
+    ]);
+    videochat_chat_archive_contract_assert(count(($roomFiltered['archive']['messages'] ?? [])) === 2, 'room filtered tail should exclude breakout room message');
+    $otherRoomFiltered = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', [
+        'room_id' => $otherRoomId,
+        'tail' => '1',
+        'limit' => 50,
+    ]);
+    videochat_chat_archive_contract_assert(count(($otherRoomFiltered['archive']['messages'] ?? [])) === 1, 'other room filtered tail should return only breakout room message');
 
     $allArchive = videochat_chat_archive_fetch($pdo, $callId, $ownerUserId, 'user', ['limit' => 50]);
     $groups = (($allArchive['archive'] ?? [])['files'] ?? [])['groups'] ?? [];

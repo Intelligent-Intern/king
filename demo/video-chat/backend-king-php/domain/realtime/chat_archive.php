@@ -49,6 +49,26 @@ function videochat_chat_archive_normalize_call_id(string $callId): string
     return preg_match('/^[A-Za-z0-9._-]{1,200}$/', $normalized) === 1 ? $normalized : '';
 }
 
+function videochat_chat_archive_normalize_room_id(mixed $roomId): string
+{
+    $normalized = trim((string) $roomId);
+    return preg_match('/^[A-Za-z0-9._:-]{1,200}$/', $normalized) === 1 ? $normalized : '';
+}
+
+function videochat_chat_archive_truthy(mixed $value): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value)) {
+        return $value === 1;
+    }
+    if (is_string($value)) {
+        return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on', 'tail', 'latest'], true);
+    }
+    return false;
+}
+
 function videochat_chat_archive_object_key(string $callId, string $roomId, string $messageId): string
 {
     $callHash = substr(hash('sha256', $callId), 0, 16);
@@ -682,15 +702,30 @@ function videochat_chat_archive_fetch(PDO $pdo, string $callId, int $userId, str
     $query = strtolower(trim((string) ($queryParams['q'] ?? ($queryParams['query'] ?? ''))));
     $senderUserId = max(0, (int) ($queryParams['sender_user_id'] ?? 0));
     $fileKind = videochat_chat_archive_normalize_file_kind($queryParams['file_kind'] ?? 'all');
+    $requestedRoomId = videochat_chat_archive_normalize_room_id($queryParams['room_id'] ?? ($queryParams['room'] ?? ''));
+    $roomFilter = $requestedRoomId !== '' ? $requestedRoomId : (string) ($context['room_id'] ?? '');
+    $direction = strtolower(trim((string) ($queryParams['direction'] ?? '')));
+    $tailMode = videochat_chat_archive_truthy($queryParams['tail'] ?? false) || in_array($direction, ['latest', 'tail', 'desc', 'backward'], true);
 
     $where = [
         'call_id = :call_id',
-        'seq > :cursor',
     ];
     $params = [
         ':call_id' => $normalizedCallId,
-        ':cursor' => $cursor,
     ];
+    if ($tailMode) {
+        if ($cursor > 0) {
+            $where[] = 'seq < :cursor';
+            $params[':cursor'] = $cursor;
+        }
+    } else {
+        $where[] = 'seq > :cursor';
+        $params[':cursor'] = $cursor;
+    }
+    if ($roomFilter !== '') {
+        $where[] = 'room_id = :room_id';
+        $params[':room_id'] = $roomFilter;
+    }
     if ($query !== '') {
         $where[] = '(lower(text) LIKE :query OR lower(sender_display_name) LIKE :query)';
         $params[':query'] = '%' . $query . '%';
@@ -706,11 +741,12 @@ function videochat_chat_archive_fetch(PDO $pdo, string $callId, int $userId, str
 SELECT *
 FROM call_chat_messages
 WHERE %s
-ORDER BY seq ASC
+ORDER BY seq %s
 LIMIT :limit
 SQL
             ,
-            implode(' AND ', $where)
+            implode(' AND ', $where),
+            $tailMode ? 'DESC' : 'ASC'
         )
     );
     foreach ($params as $key => $value) {
@@ -723,6 +759,9 @@ SQL
     $hasNext = count($rows) > $limit;
     if ($hasNext) {
         $rows = array_slice($rows, 0, $limit);
+    }
+    if ($tailMode) {
+        $rows = array_reverse($rows);
     }
 
     $messageIds = [];
@@ -740,13 +779,20 @@ SQL
             continue;
         }
         $messageId = (string) ($row['message_id'] ?? '');
-        $nextCursor = (int) ($row['seq'] ?? 0);
+        $rowSeq = (int) ($row['seq'] ?? 0);
+        if ($tailMode) {
+            if ($nextCursor === null) {
+                $nextCursor = $rowSeq;
+            }
+        } else {
+            $nextCursor = $rowSeq;
+        }
         $storedMessage = videochat_chat_archive_decode_json((string) ($row['message_json'] ?? ''), []);
         $clientMessageId = is_array($storedMessage) && is_string($storedMessage['client_message_id'] ?? null)
             ? trim((string) $storedMessage['client_message_id'])
             : '';
         $messages[] = [
-            'seq' => (int) ($row['seq'] ?? 0),
+            'seq' => $rowSeq,
             'id' => $messageId,
             'client_message_id' => $clientMessageId !== '' ? $clientMessageId : null,
             'text' => (string) ($row['text'] ?? ''),
@@ -782,6 +828,7 @@ SQL
             'pagination' => [
                 'cursor' => $cursor,
                 'limit' => $limit,
+                'direction' => $tailMode ? 'latest' : 'forward',
                 'returned' => count($messages),
                 'has_next' => $hasNext,
                 'next_cursor' => $hasNext ? $nextCursor : null,
@@ -790,6 +837,7 @@ SQL
                 'query' => $query,
                 'sender_user_id' => $senderUserId,
                 'file_kind' => $fileKind,
+                'room_id' => $roomFilter,
                 'supported_file_kinds' => ['all', 'image', 'pdf', 'office', 'text', 'document'],
             ],
             'retention' => [
