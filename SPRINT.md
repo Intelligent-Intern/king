@@ -78,7 +78,7 @@ Sprint Checkboxen:
   `local/iam-e2e-account-reconciliation-email`.
 - [x] IAM8-04 Extract or prove admin guest-list main journeys from
   `local/iam-e2e-admin-guestlist-main-journeys`.
-- [ ] IAM8-05 Extract or prove logged-in anonymous-link organization-admin
+- [x] IAM8-05 Extract or prove logged-in anonymous-link organization-admin
   rights from `local/iam-e2e-anonymous-link-org-admin-rights`.
 - [x] IAM8-06 Extract or prove anonymous temporary access rights from
   `local/iam-e2e-anonymous-temp-rights-proof-2`.
