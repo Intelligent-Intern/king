@@ -478,6 +478,7 @@ export function createCallWorkspaceMediaStack(options) {
         refs.controlState.screenEnabled = false;
         callbacks.onLocalScreenShareStateChanged?.(false, reason);
       },
+      publishLocalEncodedFrameToGossip: callbacks.publishLocalEncodedFrameToGossip,
       registerLocalScreenSharePeer,
       renderCallVideoLayout: () => renderCallVideoLayout(),
       requestWlvcFullFrameKeyframe: sfuTransport.requestWlvcFullFrameKeyframe,

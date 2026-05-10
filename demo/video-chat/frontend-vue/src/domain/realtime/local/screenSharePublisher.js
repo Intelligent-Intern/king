@@ -341,6 +341,7 @@ export function createScreenShareParticipantPublisher({
       mediaDebugLog: callbacks.mediaDebugLog,
       mountLocalPreview: false,
       noteWlvcSourceReadbackSuccess: callbacks.noteWlvcSourceReadbackSuccess,
+      publishLocalEncodedFrameToGossip: callbacks.publishLocalEncodedFrameToGossip,
       reconfigureLocalTracksFromSelectedDevices: async () => false,
       renderCallVideoLayout: callbacks.renderCallVideoLayout,
       resetBackgroundRuntimeMetrics: () => {},
@@ -659,7 +660,8 @@ export function createScreenShareParticipantPublisher({
       screenRefs.localStreamRef.value = nextStream;
       screenRefs.localTracksRef.value = [videoTrack];
 
-      if (!refs.SFUClient || typeof refs.SFUClient !== 'function') {
+      const useSfuTransport = refs.shouldConnectSfu.value === true;
+      if (useSfuTransport && (!refs.SFUClient || typeof refs.SFUClient !== 'function')) {
         throw normalizeDisplayMediaError({
           name: 'NotSupportedError',
           message: 'Screen sharing media routing is not available.',
@@ -684,7 +686,9 @@ export function createScreenShareParticipantPublisher({
         videoElement: previewVideo,
         videoTrack,
       });
-      await waitForScreenSfuConnected();
+      if (useSfuTransport) {
+        await waitForScreenSfuConnected();
+      }
       await pipeline.startEncodingPipeline(videoTrack);
       callbacks.registerLocalScreenSharePeer?.({
         stream: nextStream,

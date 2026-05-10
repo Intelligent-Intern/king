@@ -748,7 +748,7 @@ write_remote_runtime_files() {
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
   infra_cluster_q="$(shell_quote "${VIDEOCHAT_INFRA_CLUSTER_NAME:-${DEPLOY_DOMAIN}}")"
-  infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws,sfu}")"
+  infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws}")"
   infra_local_node_name_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_NODE_NAME:-${VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME:-}}")"
   infra_local_public_ip_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_HOST:-}}}")"
   infra_hcloud_token_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_TOKEN:-${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}}")"
@@ -837,6 +837,8 @@ VIDEOCHAT_V1_WS_WORKERS=8
 VIDEOCHAT_V1_BACKEND_SFU_PORT=18082
 VIDEOCHAT_V1_BACKEND_SFU_BIND=127.0.0.1
 VIDEOCHAT_V1_SFU_WORKERS=8
+VIDEOCHAT_SFU_ENABLED=0
+VIDEOCHAT_EDGE_SFU_ENABLED=0
 VIDEOCHAT_V1_EDGE_HTTP_PORT=80
 VIDEOCHAT_V1_EDGE_HTTPS_PORT=443
 
@@ -865,6 +867,7 @@ VIDEOCHAT_V1_BACKEND_ORIGIN=https://\${API_DOMAIN}
 VIDEOCHAT_V1_BACKEND_WS_ORIGIN=https://\${WS_DOMAIN}
 VIDEOCHAT_V1_BACKEND_SFU_ORIGIN=https://\${SFU_DOMAIN}
 VITE_VIDEOCHAT_ENABLE_SFU=true
+VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=false
 VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active
 VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary
 VITE_VIDEOCHAT_CDN_ORIGIN=https://\${CDN_DOMAIN}
@@ -1005,7 +1008,7 @@ start_production_https() {
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
   infra_cluster_q="$(shell_quote "${VIDEOCHAT_INFRA_CLUSTER_NAME:-${DEPLOY_DOMAIN}}")"
-  infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws,sfu}")"
+  infra_node_roles_q="$(shell_quote "${VIDEOCHAT_INFRA_NODE_ROLES:-edge,http,ws}")"
   infra_local_node_name_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_NODE_NAME:-${VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME:-}}")"
   infra_local_public_ip_q="$(shell_quote "${VIDEOCHAT_INFRA_LOCAL_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_PUBLIC_IP:-${VIDEOCHAT_DEPLOY_HOST:-}}}")"
   infra_hcloud_token_q="$(shell_quote "${VIDEOCHAT_INFRA_HETZNER_TOKEN:-${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}}")"
@@ -1078,6 +1081,8 @@ set_env_value VIDEOCHAT_V1_WS_WORKERS 8
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_PORT 18082
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_BIND 127.0.0.1
 set_env_value VIDEOCHAT_V1_SFU_WORKERS 8
+set_env_value VIDEOCHAT_SFU_ENABLED 0
+set_env_value VIDEOCHAT_EDGE_SFU_ENABLED 0
 set_env_value VIDEOCHAT_V1_EDGE_HTTP_PORT 80
 set_env_value VIDEOCHAT_V1_EDGE_HTTPS_PORT 443
 set_env_value VIDEOCHAT_DEPLOY_APP_DOMAIN "\${APP_DOMAIN}"
@@ -1107,6 +1112,7 @@ set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\${API_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "https://\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "https://\${SFU_DOMAIN}"
 set_env_value VITE_VIDEOCHAT_ENABLE_SFU true
+set_env_value VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT false
 set_env_value VITE_VIDEOCHAT_GOSSIP_DATA_LANE active
 set_env_value VITE_VIDEOCHAT_MEDIA_CARRIER gossip_primary
 set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "https://\${CDN_DOMAIN}"
@@ -1155,12 +1161,17 @@ docker compose --env-file .env --env-file .env.local \\
 docker compose --env-file .env --env-file .env.local \\
   -f docker-compose.v1.yml \\
   -f docker-compose.deploy.local.yml \\
+  --profile sfu \\
+  rm -sf videochat-backend-sfu-v1 >/dev/null 2>&1 || true
+
+docker compose --env-file .env --env-file .env.local \\
+  -f docker-compose.v1.yml \\
+  -f docker-compose.deploy.local.yml \\
   --profile edge \\
   --profile turn \\
   up -d --build --remove-orphans \\
   videochat-backend-v1 \\
   videochat-backend-ws-v1 \\
-  videochat-backend-sfu-v1 \\
   videochat-turn-v1 \\
   videochat-edge-v1
 
@@ -1234,11 +1245,11 @@ wait_for_allowed_code app-wss-route /tmp/king-videochat-app-ws-probe.out \\
   --resolve "\${APP_DOMAIN}:443:127.0.0.1" \\
   "https://\${APP_DOMAIN}/ws"
 
-wait_for_allowed_code sfu-route /tmp/king-videochat-sfu-probe.out \\
+wait_for_code sfu-route-disabled 404 \\
   --resolve "\${SFU_DOMAIN}:443:127.0.0.1" \\
   "https://\${SFU_DOMAIN}/sfu"
 
-wait_for_allowed_code app-sfu-route /tmp/king-videochat-app-sfu-probe.out \\
+wait_for_code app-sfu-route-disabled 404 \\
   --resolve "\${APP_DOMAIN}:443:127.0.0.1" \\
   "https://\${APP_DOMAIN}/sfu"
 
@@ -1334,7 +1345,7 @@ fi
 printf 'Production frontend: https://%s/\\n' "\${APP_DOMAIN}"
 printf 'Production API: https://%s/health\\n' "\${API_DOMAIN}"
 printf 'Production lobby websocket: wss://%s/ws\\n' "\${WS_DOMAIN}"
-printf 'Production SFU websocket: wss://%s/sfu\\n' "\${SFU_DOMAIN}"
+printf 'Production SFU websocket: disabled\\n'
 printf 'Production TURN relay: turn:%s:3478\\n' "\${TURN_DOMAIN}"
 REMOTE
 }
@@ -1516,7 +1527,7 @@ fi
 printf 'Public HTTP frontend: http://%s/\\n' "\${APP_DOMAIN}"
 printf 'King backend health: http://%s:18080/health\\n' "\${API_DOMAIN}"
 printf 'King lobby websocket: ws://%s:18081/ws\\n' "\${WS_DOMAIN}"
-printf 'King SFU websocket: ws://%s:18082/sfu\\n' "\${SFU_DOMAIN}"
+printf 'King SFU websocket: disabled\\n'
 REMOTE
 }
 

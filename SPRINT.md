@@ -101,6 +101,12 @@ Tickets:
     allowed to block `gossip/server-frame` delivery on this path.
   - Relay delivery first targets dedicated `relay=media` sockets and no longer
     depends on room/control websocket presence before forwarding.
+- [ ] GSR-06 Disable SFU transport completely while keeping WLVC/Gossip relay
+  encoding available.
+  - Client must not connect `/sfu`.
+  - Deploy must not start `videochat-backend-sfu-v1`.
+  - Edge must not proxy `/sfu` while disabled.
+  - No push, DNS change, or certbot run.
 - [ ] GSR-03 Build, deploy without push/DNS/certbot, and run post-deploy
   diagnostics for relay delivery and websocket errors.
 

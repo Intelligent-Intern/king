@@ -104,6 +104,7 @@ import {
   SFU_PUBLISH_RETRY_DELAY_MS,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
+  SFU_TRANSPORT_ENABLED,
   SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
   SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS,
   SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS,
@@ -560,7 +561,8 @@ const showLobbyTab = computed(() => canModerate.value);
 const usersSourceMode = computed(() => 'snapshot');
 const isSocketOnline = computed(() => connectionState.value === 'online');
 const shouldConnectSfu = computed(() => (
-  isWlvcRuntimePath()
+  SFU_TRANSPORT_ENABLED
+  && isWlvcRuntimePath()
   && isSocketOnline.value
   && hasRealtimeRoomSync.value
   && !routeCallResolve.pending

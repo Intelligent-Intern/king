@@ -32,9 +32,13 @@ const joinVisibilitySlo = read('../../src/domain/realtime/sfu/joinVisibilitySlo.
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
 const backendOrigin = read('../../src/support/backendOrigin.ts');
+const workspaceConfig = read('../../src/domain/realtime/workspace/config.ts');
+const callWorkspace = read('../../src/domain/realtime/CallWorkspaceView.vue');
 const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
+const compose = read('../../../docker-compose.v1.yml');
+const edge = read('../../../edge/edge.php');
 
 try {
   requireContains(sfuClient, 'resolveBackendSfuOriginCandidates', 'SFU client origin imports');
@@ -145,10 +149,20 @@ try {
   requireContains(backendOrigin, 'const websocketOrigin = resolveBackendWebSocketOrigin();', 'websocket fallback origin');
   requireContains(backendOrigin, 'const backendOrigin = resolveBackendOrigin();', 'backend fallback origin');
   requireMatch(backendOrigin, /pushUniqueCandidate\(candidates,\s*primarySfuOrigin\)[\s\S]*appendLoopbackHostVariant\(candidates,\s*primarySfuOrigin\)/, 'SFU loopback origin fallback');
+  requireContains(workspaceConfig, 'export const SFU_TRANSPORT_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT, false);', 'client SFU transport flag');
+  requireMatch(callWorkspace, /const shouldConnectSfu = computed\(\(\) => \(\s*SFU_TRANSPORT_ENABLED\s*&& isWlvcRuntimePath\(\)/m, 'client must not connect SFU when transport flag is disabled');
 
-  requireMatch(stackEnv, /^VITE_VIDEOCHAT_ENABLE_SFU=true$/m, 'default SFU runtime flag');
-  requireContains(deployScript, 'VITE_VIDEOCHAT_ENABLE_SFU=true', 'deployment SFU runtime flag template');
-  requireContains(deployScript, 'set_env_value VITE_VIDEOCHAT_ENABLE_SFU true', 'deployment SFU runtime env persistence');
+  requireMatch(stackEnv, /^VITE_VIDEOCHAT_ENABLE_SFU=true$/m, 'default WLVC/Gossip encoder runtime flag');
+  requireMatch(stackEnv, /^VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=false$/m, 'default SFU transport disabled flag');
+  requireMatch(stackEnv, /^VIDEOCHAT_SFU_ENABLED=0$/m, 'default backend SFU disabled flag');
+  requireContains(deployScript, 'VITE_VIDEOCHAT_ENABLE_SFU=true', 'deployment WLVC/Gossip runtime flag template');
+  requireContains(deployScript, 'VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=false', 'deployment SFU transport disabled template');
+  requireContains(deployScript, 'set_env_value VITE_VIDEOCHAT_ENABLE_SFU true', 'deployment WLVC/Gossip runtime env persistence');
+  requireContains(deployScript, 'set_env_value VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT false', 'deployment SFU transport disabled env persistence');
+  requireContains(compose, 'videochat-backend-sfu-v1:\n    profiles:\n      - sfu', 'SFU container must be behind explicit compose profile');
+  requireContains(edge, "return $sfuEnabled ? $sfuUpstream : null;", 'edge must not proxy /sfu while SFU is disabled');
+  requireContains(deployScript, 'wait_for_code sfu-route-disabled 404', 'deployment must expect disabled SFU route to return 404');
+  requireContains(deployScript, 'wait_for_code app-sfu-route-disabled 404', 'deployment must expect disabled app /sfu route to return 404');
 
   process.stdout.write('[sfu-origin-room-binding-contract] PASS\n');
 } catch (error) {
