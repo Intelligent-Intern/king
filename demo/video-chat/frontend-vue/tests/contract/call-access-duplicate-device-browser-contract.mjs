@@ -44,6 +44,28 @@ function reconcilePersonalizedLinkRedemptions(attempts) {
   });
 }
 
+function baselineDuplicateReviewOutcomes(contexts) {
+  return contexts.map((context) => ({
+    label: context.label,
+    userAgent: context.userAgent,
+    status: 403,
+    code: 'call_access_forbidden',
+    review: {
+      flag: 'duplicate_personalized_link',
+      state: 'manual_review_required',
+      stage: context.stage,
+      access_fingerprint: context.accessFingerprint,
+      subject_user_id: context.userId,
+      raw_link_identifier_logged: false,
+      account_email_logged: false,
+      host_name_logged: false,
+    },
+    sessionPostAttempted: false,
+    sessionIdAfter: context.originalSessionId,
+    navigatesToWorkspace: false,
+  }));
+}
+
 const callAccessJoinSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const callAccessSessionClient = readText('demo/video-chat/frontend-vue/src/domain/calls/access/callAccessSession.ts');
 const joinView = readText('demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue');
@@ -186,6 +208,130 @@ assert.notEqual(
   outcomes[1].sessionIdAfter,
   outcomes[0].callAccessSessionId,
   'duplicate loser must not adopt the winner call-access session',
+);
+
+const iam914Baseline = {
+  source: 'local/iam-e2e-duplicate-link-abuse-device-browser',
+  historicalTestIds: ['e2e_duplicate_link_007', 'e2e_duplicate_link_008'],
+  accessId: '23232323-2323-4232-8232-232323232323',
+  winner: {
+    label: 'linked-device-a',
+    userId: 41,
+    originalSessionId: 'sess_linked_device_a_before',
+    callAccessSessionId: 'sess_linked_device_a_call_access',
+    userAgent: 'King IAM E2E Linked Device A Chromium',
+  },
+  duplicateContexts: [
+    {
+      label: 'foreign-device-b',
+      userId: 42,
+      originalSessionId: 'sess_foreign_device_b',
+      deniedSessionId: 'sess_foreign_device_should_not_bind',
+      userAgent: 'King IAM E2E Mobile Device B',
+      viewport: { width: 390, height: 844 },
+      stage: 'cross_device_duplicate',
+      accessFingerprint: 'sha256:cross-device-duplicate',
+    },
+    {
+      label: 'foreign-browser-c',
+      userId: 43,
+      originalSessionId: 'sess_foreign_browser_c',
+      deniedSessionId: 'sess_foreign_browser_should_not_bind',
+      userAgent: 'Mozilla/5.0 King IAM E2E Firefox Browser C',
+      stage: 'cross_browser_duplicate',
+      accessFingerprint: 'sha256:cross-browser-duplicate',
+    },
+  ],
+  privateNeedles: [
+    '23232323-2323-4232-8232-232323232323',
+    'linked-device-a@example.invalid',
+    'Linked Device A',
+    'Cross Device Private Host',
+    'cross-device-host@example.invalid',
+    'sess_foreign_device_should_not_bind',
+    'sess_foreign_browser_should_not_bind',
+  ],
+};
+
+assert.deepEqual(
+  iam914Baseline.historicalTestIds,
+  ['e2e_duplicate_link_007', 'e2e_duplicate_link_008'],
+  'IAM9-14 baseline must pin the extracted historical duplicate-link device/browser rows',
+);
+assert.deepEqual(
+  iam914Baseline.duplicateContexts.map((context) => context.stage),
+  ['cross_device_duplicate', 'cross_browser_duplicate'],
+  'IAM9-14 baseline must keep separate cross-device and cross-browser duplicate stages',
+);
+assert.deepEqual(
+  baselineDuplicateReviewOutcomes(iam914Baseline.duplicateContexts),
+  [
+    {
+      label: 'foreign-device-b',
+      userAgent: 'King IAM E2E Mobile Device B',
+      status: 403,
+      code: 'call_access_forbidden',
+      review: {
+        flag: 'duplicate_personalized_link',
+        state: 'manual_review_required',
+        stage: 'cross_device_duplicate',
+        access_fingerprint: 'sha256:cross-device-duplicate',
+        subject_user_id: 42,
+        raw_link_identifier_logged: false,
+        account_email_logged: false,
+        host_name_logged: false,
+      },
+      sessionPostAttempted: false,
+      sessionIdAfter: 'sess_foreign_device_b',
+      navigatesToWorkspace: false,
+    },
+    {
+      label: 'foreign-browser-c',
+      userAgent: 'Mozilla/5.0 King IAM E2E Firefox Browser C',
+      status: 403,
+      code: 'call_access_forbidden',
+      review: {
+        flag: 'duplicate_personalized_link',
+        state: 'manual_review_required',
+        stage: 'cross_browser_duplicate',
+        access_fingerprint: 'sha256:cross-browser-duplicate',
+        subject_user_id: 43,
+        raw_link_identifier_logged: false,
+        account_email_logged: false,
+        host_name_logged: false,
+      },
+      sessionPostAttempted: false,
+      sessionIdAfter: 'sess_foreign_browser_c',
+      navigatesToWorkspace: false,
+    },
+  ],
+  'IAM9-14 extracted value must reject duplicate device/browser reuse with review flags and preserve the loser sessions',
+);
+assert.notEqual(
+  iam914Baseline.duplicateContexts[0].userAgent,
+  iam914Baseline.duplicateContexts[1].userAgent,
+  'IAM9-14 baseline must distinguish device and browser contexts by user agent',
+);
+assert.deepEqual(
+  iam914Baseline.duplicateContexts[0].viewport,
+  { width: 390, height: 844 },
+  'IAM9-14 cross-device row must retain the mobile viewport baseline',
+);
+assertNoNeedles(
+  {
+    status: 'error',
+    error: {
+      code: 'call_access_forbidden',
+      message: 'Call access link is not available for your session.',
+      details: {
+        mismatch: 'strong_personalized_link',
+        fields: { auth: 'not_bound_to_current_user', host_name: 'not_verified' },
+        review: baselineDuplicateReviewOutcomes(iam914Baseline.duplicateContexts).map((outcome) => outcome.review),
+      },
+    },
+  },
+  iam914Baseline.privateNeedles,
+  'IAM9-14 duplicate device/browser baseline conflict payload',
 );
 
 assertNoNeedles(
