@@ -7,6 +7,13 @@ require_once __DIR__ . '/../domain/realtime/realtime_signaling.php';
 const VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame';
 const VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame';
 
+function videochat_gossip_media_relay_socket_requested(array $queryParams): bool
+{
+    $relay = strtolower(trim((string) ($queryParams['relay'] ?? '')));
+    $channel = strtolower(trim((string) ($queryParams['channel'] ?? '')));
+    return $relay === 'media' || $channel === 'gossip_media_relay';
+}
+
 function videochat_gossip_media_relay_max_frame_chars(): int
 {
     $configured = (int) (getenv('VIDEOCHAT_GOSSIP_MEDIA_RELAY_MAX_FRAME_CHARS') ?: 0);
@@ -93,6 +100,169 @@ function videochat_gossip_media_relay_decode_client_frame(string $frame): array
     ];
 }
 
+function videochat_gossip_media_relay_register_socket(array &$presenceState, array $presenceConnection): void
+{
+    $connectionId = trim((string) ($presenceConnection['connection_id'] ?? ''));
+    if ($connectionId === '') {
+        return;
+    }
+
+    $presenceState['media_relay_connections'] ??= [];
+    $presenceState['media_relay_connections'][$connectionId] = [
+        ...$presenceConnection,
+        'media_relay_socket' => true,
+    ];
+}
+
+function videochat_gossip_media_relay_unregister_socket(array &$presenceState, string $connectionId): void
+{
+    $normalizedConnectionId = trim($connectionId);
+    if ($normalizedConnectionId === '') {
+        return;
+    }
+
+    if (is_array($presenceState['media_relay_connections'] ?? null)) {
+        unset($presenceState['media_relay_connections'][$normalizedConnectionId]);
+    }
+}
+
+function videochat_gossip_media_relay_send_relay_socket_error(
+    mixed $websocket,
+    string $errorCode,
+    ?callable $sender = null
+): void {
+    videochat_presence_send_frame(
+        $websocket,
+        [
+            'type' => 'system/error',
+            'code' => 'gossip_media_relay_socket_failed',
+            'message' => 'The media relay websocket accepted only Gossip media relay frames.',
+            'details' => [
+                'error' => $errorCode,
+                'accepted_type' => VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE,
+            ],
+            'time' => gmdate('c'),
+        ],
+        $sender
+    );
+}
+
+function videochat_realtime_serve_gossip_media_relay_websocket(
+    mixed $websocket,
+    array &$presenceState,
+    array $presenceConnection,
+    callable $authenticateRequest,
+    string $authSessionId,
+    string $wsPath,
+    callable $disconnectStaleAssetClient,
+    callable $openDatabase,
+    ?callable $onDetach = null,
+    ?callable $sender = null
+): void {
+    $presenceConnection['media_relay_socket'] = true;
+    videochat_gossip_media_relay_register_socket($presenceState, $presenceConnection);
+
+    $transientSessionLivenessFailures = 0;
+    $transientSessionLivenessStartedAtMs = 0;
+    $transientSessionLivenessGraceMs = 5000;
+
+    try {
+        while (true) {
+            if ($disconnectStaleAssetClient()) {
+                break;
+            }
+
+            $sessionLiveness = videochat_realtime_validate_session_liveness(
+                $authenticateRequest,
+                $authSessionId,
+                $wsPath
+            );
+            if (!(bool) ($sessionLiveness['ok'] ?? false)) {
+                $livenessAction = videochat_realtime_handle_session_liveness_failure(
+                    $websocket,
+                    $sessionLiveness,
+                    $transientSessionLivenessFailures,
+                    $transientSessionLivenessStartedAtMs,
+                    $transientSessionLivenessGraceMs
+                );
+                if ($livenessAction === 'continue') {
+                    continue;
+                }
+                break;
+            }
+            $transientSessionLivenessFailures = 0;
+            $transientSessionLivenessStartedAtMs = 0;
+
+            $frame = king_client_websocket_receive($websocket, 250);
+            if ($frame === false) {
+                $status = function_exists('king_client_websocket_get_status')
+                    ? (int) king_client_websocket_get_status($websocket)
+                    : 3;
+                if ($status === 3) {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (!is_string($frame) || trim($frame) === '') {
+                continue;
+            }
+
+            $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+            $presenceConnection['media_relay_socket'] = true;
+            videochat_gossip_media_relay_register_socket($presenceState, $presenceConnection);
+
+            if (strlen($frame) < 128) {
+                try {
+                    $smallCommand = json_decode($frame, true, 8, JSON_THROW_ON_ERROR);
+                    if (is_array($smallCommand) && strtolower(trim((string) ($smallCommand['type'] ?? ''))) === 'ping') {
+                        videochat_presence_send_frame(
+                            $websocket,
+                            [
+                                'type' => 'system/pong',
+                                'runtime' => videochat_realtime_runtime_descriptor(),
+                                'relay' => 'media',
+                                'time' => gmdate('c'),
+                            ],
+                            $sender
+                        );
+                        continue;
+                    }
+                } catch (JsonException) {
+                    // Let the strict relay decoder below produce the public error.
+                }
+            }
+
+            $relayCommand = videochat_gossip_media_relay_decode_client_frame($frame);
+            $relayResult = videochat_realtime_handle_gossip_media_relay_command(
+                $relayCommand,
+                $websocket,
+                $presenceState,
+                $presenceConnection,
+                $sender
+            );
+            if ($relayResult !== null && (bool) ($relayResult['handled'] ?? false)) {
+                continue;
+            }
+
+            videochat_gossip_media_relay_send_relay_socket_error(
+                $websocket,
+                (string) ($relayCommand['error'] ?? 'unsupported_type'),
+                $sender
+            );
+        }
+    } finally {
+        videochat_gossip_media_relay_unregister_socket(
+            $presenceState,
+            (string) ($presenceConnection['connection_id'] ?? '')
+        );
+        if ($onDetach !== null) {
+            $onDetach();
+        }
+    }
+}
+
 function videochat_realtime_send_gossip_media_relay_error(
     mixed $websocket,
     array $presenceConnection,
@@ -126,7 +296,8 @@ function videochat_gossip_media_relay_broadcast_call_event(
     array $payload,
     string $excludeConnectionId,
     ?callable $sender = null,
-    ?int $tenantId = null
+    ?int $tenantId = null,
+    ?int $excludeUserId = null
 ): int {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
     $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
@@ -141,6 +312,40 @@ function videochat_gossip_media_relay_broadcast_call_event(
 
     $sentCount = 0;
     $excludedId = trim($excludeConnectionId);
+    $excludedUserId = is_int($excludeUserId) && $excludeUserId > 0 ? $excludeUserId : 0;
+    $relayDeliveredUserIds = [];
+    $relayConnections = $presenceState['media_relay_connections'] ?? null;
+    if (is_array($relayConnections) && $relayConnections !== []) {
+        foreach ($relayConnections as $connectionId => $connection) {
+            if (!is_string($connectionId) || $connectionId === '' || !is_array($connection)) {
+                continue;
+            }
+            if ($excludedId !== '' && $connectionId === $excludedId) {
+                continue;
+            }
+            $targetUserId = (int) ($connection['user_id'] ?? 0);
+            if ($excludedUserId > 0 && $targetUserId === $excludedUserId) {
+                continue;
+            }
+            if (videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '') !== $normalizedRoomId) {
+                continue;
+            }
+            if (videochat_realtime_connection_call_id($connection) !== $normalizedCallId) {
+                continue;
+            }
+            $connectionTenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
+            if ($tenantId !== null && $connectionTenantId !== $tenantId) {
+                continue;
+            }
+            if (videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender)) {
+                $sentCount++;
+                if ($targetUserId > 0) {
+                    $relayDeliveredUserIds[$targetUserId] = true;
+                }
+            }
+        }
+    }
+
     foreach ($roomConnections as $connectionId => $_socket) {
         if (!is_string($connectionId) || $connectionId === '') {
             continue;
@@ -151,6 +356,13 @@ function videochat_gossip_media_relay_broadcast_call_event(
 
         $connection = $presenceState['connections'][$connectionId] ?? null;
         if (!is_array($connection)) {
+            continue;
+        }
+        $targetUserId = (int) ($connection['user_id'] ?? 0);
+        if ($excludedUserId > 0 && $targetUserId === $excludedUserId) {
+            continue;
+        }
+        if ($targetUserId > 0 && ($relayDeliveredUserIds[$targetUserId] ?? false)) {
             continue;
         }
         if (videochat_realtime_connection_call_id($connection) !== $normalizedCallId) {
@@ -224,7 +436,8 @@ function videochat_realtime_handle_gossip_media_relay_command(
         ],
         (string) ($presenceConnection['connection_id'] ?? ''),
         $sender,
-        $tenantId
+        $tenantId,
+        $userId
     );
 
     return videochat_realtime_secondary_handled_result();

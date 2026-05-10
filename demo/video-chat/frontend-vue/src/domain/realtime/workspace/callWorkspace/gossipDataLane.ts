@@ -7,6 +7,11 @@ import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
 import { createGossipRecoveryState } from './gossipRecoveryState';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
+const GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT = 6_000_000;
+const GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS = 1000;
+const GOSSIP_SERVER_RELAY_DIAGNOSTIC_THROTTLE_MS = 5000;
+const GOSSIP_SERVER_RELAY_RECEIVED_FRAME_WINDOW = 512;
+
 export function createCallWorkspaceGossipDataLane({
   callbacks,
   policy = null,
@@ -20,6 +25,7 @@ export function createCallWorkspaceGossipDataLane({
     defaultNativeIceServers = [],
     dynamicIceServers = null,
     handleSFUEncodedFrame,
+    relaySocketUrl = null,
     sendSocketFrame,
   } = callbacks;
   let gossipDataChannelTransport = null;
@@ -35,6 +41,11 @@ export function createCallWorkspaceGossipDataLane({
   let lastGossipTelemetrySnapshotSentAtMs = 0;
   let lastGossipRolloutGateState = null;
   let lastGossipPrimaryTopologyAdmissionDiagnosticAtMs = 0;
+  let gossipServerRelaySocket = null;
+  let gossipServerRelaySocketKey = '';
+  let gossipServerRelayReconnectAfterMs = 0;
+  let lastGossipServerRelayDiagnosticAtMs = 0;
+  const serverRelayReceivedFrameIds = new Map();
 
   function strictGossipMediaDisabled(flag = 'disableGossipMediaRepair') {
     return strictPolicyEnabled(policy, flag);
@@ -61,6 +72,136 @@ export function createCallWorkspaceGossipDataLane({
 
   function callId() {
     return String(activeSocketCallId() || activeCallId() || '').trim() || 'call';
+  }
+
+  function currentGossipServerRelaySocketUrl() {
+    if (typeof relaySocketUrl !== 'function') return '';
+    return String(relaySocketUrl() || '').trim();
+  }
+
+  function captureGossipServerRelayDiagnostic(reason, level = 'warning', extraPayload = {}, immediate = false) {
+    const nowMs = Date.now();
+    if (!immediate && (nowMs - lastGossipServerRelayDiagnosticAtMs) < GOSSIP_SERVER_RELAY_DIAGNOSTIC_THROTTLE_MS) {
+      return;
+    }
+    lastGossipServerRelayDiagnosticAtMs = nowMs;
+    captureClientDiagnostic({
+      category: 'media',
+      level,
+      eventType: 'gossip_server_relay_socket_state',
+      code: 'gossip_server_relay_socket_state',
+      message: 'Dedicated Gossip server media relay websocket state changed.',
+      payload: {
+        ...mediaCarrierDiagnosticPayload(),
+        reason: String(reason || ''),
+        room_id: roomId(),
+        call_id: callId(),
+        local_peer_id: localPeerId(),
+        relay_socket_ready_state: gossipServerRelaySocket instanceof WebSocket
+          ? Number(gossipServerRelaySocket.readyState)
+          : -1,
+        relay_socket_buffered_amount: gossipServerRelaySocket instanceof WebSocket
+          ? Number(gossipServerRelaySocket.bufferedAmount || 0)
+          : 0,
+        ...extraPayload,
+      },
+      immediate,
+    });
+  }
+
+  function closeGossipServerRelaySocket(reason = 'closed') {
+    const socket = gossipServerRelaySocket;
+    gossipServerRelaySocket = null;
+    gossipServerRelaySocketKey = '';
+    if (!(socket instanceof WebSocket)) return;
+    try {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close(1000, String(reason || 'closed').slice(0, 80));
+      }
+    } catch {
+      // Ignore close races from browser websocket teardown.
+    }
+  }
+
+  function handleGossipServerRelaySocketMessage(event) {
+    let payload;
+    try {
+      payload = JSON.parse(String(event?.data || ''));
+    } catch {
+      return;
+    }
+    if (!payload || typeof payload !== 'object') return;
+    const type = String(payload.type || '').trim().toLowerCase();
+    if (type === 'call/gossip-server-frame') {
+      const sender = payload.sender && typeof payload.sender === 'object' ? payload.sender : {};
+      const senderUserId = Number(sender.user_id || payload.sender_user_id || 0);
+      handleGossipServerRelayFrame(type, senderUserId, payload.payload || {});
+      return;
+    }
+    if (type === 'system/error') {
+      const code = String(payload.code || '').trim();
+      if (code === 'gossip_media_relay_failed' || code === 'gossip_media_relay_socket_failed') {
+        captureGossipServerRelayDiagnostic('server_error', 'warning', {
+          server_code: code,
+          server_error: String(payload?.details?.error || ''),
+        }, true);
+      }
+    }
+  }
+
+  function ensureGossipServerRelaySocket() {
+    if (!GOSSIP_SERVER_RELAY_CONFIG.enabled) return null;
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return null;
+    const relayUrl = currentGossipServerRelaySocketUrl();
+    if (relayUrl === '') {
+      captureGossipServerRelayDiagnostic('missing_relay_socket_url');
+      return null;
+    }
+    const relayKey = `${roomId()}:${callId()}:${peerId}:${relayUrl}`;
+    if (gossipServerRelaySocket instanceof WebSocket && gossipServerRelaySocketKey === relayKey) {
+      return gossipServerRelaySocket;
+    }
+
+    closeGossipServerRelaySocket('relay_context_changed');
+    const nowMs = Date.now();
+    if (nowMs < gossipServerRelayReconnectAfterMs) {
+      captureGossipServerRelayDiagnostic('reconnect_backoff');
+      return null;
+    }
+
+    let socket;
+    try {
+      socket = new WebSocket(relayUrl);
+    } catch {
+      gossipServerRelayReconnectAfterMs = nowMs + GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS;
+      captureGossipServerRelayDiagnostic('open_failed', 'warning', {}, true);
+      return null;
+    }
+
+    gossipServerRelaySocket = socket;
+    gossipServerRelaySocketKey = relayKey;
+    socket.addEventListener('open', () => {
+      if (gossipServerRelaySocket !== socket) return;
+      gossipServerRelayReconnectAfterMs = 0;
+      captureGossipServerRelayDiagnostic('open', 'info', {}, true);
+    });
+    socket.addEventListener('message', handleGossipServerRelaySocketMessage);
+    socket.addEventListener('error', () => {
+      if (gossipServerRelaySocket !== socket) return;
+      captureGossipServerRelayDiagnostic('socket_error', 'warning', {}, true);
+    });
+    socket.addEventListener('close', (event) => {
+      if (gossipServerRelaySocket !== socket) return;
+      gossipServerRelaySocket = null;
+      gossipServerRelaySocketKey = '';
+      gossipServerRelayReconnectAfterMs = Date.now() + GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS;
+      captureGossipServerRelayDiagnostic('closed', 'warning', {
+        close_code: Number(event?.code || 0),
+        close_reason: String(event?.reason || '').trim(),
+      }, true);
+    });
+    return socket;
   }
 
   function currentGossipIceServers() {
@@ -493,9 +634,13 @@ export function createCallWorkspaceGossipDataLane({
     const protectionMode = plainRelay || protectedFrame === ''
       ? 'transport_only'
       : String(frame.protectionMode || 'protected');
+    const frameId = String(frame.frameId || frame.frame_id || '').trim()
+      || `gsr_${callId()}_${peerId}_${trackId.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 80)}_${frameSequence}`;
     return {
       type: 'sfu/frame',
       protocol_version: 2,
+      frame_id: frameId,
+      route_id: frameId,
       publisher_id: String(frame.publisherId || peerId),
       publisher_user_id: String(frame.publisherUserId || peerId),
       track_id: trackId,
@@ -532,13 +677,63 @@ export function createCallWorkspaceGossipDataLane({
     const msg = gossipFrameMessageFromEncodedFrame(frame, serverRelayFrameSequenceByTrack, true);
     if (!msg) return false;
     gossipRecoveryState.rememberPublishedFrame(msg);
-    return sendSocketFrame({
-      type: 'gossip/server-frame',
-      lane: 'media',
-      room_id: String(activeRoomId() || '').trim(),
-      call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
-      payload: msg,
-    });
+    const socket = ensureGossipServerRelaySocket();
+    if (!(socket instanceof WebSocket)) return false;
+    if (socket.readyState !== WebSocket.OPEN) {
+      captureGossipServerRelayDiagnostic('socket_not_open', 'warning', {
+        ready_state: Number(socket.readyState),
+      });
+      return false;
+    }
+    if (Number(socket.bufferedAmount || 0) > GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT) {
+      captureGossipServerRelayDiagnostic('buffered_amount_limit', 'warning', {
+        buffered_amount: Number(socket.bufferedAmount || 0),
+        buffered_bytes_limit: GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT,
+      });
+      return false;
+    }
+    try {
+      socket.send(JSON.stringify({
+        type: 'gossip/server-frame',
+        lane: 'media',
+        room_id: String(activeRoomId() || '').trim(),
+        call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
+        payload: msg,
+      }));
+      return true;
+    } catch {
+      closeGossipServerRelaySocket('send_failed');
+      gossipServerRelayReconnectAfterMs = Date.now() + GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS;
+      captureGossipServerRelayDiagnostic('send_failed', 'warning', {}, true);
+      return false;
+    }
+  }
+
+  function serverRelayFrameDedupeKey(frame, body) {
+    const explicitFrameId = String(frame?.frameId || body?.frame_id || body?.frameId || '').trim();
+    if (explicitFrameId !== '') return explicitFrameId;
+    const publisherId = String(frame?.publisherId || body?.publisher_id || body?.publisherUserId || body?.publisher_user_id || '').trim();
+    const trackId = String(frame?.trackId || body?.track_id || '').trim();
+    const frameSequence = Number(frame?.frameSequence || body?.frame_sequence || 0);
+    if (publisherId === '' || trackId === '' || frameSequence <= 0) return '';
+    return `${publisherId}:${trackId}:${Number(frame?.mediaGeneration || body?.media_generation || 0)}:${frameSequence}`;
+  }
+
+  function rememberServerRelayReceivedFrame(frame, body) {
+    const key = serverRelayFrameDedupeKey(frame, body);
+    if (key === '') return true;
+    if (serverRelayReceivedFrameIds.has(key)) {
+      return false;
+    }
+    serverRelayReceivedFrameIds.set(key, Date.now());
+    if (serverRelayReceivedFrameIds.size > GOSSIP_SERVER_RELAY_RECEIVED_FRAME_WINDOW) {
+      const oldestKeys = Array.from(serverRelayReceivedFrameIds.keys())
+        .slice(0, serverRelayReceivedFrameIds.size - GOSSIP_SERVER_RELAY_RECEIVED_FRAME_WINDOW);
+      for (const oldestKey of oldestKeys) {
+        serverRelayReceivedFrameIds.delete(oldestKey);
+      }
+    }
+    return true;
   }
 
   function publishLocalEncodedFrameToGossip(frame) {
@@ -632,6 +827,7 @@ export function createCallWorkspaceGossipDataLane({
   function handleGossipServerRelayFrame(type, senderUserId, payload) {
     const normalizedType = String(type || '').trim().toLowerCase();
     if (normalizedType !== 'call/gossip-server-frame') return false;
+    ensureGossipServerRelaySocket();
     const localUserId = Number(currentUserId() || 0);
     if (Number(senderUserId || 0) === localUserId) return true;
     const body = payload && typeof payload === 'object' ? payload : null;
@@ -641,6 +837,7 @@ export function createCallWorkspaceGossipDataLane({
       frame_id: body.frame_id || '',
     });
     if (!frame) return true;
+    if (!rememberServerRelayReceivedFrame(frame, body)) return true;
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
@@ -955,6 +1152,8 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipControllerKey = '';
     liveGossipFrameSequenceByTrack.clear();
     serverRelayFrameSequenceByTrack.clear();
+    serverRelayReceivedFrameIds.clear();
+    closeGossipServerRelaySocket('teardown');
     gossipRecoveryState.clear();
     assignedGossipNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();

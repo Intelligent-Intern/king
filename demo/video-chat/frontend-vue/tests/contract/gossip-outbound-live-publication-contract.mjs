@@ -18,6 +18,11 @@ const mediaStack = fs.readFileSync(mediaStackPath, 'utf8')
 const publisherPipeline = fs.readFileSync(publisherPipelinePath, 'utf8')
 const publisherFrameDispatch = fs.readFileSync(publisherFrameDispatchPath, 'utf8')
 const packageJson = fs.readFileSync(packagePath, 'utf8')
+const relayPublishStart = gossipDataLane.indexOf('function publishLocalEncodedFrameToServerRelay(frame)')
+const relayPublishEnd = gossipDataLane.indexOf('function serverRelayFrameDedupeKey', relayPublishStart)
+const relayPublishBody = relayPublishStart >= 0 && relayPublishEnd > relayPublishStart
+  ? gossipDataLane.slice(relayPublishStart, relayPublishEnd)
+  : ''
 
 function assert(condition, message) {
   if (!condition) {
@@ -49,6 +54,23 @@ assert(
     && /frame_sequence:\s*frameSequence/.test(workspaceGossipSurface)
     && /liveGossipFrameSequenceByTrack\.clear\(\);/.test(workspaceGossipSurface),
   'outbound gossip frames must have local per-track sequences that reset with the live controller',
+)
+assert(
+  /function relaySocketUrlForCall\(\)[\s\S]*parsed\.searchParams\.set\('relay', 'media'\)/.test(callWorkspace)
+    && /relaySocketUrl:\s*relaySocketUrlForCall/.test(callWorkspace),
+  'call workspace must provide a dedicated relay=media websocket URL to the gossip data lane',
+)
+assert(
+  /function ensureGossipServerRelaySocket\(\)[\s\S]*new WebSocket\(relayUrl\)[\s\S]*socket\.addEventListener\('message', handleGossipServerRelaySocketMessage\)/.test(gossipDataLane)
+    && /const socket = ensureGossipServerRelaySocket\(\);[\s\S]*socket\.send\(JSON\.stringify\(\{[\s\S]*type:\s*'gossip\/server-frame'/.test(relayPublishBody)
+    && !/sendSocketFrame\(/.test(relayPublishBody),
+  'server relay primary must publish media over a dedicated relay websocket instead of the control websocket',
+)
+assert(
+  /const serverRelayReceivedFrameIds = new Map\(\);/.test(gossipDataLane)
+    && /function rememberServerRelayReceivedFrame\(frame,\s*body\)[\s\S]*serverRelayReceivedFrameIds\.has\(key\)/.test(gossipDataLane)
+    && /if \(!rememberServerRelayReceivedFrame\(frame,\s*body\)\) return true;/.test(gossipDataLane),
+  'server relay receive path must suppress duplicate frame delivery from multiple sockets',
 )
 assert(
   /publishLocalEncodedFrameToGossip,/.test(workspaceGossipSurface)

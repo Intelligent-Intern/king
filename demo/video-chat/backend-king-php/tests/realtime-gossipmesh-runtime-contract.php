@@ -674,6 +674,7 @@ $presenceState = videochat_presence_state_init();
 $socketOwner = 'socket-owner';
 $socketPeer = 'socket-peer';
 $socketModerator = 'socket-moderator';
+$socketPeerRelay = 'socket-peer-relay';
 $ownerConnection = [
     'connection_id' => 'conn-10',
     'session_id' => 'session-10',
@@ -711,6 +712,11 @@ $presenceState['connections']['conn-50'] = $moderatorConnection;
 $presenceState['rooms']['room-alpha']['conn-10'] = $socketOwner;
 $presenceState['rooms']['room-alpha']['conn-20'] = $socketPeer;
 $presenceState['rooms']['room-alpha']['conn-50'] = $socketModerator;
+videochat_gossip_media_relay_register_socket($presenceState, [
+    ...$peerConnection,
+    'connection_id' => 'conn-20-relay',
+    'socket' => $socketPeerRelay,
+]);
 $openEmptyDatabase = static function (): PDO {
     return new PDO('sqlite::memory:');
 };
@@ -961,8 +967,20 @@ $relayGuardClassification = videochat_realtime_classify_normal_media_fanout_fram
         'data_base64' => 'AQID',
     ],
 ], JSON_UNESCAPED_SLASHES));
-videochat_gossipmesh_test_assert(!(bool) ($relayGuardClassification['blocked'] ?? true), 'room-bound gossip server relay must not be blocked by media fanout guard');
-videochat_gossipmesh_test_assert((string) ($relayGuardClassification['reason'] ?? '') === 'room_bound_gossip_server_relay', 'room-bound gossip server relay guard reason mismatch');
+videochat_gossipmesh_test_assert((bool) ($relayGuardClassification['blocked'] ?? false), 'normal realtime websocket must reject gossip server relay media');
+videochat_gossipmesh_test_assert((string) ($relayGuardClassification['reason'] ?? '') === 'media_relay_socket_required', 'normal websocket relay guard reason mismatch');
+$relaySocketGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
+    'type' => 'gossip/server-frame',
+    'lane' => 'media',
+    'payload' => [
+        'track_id' => 'camera',
+        'data_base64' => 'AQID',
+    ],
+], JSON_UNESCAPED_SLASHES), true);
+videochat_gossipmesh_test_assert(!(bool) ($relaySocketGuardClassification['blocked'] ?? true), 'dedicated media relay websocket must allow room-bound gossip server relay');
+videochat_gossipmesh_test_assert((string) ($relaySocketGuardClassification['reason'] ?? '') === 'room_bound_gossip_server_relay', 'dedicated relay guard reason mismatch');
+videochat_gossipmesh_test_assert(videochat_gossip_media_relay_socket_requested(['relay' => 'media']) === true, 'dedicated media relay websocket query must be recognized');
+videochat_gossipmesh_test_assert(videochat_gossip_media_relay_socket_requested(['relay' => 'control']) === false, 'normal websocket query must not be classified as dedicated media relay');
 
 $otherCallConnection = [
     ...$ownerConnection,
@@ -998,7 +1016,7 @@ $relayResult = videochat_realtime_handle_gossip_media_relay_command(
 videochat_gossipmesh_test_assert((bool) ($relayResult['handled'] ?? false), 'room-bound gossip server relay command should be handled');
 $relaySockets = array_map(static fn (array $sentFrame): string => (string) ($sentFrame['socket'] ?? ''), $GLOBALS['gossipmesh_sent_frames']);
 sort($relaySockets);
-videochat_gossipmesh_test_assert($relaySockets === [$socketModerator, $socketPeer], 'room-bound gossip server relay must deliver only to same-call peers');
+videochat_gossipmesh_test_assert($relaySockets === [$socketModerator, $socketPeerRelay], 'room-bound gossip server relay must prefer dedicated relay sockets and deliver only to same-call peers');
 $relayFrame = (array) (($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? [])['payload'] ?? []);
 videochat_gossipmesh_test_assert((string) ($relayFrame['protection_mode'] ?? '') === 'transport_only', 'room-bound gossip server relay must force transport-only delivery');
 videochat_gossipmesh_test_assert(!array_key_exists('protected_frame', $relayFrame), 'room-bound gossip server relay must strip protected frame fields');

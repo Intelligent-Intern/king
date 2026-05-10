@@ -74,12 +74,14 @@ try {
     videochat_realtime_sfu_assert(
         str_contains($websocketCommandsSource, "module_realtime_gossip_media_relay.php")
         && str_contains($websocketCommandsSource, 'videochat_gossip_media_relay_decode_client_frame')
-        && str_contains($mediaFanoutGuardSource, "return \$type === 'gossip/server-frame';")
+        && str_contains($mediaFanoutGuardSource, "'media_relay_socket_required'")
+        && str_contains($gossipMediaRelaySource, 'videochat_gossip_media_relay_socket_requested(')
+        && str_contains($gossipMediaRelaySource, 'videochat_realtime_serve_gossip_media_relay_websocket(')
         && str_contains($gossipMediaRelaySource, "const VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame'")
         && str_contains($gossipMediaRelaySource, "const VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame'")
         && str_contains($gossipMediaRelaySource, "videochat_gossip_media_relay_broadcast_call_event(")
         && str_contains($gossipMediaRelaySource, "videochat_realtime_connection_call_id(\$connection) !== \$normalizedCallId"),
-        'Room-bound Gossip media relay must bypass SFU publisher discovery while remaining scoped to the call websocket room'
+        'Room-bound Gossip media relay must bypass SFU publisher discovery through the dedicated media relay socket while remaining scoped to the call room'
     );
     videochat_realtime_sfu_assert(
         str_contains($moduleRealtimeSource, "realtime_sfu_iibin.php")

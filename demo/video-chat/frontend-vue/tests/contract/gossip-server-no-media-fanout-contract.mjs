@@ -32,16 +32,19 @@ assert(
     && mediaFanoutGuard.includes("'gossip/media-frame'")
     && mediaFanoutGuard.includes("'protected_frame'")
     && mediaFanoutGuard.includes("'data_base64'")
-    && mediaFanoutGuard.includes("return $type === 'gossip/server-frame';"),
-  'media fanout guard must reject generic SFU/Gossip media commands while allowing the explicit room-bound server relay',
+    && mediaFanoutGuard.includes('$type === \'gossip/server-frame\'')
+    && mediaFanoutGuard.includes("'media_relay_socket_required'"),
+  'media fanout guard must reject generic SFU/Gossip media commands and require the dedicated relay socket for server relay frames',
 )
 assert(
   gossipMediaRelay.includes("VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame'")
     && gossipMediaRelay.includes("VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame'")
+    && gossipMediaRelay.includes('videochat_gossip_media_relay_socket_requested(')
+    && gossipMediaRelay.includes("['media_relay_connections']")
     && gossipMediaRelay.includes('videochat_gossip_media_relay_broadcast_call_event(')
     && gossipMediaRelay.includes('videochat_realtime_connection_call_id($connection) !== $normalizedCallId')
     && gossipMediaRelay.includes("'protection_mode'] = 'transport_only'"),
-  'the only normal websocket media exception must be the room/call-bound transport-only Gossip server relay',
+  'the only normal websocket media exception must be the room/call-bound transport-only Gossip server relay with dedicated relay sockets',
 )
 assert(
   /videochat_presence_send_frame\(\s*\$websocket/.test(mediaFanoutGuard)
