@@ -107,7 +107,7 @@ Sprint Checkboxen:
   `local/iam-e2e-email-confirmation-race-hardening`.
 - [x] IAM9-18 Extract or prove secure expiring account update confirmations from
   `local/iam-e2e-email-confirmation-secure-expiry`.
-- [ ] IAM9-19 Extract or prove multiple pending account confirmations from
+- [x] IAM9-19 Extract or prove multiple pending account confirmations from
   `local/iam-e2e-email-multiple-pending-proof`.
 - [ ] IAM9-20 Extract or prove email safe texts and dispatch audit from
   `local/iam-e2e-email-safe-texts-and-dispatch-audit`.
