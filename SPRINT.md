@@ -97,8 +97,18 @@ Sprint Checkboxen:
     `call-access-account-isolation-contract.mjs`,
     `call-access-duplicate-invite-replay-contract.mjs`, and `git diff --check`
     passed.
-- [ ] IAM4-05 Extract any stronger audit alias/event compatibility proof value
+- [x] IAM4-05 Extract any stronger audit alias/event compatibility proof value
   from the audit `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-05-audit-proof-extract`.
+  - Added `documentation/iam-sprint-04-audit-proof-extract-evidence.md`.
+  - Confirmed current stable alias/redaction compatibility coverage is already
+    present and green; broader lifecycle audit proof is unique but depends on
+    missing current-prod backend helper/event surfaces and stays a follow-up
+    implementation task instead of importing stale branch assumptions.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs`,
+    `call-access-audit-redaction-contract.mjs`,
+    `call-access-strong-mismatch-audit-redaction-contract.mjs`, and
+    `git diff --check` passed.
 - [ ] IAM4-06 Extract deleted/ended/disabled terminal-state proof value from the
   deleted/disabled `proof-3` branches.
 - [ ] IAM4-07 Extract duplicate-abuse device/browser proof value from
