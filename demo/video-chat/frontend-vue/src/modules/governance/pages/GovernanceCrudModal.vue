@@ -213,14 +213,14 @@ function fieldClass(field) {
   padding: 9px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--color-surface-navy);
   color: var(--text-main);
   cursor: pointer;
   text-align: start;
 }
 
 .governance-relation-link strong {
-  color: var(--accent-cyan);
+  color: var(--color-cyan-hover);
 }
 
 .governance-relation-link em {
