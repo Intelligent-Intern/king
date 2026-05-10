@@ -269,10 +269,26 @@ Sprint Checkboxen:
   - Proof: artifact contract, CI-wire contract, audit compatibility/redaction
     contracts, strong-mismatch audit-redaction contract, and `git diff --check`
     passed.
-- [ ] IAM4-18 Clean merged/superseded Sprint 04 worker branches/worktrees using
+- [x] IAM4-18 Clean merged/superseded Sprint 04 worker branches/worktrees using
   contained-HEAD and clean-worktree rules only.
-- [ ] IAM4-19 Wire accepted Sprint 04 proofs into IAM package scripts,
+  - Merged worker branch `agent/iam-s4-18-cleanup-sprint-workers`.
+  - Added `documentation/iam-sprint-04-worker-cleanup-evidence.md`.
+  - No stale administrative worktree entries were found by
+    `git worktree prune --dry-run --verbose`.
+  - Cleanup deletion was deferred for protected active Sprint 04 lanes during
+    the worker check; manager cleanup runs after IAM4-19 merge and before
+    IAM4-20 deploy.
+- [x] IAM4-19 Wire accepted Sprint 04 proofs into IAM package scripts,
   CI-wire contract, and release-gate metadata after integration.
+  - Merged worker branch `agent/iam-s4-19-ci-wire-matrix-proof` with manual
+    `package.json` conflict resolution preserving the union of IAM4-15 and
+    IAM4-19 proof paths.
+  - Added owner-transfer temp-moderator and guest-list revocation extraction
+    proofs to `test:contract:iam-call-access`, `iam-call-access-ci-wire-contract.mjs`,
+    and `ui-parity-acceptance.matrix.json`.
+  - Proof: CI-wire contract, release-gate contract, direct newly wired proof
+    contracts, full `npm run test:contract:iam-call-access`, and
+    `git diff --check` passed.
 - [ ] IAM4-20 Build, run Sprint 04 IAM proof set, deploy without
   push/DNS/certbot, and collect post-deploy diagnostics.
 
