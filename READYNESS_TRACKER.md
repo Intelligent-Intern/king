@@ -17,6 +17,35 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05:
+  closed all 20 Sprint 05 tickets on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint mined focused
+  IAM/call-access proof value from remaining local branches, preserved dirty
+  parked Background/Gossip/SFU/MediaSecurity work, cleaned only clean contained
+  `agent/iam-s5-*` worktrees/branches, and kept old source-only behavior as
+  explicit follow-up evidence instead of pretending runtime support exists.
+  Extracted proof value covers authorized rejoin, lobby cleanup/admission,
+  duplicate review, cross-org boundaries, owner absence/transfer, guest-list
+  revocation, temporary access, email confirmation evidence, calendar invites,
+  Call App IAM boundaries, system-admin lanes, seed/cache/run-docs hygiene, and
+  the focused IAM browser proof path. Proof:
+  `npm run test:contract:iam-call-access`, `npm run test:contract:call-apps`,
+  `npm run build`, and `npm run test:contract:build-size` passed; Docker PHP
+  runtime fallbacks covered SQLite proofs where host PHP lacks `pdo_sqlite`.
+  Deploy proof: ran `demo/video-chat/scripts/deploy.sh deploy` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, with no push, DNS writes, or Certbot run.
+  Post-deploy diagnostics showed production asset version `20260510041153`,
+  app/API/CDN/call-app/CSP probes reachable, backend/WS/Edge containers up,
+  authenticated `/api/calls/{id}/call-apps/available` returning HTTP 200 for
+  call `fdb60134-64b0-4a56-99ee-4126822e6122`, and admin Call Diagnostics
+  telemetry returning HTTP 200 with CPU/load/memory/container fields. Residual
+  diagnostics are expected under current parked boundaries: unauthenticated
+  marketplace/WS probes return auth failures, `sfu.kingrt.com/sfu` returns 404
+  because SFU remains disabled/manual, and TURN logs show external peer TCP
+  resets.
+
 - 2026-05-10 IAM Cleanup, Proof Consolidation, And Browser Stability 04:
   closed all 20 Sprint 04 tickets on local branch
   `prod-kingrt-do-not-push-to-github` without pushing. The sprint reconciled
