@@ -47,6 +47,9 @@ export interface PublisherBackpressureStageTelemetry {
   receiverCount?: number | string;
   receiverRenderLatencyMs?: number | string;
   subscriberSendLatencyMs?: number | string;
+  queueDepth?: number | string;
+  maxQueueDepth?: number | string;
+  droppedCount?: number | string;
   skipCount?: number | string;
   sendFailureCount?: number | string;
   sourceReadbackFailureCount?: number | string;
@@ -85,6 +88,9 @@ export interface PublisherBackpressureDecision {
     receiver_count: number;
     receiver_render_latency_ms: number;
     subscriber_send_latency_ms: number;
+    queue_depth: number;
+    max_queue_depth: number;
+    dropped_count: number;
     skip_count: number;
     send_failure_count: number;
     source_readback_failure_count: number;
@@ -117,6 +123,9 @@ export function decidePublisherBackpressureAction(
   const receiverCount = normalizedNumber(stageTelemetry.receiverCount);
   const receiverRenderLatencyMs = normalizedNumber(stageTelemetry.receiverRenderLatencyMs);
   const subscriberSendLatencyMs = normalizedNumber(stageTelemetry.subscriberSendLatencyMs);
+  const queueDepth = normalizedNumber(stageTelemetry.queueDepth);
+  const maxQueueDepth = normalizedNumber(stageTelemetry.maxQueueDepth);
+  const droppedCount = normalizedNumber(stageTelemetry.droppedCount);
   const skipCount = normalizedNumber(stageTelemetry.skipCount);
   const sendFailureCount = normalizedNumber(stageTelemetry.sendFailureCount);
   const sourceReadbackFailureCount = normalizedNumber(stageTelemetry.sourceReadbackFailureCount);
@@ -169,8 +178,26 @@ export function decidePublisherBackpressureAction(
     'sfu_wire_rate_budget_exceeded',
   ].includes(reason);
   const serverIngressLatencyExceeded = reason === 'sfu_ingress_latency_budget_exceeded';
+  const gossipBackpressure = kind === 'gossip_backpressure'
+    || reason.startsWith('gossip_datachannel_')
+    || reason.startsWith('gossip_backpressure_');
+  const gossipQueueRatio = maxQueueDepth > 0 ? queueDepth / maxQueueDepth : 0;
+  const gossipBufferedRatio = highWaterBytes > 0 ? bufferedAmount / highWaterBytes : 0;
+  const gossipPressureRatio = Math.max(gossipQueueRatio, gossipBufferedRatio);
 
-  if (kind === 'pre_encode_buffer') {
+  if (gossipBackpressure) {
+    if (gossipPressureRatio >= 0.25 || droppedCount > 0) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.CADENCE_THROTTLE);
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
+    }
+    if (gossipPressureRatio >= 0.5 || droppedCount >= 1) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    }
+    if (gossipPressureRatio >= 1 || reason === 'gossip_datachannel_stuck_not_sending') {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
+    }
+  } else if (kind === 'pre_encode_buffer') {
     if (socketHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
@@ -245,6 +272,9 @@ export function decidePublisherBackpressureAction(
       receiver_count: receiverCount,
       receiver_render_latency_ms: receiverRenderLatencyMs,
       subscriber_send_latency_ms: subscriberSendLatencyMs,
+      queue_depth: queueDepth,
+      max_queue_depth: maxQueueDepth,
+      dropped_count: droppedCount,
       skip_count: skipCount,
       send_failure_count: sendFailureCount,
       source_readback_failure_count: sourceReadbackFailureCount,
