@@ -89,8 +89,15 @@ Tickets:
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-calendar-invite-join-contract.mjs`,
     `node demo/video-chat/frontend-vue/tests/contract/call-access-link-privacy-contract.mjs`,
     and `git diff --check` passed.
-- [ ] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
+- [x] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
   flow and cannot bypass host admission.
+  - Merged worker branch `agent/iam-s2-03-unregistered-calendar-guest`.
+  - Added `call-access-calendar-unregistered-invite.spec.js` proving a calendar
+    invite without account requires a guest name, issues only a guest session,
+    keeps admin/lobby permissions false, posts lobby queue join, and does not
+    navigate directly into the workspace before host admission.
+  - Proof: `npx playwright test tests/e2e/call-access-calendar-unregistered-invite.spec.js --workers=1`
+    and `git diff --check` passed.
 - [x] IAM2-04 Prove registered invitees who are logged out get a safe login
   handoff and rebind only to the intended invite.
   - Merged worker branch `agent/iam-s2-04-registered-logged-out`.
