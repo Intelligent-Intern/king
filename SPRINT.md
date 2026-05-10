@@ -79,7 +79,7 @@ Sprint Checkboxen:
   `local/iam-e2e-calendar-invitation-flow`.
 - [ ] IAM9-04 Extract or prove unregistered calendar main journey from
   `local/iam-e2e-calendar-unregistered-main-journey`.
-- [ ] IAM9-05 Extract or prove call-access safe-screen privacy from
+- [x] IAM9-05 Extract or prove call-access safe-screen privacy from
   `local/iam-e2e-call-access-safe-screen-final`.
 - [ ] IAM9-06 Extract or prove Call App entitlement revocation from
   `local/iam-e2e-call-app-entitlement-revocation`.
