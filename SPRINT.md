@@ -105,7 +105,7 @@ Sprint Checkboxen:
   surfaces.
 - [ ] UX6-15 Remove redundant cancel/close buttons where a right-sidebar or
   modal already has the standard close affordance.
-- [ ] UX6-16 Normalize right-sidebar forms: no border radius, no top/bottom
+- [x] UX6-16 Normalize right-sidebar forms: no border radius, no top/bottom
   border, non-resizable body, and sticky bottom-right submit.
 - [ ] UX6-17 Normalize inputs/selects to the 12 King styleguide color tokens and
   remove hard-coded non-token colors on the migrated surfaces.

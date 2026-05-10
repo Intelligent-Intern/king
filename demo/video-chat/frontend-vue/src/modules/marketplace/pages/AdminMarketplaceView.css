@@ -103,7 +103,7 @@
 
 .marketplace-textarea {
   min-height: 120px;
-  resize: vertical;
+  resize: none;
 }
 
 @media (max-width: 840px) {
