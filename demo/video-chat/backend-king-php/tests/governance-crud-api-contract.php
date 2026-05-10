@@ -87,7 +87,7 @@ try {
     videochat_governance_crud_assert((string) ($governanceRule['id'] ?? '') === 'rest_governance_scope', 'governance RBAC rule id mismatch');
     videochat_governance_crud_assert((array) ($governanceRule['allowed_roles'] ?? []) === ['admin', 'user'], 'governance RBAC should pass authenticated users to route permissions');
 
-    $dispatch = static function (string $method, string $path, array $auth, array $payload = null) use (
+    $dispatch = static function (string $method, string $path, array $auth, ?array $payload = null) use (
         $jsonResponse,
         $errorResponse,
         $decodeJsonBody,

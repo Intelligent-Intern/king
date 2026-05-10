@@ -21,7 +21,17 @@
   },
   "permission_grants": {
     "subject_types": ["user", "group", "organization"],
-    "resource_types": ["calendar"],
+    "resource_types": [
+      "calendar",
+      "group",
+      "organization",
+      "role",
+      "policy",
+      "permission_grant",
+      "tenant_export_import_job",
+      "module",
+      "permission"
+    ],
     "actions": ["create", "read", "update", "delete", "share", "manage"],
     "time_bounds": ["valid_from", "valid_until", "revoked_at"]
   },
