@@ -38,7 +38,9 @@ const auditDomain = read('demo/video-chat/backend-king-php/domain/audit/audit_ev
 const callManagementCreate = read('demo/video-chat/backend-king-php/domain/calls/call_management_create.php');
 const callAccessLinks = read('demo/video-chat/backend-king-php/domain/calls/call_access_links.php');
 const callAccessPublic = read('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
+const callAccessReview = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
+const callAccessAccountConfirmation = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const backendAuditContract = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.php');
 const backendAuditWrapper = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.sh');
 const sqliteAggregate = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
@@ -86,6 +88,16 @@ assert.match(
   /videochat_audit_record_call_access_strong_mismatch\([\s\S]*videochat_audit_record_call_access_account_compared\(/,
   'verified-context mismatch must emit strong-mismatch and account-comparison audit events',
 );
+assert.match(
+  functionBody(callAccessReview, 'videochat_call_access_record_host_verification_attempt'),
+  /call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed[\s\S]*videochat_audit_record_event\([\s\S]*host_name_logged' => false/s,
+  'host-name verification attempts must emit redacted canonical audit events from the runtime path',
+);
+assert.match(
+  functionBody(callAccessAccountConfirmation, 'videochat_call_access_request_account_update_confirmation'),
+  /call_access_account_update_confirmation_requested[\s\S]*manual_reentry_required[\s\S]*confirmation_identifier_logged' => false[\s\S]*session_identifier_logged' => false/s,
+  'account-update confirmation requests must emit redacted audit events from the runtime path',
+);
 
 for (const eventType of [
   'call_created',
@@ -93,6 +105,9 @@ for (const eventType of [
   'call_access_link_opened',
   'temporary_account_created',
   'call_access_account_compared',
+  'call_access_host_name_verified',
+  'call_access_host_name_verification_failed',
+  'call_access_account_update_confirmation_requested',
   'call_access_strong_mismatch_denied',
 ]) {
   assert.ok(backendAuditContract.includes(`'${eventType}'`), `backend audit contract must assert ${eventType}`);
@@ -102,6 +117,8 @@ for (const actionProof of [
   'videochat_create_call($pdo',
   'videochat_create_call_access_link_for_user',
   'videochat_issue_session_for_call_access',
+  'videochat_call_access_record_host_verification_attempt',
+  'videochat_call_access_request_account_update_confirmation',
   'switched verified account should be denied',
   'wrong account must not allocate a session id',
   'open guest should receive a temporary session',
@@ -118,6 +135,16 @@ assert.match(
   backendAuditContract,
   /matched account comparison audit missing[\s\S]*strong mismatch account comparison audit missing/s,
   'backend audit contract must prove matched and strong-mismatch account-comparison outcomes',
+);
+assert.match(
+  backendAuditContract,
+  /correct host-name verification attempt should audit[\s\S]*call_access_host_name_verified[\s\S]*host success alias must not log host name/s,
+  'backend audit contract must prove successful host-name verification audit from the runtime path',
+);
+assert.match(
+  backendAuditContract,
+  /account-update confirmation request should audit[\s\S]*call_access_account_update_confirmation_requested[\s\S]*account-update audit must not log confirmation token/s,
+  'backend audit contract must prove account-update request audit redaction',
 );
 assert.match(
   backendAuditContract,
