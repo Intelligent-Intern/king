@@ -61,8 +61,17 @@ Proof anchors:
 - `documentation/iam-sprint-03-contained-head-cleanup-evidence.md`
 
 Sprint Checkboxen:
-- [ ] IAM4-01 Reconcile dirty `codex/iam-call-access-e2e-foundation` with the
+- [x] IAM4-01 Reconcile dirty `codex/iam-call-access-e2e-foundation` with the
   deployed IAM gate and extract only unique current value, if any.
+  - Merged worker branch `agent/iam-s4-01-foundation-reconcile`.
+  - Added `documentation/iam-sprint-04-foundation-reconcile-evidence.md`.
+  - Classified the dirty source worktree as fully superseded by the current
+    deployed IAM gate and ported no source changes.
+  - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`,
+    `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    `bash -n demo/video-chat/scripts/smoke.sh`, and `git diff --check` passed.
+  - Dirty source worktree `/home/jochen/projects/king.site/worktrees/king-domain-registry`
+    was not reset, deleted, or modified.
 - [ ] IAM4-02 Resolve/classify dirty `codex/iam-duplicate-cleanup-reaudit-20260509`
   conflict state without losing user work or broad staged proof intent.
 - [ ] IAM4-03 Inventory all non-contained `local/iam-e2e-*proof-3` worktrees and
