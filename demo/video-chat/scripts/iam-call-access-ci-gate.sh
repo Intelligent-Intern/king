@@ -63,6 +63,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam-call-access-ci-wire-contract.mjs"
   "node tests/contract/iam-ci-artifacts-contract.mjs"
   "node tests/contract/iam-call-access-audit-events-contract.mjs"
+  "node tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs"
   "node tests/contract/iam-local-run-docs-contract.mjs"
   "node tests/contract/call-access-safe-screen-final-contract.mjs"
   "node tests/contract/iam9-06-call-app-entitlement-revocation-contract.mjs"
