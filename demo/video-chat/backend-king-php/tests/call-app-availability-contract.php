@@ -282,7 +282,7 @@ SQL
 
     $pdo->exec("UPDATE call_app_catalog_entries SET health_status = 'healthy' WHERE app_key = 'whiteboard'");
     $pdo->exec("UPDATE organization_call_app_installations SET status = 'disabled' WHERE app_key = 'whiteboard'");
-    $disabled = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available', $adminAuth);
+    $disabled = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=white&page=1&page_size=6', $adminAuth);
     $disabledPayload = videochat_call_app_availability_decode($disabled);
     videochat_call_app_availability_assert(((array) (($disabledPayload['result'] ?? [])['apps'] ?? [])) === [], 'disabled installations must be hidden');
 

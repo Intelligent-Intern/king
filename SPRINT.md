@@ -82,7 +82,7 @@ Sprint Checkboxen:
   `local/iam-e2e-calendar-edge-safe-states`.
 - [ ] IAM7-07 Extract or prove call-access safe-screen privacy from
   `local/iam-e2e-call-access-safe-screen-final`.
-- [ ] IAM7-08 Extract or prove Call App entitlement revocation from
+- [x] IAM7-08 Extract or prove Call App entitlement revocation from
   `local/iam-e2e-call-app-entitlement-revocation`.
 - [ ] IAM7-09 Extract or prove Call App launch-token reconnect validation from
   `local/iam-e2e-call-app-launch-token-reconnect`.
