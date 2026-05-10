@@ -14,6 +14,7 @@ WATCHDOG_STALE_SECONDS="${VIDEOCHAT_LIVE_CHAT_WATCHDOG_STALE_SECONDS:-900}"
 CALL_ID="${VIDEOCHAT_LIVE_CHAT_CALL_ID:-39c5b3ea-855b-40fd-b030-c8af1d512605}"
 ROOM_ID="${VIDEOCHAT_LIVE_CHAT_ROOM_ID:-${CALL_ID}}"
 REPORTER_USER_ID="${VIDEOCHAT_LIVE_CHAT_REPORTER_USER_ID:-80}"
+READER_USER_ID="${VIDEOCHAT_LIVE_CHAT_READER_USER_ID:-0}"
 TAIL_LIMIT="${VIDEOCHAT_LIVE_CHAT_TAIL_LIMIT:-50}"
 TIMEOUT="${VIDEOCHAT_LIVE_CHAT_TIMEOUT:-12}"
 DRY_RUN=0
@@ -112,6 +113,7 @@ load_local_env() {
 
 normalize_env() {
   DEPLOY_DOMAIN="${VIDEOCHAT_DEPLOY_DOMAIN:-${DEPLOY_DOMAIN:-kingrt.com}}"
+  DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-${DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}}"
   DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-${DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}}"
   DEPLOY_HOST="${VIDEOCHAT_DEPLOY_HOST:-${DEPLOY_HOST:-}}"
   DEPLOY_USER="${VIDEOCHAT_DEPLOY_USER:-${DEPLOY_USER:-root}}"
@@ -123,6 +125,7 @@ validate_ids() {
   [[ "${CALL_ID}" =~ ^[A-Za-z0-9._:-]{1,200}$ ]] || fail "invalid call id"
   [[ "${ROOM_ID}" =~ ^[A-Za-z0-9._:-]{1,200}$ ]] || fail "invalid room id"
   [[ "${REPORTER_USER_ID}" =~ ^[0-9]+$ && "${REPORTER_USER_ID}" -gt 0 ]] || fail "invalid reporter user id"
+  [[ "${READER_USER_ID}" =~ ^[0-9]+$ ]] || fail "invalid reader user id"
   [[ "${TAIL_LIMIT}" =~ ^[0-9]+$ && "${TAIL_LIMIT}" -gt 0 && "${TAIL_LIMIT}" -le 200 ]] || fail "invalid tail limit"
 }
 
@@ -195,25 +198,6 @@ PHP
 REMOTE
 }
 
-sql_quote() {
-  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
-}
-
-chat_tail_sql() {
-  local call_q room_q limit_q
-  call_q="$(sql_quote "${CALL_ID}")"
-  room_q="$(sql_quote "${ROOM_ID}")"
-  limit_q="${TAIL_LIMIT}"
-  cat <<SQL
-SELECT seq, server_time, sender_display_name, sender_role, text
-FROM call_chat_messages
-WHERE call_id = ${call_q}
-  AND room_id = ${room_q}
-ORDER BY seq DESC
-LIMIT ${limit_q}
-SQL
-}
-
 reporter_session_sql() {
   cat <<SQL
 SELECT id
@@ -226,13 +210,37 @@ LIMIT 1
 SQL
 }
 
-tail_json() {
-  remote_php_sql "$(chat_tail_sql)"
+reader_session_sql() {
+  if [[ "${READER_USER_ID}" -gt 0 ]]; then
+    cat <<SQL
+SELECT id
+FROM sessions
+WHERE user_id = ${READER_USER_ID}
+  AND (revoked_at IS NULL OR revoked_at = '')
+  AND strftime('%s', expires_at) > strftime('%s', 'now')
+ORDER BY expires_at DESC, issued_at DESC
+LIMIT 1
+SQL
+    return 0
+  fi
+
+  cat <<'SQL'
+SELECT sessions.id
+FROM sessions
+INNER JOIN users ON users.id = sessions.user_id
+INNER JOIN roles ON roles.id = users.role_id
+WHERE roles.slug = 'admin'
+  AND users.status = 'active'
+  AND (sessions.revoked_at IS NULL OR sessions.revoked_at = '')
+  AND strftime('%s', sessions.expires_at) > strftime('%s', 'now')
+ORDER BY sessions.expires_at DESC, sessions.issued_at DESC
+LIMIT 1
+SQL
 }
 
-reporter_session_token() {
-  local rows token
-  rows="$(remote_php_sql "$(reporter_session_sql)")"
+session_token_from_sql() {
+  local sql="$1" rows token
+  rows="$(remote_php_sql "${sql}")"
   token="$(ROWS_JSON="${rows}" python3 - <<'PY'
 import json
 import os
@@ -243,8 +251,79 @@ if rows and isinstance(rows[0], dict):
 print(token)
 PY
 )"
-  [[ -n "${token}" ]] || fail "no active reporter session for user ${REPORTER_USER_ID}"
+  [[ -n "${token}" ]] || return 1
   printf '%s' "${token}"
+}
+
+reporter_session_token() {
+  session_token_from_sql "$(reporter_session_sql)" || fail "no active reporter session for user ${REPORTER_USER_ID}"
+}
+
+reader_session_token() {
+  if [[ -n "${VIDEOCHAT_LIVE_CHAT_READER_SESSION_TOKEN:-}" ]]; then
+    printf '%s' "${VIDEOCHAT_LIVE_CHAT_READER_SESSION_TOKEN}"
+    return 0
+  fi
+  session_token_from_sql "$(reader_session_sql)" || fail "no active reader session for chat archive HTTP tail"
+}
+
+tail_json() {
+  require_cmd python3
+  local token
+  token="$(reader_session_token)"
+  DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN}" CALL_ID="${CALL_ID}" ROOM_ID="${ROOM_ID}" TAIL_LIMIT="${TAIL_LIMIT}" SESSION_TOKEN="${token}" python3 - <<'PY' | redact_stream
+import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+
+api_domain = os.environ["DEPLOY_API_DOMAIN"]
+call_id = os.environ["CALL_ID"]
+room_id = os.environ["ROOM_ID"]
+limit = int(os.environ.get("TAIL_LIMIT") or "50")
+session = os.environ["SESSION_TOKEN"]
+query = urllib.parse.urlencode({
+    "room_id": room_id,
+    "tail": "1",
+    "limit": str(limit),
+})
+url = f"https://{api_domain}/api/calls/{urllib.parse.quote(call_id, safe='')}/chat-archive?{query}"
+request = urllib.request.Request(
+    url,
+    headers={
+        "Authorization": f"Bearer {session}",
+        "Accept": "application/json",
+    },
+    method="GET",
+)
+try:
+    with urllib.request.urlopen(request, timeout=12) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+except urllib.error.HTTPError as error:
+    reason = ""
+    try:
+        body = error.read().decode("utf-8")
+        decoded = json.loads(body)
+        reason = str(decoded.get("error", {}).get("code") or decoded.get("status") or "")
+    except Exception:
+        reason = ""
+    raise SystemExit(f"chat archive HTTP {error.code}{(': ' + reason) if reason else ''}")
+
+archive = payload.get("result", {}).get("archive", {})
+messages = archive.get("messages", [])
+rows = []
+for message in messages if isinstance(messages, list) else []:
+    sender = message.get("sender", {}) if isinstance(message, dict) else {}
+    rows.append({
+        "seq": int(message.get("seq") or 0),
+        "server_time": str(message.get("server_time") or ""),
+        "sender_display_name": str(sender.get("display_name") or ""),
+        "sender_role": str(sender.get("role") or "user"),
+        "text": str(message.get("text") or ""),
+    })
+print(json.dumps(rows, ensure_ascii=False, separators=(",", ":")))
+PY
 }
 
 pretty_tail() {
@@ -405,7 +484,7 @@ run_once() {
 run_loop() {
   validate_ids
   mkdir -p "${STATE_DIR}"
-  log "started call=${CALL_ID} room=${ROOM_ID} reporter_user=${REPORTER_USER_ID} poll=${POLL_SECONDS}s"
+  log "started call=${CALL_ID} room=${ROOM_ID} reporter_user=${REPORTER_USER_ID} reader_user=${READER_USER_ID:-0} poll=${POLL_SECONDS}s"
   while true; do
     write_heartbeat
     local previous rows current fresh
@@ -517,6 +596,7 @@ Environment:
   VIDEOCHAT_LIVE_CHAT_CALL_ID           default ${CALL_ID}
   VIDEOCHAT_LIVE_CHAT_ROOM_ID           default call id
   VIDEOCHAT_LIVE_CHAT_REPORTER_USER_ID  default ${REPORTER_USER_ID}
+  VIDEOCHAT_LIVE_CHAT_READER_USER_ID    default 0, meaning latest active admin session
   VIDEOCHAT_LIVE_CHAT_POLL_SECONDS      default ${POLL_SECONDS}
   VIDEOCHAT_LIVE_CHAT_WATCHDOG_STALE_SECONDS default ${WATCHDOG_STALE_SECONDS}
 USAGE

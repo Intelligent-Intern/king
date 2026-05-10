@@ -301,14 +301,15 @@ Current Loop Notes:
   with `chat/ack` for message `chat_04f61f244d42153327825e07`.
 - GSP02-09 proof: `demo/video-chat/scripts/live-chat-monitor.sh` now supports
   `start|stop|status|once|post|dry-run|run`, stores PID, heartbeat and logs
-  under `demo/video-chat/.local/live-chat-monitor/`, reads only `seq`, time,
-  sender, role and text from `call_chat_messages`, and posts status through the
-  existing websocket chat path without logging tokens or full websocket URLs.
+  under `demo/video-chat/.local/live-chat-monitor/`, reads chat through the
+  authenticated HTTP DB-tail endpoint `/api/calls/{id}/chat-archive?tail=1`,
+  and posts status through the existing websocket chat path without logging
+  tokens or full websocket URLs.
 - GSP02-10 proof: the monitor watchdog command checks process and heartbeat
   staleness with a 900 second default, restarts only with a logged reason, and
   `start` detaches via `setsid` when available so the tool shell cannot reap the
-  process group. A live status check showed PID `2384508` running with
-  heartbeat `2026-05-10T16:11:53Z`.
+  process group. After switching chat reads to HTTP DB-tail, a live status
+  check showed PID `2420052` running with heartbeat `2026-05-10T16:15:38Z`.
 - Latest live-chat instruction: Alexander asked at DB sequence `270` why sound
   is not using Gossip like video. Next active work remains GSP02-20: inspect and
   unblock the current audio talk path first, then fold TTS/STT follow-ups from

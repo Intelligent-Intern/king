@@ -16,10 +16,13 @@ assert.match(source, /HEARTBEAT_FILE=.*heartbeat/, 'monitor must write a heartbe
 assert.match(source, /POLL_SECONDS=.*60/, 'default chat poll cadence must be 60 seconds');
 assert.match(source, /WATCHDOG_STALE_SECONDS=.*900/, 'watchdog staleness must default to 15 minutes');
 assert.match(source, /setsid/, 'monitor start must detach from the invoking shell process group when available');
+assert.match(source, /chat-archive\?/, 'monitor must read chat through the authenticated HTTP DB-tail endpoint');
+assert.match(source, /Authorization.*Bearer/, 'monitor HTTP reads must authenticate without a public diagnostics API');
 assert.match(source, /chat\/send/, 'status posts must use the normal chat/send websocket path');
 assert.match(source, /chat\/ack/, 'status posts must wait for chat/ack');
-assert.match(source, /SELECT seq, server_time, sender_display_name, sender_role, text/, 'tail query must avoid full message_json reads');
+assert.match(source, /reader_session_sql/, 'monitor may resolve a reader session internally without logging tokens');
 assert.doesNotMatch(source, /message_json\s+FROM call_chat_messages/, 'monitor must not tail full message_json payloads');
+assert.doesNotMatch(source, /FROM call_chat_messages/, 'monitor must not bypass the DB-tail API for chat reads');
 
 for (const forbidden of ['raw ICE', 'raw SDP', 'full websocket URL']) {
   assert.doesNotMatch(source, new RegExp(forbidden, 'i'), `monitor source must not instruct logging ${forbidden}`);
