@@ -74,6 +74,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam9-12-deleted-ended-hardening-contract.mjs"
   "node tests/contract/call-access-cross-org-foreign-join-contract.mjs"
   "node tests/contract/iam9-11-terminal-join-denials-contract.mjs"
+  "node tests/contract/call-access-edge-error-matrix-contract.mjs"
 )
 
 run_static_gate() {
@@ -96,6 +97,9 @@ case "${MODE}" in
     run_static_gate
     ;;
   sqlite)
+    run_frontend_shell_step \
+      "backend/sqlite call-access-edge-error-matrix-contract.sh" \
+      "../backend-king-php/tests/call-access-edge-error-matrix-contract.sh"
     run_frontend_shell_step \
       "backend/sqlite iam-call-access-sqlite-runtime-proof.sh" \
       "../backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh"
