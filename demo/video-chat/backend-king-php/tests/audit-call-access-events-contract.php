@@ -105,6 +105,28 @@ try {
     );
     videochat_audit_call_access_events_assert((bool) ($matchedSession['ok'] ?? false), 'matched personal account should receive a session');
 
+    $switchedVerifiedSessionId = 'sess_audit_completeness_switched_verified';
+    $switchedAuthSessionId = $switchedVerifiedSessionId;
+    $switchedSessionIssuerCalls = 0;
+    $switchedSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $personalAccessId,
+        static function () use (&$switchedSessionIssuerCalls): string {
+            $switchedSessionIssuerCalls += 1;
+            return 'sess_audit_completeness_switched_should_not_issue';
+        },
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'audit-call-access-events-contract'],
+        [
+            'verified_user_id' => $standardUserId,
+            'verified_session_id' => $switchedVerifiedSessionId,
+            'authenticated_user_id' => $adminUserId,
+            'authenticated_session_id' => $switchedAuthSessionId,
+        ]
+    );
+    videochat_audit_call_access_events_assert(!(bool) ($switchedSession['ok'] ?? true), 'switched verified account should be denied');
+    videochat_audit_call_access_events_assert((string) ($switchedSession['reason'] ?? '') === 'conflict', 'switched verified account denial should be conflict');
+    videochat_audit_call_access_events_assert($switchedSessionIssuerCalls === 0, 'switched verified account must not allocate a session id');
+
     $wrongAuthSessionId = 'sess_audit_completeness_wrong_context';
     $wrongSessionIssuerCalls = 0;
     $wrongSession = videochat_issue_session_for_call_access(
@@ -197,6 +219,7 @@ try {
         'call_access_account_compared',
         'call_access_host_name_verified',
         'call_access_host_name_verification_failed',
+        'call_access_strong_mismatch_denied',
     ] as $eventType) {
         videochat_audit_call_access_events_assert(isset($eventsByType[$eventType]), "audit event missing: {$eventType}");
     }
@@ -248,6 +271,14 @@ try {
         videochat_audit_call_access_events_assert(in_array($canonicalHostEventType, $aliasTypes, true), "host alias filter {$legacyHostEventType} should read canonical {$canonicalHostEventType}");
     }
 
+    $strongMismatchPayload = (array) (($eventsByType['call_access_strong_mismatch_denied'][0] ?? [])['payload'] ?? []);
+    videochat_audit_call_access_events_assert((string) ($strongMismatchPayload['mismatch'] ?? '') === 'strong_personalized_link', 'strong mismatch audit reason mismatch');
+    videochat_audit_call_access_events_assert((string) ($strongMismatchPayload['stage'] ?? '') === 'verified_user_changed', 'strong mismatch audit stage mismatch');
+    videochat_audit_call_access_events_assert((bool) ($strongMismatchPayload['host_name_logged'] ?? true) === false, 'strong mismatch audit must not log host names');
+    videochat_audit_call_access_events_assert((bool) ($strongMismatchPayload['foreign_account_data_logged'] ?? true) === false, 'strong mismatch audit must not log foreign account data');
+    videochat_audit_call_access_events_assert((bool) ($strongMismatchPayload['raw_link_identifier_logged'] ?? true) === false, 'strong mismatch audit must not log raw link identifiers');
+    videochat_audit_call_access_events_assert((bool) ($strongMismatchPayload['raw_session_identifier_logged'] ?? true) === false, 'strong mismatch audit must not log raw session identifiers');
+
     $encodedEvents = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     videochat_audit_call_access_events_assert(is_string($encodedEvents), 'audit events should JSON encode');
     foreach ([
@@ -255,6 +286,9 @@ try {
         $openAccessId,
         $matchedSessionId,
         $matchedAuthSessionId,
+        $switchedVerifiedSessionId,
+        $switchedAuthSessionId,
+        'sess_audit_completeness_switched_should_not_issue',
         $wrongAuthSessionId,
         $openSessionId,
         'sess_audit_completeness_wrong_should_not_issue',
@@ -269,6 +303,7 @@ try {
         videochat_audit_fingerprint($personalAccessId),
         videochat_audit_fingerprint($openAccessId),
         videochat_audit_fingerprint($matchedAuthSessionId),
+        videochat_audit_fingerprint($switchedAuthSessionId),
         videochat_audit_fingerprint($wrongAuthSessionId),
     ] as $requiredFingerprint) {
         videochat_audit_call_access_events_assert(str_contains($encodedEvents, $requiredFingerprint), 'audit events missing fingerprint: ' . $requiredFingerprint);
