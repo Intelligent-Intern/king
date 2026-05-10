@@ -176,8 +176,15 @@ Tickets:
   - Proof: Node contract passed; `call-owner-moderation-contract.php` passed on
     host with persistence skipped and passed fully in Docker PHP 8.4 with
     `pdo_sqlite`; `git diff --check` passed.
-- [ ] IAM2-11 Prove owner-transfer lifecycle and rejoin behavior for old owner,
+- [x] IAM2-11 Prove owner-transfer lifecycle and rejoin behavior for old owner,
   new owner, moderators, and guests.
+  - Merged worker branch `agent/iam-s2-11-owner-transfer-lifecycle`.
+  - Added `owner-transfer-lifecycle-contract.mjs` proving post-transfer rejoin
+    roles for old owner, new owner, moderator, and guest; reconnect does not
+    imply leave; room snapshots refresh viewer rights; and moderators do not gain
+    owner-transfer rights.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/owner-transfer-lifecycle-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM2-12 Prove admin join boundaries in browser E2E for system admin,
   org-admin, foreign org-admin, moderator, owner, and member.
 - [ ] IAM2-13 Prove removed members and invited users removed from the org lose
