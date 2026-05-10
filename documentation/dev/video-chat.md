@@ -318,8 +318,15 @@ Useful commands:
 
 - `cd demo/video-chat/backend-king-php && ./run-dev.sh`
 - `cd demo/video-chat/frontend-vue && npm run dev`
+- `cd demo/video-chat/frontend-vue && npm run test:ci:iam-call-access`
+- `cd demo/video-chat/frontend-vue && npm run test:ci:iam-call-access:static`
 - `curl -s http://127.0.0.1:18080/`
 - `bash demo/video-chat/scripts/backup-sqlite.sh`
+
+IAM and call-access local run details live in
+[`iam-call-access-local-tests.md`](./video-chat/iam-call-access-local-tests.md).
+That runbook separates the host-safe static gate, Docker-backed backend
+runtime proofs, focused Playwright E2E command, and compose smoke command.
 
 ## Verification Closure
 
