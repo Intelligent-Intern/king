@@ -105,7 +105,7 @@ Sprint Checkboxen:
   `local/iam-e2e-edge-safe-states-proof-2`.
 - [ ] IAM9-17 Extract or prove email confirmation race hardening from
   `local/iam-e2e-email-confirmation-race-hardening`.
-- [ ] IAM9-18 Extract or prove secure expiring account update confirmations from
+- [x] IAM9-18 Extract or prove secure expiring account update confirmations from
   `local/iam-e2e-email-confirmation-secure-expiry`.
 - [ ] IAM9-19 Extract or prove multiple pending account confirmations from
   `local/iam-e2e-email-multiple-pending-proof`.
