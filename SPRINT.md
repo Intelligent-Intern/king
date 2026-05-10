@@ -90,7 +90,7 @@ Sprint Checkboxen:
   `local/iam-e2e-cross-org-foreign-join-edges`.
 - [x] IAM7-11 Extract or prove deleted/ended call join hardening from
   `local/iam-e2e-deleted-ended-join-hardening`.
-- [ ] IAM7-12 Extract or prove account update/email confirmation race hardening
+- [x] IAM7-12 Extract or prove account update/email confirmation race hardening
   from `local/iam-e2e-email-confirmation-race-hardening`.
 - [ ] IAM7-13 Extract or prove foreign link review audit scoping from
   `local/iam-e2e-foreign-link-review-audit`.
