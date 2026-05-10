@@ -154,11 +154,18 @@
         <span>{{ activeSessionName }}</span>
         <span class="call-apps-access-default">{{ activeSessionDefaultAccessLabel }}</span>
       </div>
-      <div v-if="canManage" class="call-apps-session-actions" aria-label="Active Call App actions">
+      <div
+        v-if="canManage"
+        class="call-apps-session-actions"
+        aria-label="Active Call App actions"
+        data-call-app-remove-flow="backend-delete"
+      >
         <button
           class="btn call-apps-remove-btn"
           type="button"
-          :disabled="removing"
+          :disabled="submitting || removing"
+          :title="activeSessionRemoveTitle"
+          :aria-label="activeSessionRemoveTitle"
           @click="removeActiveSession"
         >
           {{ removing ? 'Removing...' : 'Remove from call' }}
@@ -356,6 +363,12 @@ const activeSessionDefaultAccessLabel = computed(() => (
   defaultGrantState() === 'allowed' ? 'Default: allowed' : 'Default: blocked'
 ));
 const activeSessionPermissionActions = computed(() => supportedCallAppPermissionActions(activeSessionForAccess.value || {}));
+const activeSessionRemoveTitle = computed(() => {
+  if (!props.canManage) return 'Only the call owner or a moderator can remove Call Apps.';
+  if (submitting.value) return `Finish adding a Call App before removing ${activeSessionName.value}.`;
+  if (removing.value) return `Removing ${activeSessionName.value} from this call.`;
+  return `Remove ${activeSessionName.value} from this call.`;
+});
 
 function grantStateForParticipant(participant) {
   const userId = Number(participant?.userId || participant?.user_id || 0);
@@ -468,7 +481,7 @@ async function attachSelectedApp() {
 
 async function removeActiveSession() {
   const sessionId = String(activeSessionForAccess.value?.id || '').trim();
-  if (!props.canManage || sessionId === '' || removing.value) return;
+  if (!props.canManage || sessionId === '' || submitting.value || removing.value) return;
 
   actionError.value = '';
   notice.value = '';
