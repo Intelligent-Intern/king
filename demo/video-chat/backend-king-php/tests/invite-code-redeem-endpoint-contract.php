@@ -70,18 +70,6 @@ SQL
     )->fetchColumn();
     videochat_invite_redeem_endpoint_assert($standardUserId > 0, 'expected seeded standard user');
 
-    $createCall = videochat_create_call($pdo, $adminUserId, [
-        'room_id' => 'lobby',
-        'title' => 'Invite Redeem Endpoint Contract Call',
-        'starts_at' => '2026-08-01T09:00:00Z',
-        'ends_at' => '2026-08-01T10:00:00Z',
-        'internal_participant_user_ids' => [$standardUserId],
-        'external_participants' => [],
-    ]);
-    videochat_invite_redeem_endpoint_assert((bool) ($createCall['ok'] ?? false), 'call create should succeed for redeem endpoint contract');
-    $callId = (string) (($createCall['call'] ?? [])['id'] ?? '');
-    videochat_invite_redeem_endpoint_assert($callId !== '', 'call id must be present');
-
     $adminSessionId = 'sess_invite_redeem_endpoint_admin';
     $userSessionId = 'sess_invite_redeem_endpoint_user';
     $insertSession = $pdo->prepare(
@@ -168,6 +156,24 @@ SQL
         'rest'
     );
     videochat_invite_redeem_endpoint_assert((bool) ($userAuth['ok'] ?? false), 'expected valid user auth context');
+    $authTenantId = videochat_tenant_id_from_auth_context($adminAuth);
+    videochat_invite_redeem_endpoint_assert($authTenantId > 0, 'expected admin auth tenant context');
+    videochat_invite_redeem_endpoint_assert(
+        videochat_tenant_id_from_auth_context($userAuth) === $authTenantId,
+        'expected user auth tenant context to match admin test tenant'
+    );
+
+    $createCall = videochat_create_call($pdo, $adminUserId, [
+        'room_id' => 'lobby',
+        'title' => 'Invite Redeem Endpoint Contract Call',
+        'starts_at' => '2026-08-01T09:00:00Z',
+        'ends_at' => '2026-08-01T10:00:00Z',
+        'internal_participant_user_ids' => [$standardUserId],
+        'external_participants' => [],
+    ], $authTenantId);
+    videochat_invite_redeem_endpoint_assert((bool) ($createCall['ok'] ?? false), 'call create should succeed for redeem endpoint contract');
+    $callId = (string) (($createCall['call'] ?? [])['id'] ?? '');
+    videochat_invite_redeem_endpoint_assert($callId !== '', 'call id must be present');
 
     $adminRequestTemplate = [
         'uri' => '/api/invite-codes/redeem',
@@ -251,7 +257,7 @@ SQL
     $roomInvite = videochat_create_invite_code($pdo, $adminUserId, 'admin', [
         'scope' => 'room',
         'room_id' => 'lobby',
-    ], $fixedNow);
+    ], $fixedNow, $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($roomInvite['ok'] ?? false), 'room invite create should succeed');
     $roomInviteCode = (string) (($roomInvite['invite_code'] ?? [])['code'] ?? '');
     videochat_invite_redeem_endpoint_assert(videochat_invite_redeem_endpoint_uuid_v4_like($roomInviteCode), 'room invite code must be uuid-v4');
@@ -298,6 +304,7 @@ SQL
     );
     $roomInviteRow->execute([':code' => strtolower($roomInviteCode)]);
     $roomInviteRowData = $roomInviteRow->fetch();
+    $roomInviteRow->closeCursor();
     videochat_invite_redeem_endpoint_assert(is_array($roomInviteRowData), 'redeemed room invite row must exist');
     videochat_invite_redeem_endpoint_assert((int) ($roomInviteRowData['redemption_count'] ?? -1) === 1, 'room invite row redemption_count mismatch');
     videochat_invite_redeem_endpoint_assert((int) ($roomInviteRowData['redeemed_by_user_id'] ?? 0) === $standardUserId, 'room invite row redeemed_by mismatch');
@@ -327,7 +334,7 @@ SQL
     $callInvite = videochat_create_invite_code($pdo, $adminUserId, 'admin', [
         'scope' => 'call',
         'call_id' => $callId,
-    ], $fixedNow + 30);
+    ], $fixedNow + 30, $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($callInvite['ok'] ?? false), 'call invite create should succeed');
     $callInviteCode = (string) (($callInvite['invite_code'] ?? [])['code'] ?? '');
     videochat_invite_redeem_endpoint_assert(videochat_invite_redeem_endpoint_uuid_v4_like($callInviteCode), 'call invite code must be uuid-v4');
@@ -359,7 +366,7 @@ SQL
     $expiredInvite = videochat_create_invite_code($pdo, $adminUserId, 'admin', [
         'scope' => 'room',
         'room_id' => 'lobby',
-    ], $fixedNow + 100);
+    ], $fixedNow + 100, $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($expiredInvite['ok'] ?? false), 'expired invite setup create should succeed');
     $expiredInviteCode = (string) (($expiredInvite['invite_code'] ?? [])['code'] ?? '');
     $markExpired = $pdo->prepare('UPDATE invite_codes SET expires_at = :expires_at WHERE lower(code) = :code');
@@ -399,7 +406,7 @@ SQL
         'title' => 'Cancelled Redeem Endpoint Contract Call',
         'starts_at' => '2026-08-01T11:00:00Z',
         'ends_at' => '2026-08-01T12:00:00Z',
-    ]);
+    ], $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($cancelledCall['ok'] ?? false), 'cancelled call setup should succeed');
     $cancelledCallId = (string) (($cancelledCall['call'] ?? [])['id'] ?? '');
     videochat_invite_redeem_endpoint_assert($cancelledCallId !== '', 'cancelled call id should be present');
@@ -407,12 +414,12 @@ SQL
     $cancelledCallInvite = videochat_create_invite_code($pdo, $adminUserId, 'admin', [
         'scope' => 'call',
         'call_id' => $cancelledCallId,
-    ], $fixedNow + 150);
+    ], $fixedNow + 150, $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($cancelledCallInvite['ok'] ?? false), 'cancelled call invite setup should succeed');
     $cancelledCallInviteCode = (string) (($cancelledCallInvite['invite_code'] ?? [])['code'] ?? '');
     $markCancelledCall = $pdo->prepare('UPDATE calls SET status = :status WHERE id = :id');
     $markCancelledCall->execute([
-        ':status' => 'cancelled',
+        ':status' => 'ended',
         ':id' => $cancelledCallId,
     ]);
 
@@ -445,12 +452,12 @@ SQL
     $inactiveRoomInvite = videochat_create_invite_code($pdo, $adminUserId, 'admin', [
         'scope' => 'room',
         'room_id' => 'lobby',
-    ], $fixedNow + 200);
+    ], $fixedNow + 200, $authTenantId);
     videochat_invite_redeem_endpoint_assert((bool) ($inactiveRoomInvite['ok'] ?? false), 'inactive-room invite setup should succeed');
     $inactiveRoomInviteCode = (string) (($inactiveRoomInvite['invite_code'] ?? [])['code'] ?? '');
     $markLobbyInactive = $pdo->prepare('UPDATE rooms SET status = :status WHERE id = :id');
     $markLobbyInactive->execute([
-        ':status' => 'inactive',
+        ':status' => 'archived',
         ':id' => 'lobby',
     ]);
 
@@ -533,5 +540,6 @@ SQL
     exit(0);
 } catch (Throwable $error) {
     fwrite(STDERR, '[invite-code-redeem-endpoint-contract] ERROR: ' . $error->getMessage() . "\n");
+    fwrite(STDERR, $error->getTraceAsString() . "\n");
     exit(1);
 }
