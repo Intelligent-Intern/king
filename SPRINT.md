@@ -79,8 +79,16 @@ Tickets:
     `agent/iam-s2-06-anonymous-temp-rights`, and
     `agent/iam-s2-07-personalized-temp-reuse`.
   - Proof: IAM worktree inventory and contained-HEAD scan completed locally.
-- [ ] IAM2-02 Prove calendar invite join links resolve to call-scoped sessions
+- [x] IAM2-02 Prove calendar invite join links resolve to call-scoped sessions
   without leaking foreign calendar or call data.
+  - Merged worker branch `agent/iam-s2-02-calendar-invite`.
+  - Added `call-access-calendar-invite-join-contract.mjs` proving booking-created
+    call/access-id binding, invite-only call scope, safe public booking payload,
+    call-access session binding, least-privilege tenant fallback, invalidation
+    fail-closed behavior, and frontend safe join errors.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-calendar-invite-join-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-link-privacy-contract.mjs`,
+    and `git diff --check` passed.
 - [ ] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
   flow and cannot bypass host admission.
 - [x] IAM2-04 Prove registered invitees who are logged out get a safe login
