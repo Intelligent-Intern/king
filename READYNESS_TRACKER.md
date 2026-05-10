@@ -17,6 +17,38 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 Backlog Cleanup, Admin UX, And Governance Refactor 06:
+  closed all 20 Sprint 06 tickets on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint classified
+  remaining dirty worktree candidates, preserved parked Background/Gossip/SFU/
+  MediaSecurity/BTGF work, cleaned only short-lived merged UX6 worker branches,
+  and shipped the Governance/Admin UX batch for descriptor-driven actions,
+  route authorization proof, entity semantics, recursive relation selection,
+  relation-summary caching, localized descriptors, onboarding persistence,
+  profile expansion, action/search spacing, sidebar/modal cleanup, input token
+  normalization, readonly create-action removal, and heading-overlap proof.
+  Final proof caught and fixed one scoped Admin CSS issue: the relation-stack
+  search input now uses `var(--bg-input)` instead of the border color token.
+  Proof: `git diff --check`; Governance/Admin/Profile/Onboarding/i18n
+  contracts; backend PHP syntax checks; Docker PHP user-settings,
+  user-settings-endpoint, onboarding-progress, tenant-permission-grants, and
+  IAM SQLite governance contracts; focused Governance relation-stack and
+  heading-overlap Playwright proofs; `npm run build`; and
+  `npm run test:contract:build-size` passed. Deploy proof: ran
+  `demo/video-chat/scripts/deploy.sh deploy` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, with no push, DNS write, or Certbot
+  issuance. Post-deploy diagnostics showed runtime/asset version
+  `20260510050435`, production app/API/CDN/call-app hosts reachable,
+  planning-image and call-diagnostics Call-App assets HTTP 200, authenticated
+  `/api/calls/{id}/call-apps/available` returning HTTP 200 with six apps, and
+  no recent Backend/WS/Edge Fatal/Exception/HTTP 500/Call-App availability log
+  matches. Residual diagnostics are the expected parked boundaries:
+  unauthenticated protected probes return auth failures, `sfu.kingrt.com/sfu`
+  returns 404 because SFU remains disabled/manual, and TURN logs show external
+  peer TCP resets.
+
 - 2026-05-10 UX6-01 Call App remove-session dirty worktree
   classification: inspected dirty source worktree
   `/home/jochen/projects/king.site/worktrees/call-app-remove-session`

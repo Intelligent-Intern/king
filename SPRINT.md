@@ -22,7 +22,8 @@ Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Active as of 2026-05-10 after Sprint 05 deploy.
+- Completed on 2026-05-10 after local proof, no-push deploy, and post-deploy
+  diagnostics.
 - Local-only integration branch. Do not push to GitHub.
 - Worker branches/worktrees must use short-lived non-`codex` names and merge
   back into the local no-push branch after proof.
@@ -113,5 +114,28 @@ Sprint Checkboxen:
   pages with correct entity-specific actions or no action.
 - [x] UX6-19 Prove page headings use the standard `h1` size and avoid
   unreachable/overlapping content on the migrated Admin/Governance routes.
-- [ ] UX6-20 Run final proof, build, deploy without push/DNS/certbot, collect
+- [x] UX6-20 Run final proof, build, deploy without push/DNS/certbot, collect
   post-deploy diagnostics, and update readiness evidence.
+
+UX6-20 closure evidence:
+- Local proof passed: Governance/Admin/Profile/Onboarding/i18n contracts,
+  backend PHP syntax checks, Docker PHP user-settings/onboarding/tenant-grant
+  contracts, focused Governance/Admin Playwright proofs, `npm run build`, and
+  `npm run test:contract:build-size`.
+- One final proof finding was fixed before deploy:
+  `CrudRelationStack.vue` now uses the standard `var(--bg-input)` token for
+  the relation-stack search input.
+- Deploy command ran from `demo/video-chat` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`; no push, DNS write, or Certbot issuance was
+  performed.
+- Post-deploy diagnostics: runtime/asset version `20260510050435`, production
+  app/API/CDN/call-app hosts reachable, planning-image and call-diagnostics
+  Call-App assets HTTP 200, authenticated
+  `/api/calls/{id}/call-apps/available` HTTP 200 with six apps, and recent
+  Backend/WS/Edge logs showed no Fatal/Exception/HTTP 500/Call-App
+  availability errors.
+- Expected parked-boundary diagnostics remain unchanged: unauthenticated
+  protected APIs return auth failures, `sfu.kingrt.com/sfu` returns 404 because
+  SFU is disabled/manual, and TURN logs contain external peer TCP resets.
