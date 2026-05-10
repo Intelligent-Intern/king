@@ -260,7 +260,7 @@ export function createCallWorkspaceSocketHelpers({
 
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
-    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'call/gossip-server-frame', 'gossip/recovery/request', ...callStateSignalTypes].includes(type)) return;
+    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'gossip/recovery/request', ...callStateSignalTypes].includes(type)) return;
 
     const sender = typeof payload.sender === 'object' ? payload.sender : {};
     const senderUserId = Number(sender.user_id || 0);

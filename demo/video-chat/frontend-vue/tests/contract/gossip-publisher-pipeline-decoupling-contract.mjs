@@ -56,9 +56,9 @@ assert(
   'optional SFU failure must return success based on Gossip publication',
 )
 assert(
-  /GOSSIP_SERVER_RELAY_CONFIG\.primary && gossipPublished[\s\S]*sfuMirrorSkipped:\s*true/.test(helper)
+  !helper.includes('GOSSIP_SERVER_RELAY_CONFIG')
     && /const sent = await sendClient\.sendEncodedFrame\(frame\)/.test(helper),
-  'server-relay primary must publish Gossip first and skip SFU while non-relay modes can still mirror to an open SFU client',
+  'browser gossip primary must not depend on a server relay while non-primary modes can still mirror to an open SFU client',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline)
