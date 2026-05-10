@@ -10,7 +10,7 @@ import {
 } from '../../src/modules/routeActions.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
-const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'configure', 'inspect', 'tour', 'custom']);
+const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'save', 'configure', 'inspect', 'tour', 'custom']);
 
 function routeByName(name) {
   const record = workspaceModuleRouteRecords.find((candidate) => candidate.name === name);
@@ -119,7 +119,11 @@ assert.ok(actionKinds(portabilityRoute).has('export'), 'data portability must of
 
 assert.ok(
   actionKeys(routeByName('admin-administration-app-configuration')).has('administration.app_configuration.save'),
-  'app configuration route must expose save/configure action metadata',
+  'app configuration route must expose save action metadata',
+);
+assert.ok(
+  actionKinds(routeByName('admin-administration-app-configuration')).has('save'),
+  'app configuration action metadata must describe save as a first-class action kind',
 );
 assert.ok(
   actionKeys(routeByName('admin-administration-marketplace')).has('marketplace.apps.create'),
@@ -146,6 +150,7 @@ const governanceCrudSource = await readFile(path.join(root, 'src/modules/governa
 assert.match(governanceCrudSource, /routeActionsForContext/, 'governance CRUD must read descriptor route actions through the shared action helper');
 assert.match(governanceCrudSource, /moduleAccessContextFromSession/, 'governance CRUD must filter actions through session permissions');
 assert.match(governanceCrudSource, /createAction/, 'governance CRUD must derive create visibility from route actions');
+assert.match(governanceCrudSource, /AdminPageActionBar/, 'governance CRUD must render page-level actions through the descriptor action bar');
 assert.doesNotMatch(
   governanceCrudSource,
   /openCreateModal">\{\{\s*t\('governance\.create_new'\)\s*\}\}/,
