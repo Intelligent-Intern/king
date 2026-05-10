@@ -325,7 +325,7 @@ assert.match(
 );
 assert.match(
   sprint,
-  /## Sprint: IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05/,
+  /## Sprint: IAM Remaining Proof And Branch Cleanup 07/,
   'SPRINT.md must contain only the active IAM sprint after Sprint 03 closure',
 );
 assert.doesNotMatch(
