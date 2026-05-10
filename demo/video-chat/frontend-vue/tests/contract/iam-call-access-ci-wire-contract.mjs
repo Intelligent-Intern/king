@@ -43,11 +43,16 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs',
   'frontend-vue/tests/contract/call-access-duplicate-abuse-contract.mjs',
   'frontend-vue/tests/contract/call-access-account-isolation-contract.mjs',
+  'frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs',
+  'frontend-vue/tests/contract/call-access-callapp-revocation-contract.mjs',
+  'frontend-vue/tests/contract/call-access-route-guard-ui-contract.mjs',
+  'frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs',
   'backend-king-php/tests/call-guest-list-direct-join-contract.sh',
   'backend-king-php/tests/call-access-cross-org-contract.sh',
   'backend-king-php/tests/realtime-lobby-concurrency-contract.sh',
   'backend-king-php/tests/call-access-membership-removal-contract.sh',
   'backend-king-php/tests/call-access-stale-organization-role-contract.sh',
+  'backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh',
 ];
 
 assert.notEqual(iamContractScript, '', 'package.json must expose test:contract:iam-call-access');
