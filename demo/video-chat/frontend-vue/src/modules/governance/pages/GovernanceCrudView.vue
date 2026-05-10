@@ -175,6 +175,7 @@ import { createEntitySummaryCache } from '../entitySummaryCache.js';
 import { runGovernancePageAction } from '../governanceExportUi.js';
 import { validateGovernanceCrudSubmission } from '../governanceEntityValidation.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
+import { hydrateRelationSelectionSummaries } from '../relationSelectionSummaryHydration.js';
 import { relationRowSummary, relationSelectionSnapshot as buildRelationSelectionSnapshot } from '../relationSummaryPayload.js';
 import { useGovernanceCrudFilters } from '../useGovernanceCrudFilters.js';
 import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence.js';
@@ -614,6 +615,7 @@ function resetRelationSelections(row = null) {
   for (const [key, value] of Object.entries(source)) {
     relationSelections[key] = Array.isArray(value) ? value : [];
   }
+  void hydrateRelationSelectionSummaries({ selections: relationSelections, relationships: modalRelationships.value, entitySummaryCache, fetchSummaryBatch: governancePersistence.fetchSummaryBatch });
 }
 
 function relationSelectionSnapshot() {
