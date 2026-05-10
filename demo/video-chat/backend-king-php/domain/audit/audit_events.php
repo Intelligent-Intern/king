@@ -352,11 +352,23 @@ function videochat_audit_record_membership_removal(PDO $pdo, int $tenantId, int 
     ]);
 }
 
+function videochat_audit_call_access_tenant_id(array $accessLink, array $call = []): ?int
+{
+    if (is_numeric($call['tenant_id'] ?? null) && (int) $call['tenant_id'] > 0) {
+        return (int) $call['tenant_id'];
+    }
+    if (is_numeric($accessLink['tenant_id'] ?? null) && (int) $accessLink['tenant_id'] > 0) {
+        return (int) $accessLink['tenant_id'];
+    }
+
+    return null;
+}
+
 function videochat_audit_record_call_access_link_open(PDO $pdo, array $accessLink, array $call, ?array $targetUser = null): array
 {
     $accessId = (string) ($accessLink['id'] ?? '');
     return videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'tenant_id' => videochat_audit_call_access_tenant_id($accessLink, $call),
         'event_type' => 'call_access_link_opened',
         'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
         'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
@@ -411,7 +423,7 @@ function videochat_audit_record_call_access_invitation_created(
     $accessId = trim((string) ($accessLink['id'] ?? ''));
 
     return videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'tenant_id' => videochat_audit_call_access_tenant_id($accessLink, $call),
         'event_type' => 'call_access_invitation_created',
         'actor_user_id' => $actorUserId,
         'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
@@ -465,7 +477,7 @@ function videochat_audit_record_call_access_account_compared(
     $sessionId = trim((string) ($context['session_id'] ?? ''));
 
     return videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'tenant_id' => videochat_audit_call_access_tenant_id($accessLink, $call),
         'event_type' => 'call_access_account_compared',
         'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
         'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
@@ -490,7 +502,7 @@ function videochat_audit_record_call_access_account_compared(
 function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $accessLink, array $call, array $targetUser, string $sessionId): array
 {
     return videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'tenant_id' => videochat_audit_call_access_tenant_id($accessLink, $call),
         'event_type' => 'call_scoped_access_continued',
         'target_user_id' => is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
         'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
