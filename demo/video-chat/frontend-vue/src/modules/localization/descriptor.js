@@ -7,7 +7,6 @@ export default {
       path: '/admin/administration/localization',
       name: 'admin-administration-localization',
       roles: ['admin'],
-      pageTitle: 'Localization',
       pageTitle_key: 'navigation.administration.localization',
       actions: [
         {
@@ -26,7 +25,6 @@ export default {
     {
       group: 'administration',
       to: '/admin/administration/localization',
-      label: 'Localization',
       label_key: 'navigation.administration.localization',
       order: 20,
       roles: ['admin'],
@@ -35,7 +33,6 @@ export default {
   settings_panels: [
     {
       key: 'personal.localization',
-      label: 'Localization',
       label_key: 'settings.localization',
       roles: ['admin', 'user'],
       order: 40,
@@ -43,4 +40,8 @@ export default {
     },
   ],
   i18n_namespaces: ['localization'],
+  catalog: {
+    name_key: 'modules.localization',
+    preview_kind: 'localization',
+  },
 };

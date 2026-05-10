@@ -7,7 +7,6 @@ export default {
   settings_panels: [
     {
       key: 'personal.theme',
-      label: 'Options',
       label_key: 'settings.options',
       roles: ['admin', 'user'],
       order: 90,
@@ -17,4 +16,8 @@ export default {
     },
   ],
   i18n_namespaces: ['workspace_settings'],
+  catalog: {
+    name_key: 'modules.workspace_settings',
+    preview_kind: 'workspace_settings',
+  },
 };

@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { buildGovernanceCatalogRows } from '../../src/modules/governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../src/modules/index.js';
+import { ENGLISH_MESSAGES } from '../../src/modules/localization/englishMessages.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
@@ -14,13 +15,21 @@ assert.ok(moduleRows.some((row) => row.key === 'governance'), 'governance module
 assert.ok(moduleRows.some((row) => row.key === 'calls'), 'calls module row missing');
 assert.ok(moduleRows.some((row) => row.key === 'onboarding'), 'onboarding module row missing');
 assert.ok(moduleRows.every((row) => !row.description_key), 'module rows must not render descriptions');
+assert.ok(moduleRows.every((row) => row.name_key), 'module rows must carry localized catalog name keys');
+for (const row of moduleRows) {
+  assert.ok(ENGLISH_MESSAGES[row.name_key], `${row.key} module name key must have an English fallback`);
+}
 assert.ok(moduleRows.every((row) => typeof row.preview_kind === 'string' && row.preview_kind !== ''), 'module rows must expose screenshot preview metadata');
 assert.ok(moduleRows.every((row) => Number.isInteger(row.route_count)), 'module rows must expose route counts for diagnostics');
 
 const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-permissions');
 const permissionKeys = new Set(permissionRows.map((row) => row.key));
 assert.ok(permissionRows.every((row) => row.entity_key === 'permissions'), 'descriptor permission rows must carry their entity key');
-assert.ok(permissionRows.every((row) => row.module_key && row.module_name), 'permission rows must carry their module grouping metadata');
+assert.ok(permissionRows.every((row) => row.module_key && row.module_name && row.module_name_key), 'permission rows must carry localized module grouping metadata');
+assert.ok(
+  permissionRows.every((row) => row.description_params?.module_key === row.module_name_key && !Object.prototype.hasOwnProperty.call(row.description_params, 'module')),
+  'permission descriptions must pass module localization keys instead of pre-rendered module names',
+);
 assert.ok(permissionKeys.has('users.read'), 'users permission row missing');
 assert.ok(permissionKeys.has('users.create'), 'users create permission row missing');
 assert.ok(permissionKeys.has('governance.read'), 'governance permission row missing');

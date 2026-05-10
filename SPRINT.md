@@ -93,7 +93,7 @@ Sprint Checkboxen:
 - [x] UX6-10 Replace row-by-row relation label fetching on the proof surfaces
   with normalized rows, included summaries, batch summary endpoints, and
   frontend entity caches.
-- [ ] UX6-11 Harden Navigation/i18n descriptors so localized keys and structured
+- [x] UX6-11 Harden Navigation/i18n descriptors so localized keys and structured
   localized fields are the source of truth instead of concatenated English
   descriptions.
 - [ ] UX6-12 Add onboarding tour registry/persistence proof for per-area `?`

@@ -1,14 +1,14 @@
 const governanceRoutes = [
-  ['users', 'Nutzer', 'Nutzer', 'Nutzer', 'modules/users/pages/admin/UsersView.vue'],
-  ['groups', 'Gruppen', 'Gruppe', 'Gruppen', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['organizations', 'Organisationen', 'Organisation', 'Organisationen', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['modules', 'Module', 'Modul', 'Module', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['roles', 'Rollen', 'Rolle', 'Rollen', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['grants', 'Freigaben', 'Freigabe', 'Freigaben', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['policies', 'Richtlinien', 'Richtlinie', 'Richtlinien', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['audit-log', 'Audit Log', 'Audit Entry', 'Audit Entries', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['data-portability', 'Export / Import', 'Export / Import Job', 'Export / Import Jobs', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['compliance', 'Compliance', 'Compliance Rule', 'Compliance Rules', 'modules/governance/pages/GovernanceCrudView.vue'],
+  { slug: 'users', source_path: 'modules/users/pages/admin/UsersView.vue' },
+  { slug: 'groups', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'organizations', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'modules', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'roles', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'grants', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'policies', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'audit-log', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'data-portability', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
+  { slug: 'compliance', source_path: 'modules/governance/pages/GovernanceCrudView.vue' },
 ];
 
 const governanceLabelKeys = {
@@ -207,15 +207,12 @@ export default {
   module_key: 'governance',
   version: '0.1.0',
   permissions: governancePermissions,
-  routes: governanceRoutes.map(([slug, pageTitle, entitySingular, entityPlural, sourcePath]) => ({
+  routes: governanceRoutes.map(({ slug, source_path: sourcePath }) => ({
     path: `/admin/governance/${slug}`,
     name: `admin-governance-${slug}`,
     roles: ['admin'],
-    pageTitle,
     pageTitle_key: governanceLabelKeys[slug] || '',
-    entitySingular,
     entitySingular_key: governanceEntityKeys[slug]?.[0] || '',
-    entityPlural,
     entityPlural_key: governanceEntityKeys[slug]?.[1] || '',
     readonly_reason_key: governanceReadonlyReasons[slug] || '',
     required_permissions: governanceRequiredPermissions(slug),
@@ -223,10 +220,9 @@ export default {
     source_path: sourcePath,
     loader: governanceLoader(sourcePath),
   })),
-  navigation: governanceRoutes.map(([slug, label], index) => ({
+  navigation: governanceRoutes.map(({ slug }, index) => ({
     group: 'governance',
     to: `/admin/governance/${slug}`,
-    label,
     label_key: governanceLabelKeys[slug] || '',
     order: (index + 1) * 10,
     roles: ['admin'],
@@ -234,4 +230,8 @@ export default {
   })),
   settings_panels: [],
   i18n_namespaces: ['governance'],
+  catalog: {
+    name_key: 'modules.governance',
+    preview_kind: 'governance',
+  },
 };

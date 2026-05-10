@@ -3,6 +3,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { workspaceModuleRegistry } from '../../src/modules/index.js';
 import { GOVERNANCE_CRUD_DESCRIPTORS } from '../../src/modules/governance/crudDescriptors.js';
+import { ENGLISH_MESSAGES } from '../../src/modules/localization/englishMessages.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
@@ -55,6 +56,9 @@ for (const descriptor of modules) {
     true,
     `${descriptor.module_key} must expose the time-limited grant metadata slot`,
   );
+  assert.ok(descriptor.catalog.name_key, `${descriptor.module_key} catalog name must be keyed`);
+  assert.ok(ENGLISH_MESSAGES[descriptor.catalog.name_key], `${descriptor.module_key} catalog name key must have an English fallback`);
+  assert.equal(descriptor.catalog.localized.name.key, descriptor.catalog.name_key, `${descriptor.module_key} catalog must expose structured localized name metadata`);
 }
 
 const manifestPermissions = new Set(modules.flatMap((descriptor) => descriptor.permissions));

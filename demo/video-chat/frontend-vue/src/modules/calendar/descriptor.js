@@ -7,7 +7,6 @@ export default {
       path: '/calendar',
       name: 'workspace-calendar',
       roles: ['admin', 'user'],
-      pageTitle: 'Calendar',
       pageTitle_key: 'navigation.calendar',
       required_permissions: [],
       actions: [
@@ -27,7 +26,6 @@ export default {
     {
       group: null,
       to: '/calendar',
-      label: 'Calendar',
       label_key: 'navigation.calendar',
       icon: '/assets/orgas/kingrt/icons/lobby.png',
       order: 15,
@@ -37,4 +35,8 @@ export default {
   ],
   settings_panels: [],
   i18n_namespaces: ['calendar'],
+  catalog: {
+    name_key: 'modules.calendar',
+    preview_kind: 'calendar',
+  },
 };
