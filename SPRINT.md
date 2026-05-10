@@ -77,8 +77,18 @@ Tickets:
     and `git diff --check` passed.
 - [ ] IAM3-02 Prove forged call-access IDs, invite IDs, and call IDs are rejected
   with redacted safe states across API and browser UI.
-- [ ] IAM3-03 Prove tampered verified-context payloads cannot rebind a session,
+- [x] IAM3-03 Prove tampered verified-context payloads cannot rebind a session,
   user, tenant, or call after frontend storage manipulation.
+  - Merged worker branch `agent/iam-s3-03-tampered-verified-context`.
+  - Added `call-access-tampered-verified-context-contract.mjs` proving frontend
+    storage cannot inject trusted user/tenant/call bindings, verified context
+    carries only user/session identity, backend derives tenant/call/access from
+    bearer-authenticated server rows, and tampered verified user/session data
+    fails closed without persisting a call-access session.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-tampered-verified-context-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs`,
+    and `git diff --check` passed; local backend route-guard shell skipped
+    because host PHP lacks `pdo_sqlite`.
 - [x] IAM3-04 Prove duplicate device/browser personalized-link redemption stays
   deterministic under parallel tabs and does not leak private invite metadata.
   - Merged worker branch `agent/iam-s3-04-duplicate-device-browser`.
