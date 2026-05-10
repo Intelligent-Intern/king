@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspace = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8')
 const gossipDataLane = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
+const publisherFrameDispatch = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/local/publisherFrameDispatch.ts'), 'utf8')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const controller = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/gossipController.ts'), 'utf8')
 const lifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts'), 'utf8')
@@ -43,7 +44,7 @@ assert(
   'accepted gossip deliveries must be routed toward the remote frame path only in active receive mode',
 )
 assert(
-  /if \(!GOSSIP_DATA_LANE_CONFIG\.receive\)[\s\S]*gossip_data_lane_shadow_message_dropped[\s\S]*return;/.test(workspaceGossipSurface),
+  /if \(!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.receive\)[\s\S]*gossip_data_lane_shadow_message_dropped[\s\S]*return;/.test(workspaceGossipSurface),
   'shadow mode must still drop incoming RTCDataChannel data before GossipController handling',
 )
 assert(
@@ -51,16 +52,39 @@ assert(
   'active inbound RTCDataChannel messages must enter GossipController.handleData() as local receives',
 )
 assert(
-  /function routeLiveGossipDeliveryToRemoteFrame\(delivery\)[\s\S]*if \(!GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*msg\.type !== 'sfu\/frame'[\s\S]*handleSFUEncodedFrame\(frame\);/.test(workspaceGossipSurface),
-  'accepted sfu/frame gossip deliveries must route to the existing remote decode entry point only in active receive mode',
+  /const GOSSIP_MEDIA_FRAME_TYPE = 'gossip\.media\.frame\.v1';/.test(gossipDataLane)
+    && /function routeLiveGossipDeliveryToRemoteFrame\(delivery\)[\s\S]*if \(!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*isGossipMediaFrameMessage\(msg\)[\s\S]*handleSFUEncodedFrame\(directGossipPrimary/.test(workspaceGossipSurface),
+  'accepted gossip.media.frame.v1 gossip deliveries must route to the existing remote decode entry point only in active receive mode',
 )
 assert(
-  /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*base64UrlToArrayBuffer\(dataBase64\)[\s\S]*transportPath:\s*'gossip_rtc_datachannel'/.test(workspaceGossipSurface),
-  'gossip messages must be adapted into SFU frame objects with explicit gossip transport provenance',
+  /function isGossipMediaFrameMessage\(msg\)[\s\S]*type === GOSSIP_MEDIA_FRAME_TYPE \|\| type === 'sfu\/frame'/.test(gossipDataLane)
+    && /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*base64UrlToArrayBuffer\(dataBase64\)[\s\S]*transportPath:\s*'gossip_rtc_datachannel'/.test(workspaceGossipSurface),
+  'gossip.media.frame.v1 messages must be adapted into SFU frame objects with explicit gossip transport provenance while legacy inbound sfu/frame remains decodable',
+)
+assert(
+  /function gossipFrameMessageFromEncodedFrame\(frame,\s*sequenceMap,\s*plainRelay = false\)[\s\S]*type:\s*GOSSIP_MEDIA_FRAME_TYPE[\s\S]*envelope_contract:\s*GOSSIP_MEDIA_FRAME_TYPE/.test(gossipDataLane),
+  'active outbound Gossip envelopes must publish gossip.media.frame.v1 instead of external sfu/frame messages',
 )
 assert(
   /gossip_data_lane_frame_routed/.test(workspaceGossipSurface),
   'active live routing must emit a diagnostic when a gossip frame enters the remote frame path',
+)
+const gossipFirstPublishIndex = publisherFrameDispatch.indexOf('if (gossipFirst) {')
+const gossipPrimaryEarlyReturnIndex = publisherFrameDispatch.indexOf('sfuFallbackSuppressed: true', gossipFirstPublishIndex)
+const sfuClientLookupIndex = publisherFrameDispatch.indexOf('const sendClient = safeFunction(currentOpenSfuClient, () => null)();')
+const sfuSendIndex = publisherFrameDispatch.indexOf('sendClient.sendEncodedFrame(frame)')
+assert(
+  gossipFirstPublishIndex >= 0
+    && gossipPrimaryEarlyReturnIndex > gossipFirstPublishIndex
+    && sfuClientLookupIndex > gossipPrimaryEarlyReturnIndex
+    && sfuSendIndex > sfuClientLookupIndex,
+  'gossip_primary dispatch must return after Gossip publication and must not fall back or mirror into the SFU send path',
+)
+assert(
+  /gossip_primary_publish_failed_no_sfu_fallback/.test(publisherFrameDispatch)
+    && !/sfu_fallback_after_gossip_primary_publish_failure/.test(publisherFrameDispatch)
+    && !/sfu_fallback_unavailable_after_gossip_publish_failure/.test(publisherFrameDispatch),
+  'gossip_primary publish failure must diagnose suppressed fallback instead of sending an SFU frame',
 )
 assert(
   /dispose\(\):\s*void/.test(controller)

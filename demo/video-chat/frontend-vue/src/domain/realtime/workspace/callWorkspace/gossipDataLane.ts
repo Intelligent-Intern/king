@@ -7,6 +7,8 @@ import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
 import { createGossipRecoveryState } from './gossipRecoveryState';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
+const GOSSIP_MEDIA_FRAME_TYPE = 'gossip.media.frame.v1';
+
 export function createCallWorkspaceGossipDataLane({
   callbacks,
   policy = null,
@@ -441,7 +443,7 @@ export function createCallWorkspaceGossipDataLane({
     if (strictGossipMediaDisabled('disableGossipReceiveRecovery')) return false;
     if (!directGossipPrimary && !gossipDataPlaneAllowed()) return false;
     const msg = delivery?.message || null;
-    if (!msg || msg.type !== 'sfu/frame') return false;
+    if (!isGossipMediaFrameMessage(msg)) return false;
     const frame = sfuFrameFromGossipMessage(msg, delivery);
     if (!frame) return false;
     requestGossipRecoveryForReceivedFrame(frame, delivery);
@@ -481,6 +483,11 @@ export function createCallWorkspaceGossipDataLane({
     return frameSequence;
   }
 
+  function isGossipMediaFrameMessage(msg) {
+    const type = String(msg?.type || '').trim();
+    return type === GOSSIP_MEDIA_FRAME_TYPE || type === 'sfu/frame';
+  }
+
   function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, plainRelay = false) {
     if (!frame || typeof frame !== 'object') return null;
     const peerId = localPeerId();
@@ -502,7 +509,8 @@ export function createCallWorkspaceGossipDataLane({
     const frameId = String(frame.frameId || frame.frame_id || '').trim()
       || `gsr_${callId()}_${peerId}_${trackId.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 80)}_${frameSequence}`;
     return {
-      type: 'sfu/frame',
+      type: GOSSIP_MEDIA_FRAME_TYPE,
+      envelope_contract: GOSSIP_MEDIA_FRAME_TYPE,
       protocol_version: 2,
       frame_id: frameId,
       route_id: frameId,
