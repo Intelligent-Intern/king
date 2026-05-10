@@ -48,6 +48,7 @@ import { createCallWorkspaceRouteResolutionHelpers } from './workspace/callWorks
 import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWorkspace/runtimeSwitching';
 import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspace/participantUi';
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
+import { createCallWorkspaceChatArchiveBootstrap } from './workspace/callWorkspace/chatArchiveBootstrap.js';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
 import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
@@ -586,6 +587,7 @@ let shouldSendTransportOnlySfuFrame = () => true;
 let startMediaSecurityHandshakeWatchdog = () => {};
 let syncMediaSecurityWithParticipants = async () => {};
 let appendChatMessage = () => {};
+let bootstrapChatArchive = () => Promise.resolve(false);
 let applyActivitySnapshot = () => {};
 let applyCallLayoutPayload = () => {};
 let applyParticipantActivityPayload = () => {};
@@ -1424,6 +1426,7 @@ const {
     applyTypingEvent: (...args) => applyTypingEvent(...args),
     applyViewerContext,
     appendChatMessage: (...args) => appendChatMessage(...args),
+    bootstrapChatArchive: (...args) => bootstrapChatArchive(...args),
     captureClientDiagnostic,
     clearAdmissionGate: (...args) => clearAdmissionGate(...args),
     clearErrors: (...args) => clearErrors(...args),
@@ -1928,6 +1931,21 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   applyTypingEvent,
   normalizeLobbyEntry,
 } = chatRuntimeHelpers);
+
+const chatArchiveBootstrap = createCallWorkspaceChatArchiveBootstrap({
+  callbacks: {
+    apiRequest,
+    appendChatMessage: (...args) => appendChatMessage(...args),
+    captureClientDiagnostic,
+    ensureRoomBuckets,
+  },
+  refs: {
+    activeCallId,
+    activeRoomId,
+  },
+});
+bootstrapChatArchive = chatArchiveBootstrap.bootstrapChatArchive;
+onBeforeUnmount(() => { chatArchiveBootstrap.dispose(); });
 
 const {
   addChatAttachmentDraft,
