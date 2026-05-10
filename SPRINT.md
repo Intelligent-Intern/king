@@ -94,7 +94,7 @@ Sprint Checkboxen:
   from `local/iam-e2e-email-confirmation-race-hardening`.
 - [ ] IAM7-13 Extract or prove foreign link review audit scoping from
   `local/iam-e2e-foreign-link-review-audit`.
-- [ ] IAM7-14 Extract or prove identity mismatch review flow from
+- [x] IAM7-14 Extract or prove identity mismatch review flow from
   `local/iam-e2e-identity-mismatch-review-flow`.
 - [ ] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
   `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
