@@ -248,8 +248,19 @@ Tickets:
     `pdo_sqlite`, covering admin prevention, cross-org, membership removal,
     session route guard, stale org role, strong mismatch privacy, and guest-list
     direct join.
-- [ ] IAM-20 Build, run IAM proof set, deploy without push/DNS/certbot, and
+- [x] IAM-20 Build, run IAM proof set, deploy without push/DNS/certbot, and
   collect post-deploy diagnostics before opening the next 20-ticket sprint.
+  - Deployed local branch `prod-kingrt-do-not-push-to-github` without push, DNS
+    changes, or Certbot renewal.
+  - Proof: `npm run test:contract:iam-call-access`,
+    `npm run test:e2e:call-access`, `npm run test:e2e:release-gate`,
+    `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`,
+    `npm run build`, `npm run test:contract:build-size`, and `git diff --check`
+    passed before deploy.
+  - Diagnostics: app/API/Call-App asset HTTP checks returned 200; unauthenticated
+    call-app availability route returned expected 401 instead of the prior 500;
+    remote containers are up; `prod-debug.sh` found no fresh backend/edge
+    IAM/Call-App 500 class. Remaining log noise was coturn peer TCP resets.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned, with worker branches not named
