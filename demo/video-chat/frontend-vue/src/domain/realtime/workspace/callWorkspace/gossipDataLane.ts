@@ -209,10 +209,11 @@ export function createCallWorkspaceGossipDataLane({
 
     closeGossipServerRelaySocket('relay_context_changed');
     const nowMs = Date.now();
-    if (nowMs < gossipServerRelayReconnectAfterMs) {
+    if (nowMs < gossipServerRelayReconnectAfterMs && !VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
       captureGossipServerRelayDiagnostic('reconnect_backoff');
       return null;
     }
+    gossipServerRelayReconnectAfterMs = 0;
 
     let socket;
     try {
@@ -265,7 +266,8 @@ export function createCallWorkspaceGossipDataLane({
     gossipDataChannelTransport = new GossipRtcDataChannelTransport({
       localPeerId: peerId,
       onDataMessage: (msg, fromPeerId) => {
-        if (!GOSSIP_DATA_LANE_CONFIG.receive) {
+        const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
+        if (!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG.receive) {
           captureClientDiagnostic({
             category: 'media',
             level: 'info',
@@ -281,7 +283,7 @@ export function createCallWorkspaceGossipDataLane({
           });
           return;
         }
-        if (!gossipDataPlaneAllowed()) {
+        if (!directGossipPrimary && !gossipDataPlaneAllowed()) {
           captureClientDiagnostic({
             category: 'media',
             level: 'info',
@@ -625,9 +627,10 @@ export function createCallWorkspaceGossipDataLane({
   }
 
   function routeLiveGossipDeliveryToRemoteFrame(delivery) {
-    if (!GOSSIP_DATA_LANE_CONFIG.receive) return false;
+    const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
+    if (!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG.receive) return false;
     if (strictGossipMediaDisabled('disableGossipReceiveRecovery')) return false;
-    if (!gossipDataPlaneAllowed()) return false;
+    if (!directGossipPrimary && !gossipDataPlaneAllowed()) return false;
     const msg = delivery?.message || null;
     if (!msg || msg.type !== 'sfu/frame') return false;
     const frame = sfuFrameFromGossipMessage(msg, delivery);
@@ -650,7 +653,15 @@ export function createCallWorkspaceGossipDataLane({
         media_generation: Number(frame.mediaGeneration || 0),
       },
     });
-    handleSFUEncodedFrame(frame);
+    handleSFUEncodedFrame(directGossipPrimary
+      ? {
+          ...frame,
+          transportPath: 'gossip_primary_direct',
+          protected: null,
+          protectedFrame: null,
+          protectionMode: 'transport_only',
+        }
+      : frame);
     return true;
   }
 
@@ -736,6 +747,13 @@ export function createCallWorkspaceGossipDataLane({
       return true;
     }
     if (socket.readyState !== WebSocket.OPEN) {
+      if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
+        rememberPendingGossipServerRelayPayload(outboundPayload);
+        closeGossipServerRelaySocket('relay_socket_not_open');
+        gossipServerRelayReconnectAfterMs = 0;
+        ensureGossipServerRelaySocket();
+        return true;
+      }
       captureGossipServerRelayDiagnostic('socket_not_open', 'warning', {
         ready_state: Number(socket.readyState),
       });
@@ -774,17 +792,18 @@ export function createCallWorkspaceGossipDataLane({
   function publishLocalEncodedFrameToGossip(frame) {
     if (publishLocalEncodedFrameToServerRelay(frame)) return true;
     if (strictGossipMediaDisabled('disableGossipPublish')) return false;
-    if (!GOSSIP_DATA_LANE_CONFIG.publish) {
+    const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
+    if (!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG.publish) {
       return recordGossipShadowWouldPublish(frame, 'publish_disabled');
     }
-    if (!gossipDataPlaneAllowed()) {
+    if (!directGossipPrimary && !gossipDataPlaneAllowed()) {
       return recordGossipShadowWouldPublish(frame, 'rollout_gate_blocked');
     }
     const controller = ensureLiveGossipController();
     if (!controller || !frame || typeof frame !== 'object') return false;
     const peerId = localPeerId();
     if (peerId === '' || peerId === '0') return false;
-    const msg = gossipFrameMessageFromEncodedFrame(frame, liveGossipFrameSequenceByTrack, false);
+    const msg = gossipFrameMessageFromEncodedFrame(frame, liveGossipFrameSequenceByTrack, directGossipPrimary);
     if (!msg) return false;
     gossipRecoveryState.rememberPublishedFrame(msg);
     controller.publishFrame(peerId, msg);
