@@ -124,6 +124,21 @@ Use up to six subagents when useful:
 The manager integrates finished work into `kingrt/prod-ready`, keeps the sprint
 checkboxes current, and deploys only from the integrated branch.
 
+## Sprint 01 Result
+
+Completed on 2026-05-10 from local branch `kingrt/prod-ready`, without push,
+DNS automation or certbot. The first deploy attempt exposed a duplicate PHP
+lobby-remove helper that crashed backend and websocket containers. The second
+attempt exposed malformed call-access binding SQL from an undefined
+`$hostVerifiedSelect`, breaking auth/session/ice-server probes. Both failures
+were grouped from logs, fixed locally, committed, and redeployed.
+
+The final deploy completed and post-deploy diagnostics are green for the active
+production surface: runtime/version 200, app/CDN/call-app/registry 200,
+expected unauthenticated 401 for marketplace/lobby/ice probes, expected 404 for
+the parked SFU route, and zero recent auth SQL or PHP fatal errors across five
+fast diagnostics loops.
+
 ## Current Code Anchors
 
 - Backend capability command:
