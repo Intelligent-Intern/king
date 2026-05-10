@@ -770,18 +770,8 @@ SQL,
                 ...videochat_workspace_theme_seed_statements(),
             ],
         ],
-        26 => [
-            'name' => '0026_user_theme_editor_permission',
-            'statements' => [
-                "ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))",
-            ],
-        ],
-        27 => [
-            'name' => '0027_appointment_slot_mode',
-            'statements' => [
-                "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
-            ],
-        ],
+        26 => ['name' => '0026_user_theme_editor_permission', 'statements' => ["ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))"]],
+        27 => ['name' => '0027_appointment_slot_mode', 'statements' => ["ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))"]],
         30 => ['name' => '0030_localization_foundation', 'statements' => videochat_localization_migration_statements()],
         31 => ['name' => '0031_translation_import_history', 'statements' => videochat_translation_import_history_migration_statements()],
         44 => ['name' => '0044_call_activity_sample_history', 'statements' => ["ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'"]],
@@ -797,5 +787,6 @@ SQL,
         54 => ['name' => '0054_call_app_grant_permission_actions', 'statements' => videochat_call_app_grant_permission_actions_migration_statements()],
         55 => ['name' => '0055_operator_feedback_queue', 'statements' => videochat_operator_feedback_migration_statements()],
         56 => ['name' => '0056_call_access_link_disabled_at', 'statements' => ['ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT']],
+        57 => ['name' => '0057_call_app_launch_token_session_binding', 'statements' => videochat_call_app_launch_token_session_binding_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

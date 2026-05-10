@@ -74,6 +74,14 @@ SQL,
     ];
 }
 
+function videochat_call_app_launch_token_session_binding_migration_statements(): array
+{
+    return [
+        'ALTER TABLE call_app_launch_tokens ADD COLUMN source_session_id TEXT',
+        'CREATE INDEX IF NOT EXISTS idx_call_app_launch_tokens_source_session ON call_app_launch_tokens(source_session_id)',
+    ];
+}
+
 function videochat_call_app_grant_permission_actions_migration_statements(): array
 {
     return [

@@ -25,6 +25,7 @@ const [
   launchTokenSource,
   crdtSource,
   routeSource,
+  migrationSource,
   whiteboardSource,
 ] = await Promise.all([
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_call_subjects.php'),
@@ -32,6 +33,7 @@ const [
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
+  read('demo/video-chat/backend-king-php/support/database_migrations.php'),
   read('demo/call-app/whiteboard/public/whiteboard.js'),
 ]);
 
@@ -81,6 +83,36 @@ requireMatch(
   launchTokenSource,
   /function videochat_call_app_validate_launch_token[\s\S]*videochat_call_app_grant_subject_in_call[\s\S]*participant_not_in_call[\s\S]*videochat_call_app_launch_subject_grant/s,
   'launch token validation must re-check IAM call admission so removed participants lose reconnect access',
+);
+
+requireMatch(
+  launchTokenSource,
+  /function videochat_call_app_launch_source_session_active[\s\S]*sessions\.revoked_at[\s\S]*users\.status AS user_status[\s\S]*auth_revoked/s,
+  'Call App launch tokens must revalidate the bound browser session and disabled user state',
+);
+
+requireMatch(
+  launchTokenSource,
+  /function videochat_call_app_mint_launch_token[\s\S]*source_session_id[\s\S]*videochat_call_app_launch_source_session_active/s,
+  'Call App launch token minting must bind tokens to the current authorized session when available',
+);
+
+requireMatch(
+  launchTokenSource,
+  /function videochat_call_app_validate_launch_token[\s\S]*source_session_id[\s\S]*videochat_call_app_retire_launch_token_row[\s\S]*auth_revoked/s,
+  'Call App launch token validation must retire tokens after source session revocation or user disablement',
+);
+
+requireMatch(
+  migrationSource,
+  /0057_call_app_launch_token_session_binding[\s\S]*videochat_call_app_launch_token_session_binding_migration_statements/,
+  'database migrations must persist Call App launch-token source session bindings',
+);
+
+requireMatch(
+  routeSource,
+  /videochat_call_app_mint_launch_token[\s\S]*\['session'\][\s\S]*\['expires_at'\][\s\S]*\['session'\][\s\S]*\['id'\]/,
+  'Call App launch-token route must bind tokens only to authenticated session contexts from session validation',
 );
 
 requireMatch(

@@ -226,6 +226,79 @@ SQL
     return videochat_call_app_launch_timestamp_after((string) $statement->fetchColumn(), $issuedAt);
 }
 
+function videochat_call_app_launch_source_session_active(PDO $pdo, int $actorUserId, ?string $sourceSessionId): array
+{
+    $trimmedSessionId = trim((string) ($sourceSessionId ?? ''));
+    if ($actorUserId <= 0) {
+        return ['ok' => false, 'reason' => 'auth_revoked'];
+    }
+
+    $userStatement = $pdo->prepare('SELECT status FROM users WHERE id = :user_id LIMIT 1');
+    $userStatement->execute([':user_id' => $actorUserId]);
+    if ((string) $userStatement->fetchColumn() !== 'active') {
+        return ['ok' => false, 'reason' => 'auth_revoked'];
+    }
+
+    if ($trimmedSessionId === '') {
+        return ['ok' => true, 'source_session_id' => null];
+    }
+
+    $sessionStatement = $pdo->prepare(
+        <<<'SQL'
+SELECT sessions.expires_at, sessions.revoked_at, users.status AS user_status
+FROM sessions
+INNER JOIN users ON users.id = sessions.user_id
+WHERE sessions.id = :session_id
+  AND sessions.user_id = :user_id
+LIMIT 1
+SQL
+    );
+    $sessionStatement->execute([
+        ':session_id' => $trimmedSessionId,
+        ':user_id' => $actorUserId,
+    ]);
+    $row = $sessionStatement->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) {
+        return ['ok' => false, 'reason' => 'auth_revoked'];
+    }
+
+    $revokedAt = is_string($row['revoked_at'] ?? null) ? trim((string) $row['revoked_at']) : '';
+    $expiresAtUnix = strtotime((string) ($row['expires_at'] ?? ''));
+    if (
+        $revokedAt !== ''
+        || !is_int($expiresAtUnix)
+        || $expiresAtUnix <= time()
+        || (string) ($row['user_status'] ?? 'disabled') !== 'active'
+    ) {
+        return ['ok' => false, 'reason' => 'auth_revoked'];
+    }
+
+    return ['ok' => true, 'source_session_id' => $trimmedSessionId];
+}
+
+function videochat_call_app_retire_launch_token_row(PDO $pdo, int $tokenRowId): void
+{
+    if ($tokenRowId <= 0) {
+        return;
+    }
+
+    $now = gmdate('c');
+    $retire = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_app_launch_tokens
+SET revoked_at = :revoked_at,
+    updated_at = :updated_at
+WHERE id = :id
+  AND (revoked_at IS NULL OR revoked_at = '')
+SQL
+    );
+    $retire->execute([
+        ':revoked_at' => $now,
+        ':updated_at' => $now,
+        ':id' => $tokenRowId,
+    ]);
+}
+
 function videochat_call_app_launch_capabilities(array $session, string $grantState, array $permissionActions = []): array
 {
     $app = is_array($session['app'] ?? null) ? $session['app'] : [];
@@ -294,7 +367,7 @@ function videochat_call_app_launch_context(array $session, int $userId, string $
     ];
 }
 
-function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, bool $actorCanUseInternalAdminApps = false): array
+function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, bool $actorCanUseInternalAdminApps = false, ?string $sourceSessionId = null): array
 {
     $record = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
     if (!is_array($record)) {
@@ -313,6 +386,10 @@ function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $s
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $actorUserId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
     }
+    $sourceSession = videochat_call_app_launch_source_session_active($pdo, $actorUserId, $sourceSessionId);
+    if (!(bool) ($sourceSession['ok'] ?? false)) {
+        return ['ok' => false, 'reason' => (string) ($sourceSession['reason'] ?? 'auth_revoked')];
+    }
 
     $grant = videochat_call_app_launch_subject_grant($pdo, $tenantId, $record, 'user', $actorUserId, '');
     $grantState = (string) ($grant['grant_state'] ?? 'denied');
@@ -326,18 +403,23 @@ function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $s
     $publicId = videochat_call_app_session_public_id('ctl');
     $issuedAt = gmdate('c');
     $expiresAt = gmdate('c', time() + videochat_call_app_launch_token_ttl_seconds());
+    $boundSourceSessionId = is_string($sourceSession['source_session_id'] ?? null) ? (string) $sourceSession['source_session_id'] : null;
+    $sourceSessionColumn = $boundSourceSessionId !== null && videochat_tenant_table_has_column($pdo, 'call_app_launch_tokens', 'source_session_id')
+        ? ', source_session_id'
+        : '';
+    $sourceSessionValue = $sourceSessionColumn !== '' ? ', :source_session_id' : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 INSERT INTO call_app_launch_tokens(
     public_id, tenant_id, app_session_id, token_hash, issued_to_user_id,
-    issued_at, expires_at, created_at, updated_at
+    issued_at, expires_at, created_at, updated_at{$sourceSessionColumn}
 ) VALUES(
     :public_id, :tenant_id, :app_session_id, :token_hash, :issued_to_user_id,
-    :issued_at, :expires_at, :created_at, :updated_at
+    :issued_at, :expires_at, :created_at, :updated_at{$sourceSessionValue}
 )
 SQL
     );
-    $statement->execute([
+    $params = [
         ':public_id' => $publicId,
         ':tenant_id' => $tenantId,
         ':app_session_id' => (int) ($record['id'] ?? 0),
@@ -347,7 +429,11 @@ SQL
         ':expires_at' => $expiresAt,
         ':created_at' => $issuedAt,
         ':updated_at' => $issuedAt,
-    ]);
+    ];
+    if ($sourceSessionColumn !== '') {
+        $params[':source_session_id'] = $boundSourceSessionId;
+    }
+    $statement->execute($params);
 
     $context = videochat_call_app_launch_context($session, $actorUserId, $grantState, $permissionActions, [
         'public_id' => $publicId,
@@ -405,6 +491,14 @@ SQL
 
     $tenantId = (int) ($tokenRow['tenant_id'] ?? ($tokenRow['session_tenant_id'] ?? 0));
     $userId = (int) ($tokenRow['issued_to_user_id'] ?? 0);
+    $sourceSessionId = videochat_tenant_table_has_column($pdo, 'call_app_launch_tokens', 'source_session_id')
+        ? (is_string($tokenRow['source_session_id'] ?? null) ? (string) $tokenRow['source_session_id'] : null)
+        : null;
+    $sourceSession = videochat_call_app_launch_source_session_active($pdo, $userId, $sourceSessionId);
+    if (!(bool) ($sourceSession['ok'] ?? false)) {
+        videochat_call_app_retire_launch_token_row($pdo, (int) ($tokenRow['id'] ?? 0));
+        return ['ok' => false, 'reason' => (string) ($sourceSession['reason'] ?? 'auth_revoked')];
+    }
     $record = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
     $session = videochat_call_app_fetch_session($pdo, $tenantId, $sessionId);
     if (!is_array($record) || !is_array($session)) {
