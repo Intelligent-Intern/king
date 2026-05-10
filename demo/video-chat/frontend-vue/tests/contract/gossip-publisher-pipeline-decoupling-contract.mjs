@@ -79,8 +79,8 @@ assert(
   'gossip contract suite must include publisher pipeline decoupling',
 )
 assert(
-  /- \[x\] GSP-02 Publisher pipeline decoupling/.test(sprint),
-  'SPRINT.md must mark GSP-02 complete when the decoupling proof exists',
+  /- \[x\] GSP01-10 Publisher dispatch:[\s\S]*`gossip\.media\.frame\.v1`[\s\S]*do not emit `sfu\/frame`/.test(sprint),
+  'SPRINT.md must tie publisher decoupling proof to the active Gossip media-frame dispatch contract',
 )
 
 console.log('[gossip-publisher-pipeline-decoupling-contract] PASS')

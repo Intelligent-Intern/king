@@ -171,8 +171,9 @@ harness = publisherHarness({
   },
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when both Gossip publication and SFU fallback are unavailable')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_unavailable_after_gossip_publish_failure'), 'gossip_primary must diagnose unavailable SFU fallback after Gossip publication failure')
+assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports failure when Gossip publication fails')
+assert(result.sfuFallbackSuppressed === true, 'gossip_primary must suppress SFU fallback after Gossip publication failure')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback' && event?.immediate === true), 'gossip_primary must diagnose failed Gossip publication without SFU fallback')
 
 harness = publisherHarness({
   currentOpenSfuClient: () => ({
@@ -183,9 +184,9 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === true && result.sfuSent === true, 'gossip_primary must mirror a successfully published Gossip frame into SFU when the SFU socket is open')
-assert(result.sfuSendOptional === true, 'gossip_primary SFU mirroring must stay optional')
-assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary with an open SFU socket must publish Gossip first and then mirror to SFU')
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must keep the active path on Gossip even when an SFU socket is open')
+assert(result.sfuFallbackSuppressed === true, 'gossip_primary must mark SFU fallback as suppressed on successful Gossip publication')
+assert(harness.order.join(',') === 'gossip', 'gossip_primary with an open SFU socket must publish only Gossip on the active path')
 
 harness = publisherHarness({
   currentOpenSfuClient: () => ({
@@ -197,9 +198,10 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must keep Gossip live when optional SFU mirror send fails')
-assert(harness.order.join(',') === 'gossip,sfu,optional_sfu_failure:contract_optional_sfu_failure', 'gossip_primary optional SFU failure must still notify backpressure after Gossip publication')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_optional_send_failed_after_gossip_publish'), 'gossip_primary optional SFU failure must be diagnosed without blocking Gossip')
+assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must ignore SFU mirror failure paths on the active Gossip stream')
+assert(result.sfuFallbackSuppressed === true, 'gossip_primary must keep SFU fallback suppressed when a mirror client would fail')
+assert(harness.order.join(',') === 'gossip', 'gossip_primary must not call the SFU mirror client')
+assert(harness.diagnostics.length === 0, 'gossip_primary must not emit optional SFU mirror diagnostics after successful Gossip publication')
 
 harness = publisherHarness({
   publishLocalEncodedFrameToGossip: () => {
@@ -214,9 +216,10 @@ harness = publisherHarness({
   }),
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === true && result.gossipPublished === false && result.sfuSent === true, 'gossip_primary must use SFU fallback only after Gossip publication fails')
-assert(harness.order.join(',') === 'gossip,sfu', 'gossip_primary fallback must preserve Gossip-first order before SFU fallback')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_fallback_after_gossip_primary_publish_failure' && event?.immediate === true), 'gossip_primary SFU fallback must emit an immediate backtrace')
+assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary must not use SFU fallback after Gossip publication fails')
+assert(result.sfuFallbackSuppressed === true, 'gossip_primary must explicitly report suppressed SFU fallback after failed Gossip publication')
+assert(harness.order.join(',') === 'gossip', 'gossip_primary failure must not send through SFU')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback' && event?.immediate === true), 'gossip_primary failure must emit an immediate no-SFU-fallback diagnostic')
 
 const sfuFirstDispatch = await loadPublisherDispatch('sfu_first')
 harness = publisherHarness()
@@ -407,10 +410,10 @@ assert(
   'gossip contract suite must include integration smoke plus backend topology/runtime contracts',
 )
 assert(
-  /- \[x\] GSP-09 Integration contracts and smoke checks/.test(sprint)
-    && /gossip-media-carrier-integration-smoke-contract\.mjs/.test(sprint)
-    && /gossip_primary`, `sfu_first`, and `sfu_mirror`/.test(sprint),
-  'SPRINT must mark GSP-09 complete and record the three-mode smoke proof',
+  /- \[ \] GSP01-08 Park SFU from the active stream path:[\s\S]*no `sfu_first`, no SFU\s+fallback/.test(sprint)
+    && /- \[x\] GSP01-10 Publisher dispatch:[\s\S]*do not emit `sfu\/frame`/.test(sprint)
+    && /gsp01-18-gossip-primary-plan-frame-contract\.mjs/.test(packageJson),
+  'SPRINT/package must keep the media carrier smoke aligned with active Gossip-primary no-SFU proof',
 )
 
 console.log('[gossip-media-carrier-integration-smoke-contract] PASS')

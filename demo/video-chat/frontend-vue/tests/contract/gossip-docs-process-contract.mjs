@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../../../..')
-const currentPath = path.join(repoRoot, 'GOSSIP_CURRENT_BUILD.md')
-const planningPath = path.join(repoRoot, 'GOSSIP_PLANNING.md')
+const archivedRootDocs = path.join(repoRoot, 'documentation/archive/root-md-2026-05-10')
+const currentPath = path.join(archivedRootDocs, 'GOSSIP_CURRENT_BUILD.md')
+const planningPath = path.join(archivedRootDocs, 'GOSSIP_PLANNING.md')
 
 function assert(condition, message) {
   if (!condition) {
@@ -14,11 +15,17 @@ function assert(condition, message) {
 }
 
 function readRequired(filePath) {
-  assert(fs.existsSync(filePath), `${path.basename(filePath)} must exist at the repo root`)
+  assert(fs.existsSync(filePath), `${path.basename(filePath)} must exist in the archived root planning docs`)
   const content = fs.readFileSync(filePath, 'utf8')
   assert(content.trim() !== '', `${path.basename(filePath)} must not be empty`)
   return content
 }
+
+assert(
+  !fs.existsSync(path.join(repoRoot, 'GOSSIP_CURRENT_BUILD.md'))
+    && !fs.existsSync(path.join(repoRoot, 'GOSSIP_PLANNING.md')),
+  'retired GOSSIP_* docs must not return to the repo root while SPRINT.md and EPIC.md are the active planning sources',
+)
 
 const current = readRequired(currentPath)
 const planning = readRequired(planningPath)

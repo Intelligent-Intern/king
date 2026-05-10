@@ -66,8 +66,8 @@ assert(
   'gossip contract suite must include frontend and backend room-state topology contracts',
 )
 assert(
-  /- \[x\] GSP-03 Join\/snapshot\/churn topology hints/.test(sprint),
-  'SPRINT.md must mark GSP-03 complete when room-state topology proof exists',
+  /GSP01-18 progress:[\s\S]*server-provided, max-five-neighbor Gossip topology/.test(sprint),
+  'SPRINT.md must keep room-state topology proof tied to the active GSP01 Gossip topology gate',
 )
 
 console.log('[gossip-room-state-topology-contract] PASS')

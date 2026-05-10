@@ -116,8 +116,8 @@ assert(
   'gossip contract suite must include the production stack-overflow renegotiation proof',
 )
 assert(
-  /- \[x\] GSP-04 Dedicated bounded neighbor lifecycle/.test(sprint),
-  'SPRINT.md must mark GSP-04 complete when dedicated neighbor lifecycle proof exists',
+  /GSP01-18 progress:[\s\S]*bidirectional, server-provided, max-five-neighbor Gossip topology/.test(sprint),
+  'SPRINT.md must keep dedicated neighbor lifecycle proof tied to the active GSP01 topology gate',
 )
 
 console.log('[gossip-dedicated-neighbor-lifecycle-contract] PASS')
