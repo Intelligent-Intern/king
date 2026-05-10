@@ -49,7 +49,9 @@ try {
   requireContains(worker, 'sanitizeFilesetPaths(await FilesetResolver.forVisionTasks(resolvedWasm))', 'Vite-safe fileset paths');
   requireContains(worker, 'modelAssetBuffer: new Uint8Array(modelBuffer)', 'local model buffer load');
   requireContains(worker, 'outputCategoryMask: true', 'category mask output');
-  requireContains(worker, 'outputConfidenceMasks: true', 'confidence mask fallback output');
+  requireContains(worker, "error: 'production_category_mask_unavailable'", 'category mask unavailable error');
+  requireMissing(worker, 'outputConfidenceMasks', 'confidence mask fallback output');
+  requireMissing(worker, 'confidenceMaskValues', 'confidence mask fallback implementation');
   requireMissing(worker, 'cdn.jsdelivr.net', 'worker CDN source');
   requireMissing(worker, 'unpkg.com', 'worker CDN source');
 

@@ -11,6 +11,15 @@ function errorCodeFromPayload(payload: unknown): string {
   return typeof code === 'string' ? code.trim() : '';
 }
 
+function errorDetailsFromPayload(payload: unknown): Record<string, unknown> {
+  const source = payload && typeof payload === 'object'
+    ? payload as { error?: { details?: unknown } }
+    : null;
+  return source?.error?.details && typeof source.error.details === 'object'
+    ? source.error.details as Record<string, unknown>
+    : {};
+}
+
 async function readJsonResponse(response: Response): Promise<any> {
   try {
     return await response.json();
@@ -30,6 +39,25 @@ function callAccessSessionRequestBody(options: Record<string, any> = {}): Record
   if (verifiedContext) {
     body.verified_user_id = verifiedContext.userId;
     body.verified_session_id = verifiedContext.sessionId;
+  }
+
+  const hostName = typeof options?.hostName === 'string' ? options.hostName.trim() : '';
+  if (hostName !== '') {
+    body.host_name = hostName;
+  }
+
+  const mismatchUpdateDecision = typeof options?.mismatchUpdateDecision === 'string'
+    ? options.mismatchUpdateDecision.trim()
+    : '';
+  if (mismatchUpdateDecision !== '') {
+    body.mismatch_update_decision = mismatchUpdateDecision;
+  }
+
+  const profileUpdate = options?.profileUpdate && typeof options.profileUpdate === 'object'
+    ? options.profileUpdate
+    : null;
+  if (profileUpdate) {
+    body.profile_update = profileUpdate;
   }
 
   return Object.keys(body).length > 0 ? body : null;
@@ -85,6 +113,7 @@ export async function loginWithCallAccess(accessId: unknown, options: Record<str
         ok: false,
         status: response.status,
         errorCode: errorCodeFromPayload(payload),
+        errorDetails: errorDetailsFromPayload(payload),
         message: extractErrorMessage(payload, 'Could not start call access session.'),
       };
     }
@@ -102,6 +131,7 @@ export async function loginWithCallAccess(accessId: unknown, options: Record<str
       role: sessionState.role,
       accessLink: result.access_link || null,
       call: result.call || null,
+      emailConfirmation: result.email_confirmation || null,
     };
   } catch (error) {
     return {

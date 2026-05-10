@@ -54,7 +54,7 @@ function videochat_user_can_direct_join_call(
         ];
     }
 
-    if (videochat_normalize_role_slug($authRole) === 'admin') {
+    if (videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
         return [
             'ok' => true,
             'reason' => 'system_admin',
@@ -68,6 +68,16 @@ function videochat_user_can_direct_join_call(
         return [
             'ok' => true,
             'reason' => 'owner',
+            'call_id' => $callId,
+            'room_id' => $roomId,
+            'guest_list_entry' => null,
+        ];
+    }
+
+    if (videochat_user_is_organization_admin_for_call($pdo, $call, $authUserId, $tenantId)) {
+        return [
+            'ok' => true,
+            'reason' => 'organization_admin',
             'call_id' => $callId,
             'room_id' => $roomId,
             'guest_list_entry' => null,

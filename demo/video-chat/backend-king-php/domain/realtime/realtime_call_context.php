@@ -30,7 +30,9 @@ function videochat_realtime_call_role_context_for_room_user(
 ): array {
     $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
-    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    $isAdmin = function_exists('videochat_user_has_system_admin_call_rights')
+        ? videochat_user_has_system_admin_call_rights($pdo, $userId, $authRole)
+        : videochat_normalize_role_slug($authRole) === 'admin';
     $fallback = [
         'call_id' => '',
         'call_role' => 'participant',
@@ -45,14 +47,43 @@ function videochat_realtime_call_role_context_for_room_user(
         return $fallback;
     }
 
+    $contextFromRow = static function (array $row, bool $isSystemAdmin, bool $isOrganizationAdmin) use ($userId): array {
+        $isFreeForAll = videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only') === 'free_for_all';
+        $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
+        if ((int) ($row['owner_user_id'] ?? 0) === $userId) {
+            $callRole = 'owner';
+        }
+        $effectiveCallRole = $isSystemAdmin
+            ? 'owner'
+            : ($isOrganizationAdmin && $callRole !== 'owner' ? 'moderator' : $callRole);
+        $inviteState = $isOrganizationAdmin
+            ? 'allowed'
+            : videochat_realtime_normalize_call_invite_state(
+                $row['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited')
+            );
+
+        return [
+            'call_id' => (string) ($row['id'] ?? ''),
+            'call_role' => $callRole,
+            'effective_call_role' => $effectiveCallRole,
+            'invite_state' => $inviteState,
+            'joined_at' => trim((string) ($row['joined_at'] ?? '')),
+            'left_at' => trim((string) ($row['left_at'] ?? '')),
+            'can_moderate' => $isSystemAdmin || $isOrganizationAdmin || in_array($callRole, ['owner', 'moderator'], true),
+            'can_manage_owner' => $isSystemAdmin || $callRole === 'owner',
+        ];
+    };
+
     $callsHaveAccessMode = videochat_tenant_table_has_column($pdo, 'calls', 'access_mode');
     $accessModeSelect = $callsHaveAccessMode
         ? 'calls.access_mode'
         : "'invite_only' AS access_mode";
+    $callsHaveTenantId = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
+    $tenantSelect = $callsHaveTenantId ? 'calls.tenant_id,' : 'NULL AS tenant_id,';
     $freeForAllPredicate = $callsHaveAccessMode
         ? "      OR calls.access_mode = 'free_for_all'\n"
         : '';
-    $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+    $tenantWhere = is_int($tenantId) && $tenantId > 0 && $callsHaveTenantId
         ? '  AND calls.tenant_id = :tenant_id'
         : '';
     if ($normalizedPreferredCallId !== '' && $normalizedRoomId !== '' && $userId > 0) {
@@ -60,6 +91,7 @@ function videochat_realtime_call_role_context_for_room_user(
             <<<SQL
 SELECT
     calls.id,
+    {$tenantSelect}
     {$accessModeSelect},
     calls.owner_user_id,
     cp.call_role,
@@ -75,13 +107,6 @@ WHERE calls.id = :call_id
   AND calls.room_id = :room_id
 {$tenantWhere}
   AND calls.status IN ('active', 'scheduled')
-  AND (
-      CAST(:is_admin AS INTEGER) = 1
-      OR
-      calls.owner_user_id = :user_id
-      OR cp.user_id IS NOT NULL
-{$freeForAllPredicate}
-  )
 LIMIT 1
 SQL
         );
@@ -89,7 +114,6 @@ SQL
             ':call_id' => $normalizedPreferredCallId,
             ':room_id' => $normalizedRoomId,
             ':user_id' => $userId,
-            ':is_admin' => $isAdmin ? 1 : 0,
         ];
         if ($tenantWhere !== '') {
             $params[':tenant_id'] = $tenantId;
@@ -98,25 +122,12 @@ SQL
         $preferredRow = $preferredQuery->fetch();
         if (is_array($preferredRow)) {
             $isFreeForAll = videochat_normalize_call_access_mode($preferredRow['access_mode'] ?? 'invite_only') === 'free_for_all';
-            $callRole = videochat_normalize_call_participant_role((string) ($preferredRow['call_role'] ?? 'participant'));
-            if ((int) ($preferredRow['owner_user_id'] ?? 0) === $userId) {
-                $callRole = 'owner';
+            $isOwner = (int) ($preferredRow['owner_user_id'] ?? 0) === $userId;
+            $isParticipant = is_numeric($preferredRow['call_role'] ?? null) || (string) ($preferredRow['call_role'] ?? '') !== '';
+            $isOrganizationAdmin = videochat_user_is_organization_admin_for_call($pdo, $preferredRow, $userId, $tenantId);
+            if ($isAdmin || $isOwner || $isParticipant || $isFreeForAll || $isOrganizationAdmin) {
+                return $contextFromRow($preferredRow, $isAdmin, $isOrganizationAdmin);
             }
-            $effectiveCallRole = $isAdmin ? 'owner' : $callRole;
-            $inviteState = videochat_realtime_normalize_call_invite_state(
-                $preferredRow['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited')
-            );
-
-            return [
-                'call_id' => (string) ($preferredRow['id'] ?? ''),
-                'call_role' => $callRole,
-                'effective_call_role' => $effectiveCallRole,
-                'invite_state' => $inviteState,
-                'joined_at' => trim((string) ($preferredRow['joined_at'] ?? '')),
-                'left_at' => trim((string) ($preferredRow['left_at'] ?? '')),
-                'can_moderate' => $isAdmin || in_array($callRole, ['owner', 'moderator'], true),
-                'can_manage_owner' => $isAdmin || $callRole === 'owner',
-            ];
         }
 
         return $fallback;

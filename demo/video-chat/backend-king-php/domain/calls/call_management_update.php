@@ -2,6 +2,94 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_guest_list_audit.php';
+require_once __DIR__ . '/call_guest_lifecycle.php';
+
+/**
+ * @return array{applied: bool, invalidated_link_count: int, revoked_access_session_count: int, invalidated_guest_count: int, reason: string}
+ */
+function videochat_apply_call_reschedule_access_lifecycle(PDO $pdo, string $callId, ?int $tenantId = null): array
+{
+    $normalizedCallId = trim($callId);
+    if ($normalizedCallId === '') {
+        return [
+            'applied' => false,
+            'invalidated_link_count' => 0,
+            'revoked_access_session_count' => 0,
+            'invalidated_guest_count' => 0,
+            'reason' => 'validation_failed',
+        ];
+    }
+
+    $now = gmdate('c');
+    $invalidatedLinkCount = 0;
+    $revokedAccessSessionCount = 0;
+    try {
+        $pdo->beginTransaction();
+
+        $activeSessionCount = $pdo->prepare(
+            <<<'SQL'
+SELECT COUNT(*)
+FROM sessions
+WHERE id IN (
+    SELECT session_id
+    FROM call_access_sessions
+    WHERE call_id = :call_id
+)
+  AND (revoked_at IS NULL OR revoked_at = '')
+SQL
+        );
+        $activeSessionCount->execute([':call_id' => $normalizedCallId]);
+        $activeAccessSessionCount = max(0, (int) ($activeSessionCount->fetchColumn() ?: 0));
+
+        $revokeSessions = $pdo->prepare(
+            <<<'SQL'
+UPDATE sessions
+SET revoked_at = :revoked_at
+WHERE id IN (
+    SELECT session_id
+    FROM call_access_sessions
+    WHERE call_id = :call_id
+)
+  AND (revoked_at IS NULL OR revoked_at = '')
+SQL
+        );
+        $revokeSessions->execute([
+            ':call_id' => $normalizedCallId,
+            ':revoked_at' => $now,
+        ]);
+        $revokedAccessSessionCount = max($revokeSessions->rowCount(), $activeAccessSessionCount);
+
+        $deleteLinks = $pdo->prepare('DELETE FROM call_access_links WHERE call_id = :call_id');
+        $deleteLinks->execute([':call_id' => $normalizedCallId]);
+        $invalidatedLinkCount = $deleteLinks->rowCount();
+
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'applied' => false,
+            'invalidated_link_count' => $invalidatedLinkCount,
+            'revoked_access_session_count' => $revokedAccessSessionCount,
+            'invalidated_guest_count' => 0,
+            'reason' => 'internal_error',
+        ];
+    }
+
+    $guestCleanup = videochat_invalidate_guest_accounts_for_call($pdo, $normalizedCallId, $tenantId);
+
+    return [
+        'applied' => true,
+        'invalidated_link_count' => $invalidatedLinkCount,
+        'revoked_access_session_count' => $revokedAccessSessionCount,
+        'invalidated_guest_count' => max(0, (int) ($guestCleanup['invalidated_guests'] ?? 0)),
+        'reason' => (string) ($guestCleanup['reason'] ?? 'updated'),
+    ];
+}
+
 function videochat_validate_update_call_payload(array $payload): array
 {
     $errors = [];
@@ -275,6 +363,7 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
 
     $nextStartsUnix = (bool) $data['has_starts_at'] ? (int) $data['starts_at_unix'] : $currentStartsUnix;
     $nextEndsUnix = (bool) $data['has_ends_at'] ? (int) $data['ends_at_unix'] : $currentEndsUnix;
+    $scheduleChanged = $nextStartsUnix !== $currentStartsUnix || $nextEndsUnix !== $currentEndsUnix;
     if ($nextEndsUnix <= $nextStartsUnix) {
         return [
             'ok' => false,
@@ -430,6 +519,14 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             $participantEmailMap[$email] = true;
         }
     }
+    $guestListAuditChanges = $participantsNeedUpdate
+        ? videochat_guest_list_audit_diff(
+            (array) ($currentParticipants['internal'] ?? []),
+            (array) ($currentParticipants['external'] ?? []),
+            $nextInternalParticipants,
+            $nextExternalParticipants
+        )
+        : [];
 
     $updatedAt = gmdate('c');
     $nextStartsAt = gmdate('c', $nextStartsUnix);
@@ -520,6 +617,16 @@ SQL
                     ':left_at' => null,
                 ]);
             }
+
+            if (!videochat_guest_list_audit_record_changes(
+                $pdo,
+                is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null,
+                (string) $existingCall['id'],
+                $authUserId,
+                $guestListAuditChanges
+            )) {
+                throw new RuntimeException('guest_list_audit_write_failed');
+            }
         }
 
         $pdo->commit();
@@ -544,6 +651,21 @@ SQL
                 break;
             }
         }
+    }
+
+    $lifecycle = [
+        'applied' => false,
+        'invalidated_link_count' => 0,
+        'revoked_access_session_count' => 0,
+        'invalidated_guest_count' => 0,
+        'reason' => 'not_applicable',
+    ];
+    if ($scheduleChanged) {
+        $lifecycle = videochat_apply_call_reschedule_access_lifecycle(
+            $pdo,
+            (string) $existingCall['id'],
+            is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null
+        );
     }
 
     return [
@@ -606,6 +728,7 @@ SQL
             ],
             'my_participation' => $myParticipation,
         ],
+        'lifecycle' => $lifecycle,
         'invite_dispatch' => [
             'global_resend_triggered' => false,
             'explicit_action_required' => true,

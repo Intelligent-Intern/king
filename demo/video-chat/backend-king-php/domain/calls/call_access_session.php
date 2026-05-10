@@ -185,7 +185,7 @@ function videochat_issue_session_for_call_access(
             $userId,
             (string) ($targetUser['email'] ?? ''),
             (string) ($targetUser['display_name'] ?? ''),
-            'allowed'
+            'invited'
         );
     }
 
