@@ -45,11 +45,6 @@ function callAccessSessionRequestBody(options: Record<string, any> = {}): Record
     body.verified_session_id = verifiedContext.sessionId;
   }
 
-  const hostName = typeof options?.hostName === 'string' ? options.hostName.trim() : '';
-  if (hostName !== '') {
-    body.host_name = hostName;
-  }
-
   const mismatchUpdateDecision = typeof options?.mismatchUpdateDecision === 'string'
     ? options.mismatchUpdateDecision.trim()
     : '';
