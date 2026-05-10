@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/call_app_static.php';
 
+function videochat_edge_env_flag(string $name, bool $fallback = false): bool
+{
+    $value = getenv($name);
+    if ($value === false || trim((string) $value) === '') {
+        return $fallback;
+    }
+    return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
+}
+
 $httpHost = getenv('VIDEOCHAT_EDGE_HOST') ?: '0.0.0.0';
 $httpPort = (int) (getenv('VIDEOCHAT_EDGE_HTTP_PORT') ?: '8080');
 $httpsPort = (int) (getenv('VIDEOCHAT_EDGE_HTTPS_PORT') ?: '8443');
@@ -50,6 +59,7 @@ $callAppRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_CALL_APP_ROOT') ?: '/app/c
 $apiUpstream = getenv('VIDEOCHAT_EDGE_API_UPSTREAM') ?: 'videochat-backend-v1:18080';
 $wsUpstream = getenv('VIDEOCHAT_EDGE_WS_UPSTREAM') ?: 'videochat-backend-ws-v1:18080';
 $sfuUpstream = getenv('VIDEOCHAT_EDGE_SFU_UPSTREAM') ?: 'videochat-backend-sfu-v1:18080';
+$sfuEnabled = videochat_edge_env_flag('VIDEOCHAT_EDGE_SFU_ENABLED', videochat_edge_env_flag('VIDEOCHAT_SFU_ENABLED', false));
 $externalUpstream = trim((string) getenv('VIDEOCHAT_EDGE_EXTERNAL_UPSTREAM'));
 $socialPreviewImagePath = getenv('VIDEOCHAT_EDGE_SOCIAL_PREVIEW_IMAGE') ?: '/assets/orgas/kingrt/social/invitation-preview.png';
 $maxHeaderBytes = (int) (getenv('VIDEOCHAT_EDGE_MAX_HEADER_BYTES') ?: '65536');
@@ -1020,7 +1030,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream, $callAppKeyForHost): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $sfuEnabled, $externalUpstream, $callAppKeyForHost): ?string {
     $host = $request['host'];
     $path = $request['path'];
     if ($externalUpstream !== '' && in_array($host, $externalDomains, true)) {
@@ -1036,7 +1046,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
         return $wsUpstream;
     }
     if ($path === '/sfu' || $host === $sfuDomain) {
-        return $sfuUpstream;
+        return $sfuEnabled ? $sfuUpstream : null;
     }
     if ($host === $apiDomain || $path === '/api' || str_starts_with($path, '/api/') || $path === '/health') {
         return $apiUpstream;
