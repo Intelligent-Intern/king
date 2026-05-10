@@ -747,7 +747,7 @@ function videochat_ensure_internal_call_participant(
     string $inviteState = 'invited'
 ): void {
     $normalizedInviteState = strtolower(trim($inviteState));
-    if (!in_array($normalizedInviteState, ['invited', 'allowed'], true)) {
+    if (!in_array($normalizedInviteState, ['invited', 'pending', 'allowed'], true)) {
         $normalizedInviteState = 'invited';
     }
 
@@ -773,7 +773,9 @@ UPDATE call_participants
 SET email = :email,
     display_name = :display_name,
     invite_state = CASE
+        WHEN invite_state IN ('allowed', 'accepted') THEN invite_state
         WHEN :invite_state = 'allowed' THEN 'allowed'
+        WHEN :invite_state = 'pending' THEN 'pending'
         WHEN invite_state IN ('declined', 'cancelled') THEN 'invited'
         ELSE invite_state
     END

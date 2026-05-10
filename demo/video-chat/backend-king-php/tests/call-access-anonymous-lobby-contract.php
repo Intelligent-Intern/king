@@ -544,10 +544,10 @@ try {
         ['authenticated_user_id' => $accountUserId, 'authenticated_session_id' => $accountLoginSessionId]
     );
     $freeForAllGuestId = (int) (($freeForAllSession['user'] ?? [])['id'] ?? 0);
-    videochat_iam_anonymous_lobby_assert($freeForAllGuestId > 0 && $freeForAllGuestId !== $accountUserId, 'logged-in FFA open link should issue an isolated guest');
-    videochat_iam_anonymous_lobby_assert((bool) (($freeForAllSession['user'] ?? [])['is_guest'] ?? false), 'FFA open link user should be a guest');
-    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $freeForAllCallId, $freeForAllGuestId, 'allowed', 'FFA open guest');
-    videochat_iam_anonymous_lobby_assert_direct($pdo, $openDatabase, 'sess_iam_anon_lobby_ffa_open', $freeForAllCallId, 'FFA open guest');
+    videochat_iam_anonymous_lobby_assert($freeForAllGuestId === $accountUserId, 'logged-in FFA open link should keep the authenticated account');
+    videochat_iam_anonymous_lobby_assert(!(bool) (($freeForAllSession['user'] ?? [])['is_guest'] ?? true), 'logged-in FFA open link user should not be a guest');
+    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $freeForAllCallId, $freeForAllGuestId, 'pending', 'FFA logged-in open account');
+    videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_ffa_open', $freeForAllCallId, 'FFA logged-in open account');
 
     $inviteOnlyCallId = videochat_iam_anonymous_lobby_create_call(
         $pdo,
@@ -577,9 +577,9 @@ try {
         ['authenticated_user_id' => $accountUserId, 'authenticated_session_id' => $accountLoginSessionId]
     );
     $loggedInGuestId = (int) (($loggedInOpenSession['user'] ?? [])['id'] ?? 0);
-    videochat_iam_anonymous_lobby_assert($loggedInGuestId > 0 && $loggedInGuestId !== $accountUserId, 'logged-in invite-only open link should not promote the account');
-    videochat_iam_anonymous_lobby_assert((bool) (($loggedInOpenSession['user'] ?? [])['is_guest'] ?? false), 'logged-in invite-only open link should issue a guest');
-    videochat_iam_anonymous_lobby_assert(videochat_iam_anonymous_lobby_participant($pdo, $inviteOnlyCallId, $loggedInGuestId) === null, 'logged-in open issuance must not grant guest-list rights');
+    videochat_iam_anonymous_lobby_assert($loggedInGuestId === $accountUserId, 'logged-in invite-only open link should keep the authenticated account');
+    videochat_iam_anonymous_lobby_assert(!(bool) (($loggedInOpenSession['user'] ?? [])['is_guest'] ?? true), 'logged-in invite-only open link user should not be a guest');
+    videochat_iam_anonymous_lobby_assert_invite_state($pdo, $inviteOnlyCallId, $loggedInGuestId, 'pending', 'logged-in invite-only open account');
     videochat_iam_anonymous_lobby_assert_waiting($pdo, $openDatabase, 'sess_iam_anon_lobby_logged_in_open', $inviteOnlyCallId, 'logged-in invite-only open link');
 
     $loggedOutOpenSession = videochat_iam_anonymous_lobby_issue_open_session(
