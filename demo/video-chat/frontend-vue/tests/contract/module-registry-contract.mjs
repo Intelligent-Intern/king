@@ -105,6 +105,22 @@ assert.ok(settingsKeys.has('personal.credentials'), 'credentials settings panel 
 assert.ok(settingsKeys.has('personal.theme'), 'theme settings panel missing');
 assert.ok(settingsKeys.has('personal.localization'), 'localization settings panel missing');
 assert.ok(!settingsKeys.has('personal.regional'), 'regional time settings panel must be merged into localization');
+const aboutSettingsPanel = workspaceModuleRegistry.settingsPanels().find((panel) => panel.key === 'personal.about');
+assert.equal(
+  aboutSettingsPanel?.source_path,
+  'layouts/settings/WorkspaceAboutSettings.vue',
+  'about settings panel must resolve through the settings/profile source path',
+);
+assert.deepEqual(
+  aboutSettingsPanel?.profile_field_groups.map((group) => group.key),
+  ['about', 'social', 'contact'],
+  'about settings panel must register profile expansion field groups',
+);
+assert.deepEqual(
+  aboutSettingsPanel?.profile_field_groups.find((group) => group.key === 'contact')?.fields,
+  ['profile_contact_email', 'profile_contact_phone'],
+  'profile contact fields must be descriptor owned',
+);
 
 const namespaces = workspaceModuleRegistry.i18nNamespaces();
 for (const moduleKey of expectedModules) {

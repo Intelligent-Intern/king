@@ -152,6 +152,7 @@
         :draft="settingsDraft"
         :state="settingsState"
         :avatar-preview-src="settingsAvatarPreviewSrc"
+        :profile-field-groups="profileSettingsFieldGroups"
         @avatar-select="handleAvatarSelect"
         @avatar-drop="handleAvatarDrop"
       />
@@ -387,6 +388,7 @@ import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSetting
 import WorkspaceLocalizationSettings from './settings/WorkspaceLocalizationSettings.vue';
 import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
+import { createWorkspaceProfileSettingsDraftFields, resetWorkspaceProfileSettingsDraft, workspaceProfileSettingsPayload } from './settings/workspaceProfileSettingsFields.js';
 import CallWorkspaceLeftSidebar from './CallWorkspaceLeftSidebar.vue';
 import { useWorkspaceShellViewport } from './useWorkspaceShellViewport.js';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
@@ -518,10 +520,7 @@ const settingsDraft = reactive({
   language: 'en',
   postLogoutLandingUrl: '',
   avatarDataUrl: '',
-  aboutMe: '',
-  linkedinUrl: '',
-  xUrl: '',
-  youtubeUrl: '',
+  ...createWorkspaceProfileSettingsDraftFields(),
   webAppNotificationsEnabled: false,
   webAppNotificationSoundEnabled: true,
   webAppNotificationCallInvitesEnabled: true,
@@ -539,10 +538,12 @@ const settingsState = reactive({
   avatarStatus: '',
 });
 const activeSettingsTile = ref(DEFAULT_SETTINGS_TILE);
-const settingsTiles = computed(() => moduleStore.settingsPanelsFor({ role: sessionState.role }).map((panel) => ({
+const settingsPanels = computed(() => moduleStore.settingsPanelsFor({ role: sessionState.role }));
+const settingsTiles = computed(() => settingsPanels.value.map((panel) => ({
   id: panel.key,
   label: panel.label_key ? t(panel.label_key) : panel.label,
 })));
+const profileSettingsFieldGroups = computed(() => settingsPanels.value.find((panel) => panel.key === 'personal.about')?.profile_field_groups || []);
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
 const settingsLanguageOptions = computed(() => {
   const backendLocales = Array.isArray(sessionState.supportedLocales) && sessionState.supportedLocales.length > 0
@@ -1349,10 +1350,7 @@ function resetSettingsDraft() {
   settingsDraft.language = normalizeSettingsLanguage(sessionState.locale || 'en');
   settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
-  settingsDraft.aboutMe = sessionState.aboutMe || '';
-  settingsDraft.linkedinUrl = sessionState.linkedinUrl || '';
-  settingsDraft.xUrl = sessionState.xUrl || '';
-  settingsDraft.youtubeUrl = sessionState.youtubeUrl || '';
+  resetWorkspaceProfileSettingsDraft(settingsDraft, sessionState);
   settingsDraft.webAppNotificationsEnabled = sessionState.webAppNotificationsEnabled === true;
   settingsDraft.webAppNotificationSoundEnabled = sessionState.webAppNotificationSoundEnabled !== false;
   settingsDraft.webAppNotificationCallInvitesEnabled = sessionState.webAppNotificationCallInvitesEnabled !== false;
@@ -1509,10 +1507,7 @@ async function saveSettings() {
       locale: language,
       avatar_path: avatarPath,
       post_logout_landing_url: postLogoutLandingUrl,
-      about_me: settingsDraft.aboutMe,
-      linkedin_url: settingsDraft.linkedinUrl,
-      x_url: settingsDraft.xUrl,
-      youtube_url: settingsDraft.youtubeUrl,
+      ...workspaceProfileSettingsPayload(settingsDraft),
       web_app_notifications_enabled: settingsDraft.webAppNotificationsEnabled === true,
       web_app_notification_sound_enabled: settingsDraft.webAppNotificationSoundEnabled === true,
       web_app_notification_call_invites_enabled: settingsDraft.webAppNotificationCallInvitesEnabled === true,

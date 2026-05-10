@@ -98,7 +98,7 @@ Sprint Checkboxen:
   descriptions.
 - [x] UX6-12 Add onboarding tour registry/persistence proof for per-area `?`
   entry points, completed-tour badges, and profile display.
-- [ ] UX6-13 Add profile expansion proof through the intended settings/profile
+- [x] UX6-13 Add profile expansion proof through the intended settings/profile
   architecture for about, social, and contact fields.
 - [x] UX6-14 Keep CRUD search/action bars right-aligned with exactly 20px
   spacing and the standard submit icon across the first migrated Admin

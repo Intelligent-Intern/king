@@ -86,6 +86,8 @@ SQL
     videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
     videochat_user_settings_assert(count($initialSettings['supported_locales'] ?? []) >= 28, 'supported locale metadata missing');
     videochat_user_settings_assert((string) ($initialSettings['about_me'] ?? 'missing') === '', 'initial about_me should be empty');
+    videochat_user_settings_assert((string) ($initialSettings['profile_contact_email'] ?? 'missing') === '', 'initial profile_contact_email should be empty');
+    videochat_user_settings_assert((string) ($initialSettings['profile_contact_phone'] ?? 'missing') === '', 'initial profile_contact_phone should be empty');
     videochat_user_settings_assert(($initialSettings['web_app_notifications_enabled'] ?? null) === false, 'initial web app notifications should be disabled');
     videochat_user_settings_assert(($initialSettings['web_app_notification_sound_enabled'] ?? null) === true, 'initial web app notification sound should be enabled');
     videochat_user_settings_assert(($initialSettings['web_app_notification_call_invites_enabled'] ?? null) === true, 'initial call invite notifications should be enabled');
@@ -149,6 +151,8 @@ SQL
         'linkedin_url' => 'https://example.com/in/user',
         'x_url' => 'http://x.com/calluser',
         'youtube_url' => 'not-a-url',
+        'profile_contact_email' => 'not-an-email',
+        'profile_contact_phone' => 'call me maybe',
     ]);
     videochat_user_settings_assert($invalidProfileValues['ok'] === false, 'invalid profile settings should fail');
     videochat_user_settings_assert(
@@ -166,6 +170,14 @@ SQL
     videochat_user_settings_assert(
         (string) ($invalidProfileValues['errors']['youtube_url'] ?? '') === 'must_be_https_url',
         'invalid youtube_url error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['profile_contact_email'] ?? '') === 'must_be_valid_email',
+        'invalid profile_contact_email error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['profile_contact_phone'] ?? '') === 'must_be_phone_text',
+        'invalid profile_contact_phone error mismatch'
     );
     $unknownFieldPayload = videochat_update_user_settings($pdo, $userId, [
         'role' => 'admin',
@@ -190,6 +202,8 @@ SQL
         'linkedin_url' => ' https://www.linkedin.com/in/call-user ',
         'x_url' => 'https://x.com/calluser',
         'youtube_url' => 'https://www.youtube.com/@calluser',
+        'profile_contact_email' => ' Profile.Contact@Example.Test ',
+        'profile_contact_phone' => ' +49 (30) 1234-5678 ',
         'web_app_notifications_enabled' => true,
         'web_app_notification_sound_enabled' => false,
         'web_app_notification_call_invites_enabled' => true,
@@ -241,6 +255,14 @@ SQL
     videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['youtube_url'] ?? '') === 'https://www.youtube.com/@calluser',
         'updated youtube_url mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['profile_contact_email'] ?? '') === 'profile.contact@example.test',
+        'updated profile_contact_email mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['profile_contact_phone'] ?? '') === '+49 (30) 1234-5678',
+        'updated profile_contact_phone mismatch'
     );
     videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true, 'updated web app notifications mismatch');
     videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notification_sound_enabled'] ?? null) === false, 'updated web app notification sound mismatch');
@@ -317,6 +339,14 @@ SQL
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',
         'reauth avatar_path should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['profile_contact_email'] ?? '') === 'profile.contact@example.test',
+        'reauth should reflect persisted profile_contact_email'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['profile_contact_phone'] ?? '') === '+49 (30) 1234-5678',
+        'reauth should reflect persisted profile_contact_phone'
     );
     videochat_user_settings_assert((($reauth['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true, 'reauth should reflect persisted web app notifications');
     videochat_user_settings_assert((($reauth['user'] ?? [])['web_app_notification_sound_enabled'] ?? null) === false, 'reauth should reflect persisted web app notification sound');
