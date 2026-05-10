@@ -81,7 +81,7 @@ Sprint Checkboxen:
 - [x] UX6-06 Implement descriptor-driven page action bars for the first
   Governance/Admin proof surfaces: create/edit/delete/import/export/save actions
   must be described, permission-filtered, and locally named per entity.
-- [ ] UX6-07 Wire backend route authorization proof for tenant/resource grant
+- [x] UX6-07 Wire backend route authorization proof for tenant/resource grant
   evaluation on Governance/Admin resource actions beyond simple role/path
   checks.
 - [ ] UX6-08 Normalize Governance entity semantics for Groups, Organizations,
