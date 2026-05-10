@@ -82,7 +82,7 @@ Sprint Checkboxen:
   rights from `local/iam-e2e-anonymous-link-org-admin-rights`.
 - [x] IAM8-06 Extract or prove anonymous temporary access rights from
   `local/iam-e2e-anonymous-temp-rights-proof-2`.
-- [ ] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility
+- [x] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility
   from `local/iam-e2e-audit-alias-followup-proof-3`.
 - [ ] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
   logging from `local/iam-e2e-audit-confirmation-implicit`.
