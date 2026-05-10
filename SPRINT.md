@@ -240,8 +240,17 @@ Tickets:
   - Proof: `node tests/contract/call-access-ci-artifacts-contract.mjs`,
     `node tests/contract/iam-call-access-ci-wire-contract.mjs`, and
     `git diff --check` passed.
-- [ ] IAM2-18 Wire Sprint 02 proofs into stable package scripts and release-gate
+- [x] IAM2-18 Wire Sprint 02 proofs into stable package scripts and release-gate
   metadata after integration.
+  - Merged worker branch `agent/iam-s2-18-release-gate-wiring`.
+  - Wired Sprint 02 contract/E2E proofs into
+    `test:contract:iam-call-access`, focused `test:e2e:call-access`, release
+    gate command metadata, and the CI wire contract.
+  - Proof: `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    `node tests/contract/call-access-ci-artifacts-contract.mjs`,
+    `npm run test:contract:iam-call-access`, and `git diff --check` passed;
+    host PHP SQLite branches skipped where `pdo_sqlite` was unavailable, while
+    `iam-call-access-sqlite-runtime-proof.sh` used Docker PHP 8.4 and passed.
 - [ ] IAM2-19 Clean merged or superseded IAM Sprint 02 worktrees/branches using
   contained-HEAD and clean-worktree rules only.
 - [ ] IAM2-20 Build, run Sprint 02 IAM proof set, deploy without push/DNS/certbot,
