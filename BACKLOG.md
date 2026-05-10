@@ -92,6 +92,39 @@ Rules:
 
 ## Parked From Sprint Cleanup 2026-05-09
 
+### Parked From Sprint Reset 2026-05-10
+
+1. [ ] Video Call Stabilization and Internal Diagnostics are paused as active
+   sprint work. Reopen only concrete production defects with current evidence.
+2. [ ] Room-bound Gossip relay, SFU disablement, MediaSecurity sender-key
+   recovery, strict 720p30, and related media tests are parked/manual unless the
+   user explicitly reopens them.
+3. [ ] Planning Image multi-image controls and Guest Join-Link Admission are
+   historical hotfixes. Reopen only new concrete defects, not the old sprint
+   checklist.
+4. [ ] Call App diagnostics/telemetry improvements remain available as future
+   work, but IAM call-access test stabilization is now the active priority.
+
+### Future IAM Sprint Queue
+
+Use this queue only after the active 20-ticket IAM sprint closes.
+
+1. [ ] IAM Sprint 02: broaden browser E2E proof for calendar invite join links,
+   registered invitees, anonymous links, and personalized temporary accounts.
+2. [ ] IAM Sprint 02: close remaining edge cases for owner transfer, admin join
+   boundaries, removed members, stale roles, and disabled users in browser E2E.
+3. [ ] IAM Sprint 02: prove audit log event compatibility across legacy and
+   current event names, including redacted artifact output.
+4. [ ] IAM Sprint 02: stabilize CI artifacts, release-gate scripts, and
+   production-smoke selection for IAM call-access checks.
+5. [ ] IAM Sprint 03: harden security-manipulation cases, duplicate device/browser
+   abuse, mismatch verification, and no-data-leak UI states.
+6. [ ] IAM Sprint 03: complete Docker/SQLite backend runtime proof for call
+   access contracts that currently skip in local environments without
+   `pdo_sqlite`.
+7. [ ] IAM Sprint 03: clean redundant IAM branches/worktrees only after their
+   HEAD is merged or their diff is proven superseded by the local no-push branch.
+
 ### Completed/Parked Call App Integration Detail
 
 1. [ ] Prior `Collaborative Office Call Apps And Operator Feedback` sprint detail
