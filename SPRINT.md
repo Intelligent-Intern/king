@@ -222,8 +222,18 @@ Sprint Checkboxen:
   - Proof: `iam-review-abuse-extraction-contract.mjs`,
     duplicate-abuse/no-leak/strong-mismatch/audit-redaction contracts,
     `iam-call-access-ci-wire-contract.mjs`, and `git diff --check` passed.
-- [ ] IAM4-14 Extract system-admin deleted/ended proof value from
+- [x] IAM4-14 Extract system-admin deleted/ended proof value from
   `local/iam-e2e-system-admin-deleted-ended-proof-3`.
+  - Merged worker branch `agent/iam-s4-14-system-admin-terminal-extract`.
+  - Added `documentation/iam-sprint-04-system-admin-terminal-extract-evidence.md`
+    and aligned the terminal-browser-flow contract with the current stronger
+    personalized-link inactive-target predicate.
+  - Confirmed the source branch's system-admin ended/deleted bypass concern is
+    covered by IAM4-06 backend runtime proof and terminal browser-flow
+    contracts; no stale source code was ported.
+  - Proof: terminal-state/browser-flow/invite-invalidation/disabled-link
+    frontend contracts, focused terminal SQLite runtime proof, and
+    `git diff --check` passed.
 - [ ] IAM4-15 Convert accepted old-branch value into focused Sprint 04 contracts
   without broad package or suite-runner conflicts.
 - [ ] IAM4-16 Run or repair the focused `npm run test:e2e:call-access` browser
