@@ -75,7 +75,7 @@ const lobbyAuthorizeBody = functionBody(lobbySecuritySource, 'videochat_realtime
 
 assert.match(
   roleContextBody,
-  /\$contextFromRow = static function \(array \$row, bool \$isOrganizationAdmin\)[\s\S]*\$callRole = 'owner';[\s\S]*\$effectiveCallRole = \$isAdmin \? 'owner' : \(\$isOrganizationAdmin && \$callRole !== 'owner' \? 'moderator' : \$callRole\);[\s\S]*'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'[\s\S]*SELECT[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*calls\.status IN \('active', 'scheduled'\)/,
+  /\$contextFromRow = static function \(array \$row, bool \$isOrganizationAdmin\)[\s\S]*\$callRole = 'owner';[\s\S]*\$effectiveCallRole = \$isAdmin \? 'owner' : \(\$isOrganizationAdmin && \$callRole !== 'owner' \? 'moderator' : \$callRole\);[\s\S]*\$scopedRoleActive =[\s\S]*videochat_call_invite_state_allows_scoped_role\(\$inviteState\)[\s\S]*'can_moderate' => \$isAdmin[\s\S]*\|\| \$isOrganizationAdmin[\s\S]*\|\| \(\$scopedRoleActive && in_array\(\$callRole, \['owner', 'moderator'\], true\)\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \(\$scopedRoleActive && \$callRole === 'owner'\)[\s\S]*SELECT[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*calls\.status IN \('active', 'scheduled'\)/,
   'backend realtime role context must recompute active-call owner, moderator, admin, and org-admin authority from current DB rows',
 );
 assert.match(
@@ -90,7 +90,7 @@ assert.match(
 );
 assert.match(
   roomSnapshotPayloadBody,
-  /'viewer' => \[[\s\S]*'call_role' => videochat_normalize_call_participant_role\(\(string\) \(\$connection\['call_role'\][\s\S]*'effective_call_role' => videochat_normalize_call_participant_role\([\s\S]*'can_moderate' => \(bool\) \(\$connection\['can_moderate_call'\] \?\? false\),[\s\S]*'can_manage_owner' => \(bool\) \(\$connection\['can_manage_call_owner'\] \?\? false\),/,
+  /\$viewerConnection = videochat_realtime_connection_with_call_context\(\$connection, \$openDatabase\);[\s\S]*videochat_realtime_owner_absence_downgrade_absent_owner_connection[\s\S]*'viewer' => \[[\s\S]*'call_role' => videochat_normalize_call_participant_role\(\(string\) \(\$viewerConnection\['call_role'\][\s\S]*'effective_call_role' => videochat_normalize_call_participant_role\([\s\S]*'can_moderate' => \(bool\) \(\$viewerConnection\['can_moderate_call'\] \?\? false\),[\s\S]*'can_manage_owner' => \(bool\) \(\$viewerConnection\['can_manage_call_owner'\] \?\? false\),/,
   'room snapshots must carry the refreshed viewer role and action authority flags',
 );
 assert.match(
