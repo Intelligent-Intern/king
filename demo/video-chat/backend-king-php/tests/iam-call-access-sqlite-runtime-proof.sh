@@ -17,6 +17,7 @@ DEFAULT_CONTRACTS=(
   "call-access-invalid-expired-anonymous-link-contract.sh"
   "call-access-email-confirmation-contract.sh"
   "call-access-invalidation-contract.sh"
+  "call-access-anonymous-disabled-link-contract.sh"
   "call-access-anonymous-lobby-contract.sh"
   "call-access-membership-removal-contract.sh"
   "call-access-org-removal-active-privilege-downgrade-contract.sh"
