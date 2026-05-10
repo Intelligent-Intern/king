@@ -11,6 +11,7 @@ import {
 } from './runtimeConfig.ts';
 import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 import { resolveSfuReceiverCountAwareSendBudget } from '../../sfu/sendBudget.ts';
+import { diagnosePlannedGossipSfuRecoveryParked } from './plannedGossipSfuRecovery.ts';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
@@ -1227,6 +1228,19 @@ export function createPublisherBackpressureController({
   }
 
   function restartSfuAfterVideoStall(reason, payload = {}, options = {}) {
+    if (diagnosePlannedGossipSfuRecoveryParked({
+      captureClientDiagnostic,
+      reason,
+      payload: {
+        ...payload,
+        media_runtime_path: getMediaRuntimePath(),
+        remote_peer_count: getRemotePeerCount(),
+      },
+      eventType: 'planned_gossip_sfu_socket_restart_parked',
+      message: 'Planned Gossip media parked an SFU socket restart request from publisher backpressure.',
+      level: 'warning',
+      immediate: true,
+    })) return false;
     if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
     const nowMs = Date.now();
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {

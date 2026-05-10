@@ -103,7 +103,7 @@ assert(gossipDataLane.includes('lastGossipRolloutGateState?.gossip_topology_heal
 assert(publisherPipeline.includes('VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary'), 'publisher pipeline must branch on gossip_primary')
 assert(
   /const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary && suppressGossipPrimary !== true[\s\S]*if \(gossipFirst\)[\s\S]*publishGossipFrame/.test(publisherFrameDispatch),
-  'gossip_primary must publish through browser gossip before optional SFU send through the dispatch helper',
+  'gossip_primary must publish through browser gossip before returning from the dispatch helper',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline),
@@ -114,9 +114,9 @@ assert(
   'gossip_primary must stay on the WLVC publisher path until browser encoder gossip publication is wired',
 )
 assert(
-  /sfu_optional_send_unavailable_after_gossip_publish/.test(publisherFrameDispatch)
-    && /sfu_optional_send_failed_after_gossip_publish/.test(publisherFrameDispatch),
-  'optional SFU paths must keep gossip publication independent when SFU is unavailable or failed',
+  /gossip_primary_publish_failed_no_sfu_fallback/.test(publisherFrameDispatch)
+    && !/sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure/.test(publisherFrameDispatch),
+  'gossip_primary must keep publication independent by parking SFU fallback instead of sending through it',
 )
 
 assert(gossipController.includes('media_carrier_mode'), 'gossip telemetry snapshots must serialize media_carrier_mode')

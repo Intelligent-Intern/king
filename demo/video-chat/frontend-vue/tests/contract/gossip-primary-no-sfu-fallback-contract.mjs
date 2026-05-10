@@ -17,10 +17,29 @@ const clientDiagnostics = read('demo/video-chat/frontend-vue/src/support/clientD
 const backendDiagnostics = read('demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 
+const gossipFirstPublishIndex = dispatch.indexOf('if (gossipFirst) {')
+const earlyReturnIndex = dispatch.indexOf('sfuFallbackSuppressed: true', gossipFirstPublishIndex)
+const sfuLookupIndex = dispatch.indexOf('const sendClient = safeFunction(currentOpenSfuClient, () => null)();')
+const sfuSendIndex = dispatch.indexOf('sendClient.sendEncodedFrame(frame)')
+
+assert.ok(
+  gossipFirstPublishIndex >= 0
+    && earlyReturnIndex > gossipFirstPublishIndex
+    && sfuLookupIndex > earlyReturnIndex
+    && sfuSendIndex > sfuLookupIndex,
+  'gossip_primary dispatch must return before any SFU lookup or send',
+)
+
 assert.match(
   dispatch,
-  /gossipFirst && !gossipPublished[\s\S]*sfu_fallback_after_gossip_primary_publish_failure[\s\S]*fallback_reason:\s*'gossip_publish_failed_or_gated'[\s\S]*immediate:\s*true/s,
-  'Gossip-primary SFU fallback must emit an immediate backend-visible backtrace before sending through SFU',
+  /gossip_primary_publish_failed_no_sfu_fallback[\s\S]*planned Gossip media does not fall back to SFU[\s\S]*fallback_reason:\s*'gossip_primary_no_sfu_fallback'[\s\S]*immediate:\s*true/s,
+  'Gossip-primary publish failure must diagnose the parked SFU fallback without sending through SFU',
+)
+
+assert.equal(
+  /sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure/.test(dispatch),
+  false,
+  'Gossip-primary dispatch must not retain legacy SFU fallback diagnostics',
 )
 
 assert.match(
@@ -60,8 +79,9 @@ assert.match(
 )
 
 assert.ok(
-  packageJson.includes('gossip-primary-fallback-backtrace-contract.mjs'),
-  'gossip contract suite must include the fallback backtrace contract',
+  packageJson.includes('gossip-primary-no-sfu-fallback-contract.mjs')
+    && !packageJson.includes('gossip-primary-fallback-backtrace-contract.mjs'),
+  'gossip contract suite must include the no-SFU-fallback contract',
 )
 
-console.log('[gossip-primary-fallback-backtrace-contract] PASS')
+console.log('[gossip-primary-no-sfu-fallback-contract] PASS')

@@ -42,9 +42,9 @@ assert(
 assert(
   /gossipMayPublishWithoutSfu:\s*gossipPrimary/.test(mediaCarrier)
     && /sfuRequiredBeforeGossip:\s*!gossipPrimary/.test(mediaCarrier)
-    && /sfuSendIsOptional:\s*gossipPrimary \|\| sfuMirror/.test(mediaCarrier)
+    && /sfuSendIsOptional:\s*sfuMirror/.test(mediaCarrier)
     && /sfuFallbackAllowed:\s*!gossipPrimary/.test(mediaCarrier),
-  'runtime config must encode gossip-primary SFU independence without SFU fallback',
+  'runtime config must encode gossip-primary SFU independence without fallback or optional mirroring',
 )
 assert(
   /media_carrier_gossip_primary/.test(mediaCarrier)
