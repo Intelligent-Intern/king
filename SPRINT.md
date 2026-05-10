@@ -202,10 +202,24 @@ Tickets:
     and preserved access for still-authorized members.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-removed-members-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM2-14 Prove disabled users, deleted users, deleted calls, ended calls,
+- [x] IAM2-14 Prove disabled users, deleted users, deleted calls, ended calls,
   and disabled calls stay closed in browser flows.
-- [ ] IAM2-15 Prove stale role and active-organization switch revalidation in
+  - Merged worker branch `agent/iam-s2-14-terminal-browser-flows`.
+  - Added `call-access-terminal-browser-flows-contract.mjs` covering disabled
+    users, deleted users, deleted calls, ended calls, disabled calls, browser
+    recovery state, redacted terminal payloads, and route/session guards.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-terminal-browser-flows-contract.mjs`
+    and `git diff --check` passed.
+- [x] IAM2-15 Prove stale role and active-organization switch revalidation in
   browser flows, including no stale admin powers after switch.
+  - Merged worker branch `agent/iam-s2-15-stale-role-org-switch`.
+  - Added `call-access-stale-role-org-switch-contract.mjs` covering stale
+    org-role revalidation, active-organization switch safety, old-admin
+    demotion, refreshed realtime snapshots, denied admin actions, and redacted
+    mismatch output.
+  - Proof: `node tests/contract/call-access-stale-role-org-switch-contract.mjs`
+    and `git diff --check` passed; backend shell proofs skipped on host because
+    local PHP lacks `pdo_sqlite`.
 - [ ] IAM2-16 Prove audit event compatibility across legacy/current IAM event
   names and redacted artifact output.
 - [ ] IAM2-17 Stabilize CI artifacts for IAM browser proof: traces, screenshots,
