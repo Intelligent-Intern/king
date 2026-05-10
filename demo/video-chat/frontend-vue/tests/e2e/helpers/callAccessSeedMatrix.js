@@ -78,6 +78,10 @@ export function seedUserKeys() {
   return [...userIndex.keys()];
 }
 
+export function seedCallKeys() {
+  return [...callIndex.keys()];
+}
+
 export function seedScenarioKeys() {
   return [...scenarioIndex.keys()];
 }
@@ -198,10 +202,36 @@ function isGuestListUserForCall(user, call) {
 
 function canDirectlyResolveCall(user, call) {
   if (!user || !call) return false;
+  if (callDirectAccessFailure(call)) return false;
   return isPlatformAdminUser(user)
     || isTenantAdminForCall(user, call)
     || isCallOwner(user, call)
     || isGuestListUserForCall(user, call);
+}
+
+function callDirectAccessFailure(call) {
+  const status = String(call?.status || '').trim().toLowerCase();
+  if (call?.deleted === true || status === 'deleted') {
+    return {
+      hidden: true,
+      reason: 'calls_not_found',
+      resolveStatus: 404,
+      callStatus: 404,
+      errorCode: 'calls_not_found',
+      message: 'Call does not exist.',
+    };
+  }
+  if (!['scheduled', 'active'].includes(status)) {
+    return {
+      hidden: false,
+      reason: 'call_not_joinable_from_status',
+      resolveStatus: 200,
+      callStatus: 403,
+      errorCode: 'calls_forbidden',
+      message: 'You are not allowed to view this call.',
+    };
+  }
+  return null;
 }
 
 function participantPayload(user, callRole = 'participant', inviteState = 'allowed') {
@@ -510,11 +540,33 @@ export async function installCallAccessSeedRoutes(context) {
         });
         return;
       }
+      const callFailure = callDirectAccessFailure(call);
+      if (callFailure?.hidden) {
+        await fulfillJson(route, callFailure.resolveStatus, {
+          status: 'error',
+          error: { code: callFailure.errorCode, message: callFailure.message },
+        });
+        return;
+      }
       const record = authenticatedSeedSessionRecord(request, issuedSessions);
       if (!record) {
         await fulfillJson(route, 401, {
           status: 'error',
           error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      if (callFailure) {
+        await fulfillJson(route, callFailure.resolveStatus, {
+          status: 'ok',
+          result: {
+            state: 'forbidden',
+            resolved_as: 'call_id',
+            reason: callFailure.reason,
+            access_link: null,
+            call: null,
+          },
+          time: '2026-05-08T10:00:00.000Z',
         });
         return;
       }
@@ -556,11 +608,30 @@ export async function installCallAccessSeedRoutes(context) {
         });
         return;
       }
+      const callFailure = callDirectAccessFailure(call);
+      if (callFailure?.hidden) {
+        await fulfillJson(route, callFailure.callStatus, {
+          status: 'error',
+          error: { code: callFailure.errorCode, message: callFailure.message },
+        });
+        return;
+      }
       const record = authenticatedSeedSessionRecord(request, issuedSessions);
       if (!record) {
         await fulfillJson(route, 401, {
           status: 'error',
           error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      if (callFailure) {
+        await fulfillJson(route, callFailure.callStatus, {
+          status: 'error',
+          error: {
+            code: callFailure.errorCode,
+            message: callFailure.message,
+            details: { call_id: call.id, reason: callFailure.reason },
+          },
         });
         return;
       }

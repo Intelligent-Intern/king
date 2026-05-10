@@ -1,5 +1,5 @@
 {
-  "matrix_version": "v1.0.0",
+  "matrix_version": "v1.1.0",
   "matrix_name": "king-video-chat-iam-call-access-seeding",
   "release_policy": {
     "mode": "deterministic_e2e_seed_contract",
@@ -104,6 +104,20 @@
       ]
     },
     {
+      "key": "beta_normal_user",
+      "id": 6108,
+      "email": "iam-beta-user@example.test",
+      "display_name": "Beta Normal User",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "beta", "role": "member" }
+      ]
+    },
+    {
       "key": "registered_guest",
       "id": 6106,
       "email": "iam-registered-guest@example.test",
@@ -193,6 +207,61 @@
       "ends_at": "2026-05-08T11:00:00.000Z",
       "owner_user_key": "system_admin",
       "guest_list_user_keys": []
+    },
+    {
+      "key": "beta_cross_org_private",
+      "id": "20000000-0000-4000-8000-000000000104",
+      "room_id": "iam-beta-cross-org-room",
+      "tenant_key": "beta",
+      "title": "IAM Beta Cross Organization Private Call",
+      "status": "active",
+      "starts_at": "2026-05-08T10:00:00.000Z",
+      "ends_at": "2026-05-08T11:00:00.000Z",
+      "owner_user_key": "beta_org_admin",
+      "guest_list_user_keys": []
+    },
+    {
+      "key": "alpha_ended",
+      "id": "20000000-0000-4000-8000-000000000105",
+      "room_id": "iam-alpha-ended-room",
+      "tenant_key": "alpha",
+      "title": "IAM Alpha Ended Call",
+      "status": "ended",
+      "starts_at": "2026-05-07T10:00:00.000Z",
+      "ends_at": "2026-05-07T11:00:00.000Z",
+      "owner_user_key": "alpha_call_owner",
+      "guest_list_user_keys": [
+        "registered_guest"
+      ]
+    },
+    {
+      "key": "alpha_disabled",
+      "id": "20000000-0000-4000-8000-000000000106",
+      "room_id": "iam-alpha-disabled-room",
+      "tenant_key": "alpha",
+      "title": "IAM Alpha Disabled Call",
+      "status": "disabled",
+      "starts_at": "2026-05-08T12:00:00.000Z",
+      "ends_at": "2026-05-08T13:00:00.000Z",
+      "owner_user_key": "alpha_call_owner",
+      "guest_list_user_keys": [
+        "registered_guest"
+      ]
+    },
+    {
+      "key": "alpha_deleted",
+      "id": "20000000-0000-4000-8000-000000000107",
+      "room_id": "iam-alpha-deleted-room",
+      "tenant_key": "alpha",
+      "title": "IAM Alpha Deleted Call",
+      "status": "deleted",
+      "deleted": true,
+      "starts_at": "2026-05-08T14:00:00.000Z",
+      "ends_at": "2026-05-08T15:00:00.000Z",
+      "owner_user_key": "alpha_call_owner",
+      "guest_list_user_keys": [
+        "registered_guest"
+      ]
     }
   ],
   "access_links": [
@@ -312,6 +381,23 @@
       }
     },
     {
+      "key": "direct_join_beta_org_admin_beta_active_allowed",
+      "sprint_groups": ["3"],
+      "principal_user_key": "beta_org_admin",
+      "call_key": "beta_active",
+      "expected": {
+        "direct_join_allowed": true,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "resolved",
+        "expected_call_status": 200,
+        "platform_admin": false,
+        "tenant_admin": true,
+        "guest_list_entry": false,
+        "owner": true,
+        "guest_list_required": false
+      }
+    },
+    {
       "key": "direct_join_alpha_org_admin_beta_active_denied",
       "sprint_groups": ["3"],
       "principal_user_key": "alpha_org_admin",
@@ -328,6 +414,26 @@
         "guest_list_entry": false,
         "owner": false,
         "guest_list_required": true
+      }
+    },
+    {
+      "key": "direct_join_alpha_org_admin_beta_cross_org_private_denied",
+      "sprint_groups": ["3", "7"],
+      "principal_user_key": "alpha_org_admin",
+      "call_key": "beta_cross_org_private",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "calls_forbidden",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "platform_admin": false,
+        "tenant_admin": false,
+        "guest_list_entry": false,
+        "owner": false,
+        "guest_list_required": true,
+        "cross_org": true
       }
     },
     {
@@ -367,6 +473,25 @@
       }
     },
     {
+      "key": "direct_join_beta_normal_user_beta_active_denied",
+      "sprint_groups": ["3"],
+      "principal_user_key": "beta_normal_user",
+      "call_key": "beta_active",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "calls_forbidden",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "platform_admin": false,
+        "tenant_admin": false,
+        "guest_list_entry": false,
+        "owner": false,
+        "guest_list_required": true
+      }
+    },
+    {
       "key": "direct_join_alpha_call_owner_alpha_active_allowed",
       "sprint_groups": ["3"],
       "principal_user_key": "alpha_call_owner",
@@ -384,10 +509,57 @@
       }
     },
     {
+      "key": "direct_join_system_admin_alpha_ended_denied",
+      "sprint_groups": ["8"],
+      "principal_user_key": "system_admin",
+      "call_key": "alpha_ended",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "call_not_joinable_from_status",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "expected_call_status_value": "ended",
+        "private_call_payload_forbidden": true
+      }
+    },
+    {
+      "key": "direct_join_alpha_owner_alpha_disabled_denied",
+      "sprint_groups": ["8"],
+      "principal_user_key": "alpha_call_owner",
+      "call_key": "alpha_disabled",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "call_not_joinable_from_status",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "expected_call_status_value": "disabled",
+        "private_call_payload_forbidden": true
+      }
+    },
+    {
+      "key": "direct_join_alpha_owner_alpha_deleted_hidden",
+      "sprint_groups": ["8"],
+      "principal_user_key": "alpha_call_owner",
+      "call_key": "alpha_deleted",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 404,
+        "expected_resolve_error_code": "calls_not_found",
+        "expected_call_status": 404,
+        "expected_call_error_code": "calls_not_found",
+        "expected_call_status_value": "deleted",
+        "private_call_payload_forbidden": true
+      }
+    },
+    {
       "key": "system_admin_join_any_organization_call_without_guest_list",
       "sprint_groups": ["18"],
       "principal_user_key": "system_admin",
-      "call_keys": ["alpha_active", "beta_active", "tenantless_active"],
+      "call_keys": ["alpha_active", "beta_active", "beta_cross_org_private", "tenantless_active"],
       "expected": {
         "guest_list_required": false,
         "can_manage_lobby": true,
