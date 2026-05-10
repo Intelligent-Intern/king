@@ -16,13 +16,13 @@ Rules:
 - Do not push. Deploy only when the active sprint proof is green.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: IAM Remaining Proof And Branch Cleanup 07
+## Sprint: IAM Session, Audit, Guestlist, And Terminal Proof 08
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Active as of 2026-05-10 after Sprint 06 deploy.
+- Active as of 2026-05-10 after Sprint 07 deploy.
 - Local-only integration branch. Do not push to GitHub.
 - Worker branches/worktrees must use short-lived non-`codex` names and merge
   back into the local no-push branch after proof.
@@ -30,20 +30,22 @@ Status:
   unless the user explicitly reopens them.
 
 User-facing problem:
-- Several remaining IAM/call-access proof branches still exist locally with
-  useful test ideas, but their historical diffs are broad and stale.
-- The active branch must absorb only current missing IAM/runtime proof value,
-  keep stale branch artifacts out, and remove branch/worktree clutter only when
-  containment and clean state are proven.
+- Sprint 07 closed the last active IAM batch, but many historical local IAM
+  branches still remain unmerged because their branch heads carry broad stale
+  diffs.
+- The next batch must extract only the still-useful current proof/runtime value
+  around session switching, audit compatibility, guest-list journeys, terminal
+  call states, and disabled-user/link behavior.
 
 Sprint goal:
-- Restore the next 20 IAM call-access test/proof candidates as focused active
-  tickets.
+- Close exactly 20 IAM proof tickets from the next local-branch batch.
 - For each historical branch, classify whether the current integration already
   contains the behavior; if not, extract the smallest current proof/runtime
   change needed.
-- Keep video media internals and parked background work untouched.
-- Close exactly 20 tickets, then build/deploy locally without push/DNS/certbot.
+- Keep stale branch artifacts out of the integration branch unless they are
+  clean, contained, current, and proven.
+- Build/deploy locally only after the active sprint proof is green, without
+  push, DNS automation, or certbot issuance.
 
 Execution boundary:
 - No pushes.
@@ -68,43 +70,43 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [x] IAM7-01 Extract or prove anonymous open-link lobby split from
-  `agent/iam-e2e-anonymous-lobby`.
-- [x] IAM7-02 Extract or prove duplicate review email/account confirmation from
-  `agent/iam-e2e-duplicate-review-email`.
-- [x] IAM7-03 Extract or prove owner-transfer and temporary-moderator call
-  management from `agent/iam-e2e-owner-transfer-temp-mods`.
-- [x] IAM7-04 Extract or prove personalized call-access identity handling from
-  `agent/iam-e2e-personalized-identity`.
-- [x] IAM7-05 Extract or prove IAM audit-log completeness from
-  `local/iam-e2e-audit-log-completeness`.
-- [x] IAM7-06 Extract or prove calendar invitation edge safe states from
-  `local/iam-e2e-calendar-edge-safe-states`.
-- [x] IAM7-07 Extract or prove call-access safe-screen privacy from
-  `local/iam-e2e-call-access-safe-screen-final`.
-- [x] IAM7-08 Extract or prove Call App entitlement revocation from
-  `local/iam-e2e-call-app-entitlement-revocation`.
-- [x] IAM7-09 Extract or prove Call App launch-token reconnect validation from
-  `local/iam-e2e-call-app-launch-token-reconnect`.
-- [x] IAM7-10 Extract or prove cross-organization foreign join edges from
-  `local/iam-e2e-cross-org-foreign-join-edges`.
-- [x] IAM7-11 Extract or prove deleted/ended call join hardening from
-  `local/iam-e2e-deleted-ended-join-hardening`.
-- [x] IAM7-12 Extract or prove account update/email confirmation race hardening
-  from `local/iam-e2e-email-confirmation-race-hardening`.
-- [x] IAM7-13 Extract or prove foreign link review audit scoping from
-  `local/iam-e2e-foreign-link-review-audit`.
-- [x] IAM7-14 Extract or prove identity mismatch review flow from
-  `local/iam-e2e-identity-mismatch-review-flow`.
-- [x] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
-  `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
-- [x] IAM7-16 Extract or prove link invalidation active states from
-  `local/iam-e2e-link-invalidation-active-state`.
-- [x] IAM7-17 Extract or prove lobby management moderator rights from
-  `local/iam-e2e-lobby-management-moderator-rights`.
-- [x] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
-  from `local/iam-e2e-local-run-docs-proof-20260509`.
-- [x] IAM7-19 Extract or prove organization-removal active privilege downgrade
-  from `local/iam-e2e-org-removal-active-privilege-downgrade`.
-- [x] IAM7-20 Extract or prove owner-absence realtime sync from
-  `local/iam-e2e-owner-absence-realtime-sync`.
+- [ ] IAM8-01 Extract or prove duplicate personalized-link race detection from
+  `local/iam-e2e-abuse-duplicate-race`.
+- [ ] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
+  from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
+- [ ] IAM8-03 Extract or prove account reconciliation email confirmation from
+  `local/iam-e2e-account-reconciliation-email`.
+- [ ] IAM8-04 Extract or prove admin guest-list main journeys from
+  `local/iam-e2e-admin-guestlist-main-journeys`.
+- [ ] IAM8-05 Extract or prove logged-in anonymous-link organization-admin
+  rights from `local/iam-e2e-anonymous-link-org-admin-rights`.
+- [ ] IAM8-06 Extract or prove anonymous temporary access rights from
+  `local/iam-e2e-anonymous-temp-rights-proof-2`.
+- [ ] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility
+  from `local/iam-e2e-audit-alias-followup-proof-3`.
+- [ ] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
+  logging from `local/iam-e2e-audit-confirmation-implicit`.
+- [ ] IAM8-09 Extract or prove host-verification audit event aliases from
+  `local/iam-e2e-audit-event-compat-proof-3`.
+- [ ] IAM8-10 Extract or prove IAM audit event contract coverage from
+  `local/iam-e2e-audit-events`.
+- [ ] IAM8-11 Extract or prove authorized call rejoin from
+  `local/iam-e2e-authorized-rejoin-main`.
+- [ ] IAM8-12 Extract or prove IAM call lifecycle proof value from
+  `local/iam-e2e-call-lifecycle`.
+- [ ] IAM8-13 Extract or prove call creation owner/moderation rights from
+  `local/iam-e2e-call-owner-creation-rights`.
+- [ ] IAM8-14 Extract or prove IAM E2E CI failure artifact handling from
+  `local/iam-e2e-ci-artifacts-proof-2`.
+- [ ] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
+  `local/iam-e2e-ci-docs-gate`.
+- [ ] IAM8-16 Extract or prove core organization session journeys from
+  `local/iam-e2e-core-org-session-journey`.
+- [ ] IAM8-17 Extract or prove cross-org active organization switching from
+  `local/iam-e2e-cross-org-active-org-switch`.
+- [ ] IAM8-18 Extract or prove terminal call lifecycle states from
+  `local/iam-e2e-delete-end-terminal-proof-2`.
+- [ ] IAM8-19 Extract or prove disabled anonymous call-access links from
+  `local/iam-e2e-disabled-anonymous-links`.
+- [ ] IAM8-20 Extract or prove disabled user session revocation / Call App token
+  binding from `local/iam-e2e-disabled-user-session-revocation`.

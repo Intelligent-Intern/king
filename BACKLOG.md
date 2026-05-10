@@ -104,9 +104,12 @@ completed and moved to `READYNESS_TRACKER.md` on 2026-05-10.
 Sprint 05, `IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`,
 completed and moved to readiness evidence on 2026-05-10.
 
-Sprint 07, `IAM Remaining Proof And Branch Cleanup 07`, moved the next batch of
-remaining local IAM branch/proof candidates into active `SPRINT.md` on
-2026-05-10. Do not duplicate its active checkbox list here.
+Sprint 07, `IAM Remaining Proof And Branch Cleanup 07`, completed and moved to
+readiness evidence on 2026-05-10.
+
+Sprint 08, `IAM Session, Audit, Guestlist, And Terminal Proof 08`, moved the
+next local IAM proof batch into active `SPRINT.md` on 2026-05-10. Do not
+duplicate its active checkbox list here.
 
 ### Completed/Parked Call App Integration Detail
 
