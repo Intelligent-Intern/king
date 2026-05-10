@@ -81,13 +81,13 @@ Sprint Checkboxen:
   timestamp, redaction rules and no SDP/ICE/tokens/secrets. Decide explicitly
   whether the first sprint maps this envelope into the existing decoder or
   introduces a separate decoder adapter.
-- [ ] GSP01-03 Make `client/capabilities.v1` a hard orchestrator input:
+- [x] GSP01-03 Make `client/capabilities.v1` a hard orchestrator input:
   persistence failure must not silently ACK success; the ACK must report stored
   state, epoch and redacted public projection.
-- [ ] GSP01-04 Add durable `media_session_plan.v1` ownership: monotonic plan
+- [x] GSP01-04 Add durable `media_session_plan.v1` ownership: monotonic plan
   epoch, participant state, `waiting_for_gossip`, `streaming_720p30`,
   `throttled_50`, `throttled_25`, and `stuck_not_sending`.
-- [ ] GSP01-05 Collapse room media truth to one authoritative snapshot shape:
+- [x] GSP01-05 Collapse room media truth to one authoritative snapshot shape:
   capabilities, media plan, participant media state and diagnostics counters
   must come from the orchestrator, not parallel legacy producers.
 - [ ] GSP01-06 Frontend capability bridge: send capabilities after admitted
@@ -114,7 +114,7 @@ Sprint Checkboxen:
 - [ ] GSP01-12 Screenshare parity: screenshare is represented as a participant
   media stream in the same gossip envelope/state model and can enter fullscreen
   without special SFU assumptions.
-- [ ] GSP01-13 Backpressure ladder: replace active reconnect/restart recovery
+- [x] GSP01-13 Backpressure ladder: replace active reconnect/restart recovery
   with pause, 50 percent cadence, 25 percent cadence, then
   `stuck_not_sending` plus diagnostics reason. Gossip DataChannel
   `bufferedAmount`, queue depth and dropped delta/keyframe counters must feed
@@ -122,7 +122,7 @@ Sprint Checkboxen:
 - [ ] GSP01-14 MediaSecurity parking for this path: sender-key mismatch,
   participant transcript recovery and key-wrap delay must not block planned
   gossip frame send/receive in this sprint; log the condition instead.
-- [ ] GSP01-15 Focus/UI stability: focus loss, tab visibility changes and UI
+- [x] GSP01-15 Focus/UI stability: focus loss, tab visibility changes and UI
   clicks must not start reconnect loops; open sockets may request snapshot
   backfill, closed sockets reconnect only for real network closure.
 - [ ] GSP01-16 Strict 720p30 active profile: remove active auto-quality,
@@ -154,12 +154,51 @@ Current Loop Notes:
   defines the external `gossip.media.frame.v1` envelope, and
   `demo/video-chat/frontend-vue/tests/contract/gossip-media-frame-v1-contract.mjs`
   passed with `node tests/contract/gossip-media-frame-v1-contract.mjs`.
+- GSP01-03/GSP01-04 proof: commit `e591e81b` makes capability persistence
+  fail closed with `ok=false`/`stored=false`, adds redacted ACK projection,
+  monotonic plan epoch, Gossip plan states, and the
+  `media-capability-plan-gossip-contract.php` proof. `php -l` passed for the
+  touched PHP files and `php demo/video-chat/backend-king-php/tests/media-capability-plan-gossip-contract.php`
+  passed.
+- Frontend capability bridge progress: commit `8f2a9769` sends capabilities
+  only after admitted `system/welcome`, suppresses duplicate unchanged sends,
+  normalizes the Gossip plan catalog, and adds a matching-plan publication gate
+  helper. GSP01-06 remains open until the helper controls the actual local
+  publisher start.
+- GSP01-05 proof: commit `c78b0820` makes `room/snapshot` carry the
+  authoritative media session plan with redacted capabilities,
+  participant-media-state, Gossip readiness and diagnostics counters, and
+  removes legacy `participants[*].client_capabilities`. `php -l` passed for
+  the touched files; runtime execution is still blocked by the existing
+  duplicate `videochat_call_access_link_disabled_at()` definition in
+  `domain/calls/call_access_contract.php`.
+- Gossip route progress: commit `4618a59a` publishes external
+  `gossip.media.frame.v1` envelopes and suppresses SFU fallback on
+  `gossip_primary` publish failure. `node tests/contract/gossip-live-receive-decode-route-contract.mjs`
+  and `node tests/contract/gossip-outbound-live-publication-contract.mjs`
+  passed. GSP01-10/GSP01-11 remain open until the active codec/profile choice
+  and decoded-pixel browser proof are complete.
+- GSP01-13 proof: commit `4fb184f1` adds Gossip DataChannel buffered-amount,
+  queue-depth and dropped-frame telemetry into the backpressure ladder.
+  `node demo/video-chat/frontend-vue/tests/contract/gossip-backpressure-contract.mjs`
+  and `node demo/video-chat/frontend-vue/tests/contract/gossip-telemetry-contract.mjs`
+  passed.
+- GSP01-15 proof: commit `24a075d3` separates open sockets from room snapshot
+  sync during foreground recovery, requests snapshot backfill for live sockets,
+  and reconnects only closed sockets. `node demo/video-chat/frontend-vue/tests/contract/foreground-reconnect-contract.mjs`
+  and `node demo/video-chat/frontend-vue/tests/contract/realtime-reconnect-browser-contract.mjs`
+  passed.
 - GSP01-17 proof: Call Diagnostics now includes a Gossip stage and summary
   metrics for capabilities, plan epoch, gossip readiness, sender/receiver frame
   counters, drops, backpressure state, and stuck reason. `node --check` passed
   for the runtime and contract, and
   `node demo/video-chat/frontend-vue/tests/contract/call-app-call-diagnostics-contract.mjs`
   passed.
+- Online call-chat reporting: Playwright/MCP reached
+  `https://app.kingrt.com/login?redirect=/workspace/call/39c5b3ea-855b-40fd-b030-c8af1d512605`.
+  The page exposes only email/password sign-in and no registration or guest
+  join link in this context, so no live room reports can be posted until a
+  valid app session or real guest/invite link is available.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
