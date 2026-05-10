@@ -96,7 +96,7 @@ Sprint Checkboxen:
   `local/iam-e2e-foreign-link-review-audit`.
 - [x] IAM7-14 Extract or prove identity mismatch review flow from
   `local/iam-e2e-identity-mismatch-review-flow`.
-- [ ] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
+- [x] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
   `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
 - [ ] IAM7-16 Extract or prove link invalidation active states from
   `local/iam-e2e-link-invalidation-active-state`.
