@@ -75,7 +75,7 @@ Sprint Checkboxen:
   `local/iam-e2e-audit-log-completeness`.
 - [x] IAM9-02 Extract or prove calendar invitation edge safe states from
   `local/iam-e2e-calendar-edge-safe-states`.
-- [ ] IAM9-03 Extract or prove calendar invitation temporary account flow from
+- [x] IAM9-03 Extract or prove calendar invitation temporary account flow from
   `local/iam-e2e-calendar-invitation-flow`.
 - [ ] IAM9-04 Extract or prove unregistered calendar main journey from
   `local/iam-e2e-calendar-unregistered-main-journey`.
