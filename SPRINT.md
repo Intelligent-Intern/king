@@ -96,7 +96,7 @@ Sprint Checkboxen:
 - [x] GSP01-07 Frontend media state application: local capture/publish/receive
   state must be driven by `media_session_plan.v1`, not local runtime switching
   or remote peer counts.
-- [ ] GSP01-08 Park SFU from the active stream path: no `sfu_first`, no SFU
+- [x] GSP01-08 Park SFU from the active stream path: no `sfu_first`, no SFU
   fallback, no SFU socket restart as media recovery while the plan transport is
   gossip. Plan/deploy config must make `gossip_primary` and
   `VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active` explicit.
@@ -172,6 +172,17 @@ Current Loop Notes:
   paths call the media-plan gate before publishing. Verified with
   `node tests/contract/local-media-session-plan-gate-contract.mjs` and
   `node tests/contract/client-capabilities-media-plan-contract.mjs`.
+- GSP01-08 proof: this change parks SFU from the active planned Gossip path.
+  `gossip_primary` dispatch returns before SFU lookup,
+  failed Gossip publish emits `gossip_primary_publish_failed_no_sfu_fallback`,
+  active planned Gossip transport parks SFU socket restart diagnostics via
+  `planned_gossip_sfu_socket_restart_parked`, and `.env`/compose/deploy make
+  `VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary` plus
+  `VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active` explicit. Verified with
+  `node tests/contract/gsp01-08-sfu-parking-contract.mjs`,
+  `node tests/contract/gossip-primary-no-sfu-fallback-contract.mjs`,
+  `node tests/contract/gossip-production-deploy-profile-contract.mjs`, and
+  `node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs`.
 - GSP01-05 proof: commit `c78b0820` makes `room/snapshot` carry the
   authoritative media session plan with redacted capabilities,
   participant-media-state, Gossip readiness and diagnostics counters, and

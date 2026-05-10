@@ -18,10 +18,18 @@ function assert(condition, message) {
 
 const deployScript = read('demo/video-chat/scripts/deploy.sh')
 const compose = read('demo/video-chat/docker-compose.v1.yml')
+const envDefaults = read('demo/video-chat/.env')
 const frontendDockerfile = read('demo/video-chat/frontend-vue/Dockerfile')
 const edgeDockerfile = read('demo/video-chat/edge/Dockerfile')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 
+assert(
+  envDefaults.includes('VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active')
+    && envDefaults.includes('VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary')
+    && envDefaults.includes('VIDEOCHAT_SFU_ENABLED=0')
+    && envDefaults.includes('VIDEOCHAT_EDGE_SFU_ENABLED=0'),
+  'local v1 stack env defaults must make the planned Gossip lane explicit while keeping SFU disabled',
+)
 assert(
   deployScript.includes('VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active')
     && deployScript.includes('VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary'),
@@ -33,9 +41,9 @@ assert(
   'production deploy env refresh must persist gossip_primary flags on every deploy',
 )
 assert(
-  /VITE_VIDEOCHAT_GOSSIP_DATA_LANE:\s*"\$\{VITE_VIDEOCHAT_GOSSIP_DATA_LANE:-\}"/.test(compose)
-    && /VITE_VIDEOCHAT_MEDIA_CARRIER:\s*"\$\{VITE_VIDEOCHAT_MEDIA_CARRIER:-\}"/.test(compose),
-  'compose must pass gossip lane and media carrier flags into frontend/edge build surfaces',
+  /VITE_VIDEOCHAT_GOSSIP_DATA_LANE:\s*"\$\{VITE_VIDEOCHAT_GOSSIP_DATA_LANE:-active\}"/.test(compose)
+    && /VITE_VIDEOCHAT_MEDIA_CARRIER:\s*"\$\{VITE_VIDEOCHAT_MEDIA_CARRIER:-gossip_primary\}"/.test(compose),
+  'compose must pass explicit planned Gossip defaults into frontend/edge build surfaces',
 )
 assert(
   /ARG VITE_VIDEOCHAT_GOSSIP_DATA_LANE=""/.test(frontendDockerfile)

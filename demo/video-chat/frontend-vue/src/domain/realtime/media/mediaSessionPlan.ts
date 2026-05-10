@@ -12,6 +12,14 @@ export const CALL_MEDIA_STATE_VALUES = Object.freeze([
 ]);
 
 const STATE_SET = new Set(CALL_MEDIA_STATE_VALUES);
+const GOSSIP_TRANSPORT_VALUES = new Set([
+  'gossip',
+  'gossip_primary',
+  'gossip_primary_direct',
+  'gossip_rtc_datachannel',
+  'planned_gossip',
+]);
+const SENDING_STATE_VALUES = new Set(['streaming_720p30', 'throttled_50', 'throttled_25']);
 
 function stringValue(value: unknown, fallback = ''): string {
   const text = String(value ?? '').trim();
@@ -30,6 +38,14 @@ function planEpochValue(value: unknown): number {
 function normalizeState(value: unknown): string {
   const normalized = stringValue(value, 'waiting_for_capabilities').toLowerCase();
   return STATE_SET.has(normalized) ? normalized : 'blocked_capability';
+}
+
+function normalizeTransport(value: unknown): string {
+  return stringValue(value).toLowerCase();
+}
+
+export function isMediaSessionPlanGossipTransport(value: unknown): boolean {
+  return GOSSIP_TRANSPORT_VALUES.has(normalizeTransport(value));
 }
 
 export function normalizeMediaSessionPlanV1(input: Record<string, any> = {}) {
@@ -84,6 +100,22 @@ export function findMediaSessionPlanParticipant(plan: Record<string, any> = {}, 
   return normalized.participants.find((participant) => (
     participant.participant_session_id === sessionId
   )) || null;
+}
+
+export function mediaSessionPlanHasGossipTransport(plan: Record<string, any> = {}, {
+  participantSessionId = '',
+  sendingOnly = true,
+}: Record<string, any> = {}) {
+  const normalized = normalizeMediaSessionPlanV1(plan);
+  const sessionId = stringValue(participantSessionId);
+  const participants = sessionId !== ''
+    ? normalized.participants.filter((participant) => participant.participant_session_id === sessionId)
+    : normalized.participants;
+
+  return participants.some((participant) => (
+    isMediaSessionPlanGossipTransport(participant.transport)
+    && (sendingOnly !== true || SENDING_STATE_VALUES.has(participant.media_state))
+  ));
 }
 
 export function mediaSessionPlanAllowsLocalPublication(plan: Record<string, any> = {}, {

@@ -4,6 +4,7 @@ import {
 } from '../../media/clientCapabilities.ts';
 import {
   findMediaSessionPlanParticipant,
+  mediaSessionPlanHasGossipTransport,
   mediaSessionPlanAllowsLocalPublication,
   mediaSessionPlanDiagnosticPayload,
   normalizeMediaSessionPlanFromSnapshot,
@@ -100,6 +101,10 @@ export function registerMediaPlanLocalPublicationCallbacks(callbacks: Record<str
 
 export function canPublishLocalMediaForActivePlan(sourcePayload: Record<string, any> = {}) {
   return activeMediaCapabilityPlanBridge?.canPublishLocalMediaForLastPlan?.(sourcePayload) === true;
+}
+
+export function activeMediaSessionPlanHasGossipTransport(sourcePayload: Record<string, any> = {}) {
+  return activeMediaCapabilityPlanBridge?.mediaSessionPlanHasGossipTransportForLastPlan?.(sourcePayload) === true;
 }
 
 export function requestLocalMediaPublicationForActivePlan(
@@ -435,6 +440,17 @@ export function createCallWorkspaceMediaCapabilityBridge({
     });
   }
 
+  function mediaSessionPlanHasGossipTransportForLastPlan(sourcePayload: Record<string, any> = {}) {
+    const context = localMediaGateContext(sourcePayload);
+    if (stringValue(context.participantSessionId) !== '') {
+      const localParticipantMatches = mediaSessionPlanHasGossipTransport(lastMediaSessionPlan, {
+        participantSessionId: context.participantSessionId,
+      });
+      if (localParticipantMatches) return true;
+    }
+    return mediaSessionPlanHasGossipTransport(lastMediaSessionPlan);
+  }
+
   async function requestLocalMediaPublicationForLastPlan(
     reason = 'media_session_plan_gate',
     sourcePayload: Record<string, any> = {},
@@ -511,6 +527,7 @@ export function createCallWorkspaceMediaCapabilityBridge({
     getLastMediaSessionPlanDiagnostic,
     handleClientCapabilitiesAck,
     handleRoomSnapshotMediaSessionPlan,
+    mediaSessionPlanHasGossipTransportForLastPlan,
     requestLocalMediaPublicationForLastPlan,
     sendClientCapabilities,
   };
