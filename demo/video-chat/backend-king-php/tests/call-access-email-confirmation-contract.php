@@ -352,13 +352,17 @@ try {
     videochat_call_access_email_confirmation_assert(str_contains($firstConfirmationUrl, rawurlencode($firstToken)), 'secure confirmation link should carry the account-update token');
     videochat_call_access_email_confirmation_assert(!str_contains($firstConfirmationUrl, $accessId), 'secure confirmation link must not expose raw call-access id');
     videochat_call_access_email_confirmation_assert((string) (($firstRequest['email_delivery'] ?? [])['channel'] ?? '') === 'outbox', 'confirmation email should be dispatched to outbox in contract mode');
-    videochat_call_access_email_confirmation_assert((bool) (($firstRequest['email_delivery'] ?? [])['sent'] ?? false), 'confirmation outbox dispatch should report sent');
+    videochat_call_access_email_confirmation_assert((bool) (($firstRequest['email_delivery'] ?? [])['queued'] ?? false), 'outbox delivery should be recorded as queued');
     $outbox = is_file($outboxPath) ? (string) file_get_contents($outboxPath) : '';
     videochat_call_access_email_confirmation_assert(str_contains($outbox, 'TO=' . $currentEmail), 'confirmation email must be addressed to current account');
     videochat_call_access_email_confirmation_assert(str_contains($outbox, 'SUBJECT=Confirm your account update'), 'confirmation email subject missing');
     videochat_call_access_email_confirmation_assert(str_contains($outbox, $firstConfirmationUrl), 'confirmation email must contain the secure confirmation link');
     videochat_call_access_email_confirmation_assert(str_contains($outbox, 'The link expires at '), 'confirmation email must describe link expiry');
-    videochat_call_access_email_confirmation_assert_no_needles($outbox, [$linkEmail, $linkName, $hostEmail, $hostName, $accessId, 'sess_confirmation_current'], 'confirmation email');
+    videochat_call_access_email_confirmation_assert_no_needles(
+        $outbox,
+        [$linkEmail, $linkName, $hostEmail, $hostName, $accessId, $confirmedName, 'sess_confirmation_current'],
+        'confirmation email'
+    );
 
     $beforeConfirmUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($beforeConfirmUser['display_name'] ?? '') === $currentName, 'account data must not update before confirmation');
@@ -494,13 +498,33 @@ try {
     $afterExpiredUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
     videochat_call_access_email_confirmation_assert((string) ($afterExpiredUser['display_name'] ?? '') === $latestPendingName, 'expired confirmation must not update data');
 
+    $mailFailureName = 'Mail Failure Pending Name ' . $secret;
+    $failingOutboxPath = sys_get_temp_dir() . '/videochat-call-access-email-confirmation-failing-outbox-' . bin2hex(random_bytes(6));
+    @mkdir($failingOutboxPath, 0555, true);
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH=' . $failingOutboxPath);
+    $mailFailureRequest = videochat_call_access_request_account_update_confirmation(
+        $pdo,
+        $accessId,
+        $currentUserId,
+        ['display_name' => $mailFailureName],
+        ['session_id' => 'sess_confirmation_current']
+    );
+    videochat_call_access_email_confirmation_assert((bool) ($mailFailureRequest['ok'] ?? true) === false, 'mail delivery failure should reject the confirmation request');
+    videochat_call_access_email_confirmation_assert((string) ($mailFailureRequest['reason'] ?? '') === 'email_delivery_failed', 'mail delivery failure reason mismatch');
+    videochat_call_access_email_confirmation_assert((bool) (($mailFailureRequest['email_delivery'] ?? [])['queued'] ?? true) === false, 'failed mail delivery must not be marked queued');
+    $afterMailFailureUser = videochat_call_access_email_confirmation_user($pdo, $currentUserId);
+    videochat_call_access_email_confirmation_assert((string) ($afterMailFailureUser['display_name'] ?? '') === $latestPendingName, 'mail delivery failure must leave account data unchanged');
+    $mailFailureRows = $pdo->query("SELECT COUNT(*) FROM call_access_account_update_confirmations WHERE pending_payload_json LIKE '%Mail Failure Pending Name%'")->fetchColumn();
+    videochat_call_access_email_confirmation_assert((int) $mailFailureRows === 0, 'mail delivery failure must not leave a confirmable pending payload');
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH=' . $outboxPath);
+
     $confirmationRows = $pdo->query(
         'SELECT id, token_fingerprint, recipient_email_fingerprint, requesting_session_fingerprint, access_fingerprint, superseded_by_fingerprint, pending_payload_json FROM call_access_account_update_confirmations'
     )->fetchAll();
     $confirmationDump = json_encode($confirmationRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_call_access_email_confirmation_assert_no_needles(
         $confirmationDump,
-        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
+        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, $mailFailureName, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
         'confirmation storage'
     );
     videochat_call_access_email_confirmation_assert(str_contains($confirmationDump, videochat_audit_fingerprint($firstToken)), 'confirmation storage should keep token fingerprint');
@@ -510,13 +534,17 @@ try {
 
     $auditRequested = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_requested'")->fetchColumn();
     $auditEmailDispatched = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_email_dispatched'")->fetchColumn();
+    $auditEmailDispatchFailed = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_email_dispatch_failed'")->fetchColumn();
     $auditConfirmed = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmed'")->fetchColumn();
+    $auditAccountDataChanged = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_data_changed'")->fetchColumn();
     $auditRateLimited = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_rate_limited'")->fetchColumn();
     $auditFailed = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_failed'")->fetchColumn();
     $auditSuperseded = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_account_update_confirmation_superseded'")->fetchColumn();
     videochat_call_access_email_confirmation_assert($auditRequested >= 3, 'confirmation requests should be audit-logged');
     videochat_call_access_email_confirmation_assert($auditEmailDispatched >= 3, 'confirmation email dispatch should be audit-logged');
+    videochat_call_access_email_confirmation_assert($auditEmailDispatchFailed >= 1, 'confirmation email dispatch failures should be audit-logged');
     videochat_call_access_email_confirmation_assert($auditConfirmed >= 2, 'confirmation success should be audit-logged');
+    videochat_call_access_email_confirmation_assert($auditAccountDataChanged >= 2, 'confirmed account-data changes should be audit-logged');
     videochat_call_access_email_confirmation_assert($auditRateLimited === 0, 'focused race contract should not hit rate limiting');
     videochat_call_access_email_confirmation_assert($auditFailed >= 5, 'failed confirmation attempts should be audit-logged');
     videochat_call_access_email_confirmation_assert($auditSuperseded >= 1, 'superseded confirmation should be audit-logged');
@@ -557,7 +585,7 @@ try {
     $auditDump = json_encode($auditRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_call_access_email_confirmation_assert_no_needles(
         $auditDump,
-        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
+        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, $mailFailureName, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
         'confirmation audit'
     );
 
@@ -573,7 +601,6 @@ try {
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN');
     putenv('VIDEOCHAT_FRONTEND_ORIGIN');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER');
-    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX');
     putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH');
     if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
@@ -581,5 +608,8 @@ try {
     }
     if (isset($outboxPath) && is_string($outboxPath) && is_file($outboxPath)) {
         @unlink($outboxPath);
+    }
+    if (isset($failingOutboxPath) && is_string($failingOutboxPath) && is_dir($failingOutboxPath)) {
+        @rmdir($failingOutboxPath);
     }
 }
