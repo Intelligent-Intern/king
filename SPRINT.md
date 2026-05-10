@@ -113,8 +113,19 @@ Sprint Checkboxen:
     existing lobby/call-access contracts in the worker, and `git diff --check`
     passed. Host `pdo_sqlite` lobby DB wrappers skipped in the worker as an
     environment limitation.
-- [ ] IAM5-06 Extract lobby admission timeout/concurrency/audit proof value
+- [x] IAM5-06 Extract lobby admission timeout/concurrency/audit proof value
   from the lobby timeout, concurrency, admission, and audit branches.
+  - Merged worker branch `agent/iam-s5-06-lobby-admission`.
+  - Added `documentation/iam-sprint-05-lobby-admission-extraction.md` and
+    `call-access-lobby-admission-extract-contract.mjs`.
+  - Extracted current concurrency and admission/rejection boundary proof against
+    existing static/backend contracts. Timeout consistency and lobby-specific
+    audit event implementation value remain documented backend follow-up work,
+    because porting those runtime/audit files was outside this ticket's write
+    scope.
+  - Proof: lobby-admission extract, lobby-concurrency,
+    admission-boundaries, audit compatibility/redaction contracts,
+    `realtime-lobby-contract.sh`, and `git diff --check` passed.
 - [ ] IAM5-07 Extract duplicate review/abuse proof value from the duplicate
   review branches, including email/review safety only where current contracts
   support it.
