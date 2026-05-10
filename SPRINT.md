@@ -82,8 +82,17 @@ Sprint Checkboxen:
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-duplicate-cleanup-classification-contract.mjs`,
     `node demo/video-chat/frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs`,
     and `git diff --check` passed.
-- [ ] IAM4-03 Inventory all non-contained `local/iam-e2e-*proof-3` worktrees and
+- [x] IAM4-03 Inventory all non-contained `local/iam-e2e-*proof-3` worktrees and
   rank them by unique IAM proof value versus Sprint 03.
+  - Merged worker branch `agent/iam-s4-03-proof3-inventory`.
+  - Added `documentation/iam-sprint-04-proof3-inventory.md`.
+  - Classified all 19 `local/iam-e2e-*proof-3` branches as non-contained and
+    clean at scan time, ranked by unique proof value.
+  - Highest unique follow-up: public-copy/not-found payload preservation; most
+    other proof-3 branches are mined or evidence-only and should not be
+    wholesale merged.
+  - Proof: documentation-only evidence task; `git diff --check` and
+    `git diff --cached --check` passed in the worker.
 - [x] IAM4-04 Extract any stronger logout/login-switch and account-switch proof
   value from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
   - Merged worker branch `agent/iam-s4-04-logout-switch-extract`.
