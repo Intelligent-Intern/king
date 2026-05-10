@@ -44,7 +44,7 @@ try {
         [
             'id' => 10,
             'display_name' => 'Moderator',
-            'role' => 'moderator',
+            'role' => 'user',
         ],
         'sess-mod',
         'conn-mod',
@@ -53,6 +53,8 @@ try {
     );
     $moderatorJoin = videochat_presence_join_room($presenceState, $moderator, 'lobby', $sender);
     $moderator = (array) ($moderatorJoin['connection'] ?? $moderator);
+    $moderator['can_moderate_call'] = true;
+    $presenceState['connections']['conn-mod'] = $moderator;
 
     $userA = videochat_presence_connection_descriptor(
         [

@@ -72,6 +72,11 @@ function videochat_realtime_call_role_context_for_room_user(
                 $row['invite_state'] ?? ($isFreeForAll ? 'allowed' : 'invited')
             );
 
+        $scopedRoleActive = $isAdmin
+            || $isOrganizationAdmin
+            || (int) ($row['owner_user_id'] ?? 0) === $userId
+            || videochat_call_invite_state_allows_scoped_role($inviteState);
+
         return [
             'call_id' => (string) ($row['id'] ?? ''),
             'call_role' => $callRole,
@@ -79,8 +84,10 @@ function videochat_realtime_call_role_context_for_room_user(
             'invite_state' => $inviteState,
             'joined_at' => trim((string) ($row['joined_at'] ?? '')),
             'left_at' => trim((string) ($row['left_at'] ?? '')),
-            'can_moderate' => $isAdmin || $isOrganizationAdmin || in_array($callRole, ['owner', 'moderator'], true),
-            'can_manage_owner' => $isAdmin || $callRole === 'owner',
+            'can_moderate' => $isAdmin
+                || $isOrganizationAdmin
+                || ($scopedRoleActive && in_array($callRole, ['owner', 'moderator'], true)),
+            'can_manage_owner' => $isAdmin || ($scopedRoleActive && $callRole === 'owner'),
         ];
     };
     if ($normalizedPreferredCallId !== '' && $normalizedRoomId !== '' && $userId > 0) {
