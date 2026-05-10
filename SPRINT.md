@@ -98,7 +98,7 @@ Sprint Checkboxen:
   `local/iam-e2e-identity-mismatch-review-flow`.
 - [x] IAM7-15 Extract or prove invalid/expired anonymous-link handling from
   `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
-- [ ] IAM7-16 Extract or prove link invalidation active states from
+- [x] IAM7-16 Extract or prove link invalidation active states from
   `local/iam-e2e-link-invalidation-active-state`.
 - [x] IAM7-17 Extract or prove lobby management moderator rights from
   `local/iam-e2e-lobby-management-moderator-rights`.
