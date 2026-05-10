@@ -21,6 +21,7 @@ const docs = readText('documentation/dev/video-chat/iam-call-access-local-tests.
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const scripts = packageJson.scripts || {};
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const ciWire = readText('demo/video-chat/frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs');
 const sqliteProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const dockerWrapper = readText('demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh');
@@ -101,6 +102,11 @@ assert.match(
 );
 assert.match(
   docs,
+  /local\/iam-e2e-ci-docs-gate[\s\S]*without adopting[\s\S]*--available[\s\S]*canonical IAM gate remains[\s\S]*--full/,
+  'local IAM docs must record the current sprint extraction from the local CI docs gate branch without weakening the canonical gate',
+);
+assert.match(
+  docs,
   /pdo_sqlite[\s\S]*Docker PHP fallback[\s\S]*blocked local environment/,
   'local IAM docs must explain host pdo_sqlite and Docker fallback behavior',
 );
@@ -118,6 +124,16 @@ assert.match(
   docs,
   /VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1[\s\S]*after the[\s\S]*host-safe IAM gate has already passed/,
   'local IAM docs must bound the IAM gate skip escape hatch',
+);
+assert.match(
+  smoke,
+  /VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE[\s\S]*iam-call-access-ci-gate\.sh' --static/,
+  'video-chat smoke must run the host-safe IAM static gate unless the documented skip is set',
+);
+assert.doesNotMatch(
+  smoke,
+  /iam-call-access-ci-gate\.sh' --full/,
+  'video-chat smoke must not duplicate the full IAM gate inside the compose smoke path',
 );
 
 assert.match(ciGate, /--static[\s\S]*Run host-safe IAM command hygiene contracts/, 'CI gate script must document --static');
