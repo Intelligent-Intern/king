@@ -47,10 +47,23 @@ function normalizeArchiveMessage(row, roomId) {
   };
 }
 
-export function createCallWorkspaceChatArchiveBootstrap({
+export function createCallWorkspaceChatHistorySyncState() {
+  return {
+    loading: false,
+    loadingOlder: false,
+    error: '',
+    hasOlder: false,
+    nextCursor: null,
+    lastLoadedCount: 0,
+    lastReason: '',
+  };
+}
+
+export function createCallWorkspaceChatHistorySync({
   callbacks = {},
   refs = {},
   options = {},
+  state = createCallWorkspaceChatHistorySyncState(),
 } = {}) {
   const {
     apiRequest,
@@ -58,13 +71,14 @@ export function createCallWorkspaceChatArchiveBootstrap({
     captureClientDiagnostic = () => {},
     ensureRoomBuckets = () => {},
   } = callbacks;
-  const limit = positiveInt(options.limit, 80, 1, 100);
+  const initialLimit = positiveInt(options.initialLimit ?? options.limit, 50, 50, 100);
+  const olderLimit = positiveInt(options.olderLimit ?? options.limit, 50, 1, 100);
   const minIntervalMs = positiveInt(options.minIntervalMs, 1500, 0, 60_000);
   const lastLoadedAtByKey = new Map();
   let disposed = false;
   let inFlightKey = '';
 
-  async function bootstrapChatArchive(reason = 'unspecified') {
+  async function loadHistoryPage({ reason = 'unspecified', cursor = null, limit = initialLimit, loadingKey = 'loading' } = {}) {
     if (disposed || typeof apiRequest !== 'function' || typeof appendChatMessage !== 'function') {
       return false;
     }
@@ -76,21 +90,28 @@ export function createCallWorkspaceChatArchiveBootstrap({
     }
 
     const key = `${callId}:${roomId}`;
-    const now = Date.now();
-    if (inFlightKey === key) {
+    const pageCursor = positiveInt(cursor, 0, 0, Number.MAX_SAFE_INTEGER);
+    const pageKey = `${key}:${pageCursor}`;
+    if (inFlightKey === pageKey) {
       return false;
     }
-    if (now - Number(lastLoadedAtByKey.get(key) || 0) < minIntervalMs) {
+    const now = Date.now();
+    if (pageCursor === 0 && now - Number(lastLoadedAtByKey.get(key) || 0) < minIntervalMs) {
       return false;
     }
 
-    inFlightKey = key;
-    lastLoadedAtByKey.set(key, now);
+    inFlightKey = pageKey;
+    if (pageCursor === 0) lastLoadedAtByKey.set(key, now);
+    state[loadingKey] = true;
+    state.error = '';
     try {
       const params = new URLSearchParams();
       params.set('room_id', roomId);
       params.set('tail', '1');
       params.set('limit', String(limit));
+      if (pageCursor > 0) {
+        params.set('cursor', String(pageCursor));
+      }
       const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat-archive?${params.toString()}`);
       const archive = payload?.result?.archive && typeof payload.result.archive === 'object' ? payload.result.archive : {};
       const messages = Array.isArray(archive.messages) ? archive.messages : [];
@@ -99,29 +120,37 @@ export function createCallWorkspaceChatArchiveBootstrap({
       for (const message of messages) {
         appendChatMessage(normalizeArchiveMessage(message, resolvedRoomId));
       }
+      const pagination = archive?.pagination && typeof archive.pagination === 'object' ? archive.pagination : {};
+      state.hasOlder = Boolean(pagination.has_next);
+      state.nextCursor = state.hasOlder ? (Number(pagination.next_cursor || 0) || null) : null;
+      state.lastLoadedCount = messages.length;
+      state.lastReason = String(reason || 'unspecified');
       captureClientDiagnostic({
         category: 'realtime',
         level: 'info',
-        eventType: 'chat_archive_bootstrap_loaded',
-        code: 'chat_archive_bootstrap_loaded',
-        message: 'Call chat archive tail was loaded for workspace reload backfill.',
+        eventType: 'chat_history_db_sync_loaded',
+        code: 'chat_history_db_sync_loaded',
+        message: 'Call chat history was synchronized from the database.',
         payload: {
           call_id: callId,
           room_id: resolvedRoomId,
           reason: String(reason || 'unspecified'),
           message_count: messages.length,
-          next_cursor: Number(archive?.pagination?.next_cursor || 0) || 0,
-          has_next: Boolean(archive?.pagination?.has_next),
+          cursor: pageCursor,
+          limit,
+          next_cursor: Number(pagination.next_cursor || 0) || 0,
+          has_next: Boolean(pagination.has_next),
         },
       });
       return true;
     } catch (error) {
+      state.error = error instanceof Error ? error.message : 'Call chat history sync failed.';
       captureClientDiagnostic({
         category: 'realtime',
         level: 'warning',
-        eventType: 'chat_archive_bootstrap_failed',
-        code: 'chat_archive_bootstrap_failed',
-        message: error instanceof Error ? error.message : 'Call chat archive bootstrap failed.',
+        eventType: 'chat_history_db_sync_failed',
+        code: 'chat_history_db_sync_failed',
+        message: state.error,
         payload: {
           call_id: callId,
           room_id: roomId,
@@ -132,10 +161,30 @@ export function createCallWorkspaceChatArchiveBootstrap({
       });
       return false;
     } finally {
-      if (inFlightKey === key) {
+      state[loadingKey] = false;
+      if (inFlightKey === pageKey) {
         inFlightKey = '';
       }
     }
+  }
+
+  function bootstrapChatArchive(reason = 'unspecified') {
+    return loadHistoryPage({
+      reason,
+      cursor: null,
+      limit: initialLimit,
+      loadingKey: 'loading',
+    });
+  }
+
+  function loadOlderChatHistory(reason = 'older_requested') {
+    if (!state.hasOlder || state.nextCursor === null) return Promise.resolve(false);
+    return loadHistoryPage({
+      reason,
+      cursor: state.nextCursor,
+      limit: olderLimit,
+      loadingKey: 'loadingOlder',
+    });
   }
 
   function dispose() {
@@ -146,6 +195,10 @@ export function createCallWorkspaceChatArchiveBootstrap({
 
   return {
     bootstrapChatArchive,
+    loadOlderChatHistory,
+    state,
     dispose,
   };
 }
+
+export const createCallWorkspaceChatArchiveBootstrap = createCallWorkspaceChatHistorySync;

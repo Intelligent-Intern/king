@@ -48,7 +48,10 @@ import { createCallWorkspaceRouteResolutionHelpers } from './workspace/callWorks
 import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWorkspace/runtimeSwitching';
 import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspace/participantUi';
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
-import { createCallWorkspaceChatArchiveBootstrap } from './workspace/callWorkspace/chatArchiveBootstrap.js';
+import {
+  createCallWorkspaceChatHistorySync,
+  createCallWorkspaceChatHistorySyncState,
+} from './workspace/callWorkspace/chatArchiveBootstrap.js';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
 import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
@@ -1932,7 +1935,8 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   normalizeLobbyEntry,
 } = chatRuntimeHelpers);
 
-const chatArchiveBootstrap = createCallWorkspaceChatArchiveBootstrap({
+const chatHistorySyncState = reactive(createCallWorkspaceChatHistorySyncState());
+const chatHistorySync = createCallWorkspaceChatHistorySync({
   callbacks: {
     apiRequest,
     appendChatMessage: (...args) => appendChatMessage(...args),
@@ -1943,9 +1947,10 @@ const chatArchiveBootstrap = createCallWorkspaceChatArchiveBootstrap({
     activeCallId,
     activeRoomId,
   },
+  state: chatHistorySyncState,
 });
-bootstrapChatArchive = chatArchiveBootstrap.bootstrapChatArchive;
-onBeforeUnmount(() => { chatArchiveBootstrap.dispose(); });
+bootstrapChatArchive = chatHistorySync.bootstrapChatArchive;
+onBeforeUnmount(() => { chatHistorySync.dispose(); });
 
 const {
   addChatAttachmentDraft,

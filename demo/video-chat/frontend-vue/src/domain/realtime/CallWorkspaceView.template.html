@@ -447,6 +447,18 @@
 
         <section class="tab-panel panel-chat" :class="{ active: activeTab === 'chat' }">
           <div ref="chatListRef" class="workspace-chat-list">
+            <button
+              v-if="chatHistorySync.state.hasOlder"
+              class="workspace-chat-load-older"
+              type="button"
+              :disabled="chatHistorySync.state.loadingOlder"
+              @click="chatHistorySync.loadOlderChatHistory('user_requested_older_messages')"
+            >
+              {{ chatHistorySync.state.loadingOlder ? t('calls.workspace.chat_loading_older') : t('calls.workspace.chat_load_older') }}
+            </button>
+            <p v-if="chatHistorySync.state.error !== ''" class="workspace-chat-sync-error">
+              {{ chatHistorySync.state.error }}
+            </p>
             <article
               v-for="message in activeMessages"
               :key="message.id"

@@ -37,6 +37,8 @@ export const CALL_WORKSPACE_MESSAGES = Object.freeze({
   'calls.workspace.background_upload_avatar': 'Upload avatar',
   'calls.workspace.background_use_standard_avatar': 'Use standard avatar',
   'calls.workspace.chat': 'Chat',
+  'calls.workspace.chat_load_older': 'Load older messages',
+  'calls.workspace.chat_loading_older': 'Loading older messages...',
   'calls.workspace.chat_reconnecting': 'Realtime chat is reconnecting. The message is still in the composer.',
   'calls.workspace.chat_send_offline': 'Could not send chat message while websocket is offline.',
   'calls.workspace.context_tabs': 'Call workspace context tabs',
