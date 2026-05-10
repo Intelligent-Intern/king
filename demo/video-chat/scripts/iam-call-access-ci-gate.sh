@@ -61,6 +61,7 @@ run_frontend_shell_step() {
 
 STATIC_CONTRACTS=(
   "node tests/contract/iam-call-access-ci-wire-contract.mjs"
+  "node tests/contract/iam-call-access-audit-events-contract.mjs"
   "node tests/contract/iam-local-run-docs-contract.mjs"
 )
 

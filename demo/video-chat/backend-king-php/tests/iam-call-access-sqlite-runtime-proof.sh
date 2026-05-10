@@ -13,6 +13,7 @@ DEFAULT_CONTRACTS=(
   "call-access-cross-org-contract.sh"
   "call-access-identity-mismatch-review-flow-contract.sh"
   "call-access-foreign-link-review-audit-contract.sh"
+  "audit-call-access-events-contract.sh"
   "call-access-invalid-expired-anonymous-link-contract.sh"
   "call-access-email-confirmation-contract.sh"
   "call-access-invalidation-contract.sh"
