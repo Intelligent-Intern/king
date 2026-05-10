@@ -23,6 +23,65 @@ function videochat_call_access_session_string_option(array $options, string $key
     return trim((string) $options[$key]);
 }
 
+function videochat_call_access_record_session_context_mismatch(
+    PDO $pdo,
+    array $accessLink,
+    array $call,
+    ?array $targetUser,
+    int $verifiedUserId,
+    int $authenticatedUserId,
+    string $verifiedSessionId,
+    string $authenticatedSessionId,
+    string $stage
+): void {
+    $linkKind = function_exists('videochat_call_access_link_kind')
+        ? videochat_call_access_link_kind($accessLink)
+        : 'personal';
+    if ($linkKind !== 'personal') {
+        return;
+    }
+
+    $actorUserId = $authenticatedUserId > 0 ? $authenticatedUserId : 0;
+    $sessionId = $authenticatedSessionId !== '' ? $authenticatedSessionId : $verifiedSessionId;
+    if (function_exists('videochat_call_access_record_identity_mismatch_review')) {
+        videochat_call_access_record_identity_mismatch_review(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $actorUserId,
+            $stage,
+            [
+                'session_id' => $sessionId,
+                'denial_reason' => 'session_context_changed',
+            ]
+        );
+    }
+
+    if (function_exists('videochat_audit_record_call_access_strong_mismatch')) {
+        videochat_audit_record_call_access_strong_mismatch(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $actorUserId,
+            $stage,
+            [
+                'session_id' => $sessionId,
+                'denial_reason' => 'session_context_changed',
+                'host_name_verified' => false,
+            ]
+        );
+    }
+
+    if ($actorUserId > 0) {
+        videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $targetUser, $actorUserId, 'strong_mismatch', [
+            'session_id' => $sessionId,
+            'stage' => $stage,
+        ]);
+    }
+}
+
 function videochat_call_access_session_id_available(PDO $pdo, string $sessionId): bool
 {
     $trimmedSessionId = trim($sessionId);
@@ -90,6 +149,18 @@ function videochat_issue_session_for_call_access(
     $authenticatedSessionId = videochat_call_access_session_string_option($options, 'authenticated_session_id');
     $hostName = videochat_call_access_session_string_option($options, 'host_name');
     if (($verifiedUserId > 0 || $verifiedSessionId !== '') && ($authenticatedUserId <= 0 || $authenticatedSessionId === '')) {
+        videochat_call_access_record_session_context_mismatch(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $verifiedUserId,
+            $authenticatedUserId,
+            $verifiedSessionId,
+            $authenticatedSessionId,
+            'verified_context_without_bearer'
+        );
+
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -101,6 +172,18 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($verifiedSessionId !== '' && $authenticatedSessionId !== '' && !hash_equals($verifiedSessionId, $authenticatedSessionId)) {
+        videochat_call_access_record_session_context_mismatch(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $verifiedUserId,
+            $authenticatedUserId,
+            $verifiedSessionId,
+            $authenticatedSessionId,
+            'verified_session_changed'
+        );
+
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -112,6 +195,18 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($verifiedUserId > 0 && $authenticatedUserId > 0 && $verifiedUserId !== $authenticatedUserId) {
+        videochat_call_access_record_session_context_mismatch(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $verifiedUserId,
+            $authenticatedUserId,
+            $verifiedSessionId,
+            $authenticatedSessionId,
+            'verified_user_changed'
+        );
+
         return [
             'ok' => false,
             'reason' => 'conflict',

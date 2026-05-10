@@ -204,6 +204,10 @@ function videochat_audit_sanitize_payload(mixed $value, int $depth = 0): mixed
         }
         $index++;
         $stringKey = is_string($key) ? $key : (string) $key;
+        if (is_string($key) && is_bool($entry) && preg_match('/^raw_[a-z0-9_-]+_logged$/', strtolower($stringKey)) === 1) {
+            $sanitized[$key] = $entry;
+            continue;
+        }
         if (is_string($key) && videochat_audit_payload_key_is_sensitive($stringKey)) {
             continue;
         }
@@ -483,6 +487,43 @@ function videochat_audit_record_call_access_account_compared(
             'raw_link_identifier_logged' => false,
             'raw_credential_identifier_logged' => false,
             'foreign_account_data_logged' => false,
+        ],
+    ]);
+}
+
+function videochat_audit_record_call_access_strong_mismatch(
+    PDO $pdo,
+    array $accessLink,
+    array $call,
+    ?array $targetUser,
+    int $actorUserId,
+    string $stage,
+    array $context = []
+): array {
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $sessionId = trim((string) ($context['session_id'] ?? ''));
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_strong_mismatch_denied',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : null,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'mismatch' => 'strong_personalized_link',
+            'stage' => strtolower(trim($stage)) ?: 'unknown',
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'denial_reason' => strtolower(trim((string) ($context['denial_reason'] ?? 'not_bound_to_current_user'))) ?: 'not_bound_to_current_user',
+            'host_name_verified' => (bool) ($context['host_name_verified'] ?? false),
+            'host_name_logged' => false,
+            'foreign_account_data_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_session_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
         ],
     ]);
 }

@@ -11,6 +11,7 @@ DOCKER_IMAGE="${IAM_SQLITE_PHP_IMAGE:-php:8.4-cli-trixie}"
 DEFAULT_CONTRACTS=(
   "call-access-admin-prevention-contract.sh"
   "call-access-cross-org-contract.sh"
+  "call-access-identity-mismatch-review-flow-contract.sh"
   "call-access-membership-removal-contract.sh"
   "call-access-session-route-guard-contract.sh"
   "call-access-safe-screen-privacy-contract.sh"

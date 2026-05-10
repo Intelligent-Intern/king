@@ -293,6 +293,130 @@ SQL
     ];
 }
 
+function videochat_call_access_record_identity_mismatch_review(
+    PDO $pdo,
+    array $accessLink,
+    array $call,
+    ?array $linkedUser,
+    int $actorUserId,
+    string $stage,
+    array $options = []
+): array {
+    $linkKind = function_exists('videochat_call_access_link_kind')
+        ? videochat_call_access_link_kind($accessLink)
+        : 'personal';
+    if ($linkKind !== 'personal') {
+        return ['ok' => true, 'reason' => 'not_personal_link', 'flag_created' => false, 'flag' => null];
+    }
+    if (!videochat_call_access_review_bootstrap($pdo)) {
+        return ['ok' => false, 'reason' => 'review_unavailable', 'flag_created' => false, 'flag' => null];
+    }
+
+    $linkedUserId = is_array($linkedUser) && is_numeric($linkedUser['id'] ?? null) ? (int) $linkedUser['id'] : 0;
+    $accessFingerprint = videochat_call_access_review_access_fingerprint($accessLink);
+    $tenantId = videochat_call_access_review_tenant_id($accessLink, $call);
+    $callId = videochat_call_access_review_call_id($accessLink, $call);
+    $sessionId = trim((string) ($options['session_id'] ?? ''));
+    $denialReason = strtolower(trim((string) ($options['denial_reason'] ?? 'session_context_changed'))) ?: 'session_context_changed';
+    $createdAt = gmdate('c');
+    $payload = [
+        'flag' => 'identity_mismatch_review',
+        'mismatch' => 'strong_personalized_link',
+        'stage' => strtolower(trim($stage)) ?: 'unknown',
+        'link_kind' => 'personal',
+        'review_status' => 'manual_review_required',
+        'denial_reason' => $denialReason,
+        'raw_link_identifier_logged' => false,
+        'raw_session_identifier_logged' => false,
+        'account_email_logged' => false,
+        'host_name_logged' => false,
+        'foreign_account_data_logged' => false,
+    ];
+    $payloadJson = json_encode(videochat_audit_sanitize_payload($payload), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($payloadJson) || $payloadJson === '') {
+        $payloadJson = '{}';
+    }
+
+    $subjectSql = $actorUserId > 0 ? 'subject_user_id = :subject_user_id' : 'subject_user_id IS NULL';
+    $existingQuery = $pdo->prepare(
+        <<<SQL
+SELECT *
+FROM call_access_review_flags
+WHERE access_fingerprint = :access_fingerprint
+  AND reason = 'identity_mismatch_review'
+  AND {$subjectSql}
+LIMIT 1
+SQL
+    );
+    $existingParams = [':access_fingerprint' => $accessFingerprint];
+    if ($actorUserId > 0) {
+        $existingParams[':subject_user_id'] = $actorUserId;
+    }
+    $existingQuery->execute($existingParams);
+    $existing = $existingQuery->fetch();
+    $existing = is_array($existing) ? $existing : null;
+
+    $flagCreated = false;
+    if (!is_array($existing)) {
+        try {
+            $insert = $pdo->prepare(
+                <<<'SQL'
+INSERT INTO call_access_review_flags(
+    public_id, tenant_id, call_id, access_fingerprint, reason, status,
+    subject_user_id, target_user_id, first_seen_user_id, first_seen_at,
+    payload_json, created_at
+) VALUES(
+    :public_id, :tenant_id, :call_id, :access_fingerprint, 'identity_mismatch_review', 'open',
+    :subject_user_id, :target_user_id, :first_seen_user_id, NULL,
+    :payload_json, :created_at
+)
+SQL
+            );
+            $insert->execute([
+                ':public_id' => videochat_call_access_review_public_id('review'),
+                ':tenant_id' => $tenantId,
+                ':call_id' => $callId,
+                ':access_fingerprint' => $accessFingerprint,
+                ':subject_user_id' => $actorUserId > 0 ? $actorUserId : null,
+                ':target_user_id' => $linkedUserId > 0 ? $linkedUserId : null,
+                ':first_seen_user_id' => $linkedUserId > 0 ? $linkedUserId : null,
+                ':payload_json' => $payloadJson,
+                ':created_at' => $createdAt,
+            ]);
+            $flagCreated = true;
+        } catch (Throwable) {
+            $existingQuery->execute($existingParams);
+            $existing = $existingQuery->fetch();
+            $existing = is_array($existing) ? $existing : null;
+        }
+    }
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId,
+        'event_type' => 'call_access_identity_mismatch_review',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => $linkedUserId > 0 ? $linkedUserId : null,
+        'call_id' => $callId,
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => $accessFingerprint,
+        'session_fingerprint' => $sessionId === '' ? '' : videochat_audit_fingerprint($sessionId),
+        'payload' => $payload + ['flag_created' => $flagCreated],
+    ]);
+
+    if ($flagCreated) {
+        $existingQuery->execute($existingParams);
+        $existing = $existingQuery->fetch();
+        $existing = is_array($existing) ? $existing : null;
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'identity_mismatch_review',
+        'flag_created' => $flagCreated,
+        'flag' => $existing,
+    ];
+}
+
 function videochat_call_access_host_verification_limit(): int
 {
     $limit = (int) (getenv('VIDEOCHAT_CALL_ACCESS_HOST_VERIFICATION_LIMIT') ?: 5);
@@ -388,6 +512,27 @@ SQL
     } catch (Throwable) {
         return ['ok' => false, 'reason' => 'attempt_write_failed'];
     }
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => videochat_call_access_review_tenant_id($accessLink, $call),
+        'event_type' => $normalizedOutcome === 'correct_host_name'
+            ? 'call_access_host_name_verified'
+            : 'call_access_host_name_rejected',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'call_id' => videochat_call_access_review_call_id($accessLink, $call),
+        'resource_type' => 'call_access_host_verification',
+        'resource_fingerprint' => videochat_call_access_review_access_fingerprint($accessLink),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'verify_host_name',
+            'outcome' => $normalizedOutcome,
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'host_name_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'raw_session_identifier_logged' => false,
+            'foreign_account_data_logged' => false,
+        ],
+    ]);
 
     return ['ok' => true, 'reason' => 'recorded'];
 }
