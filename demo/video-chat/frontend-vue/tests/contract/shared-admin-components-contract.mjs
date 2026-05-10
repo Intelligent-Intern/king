@@ -47,6 +47,7 @@ assert.match(pageFrame, /\.admin-page-frame-footer[\s\S]*?background:\s*transpar
 assert.match(pageHeader, /\.app-page-header-actions[\s\S]*?margin-inline-start:\s*auto;[\s\S]*?justify-content:\s*flex-end;/, 'page header actions must stay right-aligned');
 assert.match(pageHeader, /\.app-page-header[\s\S]*?width:\s*100%;[\s\S]*?display:\s*flex;/, 'page header root must own full-width flex alignment');
 assert.match(pageHeader, /\.app-page-header-tour-btn[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/, 'tour button must match CRUD action button height');
+assert.match(pageFrame, /\.admin-page-frame-head :deep\(\.app-page-header-actions\)[\s\S]*?gap:\s*20px;/, 'admin header action rail must keep 20px spacing between CRUD actions and the tour affordance');
 assert.match(pageFrame, /\.admin-page-frame-toolbar\s*\{[\s\S]*?gap:\s*20px;[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 20px 20px;/, 'admin toolbar search controls must be right-aligned with 20px spacing');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field-main\)[\s\S]*?margin-inline-start:\s*0;/, 'admin toolbar search controls must rely on the shared 20px flex gap instead of auto spacing');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field\)[\s\S]*?flex:\s*0 1 360px;/, 'admin toolbar search fields must keep a stable desktop width');
@@ -54,7 +55,9 @@ assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.ii-select\)[\s\S]*?
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
 assert.match(pageActionBar, /actionBarLabel/, 'shared admin page action bar must resolve descriptor labels through i18n metadata');
 assert.match(pageActionBar, /v-for="action in actions"/, 'shared admin page action bar must render descriptor-provided actions');
-assert.match(pageActionBar, /admin-page-action-bar[\s\S]*?justify-content:\s*flex-end;/, 'shared admin page action bar must stay right-aligned');
+assert.match(pageActionBar, /STANDARD_SUBMIT_ICON\s*=\s*'\/assets\/orgas\/kingrt\/icons\/send\.png'/, 'shared admin page action bar must default descriptor actions to the standard submit icon');
+assert.match(pageActionBar, /:src="actionIcon\(action\)"/, 'shared admin page action bar must render the resolved action icon');
+assert.match(pageActionBar, /admin-page-action-bar[\s\S]*?justify-content:\s*flex-end;[\s\S]*?gap:\s*20px;/, 'shared admin page action bar must stay right-aligned with 20px spacing');
 assert.match(searchToolbar, /AppIconButton[\s\S]*icons\/send\.png/, 'shared admin search toolbar must own the standard submit icon');
 assert.match(searchToolbar, /defineEmits\(\['update:modelValue', 'submit'\]\)/, 'shared admin search toolbar must expose v-model and submit events');
 assert.match(searchToolbar, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'shared admin search toolbar must own stable search field sizing');
