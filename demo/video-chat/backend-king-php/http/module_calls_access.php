@@ -379,6 +379,9 @@ function videochat_handle_call_access_routes(
                 'debug_confirmation_token' => (getenv('VIDEOCHAT_KING_ENV') ?: 'development') === 'production'
                     ? null
                     : ($requestResult['token'] ?? null),
+                'debug_confirmation_url' => (getenv('VIDEOCHAT_KING_ENV') ?: 'development') === 'production'
+                    ? null
+                    : ($requestResult['confirmation_url'] ?? null),
             ],
             'time' => gmdate('c'),
         ]);
