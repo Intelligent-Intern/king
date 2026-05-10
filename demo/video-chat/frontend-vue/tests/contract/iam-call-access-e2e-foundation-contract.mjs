@@ -28,11 +28,14 @@ const e2eSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-joi
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
+const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
+const sqliteProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
 const authCache = readText('demo/video-chat/backend-king-php/support/auth_session_cache.php');
 const tenantContext = readText('demo/video-chat/backend-king-php/support/tenant_context.php');
 const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
+const callAccessSession = readText('demo/video-chat/frontend-vue/src/domain/calls/access/callAccessSession.ts');
 
 const scripts = packageJson.scripts || {};
 const callAccessScript = String(scripts['test:e2e:call-access'] || '');
@@ -131,6 +134,85 @@ assert.match(
   seedMatrixSpec,
   /temporary_personalized_guest[\s\S]*temporary_anonymous_guest[\s\S]*tenant_admin[\s\S]*false/s,
   'seed-matrix spec must prove temporary guests do not receive tenant/system admin rights',
+);
+assert.match(
+  seedMatrixSpec,
+  /alpha_tenant_member_without_organization[\s\S]*organization_memberships[\s\S]*\[\][\s\S]*direct_join_user_without_organization_denied/s,
+  'seed-matrix spec must prove a tenant member without organization receives no organization-based direct call rights',
+);
+assert.match(
+  seedMatrixHelper,
+  /const organizationIndex = byKey\(iamCallAccessSeedMatrix\.organizations,[\s\S]*export function getSeedOrganization/,
+  'seed-matrix helper must expose deterministic organization fixtures without changing existing gate structure',
+);
+const seedOrganizationsByKey = new Map((callAccessSeedMatrix.organizations || []).map((organization) => [organization?.key, organization]));
+assert.deepEqual(
+  seedOrganizationsByKey.get('alpha_org'),
+  {
+    key: 'alpha_org',
+    tenant_key: 'alpha',
+    public_id: 'organization-alpha-e2e',
+    label: 'IAM Alpha Private Organization',
+    status: 'active',
+  },
+  'seed matrix must define the alpha organization fixture for core org/session proofs',
+);
+assert.deepEqual(
+  (callAccessSeedMatrix.users || []).find((user) => user?.key === 'alpha_normal_user')?.organization_memberships,
+  [{ organization_key: 'alpha_org', role: 'member' }],
+  'seed matrix must keep normal account users as organization members, not admins',
+);
+assert.deepEqual(
+  (callAccessSeedMatrix.users || []).find((user) => user?.key === 'alpha_org_admin')?.organization_memberships,
+  [{ organization_key: 'alpha_org', role: 'admin' }],
+  'seed matrix must keep organization admins on account role user with organization admin membership',
+);
+assert.deepEqual(
+  (callAccessSeedMatrix.users || []).find((user) => user?.key === 'alpha_tenant_member_without_organization')?.organization_memberships,
+  [],
+  'seed matrix must include a tenant member with no organization membership',
+);
+assert.deepEqual(
+  seedScenarios.find((scenario) => scenario?.key === 'direct_join_user_without_organization_denied')?.expected,
+  {
+    direct_join_allowed: false,
+    expected_resolve_status: 200,
+    expected_resolve_state: 'forbidden',
+    expected_resolve_reason: 'calls_forbidden',
+    expected_call_status: 403,
+    expected_call_error_code: 'calls_forbidden',
+    platform_admin: false,
+    tenant_admin: false,
+    guest_list_entry: false,
+    owner: false,
+    guest_list_required: true,
+  },
+  'seed matrix must pin tenant-without-organization direct join denial to existing forbidden envelopes',
+);
+assert.match(
+  callAccessSession,
+  /body\.verified_user_id = verifiedContext\.userId;[\s\S]*body\.verified_session_id = verifiedContext\.sessionId;[\s\S]*headers\.authorization = `Bearer \$\{token\}`;/,
+  'frontend call-access session start must keep verified logged-in account context on the authenticated request',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /\/api\/admin\/users[\s\S]*\/api\/governance\/organizations[\s\S]*\/api\/auth\/login[\s\S]*\/api\/auth\/logout/s,
+  'backend core organization/session contract must exercise governance, user registration, login, and logout routes',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /videochat_user_is_organization_admin_for_call[\s\S]*tenant-only user without organization should be forbidden/s,
+  'backend core organization/session contract must prove org-admin rights and no-organization denial from server state',
+);
+assert.match(
+  coreOrgSessionBackendContract,
+  /verified_user_id[\s\S]*verified_session_id[\s\S]*opening a call link must not revoke the logged-in account session/s,
+  'backend core organization/session contract must prove logged-in open-link session start preserves the registered account',
+);
+assert.match(
+  sqliteProof,
+  /iam-core-org-session-journey-contract\.sh/,
+  'SQLite/Docker IAM runtime proof must include the backend core organization/session journey contract',
 );
 const seedScenarioKeys = new Set((callAccessSeedMatrix.scenarios || []).map((scenario) => scenario?.key));
 const seedScenariosByKey = new Map((callAccessSeedMatrix.scenarios || []).map((scenario) => [scenario?.key, scenario]));
