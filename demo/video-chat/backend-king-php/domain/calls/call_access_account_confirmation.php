@@ -412,7 +412,9 @@ SQL
             'sent_to_logged_in_account' => true,
             'sent_to_link_account' => false,
             'pending_fields' => array_keys($pendingPayload),
-            'request_session_bound' => $sessionFingerprint !== '',
+            'request_session_fingerprint_recorded' => $sessionFingerprint !== '',
+            'request_session_bound' => false,
+            'confirmation_account_bound' => true,
             'newer_request_invalidates_older' => videochat_call_access_account_confirmation_invalidate_older_enabled($options),
             'raw_link_identifier_logged' => false,
             'confirmation_identifier_logged' => false,
@@ -475,7 +477,7 @@ function videochat_call_access_confirm_account_update(PDO $pdo, string $token, i
         ];
     }
     $sessionFingerprint = videochat_call_access_account_confirmation_session_fingerprint((string) ($options['session_id'] ?? ''));
-    $enforceSessionBinding = array_key_exists('session_id', $options);
+    $enforceSessionBinding = (bool) ($options['enforce_session_binding'] ?? false);
     if (!videochat_call_access_account_confirmation_bootstrap($pdo)) {
         return [
             'ok' => false,
