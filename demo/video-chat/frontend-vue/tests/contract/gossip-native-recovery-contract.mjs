@@ -77,10 +77,9 @@ assert(
   'backend runtime contract must prove recovery routing and no media fanout',
 )
 assert(
-  /- \[x\] GSP-07 Gossip-native recovery/.test(sprint)
-    && /gossip-native-recovery-contract\.mjs/.test(sprint)
-    && /no media fanout/.test(sprint),
-  'SPRINT must record completed GSP-07 proof after this implementation is verified',
+  /GSP01-18 progress:[\s\S]*server lane carries capability ops frames only/.test(sprint)
+    && /GSP01-19 Predeploy gate/.test(sprint),
+  'SPRINT must keep active Gossip v1 proof scope on ops-lane control and predeploy gates',
 )
 assert(
   packageJson.includes('gossip-native-recovery-contract.mjs'),

@@ -72,10 +72,9 @@ assert(
   'backend runtime contract must prove the no-normal-media-fanout guard behavior',
 )
 assert(
-  /- \[x\] GSP-08 Server no-normal-media-fanout guard/.test(sprint)
-    && /normal_media_fanout_forbidden/.test(sprint)
-    && /gossip-server-no-media-fanout-contract\.mjs/.test(sprint),
-  'SPRINT must record completed GSP-08 proof after this guard is verified',
+  /- \[ \] GSP01-08 Park SFU from the active stream path:[\s\S]*no `sfu_first`, no SFU\s+fallback/.test(sprint)
+    && /Do not restore background regression tests or old regression harnesses as\s+release gates/.test(sprint),
+  'SPRINT must keep no-normal-media-fanout aligned with the active no-SFU-fallback Gossip gate',
 )
 assert(
   packageJson.includes('gossip-server-no-media-fanout-contract.mjs'),

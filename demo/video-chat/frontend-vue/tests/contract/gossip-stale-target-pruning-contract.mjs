@@ -39,19 +39,19 @@ assert(
   'target-not-in-room recovery must prune SFU remotes and assigned gossip neighbors in the same local removal path',
 );
 assert(
-  /requestWlvcFullFrameKeyframe\('media_security_target_not_in_room_pruned'/.test(socketLifecycle),
-  'media-security stale-target pruning must force a fresh full-frame keyframe for remaining receivers',
+  !/requestWlvcFullFrameKeyframe\('media_security_target_not_in_room_pruned'/.test(socketLifecycle),
+  'media-security stale-target pruning must not force active Gossip v1 repair keyframes',
 );
 assert(
   /const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object\.freeze\(\[[\s\S]*'call\/answer'[\s\S]*'call\/control-state'[\s\S]*'call\/ice'[\s\S]*'call\/media-quality-pressure'[\s\S]*'call\/offer'[\s\S]*\]\);/m.test(socketLifecycle),
   'socket lifecycle must explicitly cover control-state, native answer, ICE, media-quality pressure, and native offer stale-target pruning',
 );
 assert(
-  /const failedStaleTargetPruningSignal = failedMediaSecuritySignal[\s\S]*\|\| STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);[\s\S]*const shouldPruneTargetNotInRoom = targetIsKnown[\s\S]*&& normalizedError === 'target_not_in_room'[\s\S]*&& failedStaleTargetPruningSignal;[\s\S]*\? removeParticipantLocallyAfterHangup\(normalizedTargetUserId\)/m.test(socketLifecycle),
-  'target_not_in_room recovery must prune the same local participant/native/SFU/gossip state for media-security, call/control-state, call/media-quality-pressure, call/answer, call/ice, and call/offer',
+  /const failedStaleTargetPruningSignal = STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);[\s\S]*const shouldPruneTargetNotInRoom = targetIsKnown[\s\S]*&& normalizedError === 'target_not_in_room'[\s\S]*&& failedStaleTargetPruningSignal;[\s\S]*if \(shouldPruneTargetNotInRoom\) \{[\s\S]*removeParticipantLocallyAfterHangup\(normalizedTargetUserId\);/m.test(socketLifecycle),
+  'target_not_in_room recovery must prune the same local participant/native/SFU/gossip state for call/control-state, call/media-quality-pressure, call/answer, call/ice, and call/offer',
 );
 assert(
-  /function isExpectedStaleTargetPublishFailure\(code, failedCommandType, signalingError, failedTargetUserId\)[\s\S]*signalingError[\s\S]*!== 'target_not_in_room'[\s\S]*return mediaSecuritySignalTypes\.includes\(failedCommandType\)[\s\S]*\|\| STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);/m.test(socketLifecycle),
+  /function isExpectedStaleTargetPublishFailure\(code, failedCommandType, signalingError, failedTargetUserId\)[\s\S]*if \(code !== 'signaling_publish_failed'\) return false;[\s\S]*if \(String\(signalingError \|\| ''\)\.trim\(\)\.toLowerCase\(\) !== 'target_not_in_room'\) return false;[\s\S]*return STALE_TARGET_PRUNING_SIGNAL_TYPES\.includes\(failedCommandType\);/m.test(socketLifecycle),
   'stale-target publish failures must have a dedicated classifier instead of sharing broker failure diagnostics',
 );
 assert(

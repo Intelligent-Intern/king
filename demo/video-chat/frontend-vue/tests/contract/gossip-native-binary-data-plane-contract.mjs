@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '../../../../..')
 const frontendRoot = path.join(repoRoot, 'demo/video-chat/frontend-vue')
+const archivedRootDocs = path.join(repoRoot, 'documentation/archive/root-md-2026-05-10')
 
 function read(filePath) {
   return fs.readFileSync(filePath, 'utf8')
@@ -19,8 +20,9 @@ function assert(condition, message) {
 const codec = read(path.join(frontendRoot, 'src/lib/gossipmesh/iibinCodec.ts'))
 const transport = read(path.join(frontendRoot, 'src/lib/gossipmesh/rtcDataChannelTransport.ts'))
 const wire = read(path.join(frontendRoot, 'src/lib/gossipmesh/wireContract.ts'))
-const planning = read(path.join(repoRoot, 'GOSSIP_PLANNING.md'))
-const current = read(path.join(repoRoot, 'GOSSIP_CURRENT_BUILD.md'))
+const planning = read(path.join(archivedRootDocs, 'GOSSIP_PLANNING.md'))
+const current = read(path.join(archivedRootDocs, 'GOSSIP_CURRENT_BUILD.md'))
+const sprint = read(path.join(repoRoot, 'SPRINT.md'))
 const packageJson = read(path.join(frontendRoot, 'package.json'))
 
 for (const filePath of [
@@ -81,8 +83,16 @@ assert(
   'topology hints must be able to describe King LSQUIC and binary WebSocket transports',
 )
 assert(
-  /IIBIN/.test(current) && /object_store/.test(current) && /LSQUIC/.test(planning),
-  'root gossip docs must record the binary/native transport requirement before outbound publication',
+  !fs.existsSync(path.join(repoRoot, 'GOSSIP_PLANNING.md'))
+    && !fs.existsSync(path.join(repoRoot, 'GOSSIP_CURRENT_BUILD.md')),
+  'retired Gossip root docs must remain archived instead of returning as active planning files',
+)
+assert(
+  /IIBIN/.test(current)
+    && /object_store/.test(current)
+    && /LSQUIC/.test(planning)
+    && /GSP01-18 progress:[\s\S]*server-provided, max-five-neighbor Gossip topology/.test(sprint),
+  'archived gossip docs and active sprint must preserve the binary/native transport requirement before outbound publication',
 )
 assert(
   packageJson.includes('gossip-native-binary-data-plane-contract.mjs'),

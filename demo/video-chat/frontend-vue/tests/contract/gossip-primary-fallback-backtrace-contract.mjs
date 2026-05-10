@@ -19,8 +19,20 @@ const packageJson = read('demo/video-chat/frontend-vue/package.json')
 
 assert.match(
   dispatch,
-  /gossipFirst && !gossipPublished[\s\S]*sfu_fallback_after_gossip_primary_publish_failure[\s\S]*fallback_reason:\s*'gossip_publish_failed_or_gated'[\s\S]*immediate:\s*true/s,
-  'Gossip-primary SFU fallback must emit an immediate backend-visible backtrace before sending through SFU',
+  /gossip_primary_publish_failed_no_sfu_fallback[\s\S]*fallback_reason:\s*'gossip_primary_no_sfu_fallback'[\s\S]*immediate:\s*true/s,
+  'Gossip-primary publish failure must emit an immediate backend-visible no-SFU-fallback diagnostic',
+)
+
+assert.match(
+  dispatch,
+  /if \(gossipFirst\)[\s\S]*if \(!gossipPublished\)[\s\S]*diagnoseGossipPrimaryPublishFailure[\s\S]*return \{[\s\S]*sfuSent:\s*false[\s\S]*sfuFallbackSuppressed:\s*true/s,
+  'Gossip-primary dispatch must suppress SFU fallback after a failed Gossip publication',
+)
+
+assert.doesNotMatch(
+  dispatch,
+  /sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure|fallback_reason:\s*'gossip_publish_failed_or_gated'/,
+  'Gossip-primary active path must not preserve stale SFU fallback events',
 )
 
 assert.match(
