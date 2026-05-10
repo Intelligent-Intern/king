@@ -266,7 +266,15 @@ try {
     videochat_identity_mismatch_review_assert(in_array('call_access_identity_mismatch_review', $eventTypes, true), 'identity mismatch review audit missing');
     videochat_identity_mismatch_review_assert(in_array('call_access_strong_mismatch_denied', $eventTypes, true), 'strong mismatch denial audit missing');
     videochat_identity_mismatch_review_assert(in_array('call_access_account_compared', $eventTypes, true), 'account comparison audit missing');
-    videochat_identity_mismatch_review_assert(in_array('call_access_host_name_rejected', $eventTypes, true), 'host-name rejection audit missing');
+    videochat_identity_mismatch_review_assert(in_array('call_access_host_name_verification_failed', $eventTypes, true), 'host-name verification failure audit missing');
+    $legacyRejectedEvents = videochat_audit_fetch_events($pdo, ['event_type' => 'call_access_host_name_rejected', 'limit' => 20]);
+    videochat_identity_mismatch_review_assert(count($legacyRejectedEvents) >= 2, 'legacy host-name rejection alias should find canonical failed audits');
+    $legacyFailedEvents = videochat_audit_fetch_events($pdo, ['event_type' => 'call_access_host_verification_failed', 'limit' => 20]);
+    videochat_identity_mismatch_review_assert(count($legacyFailedEvents) >= 2, 'legacy host-verification failed alias should find canonical failed audits');
+    $hostFailurePayload = (array) (($legacyRejectedEvents[0] ?? [])['payload'] ?? []);
+    videochat_identity_mismatch_review_assert((string) ($hostFailurePayload['canonical_event_type'] ?? '') === 'call_access_host_name_verification_failed', 'host failure audit must mark canonical event type');
+    videochat_identity_mismatch_review_assert(in_array('call_access_host_name_rejected', (array) ($hostFailurePayload['legacy_event_types'] ?? []), true), 'host failure audit must retain rejected legacy alias');
+    videochat_identity_mismatch_review_assert(in_array('call_access_host_verification_failed', (array) ($hostFailurePayload['legacy_event_types'] ?? []), true), 'host failure audit must retain failed legacy alias');
     $eventsJson = json_encode($events, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_identity_mismatch_review_assert_no_needles($eventsJson, $secretNeedles, 'identity mismatch audit events');
     videochat_identity_mismatch_review_assert(str_contains($eventsJson, '"raw_link_identifier_logged":false'), 'audit must state raw access ids are not logged');

@@ -38,17 +38,15 @@ function videochat_audit_fingerprint(mixed $value): string
     return 'sha256:' . hash('sha256', $normalized);
 }
 
-function videochat_audit_canonical_iam_event_type(string $eventType): string
+function videochat_audit_iam_event_alias_map(): array
 {
-    $normalized = strtolower(trim($eventType));
-    if ($normalized === '') {
-        return '';
-    }
-
-    $aliases = [
+    return [
         'call_access_admission_allowed' => 'call_access_admitted',
         'call_access_allowed' => 'call_access_admitted',
         'call_access_granted' => 'call_access_admitted',
+        'call_access_host_name_rejected' => 'call_access_host_name_verification_failed',
+        'call_access_host_verification_failed' => 'call_access_host_name_verification_failed',
+        'call_access_host_verification_succeeded' => 'call_access_host_name_verified',
         'call_access_invitation_opened' => 'call_access_link_opened',
         'call_access_join_link_opened' => 'call_access_link_opened',
         'call_access_opened' => 'call_access_link_opened',
@@ -64,8 +62,39 @@ function videochat_audit_canonical_iam_event_type(string $eventType): string
         'participant_role_updated' => 'call_access_role_changed',
         'tenant_membership_removed' => 'membership_removed',
     ];
+}
+
+function videochat_audit_canonical_iam_event_type(string $eventType): string
+{
+    $normalized = strtolower(trim($eventType));
+    if ($normalized === '') {
+        return '';
+    }
+
+    $aliases = videochat_audit_iam_event_alias_map();
 
     return $aliases[$normalized] ?? $normalized;
+}
+
+function videochat_audit_iam_event_type_filter_values(string $eventType): array
+{
+    $normalized = strtolower(trim($eventType));
+    $canonical = videochat_audit_canonical_iam_event_type($normalized);
+    if ($canonical === '') {
+        return [];
+    }
+
+    $values = [$canonical => true];
+    if ($normalized !== '') {
+        $values[$normalized] = true;
+    }
+    foreach (videochat_audit_iam_event_alias_map() as $alias => $resolved) {
+        if ($resolved === $canonical) {
+            $values[$alias] = true;
+        }
+    }
+
+    return array_keys($values);
 }
 
 function videochat_audit_payload_key_is_sensitive(string $key): bool
@@ -609,8 +638,16 @@ function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
         $params[':tenant_id'] = (int) $filters['tenant_id'];
     }
     if (is_string($filters['event_type'] ?? null) && trim((string) $filters['event_type']) !== '') {
-        $where[] = 'event_type = :event_type';
-        $params[':event_type'] = videochat_audit_canonical_iam_event_type((string) $filters['event_type']);
+        $eventTypes = videochat_audit_iam_event_type_filter_values((string) $filters['event_type']);
+        if ($eventTypes !== []) {
+            $placeholders = [];
+            foreach ($eventTypes as $index => $eventType) {
+                $placeholder = ':event_type_' . $index;
+                $placeholders[] = $placeholder;
+                $params[$placeholder] = $eventType;
+            }
+            $where[] = 'event_type IN (' . implode(', ', $placeholders) . ')';
+        }
     }
     if (is_string($filters['call_id'] ?? null) && trim((string) $filters['call_id']) !== '') {
         $where[] = 'call_id = :call_id';
