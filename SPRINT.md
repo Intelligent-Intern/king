@@ -106,5 +106,5 @@ Sprint Checkboxen:
   from `local/iam-e2e-local-run-docs-proof-20260509`.
 - [x] IAM7-19 Extract or prove organization-removal active privilege downgrade
   from `local/iam-e2e-org-removal-active-privilege-downgrade`.
-- [ ] IAM7-20 Extract or prove owner-absence realtime sync from
+- [x] IAM7-20 Extract or prove owner-absence realtime sync from
   `local/iam-e2e-owner-absence-realtime-sync`.
