@@ -35,6 +35,9 @@ function videochat_call_app_crdt_session_for_actor(PDO $pdo, int $tenantId, stri
     if ((string) ($record['status'] ?? '') !== 'active') {
         return ['ok' => false, 'reason' => 'session_not_active'];
     }
+    if (!videochat_call_app_session_installation_available($pdo, $tenantId, $record)) {
+        return ['ok' => false, 'reason' => 'app_not_available'];
+    }
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $actorUserId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
     }

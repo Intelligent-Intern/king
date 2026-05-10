@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/call_app_availability.php';
 require_once __DIR__ . '/call_app_call_subjects.php';
+require_once __DIR__ . '/call_app_session_lifecycle.php';
 
 function videochat_call_app_session_public_id(string $prefix): string
 {
@@ -802,49 +803,6 @@ SQL
         'ok' => true,
         'state' => 'created',
         'session' => videochat_call_app_fetch_session($pdo, $tenantId, $publicId),
-    ];
-}
-
-function videochat_call_app_update_session(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, array $payload): array
-{
-    $record = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
-    if (!is_array($record)) {
-        return ['ok' => false, 'reason' => 'session_not_found'];
-    }
-    if ((string) ($record['status'] ?? '') === 'removed') {
-        return ['ok' => false, 'reason' => 'session_removed'];
-    }
-
-    $status = strtolower(trim((string) ($payload['status'] ?? ($payload['state'] ?? ''))));
-    if (!in_array($status, ['active', 'inactive'], true)) {
-        return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['status' => 'must_be_active_or_inactive']];
-    }
-
-    $now = gmdate('c');
-    $statement = $pdo->prepare(
-        <<<'SQL'
-UPDATE call_app_sessions
-SET status = :status,
-    activated_by_user_id = CASE WHEN :status = 'active' THEN :actor_user_id ELSE activated_by_user_id END,
-    activated_at = CASE WHEN :status = 'active' THEN :activated_at ELSE activated_at END,
-    updated_at = :updated_at
-WHERE tenant_id = :tenant_id
-  AND public_id = :public_id
-SQL
-    );
-    $statement->execute([
-        ':status' => $status,
-        ':actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
-        ':activated_at' => $now,
-        ':updated_at' => $now,
-        ':tenant_id' => $tenantId,
-        ':public_id' => trim($sessionId),
-    ]);
-
-    return [
-        'ok' => true,
-        'state' => $status,
-        'session' => videochat_call_app_fetch_session($pdo, $tenantId, $sessionId),
     ];
 }
 

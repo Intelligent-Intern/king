@@ -213,6 +213,9 @@ function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $s
     if ((string) ($record['status'] ?? '') !== 'active') {
         return ['ok' => false, 'reason' => 'session_not_active'];
     }
+    if (!videochat_call_app_session_installation_available($pdo, $tenantId, $record)) {
+        return ['ok' => false, 'reason' => 'app_not_available'];
+    }
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $actorUserId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
     }
@@ -315,6 +318,9 @@ SQL
     }
     if (videochat_call_app_is_internal_admin_app_key((string) ($record['app_key'] ?? '')) && !videochat_call_app_user_can_use_internal_admin_apps($pdo, $userId)) {
         return ['ok' => false, 'reason' => 'internal_admin_required'];
+    }
+    if (!videochat_call_app_session_installation_available($pdo, $tenantId, $record)) {
+        return ['ok' => false, 'reason' => 'app_not_available'];
     }
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $userId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
