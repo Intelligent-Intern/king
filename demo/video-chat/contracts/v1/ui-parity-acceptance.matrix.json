@@ -111,6 +111,7 @@
       "command": "npm run test:contract:iam-call-access",
       "paths": [
         "frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs",
+        "frontend-vue/tests/contract/iam-local-run-docs-contract.mjs",
         "frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs",
         "frontend-vue/tests/contract/iam-sprint-04-focused-wire-contract.mjs",
         "frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs",
