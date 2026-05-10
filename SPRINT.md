@@ -193,7 +193,14 @@ Tickets:
     binds to the current token, and parallel tab contexts stay isolated.
   - Proof: `node tests/contract/call-access-account-isolation-contract.mjs`
     passed with the existing IAM access contracts.
-- [ ] IAM-14 Prove call-access audit event compatibility and redaction.
+- [x] IAM-14 Prove call-access audit event compatibility and redaction.
+  - Merged worker branch `agent/iam-s1-14-audit-redaction`.
+  - Added `call-access-audit-redaction-contract.mjs` proving audit payloads use
+    shared sanitization, raw access/session IDs are fingerprinted, denied/auth
+    mismatch routes do not hand-roll unsafe audit payloads, and backend privacy
+    proofs cover sanitizer redaction.
+  - Proof: `node tests/contract/call-access-audit-redaction-contract.mjs` passed;
+    referenced backend SQLite runtime proofs remain gated by local `pdo_sqlite`.
 - [ ] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
   admission and removal decisions.
 - [ ] IAM-16 Prove frontend route guards and verified-context UI for call-access
