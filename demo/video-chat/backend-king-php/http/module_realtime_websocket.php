@@ -55,6 +55,7 @@ function videochat_handle_realtime_websocket_route(
         $requestedRoomId = '';
         $requestedCallId = '';
         $queryParams = videochat_request_query_params($request);
+        $isMediaRelaySocket = videochat_gossip_media_relay_socket_requested($queryParams);
         $clientAssetVersion = videochat_realtime_client_asset_version_from_query($queryParams);
         if (is_string($queryParams['room'] ?? null)) {
             $requestedRoomId = (string) $queryParams['room'];
@@ -119,6 +120,52 @@ function videochat_handle_realtime_websocket_route(
         $presenceConnection['pending_room_id'] = $pendingRoomId;
         $presenceConnection['requested_call_id'] = $requestedCallId;
         $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+        if ($isMediaRelaySocket) {
+            $presenceConnection['media_relay_socket'] = true;
+            $relayDetached = false;
+            $detachRelayWebsocket = static function () use (
+                &$relayDetached,
+                &$activeWebsocketsBySession,
+                &$presenceState,
+                $authSessionId,
+                $connectionId
+            ): void {
+                if ($relayDetached) {
+                    return;
+                }
+                $relayDetached = true;
+                videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
+                videochat_gossip_media_relay_unregister_socket($presenceState, $connectionId);
+            };
+
+            if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
+                king_server_on_cancel(
+                    $session,
+                    $streamId,
+                    static function () use ($detachRelayWebsocket): void {
+                        $detachRelayWebsocket();
+                    }
+                );
+            }
+
+            videochat_realtime_serve_gossip_media_relay_websocket(
+                $websocket,
+                $presenceState,
+                $presenceConnection,
+                $authenticateRequest,
+                $authSessionId,
+                $wsPath,
+                $disconnectStaleAssetClient,
+                $openDatabase,
+                $detachRelayWebsocket
+            );
+
+            return [
+                'status' => 101,
+                'headers' => [],
+                'body' => '',
+            ];
+        }
         $presenceJoin = videochat_presence_join_room(
             $presenceState,
             $presenceConnection,

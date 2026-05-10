@@ -43,9 +43,9 @@ function videochat_realtime_normal_media_fanout_fields(): array
     ];
 }
 
-function videochat_realtime_normal_media_fanout_allowed_relay_type(string $type): bool
+function videochat_realtime_normal_media_fanout_allowed_relay_type(string $type, bool $mediaRelaySocket = false): bool
 {
-    return $type === 'gossip/server-frame';
+    return $mediaRelaySocket && $type === 'gossip/server-frame';
 }
 
 function videochat_realtime_payload_contains_normal_media_field(mixed $payload): bool
@@ -69,7 +69,7 @@ function videochat_realtime_payload_contains_normal_media_field(mixed $payload):
 /**
  * @return array{blocked: bool, type: string, reason: string}
  */
-function videochat_realtime_classify_normal_media_fanout_frame(string $frame): array
+function videochat_realtime_classify_normal_media_fanout_frame(string $frame, bool $mediaRelaySocket = false): array
 {
     try {
         $decoded = json_decode($frame, true, 64, JSON_THROW_ON_ERROR);
@@ -82,8 +82,11 @@ function videochat_realtime_classify_normal_media_fanout_frame(string $frame): a
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
-    if (videochat_realtime_normal_media_fanout_allowed_relay_type($type)) {
+    if (videochat_realtime_normal_media_fanout_allowed_relay_type($type, $mediaRelaySocket)) {
         return ['blocked' => false, 'type' => $type, 'reason' => 'room_bound_gossip_server_relay'];
+    }
+    if ($type === 'gossip/server-frame') {
+        return ['blocked' => true, 'type' => $type, 'reason' => 'media_relay_socket_required'];
     }
     if (in_array($type, videochat_realtime_normal_media_fanout_types(), true)) {
         return ['blocked' => true, 'type' => $type, 'reason' => 'normal_media_command_on_control_socket'];
@@ -102,7 +105,10 @@ function videochat_realtime_guard_no_normal_media_fanout(
     array $presenceConnection,
     ?callable $sender = null
 ): ?array {
-    $classification = videochat_realtime_classify_normal_media_fanout_frame($frame);
+    $classification = videochat_realtime_classify_normal_media_fanout_frame(
+        $frame,
+        (bool) ($presenceConnection['media_relay_socket'] ?? false)
+    );
     if (($classification['blocked'] ?? false) !== true) {
         return null;
     }

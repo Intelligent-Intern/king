@@ -92,6 +92,9 @@ Tickets:
   when the server relay is primary.
 - [x] GSR-02 Route relay frames into the existing remote decoder path as
   transport-only frames.
+- [x] GSR-04 Move relay media off the control websocket onto a dedicated
+  `relay=media` websocket with duplicate suppression and no room-presence
+  join/leave side effects.
 - [ ] GSR-03 Build, deploy without push/DNS/certbot, and run post-deploy
   diagnostics for relay delivery and websocket errors.
 
