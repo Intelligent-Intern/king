@@ -163,8 +163,16 @@ Tickets:
     `git diff --check` passed. Docker PHP proof for anonymous temporary rights
     passed in the worker; direct host PHP remains skipped when `pdo_sqlite` is
     unavailable.
-- [ ] IAM3-09 Prove disabled anonymous links and disabled call-access links fail
+- [x] IAM3-09 Prove disabled anonymous links and disabled call-access links fail
   closed before session creation and before lobby insertion.
+  - Merged worker branch `agent/iam-s3-09-disabled-links-fail-closed`.
+  - Added `call-access-disabled-links-fail-closed-contract.mjs` proving disabled
+    anonymous and call-access links stop at the access boundary before session
+    creation, lobby insertion, or reusable state can be emitted.
+  - Proof: `node tests/contract/call-access-disabled-links-fail-closed-contract.mjs`,
+    `node tests/contract/call-access-invite-invalidation-terminal-contract.mjs`,
+    `node tests/contract/call-access-terminal-states-contract.mjs`, and
+    `git diff --check` passed.
 - [ ] IAM3-10 Prove kicked or removed participants cannot rejoin via cached
   call-access sessions, stale tabs, or copied join URLs.
 - [ ] IAM3-11 Prove active-call permission changes revoke stale UI actions and
