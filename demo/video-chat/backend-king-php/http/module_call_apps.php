@@ -690,7 +690,11 @@ function videochat_handle_call_app_routes(
                 $tenantId,
                 $sessionId,
                 $authenticatedUserId,
-                videochat_call_app_actor_can_use_internal_admin_apps($apiAuthContext)
+                videochat_call_app_actor_can_use_internal_admin_apps($apiAuthContext),
+                is_string(($apiAuthContext['session'] ?? [])['id'] ?? null)
+                    && is_string(($apiAuthContext['session'] ?? [])['expires_at'] ?? null)
+                        ? (string) (($apiAuthContext['session'] ?? [])['id'])
+                        : null
             );
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
@@ -705,7 +709,7 @@ function videochat_handle_call_app_routes(
 
         if (!(bool) ($result['ok'] ?? false)) {
             $reason = (string) ($result['reason'] ?? 'internal_error');
-            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_not_in_call', 'participant_grant_denied', 'internal_admin_required'], true) ? 403 : 409);
+            $status = $reason === 'session_not_found' ? 404 : (in_array($reason, ['participant_not_in_call', 'participant_grant_denied', 'internal_admin_required'], true) ? 403 : ($reason === 'auth_revoked' ? 401 : 409));
             return $errorResponse($status, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
                 'reason' => $reason,
                 'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [

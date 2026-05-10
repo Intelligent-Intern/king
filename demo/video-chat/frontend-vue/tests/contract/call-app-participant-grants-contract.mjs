@@ -22,6 +22,7 @@ const [
   routerSource,
   routeSource,
   domainSource,
+  retirementSource,
   launchTokenSource,
   crdtDomainSource,
   crdtBridgeSource,
@@ -41,6 +42,7 @@ const [
   read('demo/video-chat/backend-king-php/http/router.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php'),
+  read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_token_retirement.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
@@ -245,7 +247,7 @@ assert.match(
 );
 
 assert.match(
-  domainSource,
+  retirementSource,
   /function videochat_call_app_retire_launch_tokens_for_grant[\s\S]*permission_actions_changed[\s\S]*UPDATE call_app_launch_tokens[\s\S]*revoked_at/s,
   'delete/revoke and permission-restriction semantics must retire active launch tokens',
 );

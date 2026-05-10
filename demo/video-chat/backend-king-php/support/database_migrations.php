@@ -797,5 +797,6 @@ SQL,
         54 => ['name' => '0054_call_app_grant_permission_actions', 'statements' => videochat_call_app_grant_permission_actions_migration_statements()],
         55 => ['name' => '0055_operator_feedback_queue', 'statements' => videochat_operator_feedback_migration_statements()],
         56 => ['name' => '0056_call_access_link_disabled_at', 'statements' => ['ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT']],
+        57 => ['name' => '0057_call_app_launch_token_session_binding', 'statements' => videochat_call_app_launch_token_session_binding_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }
