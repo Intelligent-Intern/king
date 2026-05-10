@@ -126,7 +126,7 @@ assert.ok(lineCount(css) < 800, 'call-diagnostics stylesheet must stay below 800
 assert.ok(lineCount(runtime) < 800, 'call-diagnostics runtime must stay below 800 lines');
 includes(html, 'meta name="king-call-app-key" content="call-diagnostics"', 'HTML must declare app key');
 includes(html, 'king.call_app.iframe.v1', 'HTML must declare bridge protocol');
-for (const label of ['WebSocket', 'ICE host', 'STUN', 'TURN', 'SFU', 'Call App']) {
+for (const label of ['WebSocket', 'ICE host', 'STUN', 'TURN', 'SFU', 'Gossip', 'Call App']) {
   includes(html, label, `HTML must expose station ${label}`);
 }
 for (const label of ['Live Tail', 'Instances', 'Calls', 'Telemetry', 'Raw']) {
@@ -142,6 +142,7 @@ includes(runtime, "'call_app.crdt.op.append'", 'runtime must persist diagnostic 
 includes(runtime, "'diagnostic.log.append'", 'runtime must append diagnostic log operations');
 includes(runtime, "window.setInterval(requestOps, POLL_MS)", 'runtime must continuously replay CRDT ops');
 includes(runtime, 'classifyStage(entry)', 'runtime must map diagnostics onto connection stages');
+includes(runtime, 'gossip.media.frame.v1', 'runtime must classify Gossip media-frame diagnostics');
 includes(runtime, 'typ relay', 'runtime must classify TURN relay candidates');
 includes(runtime, 'typ srflx', 'runtime must classify STUN srflx candidates');
 includes(runtime, 'persistLog(entry)', 'runtime must store live diagnostics unless marked non-persistent');
@@ -155,6 +156,31 @@ includes(runtime, "'call_app.diagnostics.telemetry.snapshot'", 'runtime must han
 includes(runtime, "'call_app.diagnostics.stage.update'", 'runtime must handle stage update messages');
 includes(runtime, 'renderRawView(rows, telemetryRows)', 'runtime must expose redacted raw JSON for the active filter');
 includes(runtime, "REDACTED = '[redacted]'", 'runtime output must visibly redact sensitive fields');
+includes(runtime, 'diagnosticMetricPairs(entry)', 'runtime must render focused Gossip v1 diagnostic metrics');
+for (const metric of [
+  'capabilities',
+  'plan epoch',
+  'gossip readiness',
+  'sender frames',
+  'receiver frames',
+  'drops',
+  'backpressure',
+  'stuck reason',
+]) {
+  includes(runtime, metric, `runtime must expose ${metric} diagnostics`);
+}
+for (const field of [
+  'client_capabilities',
+  'plan_epoch',
+  'waiting_for_gossip',
+  'sender_frame_count',
+  'receiver_frame_count',
+  'dropped_frame_count',
+  'backpressure_state',
+  'stuck_not_sending_reason',
+]) {
+  includes(runtime, field, `runtime must normalize ${field} telemetry`);
+}
 assert.doesNotMatch(bundle, /sessionToken|Authorization|localStorage|XMLHttpRequest|fetch\(/, 'iframe bundle must not access parent auth material or direct APIs');
 
 const tailBridge = read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnosticTailBridge.js');
@@ -202,7 +228,9 @@ const availability = read('demo/video-chat/backend-king-php/domain/call_apps/cal
 includes(availability, 'include_internal', 'availability query must support admin-only internal app visibility');
 includes(availability, "catalog.app_key <> :internal_app_key", 'availability query must hide diagnostics from normal users');
 const sprint = read('SPRINT.md');
-includes(sprint, 'IAM Remaining Proof And Branch Cleanup 07', 'SPRINT must remain focused on the active IAM sprint');
+includes(sprint, 'Sprint: Gossip Video Call v1 Streaming 01', 'SPRINT must remain focused on the active Gossip sprint');
+includes(sprint, 'GSP01-17 Diagnostics surface', 'SPRINT must keep the diagnostics surface release gate visible');
+includes(sprint, 'GSP01-18 Test gate', 'SPRINT must keep the gossip video proof test gate visible');
 const backlog = read('BACKLOG.md');
 includes(backlog, 'Video Call Stabilization and Internal Diagnostics are paused as active', 'BACKLOG must record paused diagnostics stabilization work');
 includes(backlog, 'Call App diagnostics/telemetry improvements remain available as future', 'BACKLOG must retain diagnostics telemetry follow-up work');

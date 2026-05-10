@@ -207,6 +207,7 @@
     if (/(stun|srflx|server reflexive|typ srflx)/.test(text)) return 'stun';
     if (/(ice|candidate|host candidate|typ host|p2p)/.test(text)) return 'host';
     if (/(websocket|socket|signaling|room_snapshot|room_sync|foreground_reconnect)/.test(text)) return 'signaling';
+    if (/(gossip|plan_epoch|waiting_for_gossip|stuck_not_sending|backpressure|gossip.media.frame.v1)/.test(text)) return 'gossip';
     if (/(sfu|media|publisher|remote_video|decoder|keyframe|webrtc)/.test(text)) return 'sfu';
     if (/(call_app|iframe|crdt|launch|marketplace|availability)/.test(text)) return 'callapp';
     if (/(datachannel|data channel|queue)/.test(text)) return 'data';
@@ -578,6 +579,44 @@
     };
   }
 
+  function normalizedFieldName(value) {
+    return safeIdentifier(value, 'field').replace(/[-.]+/g, '_');
+  }
+
+  function findDiagnosticValue(value, fieldNames, depth = 0) {
+    if (!isPlainObject(value) || depth > 3) return undefined;
+    const wanted = new Set(fieldNames.map(normalizedFieldName));
+    for (const [key, entry] of Object.entries(value)) {
+      if (wanted.has(normalizedFieldName(key))) return entry;
+    }
+    for (const entry of Object.values(value)) {
+      const nested = findDiagnosticValue(entry, fieldNames, depth + 1);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  }
+
+  function compactDiagnosticValue(value) {
+    if (Array.isArray(value)) return value.map((entry) => safeString(entry, '', 28)).filter(Boolean).slice(0, 4).join(', ');
+    if (isPlainObject(value)) return safeString(JSON.stringify(summarizePayload(value)), '', 80);
+    return safeString(value, '', 80);
+  }
+
+  function diagnosticMetricPairs(entry) {
+    const payload = isPlainObject(entry?.payload) ? entry.payload : {};
+    return [
+      ['capabilities', ['capabilities', 'client_capabilities', 'capability_state']],
+      ['plan epoch', ['plan_epoch', 'media_plan_epoch', 'epoch']],
+      ['gossip readiness', ['gossip_readiness', 'gossip_ready', 'readiness_state', 'waiting_for_gossip']],
+      ['sender frames', ['sender_frame_count', 'sent_frame_count', 'publisher_frame_count', 'frames_sent']],
+      ['receiver frames', ['receiver_frame_count', 'received_frame_count', 'decoded_frame_count', 'frames_received']],
+      ['drops', ['dropped_frame_count', 'dropped_frames', 'dropped_delta_frame_count', 'dropped_keyframe_count']],
+      ['backpressure', ['backpressure_state', 'backpressure_level', 'publisher_backpressure_state']],
+      ['stuck reason', ['stuck_reason', 'stuck_not_sending_reason', 'non_sending_reason']],
+    ].map(([label, fields]) => [label, compactDiagnosticValue(findDiagnosticValue(payload, fields))])
+      .filter(([, value]) => value !== '');
+  }
+
   function renderSummaryList(node, rows, label = 'event') {
     if (!node) return;
     node.replaceChildren(...rows.map((row) => renderSummaryRow(row, label)));
@@ -599,7 +638,8 @@
     header.append(title, count);
     const meta = document.createElement('div');
     meta.className = 'summary-meta';
-    for (const value of [group.status, ...Array.from(group.stages || [])]) {
+    const diagnosticMetrics = diagnosticMetricPairs(group.last);
+    for (const value of [group.status, ...Array.from(group.stages || []), ...diagnosticMetrics.map(([label, value]) => `${label}: ${value}`)]) {
       const item = document.createElement('span');
       item.textContent = value;
       meta.append(item);
