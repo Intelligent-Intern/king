@@ -3,6 +3,12 @@
 This guide is the repo-local entry point for IAM and call-access proof runs.
 Run the frontend commands from `demo/video-chat/frontend-vue`.
 
+The current sprint keeps the useful split from `local/iam-e2e-ci-docs-gate`
+without adopting its soft `--available` default. The canonical IAM gate remains
+strict `--full`; the host-safe `--static` mode is the quick command-hygiene and
+documentation preflight, while `--sqlite` and `--docker` keep backend runtime
+proofs explicit.
+
 ## Host-Safe Static Gate
 
 Use this first when validating a small IAM or call-access change locally:
@@ -16,6 +22,11 @@ This runs the host-safe IAM command-hygiene contracts:
 `iam-call-access-ci-wire-contract.mjs`, `iam-ci-artifacts-contract.mjs`, and
 `iam-local-run-docs-contract.mjs`. The IAM gate does not invoke Background,
 Gossip, SFU, MediaSecurity, or BTGF gates.
+
+`demo/video-chat/scripts/smoke.sh` also runs this host-safe static preflight
+before compose or broader deployment checks. Use
+`VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1` only when the same checkout already passed
+`npm run test:ci:iam-call-access:static`.
 
 ## Full IAM Contract Gate
 
