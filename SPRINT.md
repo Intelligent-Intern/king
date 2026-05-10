@@ -224,8 +224,16 @@ Tickets:
     non-SQLite assertions because `pdo_sqlite` is unavailable.
 - [ ] IAM-18 Wire the IAM contract/E2E subset into stable package scripts and CI
   release-gate metadata.
-- [ ] IAM-19 Run backend/runtime proof in the strongest available local test
+- [x] IAM-19 Run backend/runtime proof in the strongest available local test
   environment; document any `pdo_sqlite` limitation instead of weakening tests.
+  - Merged worker branch `agent/iam-s1-19-runtime-proof`.
+  - Added `iam-call-access-sqlite-runtime-proof.sh`, which runs the stable IAM
+    SQLite backend contract set directly when host PHP has `pdo_sqlite`, or via
+    a disposable PHP CLI container when the host extension is missing.
+  - Proof: wrapper passed locally through Docker `php:8.4-cli-trixie` with
+    `pdo_sqlite`, covering admin prevention, cross-org, membership removal,
+    session route guard, stale org role, strong mismatch privacy, and guest-list
+    direct join.
 - [ ] IAM-20 Build, run IAM proof set, deploy without push/DNS/certbot, and
   collect post-deploy diagnostics before opening the next 20-ticket sprint.
 
