@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call_app_availability.php';
+require_once __DIR__ . '/call_app_call_subjects.php';
 
 function videochat_call_app_session_public_id(string $prefix): string
 {
@@ -124,11 +125,6 @@ function videochat_call_app_supported_permission_actions(array $session): array
         $supported[] = 'delete';
     }
     return $supported === [] ? videochat_call_app_default_permission_actions() : array_values(array_unique($supported));
-}
-
-function videochat_call_app_session_guest_id(string $email): string
-{
-    return 'guest_' . substr(hash('sha256', strtolower(trim($email))), 0, 32);
 }
 
 function videochat_call_app_fetch_available_installation(PDO $pdo, int $tenantId, string $appKey): ?array
@@ -286,42 +282,6 @@ SQL
         ];
     }
     return $events;
-}
-
-function videochat_call_app_grant_subject_in_call(PDO $pdo, string $callId, string $subjectType, ?int $userId, string $guestId): bool
-{
-    if ($subjectType === 'user') {
-        $normalizedUserId = (int) ($userId ?? 0);
-        if ($normalizedUserId <= 0) {
-            return false;
-        }
-        $statement = $pdo->prepare(
-            <<<'SQL'
-SELECT 1
-FROM calls
-WHERE id = :call_id AND owner_user_id = :user_id
-UNION
-SELECT 1
-FROM call_participants
-WHERE call_id = :call_id AND user_id = :user_id
-LIMIT 1
-SQL
-        );
-        $statement->execute([':call_id' => trim($callId), ':user_id' => $normalizedUserId]);
-        return (bool) $statement->fetchColumn();
-    }
-
-    if ($subjectType !== 'guest' || trim($guestId) === '') {
-        return false;
-    }
-    $statement = $pdo->prepare('SELECT email FROM call_participants WHERE call_id = :call_id AND user_id IS NULL');
-    $statement->execute([':call_id' => trim($callId)]);
-    foreach ($statement->fetchAll(PDO::FETCH_COLUMN) ?: [] as $email) {
-        if (videochat_call_app_session_guest_id((string) $email) === trim($guestId)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 function videochat_call_app_normalize_grant_patch(array $payload): array
@@ -690,34 +650,7 @@ function videochat_call_app_seed_participant_grants(PDO $pdo, int $tenantId, int
 {
     $state = videochat_call_app_session_default_grant_state($policy);
     $now = gmdate('c');
-    $participants = $pdo->prepare(
-        <<<'SQL'
-SELECT DISTINCT user_id, email
-FROM call_participants
-WHERE call_id = :call_id
-SQL
-    );
-    $participants->execute([':call_id' => $callId]);
-    $subjects = [];
-    foreach ($participants->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
-        $userId = is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : 0;
-        if ($userId > 0) {
-            $subjects['user:' . $userId] = ['subject_type' => 'user', 'user_id' => $userId, 'guest_id' => ''];
-            continue;
-        }
-        $email = strtolower(trim((string) ($row['email'] ?? '')));
-        if ($email !== '') {
-            $guestId = videochat_call_app_session_guest_id($email);
-            $subjects['guest:' . $guestId] = ['subject_type' => 'guest', 'user_id' => null, 'guest_id' => $guestId];
-        }
-    }
-
-    $owner = $pdo->prepare('SELECT owner_user_id FROM calls WHERE id = :call_id LIMIT 1');
-    $owner->execute([':call_id' => $callId]);
-    $ownerUserId = (int) $owner->fetchColumn();
-    if ($ownerUserId > 0) {
-        $subjects['user:' . $ownerUserId] = ['subject_type' => 'user', 'user_id' => $ownerUserId, 'guest_id' => ''];
-    }
+    $subjects = videochat_call_app_active_call_subjects($pdo, $callId);
 
     $insert = $pdo->prepare(
         <<<'SQL'
