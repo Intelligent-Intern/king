@@ -54,7 +54,7 @@ function videochat_user_can_direct_join_call(
         ];
     }
 
-    if (videochat_normalize_role_slug($authRole) === 'admin') {
+    if (videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
         return [
             'ok' => true,
             'reason' => 'system_admin',
