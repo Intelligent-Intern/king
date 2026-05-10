@@ -308,8 +308,30 @@ Sprint Checkboxen:
   - Proof: `git branch --list 'agent/iam-s5-*'` and
     `git worktree list --porcelain | rg 'iam-s5-'` return no remaining Sprint
     05 worker branches/worktrees, and `git status --short --branch` is clean.
-- [ ] IAM5-20 Build, run the Sprint 05 IAM proof set, deploy without
+- [x] IAM5-20 Build, run the Sprint 05 IAM proof set, deploy without
   push/DNS/certbot, and collect post-deploy diagnostics.
+  - Ran `npm run test:contract:iam-call-access`; all Node contracts passed,
+    Docker PHP `pdo_sqlite` fallbacks passed, and host-only SQLite checks
+    skipped where local PHP lacks `pdo_sqlite`.
+  - Ran `npm run test:contract:call-apps` because IAM5-15 touched Call App
+    diagnostics contracts; frontend/static contracts passed and backend
+    SQLite-only Call App checks skipped on this host due missing `pdo_sqlite`.
+  - Ran `npm run build` and `npm run test:contract:build-size`.
+  - Deployed from `prod-kingrt-do-not-push-to-github` with no push, no DNS
+    writes, and no Certbot run by setting `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+    `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+    `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`.
+  - Deploy result: production asset version `20260510041153`, backend, WS, and
+    Edge containers rebuilt/restarted; TURN stayed running; SFU stayed disabled.
+  - Diagnostics: `prod-debug.sh` passed read-only app/API/CDN/call-app/CSP and
+    container checks. Authenticated `/api/calls/{id}/call-apps/available`
+    returned HTTP 200 for current call
+    `fdb60134-64b0-4a56-99ee-4126822e6122`; admin Call Diagnostics telemetry
+    returned HTTP 200 with CPU, load, memory, and container fields. The old
+    browser-log call id now returns HTTP 404 `calls_not_found`, not HTTP 500.
+  - Residual diagnostics: unauthenticated marketplace/WS probes return expected
+    auth failures; `https://sfu.kingrt.com/sfu` returns 404 because SFU remains
+    disabled/manual; TURN logs contain external TCP reset noise from peers.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned where the remaining tickets can
