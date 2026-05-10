@@ -106,7 +106,7 @@ Sprint Checkboxen:
   `local/iam-e2e-cross-org-active-org-switch`.
 - [x] IAM8-18 Extract or prove terminal call lifecycle states from
   `local/iam-e2e-delete-end-terminal-proof-2`.
-- [ ] IAM8-19 Extract or prove disabled anonymous call-access links from
+- [x] IAM8-19 Extract or prove disabled anonymous call-access links from
   `local/iam-e2e-disabled-anonymous-links`.
 - [ ] IAM8-20 Extract or prove disabled user session revocation / Call App token
   binding from `local/iam-e2e-disabled-user-session-revocation`.
