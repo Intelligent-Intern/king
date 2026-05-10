@@ -902,7 +902,7 @@ function videochat_realtime_apply_lobby_remove_result(
             $openDatabase,
             $removedCallId,
             $removedUserId,
-            'invited',
+            'cancelled',
             ['pending', 'allowed', 'accepted']
         );
     }

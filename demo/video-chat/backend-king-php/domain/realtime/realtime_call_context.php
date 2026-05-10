@@ -352,7 +352,7 @@ SET invite_state = 'pending',
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
-  AND invite_state IN ('invited', 'declined', 'cancelled')
+  AND invite_state = 'invited'
 SQL
         );
         $statement->execute([
@@ -387,7 +387,7 @@ UPDATE call_participants
 SET joined_at = :joined_at,
     left_at = NULL,
     invite_state = CASE
-        WHEN invite_state IN ('invited', 'pending', 'accepted', 'declined', 'cancelled') THEN 'allowed'
+        WHEN invite_state IN ('invited', 'pending', 'accepted') THEN 'allowed'
         ELSE invite_state
     END,
     call_role = CASE
