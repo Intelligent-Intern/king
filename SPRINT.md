@@ -75,8 +75,23 @@ Tickets:
     dirty, not-contained, and conflict-marked.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM3-02 Prove forged call-access IDs, invite IDs, and call IDs are rejected
+- [x] IAM3-02 Prove forged call-access IDs, invite IDs, and call IDs are rejected
   with redacted safe states across API and browser UI.
+  - Merged worker branch `agent/iam-s3-02-forged-identifiers`.
+  - Removed guessed `access_id` echoing from call-access route error details,
+    updated terminal invalidation assertions to the redacted shape, and added
+    `call-access-forged-identifiers-contract.mjs`.
+  - Kept package/release-gate wiring out of this ticket; Sprint 03 proof wiring
+    remains IAM3-17.
+  - Proof: `node tests/contract/call-access-forged-identifiers-contract.mjs`,
+    `node tests/contract/call-access-link-privacy-contract.mjs`,
+    `node tests/contract/call-access-terminal-states-contract.mjs`,
+    `node tests/contract/call-access-terminal-browser-flows-contract.mjs`,
+    `node tests/contract/call-access-invite-invalidation-terminal-contract.mjs`,
+    `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    `php -l demo/video-chat/backend-king-php/http/module_calls_access.php`, and
+    `git diff --check` passed; direct host PHP privacy runtime skipped where
+    `pdo_sqlite` is unavailable.
 - [x] IAM3-03 Prove tampered verified-context payloads cannot rebind a session,
   user, tenant, or call after frontend storage manipulation.
   - Merged worker branch `agent/iam-s3-03-tampered-verified-context`.
