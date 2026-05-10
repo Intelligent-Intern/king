@@ -42,6 +42,7 @@ const callsModule = readText(repoRoot, 'demo/video-chat/backend-king-php/http/mo
 const callManagement = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
 const callAccessDecision = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_access_decision.php');
 const realtimeContext = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeRoleContext = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
 const lobbySecurity = readText(repoRoot, 'demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
 const ownerModerationProof = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/call-owner-moderation-contract.php');
 const workspaceSource = readText(repoRoot, 'demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
@@ -106,13 +107,18 @@ try {
 
   assert.match(
     realtimeContext,
-    /calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*if \(\(int\) \(\$preferredRow\['owner_user_id'\] \?\? 0\) === \$userId\) \{[\s\S]*\$callRole = 'owner';[\s\S]*\}/,
+    /require_once __DIR__ \. '\/realtime_call_role_context\.php'/,
+    'realtime context must load the focused role resolver extraction',
+  );
+  assert.match(
+    realtimeRoleContext,
+    /if \(\(int\) \(\$row\['owner_user_id'\] \?\? 0\) === \$userId\) \{[\s\S]*\$callRole = 'owner';[\s\S]*\}[\s\S]*SELECT[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role/,
     'realtime role context must recompute owner role from persisted call owner state',
   );
   assert.match(
-    realtimeContext,
-    /'can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner',/,
-    'realtime role context must not leave demoted previous owners with moderation or owner-management controls',
+    realtimeRoleContext,
+    /'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner',/,
+    'realtime role context must not leave demoted previous owners with owner-management controls while preserving org-admin moderation',
   );
   assert.match(
     lobbySecurity,

@@ -55,6 +55,7 @@ function rejoin(state, userId) {
 try {
   const ownerModerationContract = readText('demo/video-chat/backend-king-php/tests/call-owner-moderation-contract.php');
   const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+  const realtimeCallRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
   const roomState = readText('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/roomState.ts');
   const participantUi = readText('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   const socketLifecycle = readText('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
@@ -78,16 +79,21 @@ try {
 
   assert.match(
     realtimeCallContext,
+    /require_once __DIR__ \. '\/realtime_call_role_context\.php'/,
+    'realtime context must load the focused role resolver extraction',
+  );
+  assert.match(
+    realtimeCallRoleContext,
     /videochat_realtime_call_role_context_for_room_user[\s\S]*calls\.owner_user_id[\s\S]*cp\.call_role[\s\S]*calls\.id = :call_id/s,
     'realtime rejoin context must recompute owner and participant roles from the call database row',
   );
   assert.match(
-    realtimeCallContext,
-    /can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
-    'realtime rejoin context must allow moderators to moderate after reconnect',
+    realtimeCallRoleContext,
+    /can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
+    'realtime rejoin context must allow moderators and same-organization admins to moderate after reconnect',
   );
   assert.match(
-    realtimeCallContext,
+    realtimeCallRoleContext,
     /can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
     'realtime rejoin context must keep owner-transfer rights stricter than moderator rights',
   );

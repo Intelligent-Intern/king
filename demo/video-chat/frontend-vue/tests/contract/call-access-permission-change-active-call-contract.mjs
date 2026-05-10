@@ -47,6 +47,7 @@ const rosterPanelSource = readText('demo/video-chat/frontend-vue/src/domain/real
 const socketLifecycleSource = readText('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const workspaceSource = readText('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
 const realtimeContextSource = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeCallRoleContextSource = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
 const realtimeSnapshotSource = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php');
 const realtimeWebsocketSource = readText('demo/video-chat/backend-king-php/http/module_realtime_websocket.php');
 const lobbySecuritySource = readText('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
@@ -68,14 +69,14 @@ const sendLayoutCommandBody = functionBody(participantUiSource, 'sendLayoutComma
 const publishLayoutSelectionStateBody = functionBody(participantUiSource, 'publishLayoutSelectionState');
 const setActiveTabBody = functionBody(participantUiSource, 'setActiveTab');
 const connectionWithCallContextBody = functionBody(realtimeContextSource, 'videochat_realtime_connection_with_call_context');
-const roleContextBody = functionBody(realtimeContextSource, 'videochat_realtime_call_role_context_for_room_user');
+const roleContextBody = functionBody(realtimeCallRoleContextSource, 'videochat_realtime_call_role_context_for_room_user');
 const roomSnapshotPayloadBody = functionBody(realtimeSnapshotSource, 'videochat_realtime_room_snapshot_payload');
 const lobbyAuthorizeBody = functionBody(lobbySecuritySource, 'videochat_realtime_authorize_lobby_moderation_command');
 
 assert.match(
   roleContextBody,
-  /SELECT[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*calls\.status IN \('active', 'scheduled'\)[\s\S]*if \(\(int\) \(\$preferredRow\['owner_user_id'\] \?\? 0\) === \$userId\) \{[\s\S]*\$callRole = 'owner';[\s\S]*\$effectiveCallRole = \$isAdmin \? 'owner' : \$callRole;[\s\S]*'can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
-  'backend realtime role context must recompute active-call owner/moderator/admin authority from current DB rows',
+  /\$contextFromRow = static function \(array \$row, bool \$isOrganizationAdmin\)[\s\S]*\$callRole = 'owner';[\s\S]*\$effectiveCallRole = \$isAdmin \? 'owner' : \(\$isOrganizationAdmin && \$callRole !== 'owner' \? 'moderator' : \$callRole\);[\s\S]*'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'[\s\S]*SELECT[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*calls\.status IN \('active', 'scheduled'\)/,
+  'backend realtime role context must recompute active-call owner, moderator, admin, and org-admin authority from current DB rows',
 );
 assert.match(
   connectionWithCallContextBody,
