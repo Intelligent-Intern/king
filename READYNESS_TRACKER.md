@@ -17,6 +17,18 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM7-13 foreign link review audit scoping extraction:
+  inspected `local/iam-e2e-foreign-link-review-audit` at
+  `c7fa0f7bd98480e718b397f0a2bf1cb0b29e5b8c` and extracted only the focused
+  current proof. Call-access review flags and call-access audit helpers now use
+  call-scoped tenant precedence over stale link tenants. Added backend and
+  static contracts proving foreign duplicate personalized-link review flags
+  deduplicate per foreign subject/access fingerprint, audit attempts remain
+  scoped to the call tenant and call id, and raw access ids, session ids,
+  tokens, cookies, SDP, ICE, host names, emails, call titles, and person names
+  do not persist in review/audit payloads. No push, deploy, Background, Gossip,
+  SFU, MediaSecurity, or BTGF files/tests were touched.
+
 - 2026-05-10 IAM7-02 duplicate review email/account confirmation extraction:
   inspected `agent/iam-e2e-duplicate-review-email` at
   `a89ffcff40faf421c0c1be9bb1d02c39eca12349` against current Sprint 07
