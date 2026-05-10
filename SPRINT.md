@@ -87,7 +87,7 @@ Sprint Checkboxen:
 - [x] GSP02-03 Chat archive backend hardening: prove every `chat/send` from an
   admitted call participant is stored durably with room, call, sender, role,
   attachments metadata, monotonic sequence and redacted payload.
-- [ ] GSP02-04 Chat history reload API: return the latest room chat history for
+- [x] GSP02-04 Chat history reload API: return the latest room chat history for
   admitted call participants after reload with cursor pagination, redaction and
   no guest/archive leak outside the call.
 - [ ] GSP02-05 Frontend chat bootstrap: on call load and websocket reconnect,
@@ -156,3 +156,8 @@ Current Loop Notes:
   `chat-archive-contract.sh` runner proves idempotent append, monotonic `seq`,
   sender role, attachment metadata and redaction via the Docker SQLite fallback
   when host PHP lacks `pdo_sqlite`.
+- GSP02-04 proof: `videochat_chat_archive_fetch()` now supports room-scoped
+  reload tails via `room_id` plus `tail=1`/`direction=latest`, returns the
+  latest room page in ascending UI order, exposes an older-page cursor, and
+  keeps the old forward cursor mode for archive screens. The chat archive
+  contract proves latest-tail, older-tail and cross-room exclusion.
