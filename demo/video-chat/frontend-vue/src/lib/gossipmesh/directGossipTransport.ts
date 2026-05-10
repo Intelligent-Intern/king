@@ -107,7 +107,6 @@ export class GossipDirectTransport implements GossipDataTransport {
 
   close(peerId?: string): void {
     if (peerId) {
-      this.onStateChange?.(safeId(peerId), 'closed', 'close')
       return
     }
     const scoped = transportsByScope.get(this.scope)

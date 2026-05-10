@@ -375,6 +375,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function checkRemoteVideoStalls() {
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
     const nowMs = Date.now();
@@ -386,8 +387,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       const createdAtMs = Number(peer.createdAtMs || 0);
       const frameCount = Number(peer.frameCount || 0);
       const stalledLoggedAtMs = Number(peer.stalledLoggedAtMs || 0);
-      const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
-      const lastReceivedFrameAtMs = Number(peer.lastReceivedFrameAtMs || 0);
+      const latestGossipArrivalAtMs = Number(peer.gossipLatestArrivalAtMs || 0);
+      const lastFrameAtMs = Math.max(Number(peer.lastFrameAtMs || 0), latestGossipArrivalAtMs);
+      const lastReceivedFrameAtMs = Math.max(Number(peer.lastReceivedFrameAtMs || 0), latestGossipArrivalAtMs);
       const lastDecodedFrameAtMs = Number(peer.lastDecodedFrameAtMs || 0);
       if (createdAtMs <= 0) continue;
       const peerIsScreenShare = isScreenSharePeer(peer);
@@ -418,6 +420,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
         const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
+        if (latestGossipArrivalAtMs > 0 && receivingFreshFrames) {
+          if (String(peer.mediaConnectionState || '') !== 'live' || String(peer.mediaConnectionMessage || '') !== '') {
+            setRemoteVideoStatus(peer, 'live', '', nowMs);
+          }
+          continue;
+        }
         const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();
         const socketRestartBackoffRemainingMs = sfuSocketRestartBackoffRemainingMs(peer, nowMs);
         const canRestartFrozenVideo = shouldRestartFrozenVideo

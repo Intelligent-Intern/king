@@ -607,13 +607,6 @@ export function createSputnikPeerRuntime(options: SputnikRuntimeOptions) {
       },
       onStateChange: (peerId, linkState, eventType) => {
         const normalizedPeerId = String(peerId || '').trim();
-        if (normalizedPeerId !== '') {
-          controller.setCarrierState?.(
-            normalizedPeerId,
-            linkState === 'open' ? 'connected' : 'lost',
-            `sputnik_gossip_direct_${eventType}`,
-          );
-        }
         capture({
           eventType: 'sputnik_gossip_direct_link_state',
           message: 'Sputnik Gossip direct link state changed.',

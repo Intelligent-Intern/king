@@ -1159,15 +1159,27 @@ function videochat_gossipmesh_plan_topology(string $callId, string $roomId, arra
     $topology = [];
     if ($memberCount > 1) {
         $perMemberNeighbors = min($neighborLimit, $memberCount - 1);
+        foreach ($normalizedMembers as $member) {
+            $topology[$member['id']] = [];
+        }
         foreach ($normalizedMembers as $index => $member) {
-            $neighbors = [];
-            for ($offset = 1; $offset < $memberCount && count($neighbors) < $perMemberNeighbors; $offset++) {
-                $neighborId = $normalizedMembers[($index + $offset) % $memberCount]['id'];
-                if (!videochat_gossipmesh_should_avoid_pair($member['id'], $neighborId, $avoidPairs)) {
-                    $neighbors[] = $neighborId;
+            for ($offset = 1; $offset < $memberCount && count($topology[$member['id']]) < $perMemberNeighbors; $offset++) {
+                foreach ([-1, 1] as $direction) {
+                    if (count($topology[$member['id']]) >= $perMemberNeighbors) {
+                        break;
+                    }
+                    $neighborIndex = ($index + ($direction * $offset) + $memberCount) % $memberCount;
+                    $neighborId = $normalizedMembers[$neighborIndex]['id'];
+                    if (
+                        $neighborId === $member['id']
+                        || in_array($neighborId, $topology[$member['id']], true)
+                        || videochat_gossipmesh_should_avoid_pair($member['id'], $neighborId, $avoidPairs)
+                    ) {
+                        continue;
+                    }
+                    $topology[$member['id']][] = $neighborId;
                 }
             }
-            $topology[$member['id']] = $neighbors;
         }
     } else {
         foreach ($normalizedMembers as $member) {

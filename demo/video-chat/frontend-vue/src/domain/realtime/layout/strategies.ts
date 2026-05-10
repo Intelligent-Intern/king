@@ -303,6 +303,7 @@ export function selectCallLayoutParticipants({
   activityByUserId = {},
   layoutState = {},
   selectionState = null,
+  visibleParticipantsLimit = 5,
   nowMs = Date.now(),
 } = {}) {
   const layout = normalizeCallLayoutState(layoutState);
@@ -311,7 +312,8 @@ export function selectCallLayoutParticipants({
   const mainRows = rows.filter((row) => !isScreenShareParticipant(row));
   const mainByUserId = new Map(mainRows.map((row) => [row.userId, row]));
   const mode = layout.mode;
-  const limit = mode === 'grid' ? 8 : (mode === 'main_only' ? 1 : 5);
+  const configuredLimit = Math.max(1, Math.floor(Number(visibleParticipantsLimit || 5)));
+  const limit = mode === 'main_only' ? 1 : configuredLimit;
 
   const pinnedFromMap = Object.entries(pinnedUsers || {})
     .filter(([, pinned]) => pinned === true)

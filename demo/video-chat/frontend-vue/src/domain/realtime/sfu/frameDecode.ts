@@ -836,8 +836,16 @@ export function createSfuFrameDecodeHelpers({
 
   async function decodeSfuFrameForPeer(publisherId, peer, frame, options = {}) {
     if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) return;
+    const frameReceivedAtMs = Date.now();
     peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
-    peer.lastReceivedFrameAtMs = Date.now();
+    peer.lastReceivedFrameAtMs = frameReceivedAtMs;
+    if (isGossipDeliveredFrame(frame)) {
+      peer.gossipLatestArrivalAtMs = Math.max(
+        Number(peer.gossipLatestArrivalAtMs || 0),
+        Number(frame?.receivedAtMs || frame?.received_at_ms || 0),
+        frameReceivedAtMs,
+      );
+    }
     const publisherUserId = Number(frame?.publisherUserId || 0);
     const activityUserId = Number(peer?.userId || publisherUserId || 0);
     if (Number.isInteger(activityUserId) && activityUserId > 0) {

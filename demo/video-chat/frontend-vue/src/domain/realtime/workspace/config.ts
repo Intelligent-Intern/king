@@ -179,7 +179,7 @@ export function resolveSfuVideoQualityProfileBudget(value) {
 export const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
 export const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;
 export const LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS = 10;
-export const VISIBLE_PARTICIPANTS_LIMIT = 5;
+export const VISIBLE_PARTICIPANTS_LIMIT = 12;
 export const PARTICIPANT_ACTIVITY_WINDOW_MS = 15_000;
 export const ALONE_IDLE_PROMPT_AFTER_MS = 15 * 60 * 1000;
 export const ALONE_IDLE_COUNTDOWN_MS = 5 * 60 * 1000;

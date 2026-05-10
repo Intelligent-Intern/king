@@ -288,18 +288,6 @@ export function createCallWorkspaceGossipDataLane({
       },
       onStateChange: (peerId, state, eventType) => {
         const normalizedPeerId = String(peerId || '');
-        const hasOpenReplacement = eventType !== 'open'
-          && typeof gossipDirectTransport?.hasOpenChannel === 'function'
-          && gossipDirectTransport.hasOpenChannel(normalizedPeerId);
-        const controller = ensureLiveGossipController();
-        if (controller && assignedGossipNeighborIds.has(normalizedPeerId)) {
-          ensureLiveGossipPeer(normalizedPeerId);
-          if (hasOpenReplacement) {
-            controller.updateCarrierStateFromDataChannel(normalizedPeerId, 'open', 'open');
-          } else {
-            controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
-          }
-        }
         captureClientDiagnostic({
           category: 'media',
           level: 'warning',
@@ -518,7 +506,6 @@ export function createCallWorkspaceGossipDataLane({
     const repairRetiredPeerIds = topologyRepairRetiredPeerIdsForLocalPeer(topologyHint, peerId);
     for (const retiredPeerId of repairRetiredPeerIds) {
       assignedGossipNeighborIds.delete(retiredPeerId);
-      gossipDirectTransport?.close?.(retiredPeerId);
     }
 
     controller.addPeer(peerId);
@@ -546,8 +533,7 @@ export function createCallWorkspaceGossipDataLane({
     }
     for (const previousPeerId of previousAssignedNeighborIds) {
       if (!assignedGossipNeighborIds.has(previousPeerId)) {
-        gossipDirectTransport?.close?.(previousPeerId);
-        gossipAudioDirectTransport?.close?.(previousPeerId);
+        continue;
       }
     }
     const boundCount = bindAssignedGossipNeighbors();
@@ -1203,6 +1189,10 @@ export function createCallWorkspaceGossipDataLane({
       chunkCount: Math.max(1, Number(msg.chunkCount ?? msg.chunk_count ?? 1)),
       frameId: String(msg.frameId || msg.frame_id || delivery?.frame_id || ''),
       senderSentAtMs: Math.max(0, Number(msg.senderSentAtMs ?? msg.sender_sent_at_ms ?? 0)),
+      receivedAtMs: Math.max(0, Number(msg.receivedAtMs ?? msg.received_at_ms ?? 0)),
+      forwardedAtMs: Math.max(0, Number(msg.forwardedAtMs ?? msg.forwarded_at_ms ?? 0)),
+      relayPeerId: String(msg.relayPeerId || msg.relay_peer_id || delivery?.from_peer_id || ''),
+      hopCount: Math.max(0, Number(msg.hopCount ?? msg.hop_count ?? 0)),
       codecId: String(msg.codecId || msg.codec_id || ''),
       runtimeId: String(msg.runtimeId || msg.runtime_id || ''),
       videoLayer: String(msg.videoLayer || msg.video_layer || ''),
@@ -1230,9 +1220,6 @@ export function createCallWorkspaceGossipDataLane({
 
     assignedGossipNeighborIds.delete(peerId);
     gossipTopologyRepairRequestedAtByPeerId.delete(peerId);
-    liveGossipController?.updateCarrierStateFromDataChannel?.(peerId, 'lost', String(reason || 'target_not_in_room'));
-    gossipDirectTransport?.close?.(peerId);
-    gossipAudioDirectTransport?.close?.(peerId);
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',

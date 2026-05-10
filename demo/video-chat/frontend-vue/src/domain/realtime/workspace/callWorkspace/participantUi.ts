@@ -5,6 +5,7 @@ import { createCallWorkspaceModerationSync } from './moderationSync';
 import { createVideoFullscreenToggle } from './videoFullscreenToggle';
 import { isScreenShareMediaSource, isScreenShareUserId, screenShareUserIdForOwner } from '../../screenShareIdentity.js';
 import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
@@ -226,6 +227,7 @@ const layoutSelection = computed(() => selectCallLayoutParticipants({
   activityByUserId: participantActivityByUserId,
   layoutState: normalizedCallLayout.value,
   selectionState: layoutSelectionState,
+  visibleParticipantsLimit: VISIBLE_PARTICIPANTS_LIMIT,
   nowMs: Date.now(),
 }));
 const stripParticipants = computed(() => layoutSelection.value.visibleParticipants.slice(0, VISIBLE_PARTICIPANTS_LIMIT));
@@ -277,9 +279,18 @@ function participantMediaStatus(userId) {
   }
 
   const nowMs = Date.now();
+  const gossipFreshnessWindowMs = Math.max(REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 3, REMOTE_VIDEO_STALL_THRESHOLD_MS * 2);
+  const latestGossipArrivalAtMs = Number(peer.gossipLatestArrivalAtMs || 0);
+  const hasFreshGossipArrival = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+    && latestGossipArrivalAtMs > 0
+    && (nowMs - latestGossipArrivalAtMs) < gossipFreshnessWindowMs;
+  if (hasFreshGossipArrival) {
+    return { show: false, state: 'live', label: '' };
+  }
+
   const state = String(peer.mediaConnectionState || '').trim().toLowerCase();
   const message = String(peer.mediaConnectionMessage || '').trim();
-  if (state === 'recovering') {
+  if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && state === 'recovering') {
     return { show: true, state: 'recovering', label: message || 'Reconnecting video' };
   }
 
@@ -287,14 +298,21 @@ function participantMediaStatus(userId) {
   if (!hasRenderable || frameCount <= 0) {
     const createdAtMs = Number(peer.createdAtMs || 0);
     const ageMs = createdAtMs > 0 ? Math.max(0, nowMs - createdAtMs) : 0;
-    if (ageMs >= REMOTE_VIDEO_STALL_THRESHOLD_MS) {
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && ageMs >= REMOTE_VIDEO_STALL_THRESHOLD_MS) {
       return { show: true, state: 'recovering', label: 'Reconnecting video' };
     }
     return { show: true, state: 'connecting', label: message || 'Connecting media' };
   }
 
-  const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
-  if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= Math.max(REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 3, REMOTE_VIDEO_STALL_THRESHOLD_MS * 2)) {
+  const lastFrameAtMs = Math.max(
+    Number(peer.lastFrameAtMs || 0),
+    latestGossipArrivalAtMs,
+  );
+  if (
+    !VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+    && lastFrameAtMs > 0
+    && (nowMs - lastFrameAtMs) >= gossipFreshnessWindowMs
+  ) {
     return { show: true, state: 'recovering', label: 'Reconnecting video' };
   }
 
