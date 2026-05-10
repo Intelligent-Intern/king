@@ -158,8 +158,19 @@ Sprint Checkboxen:
     `call-access-guest-list-membership-docker-proof-contract.mjs`,
     `iam-backend-docker-runtime-proof-wrapper.sh`, and `git diff --check`
     passed.
-- [ ] IAM4-09 Extract registered-invitee logged-in/logged-out/final proof value
+- [x] IAM4-09 Extract registered-invitee logged-in/logged-out/final proof value
   from the registered-invitee `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-09-registered-invitee-extract`.
+  - Added `call-access-registered-invitee-extract-contract.mjs` and
+    `documentation/iam-sprint-04-registered-invitee-extract-evidence.md`.
+  - Extracted the current-prod coverage map for registered invitees: logged-in
+    matching accounts, logged-out handoff, wrong-account/session-switch
+    fail-closed behavior, call-scoped session binding, and realtime binding
+    rejection for stale call/room/user contexts.
+  - Proof: `call-access-registered-invitee-extract-contract.mjs`,
+    `call-access-registered-logged-in-invitee-contract.mjs`,
+    `call-access-registered-logged-out-handoff-contract.mjs`, and
+    `git diff --check` passed.
 - [ ] IAM4-10 Extract owner-transfer lifecycle proof value from
   `local/iam-e2e-owner-transfer-lifecycle-proof-3`.
 - [ ] IAM4-11 Extract public-copy and seed-matrix proof value from their
