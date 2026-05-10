@@ -168,3 +168,9 @@ Current Loop Notes:
   open/reconnect and room snapshots. Verified with
   `node tests/contract/chat-archive-bootstrap-contract.mjs` and
   `npm run build`.
+- GSP02-06 blocker note: the public join link currently crashes online before
+  chat reporting can resume because deployed `JoinView` references
+  `requestCallAccessAccountUpdateConfirmation` without importing it. Local fix
+  `fa4d34ac` imports the function and adds
+  `join-view-account-confirmation-import-contract.mjs`; this still needs deploy
+  before the online room can be used again through that join path.
