@@ -14,6 +14,8 @@ const lifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/w
 const frameDecode = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/sfu/frameDecode.ts'), 'utf8')
 const browserRenderer = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts'), 'utf8')
 const packageJson = fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8')
+const gossipPixelProofSpec = fs.readFileSync(path.join(frontendRoot, 'tests/e2e/gossip-frame-pixel-proof.spec.js'), 'utf8')
+const gossipPixelProofHarness = fs.readFileSync(path.join(frontendRoot, 'tests/e2e/helpers/gossipFramePixelProofHarness.js'), 'utf8')
 
 function assert(condition, message) {
   if (!condition) {
@@ -139,6 +141,42 @@ assert(
     && browserFrameCountIndex > browserCanvasWriteIndex
     && browserRenderer.includes('noteSfuRemoteVideoFrameStable(peer, frame'),
   'WebCodecs receiver branch must also draw decoded pixels before frameCount/stability updates',
+)
+assert(
+  gossipPixelProofSpec.includes("test('gossip.media.frame.v1 writes decoded pixels into a remote participant tile'")
+    && /runGossipFramePixelProof\(page\)/.test(gossipPixelProofSpec),
+  'GSP01-11 must include an executable browser proof for a rendered gossip.media.frame.v1 remote tile',
+)
+assert(
+  /gossipFrameMessageFromEncodedFrame\(avatarEncodedFrame,\s*sequenceMap/.test(gossipPixelProofHarness)
+    && /publisherController\.publishFrame\(String\(remoteUserId\),\s*publishedGossipMessage\)/.test(gossipPixelProofHarness)
+    && /sfuFrameFromGossipMessage\(delivery\?\.message,\s*delivery\)/.test(gossipPixelProofHarness)
+    && /frameDecodeHelpers\.handleSFUEncodedFrame\(adaptedFrame\)/.test(gossipPixelProofHarness),
+  'browser proof must publish an avatar frame as gossip.media.frame.v1, receive it, adapt it, and enter the existing renderer path',
+)
+assert(
+  /avatarCanvas\.captureStream/.test(gossipPixelProofHarness)
+    && /mediaSessionPlanAllowsLocalPublication\(blockedPlan/.test(gossipPixelProofHarness)
+    && /mediaSessionPlanAllowsLocalPublication\(activePlan/.test(gossipPixelProofHarness)
+    && /blockedPlanAllowsPublish/.test(gossipPixelProofSpec)
+    && /activePlanAllowsPublish/.test(gossipPixelProofSpec),
+  'browser proof must use a synthetic avatar/canvas source and prove the media_session_plan publish gate',
+)
+assert(
+  /canvas\.parentElement === tile/.test(gossipPixelProofHarness)
+    && /Number\(peer\.frameCount \|\| 0\) > 0/.test(gossipPixelProofHarness)
+    && /getImageData\(0, 0, 1, 1\)/.test(gossipPixelProofHarness)
+    && /pixel\.every\(\(value, index\) => value === expectedPixel\[index\]\)/.test(gossipPixelProofHarness),
+  'browser proof must require remote tile attachment, decoded pixel readback, and frameCount > 0',
+)
+assert(
+  /expect\(proof\.frameCount\)\.toBeGreaterThan\(0\)/.test(gossipPixelProofSpec)
+    && /expect\(proof\.receivedFrameCount\)\.toBeGreaterThan\(0\)/.test(gossipPixelProofSpec)
+    && /expect\(proof\.pixel\)\.toEqual\(proof\.expectedPixel\)/.test(gossipPixelProofSpec)
+    && /expect\(proof\.publishedTransportMessageCount\)\.toBeGreaterThan\(0\)/.test(gossipPixelProofSpec)
+    && /expect\(proof\.gossipControllerDeliveryCount\)\.toBeGreaterThan\(0\)/.test(gossipPixelProofSpec)
+    && /expect\(proof\.tileCanvasParentId\)\.toBe/.test(gossipPixelProofSpec),
+  'browser proof assertions must fail if the test only publishes, creates a peer/canvas, or omits decoded pixels',
 )
 assert(
   packageJson.includes('gossip-live-receive-decode-route-contract.mjs'),
