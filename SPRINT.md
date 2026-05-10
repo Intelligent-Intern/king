@@ -151,8 +151,18 @@ Tickets:
     `node tests/contract/call-access-direct-join-rights-contract.mjs`,
     `node tests/contract/call-access-account-isolation-contract.mjs`, and
     `git diff --check` passed.
-- [ ] IAM3-08 Prove temporary call-link users cannot persist outside the target
+- [x] IAM3-08 Prove temporary call-link users cannot persist outside the target
   call, tenant, expiration window, or admission state.
+  - Merged worker branch `agent/iam-s3-08-temp-call-link-boundaries`.
+  - Added `call-access-temp-call-link-boundaries-contract.mjs` proving temporary
+    call-link sessions are bound to the issued call, organization context,
+    expiration, and active admission state rather than becoming portable or
+    persistent access.
+  - Proof: `node tests/contract/call-access-temp-call-link-boundaries-contract.mjs`,
+    `node tests/contract/call-access-personalized-temp-reuse-contract.mjs`, and
+    `git diff --check` passed. Docker PHP proof for anonymous temporary rights
+    passed in the worker; direct host PHP remains skipped when `pdo_sqlite` is
+    unavailable.
 - [ ] IAM3-09 Prove disabled anonymous links and disabled call-access links fail
   closed before session creation and before lobby insertion.
 - [ ] IAM3-10 Prove kicked or removed participants cannot rejoin via cached
