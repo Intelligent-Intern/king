@@ -137,6 +137,16 @@ correctly requires backend realtime owner-absence implementation, room snapshot
 lifecycle payloads, terminal lifecycle cleanup, and UI/browser proof in a lane
 that permits those files.
 
-IAM5-09 closes as focused extraction evidence plus a static guard. It does not
-weaken the stronger branch contract, and it does not mark the owner-timeout
-runtime itself as implemented on current prod.
+IAM5-09 closed as focused extraction evidence plus a static guard. It did not
+weaken the stronger branch contract.
+
+## IAM7-20 Follow-Up
+
+Sprint 07 ticket IAM7-20 ports the backend owner-absence realtime runtime from
+`local/iam-e2e-owner-absence-realtime-sync` into the current integration shape
+without wholesale merging the stale branch. IAM7-20 follow-up ports the backend owner-absence realtime runtime in
+`demo/video-chat/backend-king-php/domain/realtime/realtime_owner_absence.php`
+and proves it through
+`demo/video-chat/backend-king-php/tests/call-access-owner-absence-realtime-sync-contract.php`.
+The Vue countdown banner and browser E2E source files remain non-ported UI
+evidence for a separate frontend lane.

@@ -17,6 +17,26 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM7-20 owner-absence realtime sync extraction:
+  inspected `local/iam-e2e-owner-absence-realtime-sync` at
+  `72dd4d81d1e8431e940808890f232b78cf6f8a70` against integration baseline
+  `4006074802b69ab92de623a6509a4cc9af68fa2e` and rejected it as wholesale
+  input because the branch carries broad stale IAM/UI/script changes. Extracted
+  only the focused current runtime/proof value: realtime presence retains stale
+  owner heartbeats long enough for the owner-absence window, room snapshots
+  publish signed `call_lifecycle.owner_absence` from current server state,
+  stale local owner participants and owner viewer controls fail closed, lobby
+  snapshots and lobby moderation commands revalidate current DB role/presence
+  before accepting owner/moderator authority, owner return cancels monitoring
+  from current presence, and owner-absence timeout ends the call while disabling
+  call-access links and revoking call-access sessions with redacted counts.
+  Proof: PHP syntax checks, `iam-owner-absence-realtime-sync-contract.mjs`,
+  `call-access-owner-absence-extract-contract.mjs`,
+  `iam-call-access-ci-wire-contract.mjs`, and Docker-backed
+  `IAM_SQLITE_CONTRACTS="call-access-owner-absence-realtime-sync-contract.sh" demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`.
+  No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
+  were touched.
+
 - 2026-05-10 IAM7-16 link invalidation active-state extraction:
   fast-forwarded the worker branch to integration baseline `e73009d1` after
   IAM7-17 merged, then inspected

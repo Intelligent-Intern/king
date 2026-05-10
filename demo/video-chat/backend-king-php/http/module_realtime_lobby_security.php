@@ -114,6 +114,22 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'effective_call_role' => $effectiveCallRole,
         ];
     }
+    $leftAt = trim((string) ($context['left_at'] ?? ''));
+    if (
+        $leftAt !== ''
+        && in_array($callRole, ['owner', 'moderator'], true)
+        && !videochat_realtime_presence_db_has_room_membership($pdo, $normalizedRoomId, $callId, $userId)
+    ) {
+        return [
+            'ok' => false,
+            'error' => 'stale_lobby_authority',
+            'room_id' => $normalizedRoomId,
+            'call_id' => $callId,
+            'role' => $serverRole,
+            'call_role' => $callRole,
+            'effective_call_role' => $effectiveCallRole,
+        ];
+    }
 
     return [
         'ok' => true,

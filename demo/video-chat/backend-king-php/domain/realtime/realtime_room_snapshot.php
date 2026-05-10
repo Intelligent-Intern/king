@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../call_apps/call_app_sessions.php';
 require_once __DIR__ . '/realtime_activity_layout.php';
+require_once __DIR__ . '/realtime_call_context.php';
 require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
+require_once __DIR__ . '/realtime_owner_absence.php';
 require_once __DIR__ . '/realtime_presence.php';
 
-function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
+function videochat_realtime_db_room_participants(callable $openDatabase, array $connection, ?int $nowMs = null): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
     $callId = videochat_realtime_normalize_call_id(
@@ -19,9 +21,10 @@ function videochat_realtime_db_room_participants(callable $openDatabase, array $
     }
 
     try {
+        $effectiveNowMs = is_int($nowMs) && $nowMs > 0 ? $nowMs : videochat_realtime_presence_db_now_ms();
         $pdo = $openDatabase();
         videochat_realtime_presence_db_bootstrap($pdo);
-        videochat_realtime_presence_db_prune($pdo);
+        videochat_realtime_presence_db_prune($pdo, $effectiveNowMs);
         $statement = $pdo->prepare(
             <<<'SQL'
 SELECT
@@ -54,7 +57,7 @@ SQL
         $statement->execute([
             ':call_id' => $callId,
             ':room_id' => $roomId,
-            ':cutoff_ms' => videochat_realtime_presence_db_now_ms() - videochat_realtime_presence_db_ttl_ms(),
+            ':cutoff_ms' => $effectiveNowMs - videochat_realtime_presence_db_ttl_ms(),
         ]);
     } catch (Throwable) {
         return [];
@@ -185,7 +188,8 @@ function videochat_realtime_room_snapshot_payload(
     array $presenceState,
     array $connection,
     callable $openDatabase,
-    string $reason
+    string $reason,
+    ?int $nowMs = null
 ): array {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
     $callId = videochat_realtime_normalize_call_id(
@@ -195,8 +199,27 @@ function videochat_realtime_room_snapshot_payload(
     $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : 0;
     $participants = videochat_realtime_merge_room_participants(
         videochat_presence_room_participants($presenceState, $roomId, $tenantId > 0 ? $tenantId : null),
-        videochat_realtime_db_room_participants($openDatabase, $connection)
+        videochat_realtime_db_room_participants($openDatabase, $connection, $nowMs)
     );
+    $ownerAbsence = videochat_realtime_owner_absence_disabled_payload();
+    if ($callId !== '' && $roomId !== '') {
+        try {
+            $ownerAbsence = videochat_realtime_apply_owner_absence_timeout($openDatabase(), $callId, $roomId, $nowMs);
+        } catch (Throwable) {
+            $ownerAbsence = videochat_realtime_owner_absence_disabled_payload('error');
+        }
+    }
+    if (
+        (bool) ($ownerAbsence['enabled'] ?? false)
+        && !(bool) ($ownerAbsence['owner_present'] ?? false)
+        && (int) ($ownerAbsence['owner_user_id'] ?? 0) > 0
+    ) {
+        $absentOwnerUserId = (int) ($ownerAbsence['owner_user_id'] ?? 0);
+        $participants = array_values(array_filter(
+            $participants,
+            static fn (array $participant): bool => (int) (($participant['user'] ?? [])['id'] ?? 0) !== $absentOwnerUserId
+        ));
+    }
     $activityLayout = [
         'layout' => videochat_layout_default_state($callId, $roomId),
         'activity' => [],
@@ -229,6 +252,23 @@ function videochat_realtime_room_snapshot_payload(
             trim($reason) === '' ? 'snapshot' : trim($reason)
         );
     }
+    $viewerConnection = $connection;
+    try {
+        $viewerConnection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
+        $viewerConnection = videochat_realtime_owner_absence_downgrade_absent_owner_connection(
+            $openDatabase(),
+            $viewerConnection,
+            $nowMs
+        );
+    } catch (Throwable) {
+        $viewerConnection = [
+            ...$connection,
+            'call_role' => 'participant',
+            'effective_call_role' => 'participant',
+            'can_moderate_call' => false,
+            'can_manage_call_owner' => false,
+        ];
+    }
 
     return [
         'type' => 'room/snapshot',
@@ -238,15 +278,19 @@ function videochat_realtime_room_snapshot_payload(
         'layout' => is_array($activityLayout['layout'] ?? null) ? $activityLayout['layout'] : videochat_layout_default_state($callId, $roomId),
         'activity' => is_array($activityLayout['activity'] ?? null) ? $activityLayout['activity'] : [],
         'viewer' => [
-            'user_id' => (int) ($connection['user_id'] ?? 0),
-            'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
-            'call_id' => (string) ($connection['active_call_id'] ?? ''),
-            'call_role' => videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant')),
+            'user_id' => (int) ($viewerConnection['user_id'] ?? 0),
+            'role' => videochat_normalize_role_slug((string) ($viewerConnection['role'] ?? '')),
+            'call_id' => (string) ($viewerConnection['active_call_id'] ?? ''),
+            'call_role' => videochat_normalize_call_participant_role((string) ($viewerConnection['call_role'] ?? 'participant')),
             'effective_call_role' => videochat_normalize_call_participant_role(
-                (string) ($connection['effective_call_role'] ?? ($connection['call_role'] ?? 'participant'))
+                (string) ($viewerConnection['effective_call_role'] ?? ($viewerConnection['call_role'] ?? 'participant'))
             ),
-            'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
-            'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
+            'can_moderate' => (bool) ($viewerConnection['can_moderate_call'] ?? false),
+            'can_manage_owner' => (bool) ($viewerConnection['can_manage_call_owner'] ?? false),
+        ],
+        'call_lifecycle' => [
+            'status' => (string) ($ownerAbsence['call_status'] ?? ''),
+            'owner_absence' => $ownerAbsence,
         ],
         'call_apps' => $callApps,
         'gossip_topology' => $gossipTopology,
@@ -262,6 +306,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'participants' => $payload['participants'] ?? [],
         'layout' => $payload['layout'] ?? [],
         'activity' => $payload['activity'] ?? [],
+        'call_lifecycle' => $payload['call_lifecycle'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
         'gossip_topology' => $payload['gossip_topology'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
