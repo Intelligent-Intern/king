@@ -143,8 +143,16 @@ Tickets:
     issuance is required.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-personalized-temp-reuse-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM2-08 Prove invite invalidation after reschedule, delete, end, disable,
+- [x] IAM2-08 Prove invite invalidation after reschedule, delete, end, disable,
   or explicit revoke produces terminal safe states.
+  - Merged worker branch `agent/iam-s2-08-invite-invalidation`.
+  - Added `call-access-invite-invalidation-terminal-contract.mjs` proving
+    revoked/expired/deleted/ended/disabled invite links fail closed, session
+    issuance does not allocate identities or leak call/link data, backend routes
+    map terminal states to safe HTTP errors, and join UI blocks session POSTs
+    after terminal context errors.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-invite-invalidation-terminal-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM2-09 Prove duplicate invite redemption and stale verified-context
   replay are reconciled deterministically across devices.
 - [ ] IAM2-10 Prove owner-transfer main journey updates call-access authority
