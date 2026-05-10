@@ -284,14 +284,14 @@ SQL
     $launchAfterInstallationDisable = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
     $launchAfterInstallationDisablePayload = videochat_call_app_marketplace_entitlement_decode($launchAfterInstallationDisable);
     videochat_call_app_marketplace_entitlement_assert((int) ($launchAfterInstallationDisable['status'] ?? 0) === 409, 'disabled organization installation must block launch for existing sessions');
-    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-disable launch must fail because the app is unavailable');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'installation_disabled', 'post-disable launch must fail because the installation is disabled');
 
     $validateAfterInstallationDisable = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
         'launch_token' => $preRevokeLaunchToken,
     ]);
     $validateAfterInstallationDisablePayload = videochat_call_app_marketplace_entitlement_decode($validateAfterInstallationDisable);
     videochat_call_app_marketplace_entitlement_assert((int) ($validateAfterInstallationDisable['status'] ?? 0) === 401, 'disabled organization installation must invalidate existing launch tokens');
-    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-disable launch-token validation must fail because the app is unavailable');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'installation_disabled', 'post-disable launch-token validation must fail because the installation is disabled');
 
     $enable = $dispatch('PATCH', '/api/marketplace/call-apps/whiteboard/installations/' . rawurlencode($installationId), $adminAuth, [
         'status' => 'enabled',
@@ -335,14 +335,14 @@ SQL
     $launchAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
     $launchAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($launchAfterEntitlementRevoke);
     videochat_call_app_marketplace_entitlement_assert((int) ($launchAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block launch for existing sessions');
-    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke launch must fail because the app is unavailable');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'entitlement_not_active', 'post-revoke launch must fail because the entitlement is not active');
 
     $validateAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
         'launch_token' => $preRevokeLaunchToken,
     ]);
     $validateAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($validateAfterEntitlementRevoke);
     videochat_call_app_marketplace_entitlement_assert((int) ($validateAfterEntitlementRevoke['status'] ?? 0) === 401, 'revoked organization entitlement must invalidate existing launch tokens');
-    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke launch-token validation must fail because the app is unavailable');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'entitlement_not_active', 'post-revoke launch-token validation must fail because the entitlement is not active');
 
     $bootstrapAfterEntitlementRevoke = $dispatchCallApps('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
     $bootstrapAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($bootstrapAfterEntitlementRevoke);
