@@ -68,15 +68,42 @@ Proof anchors:
 Sprint Checkboxen:
 - [ ] IAM5-01 Build a fresh remaining IAM branch/worktree inventory and rank
   branches by unique proof value, dirtiness, containment, and cleanup risk.
-- [ ] IAM5-02 Classify `iam-e2e-integration` as merge candidate, superseded
+- [x] IAM5-02 Classify `iam-e2e-integration` as merge candidate, superseded
   evidence, or cleanup anchor against `prod-kingrt-do-not-push-to-github`.
-- [ ] IAM5-03 Reconcile the `codex/iam-duplicate-cleanup*` dirty/conflicted
+  - Merged worker branch `agent/iam-s5-02-integration-classify`.
+  - Added `documentation/iam-sprint-05-integration-classification.md` and
+    `iam-sprint-05-integration-classification-contract.mjs`.
+  - Classified `iam-e2e-integration` as a cleanup anchor, not a wholesale merge
+    candidate; it remains useful source evidence for focused IAM5 lanes but is
+    not contained by the production integration branch.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-sprint-05-integration-classification-contract.mjs`
+    and `git diff --check` passed.
+- [x] IAM5-03 Reconcile the `codex/iam-duplicate-cleanup*` dirty/conflicted
   family without losing user work; extract only current package-suite value.
+  - Merged worker branch `agent/iam-s5-03-duplicate-family`.
+  - Added `documentation/iam-sprint-05-duplicate-cleanup-family.md` and
+    `iam-duplicate-cleanup-family-contract.mjs`.
+  - Preserved the dirty/conflicted source worktree untouched, documented the
+    unresolved `package.json` conflict and staged suite files, and extracted
+    only the separable package-suite redirection value as evidence for a future
+    focused runner lane.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-duplicate-cleanup-family-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM5-04 Extract authorized rejoin proof value from
   `local/iam-e2e-authorized-rejoin-main` and the 20260509 authorized-rejoin
   branches.
-- [ ] IAM5-05 Extract lobby state cleanup proof value from the lobby cleanup
+- [x] IAM5-05 Extract lobby state cleanup proof value from the lobby cleanup
   branches, keeping live state websocket-driven and avoiding manual refresh UI.
+  - Merged worker branch `agent/iam-s5-05-lobby-cleanup`.
+  - Added `documentation/iam-sprint-05-lobby-state-cleanup-extraction.md` and
+    `call-access-lobby-state-cleanup-extract-contract.mjs`.
+  - Extracted lobby cleanup proof as websocket snapshot/delta and admission
+    lifecycle evidence, explicitly rejecting manual refresh UI for realtime
+    state.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-lobby-state-cleanup-extract-contract.mjs`,
+    existing lobby/call-access contracts in the worker, and `git diff --check`
+    passed. Host `pdo_sqlite` lobby DB wrappers skipped in the worker as an
+    environment limitation.
 - [ ] IAM5-06 Extract lobby admission timeout/concurrency/audit proof value
   from the lobby timeout, concurrency, admission, and audit branches.
 - [ ] IAM5-07 Extract duplicate review/abuse proof value from the duplicate
