@@ -17,6 +17,30 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Calendar, Edge States, And Call-App Boundary Proof 09
+  closeout: completed all 20 IAM9 checkboxes on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint extracted
+  focused current IAM/call-access proof value from stale historical branches
+  covering audit completeness, calendar invitation safe states, Call App
+  entitlement and launch-token boundaries, cross-org joins, terminal join
+  denial, duplicate-device abuse, fail-closed edge errors, secure account-update
+  confirmations, confirmation races, and safe email dispatch/audit behavior.
+  Additional integration fix: lobby `reject` now distinguishes normal invited
+  participant queue reset from hard remove/kick revocation while keeping
+  call-access sessions fail-closed. This preserves anonymous/open-link rejection
+  and fixes stale admit/reject races. Proof: focused Node/PHP contracts,
+  `demo/video-chat/scripts/iam-call-access-ci-gate.sh --static`,
+  Docker-backed `demo/video-chat/scripts/iam-call-access-ci-gate.sh --sqlite`,
+  focused lobby concurrency and anonymous lobby SQLite proofs, production build
+  during deploy, `prod-debug.sh`, and HTTP probes for API/runtime, app shell,
+  Call App assets, and unauthenticated Call App availability returning 401
+  rather than the old 500. Deployment: production deployed from the local
+  no-push branch on 2026-05-10 with `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, and
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`. No DNS or certbot issuance was
+  run. SFU remains intentionally disabled; the generic deploy smoke still
+  expects an active SFU route and therefore reports the expected SFU 404.
+
 - 2026-05-10 IAM Session, Audit, Guestlist, And Terminal Proof 08 closeout:
   completed all 20 IAM8 checkboxes on local branch
   `prod-kingrt-do-not-push-to-github` without pushing. The sprint extracted or
