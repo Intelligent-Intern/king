@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspacePath = path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLanePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const mediaStackPath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/mediaStack.ts')
+const nativeBridgeRuntimePath = path.join(frontendRoot, 'src/domain/realtime/native/bridgeRuntime.ts')
 const socketLifecyclePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts')
 const publisherPipelinePath = path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts')
 const publisherFrameDispatchPath = path.join(frontendRoot, 'src/domain/realtime/local/publisherFrameDispatch.ts')
@@ -16,6 +17,7 @@ const callWorkspace = fs.readFileSync(callWorkspacePath, 'utf8')
 const gossipDataLane = fs.readFileSync(gossipDataLanePath, 'utf8')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const mediaStack = fs.readFileSync(mediaStackPath, 'utf8')
+const nativeBridgeRuntime = fs.readFileSync(nativeBridgeRuntimePath, 'utf8')
 const socketLifecycle = fs.readFileSync(socketLifecyclePath, 'utf8')
 const publisherPipeline = fs.readFileSync(publisherPipelinePath, 'utf8')
 const publisherFrameDispatch = fs.readFileSync(publisherFrameDispatchPath, 'utf8')
@@ -124,6 +126,11 @@ assert(
     && !socketLifecycle.includes('media_security')
     && !socketLifecycle.includes('MediaSecurity'),
   'websocket lifecycle must not run media-security handshake, sync, or sender-key handling',
+)
+assert(
+  /function attachMediaSecurityNativeSender\(sender, track\)[\s\S]*if \(!refs\.MediaSecuritySession\.supportsNativeTransforms\(\)\) return true;/.test(nativeBridgeRuntime)
+    && /function attachMediaSecurityNativeReceiver\(receiver, senderUserId, track\)[\s\S]*if \(!refs\.MediaSecuritySession\.supportsNativeTransforms\(\)\) return true;/.test(nativeBridgeRuntime),
+  'native WebRTC sender and receiver attachment must not block on media-security when transforms are disabled',
 )
 
 const sfuSendIndex = publisherFrameDispatch.indexOf('sendClient.sendEncodedFrame(frame)')
