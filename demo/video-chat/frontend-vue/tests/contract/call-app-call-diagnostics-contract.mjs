@@ -202,7 +202,11 @@ const availability = read('demo/video-chat/backend-king-php/domain/call_apps/cal
 includes(availability, 'include_internal', 'availability query must support admin-only internal app visibility');
 includes(availability, "catalog.app_key <> :internal_app_key", 'availability query must hide diagnostics from normal users');
 const sprint = read('SPRINT.md');
-includes(sprint, 'VCS-06 Make Call Diagnostics internal/admin-only', 'SPRINT must track diagnostics access hardening');
-includes(sprint, 'VCS-09 Add sanitized instance telemetry', 'SPRINT must track diagnostics telemetry');
+includes(sprint, 'IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05', 'SPRINT must remain focused on the active IAM sprint');
+const backlog = read('BACKLOG.md');
+includes(backlog, 'Video Call Stabilization and Internal Diagnostics are paused as active', 'BACKLOG must record paused diagnostics stabilization work');
+includes(backlog, 'Call App diagnostics/telemetry improvements remain available as future', 'BACKLOG must retain diagnostics telemetry follow-up work');
+includes(backlog, 'Call Diagnostics', 'BACKLOG must retain Call Diagnostics package history');
+includes(backlog, 'package work are represented by local commits on the active integration', 'BACKLOG must retain Call Diagnostics package integration history');
 
 console.log('[call-app-call-diagnostics-contract] PASS');

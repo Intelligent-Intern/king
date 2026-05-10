@@ -8,13 +8,20 @@ export const CALL_APP_DIAGNOSTIC_EVENTS = Object.freeze([
   'call_app_iframe_bridge_error',
 ]);
 
+function sensitiveDiagnosticKey(key) {
+  const normalized = String(key || '').trim().toLowerCase().replace(/[-.]+/g, '_');
+  if (/token|authorization|password|secret|credential|cookie/.test(normalized)) return true;
+  return /(^|_)((media|video|audio|image|canvas|pixel|encoded|raw)_)?frame_(data|payload|blob|buffer|bytes)($|_)/.test(normalized)
+    || /(^|_)(media_frame|video_frame|encoded_frame|raw_frame|pixel_buffer|canvas_pixels)($|_)/.test(normalized);
+}
+
 function sanitizeDiagnosticValue(value) {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) return value.map((entry) => sanitizeDiagnosticValue(entry));
   if (typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([key]) => !/token|authorization|password|secret/i.test(key))
+        .filter(([key]) => !sensitiveDiagnosticKey(key))
         .map(([key, entry]) => [key, sanitizeDiagnosticValue(entry)]),
     );
   }

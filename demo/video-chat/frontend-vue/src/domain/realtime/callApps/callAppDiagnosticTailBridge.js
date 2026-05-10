@@ -36,6 +36,12 @@ function secretLikeKey(key) {
   return /token|authorization|password|secret|credential|cookie|session/i.test(String(key || ''));
 }
 
+function mediaFrameLikeKey(key) {
+  const normalized = String(key || '').trim().toLowerCase().replace(/[-.]+/g, '_');
+  return /(^|_)((media|video|audio|image|canvas|pixel|encoded|raw)_)?frame_(data|payload|blob|buffer|bytes)($|_)/.test(normalized)
+    || /(^|_)(media_frame|video_frame|encoded_frame|raw_frame|pixel_buffer|canvas_pixels)($|_)/.test(normalized);
+}
+
 function redactDiagnosticString(value, maxLength = MAX_EVENT_DETAIL_LENGTH) {
   return safeString(value, '', maxLength)
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, `Bearer ${REDACTED}`)
@@ -57,7 +63,9 @@ function redactDiagnosticPayload(value, depth = 0) {
         break;
       }
       const normalizedKey = safeIdentifier(key, 'field');
-      normalized[normalizedKey] = secretLikeKey(normalizedKey) ? REDACTED : redactDiagnosticPayload(entry, depth + 1);
+      normalized[normalizedKey] = (secretLikeKey(normalizedKey) || mediaFrameLikeKey(normalizedKey))
+        ? REDACTED
+        : redactDiagnosticPayload(entry, depth + 1);
       count += 1;
     }
     return normalized;
