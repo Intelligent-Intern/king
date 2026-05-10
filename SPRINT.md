@@ -169,10 +169,23 @@ Tickets:
     foreign-call moderation boundaries.
   - Proof: `node tests/contract/call-access-admission-boundaries-contract.mjs`
     passed with the existing IAM access contracts.
-- [ ] IAM-11 Prove lobby queue idempotence, pagination/search stability, and
+- [x] IAM-11 Prove lobby queue idempotence, pagination/search stability, and
   concurrent admit/deny behavior.
-- [ ] IAM-12 Prove duplicate invite/session/device/browser abuse is rejected or
+  - Merged worker branch `agent/iam-s1-11-lobby-concurrency`.
+  - Added `call-access-lobby-concurrency-contract.mjs` and wired it into
+    `npm run test:contract:iam-call-access`.
+  - Proof covers lobby snapshot dedupe, admitted-over-stale-queue behavior,
+    action-state cleanup, search/page clamping, and concurrent admit/deny
+    convergence.
+  - Proof: `npm run test:contract:iam-call-access` passed; backend SQLite shell
+    proofs skipped locally because `pdo_sqlite` is unavailable.
+- [x] IAM-12 Prove duplicate invite/session/device/browser abuse is rejected or
   reconciled deterministically.
+  - Merged worker branch `agent/iam-s1-12-duplicate-abuse`.
+  - Added `call-access-duplicate-abuse-contract.mjs` proving stale verified
+    context conflicts, parallel browser/device isolation, duplicate session-id
+    rejection, invite redemption caps, and redacted conflict output.
+  - Proof: `node tests/contract/call-access-duplicate-abuse-contract.mjs` passed.
 - [x] IAM-13 Prove logout/login switch and parallel-tab account isolation.
   - Merged worker branch `agent/iam-s1-13-account-isolation`.
   - Added `call-access-account-isolation-contract.mjs` proving logout clears
