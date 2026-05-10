@@ -135,6 +135,20 @@ const requiredCases = [
     },
   },
   {
+    key: 'direct_join_user_without_organization_denied',
+    principal: 'alpha_tenant_member_without_organization',
+    call: 'alpha_active',
+    allow: false,
+    grants: { platform_admin: false, tenant_admin: false, owner: false, guest_list_entry: false },
+    denial: {
+      expected_resolve_status: 200,
+      expected_resolve_state: 'forbidden',
+      expected_resolve_reason: 'calls_forbidden',
+      expected_call_status: 403,
+      expected_call_error_code: 'calls_forbidden',
+    },
+  },
+  {
     key: 'direct_join_alpha_org_admin_beta_active_denied',
     principal: 'alpha_org_admin',
     call: 'beta_active',

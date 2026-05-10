@@ -5,6 +5,7 @@ import {
   createCallAccessMatrixPage,
   getSeedAccessLink,
   getSeedCall,
+  getSeedOrganization,
   getSeedScenario,
   getSeedUser,
   installStoredSeedSession,
@@ -26,6 +27,7 @@ const directJoinPermissionCases = [
   'direct_join_alpha_org_admin_beta_cross_org_private_denied',
   'direct_join_alpha_admin_beta_member_active_switch_denied',
   'direct_join_alpha_normal_user_alpha_active_denied',
+  'direct_join_user_without_organization_denied',
   'direct_join_beta_normal_user_beta_active_denied',
   'direct_join_system_admin_alpha_ended_denied',
   'direct_join_alpha_owner_alpha_disabled_denied',
@@ -81,6 +83,7 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'alpha_call_owner',
     'alpha_normal_user',
     'beta_normal_user',
+    'alpha_tenant_member_without_organization',
     'registered_guest',
     'removed_invited_member',
     'temporary_personalized_guest',
@@ -107,6 +110,28 @@ test('IAM call-access seed matrix covers required principals without temporary a
   expect(systemAdminScenario.expected.guest_list_required).toBe(false);
   expect(systemAdminScenario.expected.can_manage_lobby).toBe(true);
   expect(systemAdminScenario.expected.platform_admin).toBe(true);
+
+  expect(getSeedOrganization('alpha_org')).toMatchObject({
+    tenant_key: 'alpha',
+    public_id: 'organization-alpha-e2e',
+    status: 'active',
+  });
+  expect(getSeedUser('alpha_normal_user').organization_memberships).toEqual([
+    { organization_key: 'alpha_org', role: 'member' },
+  ]);
+  expect(getSeedUser('alpha_org_admin').organization_memberships).toEqual([
+    { organization_key: 'alpha_org', role: 'admin' },
+  ]);
+  const tenantOnlyUser = getSeedUser('alpha_tenant_member_without_organization');
+  expect(tenantOnlyUser.memberships).toEqual([{ tenant_key: 'alpha', role: 'member' }]);
+  expect(tenantOnlyUser.organization_memberships).toEqual([]);
+  expect(getSeedScenario('direct_join_user_without_organization_denied').expected).toMatchObject({
+    direct_join_allowed: false,
+    expected_resolve_state: 'forbidden',
+    expected_resolve_reason: 'calls_forbidden',
+    tenant_admin: false,
+    platform_admin: false,
+  });
 
   for (const [callKey, status] of [
     ['alpha_ended', 'ended'],
