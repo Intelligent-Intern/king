@@ -262,8 +262,20 @@ Sprint Checkboxen:
   - Proof: IAM5-15 extraction, Call App revocation, permission revocation,
     Marketplace-to-call journey, Whiteboard org-install browser proof,
     iframe-launch, Call Diagnostics, and `git diff --check` passed.
-- [ ] IAM5-16 Extract system-admin, organization-role bootstrap, admin-join,
+- [x] IAM5-16 Extract system-admin, organization-role bootstrap, admin-join,
   and lane proof value from the remaining IAM lane branches.
+  - Merged worker branch `agent/iam-s5-16-system-admin-lanes`.
+  - Added `documentation/iam-sprint-05-system-admin-lanes-extraction.md` and
+    `iam5-16-system-admin-lanes-extract-contract.mjs`.
+  - Extracted system-admin, organization-role bootstrap, admin-join,
+    owner-management, terminal-state, and lane evidence without broad lane
+    merges.
+  - Proof: IAM5-16 extraction, admission boundaries, direct-join rights,
+    terminal states, terminal browser flows, owner-transfer main,
+    admin-owner-rights contracts, owner-moderation backend wrapper
+    (`pdo_sqlite` persistence skipped locally), SQLite-backed system-admin,
+    org-admin, and call-creation wrappers skipped on this host due missing
+    `pdo_sqlite`, and `git diff --check` passed.
 - [x] IAM5-17 Consolidate seed data hygiene, asset cache busting, local run docs,
   and live-proof env audit value into the current IAM gate only if still useful.
   - Merged worker branch `agent/iam-s5-17-seed-cache-run-docs`.
