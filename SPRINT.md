@@ -99,7 +99,7 @@ Sprint Checkboxen:
   `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
 - [x] IAM9-14 Extract or prove duplicate link abuse device/browser baseline from
   `local/iam-e2e-duplicate-link-abuse-device-browser`.
-- [ ] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
+- [x] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
   `local/iam-e2e-edge-error-matrix-proof`.
 - [ ] IAM9-16 Extract or prove IAM edge safe states from
   `local/iam-e2e-edge-safe-states-proof-2`.
