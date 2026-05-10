@@ -186,8 +186,14 @@ assert.match(
 
 assert.match(
   sidebarSource,
-  /async function removeActiveSession\(\)[\s\S]*\/api\/call-app-sessions\/\$\{encodeURIComponent\(sessionId\)\}[\s\S]*method:\s*['"]DELETE['"][\s\S]*emit\(['"]session-removed['"],\s*payload\?\.result\s*\|\|\s*\{\s*session_id:\s*sessionId\s*\}\)[\s\S]*props\.requestRoomSnapshot\(\)/,
-  'Removing a Call App must use the backend DELETE route, emit removal, and request a room snapshot',
+  /data-call-app-remove-flow="backend-delete"[\s\S]*:disabled="submitting \|\| removing"[\s\S]*:title="activeSessionRemoveTitle"[\s\S]*:aria-label="activeSessionRemoveTitle"/,
+  'Call Apps remove affordance must preserve the backend-delete flow marker, avoid add/remove races, and expose an accessible active-session title',
+);
+
+assert.match(
+  sidebarSource,
+  /async function removeActiveSession\(\)[\s\S]*submitting\.value[\s\S]*\/api\/call-app-sessions\/\$\{encodeURIComponent\(sessionId\)\}[\s\S]*method:\s*['"]DELETE['"][\s\S]*emit\(['"]session-removed['"],\s*payload\?\.result\s*\|\|\s*\{\s*session_id:\s*sessionId\s*\}\)[\s\S]*props\.requestRoomSnapshot\(\)/,
+  'Removing a Call App must avoid add/remove races, use the backend DELETE route, emit removal, and request a room snapshot',
 );
 
 assert.match(
