@@ -234,8 +234,19 @@ Sprint Checkboxen:
   - Proof: terminal-state/browser-flow/invite-invalidation/disabled-link
     frontend contracts, focused terminal SQLite runtime proof, and
     `git diff --check` passed.
-- [ ] IAM4-15 Convert accepted old-branch value into focused Sprint 04 contracts
+- [x] IAM4-15 Convert accepted old-branch value into focused Sprint 04 contracts
   without broad package or suite-runner conflicts.
+  - Merged worker branch `agent/iam-s4-15-focused-contracts-wire`.
+  - Added `iam-sprint-04-focused-wire-contract.mjs`.
+  - Wired accepted Sprint 04 focused proofs into `test:contract:iam-call-access`,
+    `iam-call-access-ci-wire-contract.mjs`, and
+    `ui-parity-acceptance.matrix.json`: logout-switch extract, registered
+    invitee extract, terminal backend join proof, and the Sprint 04 wiring
+    completeness proof.
+  - Proof: focused wire contract, CI-wire contract, Sprint 03 inventory
+    contract, terminal browser-flow contract, logout-switch extract,
+    registered-invitee extract, full `npm run test:contract:iam-call-access`,
+    and `git diff --check` passed.
 - [ ] IAM4-16 Run or repair the focused `npm run test:e2e:call-access` browser
   proof path without adding media/background/SFU/Gossip coverage.
 - [ ] IAM4-17 Ensure IAM browser artifacts and failure output remain retained
