@@ -113,18 +113,13 @@ function videochat_handle_call_access_routes(
                 ]);
             }
             if ($reason === 'not_found') {
-                return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.');
             }
             if ($reason === 'expired') {
-                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.');
             }
             if ($reason === 'conflict') {
                 return $errorResponse(409, 'call_access_conflict', 'Call access cannot be used for the current call state.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($resolveResult['errors'] ?? null) ? $resolveResult['errors'] : [],
                 ]);
             }
@@ -245,24 +240,19 @@ function videochat_handle_call_access_routes(
             }
             if ($reason === 'not_found') {
                 return $errorResponse(404, 'call_access_not_found', 'Call access link or mapped user does not exist.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
             if ($reason === 'expired') {
-                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.');
             }
             if ($reason === 'conflict') {
                 return $errorResponse(409, 'call_access_conflict', 'Call access cannot be used for the current call state.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
             if ($reason === 'forbidden') {
                 return $errorResponse(403, 'call_access_forbidden', 'Call access link is not allowed for this call participant.', [
-                    'access_id' => strtolower(trim($accessId)),
                     'fields' => is_array($issueResult['errors'] ?? null) ? $issueResult['errors'] : [],
                 ]);
             }
@@ -338,19 +328,13 @@ function videochat_handle_call_access_routes(
                     ]);
                 }
 
-                return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(404, 'call_access_not_found', 'Call access link does not exist.');
             }
             if ($reason === 'expired') {
-                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(410, 'call_access_expired', 'Call access link has expired.');
             }
             if ($reason === 'forbidden') {
-                return $errorResponse(403, 'call_access_forbidden', 'You are not allowed to use this call access link.', [
-                    'access_id' => strtolower(trim($accessId)),
-                ]);
+                return $errorResponse(403, 'call_access_forbidden', 'You are not allowed to use this call access link.');
             }
 
             return $errorResponse(500, 'call_access_resolve_failed', 'Could not resolve call access.', [
