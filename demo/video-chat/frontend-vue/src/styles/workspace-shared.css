@@ -187,36 +187,37 @@
 .input,
 .select {
   height: 40px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text-primary);
+  background: var(--color-border);
+  color: var(--color-text-primary);
   padding: 0 12px;
+  caret-color: var(--color-cyan-hover);
   outline: none;
 }
 
 .input::placeholder {
-  color: var(--text-muted);
+  color: var(--color-heading);
 }
 
 .input:focus,
 .select:focus {
-  border-color: var(--brand-cyan-hover);
+  border-color: var(--color-cyan-hover);
 }
 
 .input[type='date'],
 .input[type='time'],
 .input[type='datetime-local'] {
-  border-color: var(--border-subtle);
-  background-color: var(--bg-input);
-  color: var(--text-primary);
+  border-color: var(--color-border);
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
   color-scheme: dark;
 }
 
 .input[type='date']:focus,
 .input[type='time']:focus,
 .input[type='datetime-local']:focus {
-  border-color: var(--brand-cyan-hover);
+  border-color: var(--color-cyan-hover);
 }
 
 .input[type='date']::-webkit-datetime-edit,

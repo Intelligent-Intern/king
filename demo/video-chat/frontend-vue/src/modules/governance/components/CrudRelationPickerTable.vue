@@ -128,7 +128,7 @@ function isSelected(row) {
 
 .crud-relation-group-row td {
   padding: 8px 12px;
-  background: var(--bg-soft);
+  background: var(--color-surface-navy);
   color: var(--text-main);
   font-size: 12px;
   font-weight: 800;
@@ -138,6 +138,7 @@ function isSelected(row) {
 .crud-relation-check {
   width: 18px;
   height: 18px;
+  accent-color: var(--color-cyan-primary);
 }
 
 .crud-relation-name {
