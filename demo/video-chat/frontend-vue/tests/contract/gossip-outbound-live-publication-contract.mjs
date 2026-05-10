@@ -68,6 +68,11 @@ assert(
   'server relay primary must publish media over a dedicated relay websocket instead of the control websocket',
 )
 assert(
+  gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;') > gossipDataLane.indexOf('function publishLocalEncodedFrameToGossip(frame)')
+    && gossipDataLane.indexOf('if (strictGossipMediaDisabled(\'disableGossipPublish\')) return false;') > gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;'),
+  'dedicated server relay must send before local Gossip policy gates can block publishing',
+)
+assert(
   /let pendingGossipServerRelayPayload = null;/.test(gossipDataLane)
     && /function rememberPendingGossipServerRelayPayload\(payload\)[\s\S]*currentFrameType === 'keyframe'/.test(gossipDataLane)
     && /if \(socket\.readyState === WebSocket\.CONNECTING\) \{[\s\S]*rememberPendingGossipServerRelayPayload\(outboundPayload\);[\s\S]*return true;/.test(relayPublishBody)
