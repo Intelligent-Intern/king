@@ -86,7 +86,9 @@ function videochat_decide_call_access_for_user(
         );
     }
 
-    if (is_array($participant)) {
+    $participantInactive = is_array($participant) && in_array($inviteState, ['declined', 'cancelled'], true);
+    $participantPending = is_array($participant) && $inviteState === 'pending';
+    if (is_array($participant) && !$participantInactive && !$participantPending) {
         return videochat_call_access_decision_result(
             true,
             'allowed',
@@ -114,7 +116,7 @@ function videochat_decide_call_access_for_user(
 
     return videochat_call_access_decision_result(
         false,
-        'forbidden',
+        $participantInactive ? 'guest_list_entry_inactive' : ($participantPending ? 'not_on_guest_list' : 'forbidden'),
         'none',
         'none',
         $call,
