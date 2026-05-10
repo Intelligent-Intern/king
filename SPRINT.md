@@ -89,9 +89,18 @@ Sprint Checkboxen:
     focused runner lane.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-duplicate-cleanup-family-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM5-04 Extract authorized rejoin proof value from
+- [x] IAM5-04 Extract authorized rejoin proof value from
   `local/iam-e2e-authorized-rejoin-main` and the 20260509 authorized-rejoin
   branches.
+  - Merged worker branch `agent/iam-s5-04-authorized-rejoin`.
+  - Added `documentation/iam-sprint-05-authorized-rejoin-extraction.md` and
+    `call-access-authorized-rejoin-extract-contract.mjs`.
+  - Extracted the durable authorized-rejoin rule: currently authorized
+    participants/admin paths may rejoin after normal leave, while stale, kicked,
+    removed, and role-invalidated paths remain fail-closed.
+  - Proof: authorized-rejoin extract, direct-join, kicked-rejoin,
+    removed-members, stale-role, owner-transfer temp-moderator, realtime-scope
+    contracts, and `git diff --check` passed.
 - [x] IAM5-05 Extract lobby state cleanup proof value from the lobby cleanup
   branches, keeping live state websocket-driven and avoiding manual refresh UI.
   - Merged worker branch `agent/iam-s5-05-lobby-cleanup`.
