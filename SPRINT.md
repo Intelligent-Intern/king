@@ -153,8 +153,19 @@ Tickets:
     after terminal context errors.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-invite-invalidation-terminal-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM2-09 Prove duplicate invite redemption and stale verified-context
+- [x] IAM2-09 Prove duplicate invite redemption and stale verified-context
   replay are reconciled deterministically across devices.
+  - Merged worker branch `agent/iam-s2-09-duplicate-invite-replay`.
+  - Added `call-access-duplicate-invite-replay-contract.mjs` proving stale
+    verified-context replay, parallel duplicate personalized-link use, atomic
+    invite redemption caps, deterministic 409 conflict/exhausted responses, and
+    redacted denial payloads.
+  - Stabilized `invite-code-redeem-endpoint-contract.php` for current tenant
+    scoped route execution and valid terminal room/call statuses.
+  - Proof: Node contract passed; Docker PHP 8.4 with `pdo_sqlite` ran
+    `invite-code-redeem-contract.php`, `invite-code-redeem-endpoint-contract.php`,
+    and `call-access-session-route-guard-contract.php`; `git diff --check`
+    passed.
 - [ ] IAM2-10 Prove owner-transfer main journey updates call-access authority
   without leaving old-owner moderator powers behind.
 - [ ] IAM2-11 Prove owner-transfer lifecycle and rejoin behavior for old owner,
