@@ -150,6 +150,9 @@ function videochat_validate_call_access_session_binding(
     $callTenantSelect = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
         ? 'calls.tenant_id AS resolved_call_tenant_id'
         : 'NULL AS resolved_call_tenant_id';
+    $hostVerifiedSelect = videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'host_verified_at')
+        ? 'call_access_sessions.host_verified_at AS host_verified_at'
+        : 'NULL AS host_verified_at';
 
     try {
         $statement = $pdo->prepare(
