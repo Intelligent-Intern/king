@@ -138,8 +138,19 @@ Tickets:
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-mismatch-no-leak-states-contract.mjs`,
     `node demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs`,
     and `git diff --check` passed.
-- [ ] IAM3-07 Prove anonymous guest display-name manipulation cannot escalate to
+- [x] IAM3-07 Prove anonymous guest display-name manipulation cannot escalate to
   registered-user, owner, moderator, or org-admin rights.
+  - Merged worker branch `agent/iam-s3-07-anonymous-guest-manipulation`.
+  - Added `call-access-anonymous-guest-manipulation-contract.mjs` proving
+    guest-controlled display-name/body manipulation survives only as display
+    text, while user id, role, call role, tenant-admin, platform-admin, lobby
+    moderation, owner-transfer, and direct-join authority remain server-derived
+    and denied.
+  - Proof: `node tests/contract/call-access-anonymous-guest-manipulation-contract.mjs`,
+    `node tests/contract/call-access-admission-boundaries-contract.mjs`,
+    `node tests/contract/call-access-direct-join-rights-contract.mjs`,
+    `node tests/contract/call-access-account-isolation-contract.mjs`, and
+    `git diff --check` passed.
 - [ ] IAM3-08 Prove temporary call-link users cannot persist outside the target
   call, tenant, expiration window, or admission state.
 - [ ] IAM3-09 Prove disabled anonymous links and disabled call-access links fail
