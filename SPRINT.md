@@ -201,8 +201,17 @@ Tickets:
     and `git diff --check` passed.
 - [ ] IAM3-12 Prove strong mismatch logging records only canonical, redacted IAM
   audit fields and never raw access links, cookies, SDP, ICE, or tokens.
-- [ ] IAM3-13 Convert direct host-PHP SQLite skips into deterministic Docker PHP
+- [x] IAM3-13 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for anonymous temporary rights.
+  - Merged worker branch `agent/iam-s3-13-anonymous-temp-docker-proof`.
+  - Added `call-access-anonymous-temp-rights-docker-proof.sh`, which runs the
+    existing anonymous temporary rights PHP contract directly when host
+    `pdo_sqlite` is available and otherwise runs it in `php:8.4-cli-trixie`
+    with `pdo_sqlite` installed.
+  - Proof: `bash -n demo/video-chat/backend-king-php/tests/call-access-anonymous-temp-rights-docker-proof.sh`,
+    `demo/video-chat/backend-king-php/tests/call-access-anonymous-temp-rights-docker-proof.sh`,
+    and `git diff --check` passed. Host direct PHP still skips when `pdo_sqlite`
+    is unavailable.
 - [ ] IAM3-14 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for guest-list direct join and membership removal.
 - [ ] IAM3-15 Convert direct host-PHP SQLite skips into deterministic Docker PHP
