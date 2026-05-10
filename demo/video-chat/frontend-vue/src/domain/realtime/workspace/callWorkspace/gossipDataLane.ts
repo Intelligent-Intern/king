@@ -772,8 +772,8 @@ export function createCallWorkspaceGossipDataLane({
   }
 
   function publishLocalEncodedFrameToGossip(frame) {
-    if (strictGossipMediaDisabled('disableGossipPublish')) return false;
     if (publishLocalEncodedFrameToServerRelay(frame)) return true;
+    if (strictGossipMediaDisabled('disableGossipPublish')) return false;
     if (!GOSSIP_DATA_LANE_CONFIG.publish) {
       return recordGossipShadowWouldPublish(frame, 'publish_disabled');
     }
@@ -892,6 +892,9 @@ export function createCallWorkspaceGossipDataLane({
     handleSFUEncodedFrame({
       ...frame,
       transportPath: 'gossip_server_relay',
+      protected: null,
+      protectedFrame: null,
+      protectionMode: 'transport_only',
     });
     return true;
   }

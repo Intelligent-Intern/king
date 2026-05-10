@@ -95,6 +95,12 @@ Tickets:
 - [x] GSR-04 Move relay media off the control websocket onto a dedicated
   `relay=media` websocket with duplicate suppression and no room-presence
   join/leave side effects.
+- [x] GSR-05 Make the dedicated relay fire-and-forget for media frames.
+  - No per-frame session liveness refresh, call-context revalidation,
+    sender-key handling, SFU fallback decision, or local Gossip policy gate is
+    allowed to block `gossip/server-frame` delivery on this path.
+  - Relay delivery first targets dedicated `relay=media` sockets and no longer
+    depends on room/control websocket presence before forwarding.
 - [ ] GSR-03 Build, deploy without push/DNS/certbot, and run post-deploy
   diagnostics for relay delivery and websocket errors.
 
@@ -105,12 +111,12 @@ Proof so far:
   - Runtime persistence proof skipped locally because `pdo_sqlite` is not
     available.
 - `node tests/contract/gossip-server-no-media-fanout-contract.mjs`
+- `node tests/contract/gossip-outbound-live-publication-contract.mjs`
 - `node tests/contract/gossip-media-carrier-contract.mjs`
 - `node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs`
 - `node tests/contract/gossip-publisher-pipeline-decoupling-contract.mjs`
 - `node tests/contract/gossip-live-receive-decode-route-contract.mjs`
 - `node tests/contract/gossip-data-lane-feature-flag-contract.mjs`
-- `node tests/contract/gossip-outbound-live-publication-contract.mjs`
 - `npm run test:contract:strict-720p30`
 - `npm run build`
 - `npm run test:contract:build-size`

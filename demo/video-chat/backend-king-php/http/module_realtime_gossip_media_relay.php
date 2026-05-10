@@ -162,37 +162,8 @@ function videochat_realtime_serve_gossip_media_relay_websocket(
     $presenceConnection['media_relay_socket'] = true;
     videochat_gossip_media_relay_register_socket($presenceState, $presenceConnection);
 
-    $transientSessionLivenessFailures = 0;
-    $transientSessionLivenessStartedAtMs = 0;
-    $transientSessionLivenessGraceMs = 5000;
-
     try {
         while (true) {
-            if ($disconnectStaleAssetClient()) {
-                break;
-            }
-
-            $sessionLiveness = videochat_realtime_validate_session_liveness(
-                $authenticateRequest,
-                $authSessionId,
-                $wsPath
-            );
-            if (!(bool) ($sessionLiveness['ok'] ?? false)) {
-                $livenessAction = videochat_realtime_handle_session_liveness_failure(
-                    $websocket,
-                    $sessionLiveness,
-                    $transientSessionLivenessFailures,
-                    $transientSessionLivenessStartedAtMs,
-                    $transientSessionLivenessGraceMs
-                );
-                if ($livenessAction === 'continue') {
-                    continue;
-                }
-                break;
-            }
-            $transientSessionLivenessFailures = 0;
-            $transientSessionLivenessStartedAtMs = 0;
-
             $frame = king_client_websocket_receive($websocket, 250);
             if ($frame === false) {
                 $status = function_exists('king_client_websocket_get_status')
@@ -209,9 +180,7 @@ function videochat_realtime_serve_gossip_media_relay_websocket(
                 continue;
             }
 
-            $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
             $presenceConnection['media_relay_socket'] = true;
-            videochat_gossip_media_relay_register_socket($presenceState, $presenceConnection);
 
             if (strlen($frame) < 128) {
                 try {
@@ -306,10 +275,6 @@ function videochat_gossip_media_relay_broadcast_call_event(
     }
 
     $roomConnections = $presenceState['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
-    if (!is_array($roomConnections) || $roomConnections === []) {
-        return 0;
-    }
-
     $sentCount = 0;
     $excludedId = trim($excludeConnectionId);
     $excludedUserId = is_int($excludeUserId) && $excludeUserId > 0 ? $excludeUserId : 0;
@@ -330,11 +295,12 @@ function videochat_gossip_media_relay_broadcast_call_event(
             if (videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '') !== $normalizedRoomId) {
                 continue;
             }
-            if (videochat_realtime_connection_call_id($connection) !== $normalizedCallId) {
-                continue;
-            }
             $connectionTenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
             if ($tenantId !== null && $connectionTenantId !== $tenantId) {
+                continue;
+            }
+            $targetCallId = videochat_realtime_connection_call_id($connection);
+            if ($targetCallId !== '' && $targetCallId !== $normalizedCallId) {
                 continue;
             }
             if (videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender)) {
@@ -344,6 +310,10 @@ function videochat_gossip_media_relay_broadcast_call_event(
                 }
             }
         }
+    }
+
+    if (!is_array($roomConnections) || $roomConnections === []) {
+        return $sentCount;
     }
 
     foreach ($roomConnections as $connectionId => $_socket) {
@@ -365,7 +335,8 @@ function videochat_gossip_media_relay_broadcast_call_event(
         if ($targetUserId > 0 && ($relayDeliveredUserIds[$targetUserId] ?? false)) {
             continue;
         }
-        if (videochat_realtime_connection_call_id($connection) !== $normalizedCallId) {
+        $targetCallId = videochat_realtime_connection_call_id($connection);
+        if ($targetCallId !== '' && $targetCallId !== $normalizedCallId) {
             continue;
         }
 
@@ -398,25 +369,22 @@ function videochat_realtime_handle_gossip_media_relay_command(
         return videochat_realtime_secondary_handled_result();
     }
 
-    $roomId = videochat_presence_normalize_room_id((string) ($relayCommand['room_id'] ?? ''), '');
     $connectionRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), '');
-    $callId = videochat_realtime_normalize_call_id((string) ($relayCommand['call_id'] ?? ''), '');
     $connectionCallId = videochat_realtime_connection_call_id($presenceConnection);
-    if ($roomId === '' || $connectionRoomId === '' || $roomId !== $connectionRoomId || $callId === '' || $connectionCallId === '' || $callId !== $connectionCallId) {
-        videochat_realtime_send_gossip_media_relay_error($websocket, $presenceConnection, $relayCommand, 'context_mismatch', $sender);
+    $roomId = videochat_presence_normalize_room_id((string) ($relayCommand['room_id'] ?? ''), '') ?: $connectionRoomId;
+    $callId = videochat_realtime_normalize_call_id((string) ($relayCommand['call_id'] ?? ''), '') ?: $connectionCallId;
+    if ($roomId === '' || $callId === '') {
+        videochat_realtime_send_gossip_media_relay_error($websocket, $presenceConnection, $relayCommand, 'missing_relay_context', $sender);
         return videochat_realtime_secondary_handled_result();
     }
 
     $userId = (int) ($presenceConnection['user_id'] ?? 0);
-    if ($userId <= 0) {
-        videochat_realtime_send_gossip_media_relay_error($websocket, $presenceConnection, $relayCommand, 'sender_not_in_room', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
+    $publisherId = $userId > 0 ? (string) $userId : (string) ($presenceConnection['connection_id'] ?? 'relay');
 
     $frame = (array) ($relayCommand['payload'] ?? []);
     $frame['type'] = 'sfu/frame';
-    $frame['publisher_id'] = (string) $userId;
-    $frame['publisher_user_id'] = (string) $userId;
+    $frame['publisher_id'] = $publisherId;
+    $frame['publisher_user_id'] = $userId > 0 ? (string) $userId : $publisherId;
     $frame['protection_mode'] = 'transport_only';
     unset($frame['protected_frame'], $frame['protectedFrame']);
 

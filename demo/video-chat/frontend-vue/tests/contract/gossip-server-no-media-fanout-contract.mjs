@@ -42,9 +42,9 @@ assert(
     && gossipMediaRelay.includes('videochat_gossip_media_relay_socket_requested(')
     && gossipMediaRelay.includes("['media_relay_connections']")
     && gossipMediaRelay.includes('videochat_gossip_media_relay_broadcast_call_event(')
-    && gossipMediaRelay.includes('videochat_realtime_connection_call_id($connection) !== $normalizedCallId')
+    && gossipMediaRelay.includes("$targetCallId !== '' && $targetCallId !== $normalizedCallId")
     && gossipMediaRelay.includes("'protection_mode'] = 'transport_only'"),
-  'the only normal websocket media exception must be the room/call-bound transport-only Gossip server relay with dedicated relay sockets',
+  'the only normal websocket media exception must be the transport-only Gossip server relay with dedicated relay sockets',
 )
 assert(
   /videochat_presence_send_frame\(\s*\$websocket/.test(mediaFanoutGuard)
