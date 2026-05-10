@@ -96,7 +96,7 @@ Sprint Checkboxen:
   `local/iam-e2e-call-lifecycle`.
 - [x] IAM8-13 Extract or prove call creation owner/moderation rights from
   `local/iam-e2e-call-owner-creation-rights`.
-- [ ] IAM8-14 Extract or prove IAM E2E CI failure artifact handling from
+- [x] IAM8-14 Extract or prove IAM E2E CI failure artifact handling from
   `local/iam-e2e-ci-artifacts-proof-2`.
 - [ ] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
   `local/iam-e2e-ci-docs-gate`.
