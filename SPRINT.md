@@ -91,7 +91,7 @@ Sprint Checkboxen:
   `local/iam-e2e-cross-org-remaining-proof-2`.
 - [x] IAM9-10 Extract or prove adjacent terminal join denials from
   `local/iam-e2e-deleted-ended-disabled-followup-proof-3`.
-- [ ] IAM9-11 Extract or prove deleted/ended/disabled join denials from
+- [x] IAM9-11 Extract or prove deleted/ended/disabled join denials from
   `local/iam-e2e-deleted-ended-disabled-join`.
 - [ ] IAM9-12 Extract or prove deleted/ended join hardening from
   `local/iam-e2e-deleted-ended-join-hardening`.
