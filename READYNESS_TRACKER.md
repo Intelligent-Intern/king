@@ -17,6 +17,23 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 UX6-01 Call App remove-session dirty worktree
+  classification: inspected dirty source worktree
+  `/home/jochen/projects/king.site/worktrees/call-app-remove-session`
+  read-only and confirmed its only dirty file was
+  `demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue`.
+  Current local prod already includes the backend DELETE remove flow,
+  left-sidebar event forwarding, workspace layout exit, and sidebar contract
+  proof from commit `825f99c5`. The dirty source file was not copied because it
+  lacks later participant permission-action integration and uses a stale
+  removal event wrapper. Extracted non-media value only: backend-delete flow
+  marker, add/remove race guard, and accessible active-session title/ARIA label
+  on the current integrated remove affordance. Evidence is recorded in
+  `documentation/ux6-01-call-app-remove-session-classification.md`. Proof:
+  `node tests/contract/call-app-sidebar-contract.mjs` passed, and
+  `git diff --check` passed. No deploy, push, Background, Gossip, SFU,
+  MediaSecurity, or BTGF files/tests were touched.
+
 - 2026-05-10 IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05:
   closed all 20 Sprint 05 tickets on local branch
   `prod-kingrt-do-not-push-to-github` without pushing. The sprint mined focused

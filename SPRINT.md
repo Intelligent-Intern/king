@@ -63,7 +63,7 @@ Proof anchors:
 - Governance/Admin backend modules under `demo/video-chat/backend-king-php/`
 
 Sprint Checkboxen:
-- [ ] UX6-01 Classify dirty worktree `agent/call-app-remove-session`; prove
+- [x] UX6-01 Classify dirty worktree `agent/call-app-remove-session`; prove
   whether its uncommitted remove-session UI diff is already integrated,
   extract only missing non-media value, or preserve it with evidence.
 - [ ] UX6-02 Classify dirty worktree `agent/planning-image-call-app`; compare
