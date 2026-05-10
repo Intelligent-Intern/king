@@ -130,7 +130,7 @@ Sprint Checkboxen:
   stream path; current `realtime`/`quality` profiles are not sufficient because
   they do not define 1280x720@30 as the active target. Incompatible clients
   become explicit non-sending states.
-- [ ] GSP01-17 Diagnostics surface: Call Diagnostics must show live
+- [x] GSP01-17 Diagnostics surface: Call Diagnostics must show live
   capabilities, plan epoch, gossip readiness, sender/receiver frame counters,
   dropped frames, backpressure state, stuck reasons and raw redacted events.
 - [ ] GSP01-18 Test gate: add/convert focused contract and E2E proof for two
@@ -154,6 +154,12 @@ Current Loop Notes:
   defines the external `gossip.media.frame.v1` envelope, and
   `demo/video-chat/frontend-vue/tests/contract/gossip-media-frame-v1-contract.mjs`
   passed with `node tests/contract/gossip-media-frame-v1-contract.mjs`.
+- GSP01-17 proof: Call Diagnostics now includes a Gossip stage and summary
+  metrics for capabilities, plan epoch, gossip readiness, sender/receiver frame
+  counters, drops, backpressure state, and stuck reason. `node --check` passed
+  for the runtime and contract, and
+  `node demo/video-chat/frontend-vue/tests/contract/call-app-call-diagnostics-contract.mjs`
+  passed.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
