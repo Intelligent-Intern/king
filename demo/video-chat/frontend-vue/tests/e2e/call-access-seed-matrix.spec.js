@@ -24,6 +24,7 @@ const directJoinPermissionCases = [
   'direct_join_alpha_call_owner_alpha_active_allowed',
   'direct_join_alpha_org_admin_beta_active_denied',
   'direct_join_alpha_org_admin_beta_cross_org_private_denied',
+  'direct_join_alpha_admin_beta_member_active_switch_denied',
   'direct_join_alpha_normal_user_alpha_active_denied',
   'direct_join_beta_normal_user_beta_active_denied',
   'direct_join_system_admin_alpha_ended_denied',
@@ -75,6 +76,7 @@ test('IAM call-access seed matrix covers required principals without temporary a
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
     'system_admin',
     'alpha_org_admin',
+    'alpha_admin_beta_member',
     'beta_org_admin',
     'alpha_call_owner',
     'alpha_normal_user',

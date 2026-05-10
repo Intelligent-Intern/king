@@ -256,15 +256,20 @@ try {
     $organizationAId = videochat_call_access_cross_org_create_organization($pdo, $tenantAId, 'contract-organization-a', 'Contract Organization A Unit');
     $organizationBId = videochat_call_access_cross_org_create_organization($pdo, $tenantBId, 'contract-organization-b', 'Contract Organization B Unit');
     $orgAAdminId = videochat_call_access_cross_org_create_user($pdo, 'cross-org-a-admin@example.test', 'Org A Admin');
+    $orgAMultiTenantAdminId = videochat_call_access_cross_org_create_user($pdo, 'cross-org-a-admin-beta-member@example.test', 'Org A Admin Beta Member');
     $orgAUserId = videochat_call_access_cross_org_create_user($pdo, 'cross-org-a-user@example.test', 'Org A User');
     $orgBOwnerId = videochat_call_access_cross_org_create_user($pdo, 'cross-org-b-owner@example.test', 'Org B Owner');
     $legacyAdminId = videochat_call_access_cross_org_create_user($pdo, 'cross-org-legacy-admin@example.test', 'Legacy Admin', 'admin');
 
     videochat_call_access_cross_org_attach_user($pdo, $tenantAId, $orgAAdminId, 'admin', true);
+    videochat_call_access_cross_org_attach_user($pdo, $tenantAId, $orgAMultiTenantAdminId, 'admin', true);
+    videochat_call_access_cross_org_attach_user($pdo, $tenantBId, $orgAMultiTenantAdminId, 'member', false);
     videochat_call_access_cross_org_attach_user($pdo, $tenantAId, $orgAUserId, 'member', true);
     videochat_call_access_cross_org_attach_user($pdo, $tenantAId, $legacyAdminId, 'admin', true);
     videochat_call_access_cross_org_attach_user($pdo, $tenantBId, $orgBOwnerId, 'owner', true);
     videochat_call_access_cross_org_attach_organization($pdo, $tenantAId, $organizationAId, $orgAAdminId, 'admin');
+    videochat_call_access_cross_org_attach_organization($pdo, $tenantAId, $organizationAId, $orgAMultiTenantAdminId, 'admin');
+    videochat_call_access_cross_org_attach_organization($pdo, $tenantBId, $organizationBId, $orgAMultiTenantAdminId, 'member');
     videochat_call_access_cross_org_attach_organization($pdo, $tenantAId, $organizationAId, $orgAUserId, 'member');
     videochat_call_access_cross_org_attach_organization($pdo, $tenantBId, $organizationBId, $orgBOwnerId, 'member');
 
@@ -356,6 +361,47 @@ SQL
     ], 'http');
     videochat_call_access_cross_org_assert(!(bool) ($switchedAuth['ok'] ?? false), 'active organization switch must not mint organization B membership');
     videochat_call_access_cross_org_assert((string) ($switchedAuth['reason'] ?? '') === 'tenant_membership_inactive', 'cross-organization active switch should fail at tenant membership');
+
+    $multiTenantSessionId = 'sess_cross_org_multi_active_switch';
+    videochat_call_access_cross_org_insert_auth_session($pdo, $multiTenantSessionId, $tenantAId, $orgAMultiTenantAdminId);
+    $multiTenantActiveAAuth = videochat_authenticate_request($pdo, [
+        'method' => 'GET',
+        'uri' => '/api/calls/' . $orgACallId,
+        'headers' => ['Authorization' => 'Bearer ' . $multiTenantSessionId],
+    ], 'http');
+    videochat_call_access_cross_org_assert((bool) ($multiTenantActiveAAuth['ok'] ?? false), 'multi-tenant organization A admin should authenticate in organization A');
+    videochat_call_access_cross_org_assert((int) (($multiTenantActiveAAuth['tenant'] ?? [])['id'] ?? 0) === $tenantAId, 'multi-tenant organization A admin should keep active organization A');
+    videochat_call_access_cross_org_assert((bool) (((($multiTenantActiveAAuth['tenant'] ?? [])['permissions'] ?? [])['tenant_admin'] ?? false)) === true, 'multi-tenant organization A admin should keep organization A admin permissions');
+
+    $multiTenantOwnOrg = videochat_get_call_for_user($pdo, $orgAdminManagedCallId, $orgAMultiTenantAdminId, 'user', $tenantAId);
+    videochat_call_access_cross_org_assert((bool) ($multiTenantOwnOrg['ok'] ?? false), 'multi-tenant organization A admin should access own organization call');
+
+    $pdo->prepare('UPDATE sessions SET active_tenant_id = :tenant_id WHERE id = :id')->execute([
+        ':tenant_id' => $tenantBId,
+        ':id' => $multiTenantSessionId,
+    ]);
+    $multiTenantSwitchedAuth = videochat_authenticate_request($pdo, [
+        'method' => 'GET',
+        'uri' => '/api/calls/' . $orgBInviteOnlyCallId,
+        'headers' => ['Authorization' => 'Bearer ' . $multiTenantSessionId],
+    ], 'http');
+    videochat_call_access_cross_org_assert((bool) ($multiTenantSwitchedAuth['ok'] ?? false), 'multi-tenant organization A admin should authenticate as organization B member after active switch');
+    videochat_call_access_cross_org_assert((int) (($multiTenantSwitchedAuth['tenant'] ?? [])['id'] ?? 0) === $tenantBId, 'multi-tenant active switch should expose organization B tenant context');
+    videochat_call_access_cross_org_assert((string) (($multiTenantSwitchedAuth['tenant'] ?? [])['role'] ?? '') === 'member', 'multi-tenant active switch should keep organization B member role');
+    videochat_call_access_cross_org_assert((bool) (((($multiTenantSwitchedAuth['tenant'] ?? [])['permissions'] ?? [])['tenant_admin'] ?? true)) === false, 'multi-tenant active switch must not grant organization B tenant-admin permissions');
+    videochat_call_access_cross_org_assert((bool) (((($multiTenantSwitchedAuth['tenant'] ?? [])['permissions'] ?? [])['platform_admin'] ?? true)) === false, 'multi-tenant active switch must not grant platform-admin permissions');
+
+    $multiTenantForeignFetch = videochat_get_call_for_user($pdo, $orgBInviteOnlyCallId, $orgAMultiTenantAdminId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($multiTenantForeignFetch['ok'] ?? true), 'multi-tenant active switch must not grant organization B call permission');
+    videochat_call_access_cross_org_assert((string) ($multiTenantForeignFetch['reason'] ?? '') === 'forbidden', 'multi-tenant active switch denial reason mismatch');
+
+    $multiTenantForeignDirectJoin = videochat_user_can_direct_join_call($pdo, $orgBInviteOnlyCallId, $orgAMultiTenantAdminId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($multiTenantForeignDirectJoin['ok'] ?? true), 'multi-tenant active switch must not direct-join organization B call');
+    videochat_call_access_cross_org_assert((string) ($multiTenantForeignDirectJoin['reason'] ?? '') === 'not_on_guest_list', 'multi-tenant active switch direct-join denial reason mismatch');
+
+    $multiTenantForeignDecision = videochat_decide_call_access_for_user($pdo, $orgBInviteOnlyCallId, $orgAMultiTenantAdminId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($multiTenantForeignDecision['allowed'] ?? true), 'multi-tenant active switch must not alter server-side call-access decision');
+    videochat_call_access_cross_org_assert((string) ($multiTenantForeignDecision['source'] ?? '') === 'none', 'multi-tenant active switch denial must not claim an access source');
 
     $stalePersonalAccessId = videochat_call_access_cross_org_insert_link($pdo, $tenantBId, $orgBInviteOnlyCallId, $orgAAdminId);
     $staleResolution = videochat_resolve_call_access_public($pdo, $stalePersonalAccessId);

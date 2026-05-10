@@ -118,6 +118,21 @@
       ]
     },
     {
+      "key": "alpha_admin_beta_member",
+      "id": 6109,
+      "email": "iam-alpha-admin-beta-member@example.test",
+      "display_name": "Alpha Admin Beta Member",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "admin" },
+        { "tenant_key": "beta", "role": "member" }
+      ]
+    },
+    {
       "key": "registered_guest",
       "id": 6106,
       "email": "iam-registered-guest@example.test",
@@ -434,6 +449,26 @@
         "owner": false,
         "guest_list_required": true,
         "cross_org": true
+      }
+    },
+    {
+      "key": "direct_join_alpha_admin_beta_member_active_switch_denied",
+      "sprint_groups": ["21"],
+      "principal_user_key": "alpha_admin_beta_member",
+      "call_key": "beta_active",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "calls_forbidden",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "platform_admin": false,
+        "tenant_admin": false,
+        "guest_list_entry": false,
+        "owner": false,
+        "guest_list_required": true,
+        "active_org_switch": true
       }
     },
     {
