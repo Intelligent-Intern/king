@@ -96,6 +96,7 @@ const callAccessContract = readText('demo/video-chat/backend-king-php/domain/cal
 const callAccessSessionPhp = readText('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const realtimePresence = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_presence.php');
 const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeCallRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
 const realtimeLobby = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby.php');
 const realtimeLobbyState = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby_state.php');
 const lobbySecurity = readText('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
@@ -148,13 +149,13 @@ assert.match(
   'non-moderator lobby snapshots must expose only the viewer guest row',
 );
 assert.match(
-  realtimeCallContext,
+  `${realtimeCallContext}\n${realtimeCallRoleContext}`,
   /SELECT[\s\S]*calls\.owner_user_id[\s\S]*cp\.call_role[\s\S]*WHERE calls\.id = :call_id[\s\S]*AND cp\.user_id = :user_id/s,
   'room role computation must derive call role from call owner and participant rows keyed by user_id',
 );
 assert.match(
-  realtimeCallContext,
-  /'can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
+  `${realtimeCallContext}\n${realtimeCallRoleContext}`,
+  /'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
   'room snapshot viewer authority must not derive moderation or owner rights from display name',
 );
 assert.match(
