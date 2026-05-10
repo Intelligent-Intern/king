@@ -44,6 +44,11 @@
         "path": "frontend-vue/tests/e2e/chat-activity-matrix.spec.js",
         "test_title": "websocket reconnect resyncs room snapshot, media security, and control state"
       }
+    ],
+    "required_iam_call_access_commands": [
+      "frontend:contract:iam-call-access",
+      "frontend:e2e:call-access",
+      "frontend:e2e:lobby-concurrency"
     ]
   },
   "commands": {
@@ -95,6 +100,31 @@
       "paths": [
         "frontend-vue/tests/e2e/call-access-join.spec.js",
         "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js"
+      ]
+    },
+    "frontend:contract:iam-call-access": {
+      "kind": "npm_script",
+      "working_directory": "frontend-vue",
+      "script": "test:contract:iam-call-access",
+      "command": "npm run test:contract:iam-call-access",
+      "paths": [
+        "frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs",
+        "frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs",
+        "frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs",
+        "frontend-vue/tests/contract/call-access-link-privacy-contract.mjs",
+        "frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs",
+        "frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs",
+        "frontend-vue/tests/contract/call-access-cross-org-contract.mjs",
+        "frontend-vue/tests/contract/call-access-terminal-states-contract.mjs",
+        "frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs",
+        "frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs",
+        "frontend-vue/tests/contract/call-access-duplicate-abuse-contract.mjs",
+        "frontend-vue/tests/contract/call-access-account-isolation-contract.mjs",
+        "backend-king-php/tests/call-guest-list-direct-join-contract.sh",
+        "backend-king-php/tests/call-access-cross-org-contract.sh",
+        "backend-king-php/tests/realtime-lobby-concurrency-contract.sh",
+        "backend-king-php/tests/call-access-membership-removal-contract.sh",
+        "backend-king-php/tests/call-access-stale-organization-role-contract.sh"
       ]
     },
     "frontend:contract:wlvc": {
