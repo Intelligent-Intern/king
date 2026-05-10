@@ -92,8 +92,17 @@ Tickets:
     account/session switch handling.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-registered-logged-out-handoff-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM2-05 Prove registered invitees who are already logged in can join only
+- [x] IAM2-05 Prove registered invitees who are already logged in can join only
   the invited call and keep active organization boundaries intact.
+  - Merged worker branch `agent/iam-s2-05-registered-logged-in`.
+  - Added `call-access-registered-logged-in-invitee-contract.mjs` proving
+    personalized registered invitee binding, wrong-account denial, call/room/user
+    session binding, realtime binding mismatch rejection, cross-org separation,
+    and no private call data leak on denial.
+  - Proof: `node tests/contract/call-access-registered-logged-in-invitee-contract.mjs`,
+    `../backend-king-php/tests/call-access-session-route-guard-contract.sh`
+    (SQLite phase skipped because host PHP lacks `pdo_sqlite`), and
+    `git diff --check` passed.
 - [ ] IAM2-06 Prove anonymous call links and temporary call-link accounts honor
   org-admin restrictions and do not elevate direct-join rights.
 - [ ] IAM2-07 Prove personalized temporary accounts cannot be reused across
