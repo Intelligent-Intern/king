@@ -24,6 +24,14 @@
         <div v-else-if="state.contextError" class="calls-modal-body call-access-join-context-body">
           <section class="call-access-join-status error">{{ state.contextError }}</section>
         </div>
+        <StrongMismatchHostVerificationModal
+          v-else-if="state.strongMismatchRequired"
+          :access-id="normalizeAccessId(route.params.accessId)"
+          :verified-context="state.verifiedAccessContext"
+          @cancel="goToLogin"
+          @verified="handleStrongMismatchHostVerified"
+          @continue="continueAfterStrongMismatchDeclineUpdate"
+        />
         <template v-else>
           <div class="calls-modal-body calls-enter-body">
             <div class="calls-enter-layout">
@@ -53,9 +61,16 @@
 
               <section class="calls-enter-right calls-enter-right-settings">
                 <div class="call-left-settings">
-                  <CallBackgroundControls i18n-prefix="public.join" :image-title="t('public.join.background_images')" />
+                  <JoinStrongMismatchPanel
+                    v-if="state.strongMismatchRequired"
+                    :state="state"
+                    @verify-host="strongMismatchFlow.verifyHost"
+                    @continue-without-update="strongMismatchFlow.continueWithoutUpdate"
+                    @request-update="strongMismatchFlow.requestUpdate"
+                  />
+                  <CallBackgroundControls v-if="!state.strongMismatchRequired" i18n-prefix="public.join" :image-title="t('public.join.background_images')" />
 
-                  <section class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
                     <div class="call-left-settings-title">{{ t('public.join.mic') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
@@ -98,7 +113,7 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block join-settings-speaker" :aria-label="t('public.join.speaker')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-speaker" :aria-label="t('public.join.speaker')">
                     <div class="call-left-settings-title">{{ t('public.join.speaker') }}</div>
                     <div class="call-left-settings-field">
                       <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
@@ -136,7 +151,7 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block join-settings-camera" :aria-label="t('public.join.camera')">
+                  <section v-if="!state.strongMismatchRequired" class="call-left-settings-block join-settings-camera" :aria-label="t('public.join.camera')">
                     <div class="call-left-settings-title">{{ t('public.join.camera') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
@@ -153,7 +168,7 @@
                     </div>
                   </section>
 
-                  <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+                  <div v-if="!state.strongMismatchRequired && callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
                 </div>
               </section>
             </div>
@@ -181,6 +196,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../../components/AppSelect.vue';
+import StrongMismatchHostVerificationModal from './StrongMismatchHostVerificationModal.vue';
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
@@ -221,6 +237,8 @@ import {
 } from './callAccessPersonalizedMismatch';
 import { loginWithCallAccess } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
+import JoinStrongMismatchPanel from './JoinStrongMismatchPanel.vue';
+import { callAccessJoinHeaders, createJoinStrongMismatchFlow, isStrongPersonalizedMismatchPayload } from './joinStrongMismatchFlow';
 
 const route = useRoute();
 const router = useRouter();
@@ -287,6 +305,19 @@ function normalizeCallId(value) {
   if (candidate === '') return '';
   return /^[A-Za-z0-9._-]{1,200}$/.test(candidate) ? candidate : '';
 }
+
+const strongMismatchFlow = createJoinStrongMismatchFlow({
+  state,
+  route,
+  sessionState,
+  t,
+  normalizeAccessId,
+  normalizeCallId,
+  normalizeRoomId,
+  loginWithCallAccess,
+  requestCallAccessAccountUpdateConfirmation,
+  startAdmissionWait,
+});
 
 function resetJoinContextDetails() {
   state.callId = '';
@@ -626,6 +657,29 @@ function startAdmissionWait(accessId) {
   return true;
 }
 
+function isStrongMismatchHostVerificationError(payload) {
+  const error = payload && typeof payload === 'object' ? payload.error || {} : {};
+  const details = error && typeof error === 'object' ? error.details || {} : {};
+  const fields = details && typeof details === 'object' ? details.fields || {} : {};
+  return String(error.code || '') === 'call_access_forbidden'
+    && String(details.mismatch || '') === 'strong_personalized_link'
+    && String(fields.host_name || '') === 'not_verified';
+}
+
+function handleStrongMismatchHostVerified(result) {
+  const call = result?.call && typeof result.call === 'object' ? result.call : {};
+  state.callId = normalizeCallId(call.id || state.callId);
+  state.roomId = normalizeRoomId(call.room_id || state.roomId || 'lobby');
+  state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
+}
+
+function continueAfterStrongMismatchDeclineUpdate() {
+  const accessId = normalizeAccessId(route.params.accessId);
+  if (accessId === '') return;
+  state.strongMismatchRequired = false;
+  startAdmissionWait(accessId);
+}
+
 async function loadJoinContext() {
   state.loadingContext = true;
   state.contextError = '';
@@ -642,9 +696,7 @@ async function loadJoinContext() {
   try {
     const { response } = await fetchBackend(`/api/call-access/${encodeURIComponent(accessId)}/join`, {
       method: 'GET',
-      headers: {
-        accept: 'application/json',
-      },
+      headers: callAccessJoinHeaders(sessionState),
     });
     let payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
@@ -776,7 +828,7 @@ onMounted(async () => {
   });
   detachDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await loadJoinContext();
-  if (state.contextError) return;
+  if (state.contextError || state.strongMismatchRequired) return;
   await refreshCallMediaDevices({ requestPermissions: true });
   await startPreview();
 });

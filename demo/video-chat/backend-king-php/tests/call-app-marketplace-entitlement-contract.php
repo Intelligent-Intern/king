@@ -91,6 +91,17 @@ SQL
         ':created_at' => $now,
         ':updated_at' => $now,
     ]);
+    $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, invite_state)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'accepted')
+SQL
+    )->execute([
+        ':call_id' => $callId,
+        ':user_id' => $adminUserId,
+        ':email' => 'admin@intelligent-intern.com',
+        ':display_name' => 'Admin',
+    ]);
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [

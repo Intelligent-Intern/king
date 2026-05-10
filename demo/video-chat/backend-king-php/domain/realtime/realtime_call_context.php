@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../support/tenant_context.php';
 require_once __DIR__ . '/../calls/call_access_contract.php';
 require_once __DIR__ . '/../calls/call_management_contract.php';
+require_once __DIR__ . '/../calls/call_access_decision.php';
 require_once __DIR__ . '/../calls/invite_code_contract.php';
 require_once __DIR__ . '/realtime_connection_contract.php';
 require_once __DIR__ . '/realtime_presence.php';
@@ -204,24 +205,27 @@ function videochat_realtime_mark_call_participant_invite_state(
     );
 }
 
-function videochat_realtime_mark_call_participant_pending_for_queue(
+function videochat_realtime_mark_call_participant_removed_from_active_call(
     callable $openDatabase,
-    array $connection
+    string $callId,
+    int $userId
 ): bool {
-    $callId = videochat_realtime_connection_call_id($connection);
-    $userId = (int) ($connection['user_id'] ?? 0);
-    if ($callId === '' || $userId <= 0) {
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    if ($normalizedCallId === '' || $userId <= 0) {
         return false;
     }
 
     try {
         $pdo = $openDatabase();
+        $leftAt = gmdate('c');
         $statement = $pdo->prepare(
             <<<'SQL'
 UPDATE call_participants
-SET invite_state = 'pending',
-    joined_at = NULL,
-    left_at = NULL
+SET invite_state = 'invited',
+    left_at = CASE
+        WHEN joined_at IS NOT NULL AND left_at IS NULL THEN :left_at
+        ELSE left_at
+    END
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
@@ -229,7 +233,8 @@ WHERE call_id = :call_id
 SQL
         );
         $statement->execute([
-            ':call_id' => $callId,
+            ':left_at' => $leftAt,
+            ':call_id' => $normalizedCallId,
             ':user_id' => $userId,
         ]);
 
@@ -548,6 +553,22 @@ function videochat_realtime_connection_with_call_context(array $connection, call
     return $connection;
 }
 
+function videochat_realtime_connection_removed_from_active_call(array $connection): bool
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+    if ($roomId === '' || $roomId === 'lobby' || $roomId === videochat_realtime_waiting_room_id()) {
+        return false;
+    }
+
+    if (videochat_realtime_connection_call_id($connection) === '') {
+        return false;
+    }
+
+    $inviteState = videochat_realtime_normalize_call_invite_state($connection['invite_state'] ?? 'invited');
+    $leftAt = trim((string) ($connection['left_at'] ?? ''));
+    return $leftAt !== '' && !in_array($inviteState, ['allowed', 'accepted'], true);
+}
+
 function videochat_realtime_call_context_allows_admission_bypass(array $context): bool
 {
     if ((bool) ($context['can_moderate'] ?? false)) {
@@ -572,10 +593,6 @@ function videochat_realtime_is_user_moderator_for_room(
 ): bool {
     if ($userId <= 0) {
         return false;
-    }
-
-    if (videochat_normalize_role_slug($role) === 'admin') {
-        return true;
     }
 
     try {
@@ -605,10 +622,6 @@ function videochat_realtime_user_has_sfu_room_admission(
 ): bool {
     if ($userId <= 0) {
         return false;
-    }
-
-    if (videochat_normalize_role_slug($role) === 'admin') {
-        return true;
     }
 
     try {
@@ -785,6 +798,7 @@ function videochat_realtime_resolve_connection_rooms(
     $userId = (int) ($user['id'] ?? 0);
     $userRole = (string) ($user['role'] ?? 'user');
     $sessionId = videochat_realtime_session_id_from_auth($websocketAuth);
+    $boundOpenAccessSession = false;
     if ($sessionId !== '') {
         try {
             $pdo = $openDatabase();
@@ -808,6 +822,7 @@ function videochat_realtime_resolve_connection_rooms(
 
                 $resolvedRequestedRoomId = $boundRoomId;
                 $normalizedRequestedCallId = $boundCallId;
+                $boundOpenAccessSession = (string) ($accessBinding['link_kind'] ?? '') === 'open';
                 $tenantId = null;
             }
         } catch (Throwable) {
@@ -828,6 +843,11 @@ function videochat_realtime_resolve_connection_rooms(
                 $tenantId
             );
             $canBypassLobby = videochat_realtime_call_context_allows_admission_bypass($context);
+            if ($boundOpenAccessSession) {
+                $decision = videochat_decide_call_access_for_user($pdo, $normalizedRequestedCallId, $userId, $userRole, $tenantId);
+                $directSources = ['system_admin', 'owner', 'organization_admin', 'internal_participant'];
+                $canBypassLobby = $canBypassLobby && in_array((string) ($decision['source'] ?? ''), $directSources, true);
+            }
         } catch (Throwable) {
             if ($requiresAuthoritativeBackfill) {
                 return videochat_realtime_room_resolution_backfill_unavailable();

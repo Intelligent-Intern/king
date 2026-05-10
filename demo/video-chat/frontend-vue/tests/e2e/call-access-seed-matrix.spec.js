@@ -2,11 +2,12 @@ import { test, expect } from '@playwright/test';
 
 import {
   accessIdFromJoinPath,
-  createCallAccessMatrixPage,
+  directJoinDecisionForSeedUser,
   getSeedAccessLink,
   getSeedCall,
   getSeedOrganization,
   getSeedScenario,
+  getSeedTenant,
   getSeedUser,
   installStoredSeedSession,
   seedCallKeys,
@@ -14,6 +15,10 @@ import {
   sessionStorageKey,
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import {
+  createCallAccessMatrixPage,
+  createDirectJoinMatrixPage,
+} from './helpers/callAccessSeedRuntime.js';
 
 const directJoinPermissionCases = [
   'direct_join_system_admin_alpha_active_allowed',
@@ -90,6 +95,8 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'alpha_tenant_member_without_organization',
     'registered_guest',
     'removed_invited_member',
+    'disabled_registered_user',
+    'deleted_registered_user',
     'temporary_personalized_guest',
     'temporary_anonymous_guest',
   ]));
@@ -154,6 +161,45 @@ test('IAM call-access seed matrix covers required principals without temporary a
     expect(user.system_admin).toBe(false);
     expect(tenant?.permissions?.platform_admin ?? false).toBe(false);
     expect(tenant?.permissions?.tenant_admin ?? false).toBe(false);
+  }
+
+  const removedInvitedMember = getSeedUser('removed_invited_member');
+  const removedTenant = tenantSnapshotForSeedUser('removed_invited_member', 'alpha_active');
+  const removedDirectJoin = directJoinDecisionForSeedUser('removed_invited_member', 'alpha_active');
+  expect(removedInvitedMember.memberships || []).toEqual([]);
+  expect(removedInvitedMember.organization_memberships || []).toEqual([]);
+  expect(removedInvitedMember.removed_organization_memberships || []).toEqual(expect.arrayContaining([
+    expect.objectContaining({ organization_key: 'alpha_org', role: 'admin' }),
+  ]));
+  expect(removedTenant?.membership_id ?? 0).toBe(0);
+  expect(removedTenant?.permissions?.platform_admin ?? false).toBe(false);
+  expect(removedTenant?.permissions?.tenant_admin ?? false).toBe(false);
+  expect(removedTenant?.permissions?.manage_organizations ?? false).toBe(false);
+  expect(removedDirectJoin.allowed).toBe(false);
+  expect(removedDirectJoin.source).toBe('none');
+
+  for (const scenarioKey of [
+    ...allowedDirectJoinScenarios,
+    ...deniedDirectJoinScenarios,
+    ...authDeniedDirectJoinScenarios,
+  ]) {
+    const scenario = getSeedScenario(scenarioKey);
+    const decision = directJoinDecisionForSeedUser(scenario.principal_user_key, scenario.call_key);
+    expect(decision.source).toBe(scenario.expected.decision_source);
+    expect(decision.allowed).toBe(scenario.expected.state === 'resolved');
+    if (scenario.expected.decision_reason) {
+      expect(decision.reason).toBe(scenario.expected.decision_reason);
+    }
+    expect(decision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+    const tenant = tenantSnapshotForSeedUser(scenario.principal_user_key, scenario.call_key);
+    if (scenario.expected.tenant_required === false) {
+      expect(tenant).toBeNull();
+      expect(getSeedUser(scenario.principal_user_key).system_admin === true).toBe(scenario.expected.platform_admin);
+      expect(scenario.expected.tenant_admin).toBe(false);
+    } else {
+      expect(tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
+      expect(tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
+    }
   }
 });
 
@@ -259,7 +305,12 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
     expect(sessionPayload?.status).toBe('ok');
     expect(sessionPayload?.result?.user?.id).toBe(participant.id);
     expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('pending');
+    expect(sessionPayload?.result?.tenant?.membership_id ?? 0).toBe(0);
     expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_organizations ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.admit_participants ?? false).toBe(false);
     expect(JSON.stringify(sessionPayload)).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential)\b/i);
 
     await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
@@ -278,4 +329,441 @@ test('personal call-access matrix seed starts a call-scoped session and waits fo
   } finally {
     await context.close();
   }
+});
+
+test('deleted personalized call-access link is denied without leaking call payload', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario('deleted_personalized_link_denied');
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const participant = getSeedUser(link.target_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+  });
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(404);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.status).toBe('error');
+    expect(joinPayload?.error?.code).toBe('call_access_not_found');
+    expect(JSON.stringify(joinPayload)).not.toContain(call.title);
+    expect(JSON.stringify(joinPayload)).not.toContain(participant.email);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid|call link does not exist/i);
+    await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
+    expectTextDoesNotContain(
+      await joinDialog.innerText(),
+      [call.id, call.title, participant.email, participant.display_name, accessId],
+      'deleted personalized link dialog',
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+for (const scenarioKey of allowedDirectJoinScenarios) {
+  test(scenarioTestName(scenarioKey, `direct workspace join allows ${scenarioKey} through server-side role evaluation`), async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+    try {
+      const resolveResponsePromise = page.waitForResponse((response) => (
+        response.url().includes(`/api/calls/resolve/${call.id}`)
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const resolveResponse = await resolveResponsePromise;
+      expect(resolveResponse.status()).toBe(200);
+      const resolvePayload = await resolveResponse.json();
+      expect(resolvePayload?.result?.state).toBe('resolved');
+      expect(resolvePayload?.result?.call?.id).toBe(call.id);
+      expect(resolvePayload?.result?.access_decision?.source).toBe(scenario.expected.decision_source);
+      expect(resolvePayload?.result?.access_decision?.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+
+      await expect(page).toHaveURL(new RegExp(`/workspace/call/${escapeRegExp(call.id)}(?:[/?#].*)?$`));
+      await expect(page.locator('.workspace-call-view')).toBeVisible({ timeout: 20_000 });
+      expect(directJoinDecisions.some((decision) => (
+        decision.call_id === call.id
+        && decision.allowed === true
+        && decision.source === scenario.expected.decision_source
+      ))).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+for (const scenarioKey of deniedDirectJoinScenarios) {
+  test(scenarioTestName(scenarioKey, `direct workspace join denies ${scenarioKey} without leaking call payload`), async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+    try {
+      const resolveResponsePromise = page.waitForResponse((response) => (
+        response.url().includes(`/api/calls/resolve/${call.id}`)
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const resolveResponse = await resolveResponsePromise;
+      expect(resolveResponse.status()).toBe(200);
+      const resolvePayload = await resolveResponse.json();
+      expect(resolvePayload?.result?.state).toBe('forbidden');
+      expect(resolvePayload?.result?.call ?? null).toBe(null);
+      expectNoSafeScreenLeakage(
+        JSON.stringify(resolvePayload),
+        directJoinNetworkNeedles(call),
+        `${scenarioKey} resolve response`,
+      );
+
+      await expect(page).toHaveURL(/\/(user\/dashboard|admin\/calls)(?:[/?#].*)?$/);
+      await expect(page.locator('body')).not.toContainText(call.title);
+      expectNoSafeScreenLeakage(
+        await page.locator('body').innerText(),
+        directJoinContentNeedles(call),
+        `${scenarioKey} safe screen`,
+      );
+      expect(directJoinDecisions.some((decision) => (
+        decision.call_id === call.id
+        && decision.allowed === false
+        && decision.source === 'none'
+      ))).toBe(true);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+for (const scenarioKey of authDeniedDirectJoinScenarios) {
+  test(`direct workspace join denies ${scenarioKey} before call resolution`, async ({ browser }) => {
+    test.setTimeout(60_000);
+    const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+    const scenario = getSeedScenario(scenarioKey);
+    const call = getSeedCall(scenario.call_key);
+    const { context, page, directJoinDecisions } = await createDirectJoinMatrixPage(browser, baseURL, { scenarioKey });
+
+    try {
+      const authResponsePromise = page.waitForResponse((response) => (
+        response.url().includes('/api/auth/session-state')
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/workspace/call/${call.id}`);
+      const authResponse = await authResponsePromise;
+      expect(authResponse.status()).toBe(401);
+      const authPayload = await authResponse.json();
+      expectNoSafeScreenLeakage(
+        JSON.stringify(authPayload),
+        directJoinNetworkNeedles(call),
+        `${scenarioKey} auth response`,
+      );
+
+      await expect(page).toHaveURL(/\/login(?:[/?#].*)?$/);
+      await expect(page.locator('body')).not.toContainText(call.title);
+      expectNoSafeScreenLeakage(
+        await page.locator('body').innerText(),
+        directJoinContentNeedles(call),
+        `${scenarioKey} login safe screen`,
+      );
+      expect(directJoinDecisions.some((decision) => decision.allowed === true)).toBe(false);
+    } finally {
+      await context.close();
+    }
+  });
+}
+
+test('foreign personalized link review flags stay bound to the target organization and call', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario('review_flags_correct_org_for_foreign_personal_link');
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(scenario.expected.review_call_key);
+  const tenant = getSeedTenant(scenario.expected.review_tenant_key);
+  const subject = getSeedUser(scenario.expected.subject_user_key);
+  const target = getSeedUser(scenario.expected.target_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const reviewFlags = [];
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+    storedSessionUserKey: scenario.principal_user_key,
+    storedSessionCallKey: 'alpha_active',
+  });
+  try {
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      reviewFlags.push({
+        reason: 'duplicate_personalized_link',
+        status: 'open',
+        tenant_id: tenant.id,
+        tenant_key: scenario.expected.review_tenant_key,
+        call_id: call.id,
+        call_key: call.key,
+        subject_user_id: subject.id,
+        subject_user_key: subject.key,
+        target_user_id: target.id,
+        target_user_key: target.key,
+        payload: {
+          flag: 'duplicate_personalized_link',
+          link_kind: 'personal',
+          review_status: 'manual_review_required',
+          raw_link_identifier_logged: false,
+          account_email_logged: false,
+          host_name_logged: false,
+        },
+      });
+      await route.fulfill({
+        status: 403,
+        json: {
+          status: 'error',
+          error: {
+            code: 'call_access_forbidden',
+            message: 'Call access link is not available for your session.',
+            details: {
+              mismatch: 'strong_personalized_link',
+              fields: {
+                auth: 'not_bound_to_current_user',
+                host_name: 'not_verified',
+              },
+            },
+          },
+        },
+      });
+    });
+
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(403);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.error?.code).toBe('call_access_forbidden');
+    expect(joinPayload?.error?.details?.fields?.auth).toBe('not_bound_to_current_user');
+
+    expect(reviewFlags).toHaveLength(1);
+    expect(reviewFlags[0]).toMatchObject({
+      reason: scenario.expected.reason,
+      tenant_id: tenant.id,
+      tenant_key: scenario.expected.review_tenant_key,
+      call_id: call.id,
+      call_key: call.key,
+      subject_user_id: subject.id,
+      subject_user_key: subject.key,
+      target_user_id: target.id,
+      target_user_key: target.key,
+    });
+    expect(JSON.stringify(reviewFlags[0])).not.toContain(link.id);
+    expect(reviewFlags[0]?.payload?.raw_link_identifier_logged).toBe(false);
+    expect(reviewFlags[0]?.payload?.account_email_logged).toBe(false);
+  } finally {
+    await context.close();
+  }
+});
+
+async function expectOpenLinkWaitsForHost({ browser, scenarioKey, storedSessionUserKey = '', guestName }) {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const expectedUser = getSeedUser(scenario.principal_user_key);
+  const temporaryGuest = getSeedUser('temporary_anonymous_guest');
+  const accessId = accessIdFromJoinPath(link.join_path);
+
+  expect(accessId, 'join path must contain the backend-issued access id').not.toBe('');
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+    storedSessionUserKey,
+    storedSessionCallKey: link.call_key,
+  });
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.status).toBe('ok');
+    expect(joinPayload?.result?.link_kind).toBe('open');
+    expect(joinPayload?.result?.call?.id).toBe(call.id);
+    expect(joinPayload?.result?.target_user).toBeNull();
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(call.title);
+    await expect(joinDialog).toContainText('Free-for-all link');
+    await joinDialog.getByPlaceholder('Enter your display name').fill(guestName);
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionPayload = await sessionResponse.json();
+    expect(sessionPayload?.status).toBe('ok');
+    expect(sessionPayload?.result?.link_kind).toBe('open');
+    expect(sessionPayload?.result?.user?.id).toBe(expectedUser.id);
+    expect(sessionPayload?.result?.user?.account_type).toBe(expectedUser.account_type);
+    expect(Boolean(sessionPayload?.result?.user?.is_guest)).toBe(Boolean(expectedUser.is_guest));
+    if (scenario.expected?.must_not_create_temporary_identity) {
+      expect(sessionPayload?.result?.user?.id).not.toBe(temporaryGuest.id);
+    }
+    expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('pending');
+    if (scenario.expected?.must_not_create_personalized_binding) {
+      expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, scenarioKey);
+    }
+    if (scenario.expected?.must_not_modify_guest_list) {
+      expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, expectedUser, scenarioKey);
+    }
+    expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.admit_participants ?? false).toBe(false);
+    expect(JSON.stringify(sessionPayload)).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential)\b/i);
+
+    await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
+    const socketFrames = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+    expect(socketFrames.some((frame) => frame?.type === 'lobby/queue/join')).toBe(true);
+
+    const storedSession = await page.evaluate((key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '{}');
+      } catch {
+        return {};
+      }
+    }, sessionStorageKey);
+    expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
+    expect(storedSession.sessionId).toBe(sessionPayload?.result?.session?.id);
+  } finally {
+    await context.close();
+  }
+}
+
+async function expectOpenLinkJoinsWithOwnRights({ browser, scenarioKey, storedSessionUserKey, guestName }) {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const expectedUser = getSeedUser(scenario.principal_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const expectedDecision = directJoinDecisionForSeedUser(scenario.principal_user_key, link.call_key);
+
+  expect(accessId, 'join path must contain the backend-issued access id').not.toBe('');
+  expect(expectedDecision.allowed).toBe(true);
+  expect(expectedDecision.source).toBe(scenario.expected.decision_source);
+  expect(expectedDecision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+    storedSessionUserKey,
+    storedSessionCallKey: link.call_key,
+  });
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await joinDialog.getByPlaceholder('Enter your display name').fill(guestName);
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionPayload = await sessionResponse.json();
+    expect(sessionPayload?.status).toBe('ok');
+    expect(sessionPayload?.result?.link_kind).toBe('open');
+    expect(sessionPayload?.result?.user?.id).toBe(expectedUser.id);
+    expect(sessionPayload?.result?.user?.account_type).toBe('account');
+    expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('allowed');
+    expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, scenarioKey);
+    expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, expectedUser, scenarioKey);
+
+    await expect(page).toHaveURL(new RegExp(`/workspace/call/${escapeRegExp(call.id)}(?:[/?#].*)?$`), { timeout: 20_000 });
+    const socketFrames = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+    expect(socketFrames.some((frame) => frame?.type === 'lobby/queue/join')).toBe(false);
+  } finally {
+    await context.close();
+  }
+}
+
+test('e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights: anonymous open link keeps a logged-in user on their own account and waits for host admission', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkWaitsForHost({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_uses_own_account_waits_for_host',
+    storedSessionUserKey: 'alpha_normal_user',
+    guestName: 'Ignored Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_005 org admin joins own organization call through anonymous link without guest-list mutation', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkJoinsWithOwnRights({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_org_admin_own_org_direct',
+    storedSessionUserKey: 'alpha_org_admin',
+    guestName: 'Ignored Org Admin Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_006 org admin cannot direct-join a foreign organization call through anonymous link', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkWaitsForHost({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_org_admin_foreign_org_lobby',
+    storedSessionUserKey: 'alpha_org_admin',
+    guestName: 'Ignored Foreign Org Admin Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_007 guest-list user joins through anonymous link without personalized binding', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkJoinsWithOwnRights({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_guest_list_user_direct',
+    storedSessionUserKey: 'registered_guest',
+    guestName: 'Ignored Guest List Name',
+  });
+});
+
+test('anonymous open link creates a temporary guest for logged-out users and waits for host admission', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkWaitsForHost({
+    browser,
+    scenarioKey: 'anonymous_open_logged_out_creates_temporary_guest_waits_for_host',
+    guestName: 'Anonymous Lobby Guest',
+  });
 });

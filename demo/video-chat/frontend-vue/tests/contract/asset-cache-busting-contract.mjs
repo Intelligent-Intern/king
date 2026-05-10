@@ -97,6 +97,10 @@ try {
   assert.ok(realtimeAssetVersion.includes('function videochat_realtime_disconnect_stale_asset_client'), 'realtime asset version helper must expose a stale-client disconnect helper');
   assert.ok(realtimeAssetVersion.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'stale-client disconnect helper must close stale sockets');
 
+  const realtimeWsReconnect = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket_reconnect.php'));
+  assert.ok(realtimeWsReconnect.includes('function videochat_realtime_websocket_disconnect_stale_asset_client'), 'presence websocket must expose a stale-client disconnect helper');
+  assert.ok(realtimeWsReconnect.includes('videochat_realtime_disconnect_stale_asset_client('), 'presence websocket stale-client helper must use the shared stale-client disconnect helper');
+
   const realtimeWs = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket.php'));
   const realtimeWsReconnect = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket_reconnect.php'));
   assert.ok(

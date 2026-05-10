@@ -476,6 +476,16 @@ function videochat_lobby_apply_command(
             unset($admittedByUser[$targetUserId]);
             $changed = true;
         }
+        $targetActiveInRoom = videochat_lobby_user_present_in_room(
+            $presenceState,
+            $roomId,
+            $targetUserId,
+            null,
+            $tenantId
+        );
+        if ($targetActiveInRoom) {
+            $changed = true;
+        }
 
         if (!$changed) {
             return [
@@ -512,6 +522,7 @@ function videochat_lobby_apply_command(
             'target_user_id' => $targetUserId,
             'room_id' => $roomId,
             'affected_user_ids' => [$targetUserId],
+            'active_target_user_ids' => $targetActiveInRoom ? [$targetUserId] : [],
         ];
     }
 

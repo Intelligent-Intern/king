@@ -81,17 +81,17 @@ try {
     videochat_call_guest_list_direct_join_assert($roleId > 0, 'expected user role');
     $insertUser = $pdo->prepare(
         <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status)
-VALUES(:email, :display_name, NULL, :role_id, 'active')
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
 SQL
     );
-    $insertUser->execute([
-        ':email' => 'not-on-guest-list@intelligent-intern.com',
-        ':display_name' => 'Not On Guest List',
-        ':role_id' => $roleId,
-    ]);
-    $notOnGuestListUserId = (int) $pdo->lastInsertId();
-    videochat_call_guest_list_direct_join_assert($notOnGuestListUserId > 0, 'expected non-guest-list user');
+    $notOnGuestListUserId = videochat_call_guest_list_direct_join_create_user(
+        $pdo,
+        $insertUser,
+        $roleId,
+        'not-on-guest-list@intelligent-intern.com',
+        'Not On Guest List'
+    );
 
     $guestListedCall = videochat_create_call($pdo, $adminUserId, [
         'title' => 'Guest List Direct Join',

@@ -69,6 +69,30 @@ assert.match(
 
 assert.match(
   launchDomainSource,
+  /function videochat_call_app_launch_session_availability[\s\S]*organization_call_app_installations[\s\S]*organization_call_app_entitlements[\s\S]*entitlement_not_active[\s\S]*token_stale_after_entitlement_change/s,
+  'launch token mint and reconnect validation must recheck current installation and entitlement state',
+);
+
+assert.match(
+  launchDomainSource,
+  /function videochat_call_app_launch_subject_changed_after[\s\S]*call_app_participant_grants[\s\S]*token_stale_after_grant_change/s,
+  'launch token reconnect validation must reject tokens issued before a later participant grant change',
+);
+
+assert.match(
+  launchDomainSource,
+  /activated_at[\s\S]*token_stale_after_session_reactivation/s,
+  'launch token reconnect validation must reject tokens issued before session reactivation',
+);
+
+assert.match(
+  launchDomainSource,
+  /function videochat_call_app_mint_launch_token[\s\S]*videochat_call_app_launch_session_availability[\s\S]*function videochat_call_app_validate_launch_token[\s\S]*videochat_call_app_launch_session_availability/s,
+  'launch mint and validation must re-check active organization installation and entitlement state after revocation',
+);
+
+assert.match(
+  launchDomainSource,
   /\$base = \['call_apps\.launch'\][\s\S]*if \(\$grantState !== 'allowed'\)[\s\S]*return array_values/s,
   'denied participants must receive only status launch capability, not CRDT read',
 );

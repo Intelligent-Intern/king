@@ -105,6 +105,9 @@ function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string
     $cancelledAt = gmdate('c');
     $updatedAt = $cancelledAt;
 
+    $guestCleanup = null;
+    $invitationInvalidationAudit = ['ok' => true, 'reason' => 'not_applicable', 'events' => []];
+
     $pdo->beginTransaction();
     try {
         $updateCall = $pdo->prepare(
@@ -142,6 +145,26 @@ SQL
             ':left_at' => $cancelledAt,
             ':call_id' => (string) $existingCall['id'],
         ]);
+
+        $guestCleanup = videochat_invalidate_guest_accounts_for_call(
+            $pdo,
+            (string) $existingCall['id'],
+            is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : $tenantId
+        );
+        if (!(bool) ($guestCleanup['ok'] ?? false)) {
+            throw new RuntimeException('guest_cleanup_failed');
+        }
+
+        $invitationInvalidationAudit = videochat_call_access_record_invitation_invalidations_for_call(
+            $pdo,
+            (string) $existingCall['id'],
+            is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : $tenantId,
+            $authUserId,
+            ['invalidation_reason' => 'call_cancelled']
+        );
+        if (!(bool) ($invitationInvalidationAudit['ok'] ?? false)) {
+            throw new RuntimeException('invitation_invalidation_audit_failed');
+        }
 
         $pdo->commit();
     } catch (Throwable) {
@@ -222,6 +245,8 @@ SQL
             ],
             'my_participation' => false,
         ],
+        'guest_cleanup' => $guestCleanup,
+        'invitation_invalidation_audit' => $invitationInvalidationAudit,
     ];
 }
 

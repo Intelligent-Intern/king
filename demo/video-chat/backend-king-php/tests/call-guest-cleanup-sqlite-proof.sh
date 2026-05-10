@@ -7,6 +7,14 @@ REPO_ROOT="$(cd "${BACKEND_ROOT}/../../.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 DOCKER_IMAGE="${GUEST_CLEANUP_SQLITE_PHP_IMAGE:-php:8.4-cli-trixie}"
+GUEST_CLEANUP_CONTRACTS=(
+  call-guest-cleanup-explicit-contract.sh
+  call-guest-cleanup-invitation-delete-contract.sh
+  call-guest-cleanup-restart-contract.sh
+  call-guest-cleanup-lifecycle-remaining-contract.sh
+  call-guest-cleanup-call-end-contract.sh
+  call-guest-cleanup-call-delete-contract.sh
+)
 
 php_has_pdo_sqlite() {
   "${PHP_BIN}" -m 2>/dev/null | grep -qi '^pdo_sqlite$'
@@ -15,7 +23,10 @@ php_has_pdo_sqlite() {
 run_with_php_bin() {
   echo "[call-guest-cleanup-sqlite-proof] PHP runtime: $("${PHP_BIN}" -r 'echo PHP_VERSION;' 2>/dev/null)"
   "${PHP_BIN}" -m | grep -i '^pdo_sqlite$'
-  "${SCRIPT_DIR}/call-guest-lifecycle-contract.sh"
+  local contract
+  for contract in "${GUEST_CLEANUP_CONTRACTS[@]}"; do
+    "${SCRIPT_DIR}/${contract}"
+  done
 }
 
 run_with_docker() {
@@ -33,7 +44,12 @@ run_with_docker() {
     bash -lc '
       set -euo pipefail
       php -m | grep -i "^pdo_sqlite$"
-      tests/call-guest-lifecycle-contract.sh
+      tests/call-guest-cleanup-explicit-contract.sh
+      tests/call-guest-cleanup-invitation-delete-contract.sh
+      tests/call-guest-cleanup-restart-contract.sh
+      tests/call-guest-cleanup-lifecycle-remaining-contract.sh
+      tests/call-guest-cleanup-call-end-contract.sh
+      tests/call-guest-cleanup-call-delete-contract.sh
     '
 }
 
