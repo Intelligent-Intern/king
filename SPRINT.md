@@ -297,8 +297,17 @@ Sprint Checkboxen:
   - Proof: `npm run test:e2e:call-access` from
     `demo/video-chat/frontend-vue` passed with 12 Playwright tests, and
     `git diff --check` passed.
-- [ ] IAM5-19 Clean merged/superseded Sprint 05 and old IAM worker
+- [x] IAM5-19 Clean merged/superseded Sprint 05 and old IAM worker
   branches/worktrees using contained-HEAD and clean-worktree rules only.
+  - Removed clean, contained Sprint 05 worker worktrees and branches for
+    IAM5-01 through IAM5-18 after their evidence was merged into
+    `prod-kingrt-do-not-push-to-github`.
+  - Used only contained-HEAD and clean-worktree checks before removal; dirty
+    parked BGF/IAM worktrees were retained and not discarded.
+  - Ran `git worktree prune`.
+  - Proof: `git branch --list 'agent/iam-s5-*'` and
+    `git worktree list --porcelain | rg 'iam-s5-'` return no remaining Sprint
+    05 worker branches/worktrees, and `git status --short --branch` is clean.
 - [ ] IAM5-20 Build, run the Sprint 05 IAM proof set, deploy without
   push/DNS/certbot, and collect post-deploy diagnostics.
 
