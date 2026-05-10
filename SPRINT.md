@@ -203,8 +203,15 @@ Tickets:
     referenced backend SQLite runtime proofs remain gated by local `pdo_sqlite`.
 - [ ] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
   admission and removal decisions.
-- [ ] IAM-16 Prove frontend route guards and verified-context UI for call-access
+- [x] IAM-16 Prove frontend route guards and verified-context UI for call-access
   sessions.
+  - Merged worker branch `agent/iam-s1-16-route-guards-ui`.
+  - Added `call-access-route-guard-ui-contract.mjs` proving public join route,
+    authenticated workspace guard, post-login join-modal routing, verified
+    context session issuance, admission wait UI, safe logout/switch failures,
+    and invite-entry workspace transition.
+  - Proof: `node tests/contract/call-access-route-guard-ui-contract.mjs` and
+    `node tests/contract/call-access-verified-context-ui-contract.mjs` passed.
 - [x] IAM-17 Prove realtime websocket room scope and reconnect/backfill under IAM
   session changes.
   - Merged worker branch `agent/iam-s1-17-realtime-scope`.
