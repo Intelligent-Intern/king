@@ -325,9 +325,14 @@ function videochat_realtime_room_snapshot_diagnostics(array $presenceState, stri
     $roomTelemetry = is_array($presenceState['gossipmesh_telemetry'][$roomId] ?? null)
         ? (array) $presenceState['gossipmesh_telemetry'][$roomId]
         : [];
+    $gossipCounters = videochat_gossipmesh_sanitize_telemetry_counters($roomTelemetry['totals'] ?? []);
+    if (isset($gossipCounters['missing_frame_requests'])) {
+        $gossipCounters['missing_media_requests'] = (int) $gossipCounters['missing_frame_requests'];
+        unset($gossipCounters['missing_frame_requests']);
+    }
 
     return [
-        'gossip_counters' => videochat_gossipmesh_sanitize_telemetry_counters($roomTelemetry['totals'] ?? []),
+        'gossip_counters' => $gossipCounters,
         'gossip_peer_count' => (int) ($roomTelemetry['peer_count'] ?? 0),
         'gossip_transports' => is_array($roomTelemetry['transports'] ?? null) ? (array) $roomTelemetry['transports'] : [],
         'updated_at_ms' => (int) ($roomTelemetry['updated_at_ms'] ?? 0),

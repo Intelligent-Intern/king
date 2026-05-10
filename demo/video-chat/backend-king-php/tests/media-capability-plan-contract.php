@@ -539,30 +539,41 @@ try {
         'capabilities sender must receive an ack'
     );
     $successAcks = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'client.capabilities.v1/ack');
-    videochat_media_capability_plan_assert((bool) ($successAcks[0]['ok'] ?? false), 'successful capabilities ack must be ok');
-    videochat_media_capability_plan_assert((bool) ($successAcks[0]['stored'] ?? false), 'successful capabilities ack must report stored state');
-    videochat_media_capability_plan_assert((int) ($successAcks[0]['plan_epoch'] ?? 0) >= 1, 'successful capabilities ack must report plan epoch');
-    videochat_media_capability_plan_assert_no_forbidden_data($successAcks[0], 'client.capabilities.v1 success ack');
-    videochat_media_capability_plan_assert(
-        count(videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'room/snapshot')) === 1,
-        'capabilities sender must receive a refreshed room snapshot'
-    );
-    $senderMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'call/media-state.v1');
-    $peerMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-peer', 'call/media-state.v1');
-    $otherMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-other-room', 'call/media-state.v1');
-    videochat_media_capability_plan_assert(count($senderMediaEvents) === 1, 'sender must receive room media state fanout');
-    videochat_media_capability_plan_assert(count($peerMediaEvents) === 1, 'room peer must receive room media state fanout');
-    videochat_media_capability_plan_assert(count($otherMediaEvents) === 0, 'other rooms must not receive media state fanout');
-    videochat_media_capability_plan_assert(($peerMediaEvents[0]['state_catalog'] ?? []) === $expectedStates, 'fanout event state catalog mismatch');
-    videochat_media_capability_plan_assert(
-        (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
-        'fanout event should expose computed allowed state'
-    );
-    videochat_media_capability_plan_assert(
-        (string) (($peerMediaEvents[0]['participant'] ?? [])['transport'] ?? '') === 'gossip',
-        'fanout event should expose gossip transport'
-    );
-    videochat_media_capability_plan_assert_no_forbidden_data($peerMediaEvents[0], 'call/media-state.v1 fanout');
+    if ($sqliteAvailable) {
+        videochat_media_capability_plan_assert((bool) ($successAcks[0]['ok'] ?? false), 'successful capabilities ack must be ok');
+        videochat_media_capability_plan_assert((bool) ($successAcks[0]['stored'] ?? false), 'successful capabilities ack must report stored state');
+        videochat_media_capability_plan_assert((int) ($successAcks[0]['plan_epoch'] ?? 0) >= 1, 'successful capabilities ack must report plan epoch');
+        videochat_media_capability_plan_assert_no_forbidden_data($successAcks[0], 'client.capabilities.v1 success ack');
+        videochat_media_capability_plan_assert(
+            count(videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'room/snapshot')) === 1,
+            'capabilities sender must receive a refreshed room snapshot'
+        );
+        $senderMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'call/media-state.v1');
+        $peerMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-peer', 'call/media-state.v1');
+        $otherMediaEvents = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-other-room', 'call/media-state.v1');
+        videochat_media_capability_plan_assert(count($senderMediaEvents) === 1, 'sender must receive room media state fanout');
+        videochat_media_capability_plan_assert(count($peerMediaEvents) === 1, 'room peer must receive room media state fanout');
+        videochat_media_capability_plan_assert(count($otherMediaEvents) === 0, 'other rooms must not receive media state fanout');
+        videochat_media_capability_plan_assert(($peerMediaEvents[0]['state_catalog'] ?? []) === $expectedStates, 'fanout event state catalog mismatch');
+        videochat_media_capability_plan_assert(
+            (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
+            'fanout event should expose computed allowed state'
+        );
+        videochat_media_capability_plan_assert(
+            (string) (($peerMediaEvents[0]['participant'] ?? [])['transport'] ?? '') === 'gossip',
+            'fanout event should expose gossip transport'
+        );
+        videochat_media_capability_plan_assert_no_forbidden_data($peerMediaEvents[0], 'call/media-state.v1 fanout');
+    } else {
+        videochat_media_capability_plan_assert(!((bool) ($successAcks[0]['ok'] ?? true)), 'unavailable persistence ack must fail closed');
+        videochat_media_capability_plan_assert(!((bool) ($successAcks[0]['stored'] ?? true)), 'unavailable persistence ack must report stored=false');
+        videochat_media_capability_plan_assert((int) ($successAcks[0]['plan_epoch'] ?? 0) >= 1, 'unavailable persistence ack must report plan epoch');
+        videochat_media_capability_plan_assert_no_forbidden_data($successAcks[0], 'client.capabilities.v1 unavailable persistence ack');
+        videochat_media_capability_plan_assert(
+            count(videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'room/snapshot')) === 0,
+            'unavailable persistence must not publish a success snapshot'
+        );
+    }
 
     $failedFrames = [];
     $failedSender = static function (mixed $socket, array $payload) use (&$failedFrames): bool {
