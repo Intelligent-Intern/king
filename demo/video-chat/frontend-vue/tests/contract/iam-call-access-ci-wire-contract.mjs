@@ -47,6 +47,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs',
   'frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs',
   'frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs',
+  'frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs',
   'frontend-vue/tests/contract/call-access-link-privacy-contract.mjs',
   'frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs',
   'frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs',
