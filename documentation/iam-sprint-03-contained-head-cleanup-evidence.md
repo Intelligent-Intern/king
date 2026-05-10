@@ -2,11 +2,12 @@
 
 Date: 2026-05-10
 
-Scope: cleanup evidence only. No branch or worktree was deleted. Background,
-Gossip, SFU, MediaSecurity, and BTGF areas were not touched.
+Scope: cleanup evidence plus contained-HEAD cleanup for clean Sprint 03 worker
+branches. Background, Gossip, SFU, MediaSecurity, and BTGF areas were not
+touched.
 
 Base checked: local `prod-kingrt-do-not-push-to-github` at
-`b41cd5850ef7cf05649767ba2494c07b861a6078`.
+`1b9d56095d38c6b423e74b732465f8896638cae9`.
 
 ## Actions Run
 
@@ -21,6 +22,8 @@ git branch --list 'agent/iam-s3-*' 'local/iam-e2e-*proof-3' --format='%(refname:
 git branch --merged prod-kingrt-do-not-push-to-github --format='%(refname:short)' | rg '^(agent/iam-s3-|local/iam-e2e-.*proof-3)' || true
 git worktree prune --verbose
 git worktree list --porcelain | awk ... | git -C <worktree> status --porcelain=v1 --untracked-files=all
+git worktree remove /home/jochen/projects/king.site/worktrees/iam-s3-17-proof-wiring
+git branch -d agent/iam-s3-17-proof-wiring
 ```
 
 `git worktree prune --verbose` produced no output and did not remove any checked
@@ -33,8 +36,8 @@ out worktree.
 | `agent/iam-s3-05-logout-login-switch` | missing locally | n/a | n/a | No action available. |
 | `agent/iam-s3-07-anonymous-guest-manipulation` | missing locally | n/a | n/a | No action available. |
 | `agent/iam-s3-13-anonymous-temp-docker-proof` | missing locally | n/a | n/a | No action available. |
-| `agent/iam-s3-17-proof-wiring` | `b41cd5850ef7cf05649767ba2494c07b861a6078` | yes | yes | Safe candidate by rule; left in place for manager-controlled cleanup. |
-| `agent/iam-s3-19-cleanup-evidence` | `b41cd5850ef7cf05649767ba2494c07b861a6078` before this evidence commit | yes | yes before this evidence commit | Current worker branch; not a cleanup target. |
+| `agent/iam-s3-17-proof-wiring` | `254d0048` before cleanup | yes | yes | Removed after merge under contained-HEAD and clean-worktree rules. |
+| `agent/iam-s3-19-cleanup-evidence` | current evidence branch | no, until merge | yes | Current worker branch; remove only after manager merge. |
 
 ## Checked-Out `proof-3` IAM Worktrees
 
@@ -76,8 +79,10 @@ user work:
 
 ## Cleanup Result
 
-No deletions were performed. The only safe non-current candidate found by the
-contained-HEAD and clean-worktree rules was
-`agent/iam-s3-17-proof-wiring`; it remains checked out at
-`/home/jochen/projects/king.site/worktrees/iam-s3-17-proof-wiring` for
-manager-controlled cleanup.
+`agent/iam-s3-17-proof-wiring` was merged into
+`prod-kingrt-do-not-push-to-github`, verified clean, confirmed as a contained
+HEAD, and removed with its worktree. The remaining checked-out Sprint 03 worker
+is this cleanup-evidence branch; it is eligible for the same removal after its
+manager merge.
+
+All dirty IAM worktrees listed above remain untouched as user work.
