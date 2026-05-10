@@ -92,8 +92,17 @@ Tickets:
     `node tests/contract/call-access-registered-logged-in-invitee-contract.mjs`,
     `node tests/contract/call-access-registered-logged-out-handoff-contract.mjs`,
     and `git diff --check` passed.
-- [ ] IAM3-06 Prove mismatch verification blocks wrong host/account identities
+- [x] IAM3-06 Prove mismatch verification blocks wrong host/account identities
   with no foreign person, call, calendar, or organization data in UI payloads.
+  - Merged worker branch `agent/iam-s3-06-mismatch-no-leak`.
+  - Added `call-access-mismatch-no-leak-states-contract.mjs` proving
+    wrong-account, logout, duplicate-browser, and strong personalized-link
+    mismatch states render only stable safe messages, do not enter lobby or
+    workspace, do not bind rejected sessions, and do not expose foreign person,
+    call, calendar, tenant, organization, or session data.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-mismatch-no-leak-states-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs`,
+    and `git diff --check` passed.
 - [ ] IAM3-07 Prove anonymous guest display-name manipulation cannot escalate to
   registered-user, owner, moderator, or org-admin rights.
 - [ ] IAM3-08 Prove temporary call-link users cannot persist outside the target
