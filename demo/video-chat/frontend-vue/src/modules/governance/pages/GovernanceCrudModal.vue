@@ -185,7 +185,7 @@ function fieldClass(field) {
 
 .governance-textarea {
   min-height: 96px;
-  resize: vertical;
+  resize: none;
 }
 
 .governance-form-error {

@@ -59,7 +59,12 @@ assert.match(emailTextsTable, /row\.is_system[\s\S]*email_text_system/, 'email t
 assert.match(emailTextEditor, /AppSelect[\s\S]*active[\s\S]*disabled/, 'email text editor must keep active/disabled status options');
 assert.match(emailTextEditor, /body_template[\s\S]*settings-textarea/, 'email text editor must keep the body template textarea');
 assert.match(emailTextEditor, /icons\/cancel\.png/, 'email text editor must keep the standard close icon');
-assert.match(emailTextEditor, /btn btn-cyan[\s\S]*common\.save/, 'email text editor must keep the bottom save action');
+assert.match(emailTextEditor, /AdminSidePanelSubmitFooter[\s\S]*common\.save/, 'email text editor must keep the shared bottom save action');
+assert.match(emailTextEditor, /\.app-config-editor\s*\{[\s\S]*?border-top:\s*0;[\s\S]*?border-bottom:\s*0;[\s\S]*?border-radius:\s*0;/, 'email text right sidebar must have no top or bottom border and no rounded corners');
+assert.match(emailTextEditor, /\.settings-textarea\s*\{[\s\S]*?border-radius:\s*0;[\s\S]*?resize:\s*none;/, 'email text body textarea must not be resizable');
+assert.match(emailTextEditor, /\.app-config-editor-actions\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;[\s\S]*?justify-content:\s*flex-end;/, 'email text save action must stay sticky at the bottom right');
+assert.doesNotMatch(emailTextEditor, /resize:\s*vertical;/, 'email text editor must not keep resizable form bodies');
+assert.doesNotMatch(emailTextEditor, /@media \(max-width: 900px\)[\s\S]*?border-top:\s*1px/, 'email text right sidebar must not reintroduce a top border on compact layouts');
 
 assert.match(emailTextsLogic, /listWorkspaceEmailTexts/, 'email texts composable must load through the workspace administration API');
 assert.match(emailTextsLogic, /updateWorkspaceEmailText\(form\.id, payloadFromForm\(\)\)/, 'email texts composable must save through the workspace administration API');

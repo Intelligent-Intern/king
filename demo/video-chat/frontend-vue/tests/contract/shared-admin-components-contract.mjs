@@ -147,10 +147,15 @@ assert.match(backgroundUploadModal, /AppPagination/, 'bulk background upload cro
 assert.doesNotMatch(backgroundUploadModal, /common\.cancel|>\s*Cancel\s*</, 'background upload cropper must rely on the standard modal close control instead of a footer cancel button');
 assert.match(sidePanelShell, /\.app-side-panel[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/, 'CRUD side panels must be anchored to the right edge');
 assert.match(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-left:\s*1px solid var\(--border-subtle\);[\s\S]*?border-radius:\s*0;/, 'right side panels must only render the left divider with no rounded corners');
+assert.match(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border-top:\s*0;[\s\S]*?border-bottom:\s*0;/, 'right side panels must explicitly suppress top and bottom borders');
 assert.doesNotMatch(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*1px solid/, 'right side panels must not render top, right, and bottom borders');
 assert.doesNotMatch(sidePanelShell, /border-radius:\s*10px 0 0 10px/, 'right side panels must not keep the old rounded drawer corners');
 assert.doesNotMatch(sidePanelShell, /toggleMaximized|maximizeIcon|restoreIcon|update:maximized/, 'right side panels must not expose resize or maximize controls');
-assert.match(sidePanelShell, /\.app-side-panel-footer\s*\{[\s\S]*?display:\s*flex;[\s\S]*?justify-content:\s*flex-end;/, 'right side panel footer must remain a bottom-right action rail');
+assert.match(sidePanelShell, /\.app-side-panel-body :deep\(textarea\)\s*\{[\s\S]*?resize:\s*none;/, 'right side panel text bodies must not be resizable');
+assert.match(sidePanelShell, /\.app-side-panel-footer\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?bottom:\s*0;[\s\S]*?display:\s*flex;[\s\S]*?justify-content:\s*flex-end;/, 'right side panel footer must remain a sticky bottom-right action rail');
+assert.match(sidePanelShell, /\.app-side-panel-footer\s*\{[\s\S]*?border-top:\s*0;[\s\S]*?border-bottom:\s*0;/, 'right side panel footer must not add top or bottom borders');
+assert.match(governanceModal, /\.governance-textarea\s*\{[\s\S]*?resize:\s*none;/, 'governance side-panel textareas must not be resizable');
+assert.match(marketplaceStyles, /\.marketplace-textarea\s*\{[\s\S]*?resize:\s*none;/, 'marketplace side-panel textareas must not be resizable');
 assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'users search field must not add extra auto spacing inside the standard toolbar');
 assert.doesNotMatch(marketplaceStyles, /\.search-field|marketplace-toolbar-search-btn/, 'marketplace must not duplicate shared search toolbar CSS');
 
