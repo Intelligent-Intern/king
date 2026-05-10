@@ -234,8 +234,15 @@ Tickets:
     `../backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh`,
     and `git diff --check` passed. Direct host scripts skip without
     `pdo_sqlite`; Docker execution passed both wrapped contracts.
-- [ ] IAM3-15 Convert direct host-PHP SQLite skips into deterministic Docker PHP
+- [x] IAM3-15 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for cross-org and stale-organization-role checks.
+  - Merged worker branch `agent/iam-s3-15-cross-org-stale-role-docker-proof`.
+  - Added `call-access-cross-org-stale-role-docker-proof.sh` and changed the
+    focused cross-org/stale-organization-role shell contracts to use that Docker
+    proof instead of silently skipping when host `pdo_sqlite` is unavailable.
+  - Proof: `bash -n demo/video-chat/backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh demo/video-chat/backend-king-php/tests/call-access-cross-org-contract.sh demo/video-chat/backend-king-php/tests/call-access-stale-organization-role-contract.sh`,
+    `demo/video-chat/backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh`,
+    and `git diff --check` passed.
 - [ ] IAM3-16 Add a single stable IAM backend runtime proof wrapper that runs the
   Docker fallback contracts and exposes concise failure output.
 - [ ] IAM3-17 Wire Sprint 03 contract/E2E/runtime proofs into package scripts and
