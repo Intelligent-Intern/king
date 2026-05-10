@@ -15,6 +15,7 @@ DEFAULT_CONTRACTS=(
   "call-access-session-route-guard-contract.sh"
   "call-access-stale-organization-role-contract.sh"
   "call-access-strong-mismatch-privacy-contract.sh"
+  "call-access-terminal-join-contract.sh"
   "call-guest-list-direct-join-contract.sh"
 )
 

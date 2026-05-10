@@ -37,6 +37,12 @@ function videochat_decide_call_access_for_user(
     $ownerUserId = (int) ($call['owner_user_id'] ?? 0);
     $normalizedRole = videochat_normalize_role_slug($authRole);
     $isAdmin = $normalizedRole === 'admin';
+    if (!videochat_is_call_joinable_status((string) ($call['status'] ?? ''))) {
+        return videochat_call_access_decision_result(false, 'conflict', 'none', 'none', $call);
+    }
+    if ($authUserId > 0 && !is_array(videochat_fetch_active_user_for_call_access($pdo, $authUserId, null, $tenantId, false))) {
+        return videochat_call_access_decision_result(false, 'forbidden', 'none', 'none', $call);
+    }
 
     $participant = $authUserId > 0
         ? videochat_fetch_call_access_participant_for_decision($pdo, $normalizedCallId, $authUserId)
