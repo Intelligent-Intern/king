@@ -80,16 +80,60 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
+            $accessBinding = videochat_call_route_access_session_binding($pdo, $apiAuthContext);
+            if (is_array($accessBinding) && !videochat_call_route_ref_matches_access_binding($callRef, $accessBinding)) {
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'result' => [
+                        'state' => 'forbidden',
+                        'resolved_as' => 'call_id',
+                        'reason' => 'call_access_session_call_mismatch',
+                        'access_link' => null,
+                        'call' => null,
+                    ],
+                    'time' => gmdate('c'),
+                ]);
+            }
+
             $callResolution = videochat_get_call_for_user($pdo, $callRef, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
             if ((bool) ($callResolution['ok'] ?? false)) {
+                $resolvedCall = is_array($callResolution['call'] ?? null) ? $callResolution['call'] : [];
+                if (!videochat_is_call_joinable_status((string) ($resolvedCall['status'] ?? ''))) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'call_id',
+                            'reason' => 'call_not_joinable_from_status',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+                $timeWindowState = videochat_call_time_window_state($resolvedCall);
+                if ($timeWindowState !== 'ok') {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'call_id',
+                            'reason' => $timeWindowState === 'not_started' ? 'call_not_started' : 'call_expired',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
+
                 return $jsonResponse(200, [
                     'status' => 'ok',
                     'result' => [
                         'state' => 'resolved',
                         'resolved_as' => 'call_id',
                         'access_link' => null,
-                        'call' => $callResolution['call'] ?? null,
+                        'call' => $resolvedCall,
                     ],
                     'time' => gmdate('c'),
                 ]);
@@ -132,6 +176,19 @@ function videochat_handle_call_routes(
                 }
 
                 $accessReason = (string) ($accessResolution['reason'] ?? 'internal_error');
+                if (in_array($accessReason, ['call_not_joinable', 'conflict'], true)) {
+                    return $jsonResponse(200, [
+                        'status' => 'ok',
+                        'result' => [
+                            'state' => 'forbidden',
+                            'resolved_as' => 'access_id',
+                            'reason' => 'call_not_joinable_from_status',
+                            'access_link' => null,
+                            'call' => null,
+                        ],
+                        'time' => gmdate('c'),
+                    ]);
+                }
                 if ($accessReason === 'expired') {
                     return $jsonResponse(200, [
                         'status' => 'ok',

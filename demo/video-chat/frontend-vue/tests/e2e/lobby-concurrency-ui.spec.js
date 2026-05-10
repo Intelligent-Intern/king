@@ -93,7 +93,7 @@ async function setWorkspaceParticipants(page, participants) {
   }, participants);
 }
 
-test('concurrent lobby snapshots do not duplicate queue rows, participants, or stale controls', async ({ browser, baseURL }) => {
+test('e2e_lobby_010_concurrent_admission_idempotent e2e_lobby_011_concurrent_admit_reject_deterministic e2e_lobby_012_lobby_state_updates_correctly', async ({ browser, baseURL }) => {
   const { context, page } = await createMatrixPage(browser, baseURL, matrixUsers.admin);
   try {
     await openMatrixWorkspace(page);

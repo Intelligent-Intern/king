@@ -13,10 +13,7 @@ require_once __DIR__ . '/realtime_presence.php';
 function videochat_realtime_db_room_participants(callable $openDatabase, array $connection, ?int $nowMs = null): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
-    $callId = videochat_realtime_normalize_call_id(
-        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
-        ''
-    );
+    $callId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     if ($roomId === '' || $callId === '') {
         return [];
     }
@@ -106,10 +103,7 @@ function videochat_realtime_db_room_has_joined_user(
     int $targetUserId
 ): bool {
     $normalizedRoomId = videochat_presence_external_room_id_from_key($roomId, '');
-    $callId = videochat_realtime_normalize_call_id(
-        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
-        ''
-    );
+    $callId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     if ($normalizedRoomId === '' || $callId === '' || $targetUserId <= 0) {
         return false;
     }
@@ -193,10 +187,7 @@ function videochat_realtime_room_snapshot_payload(
     ?int $nowMs = null
 ): array {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
-    $callId = videochat_realtime_normalize_call_id(
-        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
-        ''
-    );
+    $callId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : 0;
     $participants = videochat_realtime_merge_room_participants(
         videochat_presence_room_participants($presenceState, $roomId, $tenantId > 0 ? $tenantId : null),
@@ -309,8 +300,12 @@ function videochat_realtime_room_snapshot_payload(
         ),
         'call_apps' => $callApps,
         'gossip_topology' => $gossipTopology,
+        'call_lifecycle' => [
+            'status' => (string) ($ownerAbsence['call_status'] ?? ''),
+            'owner_absence' => $ownerAbsence,
+        ],
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
-        'time' => gmdate('c'),
+        'time' => is_int($nowMs) && $nowMs > 0 ? gmdate('c', (int) floor($nowMs / 1000)) : gmdate('c'),
     ];
 }
 
@@ -325,6 +320,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'media_session_plan' => $payload['media_session_plan'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
         'gossip_topology' => $payload['gossip_topology'] ?? [],
+        'call_lifecycle' => $payload['call_lifecycle'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
@@ -363,10 +359,7 @@ function videochat_realtime_send_gossipmesh_topology_hint(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
-    $callId = videochat_realtime_normalize_call_id(
-        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
-        ''
-    );
+    $callId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     $peerId = videochat_gossipmesh_safe_id((string) ($connection['user_id'] ?? ''));
     if (!videochat_realtime_gossipmesh_room_allows_topology($roomId) || $callId === '' || $peerId === '') {
         return false;

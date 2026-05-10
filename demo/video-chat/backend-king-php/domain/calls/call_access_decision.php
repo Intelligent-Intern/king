@@ -30,7 +30,8 @@ function videochat_decide_call_access_for_user(
     string $authRole,
     ?int $tenantId = null
 ): array {
-    $call = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $call = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if (!is_array($call)) {
         return videochat_call_access_decision_result(false, 'not_found');
     }

@@ -9,20 +9,54 @@ require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../http/module_calls.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
-function videochat_call_access_invalidation_assert(bool $condition, string $message): void
-{
-    if ($condition) {
-        return;
-    }
+$label = 'call-access-invalidation-contract';
 
-    fwrite(STDERR, "[call-access-invalidation-contract] FAIL: {$message}\n");
-    exit(1);
+function videochat_iam_invalidation_issue_personal_session(PDO $pdo, array $fixture, string $suffix, string $label): string
+{
+    $sessionId = videochat_iam_invitation_invalidation_session_id($fixture, $suffix);
+    $issued = videochat_issue_session_for_call_access(
+        $pdo,
+        (string) ($fixture['access_id'] ?? ''),
+        static fn (): string => $sessionId,
+        ['client_ip' => '127.0.0.1', 'user_agent' => "{$label}/{$suffix}"]
+    );
+    videochat_iam_invitation_invalidation_assert((bool) ($issued['ok'] ?? false), "{$suffix}: personalized link should issue a call-access session", $label);
+    videochat_iam_invitation_invalidation_assert((string) (($issued['session'] ?? [])['id'] ?? '') === $sessionId, "{$suffix}: issued session id mismatch", $label);
+
+    return $sessionId;
 }
 
-function videochat_call_access_invalidation_decode(array $response): array
-{
-    $payload = json_decode((string) ($response['body'] ?? ''), true);
-    return is_array($payload) ? $payload : [];
+function videochat_iam_invalidation_assert_session_room(
+    PDO $pdo,
+    array $fixture,
+    string $sessionId,
+    string $expectedInitialRoomId,
+    string $label,
+    string $context
+): void {
+    $callId = (string) ($fixture['call_id'] ?? '');
+    $auth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($sessionId) . '&room=' . rawurlencode($callId) . '&call_id=' . rawurlencode($callId),
+            'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+        ],
+        'websocket'
+    );
+    videochat_iam_invitation_invalidation_assert((bool) ($auth['ok'] ?? false), "{$context}: session should authenticate before invalidation", $label);
+    $resolution = videochat_realtime_resolve_connection_rooms(
+        $auth,
+        $callId,
+        static fn (): PDO => $pdo,
+        $callId
+    );
+    videochat_iam_invitation_invalidation_assert((string) ($resolution['initial_room_id'] ?? '') === $expectedInitialRoomId, "{$context}: initial room mismatch", $label);
+    if ($expectedInitialRoomId === videochat_realtime_waiting_room_id()) {
+        videochat_iam_invitation_invalidation_assert((string) ($resolution['pending_room_id'] ?? '') === $callId, "{$context}: lobby pending room should stay call-bound", $label);
+    } else {
+        videochat_iam_invitation_invalidation_assert((string) ($resolution['pending_room_id'] ?? '') === '', "{$context}: admitted session should not keep a pending room", $label);
+    }
 }
 
 function videochat_call_access_invalidation_call_room(PDO $pdo, string $callId): string
@@ -252,183 +286,224 @@ try {
         fwrite(STDOUT, "[call-access-invalidation-contract] SKIP: pdo_sqlite unavailable\n");
         exit(0);
     }
+}
 
-    $databasePath = sys_get_temp_dir() . '/videochat-call-access-invalidation-' . bin2hex(random_bytes(6)) . '.sqlite';
-    @unlink($databasePath);
-
-    videochat_bootstrap_sqlite($databasePath);
-    $pdo = videochat_open_sqlite_pdo($databasePath);
-
-    $adminUserId = (int) $pdo->query("SELECT id FROM users WHERE lower(email) = lower('admin@intelligent-intern.com') LIMIT 1")->fetchColumn();
-    $invitedUser = $pdo->query("SELECT id, email, display_name FROM users WHERE lower(email) = lower('user@intelligent-intern.com') LIMIT 1")->fetch();
-    videochat_call_access_invalidation_assert($adminUserId > 0, 'expected seeded admin user');
-    videochat_call_access_invalidation_assert(is_array($invitedUser), 'expected seeded invited user');
-    $invitedUserId = (int) ($invitedUser['id'] ?? 0);
-    $invitedEmail = (string) ($invitedUser['email'] ?? '');
-    $invitedDisplayName = (string) ($invitedUser['display_name'] ?? '');
-    videochat_call_access_invalidation_assert($invitedUserId > 0, 'expected invited user id');
-    videochat_call_access_invalidation_assert($invitedEmail !== '', 'expected invited user email');
-
-    $createCall = videochat_create_call($pdo, $adminUserId, [
-        'title' => 'Call Access Invalidation Secret Title',
-        'starts_at' => '2026-09-05T09:00:00Z',
-        'ends_at' => '2026-09-05T10:00:00Z',
-        'internal_participant_user_ids' => [$invitedUserId],
-        'external_participants' => [],
-    ]);
-    videochat_call_access_invalidation_assert((bool) ($createCall['ok'] ?? false), 'call should be created');
-    $callId = (string) (($createCall['call'] ?? [])['id'] ?? '');
-    videochat_call_access_invalidation_assert($callId !== '', 'call id should be present');
-
-    $access = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
-        'link_kind' => 'personal',
-        'participant_user_id' => $invitedUserId,
-    ]);
-    videochat_call_access_invalidation_assert((bool) ($access['ok'] ?? false), 'personal access link should be created');
-    $accessId = (string) (($access['access_link'] ?? [])['id'] ?? '');
-    videochat_call_access_invalidation_assert($accessId !== '', 'personal access id should be present');
-
-    $initialResolution = videochat_resolve_call_access_public($pdo, $accessId);
-    videochat_call_access_invalidation_assert((bool) ($initialResolution['ok'] ?? false), 'personal link should resolve before invalidation');
-    videochat_call_access_invalidation_assert((int) (($initialResolution['target_user'] ?? [])['id'] ?? 0) === $invitedUserId, 'pre-invalidation target user mismatch');
-
-    $pdo->prepare(
+function videochat_iam_invalidation_mark_participant_joined(PDO $pdo, array $fixture): void
+{
+    $update = $pdo->prepare(
         <<<'SQL'
 UPDATE call_participants
-SET invite_state = 'cancelled'
+SET joined_at = :joined_at,
+    left_at = NULL
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
 SQL
-    )->execute([
-        ':call_id' => $callId,
-        ':user_id' => $invitedUserId,
+    );
+    $update->execute([
+        ':joined_at' => gmdate('c'),
+        ':call_id' => (string) ($fixture['call_id'] ?? ''),
+        ':user_id' => (int) ($fixture['invited_user_id'] ?? 0),
     ]);
+}
 
-    $invalidatedLink = videochat_fetch_call_access_link($pdo, $accessId);
-    videochat_call_access_invalidation_assert(is_array($invalidatedLink), 'invalidated access link row should remain persisted');
-    videochat_call_access_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'domain should classify cancelled participant invite as invalidated');
+function videochat_iam_invalidation_assert_participant_cancelled_with_left_at(PDO $pdo, array $fixture, string $label): void
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT invite_state, joined_at, left_at
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+    );
+    $query->execute([
+        ':call_id' => (string) ($fixture['call_id'] ?? ''),
+        ':user_id' => (int) ($fixture['invited_user_id'] ?? 0),
+    ]);
+    $row = $query->fetch(PDO::FETCH_ASSOC);
+    videochat_iam_invitation_invalidation_assert(is_array($row), 'active participant row should remain inspectable after invalidation', $label);
+    videochat_iam_invitation_invalidation_assert((string) ($row['invite_state'] ?? '') === 'cancelled', 'active participant should be cancelled after invalidation', $label);
+    videochat_iam_invitation_invalidation_assert(trim((string) ($row['joined_at'] ?? '')) !== '', 'active participant joined_at should be preserved', $label);
+    videochat_iam_invitation_invalidation_assert(trim((string) ($row['left_at'] ?? '')) !== '', 'active participant should receive left_at when invalidated from call', $label);
+}
 
-    $invalidatedResolution = videochat_resolve_call_access_public($pdo, $accessId);
-    videochat_call_access_invalidation_assert(!(bool) ($invalidatedResolution['ok'] ?? true), 'invalidated link must not resolve');
-    videochat_call_access_invalidation_assert((string) ($invalidatedResolution['reason'] ?? '') === 'not_found', 'invalidated link should fail as safe invalid-link state');
-    videochat_call_access_invalidation_assert(($invalidatedResolution['access_link'] ?? null) === null, 'invalidated resolution must not expose access link metadata');
-    videochat_call_access_invalidation_assert(($invalidatedResolution['call'] ?? null) === null, 'invalidated resolution must not expose call data');
-    videochat_call_access_invalidation_assert(($invalidatedResolution['target_user'] ?? null) === null, 'invalidated resolution must not expose target user data');
-    videochat_call_access_invalidation_assert((($invalidatedResolution['target_hint'] ?? [])['participant_email'] ?? null) === null, 'invalidated resolution must not expose participant email hint');
+function videochat_call_access_invalidation_contract_restart_probe(array $argv, string $label): void
+{
+    videochat_iam_invitation_invalidation_skip_without_sqlite($label);
+    $databasePath = (string) ($argv[2] ?? '');
+    $fixturePath = (string) ($argv[3] ?? '');
+    videochat_iam_invitation_invalidation_assert($databasePath !== '' && is_file($databasePath), 'restart probe database is missing', $label);
+    videochat_iam_invitation_invalidation_assert($fixturePath !== '' && is_file($fixturePath), 'restart probe fixture is missing', $label);
 
-    $sessionIssueAttempts = 0;
-    $sessionResult = videochat_issue_session_for_call_access(
+    $fixture = json_decode((string) file_get_contents($fixturePath), true);
+    videochat_iam_invitation_invalidation_assert(is_array($fixture), 'restart probe fixture should decode', $label);
+    $pdo = videochat_open_sqlite_pdo($databasePath);
+    $invalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($fixture['access_id'] ?? ''));
+    videochat_iam_invitation_invalidation_assert(is_array($invalidatedLink), 'restart probe should refetch invalidated link from disk', $label);
+    videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'restart probe should preserve invalidated classification', $label);
+    videochat_iam_invitation_invalidation_assert_state_across_browser_device_sessions(
         $pdo,
-        $accessId,
-        static function () use (&$sessionIssueAttempts): string {
-            $sessionIssueAttempts += 1;
-            return 'sess_call_access_invalidated_should_not_issue';
-        },
-        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-invalidation-contract']
+        $fixture,
+        $label,
+        'application-restart-ci'
     );
-    videochat_call_access_invalidation_assert(!(bool) ($sessionResult['ok'] ?? true), 'invalidated personalized link must not create a fresh session');
-    videochat_call_access_invalidation_assert((string) ($sessionResult['reason'] ?? '') === 'not_found', 'invalidated session attempt should fail as safe invalid-link state');
-    videochat_call_access_invalidation_assert($sessionIssueAttempts === 0, 'session id issuer must not run for invalidated link');
-    videochat_call_access_invalidation_assert(($sessionResult['session'] ?? null) === null, 'invalidated session attempt must not expose session');
-    videochat_call_access_invalidation_assert(($sessionResult['user'] ?? null) === null, 'invalidated session attempt must not expose user');
-    videochat_call_access_invalidation_assert(($sessionResult['access_link'] ?? null) === null, 'invalidated session attempt must not expose access link');
-    videochat_call_access_invalidation_assert(($sessionResult['call'] ?? null) === null, 'invalidated session attempt must not expose call');
+}
 
-    $sessionCount = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_call_access_invalidated_should_not_issue'")->fetchColumn();
-    videochat_call_access_invalidation_assert($sessionCount === 0, 'invalidated link must not persist a fresh session');
-    $bindingCount = (int) $pdo->query("SELECT COUNT(*) FROM call_access_sessions WHERE access_id = " . $pdo->quote($accessId))->fetchColumn();
-    videochat_call_access_invalidation_assert($bindingCount === 0, 'invalidated link must not persist a call-access session binding');
+function videochat_call_access_invalidation_contract_assert_restart_survives(
+    string $databasePath,
+    array $fixture,
+    string $label
+): void {
+    $fixturePath = sys_get_temp_dir() . '/videochat-call-access-invalidation-restart-' . bin2hex(random_bytes(6)) . '.json';
+    $encoded = json_encode($fixture, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_iam_invitation_invalidation_assert(is_string($encoded), 'restart fixture should encode', $label);
+    file_put_contents($fixturePath, $encoded);
 
-    $jsonResponse = static function (int $status, array $payload): array {
-        return [
-            'status' => $status,
-            'headers' => ['content-type' => 'application/json; charset=utf-8'],
-            'body' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-        ];
-    };
-    $errorResponse = static function (int $status, string $code, string $message, array $details = []) use ($jsonResponse): array {
-        $error = [
-            'code' => $code,
-            'message' => $message,
-        ];
-        if ($details !== []) {
-            $error['details'] = $details;
-        }
+    $command = escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(__FILE__) . ' --restart-probe '
+        . escapeshellarg($databasePath) . ' '
+        . escapeshellarg($fixturePath);
+    $output = [];
+    $exitCode = 1;
+    exec($command . ' 2>&1', $output, $exitCode);
+    @unlink($fixturePath);
 
-        return $jsonResponse($status, [
-            'status' => 'error',
-            'error' => $error,
-            'time' => gmdate('c'),
-        ]);
-    };
-    $decodeJsonBody = static function (array $request): array {
-        $body = $request['body'] ?? '';
-        if (!is_string($body) || trim($body) === '') {
-            return [null, 'empty_body'];
-        }
-
-        $decoded = json_decode($body, true);
-        if (!is_array($decoded)) {
-            return [null, 'invalid_json'];
-        }
-
-        return [$decoded, null];
-    };
-    $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
-
-    $joinResponse = videochat_handle_call_routes(
-        '/api/call-access/' . $accessId . '/join',
-        'GET',
-        ['method' => 'GET', 'uri' => '/api/call-access/' . $accessId . '/join', 'headers' => []],
-        [],
-        $jsonResponse,
-        $errorResponse,
-        $decodeJsonBody,
-        $openDatabase
+    videochat_iam_invitation_invalidation_assert(
+        $exitCode === 0,
+        'restart probe failed: ' . implode("\n", $output),
+        $label
     );
-    videochat_call_access_invalidation_assert(is_array($joinResponse), 'invalidated join response should be an array');
-    videochat_call_access_invalidation_assert((int) ($joinResponse['status'] ?? 0) === 404, 'invalidated join should return safe not-found status');
-    $joinBody = (string) ($joinResponse['body'] ?? '');
-    $joinPayload = videochat_call_access_invalidation_decode($joinResponse);
-    videochat_call_access_invalidation_assert((string) (($joinPayload['error'] ?? [])['code'] ?? '') === 'call_access_not_found', 'invalidated join error code mismatch');
+}
 
-    $httpSessionIssuerCalls = 0;
-    $httpSessionResponse = videochat_handle_call_routes(
-        '/api/call-access/' . $accessId . '/session',
-        'POST',
-        [
-            'method' => 'POST',
-            'uri' => '/api/call-access/' . $accessId . '/session',
-            'headers' => ['User-Agent' => 'call-access-invalidation-contract-http'],
-            'remote_address' => '127.0.0.1',
-            'body' => '{}',
-        ],
-        [],
-        $jsonResponse,
-        $errorResponse,
-        $decodeJsonBody,
-        $openDatabase,
-        static function () use (&$httpSessionIssuerCalls): string {
-            $httpSessionIssuerCalls += 1;
-            return 'sess_call_access_invalidated_http_should_not_issue';
-        }
-    );
-    videochat_call_access_invalidation_assert(is_array($httpSessionResponse), 'invalidated HTTP session response should be an array');
-    videochat_call_access_invalidation_assert((int) ($httpSessionResponse['status'] ?? 0) === 404, 'invalidated HTTP session should return safe not-found status');
-    videochat_call_access_invalidation_assert($httpSessionIssuerCalls === 0, 'HTTP session issuer must not run for invalidated link');
-    $httpSessionBody = (string) ($httpSessionResponse['body'] ?? '');
-    $httpSessionPayload = videochat_call_access_invalidation_decode($httpSessionResponse);
-    videochat_call_access_invalidation_assert((string) (($httpSessionPayload['error'] ?? [])['code'] ?? '') === 'call_access_not_found', 'invalidated HTTP session error code mismatch');
-
-    foreach ([$joinBody, $httpSessionBody] as $body) {
-        videochat_call_access_invalidation_assert(!str_contains($body, $invitedEmail), 'invalidated response must not leak invited email');
-        if ($invitedDisplayName !== '') {
-            videochat_call_access_invalidation_assert(!str_contains($body, $invitedDisplayName), 'invalidated response must not leak invited display name');
-        }
-        videochat_call_access_invalidation_assert(!str_contains($body, 'Call Access Invalidation Secret Title'), 'invalidated response must not leak call title');
-        videochat_call_access_invalidation_assert(!str_contains($body, $callId), 'invalidated response must not leak call id');
+if (($argv[1] ?? '') === '--restart-probe') {
+    try {
+        videochat_call_access_invalidation_contract_restart_probe($argv, $label);
+        exit(0);
+    } catch (Throwable $error) {
+        fwrite(STDERR, "[{$label}] RESTART ERROR: " . $error->getMessage() . "\n");
+        exit(1);
     }
+}
+
+try {
+    videochat_iam_invitation_invalidation_skip_without_sqlite($label);
+    [$databasePath, $pdo] = videochat_iam_invitation_invalidation_bootstrap_database('videochat-call-access-invalidation');
+
+    $beforeUse = videochat_iam_invitation_invalidation_personal_fixture(
+        $pdo,
+        $label,
+        'Call Access Invalidation Secret Title'
+    );
+    $beforeUseInvalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $beforeUse);
+    videochat_iam_invitation_invalidation_assert((bool) ($beforeUseInvalidation['ok'] ?? false), 'cancelled invite should be audit-loggable before use', $label);
+    $invalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($beforeUse['access_id'] ?? ''));
+    videochat_iam_invitation_invalidation_assert(is_array($invalidatedLink), 'invalidated access link row should remain persisted', $label);
+    videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $invalidatedLink), 'domain should classify cancelled participant invite as invalidated', $label);
+    videochat_iam_invitation_invalidation_assert_audit_logged(
+        $pdo,
+        $beforeUse,
+        $label,
+        'participant_invite_cancelled'
+    );
+    videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
+        $pdo,
+        $beforeUse,
+        $label,
+        'not_found',
+        404,
+        'call_access_not_found'
+    );
+    videochat_iam_invitation_invalidation_assert_state_across_browser_device_sessions(
+        $pdo,
+        $beforeUse,
+        $label,
+        'invalidated-before-use'
+    );
+
+    $afterUse = videochat_iam_invitation_invalidation_personal_fixture(
+        $pdo,
+        $label,
+        'Call Access Invalidation Rejoin Secret Title'
+    );
+    videochat_iam_invitation_invalidation_assert_existing_session_rejected_after_cancel($pdo, $afterUse, $label);
+    videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
+        $pdo,
+        $afterUse,
+        $label,
+        'not_found',
+        404,
+        'call_access_not_found'
+    );
+
+    $inLobby = videochat_iam_invitation_invalidation_personal_fixture(
+        $pdo,
+        $label,
+        'Call Access Invalidation Lobby Secret Title'
+    );
+    $lobbySessionA = videochat_iam_invalidation_issue_personal_session($pdo, $inLobby, 'lobby_a', $label);
+    $lobbySessionB = videochat_iam_invalidation_issue_personal_session($pdo, $inLobby, 'lobby_b', $label);
+    videochat_iam_invalidation_assert_session_room($pdo, $inLobby, $lobbySessionA, videochat_realtime_waiting_room_id(), $label, 'lobby browser A');
+    videochat_iam_invalidation_assert_session_room($pdo, $inLobby, $lobbySessionB, videochat_realtime_waiting_room_id(), $label, 'lobby browser B');
+    $lobbyInvalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $inLobby, [
+        'session_id' => $lobbySessionA,
+        'invalidation_reason' => 'participant_invite_cancelled_while_lobby',
+    ]);
+    videochat_iam_invitation_invalidation_assert((bool) ($lobbyInvalidation['ok'] ?? false), 'lobby invite invalidation should succeed', $label);
+    videochat_iam_invitation_invalidation_assert((int) ($lobbyInvalidation['access_session_count'] ?? 0) === 2, 'lobby invalidation should see both browser sessions', $label);
+    videochat_iam_invalidation_assert_sessions_invalidated($pdo, [$lobbySessionA, $lobbySessionB], $label, 'lobby invalidation');
+    videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
+        $pdo,
+        $inLobby,
+        $label,
+        'not_found',
+        404,
+        'call_access_not_found'
+    );
+
+    $inCall = videochat_iam_invitation_invalidation_personal_fixture(
+        $pdo,
+        $label,
+        'Call Access Invalidation Active Call Secret Title'
+    );
+    videochat_iam_invitation_invalidation_set_invite_state($pdo, $inCall, 'allowed');
+    $activeSessionA = videochat_iam_invalidation_issue_personal_session($pdo, $inCall, 'active_a', $label);
+    $activeSessionB = videochat_iam_invalidation_issue_personal_session($pdo, $inCall, 'active_b', $label);
+    videochat_iam_invalidation_mark_participant_joined($pdo, $inCall);
+    videochat_iam_invalidation_assert_session_room($pdo, $inCall, $activeSessionA, (string) ($inCall['call_id'] ?? ''), $label, 'active-call browser A');
+    videochat_iam_invalidation_assert_session_room($pdo, $inCall, $activeSessionB, (string) ($inCall['call_id'] ?? ''), $label, 'active-call browser B');
+    $activeInvalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $inCall, [
+        'session_id' => $activeSessionA,
+        'invalidation_reason' => 'participant_invite_cancelled_while_in_call',
+    ]);
+    videochat_iam_invitation_invalidation_assert((bool) ($activeInvalidation['ok'] ?? false), 'active-call invite invalidation should succeed', $label);
+    videochat_iam_invitation_invalidation_assert((int) ($activeInvalidation['access_session_count'] ?? 0) === 2, 'active-call invalidation should see both browser sessions', $label);
+    videochat_iam_invalidation_assert_sessions_invalidated($pdo, [$activeSessionA, $activeSessionB], $label, 'active-call invalidation');
+    videochat_iam_invalidation_assert_participant_cancelled_with_left_at($pdo, $inCall, $label);
+    videochat_iam_invitation_invalidation_assert_fresh_link_rejected(
+        $pdo,
+        $inCall,
+        $label,
+        'not_found',
+        404,
+        'call_access_not_found'
+    );
+
+    $restart = videochat_iam_invitation_invalidation_personal_fixture(
+        $pdo,
+        $label,
+        'Call Access Invalidation Restart Secret Title'
+    );
+    $restartInvalidation = videochat_iam_invitation_invalidation_cancel_personal_invitation($pdo, $restart, [
+        'invalidation_reason' => 'participant_invite_cancelled_before_restart',
+    ]);
+    videochat_iam_invitation_invalidation_assert((bool) ($restartInvalidation['ok'] ?? false), 'restart fixture invite should be invalidated before process restart', $label);
+    $restartInvalidatedLink = videochat_fetch_call_access_link($pdo, (string) ($restart['access_id'] ?? ''));
+    videochat_iam_invitation_invalidation_assert(is_array($restartInvalidatedLink), 'restart invalidated access link row should remain persisted', $label);
+    videochat_iam_invitation_invalidation_assert(videochat_call_access_link_is_invalidated($pdo, $restartInvalidatedLink), 'restart fixture should classify as invalidated before child process', $label);
+    videochat_call_access_invalidation_contract_assert_restart_survives($databasePath, $restart, $label);
 
     $lobbyFixture = videochat_call_access_invalidation_create_personal_fixture(
         $pdo,
@@ -583,9 +658,13 @@ SQL
     }
 
     @unlink($databasePath);
-    fwrite(STDOUT, "[call-access-invalidation-contract] PASS\n");
+    fwrite(STDOUT, "[{$label}] PASS\n");
     exit(0);
 } catch (Throwable $error) {
-    fwrite(STDERR, '[call-access-invalidation-contract] ERROR: ' . $error->getMessage() . "\n");
+    fwrite(STDERR, "[{$label}] ERROR: " . $error->getMessage() . "\n");
     exit(1);
+} finally {
+    if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
+        @unlink($databasePath);
+    }
 }

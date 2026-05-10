@@ -349,7 +349,7 @@ try {
     videochat_call_access_cross_org_assert((bool) (($tenantAContext['permissions'] ?? [])['tenant_admin'] ?? false), 'organization A admin should be admin in organization A');
     videochat_call_access_cross_org_assert(videochat_tenant_context_for_user($pdo, $orgAAdminId, $tenantBId) === null, 'organization A admin must not have organization B context');
 
-    $orgACallId = videochat_call_access_cross_org_create_call($pdo, $orgAAdminId, $tenantAId, 'Organization A Own Call', [$orgAUserId]);
+    $orgACallId = videochat_call_access_cross_org_create_call($pdo, $orgAOwnerId, $tenantAId, 'Organization A Own Call', [$orgAUserId]);
     $orgBInviteOnlyCallId = videochat_call_access_cross_org_create_call($pdo, $orgBOwnerId, $tenantBId, 'Organization B Invite Only');
     $orgBOpenCallId = videochat_call_access_cross_org_create_call($pdo, $orgBOwnerId, $tenantBId, 'Organization B Open Link', [], 'free_for_all');
     $orgAdminManagedCallId = videochat_call_access_cross_org_create_call($pdo, $orgAUserId, $tenantAId, 'Organization A Admin Managed Call');
@@ -480,13 +480,140 @@ SQL
     videochat_call_access_cross_org_assert(!(bool) ($staleOrgAccess['ok'] ?? true), 'stale organization admin must not keep invite-only call access');
     videochat_call_access_cross_org_assert((string) ($staleOrgAccess['reason'] ?? '') === 'forbidden', 'stale organization admin denial reason mismatch');
 
+    videochat_ensure_internal_call_participant(
+        $pdo,
+        $orgACallId,
+        $orgAOnlyUserId,
+        'cross-org-a-only-user@example.test',
+        'Org A Only User',
+        'invited'
+    );
+
+    $orgAOwnPersonalLink = videochat_create_call_access_link_for_user($pdo, $orgACallId, $orgAOwnerId, 'user', [
+        'link_kind' => 'personal',
+        'participant_user_id' => $orgAOnlyUserId,
+    ], $tenantAId);
+    videochat_call_access_cross_org_assert((bool) ($orgAOwnPersonalLink['ok'] ?? false), 'organization A personalized link for organization A user should be created');
+    $orgAOwnPersonalAccessId = (string) (($orgAOwnPersonalLink['access_link'] ?? [])['id'] ?? '');
+    videochat_call_access_cross_org_assert($orgAOwnPersonalAccessId !== '', 'organization A personalized link id should be present');
+    $orgAOwnPersonalSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $orgAOwnPersonalAccessId,
+        static fn (): string => 'sess_cross_org_a_user_a_personal',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-cross-org-contract'],
+        [
+            'authenticated_user_id' => $orgAOnlyUserId,
+            'authenticated_session_id' => 'sess_cross_org_a_user_browser',
+            'verified_user_id' => $orgAOnlyUserId,
+            'verified_session_id' => 'sess_cross_org_a_user_browser',
+        ]
+    );
+    videochat_call_access_cross_org_assert((bool) ($orgAOwnPersonalSession['ok'] ?? false), 'organization A user should open own-organization personalized link');
+    videochat_call_access_cross_org_assert((int) (($orgAOwnPersonalSession['user'] ?? [])['id'] ?? 0) === $orgAOnlyUserId, 'own-organization personalized link should bind organization A user');
+    videochat_call_access_cross_org_assert_member_context($pdo, 'organization A personalized link', 'sess_cross_org_a_user_a_personal', $orgAOnlyUserId, $tenantAId, $orgACallId);
+
+    $multiOrgPersonalAccessId = videochat_call_access_cross_org_insert_link($pdo, $tenantAId, $orgACallId, $orgAMultiTenantAdminId);
+    $multiOrgPersonalSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $multiOrgPersonalAccessId,
+        static fn (): string => 'sess_cross_org_multi_context_personal',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-cross-org-contract'],
+        [
+            'authenticated_user_id' => $orgAMultiTenantAdminId,
+            'authenticated_session_id' => 'sess_cross_org_multi_active_b',
+            'verified_user_id' => $orgAMultiTenantAdminId,
+            'verified_session_id' => 'sess_cross_org_multi_active_b',
+        ]
+    );
+    videochat_call_access_cross_org_assert((bool) ($multiOrgPersonalSession['ok'] ?? false), 'multi-organization account should open organization A personalized link');
+    $multiOrgAuth = videochat_authenticate_request($pdo, [
+        'method' => 'GET',
+        'uri' => '/ws?session=sess_cross_org_multi_context_personal&room=' . $orgACallId . '&call_id=' . $orgACallId,
+        'headers' => ['Authorization' => 'Bearer sess_cross_org_multi_context_personal'],
+    ], 'websocket');
+    videochat_call_access_cross_org_assert((bool) ($multiOrgAuth['ok'] ?? false), 'multi-organization call-access session should authenticate');
+    videochat_call_access_cross_org_assert((int) (($multiOrgAuth['tenant'] ?? [])['id'] ?? 0) === $tenantAId, 'multi-organization account must use personalized-link call tenant, not browser active organization');
+    videochat_call_access_cross_org_assert((bool) (((($multiOrgAuth['tenant'] ?? [])['permissions'] ?? [])['tenant_admin'] ?? true)) === false, 'multi-organization member context must not grow tenant-admin rights from active organization');
+    $multiOrgCallDecision = videochat_decide_call_access_for_user($pdo, $orgACallId, $orgAMultiTenantAdminId, 'user', $tenantAId);
+    videochat_call_access_cross_org_assert((bool) ($multiOrgCallDecision['allowed'] ?? false), 'multi-organization account should be checked against organization A call context');
+    videochat_call_access_cross_org_assert((string) ($multiOrgCallDecision['source'] ?? '') === 'organization_admin', 'multi-organization account should keep organization A call-admin source only for organization A call');
+
+    videochat_ensure_internal_call_participant(
+        $pdo,
+        $orgBInviteOnlyCallId,
+        $orgAOnlyUserId,
+        'cross-org-a-only-user@example.test',
+        'Org A Only User',
+        'invited'
+    );
+    $orgBPersonalAccessId = videochat_call_access_cross_org_insert_link($pdo, $tenantBId, $orgBInviteOnlyCallId, $orgAOnlyUserId);
+    $orgBPersonalSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $orgBPersonalAccessId,
+        static fn (): string => 'sess_cross_org_a_user_b_personal',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-cross-org-contract'],
+        [
+            'authenticated_user_id' => $orgAOnlyUserId,
+            'authenticated_session_id' => 'sess_cross_org_a_user_browser',
+            'verified_user_id' => $orgAOnlyUserId,
+            'verified_session_id' => 'sess_cross_org_a_user_browser',
+        ]
+    );
+    videochat_call_access_cross_org_assert((bool) ($orgBPersonalSession['ok'] ?? false), 'organization A user should open explicit organization B personalized link as call-scoped participant');
+    videochat_call_access_cross_org_assert(!videochat_tenant_user_is_member($pdo, $orgAOnlyUserId, $tenantBId), 'organization B personalized link must not create organization B tenant membership');
+    videochat_call_access_cross_org_assert_member_context($pdo, 'organization B personalized link for organization A user', 'sess_cross_org_a_user_b_personal', $orgAOnlyUserId, $tenantBId, $orgBInviteOnlyCallId);
+
+    $foreignTargetAccessId = videochat_call_access_cross_org_insert_link($pdo, $tenantBId, $orgBInviteOnlyCallId, $orgBOwnerId);
+    $foreignTargetSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $foreignTargetAccessId,
+        static fn (): string => 'sess_cross_org_a_user_b_wrong_personal',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-access-cross-org-contract'],
+        [
+            'authenticated_user_id' => $orgAOnlyUserId,
+            'authenticated_session_id' => 'sess_cross_org_a_user_browser',
+            'verified_user_id' => $orgAOnlyUserId,
+            'verified_session_id' => 'sess_cross_org_a_user_browser',
+            'host_name' => 'Wrong Host',
+        ]
+    );
+    videochat_call_access_cross_org_assert(!(bool) ($foreignTargetSession['ok'] ?? true), 'organization A user must not consume organization B personalized link issued for another account');
+    videochat_call_access_cross_org_assert((string) ($foreignTargetSession['reason'] ?? '') === 'forbidden', 'foreign personalized-link mismatch should be forbidden');
+    videochat_call_access_cross_org_assert((string) (($foreignTargetSession['errors'] ?? [])['auth'] ?? '') === 'not_bound_to_current_user', 'foreign personalized-link mismatch must not bind the authenticated user');
+    videochat_call_access_cross_org_assert((string) (($foreignTargetSession['errors'] ?? [])['host_name'] ?? '') === 'wrong_host_name', 'foreign personalized-link mismatch must fail closed on wrong host verification');
+    videochat_call_access_cross_org_assert(videochat_call_access_session_id_available($pdo, 'sess_cross_org_a_user_b_wrong_personal'), 'foreign mismatch denial should not persist a session');
+
     $ownOrgAccess = videochat_get_call_for_user($pdo, $orgACallId, $orgAUserId, 'user', $tenantAId);
     videochat_call_access_cross_org_assert((bool) ($ownOrgAccess['ok'] ?? false), 'organization A participant should access own organization call');
     videochat_call_access_cross_org_assert((bool) ((($ownOrgAccess['call'] ?? [])['my_participation'] ?? false)), 'own organization call should preserve participant state');
 
+    $orgAdminOwnDecision = videochat_decide_call_access_for_user($pdo, $orgACallId, $orgAAdminId, 'user', $tenantAId);
+    videochat_call_access_cross_org_assert((bool) ($orgAdminOwnDecision['allowed'] ?? false), 'organization A admin should receive own-organization call access');
+    videochat_call_access_cross_org_assert((string) ($orgAdminOwnDecision['source'] ?? '') === 'organization_admin', 'own-organization admin decision source mismatch');
+    videochat_call_access_cross_org_assert((string) ($orgAdminOwnDecision['scope'] ?? '') === 'organization', 'own-organization admin decision scope mismatch');
+    videochat_call_access_cross_org_assert((bool) ($orgAdminOwnDecision['can_moderate'] ?? false), 'own-organization admin should receive call moderation rights');
+    videochat_call_access_cross_org_assert(!(bool) ($orgAdminOwnDecision['can_manage_owner'] ?? true), 'own-organization admin must not receive owner-management rights');
+
+    $orgAdminForeignDecision = videochat_decide_call_access_for_user($pdo, $orgBInviteOnlyCallId, $orgAAdminId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($orgAdminForeignDecision['allowed'] ?? true), 'organization A admin should not receive organization B call access');
+    videochat_call_access_cross_org_assert((string) ($orgAdminForeignDecision['reason'] ?? '') === 'forbidden', 'organization A admin foreign denial reason mismatch');
+    videochat_call_access_cross_org_assert((string) ($orgAdminForeignDecision['source'] ?? '') === 'none', 'foreign organization admin denial must not claim a source');
+
     $guestListLeak = videochat_get_call_for_user($pdo, $orgBInviteOnlyCallId, $orgAUserId, 'user', $tenantBId);
     videochat_call_access_cross_org_assert(!(bool) ($guestListLeak['ok'] ?? false), 'organization A participant list entry must not leak into organization B invite-only call');
     videochat_call_access_cross_org_assert((string) ($guestListLeak['reason'] ?? '') === 'forbidden', 'guest-list leakage should fail as forbidden inside organization B context');
+
+    $guestListDirectLeak = videochat_user_can_direct_join_call($pdo, $orgBInviteOnlyCallId, $orgAUserId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($guestListDirectLeak['ok'] ?? true), 'organization A guest-list entry must not direct-join organization B call');
+    videochat_call_access_cross_org_assert((string) ($guestListDirectLeak['reason'] ?? '') === 'not_on_guest_list', 'cross-organization guest-list direct join denial reason mismatch');
+
+    $ownerRightsLeak = videochat_get_call_for_user($pdo, $orgBInviteOnlyCallId, $orgAOwnerId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($ownerRightsLeak['ok'] ?? false), 'organization A owner rights must not leak into organization B call');
+    videochat_call_access_cross_org_assert((string) ($ownerRightsLeak['reason'] ?? '') === 'forbidden', 'cross-organization owner fetch denial reason mismatch');
+
+    $ownerDirectLeak = videochat_user_can_direct_join_call($pdo, $orgBInviteOnlyCallId, $orgAOwnerId, 'user', $tenantBId);
+    videochat_call_access_cross_org_assert(!(bool) ($ownerDirectLeak['ok'] ?? true), 'organization A owner must not direct-join organization B call through owner rights');
+    videochat_call_access_cross_org_assert((string) ($ownerDirectLeak['reason'] ?? '') === 'not_on_guest_list', 'cross-organization owner direct join denial reason mismatch');
 
     $wrongActiveOrg = videochat_get_call_for_user($pdo, $orgBInviteOnlyCallId, $orgAAdminId, 'user', $tenantAId);
     videochat_call_access_cross_org_assert(!(bool) ($wrongActiveOrg['ok'] ?? false), 'active organization A context must not fetch organization B call');

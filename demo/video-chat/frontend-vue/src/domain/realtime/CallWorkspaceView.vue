@@ -29,6 +29,7 @@ import { reportClientDiagnostic } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
 import BackgroundReplacementUnavailableModal from './background/BackgroundReplacementUnavailableModal.vue';
+import OwnerAbsenceCountdownBanner from './OwnerAbsenceCountdownBanner.vue';
 import { createBackgroundStaticAvatarRenderState } from './background/staticAvatarRender';
 import { evaluateBackgroundFilterGates } from './background/gates';
 import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
@@ -369,6 +370,7 @@ const compactMiniStripPlacement = ref('below');
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
+const ownerAbsenceState = ref(null);
 const viewerCallRole = ref('participant');
 const viewerEffectiveCallRole = ref('participant');
 const viewerCanModerateCall = ref(false);
@@ -505,16 +507,11 @@ const {
   getRoomId: () => activeRoomId.value,
 });
 
-let clearRemoteVideoStallTimer;
 let isNativeWebRtcRuntimePath = () => false;
 let isWlvcRuntimePath = () => false;
-let nativeAudioBridgeFailureMessage;
-let resetBackgroundRuntimeMetrics;
-let restartSfuAfterVideoStall;
-let shouldBlockNativeRuntimeSignaling;
-let shouldUseNativeAudioBridge;
-let startRemoteVideoStallTimer;
-let stopActivityMonitor;
+let clearRemoteVideoStallTimer, nativeAudioBridgeFailureMessage, resetBackgroundRuntimeMetrics;
+let restartSfuAfterVideoStall, shouldBlockNativeRuntimeSignaling, shouldUseNativeAudioBridge;
+let startRemoteVideoStallTimer, stopActivityMonitor;
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
@@ -828,6 +825,7 @@ const {
     lobbyNotificationState,
     lobbyQueue,
     nativePeerConnectionsRef,
+    ownerAbsenceState,
     participantsRaw,
     peerControlStateByUserId,
     pendingAdmissionJoinRoomId,
@@ -1724,7 +1722,6 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   syncControlStateToPeers,
   syncModerationStateToPeers,
 } = participantUiHelpers);
-
 ({
   currentLayoutMode,
   gridVideoParticipants,
@@ -1738,6 +1735,7 @@ const {
   activityLabelForUser,
   allowAllLobbyUsers,
   allowLobbyUser,
+  removeLobbyUser,
   aloneIdleCountdownLabel,
   attachAloneIdleActivityListeners,
   canSubmitChatMessage,

@@ -2,9 +2,13 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/auth_rbac.php';
+require_once __DIR__ . '/../domain/audit/audit_lobby_events.php';
+require_once __DIR__ . '/../domain/calls/call_management.php';
+
 function videochat_realtime_lobby_command_requires_moderation(array $lobbyCommand): bool
 {
-    return in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/allow', 'lobby/remove', 'lobby/allow_all'], true);
+    return in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/allow', 'lobby/remove', 'lobby/reject', 'lobby/kick', 'lobby/allow_all'], true);
 }
 
 function videochat_realtime_lobby_server_role_for_user(PDO $pdo, int $userId): string
@@ -143,7 +147,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
 }
 
 function videochat_realtime_reject_unauthorized_lobby_moderation_command(
-    array $presenceConnection,
+    array &$presenceConnection,
     array $lobbyCommand,
     string $roomId,
     mixed $websocket,
@@ -160,7 +164,38 @@ function videochat_realtime_reject_unauthorized_lobby_moderation_command(
         $openDatabase
     );
     if ((bool) ($lobbyAuthority['ok'] ?? false)) {
+        $presenceConnection['role'] = (string) ($lobbyAuthority['role'] ?? ($presenceConnection['role'] ?? 'user'));
+        $presenceConnection['raw_role'] = strtolower((string) ($presenceConnection['role'] ?? 'user'));
+        $presenceConnection['active_call_id'] = (string) ($lobbyAuthority['call_id'] ?? ($presenceConnection['active_call_id'] ?? ''));
+        $presenceConnection['call_role'] = videochat_normalize_call_participant_role((string) ($lobbyAuthority['call_role'] ?? 'participant'));
+        $presenceConnection['effective_call_role'] = videochat_normalize_call_participant_role(
+            (string) ($lobbyAuthority['effective_call_role'] ?? $presenceConnection['call_role'])
+        );
+        $presenceConnection['can_moderate_call'] = true;
         return null;
+    }
+
+    try {
+        $callId = videochat_realtime_normalize_call_id((string) ($lobbyAuthority['call_id'] ?? ''), '');
+        if ($callId === '') {
+            $callId = videochat_realtime_connection_call_id($presenceConnection);
+        }
+        videochat_audit_record_call_lobby_moderation_denied(
+            $openDatabase(),
+            videochat_realtime_connection_tenant_id($presenceConnection),
+            $callId,
+            (int) ($presenceConnection['user_id'] ?? 0),
+            (int) ($lobbyCommand['target_user_id'] ?? 0),
+            [
+                'room_id' => $roomId,
+                'session_id' => (string) ($presenceConnection['session_id'] ?? ''),
+                'actor_role' => (string) ($lobbyAuthority['role'] ?? ($presenceConnection['role'] ?? 'user')),
+                'actor_call_role' => (string) ($lobbyAuthority['effective_call_role'] ?? ($lobbyAuthority['call_role'] ?? 'participant')),
+                'attempted_action' => (string) ($lobbyCommand['type'] ?? ''),
+                'denial_reason' => (string) ($lobbyAuthority['error'] ?? 'forbidden'),
+            ]
+        );
+    } catch (Throwable) {
     }
 
     videochat_presence_send_frame(

@@ -279,7 +279,7 @@ function videochat_tenant_attach_user(PDO $pdo, int $userId, int $tenantId, stri
 
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO tenant_memberships(tenant_id, user_id, membership_role, permissions_json, status, default_membership, created_at, updated_at)
+INSERT OR IGNORE INTO tenant_memberships(tenant_id, user_id, membership_role, permissions_json, status, default_membership, created_at, updated_at)
 VALUES(:tenant_id, :user_id, :membership_role, '{}', 'active', 0, :created_at, :updated_at)
 SQL
     );

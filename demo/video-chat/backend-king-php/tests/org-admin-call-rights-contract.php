@@ -187,6 +187,16 @@ SQL
         !videochat_user_is_organization_admin_for_call($pdo, $foreignCallId, $orgAdminUserId, $tenantId),
         'org admin helper should reject foreign organization call'
     );
+    $manipulatedForeignCall = [
+        'id' => $foreignCallId,
+        'tenant_id' => $tenantId,
+        'owner_user_id' => $ownerBUserId,
+        'organization_id' => $organizationAId,
+    ];
+    videochat_org_admin_call_rights_assert(
+        !videochat_user_is_organization_admin_for_call($pdo, $manipulatedForeignCall, $orgAdminUserId, $tenantId),
+        'org admin helper must ignore manipulated organization id'
+    );
 
     $ownFetch = videochat_get_call_for_user($pdo, $ownCallId, $orgAdminUserId, 'user', $tenantId);
     videochat_org_admin_call_rights_assert((bool) ($ownFetch['ok'] ?? false), 'org admin should fetch own organization call');

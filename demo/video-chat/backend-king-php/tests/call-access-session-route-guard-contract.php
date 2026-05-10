@@ -60,6 +60,8 @@ try {
 
     $standardEmail = (string) $pdo->query("SELECT email FROM users WHERE id = {$standardUserId} LIMIT 1")->fetchColumn();
     $standardName = (string) $pdo->query("SELECT display_name FROM users WHERE id = {$standardUserId} LIMIT 1")->fetchColumn();
+    $adminBefore = $pdo->query("SELECT email, display_name, password_hash, status FROM users WHERE id = {$adminUserId} LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    videochat_call_access_session_route_guard_assert(is_array($adminBefore), 'expected seeded admin user profile');
 
     $insertSession = $pdo->prepare(
         <<<'SQL'
@@ -172,6 +174,26 @@ SQL
         (int) (((($anonymousPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0)) === $standardUserId,
         'anonymous personal link should bind the linked user'
     );
+
+    $verifiedAfterLogout = $callSessionRoute(
+        $personalAccessId,
+        ['User-Agent' => 'route-guard-verified-after-logout', 'Content-Type' => 'application/json'],
+        json_encode([
+            'verified_user_id' => $standardUserId,
+            'verified_session_id' => 'sess_route_guard_standard',
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'sess_route_guard_verified_after_logout_should_not_issue'
+    );
+    videochat_call_access_session_route_guard_assert((int) ($verifiedAfterLogout['status'] ?? 0) === 409, 'verified context without current auth should conflict');
+    $verifiedAfterLogoutPayload = videochat_call_access_session_route_guard_decode($verifiedAfterLogout);
+    videochat_call_access_session_route_guard_assert((string) (($verifiedAfterLogoutPayload['error'] ?? [])['code'] ?? '') === 'call_access_conflict', 'verified-after-logout error code mismatch');
+    videochat_call_access_session_route_guard_assert(
+        (string) (((($verifiedAfterLogoutPayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['auth'] ?? '') === 'session_context_changed',
+        'verified-after-logout route should surface context-change mismatch only'
+    );
+    videochat_call_access_session_route_guard_assert_no_leak($verifiedAfterLogout, [$standardEmail, $standardName, 'Route Guard Secret Personal Call', $personalCallId], 'verified-after-logout response');
+    $verifiedAfterLogoutRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_route_guard_verified_after_logout_should_not_issue'")->fetchColumn();
+    videochat_call_access_session_route_guard_assert($verifiedAfterLogoutRows === 0, 'verified-after-logout route must not persist a session');
 
     $standardPersonal = $callSessionRoute(
         $personalAccessId,

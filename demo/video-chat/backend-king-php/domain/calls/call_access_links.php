@@ -530,16 +530,37 @@ function videochat_resolve_call_access_for_user(
     $callId = trim((string) ($accessLink['call_id'] ?? ''));
     $callDecision = videochat_decide_call_access_for_user($pdo, $callId, $authUserId, $authRole, $tenantId);
     if (!(bool) ($callDecision['allowed'] ?? false)) {
+        $decisionReason = (string) ($callDecision['reason'] ?? 'forbidden');
+        if ($decisionReason === 'call_not_joinable_from_status') {
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['call_id' => 'call_not_joinable_from_status'],
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+        if (in_array($decisionReason, ['call_not_started', 'call_expired'], true)) {
+            return [
+                'ok' => false,
+                'reason' => 'conflict',
+                'errors' => ['call_id' => $decisionReason],
+                'access_link' => null,
+                'call' => null,
+            ];
+        }
+
         return [
             'ok' => false,
-            'reason' => (string) ($callDecision['reason'] ?? 'forbidden'),
+            'reason' => $decisionReason,
             'errors' => [],
             'access_link' => null,
             'call' => null,
         ];
     }
 
-    $callRecord = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $callRecord = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
     if (!is_array($callRecord)) {
         return [
             'ok' => false,

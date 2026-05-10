@@ -164,6 +164,7 @@ SELECT
     call_access_sessions.issued_at,
     call_access_sessions.expires_at,
     call_access_sessions.created_at,
+    {$hostVerifiedSelect},
     call_access_links.id AS link_id,
     call_access_links.call_id AS link_call_id,
     call_access_links.participant_user_id AS link_participant_user_id,
@@ -226,6 +227,7 @@ SQL
         'issued_at' => (string) ($row['issued_at'] ?? ''),
         'expires_at' => (string) ($row['expires_at'] ?? ''),
         'created_at' => (string) ($row['created_at'] ?? ''),
+        'host_verified_at' => is_string($row['host_verified_at'] ?? null) ? (string) $row['host_verified_at'] : null,
     ];
 
     $fail = static function (string $reason) use ($binding): array {
@@ -339,7 +341,7 @@ SQL
     );
     $userAccountType = videochat_user_account_type($userEmail, $row['resolved_user_password_hash'] ?? null);
     if ($linkKind === 'personal') {
-        if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId) {
+        if ($linkParticipantUserId > 0 && $linkParticipantUserId !== $bindingUserId && !$personalLinkHostVerified) {
             return $fail('call_access_binding_mismatch');
         }
         if (
@@ -492,6 +494,16 @@ SQL
     return strtolower(trim((string) ($row['invite_state'] ?? '')));
 }
 
+function videochat_call_access_link_disabled_at(array $accessLink): string
+{
+    return is_string($accessLink['disabled_at'] ?? null) ? trim((string) $accessLink['disabled_at']) : '';
+}
+
+function videochat_call_access_link_is_disabled(array $accessLink): bool
+{
+    return videochat_call_access_link_disabled_at($accessLink) !== '';
+}
+
 function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink): bool
 {
     if (videochat_call_access_link_is_disabled($accessLink)) {
@@ -636,8 +648,12 @@ SQL
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_create_guest_user_for_call_access(PDO $pdo, string $displayName, ?int $tenantId = null): array
-{
+function videochat_create_guest_user_for_call_access(
+    PDO $pdo,
+    string $displayName,
+    ?int $tenantId = null,
+    bool $attachTenantMembership = true
+): array {
     $name = trim($displayName);
     if ($name === '') {
         return [
@@ -707,7 +723,7 @@ SQL
                 ':updated_at' => gmdate('c'),
             ]);
             $createdUserId = (int) $pdo->lastInsertId();
-            if (is_int($tenantId) && $tenantId > 0) {
+            if ($attachTenantMembership && is_int($tenantId) && $tenantId > 0) {
                 videochat_tenant_attach_user($pdo, $createdUserId, $tenantId);
             }
             break;
@@ -733,7 +749,7 @@ SQL
         ];
     }
 
-    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null, $tenantId);
+    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null, $tenantId, $attachTenantMembership);
     if (!is_array($user)) {
         return [
             'ok' => false,
@@ -811,6 +827,22 @@ SQL
         <<<'SQL'
 INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
 VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', :invite_state, NULL, NULL)
+ON CONFLICT(call_id, email) DO UPDATE SET
+    user_id = excluded.user_id,
+    display_name = excluded.display_name,
+    source = 'internal',
+    call_role = CASE
+        WHEN call_participants.call_role = 'owner' THEN 'owner'
+        ELSE call_participants.call_role
+    END,
+    invite_state = CASE
+        WHEN call_participants.invite_state IN ('allowed', 'accepted') THEN call_participants.invite_state
+        WHEN excluded.invite_state = 'allowed' THEN 'allowed'
+        WHEN excluded.invite_state = 'pending' THEN 'pending'
+        WHEN call_participants.invite_state IN ('declined', 'cancelled') THEN 'invited'
+        ELSE call_participants.invite_state
+    END,
+    left_at = NULL
 SQL
     );
     $insert->execute([
