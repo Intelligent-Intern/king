@@ -444,6 +444,10 @@ function videochat_call_access_record_account_confirmation_failure(
 ): void
 {
     $rowUserId = is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : null;
+    $normalizedReason = strtolower(trim($reason));
+    if ($normalizedReason === '' || preg_match('/^[a-z0-9_.:-]{1,120}$/', $normalizedReason) !== 1) {
+        $normalizedReason = 'unknown';
+    }
     videochat_audit_record_event($pdo, [
         'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
         'event_type' => 'call_access_account_update_confirmation_failed',
@@ -454,10 +458,15 @@ function videochat_call_access_record_account_confirmation_failure(
         'resource_fingerprint' => (string) ($row['access_fingerprint'] ?? ''),
         'session_fingerprint' => $sessionFingerprint,
         'payload' => [
-            'reason' => $reason,
+            'audit_scope' => 'iam_call_access',
+            'action' => 'confirm_account_update',
+            'result' => 'failed',
+            'reason' => $normalizedReason,
+            'failure_reason' => $normalizedReason,
             'token_logged' => false,
             'raw_link_identifier_logged' => false,
             'session_identifier_logged' => false,
+            'recipient_email_logged' => false,
         ],
     ]);
 }
@@ -634,6 +643,9 @@ SQL
             'resource_fingerprint' => (string) ($row['access_fingerprint'] ?? ''),
             'session_fingerprint' => $sessionFingerprint,
             'payload' => [
+                'audit_scope' => 'iam_call_access',
+                'action' => 'confirm_account_update',
+                'result' => 'confirmed',
                 'updated_fields' => ['display_name'],
                 'token_logged' => false,
                 'raw_link_identifier_logged' => false,
