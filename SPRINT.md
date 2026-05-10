@@ -72,7 +72,7 @@ Sprint Checkboxen:
   `agent/iam-e2e-anonymous-lobby`.
 - [ ] IAM7-02 Extract or prove duplicate review email/account confirmation from
   `agent/iam-e2e-duplicate-review-email`.
-- [ ] IAM7-03 Extract or prove owner-transfer and temporary-moderator call
+- [x] IAM7-03 Extract or prove owner-transfer and temporary-moderator call
   management from `agent/iam-e2e-owner-transfer-temp-mods`.
 - [x] IAM7-04 Extract or prove personalized call-access identity handling from
   `agent/iam-e2e-personalized-identity`.
