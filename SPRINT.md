@@ -133,8 +133,16 @@ Tickets:
     `call-access-admin-prevention-contract.php`,
     `call-guest-list-direct-join-contract.php`, and
     `call-access-anonymous-temp-rights-contract.php`.
-- [ ] IAM2-07 Prove personalized temporary accounts cannot be reused across
+- [x] IAM2-07 Prove personalized temporary accounts cannot be reused across
   another account, browser, or organization.
+  - Merged worker branch `agent/iam-s2-07-personalized-temp-reuse`.
+  - Added `call-access-personalized-temp-reuse-contract.mjs` proving email-only
+    personal links create tenant-bound guest identities, session validation binds
+    user/call/room/link kind, wrong account/browser replay fails closed, tenant
+    fallback stays bound to call-access session, and frontend verified-context
+    issuance is required.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-personalized-temp-reuse-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM2-08 Prove invite invalidation after reschedule, delete, end, disable,
   or explicit revoke produces terminal safe states.
 - [ ] IAM2-09 Prove duplicate invite redemption and stale verified-context
