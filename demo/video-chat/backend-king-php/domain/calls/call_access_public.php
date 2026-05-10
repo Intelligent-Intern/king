@@ -101,7 +101,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $tenantId,
         false
     );
-    if ($linkKind === 'personal' && !is_array($targetUser) && $participantEmail === '') {
+    if ($linkKind === 'personal' && !is_array($targetUser) && ($linkedUserId > 0 || $participantEmail === '')) {
         return [
             'ok' => false,
             'reason' => 'not_found',
