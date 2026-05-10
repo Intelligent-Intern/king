@@ -219,8 +219,19 @@ Sprint Checkboxen:
     anonymous temp-rights Docker backend proof, and `git diff --check` passed.
 - [ ] IAM5-13 Extract email confirmation, account reconciliation, and safe
   dispatch/audit proof value from the account-confirmation branches.
-- [ ] IAM5-14 Extract calendar invite, unregistered invitee, and reschedule
+- [x] IAM5-14 Extract calendar invite, unregistered invitee, and reschedule
   stale-link proof value from the calendar/invite branches.
+  - Merged worker branch `agent/iam-s5-14-calendar-invite`.
+  - Added `documentation/iam-sprint-05-calendar-invite-extraction.md` and
+    `call-access-calendar-invite-extract-contract.mjs`.
+  - Extracted calendar invite, registered invitee handoff, unregistered
+    invitee/account-claim, terminal invalidation, stale-link privacy, and
+    reschedule evidence while keeping the full backend reschedule lifecycle as
+    source-only follow-up evidence outside this extraction ticket.
+  - Proof: calendar invite extract, calendar invite join, registered logged-in
+    invitee, registered logged-out handoff, registered invitee extract, invite
+    invalidation terminal, terminal browser flows, terminal states, link
+    privacy contracts, and `git diff --check` passed.
 - [ ] IAM5-15 Extract Call App IAM boundary proof value for entitlement
   revocation, launch-token reconnect validation, and whiteboard org install
   without touching Call App UI feature work.
