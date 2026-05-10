@@ -247,8 +247,16 @@ Sprint Checkboxen:
     contract, terminal browser-flow contract, logout-switch extract,
     registered-invitee extract, full `npm run test:contract:iam-call-access`,
     and `git diff --check` passed.
-- [ ] IAM4-16 Run or repair the focused `npm run test:e2e:call-access` browser
+- [x] IAM4-16 Run or repair the focused `npm run test:e2e:call-access` browser
   proof path without adding media/background/SFU/Gossip coverage.
+  - Worker branch `agent/iam-s4-16-e2e-call-access-proof` produced no tracked
+    source changes and no merge commit was needed.
+  - `npm ci` was required because the worker worktree had no `node_modules`.
+  - Proof: `npm run test:e2e:call-access` passed 12/12 focused IAM browser
+    tests; `git diff --check` passed.
+  - Generated artifacts were left only in the worker worktree:
+    `playwright-report/iam-call-access/index.html` and
+    `test-results/iam-call-access/.last-run.json`.
 - [ ] IAM4-17 Ensure IAM browser artifacts and failure output remain retained
   and redacted for call-access E2E diagnostics.
 - [ ] IAM4-18 Clean merged/superseded Sprint 04 worker branches/worktrees using
