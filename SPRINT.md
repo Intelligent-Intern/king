@@ -84,7 +84,7 @@ Sprint Checkboxen:
   `local/iam-e2e-anonymous-temp-rights-proof-2`.
 - [x] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility
   from `local/iam-e2e-audit-alias-followup-proof-3`.
-- [ ] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
+- [x] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
   logging from `local/iam-e2e-audit-confirmation-implicit`.
 - [x] IAM8-09 Extract or prove host-verification audit event aliases from
   `local/iam-e2e-audit-event-compat-proof-3`.
