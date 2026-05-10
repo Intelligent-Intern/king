@@ -108,5 +108,5 @@ Sprint Checkboxen:
   `local/iam-e2e-delete-end-terminal-proof-2`.
 - [x] IAM8-19 Extract or prove disabled anonymous call-access links from
   `local/iam-e2e-disabled-anonymous-links`.
-- [ ] IAM8-20 Extract or prove disabled user session revocation / Call App token
+- [x] IAM8-20 Extract or prove disabled user session revocation / Call App token
   binding from `local/iam-e2e-disabled-user-session-revocation`.
