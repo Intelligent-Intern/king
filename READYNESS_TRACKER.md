@@ -37,6 +37,25 @@ Purpose:
   No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
   were touched.
 
+- 2026-05-10 IAM7-18 local IAM E2E run docs and CI command hygiene:
+  inspected `local/iam-e2e-local-run-docs-proof-20260509` at `f956c91b`
+  against current integration baseline `e73009d1` and rejected the historical
+  branch as wholesale input because it carries broad stale IAM and parked
+  non-IAM churn. Extracted only current runbook/CI hygiene value: documented
+  host-safe IAM command-hygiene proof, canonical IAM contract gate, SQLite and
+  Docker fallback backend proof commands, focused serial Call Access E2E
+  command, and compose smoke usage. Added a local run-docs contract plus CI-wire
+  assertions for stable package scripts, release-matrix paths, executable gate
+  wrapper, and Docker fallback behavior. Updated the stale anonymous guest
+  manipulation static assertion to preserve the IAM7-17 scoped-role authority
+  contract instead of weakening it. Proof: `node --check` for touched MJS,
+  `bash -n demo/video-chat/scripts/iam-call-access-ci-gate.sh`,
+  `node tests/contract/iam-local-run-docs-contract.mjs`,
+  `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+  `node tests/contract/call-access-anonymous-guest-manipulation-contract.mjs`,
+  and `npm run test:ci:iam-call-access:static`. No push, deploy, Background,
+  Gossip, SFU, MediaSecurity, or BTGF files/tests were touched.
+
 - 2026-05-10 IAM7-15 invalid/expired anonymous-link extraction:
   inspected `local/iam-e2e-invalid-anonymous-link-proof-20260509` against
   current integration baseline `1d0f11af` and rejected the historical branch as

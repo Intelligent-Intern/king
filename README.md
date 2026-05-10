@@ -348,6 +348,12 @@ For KingRT production call investigations, use:
 demo/video-chat/scripts/prod-debug.sh
 ```
 
+For local IAM and call-access proof runs, use
+[`documentation/dev/video-chat/iam-call-access-local-tests.md`](./documentation/dev/video-chat/iam-call-access-local-tests.md).
+The canonical local gate is `cd demo/video-chat/frontend-vue && npm run
+test:ci:iam-call-access`; the host-safe static subset is `npm run
+test:ci:iam-call-access:static`.
+
 The prod-debug process is read-only. It inspects public runtime health, domains,
 asset/version endpoints, API/WS/SFU reachability, marketplace and call-app
 reachability, Whiteboard Call App CSP/`Allow-CSP-From` frame headers, container
