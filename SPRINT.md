@@ -134,8 +134,20 @@ Sprint Checkboxen:
     passed.
 - [ ] IAM4-07 Extract duplicate-abuse device/browser proof value from
   `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
-- [ ] IAM4-08 Extract guest-list revocation proof value from
+- [x] IAM4-08 Extract guest-list revocation proof value from
   `local/iam-e2e-guest-list-revocation-proof-3`.
+  - Merged worker branch `agent/iam-s4-08-guest-list-revocation-extract`.
+  - Added `documentation/iam-sprint-04-guest-list-revocation-extraction.md`
+    and `iam-guest-list-revocation-extraction-contract.mjs`.
+  - Classified the broad guest-list revocation source branch as
+    `superseded/documentation-only`; current narrower proofs already cover
+    removed/cancelled/declined guest-list access, stale personalized links,
+    stale call-scoped sessions, lobby visibility, and Docker runtime wiring.
+  - Proof: `iam-guest-list-revocation-extraction-contract.mjs`,
+    `call-access-removed-members-contract.mjs`,
+    `call-access-guest-list-membership-docker-proof-contract.mjs`,
+    `iam-backend-docker-runtime-proof-wrapper.sh`, and `git diff --check`
+    passed.
 - [ ] IAM4-09 Extract registered-invitee logged-in/logged-out/final proof value
   from the registered-invitee `proof-3` branches.
 - [ ] IAM4-10 Extract owner-transfer lifecycle proof value from
