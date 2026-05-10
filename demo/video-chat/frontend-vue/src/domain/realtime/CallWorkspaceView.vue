@@ -583,7 +583,7 @@ let reportNativeAudioBridgeFailure = () => {};
 let resyncNativeAudioBridgePeerAfterSecurityReady = () => {};
 let scheduleMediaSecurityParticipantSync = () => {};
 let sendMediaSecurityHello = async () => false;
-let shouldBypassNativeAudioProtectionForPeer = () => false;
+let shouldBypassNativeAudioProtectionForPeer = () => true;
 let shouldRecoverMediaSecurityFromFrameError = () => false;
 let shouldSendTransportOnlySfuFrame = () => true;
 let startMediaSecurityHandshakeWatchdog = () => {};

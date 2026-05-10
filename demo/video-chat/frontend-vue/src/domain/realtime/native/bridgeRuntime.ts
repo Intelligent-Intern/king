@@ -151,7 +151,9 @@ export function createNativeBridgeRuntimeHelpers({
 
   function attachMediaSecurityNativeSender(sender, track) {
     if (!sender || !track || !shouldMaintainNativePeerConnections()) return false;
+    if (!refs.MediaSecuritySession.supportsNativeTransforms()) return true;
     const session = ensureMediaSecuritySession();
+    if (!session) return true;
     try {
       if (attachMediaSecurityNativeSenderBase(session, sender, track)) {
         refs.mediaSecurityStateVersion.value += 1;
@@ -165,7 +167,9 @@ export function createNativeBridgeRuntimeHelpers({
 
   function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
     if (!receiver || !shouldMaintainNativePeerConnections()) return false;
+    if (!refs.MediaSecuritySession.supportsNativeTransforms()) return true;
     const session = ensureMediaSecuritySession();
+    if (!session) return true;
     const normalizedSenderUserId = Number(senderUserId || 0);
     const trackKind = String(track?.kind || '').trim().toLowerCase();
     if (trackKind === 'audio' && shouldBypassNativeAudioProtectionForPeer(normalizedSenderUserId)) {
