@@ -305,6 +305,41 @@ try {
     videochat_realtime_lobby_concurrency_assert((int) ($rejectThenAdmitSnapshot['queue_count'] ?? -1) === 0, 'reject-then-stale-admit should leave no queued entry');
     videochat_realtime_lobby_concurrency_assert((int) ($rejectThenAdmitSnapshot['admitted_count'] ?? -1) === 0, 'reject-then-stale-admit should leave no admitted handoff');
 
+    videochat_realtime_lobby_concurrency_set_waiting_state($pdo, 'pending');
+    $timeoutState = videochat_realtime_lobby_concurrency_sync($openDatabase, 1_780_500_030_000);
+    $timeoutAllow = videochat_lobby_apply_command(
+        $timeoutState,
+        $presenceState,
+        $moderatorA,
+        $allowCommand,
+        null,
+        1_780_500_031_000
+    );
+    videochat_realtime_lobby_concurrency_assert((bool) ($timeoutAllow['ok'] ?? false), 'timeout admission allow should mutate optimistic lobby state');
+    $timeoutOptimisticSnapshot = videochat_lobby_snapshot_payload($timeoutState, 'room-lobby-concurrency', 'assert_timeout_optimistic');
+    videochat_realtime_lobby_concurrency_assert((int) ($timeoutOptimisticSnapshot['admitted_count'] ?? -1) === 1, 'timeout admission should optimistically create one handoff before persistence');
+    $timeoutOpenDatabase = static function (): PDO {
+        throw new RuntimeException('simulated lobby admission persistence timeout');
+    };
+    $timeoutPersist = videochat_realtime_apply_successful_lobby_command(
+        $timeoutAllow,
+        $timeoutState,
+        $presenceState,
+        $moderatorA,
+        $timeoutOpenDatabase
+    );
+    videochat_realtime_lobby_concurrency_assert((bool) ($timeoutPersist['ok'] ?? true) === false, 'timeout during lobby admission should fail safely');
+    videochat_realtime_lobby_concurrency_assert((string) ($timeoutPersist['error'] ?? '') === 'lobby_admission_persist_failed', 'timeout during lobby admission should expose deterministic persist failure');
+    videochat_realtime_lobby_concurrency_assert(videochat_realtime_lobby_concurrency_waiting_state($pdo) === 'pending', 'timeout during lobby admission must leave durable invite state pending');
+    $timeoutSnapshot = videochat_lobby_snapshot_payload($timeoutState, 'room-lobby-concurrency', 'assert_timeout_consistent');
+    videochat_realtime_lobby_concurrency_assert((int) ($timeoutSnapshot['queue_count'] ?? -1) === 1, 'timeout during lobby admission should restore queued in-memory state');
+    videochat_realtime_lobby_concurrency_assert((int) ($timeoutSnapshot['admitted_count'] ?? -1) === 0, 'timeout during lobby admission should remove failed admitted handoff');
+    videochat_realtime_lobby_concurrency_assert((int) (($timeoutSnapshot['queue'][0]['user_id'] ?? 0)) === 20, 'timeout restored queued user mismatch');
+    $timeoutCanonicalState = videochat_realtime_lobby_concurrency_sync($openDatabase, 1_780_500_032_000);
+    $timeoutCanonicalSnapshot = videochat_lobby_snapshot_payload($timeoutCanonicalState, 'room-lobby-concurrency', 'assert_timeout_canonical');
+    videochat_realtime_lobby_concurrency_assert((int) ($timeoutCanonicalSnapshot['queue_count'] ?? -1) === 1, 'timeout durable canonical queue should remain pending');
+    videochat_realtime_lobby_concurrency_assert((int) ($timeoutCanonicalSnapshot['admitted_count'] ?? -1) === 0, 'timeout durable canonical state should have no admitted handoff');
+
     fwrite(STDOUT, "[realtime-lobby-concurrency-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {
