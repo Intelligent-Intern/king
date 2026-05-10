@@ -183,8 +183,24 @@ Sprint Checkboxen:
     `owner-transfer-lifecycle-contract.mjs`,
     `call-access-owner-transfer-main-contract.mjs`, and `git diff --check`
     passed.
-- [ ] IAM4-11 Extract public-copy and seed-matrix proof value from their
+- [x] IAM4-11 Extract public-copy and seed-matrix proof value from their
   `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-11-public-copy-seed-matrix-extract`.
+  - Updated public join resolution to preserve backend stable error payloads
+    before localization instead of replacing every failed response with
+    `call_access_validation_failed`.
+  - Updated localization/privacy/terminal contracts and E2E expectation so
+    missing/deleted personalized links render the safe no-data copy
+    `This call link does not exist.` without leaking backend payload details.
+  - Proof: `public-pages-localization-contract.mjs`,
+    `call-access-link-privacy-contract.mjs`,
+    `call-access-disabled-links-fail-closed-contract.mjs`,
+    `call-access-forged-identifiers-contract.mjs`,
+    `call-access-invite-invalidation-terminal-contract.mjs`,
+    `call-access-direct-join-rights-contract.mjs`, and `git diff --check`
+    passed.
+  - Playwright target was skipped by worker because local `@playwright/test`
+    was unavailable in the worktree.
 - [ ] IAM4-12 Extract remaining deleted-disabled and remaining-sprint-gap proof
   value from their `proof-3` branches.
 - [ ] IAM4-13 Extract review-abuse cross-browser and warning-modal policy proof
