@@ -84,15 +84,15 @@ Sprint Checkboxen:
   `local/iam-e2e-call-access-safe-screen-final`.
 - [x] IAM7-08 Extract or prove Call App entitlement revocation from
   `local/iam-e2e-call-app-entitlement-revocation`.
-- [ ] IAM7-09 Extract or prove Call App launch-token reconnect validation from
+- [x] IAM7-09 Extract or prove Call App launch-token reconnect validation from
   `local/iam-e2e-call-app-launch-token-reconnect`.
 - [x] IAM7-10 Extract or prove cross-organization foreign join edges from
   `local/iam-e2e-cross-org-foreign-join-edges`.
-- [ ] IAM7-11 Extract or prove deleted/ended call join hardening from
+- [x] IAM7-11 Extract or prove deleted/ended call join hardening from
   `local/iam-e2e-deleted-ended-join-hardening`.
-- [ ] IAM7-12 Extract or prove account update/email confirmation race hardening
+- [x] IAM7-12 Extract or prove account update/email confirmation race hardening
   from `local/iam-e2e-email-confirmation-race-hardening`.
-- [ ] IAM7-13 Extract or prove foreign link review audit scoping from
+- [x] IAM7-13 Extract or prove foreign link review audit scoping from
   `local/iam-e2e-foreign-link-review-audit`.
 - [x] IAM7-14 Extract or prove identity mismatch review flow from
   `local/iam-e2e-identity-mismatch-review-flow`.

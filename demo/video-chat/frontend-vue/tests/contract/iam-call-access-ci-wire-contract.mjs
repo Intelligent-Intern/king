@@ -71,6 +71,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs',
   'frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs',
   'frontend-vue/tests/contract/call-access-cross-org-contract.mjs',
+  'frontend-vue/tests/contract/call-access-foreign-link-review-audit-contract.mjs',
   'frontend-vue/tests/contract/call-access-terminal-states-contract.mjs',
   'frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs',
   'frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs',
@@ -97,6 +98,7 @@ const requiredIamSupportingPaths = [
   'backend-king-php/tests/call-access-safe-screen-privacy-contract.sh',
   'backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.php',
   'backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.sh',
+  'backend-king-php/tests/call-access-foreign-link-review-audit-contract.sh',
   'backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh',
   'backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh',
 ];

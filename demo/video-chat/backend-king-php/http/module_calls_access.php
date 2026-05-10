@@ -409,7 +409,8 @@ function videochat_handle_call_access_routes(
             $confirmResult = videochat_call_access_confirm_account_update(
                 $pdo,
                 (string) ($accountConfirmMatch[1] ?? ''),
-                $authenticatedUserId
+                $authenticatedUserId,
+                ['session_id' => videochat_call_access_route_session_id($effectiveAuthContext)]
             );
         } catch (Throwable) {
             return $errorResponse(500, 'call_access_account_update_confirm_failed', 'Could not confirm account update.', [

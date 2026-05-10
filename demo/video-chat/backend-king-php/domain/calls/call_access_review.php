@@ -93,11 +93,11 @@ SQL
 
 function videochat_call_access_review_tenant_id(array $accessLink, array $call = []): ?int
 {
-    if (is_numeric($accessLink['tenant_id'] ?? null) && (int) $accessLink['tenant_id'] > 0) {
-        return (int) $accessLink['tenant_id'];
-    }
     if (is_numeric($call['tenant_id'] ?? null) && (int) $call['tenant_id'] > 0) {
         return (int) $call['tenant_id'];
+    }
+    if (is_numeric($accessLink['tenant_id'] ?? null) && (int) $accessLink['tenant_id'] > 0) {
+        return (int) $accessLink['tenant_id'];
     }
     return null;
 }
