@@ -206,6 +206,7 @@ function videochat_supported_user_date_formats(): array
  *   web_app_notification_call_reminders_enabled: bool,
  *   web_app_notification_chat_mentions_enabled: bool,
  *   onboarding_completed_tours: array<int, string>,
+ *   onboarding_badges: array<int, array{tour_key: string, completed_at: string}>,
  * }|null
  */
 function videochat_fetch_user_settings(PDO $pdo, int $userId, int $tenantId = 0): ?array
@@ -278,6 +279,7 @@ SQL
         'web_app_notification_call_reminders_enabled' => ((int) ($row['web_app_notification_call_reminders_enabled'] ?? 1)) === 1,
         'web_app_notification_chat_mentions_enabled' => ((int) ($row['web_app_notification_chat_mentions_enabled'] ?? 1)) === 1,
         'onboarding_completed_tours' => $onboarding['completed_tours'],
+        'onboarding_badges' => $onboarding['badges'],
     ];
 }
 
@@ -735,6 +737,9 @@ function videochat_user_settings_payload(array $userSettings): array
         'web_app_notification_chat_mentions_enabled' => (bool) ($userSettings['web_app_notification_chat_mentions_enabled'] ?? true),
         'onboarding_completed_tours' => is_array($userSettings['onboarding_completed_tours'] ?? null)
             ? $userSettings['onboarding_completed_tours']
+            : [],
+        'onboarding_badges' => is_array($userSettings['onboarding_badges'] ?? null)
+            ? $userSettings['onboarding_badges']
             : [],
     ];
 }

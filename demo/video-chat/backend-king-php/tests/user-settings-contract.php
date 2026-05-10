@@ -16,6 +16,20 @@ function videochat_user_settings_assert(bool $condition, string $message): void
     exit(1);
 }
 
+function videochat_user_settings_badge_completed_at(array $badges, string $tourKey): string
+{
+    foreach ($badges as $badge) {
+        if (!is_array($badge)) {
+            continue;
+        }
+        if ((string) ($badge['tour_key'] ?? '') === $tourKey) {
+            return (string) ($badge['completed_at'] ?? '');
+        }
+    }
+
+    return '';
+}
+
 try {
     $databasePath = sys_get_temp_dir() . '/videochat-user-settings-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
@@ -37,6 +51,8 @@ SQL
     );
     $userId = (int) $userQuery->fetchColumn();
     videochat_user_settings_assert($userId > 0, 'expected seeded standard user in sqlite bootstrap');
+    $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
+    videochat_user_settings_assert($tenantId > 0, 'expected seeded default tenant in sqlite bootstrap');
 
     $sessionId = 'sess_user_settings_contract';
     $insertSession = $pdo->prepare(
@@ -64,7 +80,7 @@ SQL
     videochat_user_settings_assert($initialAuth['ok'] === true, 'initial auth should succeed');
     videochat_user_settings_assert((string) (($initialAuth['user'] ?? [])['role'] ?? '') === 'user', 'initial auth role mismatch');
 
-    $initialSettings = videochat_fetch_user_settings($pdo, $userId);
+    $initialSettings = videochat_fetch_user_settings($pdo, $userId, $tenantId);
     videochat_user_settings_assert(is_array($initialSettings), 'initial settings lookup should succeed');
     videochat_user_settings_assert((string) ($initialSettings['locale'] ?? '') === 'en', 'initial locale should default to en');
     videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
@@ -76,7 +92,19 @@ SQL
     videochat_user_settings_assert(($initialSettings['web_app_notification_call_reminders_enabled'] ?? null) === true, 'initial call reminder notifications should be enabled');
     videochat_user_settings_assert(($initialSettings['web_app_notification_chat_mentions_enabled'] ?? null) === true, 'initial chat mention notifications should be enabled');
     videochat_user_settings_assert(!array_key_exists('messenger_contacts', $initialSettings), 'settings must not expose removed messenger contacts');
-    videochat_user_settings_assert(!array_key_exists('onboarding_badges', $initialSettings), 'settings must not expose onboarding badges');
+    videochat_user_settings_assert(($initialSettings['onboarding_badges'] ?? null) === [], 'initial onboarding badges should be empty');
+
+    $tourCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'users.overview.tour', '2026-05-06T09:00:00+00:00');
+    videochat_user_settings_assert((bool) ($tourCompletion['ok'] ?? false), 'tour completion should succeed for settings badge proof');
+    $settingsWithBadge = videochat_fetch_user_settings($pdo, $userId, $tenantId);
+    videochat_user_settings_assert(is_array($settingsWithBadge), 'settings with completed badge should load');
+    videochat_user_settings_assert(
+        videochat_user_settings_badge_completed_at(
+            is_array($settingsWithBadge['onboarding_badges'] ?? null) ? $settingsWithBadge['onboarding_badges'] : [],
+            'users.overview.tour'
+        ) === '2026-05-06T09:00:00+00:00',
+        'settings should expose completed onboarding badge timestamp'
+    );
 
     $invalidEmptyPayload = videochat_update_user_settings($pdo, $userId, []);
     videochat_user_settings_assert($invalidEmptyPayload['ok'] === false, 'empty settings update should fail');

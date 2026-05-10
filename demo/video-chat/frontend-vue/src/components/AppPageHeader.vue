@@ -23,9 +23,11 @@
       <button
         v-if="tourDefinition"
         class="icon-mini-btn app-page-header-tour-btn"
+        :class="{ 'is-completed': tourCompleted }"
         type="button"
         :title="tourButtonLabel"
         :aria-label="tourButtonLabel"
+        :aria-pressed="tourCompleted ? 'true' : 'false'"
         @click="openTour"
       >
         <span aria-hidden="true">?</span>
@@ -83,7 +85,7 @@ const rootAttrs = computed(() => {
   return rest;
 });
 const rootClass = computed(() => ['app-page-header', attrs.class]);
-const { openTour, tourButtonLabel, tourDefinition } = useOnboardingDriver({
+const { openTour, tourButtonLabel, tourCompleted, tourDefinition } = useOnboardingDriver({
   route,
   title: toRef(props, 'title'),
 });
@@ -138,9 +140,14 @@ const { openTour, tourButtonLabel, tourDefinition } = useOnboardingDriver({
 }
 
 .app-page-header-tour-btn {
-  display: none;
+  display: inline-flex;
   width: 40px;
   height: 40px;
+}
+
+.app-page-header-tour-btn.is-completed {
+  border-color: var(--brand-cyan);
+  color: var(--brand-cyan);
 }
 
 .app-page-header-tour-btn span {

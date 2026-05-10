@@ -5,6 +5,7 @@ import {
   localizationLanguageDirection,
   normalizeBooleanPreference,
   normalizeDateFormat,
+  normalizeOnboardingBadges,
   normalizeOnboardingCompletedTours,
   normalizePostLogoutLandingUrl,
   normalizeLocalizationLanguage,
@@ -94,6 +95,7 @@ export const sessionState = reactive({
   webAppNotificationCallRemindersEnabled: true,
   webAppNotificationChatMentionsEnabled: true,
   onboardingCompletedTours: [],
+  onboardingBadges: [],
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -154,6 +156,7 @@ function resetUserFields() {
   sessionState.webAppNotificationCallRemindersEnabled = true;
   sessionState.webAppNotificationChatMentionsEnabled = true;
   sessionState.onboardingCompletedTours = [];
+  sessionState.onboardingBadges = [];
   sessionState.status = '';
 }
 function setRecoveryState(state, reason = '', message = '') {
@@ -205,6 +208,9 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.webAppNotificationChatMentionsEnabled = normalizeBooleanPreference(user.web_app_notification_chat_mentions_enabled, true);
   if (Object.prototype.hasOwnProperty.call(user, 'onboarding_completed_tours')) {
     sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(user.onboarding_completed_tours);
+  }
+  if (Object.prototype.hasOwnProperty.call(user, 'onboarding_badges')) {
+    sessionState.onboardingBadges = normalizeOnboardingBadges(user.onboarding_badges);
   }
   sessionState.status = normalizeString(user.status);
 }
@@ -837,67 +843,6 @@ export async function changeSessionPassword({ currentPassword, newPassword, repe
   }
 }
 
-export async function completeOnboardingTour(tourKey) {
-  if (!sessionState.sessionToken) {
-    return {
-      ok: false,
-      reason: 'missing_session',
-      message: 'A valid session token is required.',
-    };
-  }
-
-  const normalizedTourKey = normalizeString(tourKey).toLowerCase();
-  if (normalizedTourKey === '') {
-    return {
-      ok: false,
-      reason: 'invalid_tour_key',
-      message: 'Tour key is required.',
-    };
-  }
-
-  try {
-    const { response } = await fetchBackend('/api/user/onboarding/tours/complete', {
-      method: 'POST',
-      headers: sessionHeaders(),
-      body: JSON.stringify({ tour_key: normalizedTourKey }),
-    });
-    const payload = await readJsonResponse(response);
-    if (!response.ok || !payload || payload.status !== 'ok') {
-      const message = extractErrorMessage(payload, 'Could not update onboarding progress.');
-      if ([401, 403].includes(response.status)) {
-        normalizeAuthErrorState('invalid_session', message, true);
-        return {
-          ok: false,
-          reason: 'invalid_session',
-          status: response.status,
-          message,
-        };
-      }
-      return {
-        ok: false,
-        reason: 'request_failed',
-        status: response.status,
-        message,
-        fields: payload?.error?.details?.fields || {},
-      };
-    }
-
-    const onboarding = payload.result?.onboarding || {};
-    sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(onboarding.completed_tours);
-    return {
-      ok: true,
-      reason: payload.result?.state || 'completed',
-      onboarding,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      reason: 'network_error',
-      status: 0,
-      message: normalizeNetworkErrorMessage(error, 'Could not update onboarding progress.'),
-    };
-  }
-}
 export async function uploadSessionAvatar(dataUrl) {
   if (!sessionState.sessionToken) {
     return {
