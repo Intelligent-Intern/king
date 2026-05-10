@@ -171,8 +171,18 @@ Sprint Checkboxen:
     `call-access-registered-logged-in-invitee-contract.mjs`,
     `call-access-registered-logged-out-handoff-contract.mjs`, and
     `git diff --check` passed.
-- [ ] IAM4-10 Extract owner-transfer lifecycle proof value from
+- [x] IAM4-10 Extract owner-transfer lifecycle proof value from
   `local/iam-e2e-owner-transfer-lifecycle-proof-3`.
+  - Merged worker branch `agent/iam-s4-10-owner-transfer-extract`.
+  - Added `call-access-owner-transfer-temp-moderator-extract-contract.mjs`.
+  - Extracted the temporary moderator/owner-transfer proof value: moderators may
+    moderate their assigned call, but cannot transfer/demote ownership, cannot
+    moderate other calls, lose rights immediately on revocation, and server-side
+    lobby/role checks must ignore forged client role frames.
+  - Proof: `call-access-owner-transfer-temp-moderator-extract-contract.mjs`,
+    `owner-transfer-lifecycle-contract.mjs`,
+    `call-access-owner-transfer-main-contract.mjs`, and `git diff --check`
+    passed.
 - [ ] IAM4-11 Extract public-copy and seed-matrix proof value from their
   `proof-3` branches.
 - [ ] IAM4-12 Extract remaining deleted-disabled and remaining-sprint-gap proof
