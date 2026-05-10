@@ -109,20 +109,12 @@ Rules:
 
 Use this queue only after the active 20-ticket IAM sprint closes.
 
-1. [ ] IAM Sprint 02: broaden browser E2E proof for calendar invite join links,
-   registered invitees, anonymous links, and personalized temporary accounts.
-2. [ ] IAM Sprint 02: close remaining edge cases for owner transfer, admin join
-   boundaries, removed members, stale roles, and disabled users in browser E2E.
-3. [ ] IAM Sprint 02: prove audit log event compatibility across legacy and
-   current event names, including redacted artifact output.
-4. [ ] IAM Sprint 02: stabilize CI artifacts, release-gate scripts, and
-   production-smoke selection for IAM call-access checks.
-5. [ ] IAM Sprint 03: harden security-manipulation cases, duplicate device/browser
+1. [ ] IAM Sprint 03: harden security-manipulation cases, duplicate device/browser
    abuse, mismatch verification, and no-data-leak UI states.
-6. [ ] IAM Sprint 03: complete Docker/SQLite backend runtime proof for call
+2. [ ] IAM Sprint 03: complete Docker/SQLite backend runtime proof for call
    access contracts that currently skip in local environments without
    `pdo_sqlite`.
-7. [ ] IAM Sprint 03: clean redundant IAM branches/worktrees only after their
+3. [ ] IAM Sprint 03: clean redundant IAM branches/worktrees only after their
    HEAD is merged or their diff is proven superseded by the local no-push branch.
 
 ### Completed/Parked Call App Integration Detail

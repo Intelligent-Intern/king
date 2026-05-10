@@ -16,7 +16,7 @@ Rules:
 - Do not push. Deploy only when the active sprint proof is green.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: IAM Call-Access Test Stabilization 01
+## Sprint: IAM Call-Access Browser E2E Stabilization 02
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
@@ -24,243 +24,86 @@ Branch:
 Status:
 - Active as of 2026-05-10.
 - Local-only integration branch. Do not push to GitHub.
-- Work happens in short-lived non-`codex` worker branches/worktrees and is
-  merged back into the local no-push branch after proof.
+- Worker branches/worktrees must use short-lived non-`codex` names and merge
+  back into the local no-push branch after proof.
 - Background, Gossip, SFU, MediaSecurity, BTGF, and their tests remain parked
   unless the user explicitly reopens them.
 
 User-facing problem:
-- IAM/call-access coverage exists across many local worktrees and contracts, but
-  the active sprint does not expose a clean 20-ticket execution queue.
-- Guest/lobby/direct-join behavior, role boundaries, stale membership, duplicate
-  invite/session abuse, and CI proof must be made deterministic before further
-  deploys depend on them.
-- Branch/worktree leftovers must be merged, parked, or removed intentionally so
-  the local no-push branch remains the only deploy source.
+- Sprint 01 made the deterministic IAM contract gate deployable, but the
+  broader invite/browser journeys are still scattered across old local IAM
+  branches and worktrees.
+- Calendar invite links, registered invitees, anonymous temporary accounts,
+  invite invalidation, owner transfer, admin boundaries, removed members, stale
+  roles, disabled users, audit output, CI artifacts, and production smoke
+  selection need a clean 20-ticket execution queue.
 
 Sprint goal:
-- Stabilize IAM call-access tests and runtime contracts without shrinking the
-  existing access model.
-- Keep deterministic E2E seeding, frontend route behavior, backend admission,
-  realtime scope, and deploy proof aligned.
-- Close exactly 20 IAM/test checkboxes before opening the next IAM sprint.
+- Promote the next IAM backlog batch into focused browser/E2E and contract
+  proofs without shrinking the access model.
+- Keep all new proof files explicit, deterministic, and wired into stable
+  package/release-gate commands only after they are merged.
+- Close exactly 20 tickets, then build/deploy locally without push/DNS/certbot.
 
 Execution boundary:
 - No pushes.
 - No DNS or certbot automation.
 - No Background/Gossip/SFU/MediaSecurity implementation work.
-- Do not weaken admin, owner, moderator, guest-list, org-boundary, lobby, or
-  audit semantics to make tests pass.
 - Do not discard dirty worktrees unless their changes are proven merged or the
   user explicitly approves removal.
+- Prefer new focused contract/E2E proof files over broad edits that collide with
+  existing joined call-access specs.
 
 Proof anchors:
-- `demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json`
-- `demo/video-chat/frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs`
+- `demo/video-chat/frontend-vue/package.json`
+- `demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json`
 - `demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js`
 - `demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js`
 - `demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js`
 - `demo/video-chat/frontend-vue/tests/e2e/helpers/videochatMatrixHarness.js`
-- `demo/video-chat/backend-king-php/tests/call-guest-list-direct-join-contract.php`
-- `demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.sh`
-- `demo/video-chat/backend-king-php/tests/call-access-stale-organization-role-contract.sh`
-- `demo/video-chat/frontend-vue/package.json`
+- `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`
 
 Tickets:
-- [x] IAM-01 Inventory IAM worktrees/branches and classify merge candidates for
-  this sprint.
-  - Removed 55 clean `codex/iam-lane-*` worktrees/branches whose HEAD was
-    already contained in `prod-kingrt-do-not-push-to-github`.
-  - Deleted the contained `codex/iam-lane-10-privacy-leak` branch; its worktree
-    registration is gone, but a root-owned generated
-    `demo/video-chat/backend-king-php/.local/email-outbox.log` directory remains
-    on disk and needs manual/root cleanup if the empty path should disappear.
-  - Kept six clean but not-contained IAM lane candidates for ticket-level review:
-    `codex/iam-lane-54-organization-role-bootstrap-proof`,
-    `codex/iam-lane-57-guest-list-owner-management-proof`,
-    `codex/iam-lane-58-owner-transfer-rights-audit-proof`,
-    `codex/iam-lane-59-admin-join-boundaries-proof`,
-    `codex/iam-lane-60-calendar-invite-personalized-link-proof`, and
-    `codex/iam-lane-61-temporary-call-link-account-proof`.
-  - Primary larger merge candidate is the clean `iam-e2e-integration` worktree;
-    do not wholesale merge it before per-ticket conflict and proof review.
-  - Small clean worker candidates:
-    `agent/iam-e2e-fixtures-foundation` and
-    `agent/iam-e2e-rejoin-kick-membership`.
-- [x] IAM-02 Restore a clean deterministic IAM seed matrix covering system admin,
-  tenant admins, owners, normal members, registered guests, temporary guests,
-  deleted/ended/disabled calls, and cross-org calls.
-  - Merged worker branch `agent/iam-s1-02-seed-matrix`.
-  - Seed matrix now includes beta normal member denial plus ended, disabled, and
-    deleted call cases; seed routes keep denied/terminal payloads free of private
-    call objects and call identifiers.
-  - Integrated with IAM-03/IAM-07 by allowing terminal direct-join denials to
-    use terminal status reasons instead of masquerading as `calls_forbidden`.
-  - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`,
-    `node tests/contract/call-access-direct-join-rights-contract.mjs`,
-    `node tests/contract/call-access-cross-org-contract.mjs`, and
-    `npx playwright test tests/e2e/call-access-seed-matrix.spec.js --workers=1
-    --reporter=list` passed.
-- [x] IAM-03 Make `iam-call-access-e2e-foundation-contract.mjs` pass against the
-  seed matrix without fixture drift.
-  - Merged worker branch `agent/iam-s1-03-foundation-contract`.
-  - Contract now derives Direct Join Permissions scenarios from
-    `iam-call-access-seeding.matrix.json`, asserts exact spec/matrix parity, and
-    derives denied direct-join checks from the matrix.
-  - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` and
-    `npm run test:contract:iam-call-access` passed; backend SQLite shell proofs
-    skipped locally because `pdo_sqlite` is unavailable.
-- [x] IAM-04 Prove direct join permissions for platform admin, tenant admin,
-  call owner, guest-list participant, and denied normal member.
-  - Merged worker branch `agent/iam-s1-04-direct-join-rights`.
-  - Added `call-access-direct-join-rights-contract.mjs` proving direct-join
-    authorization is limited to platform admin, tenant admin, call owner, or
-    guest-list participant, with normal tenant members denied.
-  - Proof: `node tests/contract/call-access-direct-join-rights-contract.mjs`,
-    `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`, and
-    `node tests/contract/call-access-cross-org-contract.mjs` passed.
-- [x] IAM-05 Prove external guest join links require display name, create a
-  temporary guest identity, and wait in lobby until admitted.
-  - Merged worker branch `agent/iam-s1-05-guest-link-lobby`.
-  - Added an external open guest-link E2E case proving name-required behavior,
-    `guest_name` session creation, temporary guest identity, lobby wait, owner
-    admission transition, and no media/control secret exposure in payloads.
-  - Proof: `npx playwright test tests/e2e/call-access-join.spec.js --grep
-    "external guest join link" --workers=1 --reporter=list` and
-    `npm run test:contract:iam-call-access` passed; backend SQLite shell proofs
-    skipped locally because `pdo_sqlite` is unavailable.
-- [x] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
-  - Merged worker branch `agent/iam-s1-06-guest-list-php`.
-  - PHP contract now covers active internal guest-list access, declined entries,
-    external participant rows not counting as guest-list access, and tenant-scoped
-    lookup denial.
-  - Proof: PHP lint passed for the contract and guest-list domain file. Host
-    shell proof skipped because `pdo_sqlite` is unavailable; worker ran the same
-    PHP contract successfully in a disposable PHP container with `pdo_sqlite`.
-- [x] IAM-07 Prove cross-org denial and active-org switch behavior.
-  - Merged worker branch `agent/iam-s1-07-cross-org`.
-  - Added `call-access-cross-org-contract.mjs` for alpha-admin to beta-call
-    denial, active-org switch least-privilege behavior, and no private call-data
-    leak on denied resolve/fetch payloads.
-  - Removed private `call_id` echo from denied seed-route call-fetch details.
-  - Proof: `node tests/contract/call-access-cross-org-contract.mjs` and
-    `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` passed.
-- [x] IAM-08 Prove deleted, ended, disabled, and terminal call states do not leak
-  private call data and cannot be joined.
-  - Merged worker branch `agent/iam-s1-08-terminal-states`.
-  - Added `call-access-terminal-states-contract.mjs` proving ended/disabled
-    calls deny direct join, deleted calls are hidden as not found, and terminal
-    resolve/fetch payloads do not include private call objects or identifiers.
-  - Proof: `node tests/contract/call-access-terminal-states-contract.mjs`
-    passed with the existing IAM access contracts.
-- [x] IAM-09 Prove membership removal and stale organization-role revalidation.
-  - Merged worker branch `agent/iam-s1-09-membership-stale-role`.
-  - Membership-removal and stale-role shell proofs now run PHP syntax validation
-    before the `pdo_sqlite` gate, so non-SQLite hosts still catch contract syntax
-    regressions instead of skipping all proof.
-  - Proof: PHP lint passed for both contracts; shell wrappers executed and
-    skipped only the SQLite-backed runtime phase because host PHP lacks
-    `pdo_sqlite`.
-- [x] IAM-10 Prove owner transfer, moderator, org-admin, and system-admin
-  admission boundaries.
-  - Merged worker branch `agent/iam-s1-10-admission-boundaries`.
-  - Added `call-access-admission-boundaries-contract.mjs` covering system-admin,
-    org-admin, owner/moderator, owner-transfer, stale role, forged role, and
-    foreign-call moderation boundaries.
-  - Proof: `node tests/contract/call-access-admission-boundaries-contract.mjs`
-    passed with the existing IAM access contracts.
-- [x] IAM-11 Prove lobby queue idempotence, pagination/search stability, and
-  concurrent admit/deny behavior.
-  - Merged worker branch `agent/iam-s1-11-lobby-concurrency`.
-  - Added `call-access-lobby-concurrency-contract.mjs` and wired it into
-    `npm run test:contract:iam-call-access`.
-  - Proof covers lobby snapshot dedupe, admitted-over-stale-queue behavior,
-    action-state cleanup, search/page clamping, and concurrent admit/deny
-    convergence.
-  - Proof: `npm run test:contract:iam-call-access` passed; backend SQLite shell
-    proofs skipped locally because `pdo_sqlite` is unavailable.
-- [x] IAM-12 Prove duplicate invite/session/device/browser abuse is rejected or
-  reconciled deterministically.
-  - Merged worker branch `agent/iam-s1-12-duplicate-abuse`.
-  - Added `call-access-duplicate-abuse-contract.mjs` proving stale verified
-    context conflicts, parallel browser/device isolation, duplicate session-id
-    rejection, invite redemption caps, and redacted conflict output.
-  - Proof: `node tests/contract/call-access-duplicate-abuse-contract.mjs` passed.
-- [x] IAM-13 Prove logout/login switch and parallel-tab account isolation.
-  - Merged worker branch `agent/iam-s1-13-account-isolation`.
-  - Added `call-access-account-isolation-contract.mjs` proving logout clears
-    local session state, login replaces account tokens, call-access issuance
-    binds to the current token, and parallel tab contexts stay isolated.
-  - Proof: `node tests/contract/call-access-account-isolation-contract.mjs`
-    passed with the existing IAM access contracts.
-- [x] IAM-14 Prove call-access audit event compatibility and redaction.
-  - Merged worker branch `agent/iam-s1-14-audit-redaction`.
-  - Added `call-access-audit-redaction-contract.mjs` proving audit payloads use
-    shared sanitization, raw access/session IDs are fingerprinted, denied/auth
-    mismatch routes do not hand-roll unsafe audit payloads, and backend privacy
-    proofs cover sanitizer redaction.
-  - Proof: `node tests/contract/call-access-audit-redaction-contract.mjs` passed;
-    referenced backend SQLite runtime proofs remain gated by local `pdo_sqlite`.
-- [x] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
-  admission and removal decisions.
-  - Merged worker branch `agent/iam-s1-15-callapp-revocation`.
-  - Added active call-subject validation for call-app grants and launch-token
-    validation so owners, current participants, and admitted guests keep access
-    while removed participants/guests lose call-app access.
-  - Proof: PHP syntax checks for touched call-app backend files plus
-    `node tests/contract/call-access-callapp-revocation-contract.mjs` and
-    `node tests/contract/call-app-permission-revocation-contract.mjs` passed.
-- [x] IAM-16 Prove frontend route guards and verified-context UI for call-access
-  sessions.
-  - Merged worker branch `agent/iam-s1-16-route-guards-ui`.
-  - Added `call-access-route-guard-ui-contract.mjs` proving public join route,
-    authenticated workspace guard, post-login join-modal routing, verified
-    context session issuance, admission wait UI, safe logout/switch failures,
-    and invite-entry workspace transition.
-  - Proof: `node tests/contract/call-access-route-guard-ui-contract.mjs` and
-    `node tests/contract/call-access-verified-context-ui-contract.mjs` passed.
-- [x] IAM-17 Prove realtime websocket room scope and reconnect/backfill under IAM
-  session changes.
-  - Merged worker branch `agent/iam-s1-17-realtime-scope`.
-  - Added `call-access-realtime-scope-contract.mjs` proving websocket room/call
-    query binding, current-session reconnect, fail-closed missing session,
-    welcome/snapshot backfill, backend binding mismatch handling, and retryable
-    reconnect backfill failures.
-  - Proof: `node tests/contract/call-access-realtime-scope-contract.mjs` passed.
-    Backend reconnect shell proof skipped the SQLite runtime phase locally after
-    non-SQLite assertions because `pdo_sqlite` is unavailable.
-- [x] IAM-18 Wire the IAM contract/E2E subset into stable package scripts and CI
-  release-gate metadata.
-  - Merged worker branch `agent/iam-s1-18-ci-wire`.
-  - Wired `test:contract:iam-call-access` into package scripts, canonical CI,
-    and release-gate metadata, then expanded the gate after integration to cover
-    all merged IAM-01..IAM-19 contract and backend runtime proofs.
-  - Proof: `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
-    `npm run test:e2e:release-gate`, `npm run test:contract:iam-call-access`,
-    and `git diff --check` passed.
-- [x] IAM-19 Run backend/runtime proof in the strongest available local test
-  environment; document any `pdo_sqlite` limitation instead of weakening tests.
-  - Merged worker branch `agent/iam-s1-19-runtime-proof`.
-  - Added `iam-call-access-sqlite-runtime-proof.sh`, which runs the stable IAM
-    SQLite backend contract set directly when host PHP has `pdo_sqlite`, or via
-    a disposable PHP CLI container when the host extension is missing.
-  - Proof: wrapper passed locally through Docker `php:8.4-cli-trixie` with
-    `pdo_sqlite`, covering admin prevention, cross-org, membership removal,
-    session route guard, stale org role, strong mismatch privacy, and guest-list
-    direct join.
-- [x] IAM-20 Build, run IAM proof set, deploy without push/DNS/certbot, and
-  collect post-deploy diagnostics before opening the next 20-ticket sprint.
-  - Deployed local branch `prod-kingrt-do-not-push-to-github` without push, DNS
-    changes, or Certbot renewal.
-  - Proof: `npm run test:contract:iam-call-access`,
-    `npm run test:e2e:call-access`, `npm run test:e2e:release-gate`,
-    `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`,
-    `npm run build`, `npm run test:contract:build-size`, and `git diff --check`
-    passed before deploy.
-  - Diagnostics: app/API/Call-App asset HTTP checks returned 200; unauthenticated
-    call-app availability route returned expected 401 instead of the prior 500;
-    remote containers are up; `prod-debug.sh` found no fresh backend/edge
-    IAM/Call-App 500 class. Remaining log noise was coturn peer TCP resets.
+- [ ] IAM2-01 Inventory remaining IAM browser/worktree candidates and map them
+  to this sprint without merging stale branches wholesale.
+- [ ] IAM2-02 Prove calendar invite join links resolve to call-scoped sessions
+  without leaking foreign calendar or call data.
+- [ ] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
+  flow and cannot bypass host admission.
+- [ ] IAM2-04 Prove registered invitees who are logged out get a safe login
+  handoff and rebind only to the intended invite.
+- [ ] IAM2-05 Prove registered invitees who are already logged in can join only
+  the invited call and keep active organization boundaries intact.
+- [ ] IAM2-06 Prove anonymous call links and temporary call-link accounts honor
+  org-admin restrictions and do not elevate direct-join rights.
+- [ ] IAM2-07 Prove personalized temporary accounts cannot be reused across
+  another account, browser, or organization.
+- [ ] IAM2-08 Prove invite invalidation after reschedule, delete, end, disable,
+  or explicit revoke produces terminal safe states.
+- [ ] IAM2-09 Prove duplicate invite redemption and stale verified-context
+  replay are reconciled deterministically across devices.
+- [ ] IAM2-10 Prove owner-transfer main journey updates call-access authority
+  without leaving old-owner moderator powers behind.
+- [ ] IAM2-11 Prove owner-transfer lifecycle and rejoin behavior for old owner,
+  new owner, moderators, and guests.
+- [ ] IAM2-12 Prove admin join boundaries in browser E2E for system admin,
+  org-admin, foreign org-admin, moderator, owner, and member.
+- [ ] IAM2-13 Prove removed members and invited users removed from the org lose
+  call-access and lobby visibility without data leakage.
+- [ ] IAM2-14 Prove disabled users, deleted users, deleted calls, ended calls,
+  and disabled calls stay closed in browser flows.
+- [ ] IAM2-15 Prove stale role and active-organization switch revalidation in
+  browser flows, including no stale admin powers after switch.
+- [ ] IAM2-16 Prove audit event compatibility across legacy/current IAM event
+  names and redacted artifact output.
+- [ ] IAM2-17 Stabilize CI artifacts for IAM browser proof: traces, screenshots,
+  report naming, and failure redaction.
+- [ ] IAM2-18 Wire Sprint 02 proofs into stable package scripts and release-gate
+  metadata after integration.
+- [ ] IAM2-19 Clean merged or superseded IAM Sprint 02 worktrees/branches using
+  contained-HEAD and clean-worktree rules only.
+- [ ] IAM2-20 Build, run Sprint 02 IAM proof set, deploy without push/DNS/certbot,
+  and collect post-deploy diagnostics before opening the next sprint.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned, with worker branches not named
