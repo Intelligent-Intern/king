@@ -12,6 +12,7 @@ require_once __DIR__ . '/../domain/tenancy/governance_roles.php';
 require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
 require_once __DIR__ . '/../domain/tenancy/governance_summaries.php';
 require_once __DIR__ . '/../domain/tenancy/tenant_portability.php';
+require_once __DIR__ . '/../domain/users/user_directory.php';
 require_once __DIR__ . '/../support/auth_request.php';
 
 function videochat_handle_tenancy_routes(
@@ -39,12 +40,6 @@ function videochat_handle_tenancy_routes(
     }
 
     if ($path === '/api/admin/tenancy/export' || $path === '/api/admin/tenancy/import/dry-run') {
-        $admin = videochat_tenancy_require_admin($apiAuthContext);
-        if (!(bool) ($admin['ok'] ?? false)) {
-            return $errorResponse(403, 'tenant_admin_required', 'Tenant administration requires an active tenant admin membership.', [
-                'reason' => (string) ($admin['reason'] ?? 'tenant_admin_required'),
-            ]);
-        }
         if ($method !== 'POST') {
             return $errorResponse(405, 'method_not_allowed', 'Use POST for tenant portability endpoints.', [
                 'allowed_methods' => ['POST'],
@@ -58,8 +53,23 @@ function videochat_handle_tenancy_routes(
         }
         try {
             $pdo = $openDatabase();
-            $tenantId = (int) ($admin['tenant_id'] ?? 0);
+            $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
             $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+            if ($tenantId <= 0 || $actorUserId <= 0) {
+                return $errorResponse(401, 'auth_failed', 'A valid tenant session is required.', [
+                    'reason' => 'invalid_tenant_context',
+                ]);
+            }
+
+            $permission = videochat_tenancy_governance_portability_permission_decision(
+                $pdo,
+                $apiAuthContext,
+                $path === '/api/admin/tenancy/export' ? 'export' : 'import'
+            );
+            if (!(bool) ($permission['ok'] ?? false)) {
+                return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
+            }
+
             $result = $path === '/api/admin/tenancy/export'
                 ? videochat_tenant_export_bundle($pdo, $tenantId, $actorUserId, $payload)
                 : videochat_tenant_import_dry_run($pdo, $tenantId, $actorUserId, is_array($payload['bundle'] ?? null) ? (array) $payload['bundle'] : $payload);
