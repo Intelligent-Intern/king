@@ -35,8 +35,16 @@ assert(
   'workspace gossip data-lane implementation must import arrayBufferToBase64Url for outbound gossip payload conversion',
 )
 assert(
-  /function publishLocalEncodedFrameToGossip\(frame\)[\s\S]*if \(!GOSSIP_DATA_LANE_CONFIG\.publish\)[\s\S]*recordGossipShadowWouldPublish\(frame, 'publish_disabled'\);[\s\S]*if \(!gossipDataPlaneAllowed\(\)\)[\s\S]*recordGossipShadowWouldPublish\(frame, 'rollout_gate_blocked'\);[\s\S]*controller\.publishFrame\((String\(currentUserId\.value \|\| ''\)|peerId),\s*msg\);/.test(workspaceGossipSurface),
-  'outbound live gossip publication must be gated by publish mode and gossip data-plane admission before publishFrame()',
+  /function publishLocalEncodedFrameToGossip\(frame\)[\s\S]*const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary;[\s\S]*if \(!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.publish\)[\s\S]*recordGossipShadowWouldPublish\(frame, 'publish_disabled'\);[\s\S]*if \(!directGossipPrimary && !gossipDataPlaneAllowed\(\)\)[\s\S]*recordGossipShadowWouldPublish\(frame, 'rollout_gate_blocked'\);[\s\S]*controller\.publishFrame\((String\(currentUserId\.value \|\| ''\)|peerId),\s*msg\);/.test(workspaceGossipSurface),
+  'outbound live gossip publication must bypass publish and rollout gates for gossip_primary before publishFrame()',
+)
+assert(
+  /const msg = gossipFrameMessageFromEncodedFrame\(frame,\s*liveGossipFrameSequenceByTrack,\s*directGossipPrimary\);/.test(workspaceGossipSurface),
+  'gossip_primary live publication must send plain transport frames instead of protected SFU frames',
+)
+assert(
+  /function routeLiveGossipDeliveryToRemoteFrame\(delivery\)[\s\S]*const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary;[\s\S]*!directGossipPrimary && !GOSSIP_DATA_LANE_CONFIG\.receive[\s\S]*!directGossipPrimary && !gossipDataPlaneAllowed\(\)[\s\S]*transportPath: 'gossip_primary_direct'[\s\S]*protectionMode: 'transport_only'/.test(workspaceGossipSurface),
+  'gossip_primary receive path must route frames directly to the decoder without data-plane gates',
 )
 assert(
   /function gossipDataPlaneAllowed\(\)[\s\S]*if \(gossipActiveDataLaneAllowed\(\)\) return true;[\s\S]*gossipPrimaryTopologyReady\(\)/.test(workspaceGossipSurface),
@@ -71,6 +79,11 @@ assert(
   gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;') > gossipDataLane.indexOf('function publishLocalEncodedFrameToGossip(frame)')
     && gossipDataLane.indexOf('if (strictGossipMediaDisabled(\'disableGossipPublish\')) return false;') > gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;'),
   'dedicated server relay must send before local Gossip policy gates can block publishing',
+)
+assert(
+  /if \(nowMs < gossipServerRelayReconnectAfterMs && !VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary\)/.test(gossipDataLane)
+    && /if \(VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary\) \{[\s\S]*rememberPendingGossipServerRelayPayload\(outboundPayload\);[\s\S]*gossipServerRelayReconnectAfterMs = 0;[\s\S]*ensureGossipServerRelaySocket\(\);[\s\S]*return true;/.test(relayPublishBody),
+  'gossip_primary server relay must queue and reconnect immediately instead of dropping into shadow mode when the relay socket is closed',
 )
 assert(
   /let pendingGossipServerRelayPayload = null;/.test(gossipDataLane)
