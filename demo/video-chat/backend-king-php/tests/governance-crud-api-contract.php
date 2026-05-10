@@ -215,15 +215,18 @@ try {
 
     $summaryBatch = $dispatch('POST', '/api/governance/summaries', $adminAuth, [
         'requests' => [
+            ['entity_key' => 'users', 'ids' => [(string) $adminUserId, (string) $regularUserId]],
             ['entity_key' => 'organizations', 'ids' => [$createdOrganizationId]],
             ['entity_key' => 'data-portability', 'ids' => [$createdExportJobId]],
         ],
     ]);
     $summaryBatchPayload = videochat_governance_crud_decode($summaryBatch);
     $summaryIncluded = (array) (($summaryBatchPayload['result'] ?? [])['included'] ?? []);
+    $userSummaries = (array) ($summaryIncluded['users'] ?? []);
     $organizationSummaries = (array) ($summaryIncluded['organizations'] ?? []);
     $portabilitySummaries = (array) ($summaryIncluded['data-portability'] ?? []);
     videochat_governance_crud_assert((int) ($summaryBatch['status'] ?? 0) === 200, 'admin should batch load governance summaries');
+    videochat_governance_crud_assert(array_map(static fn ($row): string => (string) ($row['id'] ?? ''), $userSummaries) === [(string) $adminUserId, (string) $regularUserId], 'summary batch should preserve multi-user request order');
     videochat_governance_crud_assert((string) (($organizationSummaries[0] ?? [])['id'] ?? '') === $createdOrganizationId, 'summary batch should include requested organization');
     videochat_governance_crud_assert((string) (($portabilitySummaries[0] ?? [])['id'] ?? '') === $createdExportJobId, 'summary batch should include requested portability job');
     videochat_governance_crud_assert(!array_key_exists('database_id', (array) ($organizationSummaries[0] ?? [])), 'summary rows must not expose internal database ids');

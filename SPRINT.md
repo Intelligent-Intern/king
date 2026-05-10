@@ -90,7 +90,7 @@ Sprint Checkboxen:
 - [x] UX6-09 Implement the first recursive relation flow proof for User ->
   Group -> Module -> Permission and similar entity references without stacked
   modals.
-- [ ] UX6-10 Replace row-by-row relation label fetching on the proof surfaces
+- [x] UX6-10 Replace row-by-row relation label fetching on the proof surfaces
   with normalized rows, included summaries, batch summary endpoints, and
   frontend entity caches.
 - [ ] UX6-11 Harden Navigation/i18n descriptors so localized keys and structured
