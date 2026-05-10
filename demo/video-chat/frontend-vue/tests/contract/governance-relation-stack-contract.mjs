@@ -64,14 +64,23 @@ const nestedNavigator = useCrudRelationNavigator({
 });
 nestedNavigator.reset({ key: 'groups', target_entity: 'groups', selection_mode: 'multiple' });
 nestedNavigator.toggleRow(rowsByEntity.groups[0]);
+nestedNavigator.push({ key: 'modules', target_entity: 'modules', selection_mode: 'multiple' });
+nestedNavigator.toggleRow(rowsByEntity.modules[0]);
 nestedNavigator.push({ key: 'permissions', target_entity: 'permissions', selection_mode: 'multiple' });
 nestedNavigator.toggleRow(rowsByEntity.permissions[0]);
 assert.equal(nestedNavigator.applyCurrentSelectionToParent(), true, 'nested selections must return to the selected parent frame');
-assert.equal(nestedNavigator.currentFrame.value.key, 'groups', 'nested apply must navigate back to the parent relation');
+assert.equal(nestedNavigator.currentFrame.value.key, 'modules', 'permission apply must navigate back to the module relation');
 assert.deepEqual(
   nestedNavigator.currentSelectedRows.value[0].relationships.permissions.map((row) => row.id),
   ['permission:users.read'],
-  'nested selections must attach to the selected parent row draft',
+  'permission selections must attach to the selected module row draft',
+);
+assert.equal(nestedNavigator.applyCurrentSelectionToParent(), true, 'module selections must return to the selected group frame');
+assert.equal(nestedNavigator.currentFrame.value.key, 'groups', 'module apply must navigate back to the group relation');
+assert.deepEqual(
+  nestedNavigator.currentSelectedRows.value[0].relationships.modules[0].relationships.permissions.map((row) => row.id),
+  ['permission:users.read'],
+  'User -> Group -> Module -> Permission selections must survive as nested relation payload',
 );
 
 const modalSource = await source('src/modules/governance/pages/GovernanceCrudModal.vue');

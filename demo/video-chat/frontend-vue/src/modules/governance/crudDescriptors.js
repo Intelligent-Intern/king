@@ -141,6 +141,7 @@ const descriptors = {
     resource_type: 'group',
     fields: Object.freeze([
       textField('name', 'governance.name', { required: true }),
+      textField('key', 'governance.key'),
       textField('description', 'governance.description', { type: 'textarea', wide: true }),
       enumField('status', 'governance.status', STATUS_OPTIONS, { default: 'active' }),
     ]),
