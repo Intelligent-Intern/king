@@ -193,7 +193,10 @@ const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_p
   gap: 14px;
   overflow: hidden;
   border: 0;
+  border-top: 0;
   border-left: 1px solid var(--border-subtle);
+  border-right: 0;
+  border-bottom: 0;
   border-radius: 0;
   background: var(--bg-surface);
   box-shadow: -18px 0 42px color-mix(in srgb, var(--color-primary-navy) 42%, transparent);
@@ -251,6 +254,10 @@ const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_p
   overflow: auto;
 }
 
+.app-side-panel-body :deep(textarea) {
+  resize: none;
+}
+
 .users-side-panel-body,
 .marketplace-side-panel-body {
   grid-template-columns: minmax(0, 1fr);
@@ -262,9 +269,17 @@ const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_p
 }
 
 .app-side-panel-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: auto;
+  border-top: 0;
+  border-bottom: 0;
+  background: var(--bg-surface);
 }
 
 @media (max-width: 760px) {

@@ -35,9 +35,12 @@
       </label>
       <section v-if="editor.error" class="settings-upload-status error">{{ editor.error }}</section>
       <footer class="app-config-editor-actions">
-        <button class="btn btn-cyan" type="submit" :disabled="editor.saving">
-          {{ editor.saving ? t('settings.saving') : t('common.save') }}
-        </button>
+        <AdminSidePanelSubmitFooter
+          type="submit"
+          :saving="editor.saving"
+          :label="t('common.save')"
+          :saving-label="t('settings.saving')"
+        />
       </footer>
     </form>
   </aside>
@@ -46,6 +49,7 @@
 <script setup>
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import AdminSidePanelSubmitFooter from '../../../components/admin/AdminSidePanelSubmitFooter.vue';
 import { t } from '../../localization/i18nRuntime.js';
 
 defineProps({
@@ -96,6 +100,7 @@ defineEmits(['close', 'save']);
   min-height: 0;
   overflow: auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 14px;
 }
@@ -108,12 +113,20 @@ defineEmits(['close', 'save']);
   background: var(--bg-input);
   color: var(--text-primary);
   padding: 8px 10px;
-  resize: vertical;
+  resize: none;
 }
 
 .app-config-editor-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  margin-top: auto;
+  border-top: 0;
+  border-bottom: 0;
+  background: var(--color-surface-navy);
 }
 
 .settings-upload-status.error {
@@ -127,7 +140,7 @@ defineEmits(['close', 'save']);
     min-width: 0;
     margin: 20px 0 0;
     border-left: 0;
-    border-top: 1px solid var(--color-border);
+    border-top: 0;
   }
 }
 </style>
