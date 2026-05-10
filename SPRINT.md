@@ -251,8 +251,14 @@ Tickets:
     `npm run test:contract:iam-call-access`, and `git diff --check` passed;
     host PHP SQLite branches skipped where `pdo_sqlite` was unavailable, while
     `iam-call-access-sqlite-runtime-proof.sh` used Docker PHP 8.4 and passed.
-- [ ] IAM2-19 Clean merged or superseded IAM Sprint 02 worktrees/branches using
+- [x] IAM2-19 Clean merged or superseded IAM Sprint 02 worktrees/branches using
   contained-HEAD and clean-worktree rules only.
+  - Removed merged Sprint 02 worker worktrees/branches after each merge.
+  - Final scan found no remaining `agent/iam-s2-*` branches, no registered
+    Sprint 02 worktrees, and no merged Sprint 02 cleanup candidates.
+  - Proof: `git branch --list 'agent/iam-s2-*'`,
+    `git worktree list --porcelain | rg ...`, `git branch --merged ... | rg ...`,
+    and `git worktree prune --verbose` produced no remaining Sprint 02 entries.
 - [ ] IAM2-20 Build, run Sprint 02 IAM proof set, deploy without push/DNS/certbot,
   and collect post-deploy diagnostics before opening the next sprint.
 
