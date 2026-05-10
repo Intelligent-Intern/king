@@ -259,8 +259,22 @@ Tickets:
   - Proof: `git branch --list 'agent/iam-s2-*'`,
     `git worktree list --porcelain | rg ...`, `git branch --merged ... | rg ...`,
     and `git worktree prune --verbose` produced no remaining Sprint 02 entries.
-- [ ] IAM2-20 Build, run Sprint 02 IAM proof set, deploy without push/DNS/certbot,
+- [x] IAM2-20 Build, run Sprint 02 IAM proof set, deploy without push/DNS/certbot,
   and collect post-deploy diagnostics before opening the next sprint.
+  - Ran `npm run test:contract:iam-call-access`; all Node contracts passed,
+    host PHP SQLite checks skipped where `pdo_sqlite` is unavailable, and the
+    Docker PHP 8.4 `iam-call-access-sqlite-runtime-proof.sh` fallback passed.
+  - Ran `npm run test:e2e:call-access`; 12 focused Call Access E2E tests passed.
+  - Ran `npm run build`; Vite production build passed.
+  - Deployed locally from `prod-kingrt-do-not-push-to-github` with
+    `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`, `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`,
+    `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and no push.
+  - Post-deploy diagnostics: `prod-debug.sh` passed public runtime/assets/CSP
+    checks; app/API/call-app asset probes returned 200; unauthenticated
+    `/api/calls/{id}/call-apps/available` returned 401 instead of the previous
+    500 shape; remote compose shows backend, websocket, edge, and TURN
+    containers up; recent app-container error scan found no fatal/panic/500
+    lines after deploy.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned, with worker branches not named
