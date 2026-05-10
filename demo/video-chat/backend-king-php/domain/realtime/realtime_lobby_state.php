@@ -15,14 +15,12 @@ function videochat_lobby_can_moderate(array $connection): bool
         return true;
     }
 
-    $rawRole = strtolower(trim((string) ($connection['raw_role'] ?? $connection['role'] ?? '')));
     $globalRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
-    if ($globalRole === 'admin' || $rawRole === 'moderator') {
+    if ($globalRole === 'admin') {
         return true;
     }
 
-    $callRole = strtolower(trim((string) ($connection['call_role'] ?? 'participant')));
-    return in_array($callRole, ['owner', 'moderator'], true);
+    return false;
 }
 
 function videochat_lobby_ensure_room_state(array &$lobbyState, string $roomId): void
