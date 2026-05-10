@@ -39,7 +39,7 @@ export function resolveVideochatMediaCarrierConfig(env: Record<string, unknown> 
     sfuMirror,
     gossipMayPublishWithoutSfu: gossipPrimary,
     sfuRequiredBeforeGossip: !gossipPrimary,
-    sfuSendIsOptional: gossipPrimary || sfuMirror,
+    sfuSendIsOptional: sfuMirror,
     sfuFallbackAllowed: !gossipPrimary,
     diagnosticsLabel: gossipPrimary
       ? 'media_carrier_gossip_primary'

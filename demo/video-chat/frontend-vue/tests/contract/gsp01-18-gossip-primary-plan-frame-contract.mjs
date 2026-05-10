@@ -215,7 +215,7 @@ async function loadPublisherFrameDispatchForGossipPrimary() {
     sfuMirror: false,
     gossipMayPublishWithoutSfu: true,
     sfuRequiredBeforeGossip: false,
-    sfuSendIsOptional: true,
+    sfuSendIsOptional: false,
     sfuFallbackAllowed: false,
     diagnosticsLabel: 'media_carrier_gossip_primary',
   };
@@ -544,7 +544,7 @@ try {
       sfuMirror: false,
       gossipMayPublishWithoutSfu: true,
       sfuRequiredBeforeGossip: false,
-      sfuSendIsOptional: true,
+      sfuSendIsOptional: false,
       sfuFallbackAllowed: false,
       diagnosticsLabel: 'media_carrier_gossip_primary',
     },

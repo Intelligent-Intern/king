@@ -35,7 +35,7 @@ assert(
 )
 assert(
   gossipFirstIndex >= 0 && firstGossipPublishIndex > gossipFirstIndex && firstGossipPublishIndex < sfuSendIndex,
-  'gossip_primary must publish Gossip before attempting SFU send',
+  'gossip_primary must publish Gossip before the non-primary SFU send branch',
 )
 assert(
   mirrorGossipPublishIndex > sfuSendIndex,
@@ -49,11 +49,16 @@ assert(
 assert(
   /sfu_optional_send_unavailable_after_gossip_publish/.test(helper)
     && /sfu_optional_send_failed_after_gossip_publish/.test(helper),
-  'gossip_primary must diagnose optional SFU unavailability and send failure without blocking Gossip',
+  'non-primary mirror modes must still diagnose optional SFU unavailability and send failure without blocking Gossip',
 )
 assert(
   /return \{\s*ok:\s*gossipPublished[\s\S]*sfuSendOptional:\s*true/.test(helper),
-  'optional SFU failure must return success based on Gossip publication',
+  'optional SFU mirror failure must return success based on Gossip publication',
+)
+assert(
+  /gossip_primary_publish_failed_no_sfu_fallback/.test(helper)
+    && !/sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure/.test(helper),
+  'gossip_primary must diagnose parked SFU fallback without retaining the fallback send path',
 )
 assert(
   !helper.includes('GOSSIP_SERVER_RELAY_CONFIG')
@@ -72,15 +77,17 @@ assert(
 )
 assert(
   /sfu_optional_send_pressure_after_gossip_publish/.test(`${publisherPipeline}\n${helper}`),
-  'optional SFU send pressure must be diagnostic after Gossip publication, not a Gossip blocker',
+  'optional SFU mirror pressure must be diagnostic after Gossip publication, not a Gossip blocker',
 )
 assert(
-  packageJson.includes('gossip-publisher-pipeline-decoupling-contract.mjs'),
-  'gossip contract suite must include publisher pipeline decoupling',
+  !packageJson.includes('gossip-publisher-pipeline-decoupling-contract.mjs')
+    && packageJson.includes('gsp01-08-sfu-parking-contract.mjs')
+    && packageJson.includes('gossip-primary-no-sfu-fallback-contract.mjs'),
+  'active Gossip contract suite must use the current GSP01 no-SFU publisher proof instead of the legacy decoupling gate',
 )
 assert(
-  /- \[x\] GSP-02 Publisher pipeline decoupling/.test(sprint),
-  'SPRINT.md must mark GSP-02 complete when the decoupling proof exists',
+  /- \[x\] GSP01-08 Park SFU from the active stream path/.test(sprint),
+  'SPRINT.md must mark GSP01-08 complete when the Gossip-only publisher proof exists',
 )
 
 console.log('[gossip-publisher-pipeline-decoupling-contract] PASS')
