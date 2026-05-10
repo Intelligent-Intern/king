@@ -199,8 +199,19 @@ Tickets:
     `node demo/video-chat/frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs`,
     `node demo/video-chat/frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs`,
     and `git diff --check` passed.
-- [ ] IAM3-12 Prove strong mismatch logging records only canonical, redacted IAM
+- [x] IAM3-12 Prove strong mismatch logging records only canonical, redacted IAM
   audit fields and never raw access links, cookies, SDP, ICE, or tokens.
+  - Merged worker branch `agent/iam-s3-12-strong-mismatch-audit-redaction`.
+  - Added `call-access-strong-mismatch-audit-redaction-contract.mjs` and wired
+    that focused redaction proof into the existing IAM call-access contract
+    gate/matrix without pulling media, Background, SFU, or Gossip checks.
+  - Proof: `node tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs`,
+    `node tests/contract/call-access-audit-event-compatibility-contract.mjs`,
+    `node tests/contract/call-access-audit-redaction-contract.mjs`,
+    `node tests/contract/call-access-strong-mismatch-privacy-contract.mjs`,
+    `node tests/contract/iam-call-access-ci-wire-contract.mjs`, and
+    `git diff --check` passed. SQLite-backed audit persistence probe skips
+    internally on hosts without `pdo_sqlite`/`sqlite3`.
 - [x] IAM3-13 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for anonymous temporary rights.
   - Merged worker branch `agent/iam-s3-13-anonymous-temp-docker-proof`.
