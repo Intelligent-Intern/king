@@ -85,12 +85,13 @@ export function createCallWorkspaceGossipDataLane({
       return;
     }
     lastGossipServerRelayDiagnosticAtMs = nowMs;
+    const normalizedReason = String(reason || 'state').trim().toLowerCase().replace(/[^a-z0-9_:-]+/g, '_').slice(0, 80) || 'state';
     captureClientDiagnostic({
       category: 'media',
       level,
       eventType: 'gossip_server_relay_socket_state',
-      code: 'gossip_server_relay_socket_state',
-      message: 'Dedicated Gossip server media relay websocket state changed.',
+      code: `gossip_server_relay_${normalizedReason}`,
+      message: `Dedicated Gossip server media relay websocket state changed: ${normalizedReason}.`,
       payload: {
         ...mediaCarrierDiagnosticPayload(),
         reason: String(reason || ''),
@@ -160,7 +161,10 @@ export function createCallWorkspaceGossipDataLane({
     }
     const relayKey = `${roomId()}:${callId()}:${peerId}:${relayUrl}`;
     if (gossipServerRelaySocket instanceof WebSocket && gossipServerRelaySocketKey === relayKey) {
-      return gossipServerRelaySocket;
+      if (gossipServerRelaySocket.readyState === WebSocket.OPEN || gossipServerRelaySocket.readyState === WebSocket.CONNECTING) {
+        return gossipServerRelaySocket;
+      }
+      closeGossipServerRelaySocket('relay_socket_stale');
     }
 
     closeGossipServerRelaySocket('relay_context_changed');
@@ -1171,6 +1175,7 @@ export function createCallWorkspaceGossipDataLane({
     getAssignedGossipNeighborCount,
     getGossipRolloutGateState,
     handleGossipNeighborSignal: (...args) => handleGossipServerRelayFrame(...args) || handleGossipRecoveryOpsMessage(...args) || ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
+    ensureGossipServerRelaySocket,
     pruneGossipNeighborForUserId,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,
