@@ -84,14 +84,20 @@ function videochat_call_app_session_lifecycle_auth(PDO $pdo, int $userId, string
 {
     $tenant = videochat_tenant_context_for_user($pdo, $userId);
     videochat_call_app_session_lifecycle_assert(is_array($tenant), 'tenant context missing');
-
-    return [
-        'ok' => true,
-        'token' => 'sess_call_app_session_lifecycle_' . $userId,
-        'user' => ['id' => $userId, 'role' => $role, 'status' => 'active'],
-        'session' => ['id' => 'sess_call_app_session_lifecycle_' . $userId],
-        'tenant' => videochat_tenant_auth_payload($tenant),
-    ];
+    static $sessionCounter = 0;
+    $sessionCounter += 1;
+    $token = 'sess_call_app_session_lifecycle_' . $userId . '_' . $sessionCounter;
+    $hasActiveTenant = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id');
+    $insert = $hasActiveTenant
+        ? 'INSERT OR IGNORE INTO sessions(id, user_id, active_tenant_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :active_tenant_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)'
+        : 'INSERT OR IGNORE INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)';
+    $expiresAt = gmdate('c', time() + 3600);
+    $params = [':id' => $token, ':user_id' => $userId, ':issued_at' => gmdate('c'), ':expires_at' => $expiresAt, ':client_ip' => '127.0.0.1', ':user_agent' => 'call-app-session-lifecycle-contract'];
+    if ($hasActiveTenant) {
+        $params[':active_tenant_id'] = (int) ($tenant['id'] ?? 0);
+    }
+    $pdo->prepare($insert)->execute($params);
+    return ['ok' => true, 'token' => $token, 'user' => ['id' => $userId, 'role' => $role, 'status' => 'active'], 'session' => ['id' => $token, 'expires_at' => $expiresAt], 'tenant' => videochat_tenant_auth_payload($tenant)];
 }
 
 try {
