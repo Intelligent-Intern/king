@@ -570,7 +570,6 @@ export async function installCallAccessSeedRoutes(context) {
           error: {
             code: 'calls_forbidden',
             message: 'You are not allowed to view this call.',
-            details: { call_id: call.id },
           },
         });
         return;
