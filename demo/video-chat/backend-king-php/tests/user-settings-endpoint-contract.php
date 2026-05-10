@@ -146,6 +146,8 @@ SQL
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['locale'] ?? '') === 'en', 'GET settings locale default mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['direction'] ?? '') === 'ltr', 'GET settings direction mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['about_me'] ?? 'missing') === '', 'GET settings about_me default mismatch');
+    videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['profile_contact_email'] ?? 'missing') === '', 'GET settings profile_contact_email default mismatch');
+    videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['profile_contact_phone'] ?? 'missing') === '', 'GET settings profile_contact_phone default mismatch');
     videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notifications_enabled'] ?? null) === false, 'GET settings web app notifications default mismatch');
     videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notification_sound_enabled'] ?? null) === true, 'GET settings web app notification sound default mismatch');
     videochat_user_settings_endpoint_assert(!array_key_exists('messenger_contacts', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose removed messenger contacts');
@@ -188,6 +190,8 @@ SQL
                 'locale' => 'unknown',
                 'post_logout_landing_url' => 'https://evil.example/logout',
                 'linkedin_url' => 'https://example.com/in/user',
+                'profile_contact_email' => 'bad-contact',
+                'profile_contact_phone' => 'call endpoint',
                 'web_app_notification_sound_enabled' => 'loud',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
@@ -226,6 +230,14 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['linkedin_url'] ?? '') === 'host_not_allowed',
         'PATCH invalid-value linkedin_url field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['profile_contact_email'] ?? '') === 'must_be_valid_email',
+        'PATCH invalid-value profile_contact_email field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['profile_contact_phone'] ?? '') === 'must_be_phone_text',
+        'PATCH invalid-value profile_contact_phone field mismatch'
     );
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['web_app_notification_sound_enabled'] ?? '') === 'must_be_boolean',
@@ -276,6 +288,8 @@ SQL
                 'linkedin_url' => ' https://linkedin.com/in/endpoint-user ',
                 'x_url' => 'https://x.com/endpointuser',
                 'youtube_url' => 'https://youtu.be/abcdefghijk',
+                'profile_contact_email' => ' Endpoint.Contact@Example.Test ',
+                'profile_contact_phone' => ' +1 415 555 0199 ',
                 'web_app_notifications_enabled' => true,
                 'web_app_notification_sound_enabled' => false,
                 'web_app_notification_call_invites_enabled' => true,
@@ -343,6 +357,14 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['youtube_url'] ?? '')) === 'https://youtu.be/abcdefghijk',
         'PATCH valid youtube_url should be normalized'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['profile_contact_email'] ?? '')) === 'endpoint.contact@example.test',
+        'PATCH valid profile_contact_email should be normalized'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['profile_contact_phone'] ?? '')) === '+1 415 555 0199',
+        'PATCH valid profile_contact_phone should be normalized'
     );
     videochat_user_settings_endpoint_assert(
         (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['web_app_notifications_enabled'] ?? null)) === true,
@@ -426,6 +448,14 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?from=settings',
         'session-check should reflect updated post_logout_landing_url'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['profile_contact_email'] ?? '')) === 'endpoint.contact@example.test',
+        'session-check should reflect updated profile_contact_email'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['profile_contact_phone'] ?? '')) === '+1 415 555 0199',
+        'session-check should reflect updated profile_contact_phone'
     );
     videochat_user_settings_endpoint_assert(
         (($sessionPayload['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true,
