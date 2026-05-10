@@ -36,6 +36,8 @@ const packageJson = JSON.parse(readText('demo/video-chat/frontend-vue/package.js
 const realtimeContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const guestList = readText('demo/video-chat/backend-king-php/domain/calls/call_management_guest_list.php');
 const callAccessContract = readText('demo/video-chat/backend-king-php/domain/calls/call_access_contract.php');
+const authorizedRejoinBackend = readText('demo/video-chat/backend-king-php/tests/call-access-authorized-rejoin-contract.php');
+const sqliteRuntimeProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const directJoinRightsContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs');
 const decisionContract = readText('demo/video-chat/backend-king-php/tests/call-access-decision-contract.php');
 const membershipRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
@@ -54,6 +56,7 @@ for (const contractPath of [
   'call-access-stale-role-org-switch-contract.mjs',
   'call-access-owner-transfer-temp-moderator-extract-contract.mjs',
   'call-access-realtime-scope-contract.mjs',
+  'call-access-authorized-rejoin-extract-contract.mjs',
   'call-access-membership-removal-contract',
   'call-access-stale-organization-role-contract',
 ]) {
@@ -98,13 +101,18 @@ assert.doesNotMatch(
 
 assert.match(
   guestList,
-  /videochat_normalize_role_slug\(\$authRole\) === 'admin'[\s\S]*'reason' => 'system_admin'/,
-  'direct join must preserve current system-admin authorization',
+  /videochat_user_has_system_admin_call_rights\(\$pdo, \$authUserId, \$authRole\)[\s\S]*'reason' => 'system_admin'/,
+  'direct join must preserve database-validated system-admin authorization',
 );
 assert.match(
   guestList,
   /\(int\) \(\$call\['owner_user_id'\] \?\? 0\) === \$authUserId[\s\S]*'reason' => 'owner'/,
   'direct join must preserve current owner authorization',
+);
+assert.match(
+  guestList,
+  /videochat_user_is_organization_admin_for_call\(\$pdo, \$call, \$authUserId, \$tenantId\)[\s\S]*'reason' => 'organization_admin'/,
+  'direct join must preserve same-organization admin authorization without requiring a guest-list row',
 );
 assert.match(
   guestList,
@@ -115,6 +123,11 @@ assert.match(
   guestList,
   /if \(in_array\(\$inviteState, \['declined', 'cancelled'\], true\)\) \{[\s\S]*'reason' => 'guest_list_entry_inactive'[\s\S]*'reason' => 'guest_list'/,
   'direct guest-list join must allow current guest-list rows while failing closed after cancellation or decline',
+);
+assert.match(
+  guestList,
+  /if \(\$inviteState === 'pending'\) \{[\s\S]*'reason' => 'not_on_guest_list'/,
+  'direct guest-list join must not treat pending lobby rows as authorized rejoin',
 );
 
 assert.match(
@@ -174,6 +187,27 @@ assert.match(
   realtimeScopeContract,
   /workspace reconnect must fail closed when an IAM session disappears[\s\S]*successful websocket reconnect must request an authoritative room snapshot backfill[\s\S]*backend room resolution must reject call-access session room\/call\/user binding mismatches/s,
   'realtime scope proof must revalidate reconnect sessions and bind them to the current call, room, and user',
+);
+
+assert.match(
+  authorizedRejoinBackend,
+  /registered_guest_can_rejoin_after_leaving[\s\S]*system_admin_can_rejoin_after_leaving[\s\S]*organization_admin_can_rejoin_after_leaving/s,
+  'backend authorized-rejoin proof must cover registered guest-list, system-admin, and organization-admin rejoin paths',
+);
+assert.match(
+  authorizedRejoinBackend,
+  /forged_admin_role_does_not_rejoin[\s\S]*pending_lobby_user_must_not_bypass_admission/s,
+  'backend authorized-rejoin proof must keep forged admin roles and pending lobby users fail-closed',
+);
+assert.match(
+  authorizedRejoinBackend,
+  /leave should persist left_at[\s\S]*rejoin should clear stale left_at/s,
+  'backend authorized-rejoin proof must prove leave persistence and rejoin cleanup',
+);
+assert.match(
+  sqliteRuntimeProof,
+  /call-access-authorized-rejoin-contract\.sh/,
+  'SQLite IAM runtime proof must execute the authorized-rejoin backend contract',
 );
 
 process.stdout.write('[call-access-authorized-rejoin-extract-contract] PASS\n');
