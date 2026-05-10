@@ -6,6 +6,8 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_calls.php';
 
 function videochat_call_creation_owner_rights_assert(bool $condition, string $message): void
@@ -64,6 +66,33 @@ SQL
     return $sessionId;
 }
 
+function videochat_call_creation_owner_rights_seed_user(PDO $pdo, string $label, string $displayName): int
+{
+    $roleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    videochat_call_creation_owner_rights_assert($roleId > 0, 'expected seeded user role');
+
+    $passwordHash = password_hash('owner-rights-' . $label, PASSWORD_DEFAULT);
+    videochat_call_creation_owner_rights_assert(is_string($passwordHash) && $passwordHash !== '', 'password hash failed');
+
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
+SQL
+    );
+    $insert->execute([
+        ':email' => 'call-creation-owner-rights-' . $label . '@example.com',
+        ':display_name' => $displayName,
+        ':password_hash' => $passwordHash,
+        ':role_id' => $roleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $userId = (int) $pdo->lastInsertId();
+    videochat_call_creation_owner_rights_assert($userId > 0, "{$label} user id should be positive");
+    return $userId;
+}
+
 /**
  * @return array<string, mixed>
  */
@@ -99,6 +128,165 @@ function videochat_call_creation_owner_rights_internal_participant(array $call, 
     return null;
 }
 
+function videochat_call_creation_owner_rights_connection(
+    PDO $pdo,
+    array &$presenceState,
+    string $roomId,
+    int $userId,
+    string $displayName,
+    string $globalRole,
+    string $connectionSuffix
+): array {
+    $connection = videochat_presence_connection_descriptor(
+        [
+            'id' => $userId,
+            'display_name' => $displayName,
+            'role' => $globalRole,
+        ],
+        'sess-owner-rights-' . $connectionSuffix,
+        'conn-owner-rights-' . $connectionSuffix,
+        'socket-owner-rights-' . $connectionSuffix,
+        $roomId
+    );
+    $context = videochat_call_role_context_for_room_user($pdo, $roomId, $userId);
+    $connection['active_call_id'] = (string) ($context['call_id'] ?? '');
+    $connection['call_role'] = (string) ($context['call_role'] ?? 'participant');
+    $connection['effective_call_role'] = (string) ($context['effective_call_role'] ?? $connection['call_role']);
+    $connection['can_moderate_call'] = (bool) ($context['can_moderate'] ?? false);
+    $connection['can_manage_call_owner'] = (bool) ($context['can_manage_owner'] ?? false);
+
+    $join = videochat_presence_join_room($presenceState, $connection, $roomId);
+    return (array) ($join['connection'] ?? $connection);
+}
+
+function videochat_call_creation_owner_rights_queue_lobby_user(
+    array &$lobbyState,
+    string $roomId,
+    int $userId,
+    string $displayName
+): void {
+    videochat_lobby_ensure_room_state($lobbyState, $roomId);
+    $lobbyState['rooms'][$roomId]['queued_by_user'][$userId] = [
+        'user_id' => $userId,
+        'display_name' => $displayName,
+        'role' => 'user',
+        'requested_unix_ms' => 1_905_000_000_000,
+        'requested_at' => '2030-05-13T00:00:00+00:00',
+    ];
+}
+
+function videochat_call_creation_owner_rights_command(string $type, string $roomId, int $targetUserId): array
+{
+    $command = videochat_lobby_decode_client_frame(json_encode([
+        'type' => $type,
+        'room_id' => $roomId,
+        'target_user_id' => $targetUserId,
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_call_creation_owner_rights_assert((bool) ($command['ok'] ?? false), "{$type} command should decode");
+    return $command;
+}
+
+function videochat_call_creation_owner_rights_lobby_admitted(array $lobbyState, string $roomId, int $userId): bool
+{
+    $roomState = $lobbyState['rooms'][$roomId] ?? null;
+    return is_array($roomState)
+        && isset($roomState['admitted_by_user'][$userId])
+        && is_array($roomState['admitted_by_user'][$userId]);
+}
+
+function videochat_call_creation_owner_rights_lobby_queued(array $lobbyState, string $roomId, int $userId): bool
+{
+    $roomState = $lobbyState['rooms'][$roomId] ?? null;
+    return is_array($roomState)
+        && isset($roomState['queued_by_user'][$userId])
+        && is_array($roomState['queued_by_user'][$userId]);
+}
+
+function videochat_call_creation_owner_rights_assert_owner_moderation(
+    PDO $pdo,
+    string $roomId,
+    int $ownerUserId,
+    string $ownerGlobalRole,
+    int $unauthorizedUserId,
+    int $waitingUserId,
+    string $label
+): void {
+    $presenceState = videochat_presence_state_init();
+    $lobbyState = videochat_lobby_state_init();
+    $ownerConnection = videochat_call_creation_owner_rights_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $ownerUserId,
+        ucfirst($label) . ' Owner',
+        $ownerGlobalRole,
+        $label . '-owner'
+    );
+    $unauthorizedConnection = videochat_call_creation_owner_rights_connection(
+        $pdo,
+        $presenceState,
+        $roomId,
+        $unauthorizedUserId,
+        ucfirst($label) . ' Unauthorized',
+        'user',
+        $label . '-unauthorized'
+    );
+
+    videochat_call_creation_owner_rights_queue_lobby_user($lobbyState, $roomId, $waitingUserId, ucfirst($label) . ' Waiting');
+
+    $unauthorizedAllow = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $unauthorizedConnection,
+        videochat_call_creation_owner_rights_command('lobby/allow', $roomId, $waitingUserId)
+    );
+    videochat_call_creation_owner_rights_assert(!(bool) ($unauthorizedAllow['ok'] ?? true), "{$label} non-owner must not admit lobby participants");
+    videochat_call_creation_owner_rights_assert((string) ($unauthorizedAllow['error'] ?? '') === 'forbidden', "{$label} non-owner admit error mismatch");
+    videochat_call_creation_owner_rights_assert(
+        videochat_call_creation_owner_rights_lobby_queued($lobbyState, $roomId, $waitingUserId),
+        "{$label} unauthorized admit must leave lobby participant queued"
+    );
+
+    $ownerAllow = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        videochat_call_creation_owner_rights_command('lobby/allow', $roomId, $waitingUserId)
+    );
+    videochat_call_creation_owner_rights_assert((bool) ($ownerAllow['ok'] ?? false), "{$label} owner should admit lobby participants");
+    videochat_call_creation_owner_rights_assert((string) ($ownerAllow['state'] ?? '') === 'allowed', "{$label} owner admit state mismatch");
+    videochat_call_creation_owner_rights_assert(
+        videochat_call_creation_owner_rights_lobby_admitted($lobbyState, $roomId, $waitingUserId),
+        "{$label} admitted lobby participant should be tracked"
+    );
+
+    $unauthorizedKick = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $unauthorizedConnection,
+        videochat_call_creation_owner_rights_command('lobby/kick', $roomId, $waitingUserId)
+    );
+    videochat_call_creation_owner_rights_assert(!(bool) ($unauthorizedKick['ok'] ?? true), "{$label} non-owner must not kick admitted participants");
+    videochat_call_creation_owner_rights_assert((string) ($unauthorizedKick['error'] ?? '') === 'forbidden', "{$label} non-owner kick error mismatch");
+    videochat_call_creation_owner_rights_assert(
+        videochat_call_creation_owner_rights_lobby_admitted($lobbyState, $roomId, $waitingUserId),
+        "{$label} unauthorized kick must leave admitted participant intact"
+    );
+
+    $ownerKick = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        videochat_call_creation_owner_rights_command('lobby/kick', $roomId, $waitingUserId)
+    );
+    videochat_call_creation_owner_rights_assert((bool) ($ownerKick['ok'] ?? false), "{$label} owner should kick admitted participants");
+    videochat_call_creation_owner_rights_assert((string) ($ownerKick['action'] ?? '') === 'lobby/remove', "{$label} owner kick should normalize to remove");
+    videochat_call_creation_owner_rights_assert(
+        !videochat_call_creation_owner_rights_lobby_admitted($lobbyState, $roomId, $waitingUserId),
+        "{$label} kicked participant should be removed from admitted state"
+    );
+}
+
 /**
  * @param array<string, mixed> $apiAuthContext
  */
@@ -111,6 +299,8 @@ function videochat_call_creation_owner_rights_run_actor(
     array $apiAuthContext,
     int $actorUserId,
     string $actorRole,
+    int $unauthorizedUserId,
+    int $waitingUserId,
     string $label
 ): void {
     $title = 'Owner Rights ' . ucfirst($label) . ' Contract';
@@ -214,6 +404,16 @@ SQL
     videochat_call_creation_owner_rights_assert((bool) ($updateResult['ok'] ?? false), "{$label} creator should update own call through call-admin path");
     videochat_call_creation_owner_rights_assert((string) (($updateResult['call'] ?? [])['title'] ?? '') === $title . ' Updated', "{$label} update result title mismatch");
     videochat_call_creation_owner_rights_assert((int) (((($updateResult['call'] ?? [])['owner'] ?? [])['user_id'] ?? 0)) === $actorUserId, "{$label} update should preserve owner");
+
+    videochat_call_creation_owner_rights_assert_owner_moderation(
+        $pdo,
+        $roomId,
+        $actorUserId,
+        $actorRole,
+        $unauthorizedUserId,
+        $waitingUserId,
+        $label
+    );
 }
 
 try {
@@ -234,6 +434,8 @@ try {
     $adminSessionId = videochat_call_creation_owner_rights_issue_session($pdo, $adminUserId, 'admin');
     $normalAuth = videochat_call_creation_owner_rights_auth_context($pdo, $normalSessionId);
     $adminAuth = videochat_call_creation_owner_rights_auth_context($pdo, $adminSessionId);
+    $unauthorizedUserId = videochat_call_creation_owner_rights_seed_user($pdo, 'unauthorized', 'Owner Rights Unauthorized');
+    $waitingUserId = videochat_call_creation_owner_rights_seed_user($pdo, 'waiting', 'Owner Rights Waiting');
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [
@@ -283,6 +485,8 @@ try {
         $normalAuth,
         $normalUserId,
         'user',
+        $unauthorizedUserId,
+        $waitingUserId,
         'normal-user'
     );
     videochat_call_creation_owner_rights_run_actor(
@@ -294,6 +498,8 @@ try {
         $adminAuth,
         $adminUserId,
         'admin',
+        $unauthorizedUserId,
+        $waitingUserId,
         'admin-user'
     );
 
