@@ -98,7 +98,7 @@ Sprint Checkboxen:
   `local/iam-e2e-call-owner-creation-rights`.
 - [x] IAM8-14 Extract or prove IAM E2E CI failure artifact handling from
   `local/iam-e2e-ci-artifacts-proof-2`.
-- [ ] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
+- [x] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
   `local/iam-e2e-ci-docs-gate`.
 - [ ] IAM8-16 Extract or prove core organization session journeys from
   `local/iam-e2e-core-org-session-journey`.
