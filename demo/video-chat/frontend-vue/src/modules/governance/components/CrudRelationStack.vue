@@ -447,7 +447,7 @@ function applySelection() {
 
 .crud-relation-search-field .input {
   border-color: var(--color-border);
-  background-color: var(--color-border);
+  background-color: var(--bg-input);
 }
 
 .crud-relation-submit-btn {
