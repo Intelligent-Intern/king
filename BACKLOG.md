@@ -84,6 +84,38 @@ refactor items moved into active Sprint 06 on 2026-05-10.
 
 ## Parked From Sprint Cleanup 2026-05-09
 
+### Parked From Sprint Reset 2026-05-10: IAM12
+
+`IAM Call Access Proof Consolidation And Test Gate 12` was replaced as the
+active sprint by `Gossip Video Call v1 Streaming 01`.
+
+The parked IAM12 intent remains valid future work:
+
+1. [ ] Reconcile strong personalized-link mismatch UI proof after
+   `CallAccessJoinFooter.vue` extraction.
+2. [ ] Reconcile invalid/expired anonymous-link proof with archived readiness
+   references.
+3. [ ] Reconcile foreign-link review audit proof with archived readiness
+   references and redaction markers.
+4. [ ] Reconcile identity-mismatch review proof with audit marker preservation
+   and redaction.
+5. [ ] Reconcile lobby management moderator-rights proof with kick/reject/remove
+   lifecycle semantics.
+6. [ ] Reconcile org-removal active-privilege downgrade proof with
+   database-backed admin authority.
+7. [ ] Reconcile owner-absence realtime sync proof with current presence and
+   room-snapshot behavior.
+8. [ ] Reconcile Call-App entitlement revocation proof with package boundaries
+   under `demo/call-app/<app-key>`.
+9. [ ] Reconcile Call-App launch-token reconnect proof with current
+   route/session behavior.
+10. [ ] Reconcile registered invitee logged-in/logged-out handoff proof with
+    current session route guards.
+11. [ ] Reconcile guest-list lifecycle cleanup proof with current owner,
+    moderator, and temporary-guest behavior.
+12. [ ] Restore any remaining IAM aggregate gate cleanup as a focused future
+    sprint, not as the active Video Call/Gossip sprint.
+
 ### Completed Video Call v1 Capability And Media Plan Foundation
 
 Completed on 2026-05-10. Keep proof in commit history, contracts, readiness
