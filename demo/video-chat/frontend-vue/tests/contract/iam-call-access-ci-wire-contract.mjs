@@ -32,6 +32,19 @@ const lobbyConcurrencyScript = String(scripts['test:e2e:lobby-concurrency'] || '
 
 const requiredIamContractPaths = [
   'frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs',
+  'frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs',
+  'frontend-vue/tests/contract/call-access-calendar-invite-join-contract.mjs',
+  'frontend-vue/tests/contract/call-access-registered-logged-out-handoff-contract.mjs',
+  'frontend-vue/tests/contract/call-access-registered-logged-in-invitee-contract.mjs',
+  'frontend-vue/tests/contract/call-access-personalized-temp-reuse-contract.mjs',
+  'frontend-vue/tests/contract/call-access-invite-invalidation-terminal-contract.mjs',
+  'frontend-vue/tests/contract/call-access-duplicate-invite-replay-contract.mjs',
+  'frontend-vue/tests/contract/call-access-owner-transfer-main-contract.mjs',
+  'frontend-vue/tests/contract/owner-transfer-lifecycle-contract.mjs',
+  'frontend-vue/tests/contract/call-access-removed-members-contract.mjs',
+  'frontend-vue/tests/contract/call-access-terminal-browser-flows-contract.mjs',
+  'frontend-vue/tests/contract/call-access-stale-role-org-switch-contract.mjs',
+  'frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs',
   'frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs',
   'frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs',
   'frontend-vue/tests/contract/call-access-link-privacy-contract.mjs',
@@ -47,6 +60,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-callapp-revocation-contract.mjs',
   'frontend-vue/tests/contract/call-access-route-guard-ui-contract.mjs',
   'frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs',
+  'backend-king-php/tests/call-access-anonymous-temp-rights-contract.php',
   'backend-king-php/tests/call-guest-list-direct-join-contract.sh',
   'backend-king-php/tests/call-access-cross-org-contract.sh',
   'backend-king-php/tests/realtime-lobby-concurrency-contract.sh',
@@ -74,8 +88,8 @@ for (const contractPath of requiredIamContractPaths) {
 
 assert.match(
   callAccessE2eScript,
-  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js --workers=1$/,
-  'focused call-access E2E script must stay limited to join and deterministic seed-matrix specs with IAM artifact retention enabled',
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js tests\/e2e\/call-access-calendar-unregistered-invite\.spec\.js tests\/e2e\/call-access-admin-join-boundaries\.spec\.js --workers=1$/,
+  'focused call-access E2E script must stay limited to join, deterministic seed-matrix, calendar unregistered invite, and admin join boundary specs with IAM artifact retention enabled',
 );
 assert.doesNotMatch(
   callAccessE2eScript,
@@ -116,8 +130,10 @@ assert.deepEqual(
   [
     'frontend-vue/tests/e2e/call-access-join.spec.js',
     'frontend-vue/tests/e2e/call-access-seed-matrix.spec.js',
+    'frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js',
+    'frontend-vue/tests/e2e/call-access-admin-join-boundaries.spec.js',
   ],
-  'Call Access E2E metadata must stay limited to join and seed-matrix specs',
+  'Call Access E2E metadata must stay limited to stable Sprint 02 call-access specs',
 );
 const lobbyCommand = matrix.commands?.['frontend:e2e:lobby-concurrency'] || {};
 assert.deepEqual(
