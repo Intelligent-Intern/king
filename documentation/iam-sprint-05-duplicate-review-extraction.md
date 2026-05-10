@@ -137,3 +137,42 @@ Safe extraction performed in this branch:
 
 No product code, package scripts, shared CI wiring, `SPRINT.md`, or
 `BACKLOG.md` were edited. No source branch was merged or cherry-picked.
+
+## IAM7-02 Current Extraction Update
+
+Date: 2026-05-10
+
+Worker `agent/iam7-02-duplicate-review-email` re-inspected
+`agent/iam-e2e-duplicate-review-email` at
+`a89ffcff40faf421c0c1be9bb1d02c39eca12349` after the Sprint 07 baseline
+advanced to `b413f7de5ed6992ebf7b550955ca570d72244714`.
+
+The branch is no longer only deferred evidence. The focused backend value is
+now extracted into current-owned files:
+
+- `demo/video-chat/backend-king-php/domain/calls/call_access_review.php`
+  persists private duplicate personalized-link review flags and host-name
+  verification attempts by fingerprint.
+- `demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php`
+  persists account-update confirmations with token fingerprints, not raw
+  confirmation tokens.
+- `demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php`
+  proves same-account reuse does not flag, wrong-account opens create exactly
+  one `duplicate_personalized_link` review flag, host-name retries rate-limit
+  safely, and denied/rate-limited attempts do not create sessions.
+- `demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php`
+  proves confirmation targets the current logged-in account, not the link
+  target account, requires manual re-entry, keeps account data unchanged before
+  confirmation, rejects wrong-account/replayed/expired tokens, stores token
+  fingerprints, and does not rebind sessions.
+
+The historical branch remains partially parked rather than mergeable:
+
+- The broad branch still carries stale frontend E2E and UI proof files that are
+  not current enough to import wholesale.
+- `call_access_account_confirmation_audit.php`, `call_access_identity.php`,
+  account-update confirmation views, identity-mismatch review flow, duplicate
+  race browser specs, and safe dispatch/outbox audit proofs remain future
+  evidence for IAM7 follow-up tickets.
+- No Background, Gossip, SFU, MediaSecurity, BTGF, deployment, or push work was
+  part of this extraction.

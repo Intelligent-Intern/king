@@ -35,6 +35,12 @@ const linkPrivacy = read('demo/video-chat/frontend-vue/tests/contract/call-acces
 const auditCompatibility = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs');
 const auditRedaction = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 const strongMismatchAudit = read('demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs');
+const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
+const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
+const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
+const callAccessRoutes = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
+const duplicateBackendContract = read('demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php');
+const emailBackendContract = read('demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php');
 
 for (const branch of [
   'codex/iam-e2e-duplicate-review-abuse-integration',
@@ -76,13 +82,29 @@ for (const [pattern, message] of [
     /No product code, package scripts, shared CI wiring, `SPRINT\.md`, or\s+`BACKLOG\.md` were edited/,
     'evidence must document write-scope compliance',
   ],
+  [
+    /IAM7-02 Current Extraction Update/,
+    'evidence must record the current IAM7-02 backend extraction update',
+  ],
+  [
+    /The branch is no longer only deferred evidence/,
+    'evidence must distinguish old deferred classification from current extraction',
+  ],
 ]) {
   requireMatch(evidence, pattern, message);
 }
 
-for (const sourceOnlyPath of [
+for (const integratedPath of [
   'demo/video-chat/backend-king-php/domain/calls/call_access_review.php',
   'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php',
+  'demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php',
+  'demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php',
+]) {
+  assert.equal(exists(integratedPath), true, `focused IAM7-02 backend path must be extracted: ${integratedPath}`);
+  requireIncludes(evidence, integratedPath, `evidence must list extracted backend path ${integratedPath}`);
+}
+
+for (const sourceOnlyPath of [
   'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php',
   'demo/video-chat/backend-king-php/domain/calls/call_access_identity.php',
   'demo/video-chat/frontend-vue/src/domain/calls/access/AccountUpdateConfirmationView.vue',
@@ -92,12 +114,10 @@ for (const sourceOnlyPath of [
   'demo/video-chat/frontend-vue/tests/contract/call-access-identity-mismatch-review-flow-contract.mjs',
   'demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js',
   'demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-race.spec.js',
-  'demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php',
-  'demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php',
   'demo/video-chat/backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.php',
 ]) {
-  assert.equal(exists(sourceOnlyPath), false, `source-only manual review/email path must remain absent: ${sourceOnlyPath}`);
-  requireIncludes(evidence, sourceOnlyPath, `evidence must list absent source-only path ${sourceOnlyPath}`);
+  assert.equal(exists(sourceOnlyPath), false, `still-parked manual review/email path must remain absent: ${sourceOnlyPath}`);
+  requireIncludes(evidence, sourceOnlyPath, `evidence must list parked source-only path ${sourceOnlyPath}`);
 }
 
 const iamGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
@@ -120,12 +140,51 @@ for (const sourceOnlyTarget of [
   'call-access-identity-mismatch-review-flow-contract.mjs',
   'call-access-duplicate-review-email.spec.js',
   'call-access-duplicate-race.spec.js',
-  'call-access-duplicate-review-contract.php',
-  'call-access-email-confirmation-contract.php',
   'call-access-identity-mismatch-review-flow-contract.php',
 ]) {
   assert.equal(iamGate.includes(sourceOnlyTarget), false, `IAM gate must not claim source-only duplicate review/email target ${sourceOnlyTarget}`);
 }
+
+requireMatch(
+  reviewHelper,
+  /CREATE TABLE IF NOT EXISTS call_access_review_flags[\s\S]*CREATE TABLE IF NOT EXISTS call_access_host_verification_attempts/s,
+  'current backend review helper must persist review flags and host verification attempts',
+);
+requireMatch(
+  reviewHelper,
+  /duplicate_personalized_link[\s\S]*manual_review_required[\s\S]*raw_link_identifier_logged' => false/s,
+  'current backend review helper must keep duplicate review payload private',
+);
+requireMatch(
+  callAccessSession,
+  /session_verified_context[\s\S]*session_host_verification[\s\S]*'host_name' => 'rate_limited'/s,
+  'session issuance must record duplicate review stages and safe host-name rate-limit fields',
+);
+requireMatch(
+  callAccessRoutes,
+  /account-update-confirmation[\s\S]*account-update-confirmations\/\(\[A-Za-z0-9\._-\]\{20,200\}\)\/confirm/s,
+  'call-access routes must expose account update confirmation request and confirm endpoints',
+);
+requireMatch(
+  confirmationHelper,
+  /token_fingerprint TEXT NOT NULL UNIQUE[\s\S]*sent_to_logged_in_account' => true[\s\S]*sent_to_link_account' => false/s,
+  'account confirmation helper must store token fingerprints and target the current account',
+);
+assert.doesNotMatch(
+  confirmationHelper,
+  /UPDATE sessions SET user_id/,
+  'account confirmation helper must not rebind sessions',
+);
+requireMatch(
+  duplicateBackendContract,
+  /same linked account must not create a duplicate review flag[\s\S]*third host attempt should be rate-limited[\s\S]*duplicate denied and rate-limited attempts must not persist sessions/s,
+  'backend duplicate contract must prove same-account no-flag, rate limiting, and no denied sessions',
+);
+requireMatch(
+  emailBackendContract,
+  /confirmation must be sent to current logged-in email[\s\S]*confirmation must not rebind the current session[\s\S]*confirmation storage should keep token fingerprint/s,
+  'backend email contract must prove current-account target, token fingerprint storage, and no session rebinding',
+);
 
 requireMatch(
   duplicateDevice,

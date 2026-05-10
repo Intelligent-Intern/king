@@ -70,7 +70,7 @@ Proof anchors:
 Sprint Checkboxen:
 - [ ] IAM7-01 Extract or prove anonymous open-link lobby split from
   `agent/iam-e2e-anonymous-lobby`.
-- [ ] IAM7-02 Extract or prove duplicate review email/account confirmation from
+- [x] IAM7-02 Extract or prove duplicate review email/account confirmation from
   `agent/iam-e2e-duplicate-review-email`.
 - [ ] IAM7-03 Extract or prove owner-transfer and temporary-moderator call
   management from `agent/iam-e2e-owner-transfer-temp-mods`.

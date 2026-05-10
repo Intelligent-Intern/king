@@ -17,6 +17,22 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM7-02 duplicate review email/account confirmation extraction:
+  inspected `agent/iam-e2e-duplicate-review-email` at
+  `a89ffcff40faf421c0c1be9bb1d02c39eca12349` against current Sprint 07
+  baseline `b413f7de5ed6992ebf7b550955ca570d72244714` and extracted the
+  focused backend runtime/proof without merging the historical branch. Added
+  duplicate personalized-link review flags, host-name verification attempt
+  rate limiting, account-bound account-update confirmations, token fingerprint
+  storage, and backend contracts for duplicate review plus email/account
+  confirmation. Parked stale frontend warning-modal/E2E, identity mismatch,
+  confirmation dispatch/outbox, and superseded-token race-hardening value for
+  later tickets. Proof: PHP syntax checks for touched PHP files; Docker PHP
+  SQLite contracts `call-access-duplicate-review-contract.php` and
+  `call-access-email-confirmation-contract.php`; updated static extraction
+  contracts. No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF
+  files/tests were touched.
+
 - 2026-05-10 Backlog Cleanup, Admin UX, And Governance Refactor 06:
   closed all 20 Sprint 06 tickets on local branch
   `prod-kingrt-do-not-push-to-github` without pushing. The sprint classified
