@@ -210,7 +210,8 @@ CREATE TABLE IF NOT EXISTS call_access_links (
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     expires_at TEXT,
     last_used_at TEXT,
-    consumed_at TEXT
+    consumed_at TEXT,
+    disabled_at TEXT
 )
 SQL,
                 "CREATE INDEX IF NOT EXISTS idx_call_access_links_call_id ON call_access_links(call_id)",
@@ -795,5 +796,6 @@ SQL,
         53 => ['name' => '0053_workspace_calendar_settings', 'statements' => videochat_workspace_calendar_additive_migration_statements()],
         54 => ['name' => '0054_call_app_grant_permission_actions', 'statements' => videochat_call_app_grant_permission_actions_migration_statements()],
         55 => ['name' => '0055_operator_feedback_queue', 'statements' => videochat_operator_feedback_migration_statements()],
+        56 => ['name' => '0056_call_access_link_disabled_at', 'statements' => ['ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT']],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }
