@@ -69,8 +69,17 @@ Tickets:
   with redacted safe states across API and browser UI.
 - [ ] IAM3-03 Prove tampered verified-context payloads cannot rebind a session,
   user, tenant, or call after frontend storage manipulation.
-- [ ] IAM3-04 Prove duplicate device/browser personalized-link redemption stays
+- [x] IAM3-04 Prove duplicate device/browser personalized-link redemption stays
   deterministic under parallel tabs and does not leak private invite metadata.
+  - Merged worker branch `agent/iam-s3-04-duplicate-device-browser`.
+  - Added `call-access-duplicate-device-browser-contract.mjs` proving one
+    deterministic success plus one 409 conflict for parallel personalized-link
+    redemption, no session adoption by the rejected browser, no retry loop, and
+    no private invite/call/session metadata in the conflict state.
+  - Proof: `node tests/contract/call-access-duplicate-device-browser-contract.mjs`,
+    `node tests/contract/call-access-duplicate-invite-replay-contract.mjs`,
+    `node tests/contract/call-access-duplicate-abuse-contract.mjs`, and
+    `git diff --check` passed.
 - [x] IAM3-05 Prove account logout/login switching across two browsers cannot
   reuse the previous viewer's call-access session.
   - Merged worker branch `agent/iam-s3-05-logout-login-switch`.
