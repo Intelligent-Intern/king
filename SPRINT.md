@@ -97,7 +97,7 @@ Sprint Checkboxen:
   `local/iam-e2e-deleted-ended-join-hardening`.
 - [ ] IAM9-13 Extract or prove duplicate link abuse across devices from
   `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
-- [ ] IAM9-14 Extract or prove duplicate link abuse device/browser baseline from
+- [x] IAM9-14 Extract or prove duplicate link abuse device/browser baseline from
   `local/iam-e2e-duplicate-link-abuse-device-browser`.
 - [ ] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
   `local/iam-e2e-edge-error-matrix-proof`.
