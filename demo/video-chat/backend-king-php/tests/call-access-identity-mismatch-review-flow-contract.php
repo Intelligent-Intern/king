@@ -271,6 +271,11 @@ try {
     videochat_identity_mismatch_review_assert(count($legacyRejectedEvents) >= 2, 'legacy host-name rejection alias should find canonical failed audits');
     $legacyFailedEvents = videochat_audit_fetch_events($pdo, ['event_type' => 'call_access_host_verification_failed', 'limit' => 20]);
     videochat_identity_mismatch_review_assert(count($legacyFailedEvents) >= 2, 'legacy host-verification failed alias should find canonical failed audits');
+    $legacyHostRejectedTypes = array_map(static fn (array $event): string => (string) ($event['event_type'] ?? ''), $legacyRejectedEvents);
+    videochat_identity_mismatch_review_assert(
+        in_array('call_access_host_name_verification_failed', $legacyHostRejectedTypes, true),
+        'legacy host-name rejection audit filter must resolve to canonical failure audit'
+    );
     $hostFailurePayload = (array) (($legacyRejectedEvents[0] ?? [])['payload'] ?? []);
     videochat_identity_mismatch_review_assert((string) ($hostFailurePayload['canonical_event_type'] ?? '') === 'call_access_host_name_verification_failed', 'host failure audit must mark canonical event type');
     videochat_identity_mismatch_review_assert(in_array('call_access_host_name_rejected', (array) ($hostFailurePayload['legacy_event_types'] ?? []), true), 'host failure audit must retain rejected legacy alias');

@@ -61,7 +61,7 @@ assert.match(
 );
 assert.match(
   reviewDomain,
-  /function videochat_call_access_record_host_verification_attempt[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*host_name_fingerprint[\s\S]*'canonical_event_type' => \$canonicalEventType[\s\S]*'legacy_event_types' => \$legacyEventTypes[\s\S]*'host_name_logged' => false/,
+  /function videochat_call_access_record_host_verification_attempt[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*host_name_fingerprint[\s\S]*'host_name_verified' => \$hostNameVerified[\s\S]*'canonical_event_type' => \$canonicalEventType[\s\S]*'legacy_event_types' => \$legacyEventTypes[\s\S]*'host_name_logged' => false/,
   'host verification attempts must be fingerprinted, canonicalize legacy audit aliases, and never log the raw host name',
 );
 
@@ -84,6 +84,7 @@ for (const sentinel of [
   'identity mismatch review audit missing',
   'host-name verification failure audit missing',
   'legacy host-name rejection alias should find canonical failed audits',
+  'legacy host-name rejection audit filter must resolve to canonical failure audit',
   'audit must state raw access ids are not logged',
   'audit must state raw session ids are not logged',
   'audit must state foreign account data is not logged',
