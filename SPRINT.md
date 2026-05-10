@@ -145,8 +145,14 @@ Tickets:
   - Removed private `call_id` echo from denied seed-route call-fetch details.
   - Proof: `node tests/contract/call-access-cross-org-contract.mjs` and
     `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` passed.
-- [ ] IAM-08 Prove deleted, ended, disabled, and terminal call states do not leak
+- [x] IAM-08 Prove deleted, ended, disabled, and terminal call states do not leak
   private call data and cannot be joined.
+  - Merged worker branch `agent/iam-s1-08-terminal-states`.
+  - Added `call-access-terminal-states-contract.mjs` proving ended/disabled
+    calls deny direct join, deleted calls are hidden as not found, and terminal
+    resolve/fetch payloads do not include private call objects or identifiers.
+  - Proof: `node tests/contract/call-access-terminal-states-contract.mjs`
+    passed with the existing IAM access contracts.
 - [x] IAM-09 Prove membership removal and stale organization-role revalidation.
   - Merged worker branch `agent/iam-s1-09-membership-stale-role`.
   - Membership-removal and stale-role shell proofs now run PHP syntax validation
@@ -155,13 +161,25 @@ Tickets:
   - Proof: PHP lint passed for both contracts; shell wrappers executed and
     skipped only the SQLite-backed runtime phase because host PHP lacks
     `pdo_sqlite`.
-- [ ] IAM-10 Prove owner transfer, moderator, org-admin, and system-admin
+- [x] IAM-10 Prove owner transfer, moderator, org-admin, and system-admin
   admission boundaries.
+  - Merged worker branch `agent/iam-s1-10-admission-boundaries`.
+  - Added `call-access-admission-boundaries-contract.mjs` covering system-admin,
+    org-admin, owner/moderator, owner-transfer, stale role, forged role, and
+    foreign-call moderation boundaries.
+  - Proof: `node tests/contract/call-access-admission-boundaries-contract.mjs`
+    passed with the existing IAM access contracts.
 - [ ] IAM-11 Prove lobby queue idempotence, pagination/search stability, and
   concurrent admit/deny behavior.
 - [ ] IAM-12 Prove duplicate invite/session/device/browser abuse is rejected or
   reconciled deterministically.
-- [ ] IAM-13 Prove logout/login switch and parallel-tab account isolation.
+- [x] IAM-13 Prove logout/login switch and parallel-tab account isolation.
+  - Merged worker branch `agent/iam-s1-13-account-isolation`.
+  - Added `call-access-account-isolation-contract.mjs` proving logout clears
+    local session state, login replaces account tokens, call-access issuance
+    binds to the current token, and parallel tab contexts stay isolated.
+  - Proof: `node tests/contract/call-access-account-isolation-contract.mjs`
+    passed with the existing IAM access contracts.
 - [ ] IAM-14 Prove call-access audit event compatibility and redaction.
 - [ ] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
   admission and removal decisions.
