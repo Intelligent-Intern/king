@@ -166,8 +166,16 @@ Tickets:
     `invite-code-redeem-contract.php`, `invite-code-redeem-endpoint-contract.php`,
     and `call-access-session-route-guard-contract.php`; `git diff --check`
     passed.
-- [ ] IAM2-10 Prove owner-transfer main journey updates call-access authority
+- [x] IAM2-10 Prove owner-transfer main journey updates call-access authority
   without leaving old-owner moderator powers behind.
+  - Merged worker branch `agent/iam-s2-10-owner-transfer-main`.
+  - Added `call-access-owner-transfer-main-contract.mjs` proving transfer routes
+    through the call-scoped role endpoint, previous owner demotion, canonical
+    `calls.owner_user_id` authority, realtime/lobby role recomputation, and
+    frontend owner-management gating.
+  - Proof: Node contract passed; `call-owner-moderation-contract.php` passed on
+    host with persistence skipped and passed fully in Docker PHP 8.4 with
+    `pdo_sqlite`; `git diff --check` passed.
 - [ ] IAM2-11 Prove owner-transfer lifecycle and rejoin behavior for old owner,
   new owner, moderators, and guests.
 - [ ] IAM2-12 Prove admin join boundaries in browser E2E for system admin,
