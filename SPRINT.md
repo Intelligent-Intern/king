@@ -119,8 +119,16 @@ Tickets:
   - Proof: `node tests/contract/call-access-direct-join-rights-contract.mjs`,
     `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`, and
     `node tests/contract/call-access-cross-org-contract.mjs` passed.
-- [ ] IAM-05 Prove external guest join links require display name, create a
+- [x] IAM-05 Prove external guest join links require display name, create a
   temporary guest identity, and wait in lobby until admitted.
+  - Merged worker branch `agent/iam-s1-05-guest-link-lobby`.
+  - Added an external open guest-link E2E case proving name-required behavior,
+    `guest_name` session creation, temporary guest identity, lobby wait, owner
+    admission transition, and no media/control secret exposure in payloads.
+  - Proof: `npx playwright test tests/e2e/call-access-join.spec.js --grep
+    "external guest join link" --workers=1 --reporter=list` and
+    `npm run test:contract:iam-call-access` passed; backend SQLite shell proofs
+    skipped locally because `pdo_sqlite` is unavailable.
 - [x] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
   - Merged worker branch `agent/iam-s1-06-guest-list-php`.
   - PHP contract now covers active internal guest-list access, declined entries,
