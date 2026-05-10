@@ -12,6 +12,7 @@ DEFAULT_CONTRACTS=(
   "call-access-admin-prevention-contract.sh"
   "call-access-cross-org-contract.sh"
   "call-access-foreign-link-review-audit-contract.sh"
+  "call-access-invalid-expired-anonymous-link-contract.sh"
   "call-access-membership-removal-contract.sh"
   "call-access-session-route-guard-contract.sh"
   "call-access-safe-screen-privacy-contract.sh"
