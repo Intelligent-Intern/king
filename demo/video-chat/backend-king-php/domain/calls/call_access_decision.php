@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_management_contract.php';
+require_once __DIR__ . '/call_management_query.php';
+
 /**
  * @return array{
  *   allowed: bool,
@@ -35,8 +38,7 @@ function videochat_decide_call_access_for_user(
     $normalizedCallId = (string) ($call['id'] ?? '');
     $accessMode = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only');
     $ownerUserId = (int) ($call['owner_user_id'] ?? 0);
-    $normalizedRole = videochat_normalize_role_slug($authRole);
-    $isAdmin = $normalizedRole === 'admin';
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
     if (!videochat_is_call_joinable_status((string) ($call['status'] ?? ''))) {
         return videochat_call_access_decision_result(false, 'conflict', 'none', 'none', $call);
     }
@@ -58,7 +60,7 @@ function videochat_decide_call_access_for_user(
         ? videochat_normalize_call_invite_state($participant['invite_state'] ?? ($accessMode === 'free_for_all' ? 'allowed' : 'invited'))
         : videochat_normalize_call_invite_state($accessMode === 'free_for_all' ? 'allowed' : 'invited');
 
-    if ($isAdmin) {
+    if ($isSystemAdmin) {
         return videochat_call_access_decision_result(
             true,
             'allowed',
