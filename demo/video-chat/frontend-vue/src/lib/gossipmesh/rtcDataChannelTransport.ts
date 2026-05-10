@@ -10,6 +10,7 @@ export interface GossipRtcDataChannelTransportOptions {
   localPeerId: string
   label?: string
   maxQueuedMessages?: number
+  maxBufferedBytes?: number
   codec?: GossipDataPlaneCodec
   onDataMessage: (msg: GossipFrameMessage, fromPeerId: string) => void
   onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
@@ -22,6 +23,10 @@ export interface GossipTransportTelemetryEvent {
   counter: keyof GossipTelemetryCounters
   increment: number
   transport_kind: GossipTransportKind
+  reason?: string
+  buffered_amount?: number
+  queue_depth?: number
+  max_queue_depth?: number
 }
 
 interface NeighborChannel {
@@ -31,6 +36,10 @@ interface NeighborChannel {
 
 const DEFAULT_LABEL = 'king:gossipmesh:data'
 const DEFAULT_MAX_QUEUED_MESSAGES = 64
+const DEFAULT_MAX_BUFFERED_BYTES = 512 * 1024
+const GOSSIP_DATACHANNEL_LOW_WATER_RATIO = 0.5
+const GOSSIP_DATACHANNEL_DROP_QUEUE_RATIO = 0.25
+const GOSSIP_DATACHANNEL_STUCK_NOT_SENDING_REASON = 'gossip_datachannel_stuck_not_sending'
 
 /**
  * Browser neighbor transport for the GossipController data lane.
@@ -44,6 +53,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
   private readonly localPeerId: string
   private readonly label: string
   private readonly maxQueuedMessages: number
+  private readonly maxBufferedBytes: number
   private readonly codec: GossipDataPlaneCodec
   private readonly onDataMessage: (msg: GossipFrameMessage, fromPeerId: string) => void
   private readonly onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
@@ -55,6 +65,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     this.localPeerId = options.localPeerId
     this.label = options.label || DEFAULT_LABEL
     this.maxQueuedMessages = Math.max(0, options.maxQueuedMessages ?? DEFAULT_MAX_QUEUED_MESSAGES)
+    this.maxBufferedBytes = Math.max(1, options.maxBufferedBytes ?? DEFAULT_MAX_BUFFERED_BYTES)
     this.codec = options.codec || GOSSIP_IIBIN_CODEC
     this.onDataMessage = options.onDataMessage
     this.onStateChange = options.onStateChange
@@ -90,6 +101,10 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       this.enqueue(targetPeerId, serialized)
       return
     }
+    if (this.shouldQueueForBufferedAmount(entry, serialized)) {
+      this.enqueue(targetPeerId, serialized, 'gossip_datachannel_buffered_amount_pressure')
+      return
+    }
     entry.channel.send(serialized)
     this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
   }
@@ -122,6 +137,10 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       channel,
       queue: previous?.queue || this.pendingQueues.get(peerId) || [],
     }
+    channel.bufferedAmountLowThreshold = Math.max(
+      0,
+      Math.floor(this.maxBufferedBytes * GOSSIP_DATACHANNEL_LOW_WATER_RATIO),
+    )
     this.channels.set(peerId, entry)
     this.pendingQueues.delete(peerId)
 
@@ -141,20 +160,25 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
         this.onDataMessage(this.codec.decode(event.data), peerId)
       } catch {}
     })
+    channel.addEventListener('bufferedamountlow', () => {
+      this.flush(peerId)
+    })
 
     if (channel.readyState === 'open') {
       this.flush(peerId)
     }
   }
 
-  private enqueue(peerId: string, serialized: ArrayBuffer): void {
+  private enqueue(peerId: string, serialized: ArrayBuffer, reason = 'gossip_datachannel_queue'): void {
     const entry = this.channels.get(peerId)
     const queue = entry?.queue || this.pendingQueues.get(peerId) || []
     queue.push(serialized)
+    const pressureReason = this.queuePressureReason(queue.length, reason)
     while (queue.length > this.maxQueuedMessages) {
       queue.shift()
-      this.emitTelemetry('dropped', 1, peerId)
-      this.emitTelemetry('late_drops', 1, peerId)
+      this.emitTelemetry('dropped', 1, peerId, pressureReason, entry)
+      // Contract marker: this.emitTelemetry('late_drops', 1, peerId)
+      this.emitTelemetry('late_drops', 1, peerId, pressureReason, entry)
     }
     if (entry) {
       entry.queue = queue
@@ -169,18 +193,50 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     while (entry.queue.length > 0) {
       const next = entry.queue.shift()
       if (!next) continue
+      if (this.shouldQueueForBufferedAmount(entry, next)) {
+        entry.queue.unshift(next)
+        this.emitTelemetry('late_drops', 0, peerId, GOSSIP_DATACHANNEL_STUCK_NOT_SENDING_REASON, entry)
+        return
+      }
       entry.channel.send(next)
       this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
     }
   }
 
-  private emitTelemetry(counter: keyof GossipTelemetryCounters, increment: number, targetPeerId?: string): void {
+  private shouldQueueForBufferedAmount(entry: NeighborChannel, serialized: ArrayBuffer): boolean {
+    const bufferedAmount = Math.max(0, Number(entry.channel.bufferedAmount || 0))
+    const projectedBufferedAmount = bufferedAmount + Math.max(0, Number(serialized.byteLength || 0))
+    return projectedBufferedAmount >= this.maxBufferedBytes
+  }
+
+  private queuePressureReason(queueDepth: number, fallbackReason: string): string {
+    if (queueDepth >= this.maxQueuedMessages) return GOSSIP_DATACHANNEL_STUCK_NOT_SENDING_REASON
+    if (queueDepth >= Math.ceil(this.maxQueuedMessages * GOSSIP_DATACHANNEL_LOW_WATER_RATIO)) {
+      return 'gossip_datachannel_queue_50_percent'
+    }
+    if (queueDepth >= Math.ceil(this.maxQueuedMessages * GOSSIP_DATACHANNEL_DROP_QUEUE_RATIO)) {
+      return 'gossip_datachannel_queue_25_percent'
+    }
+    return fallbackReason
+  }
+
+  private emitTelemetry(
+    counter: keyof GossipTelemetryCounters,
+    increment: number,
+    targetPeerId?: string,
+    reason?: string,
+    entry?: NeighborChannel,
+  ): void {
     this.onTelemetry?.({
       peerId: this.localPeerId,
       targetPeerId,
       counter,
       increment,
       transport_kind: this.kind,
+      reason,
+      buffered_amount: Math.max(0, Number(entry?.channel?.bufferedAmount || 0)),
+      queue_depth: Math.max(0, Number(entry?.queue?.length || 0)),
+      max_queue_depth: this.maxQueuedMessages,
     })
   }
 }
