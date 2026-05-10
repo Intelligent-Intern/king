@@ -194,8 +194,14 @@ Tickets:
     payloads.
   - Proof: `npx playwright test tests/e2e/call-access-admin-join-boundaries.spec.js --workers=1`
     and `git diff --check` passed.
-- [ ] IAM2-13 Prove removed members and invited users removed from the org lose
+- [x] IAM2-13 Prove removed members and invited users removed from the org lose
   call-access and lobby visibility without data leakage.
+  - Merged worker branch `agent/iam-s2-13-removed-members`.
+  - Added `call-access-removed-members-contract.mjs` covering removed org
+    members, removed invitees, denied lobby visibility, redacted denial payloads,
+    and preserved access for still-authorized members.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-removed-members-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM2-14 Prove disabled users, deleted users, deleted calls, ended calls,
   and disabled calls stay closed in browser flows.
 - [ ] IAM2-15 Prove stale role and active-organization switch revalidation in
