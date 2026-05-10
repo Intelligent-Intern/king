@@ -402,8 +402,23 @@ SQL
         throw new RuntimeException('database_unavailable');
     };
     videochat_realtime_admission_bypass_assert(
-        videochat_realtime_connection_can_bypass_admission_for_room($ownerFastPathConnection, 'demo-call-room', $failingOpenDatabase),
-        'owner call-role fast-path must bypass admission even when db lookup is unavailable'
+        !videochat_realtime_connection_can_bypass_admission_for_room($ownerFastPathConnection, 'demo-call-room', $failingOpenDatabase),
+        'cached owner call-role must not bypass admission when current db permissions are unavailable'
+    );
+
+    $pdo->exec("UPDATE calls SET status = 'ended' WHERE id = 'call-owner-room'");
+    $staleOwnerConnection = $ownerContextConnection + [
+        'requested_room_id' => 'demo-call-room',
+        'pending_room_id' => 'demo-call-room',
+        'active_call_id' => 'call-owner-room',
+    ];
+    videochat_realtime_admission_bypass_assert(
+        !videochat_realtime_connection_can_bypass_admission_for_room($staleOwnerConnection, 'demo-call-room', $openDatabase),
+        'cached owner context must not bypass admission after the call ended'
+    );
+    videochat_realtime_admission_bypass_assert(
+        !videochat_realtime_connection_can_join_call_scoped_room($staleOwnerConnection, 'demo-call-room', $openDatabase),
+        'stale same-room connection must not rejoin an ended call room'
     );
 
     fwrite(STDOUT, "[realtime-admission-bypass-contract] PASS\n");

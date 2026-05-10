@@ -162,7 +162,8 @@ SELECT
     calls.status AS resolved_call_status,
     cp.invite_state AS participant_invite_state,
     users.email AS resolved_user_email,
-    users.password_hash AS resolved_user_password_hash
+    users.password_hash AS resolved_user_password_hash,
+    users.status AS resolved_user_status
 FROM call_access_sessions
 LEFT JOIN call_access_links ON call_access_links.id = call_access_sessions.access_id
 LEFT JOIN calls ON calls.id = call_access_sessions.call_id
@@ -262,6 +263,9 @@ SQL
     }
     if (!is_string($row['resolved_call_id'] ?? null) || trim((string) $row['resolved_call_id']) === '') {
         return $fail('call_access_binding_mismatch');
+    }
+    if (!is_string($row['resolved_user_status'] ?? null) || strtolower(trim((string) $row['resolved_user_status'])) !== 'active') {
+        return $fail('call_access_user_inactive');
     }
     if ((string) ($row['link_call_id'] ?? '') !== (string) ($binding['call_id'] ?? '')) {
         return $fail('call_access_binding_mismatch');
