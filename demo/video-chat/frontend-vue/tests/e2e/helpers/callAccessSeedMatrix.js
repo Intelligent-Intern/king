@@ -37,6 +37,7 @@ function byKey(rows, label) {
 export const iamCallAccessSeedMatrix = Object.freeze(readSeedMatrix());
 
 const tenantIndex = byKey(iamCallAccessSeedMatrix.tenants, 'tenant');
+const organizationIndex = byKey(iamCallAccessSeedMatrix.organizations, 'organization');
 const userIndex = byKey(iamCallAccessSeedMatrix.users, 'user');
 const callIndex = byKey(iamCallAccessSeedMatrix.calls, 'call');
 const accessLinkIndex = byKey(iamCallAccessSeedMatrix.access_links, 'access link');
@@ -55,6 +56,10 @@ export function getSeedTenant(key) {
 
 export function getSeedUser(key) {
   return clone(requiredRow(userIndex, key, 'user'));
+}
+
+export function getSeedOrganization(key) {
+  return clone(requiredRow(organizationIndex, key, 'organization'));
 }
 
 export function getSeedCall(key) {
@@ -80,6 +85,10 @@ export function seedUserKeys() {
 
 export function seedCallKeys() {
   return [...callIndex.keys()];
+}
+
+export function seedOrganizationKeys() {
+  return [...organizationIndex.keys()];
 }
 
 export function seedScenarioKeys() {

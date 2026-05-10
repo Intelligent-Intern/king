@@ -22,6 +22,7 @@ DEFAULT_CONTRACTS=(
   "call-access-membership-removal-contract.sh"
   "call-access-org-removal-active-privilege-downgrade-contract.sh"
   "call-access-owner-absence-realtime-sync-contract.sh"
+  "iam-core-org-session-journey-contract.sh"
   "call-access-session-route-guard-contract.sh"
   "call-access-authorized-rejoin-contract.sh"
   "call-access-safe-screen-privacy-contract.sh"

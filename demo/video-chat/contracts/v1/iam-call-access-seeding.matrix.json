@@ -31,6 +31,22 @@
       "label": "IAM Beta Organization"
     }
   ],
+  "organizations": [
+    {
+      "key": "alpha_org",
+      "tenant_key": "alpha",
+      "public_id": "organization-alpha-e2e",
+      "label": "IAM Alpha Private Organization",
+      "status": "active"
+    },
+    {
+      "key": "beta_org",
+      "tenant_key": "beta",
+      "public_id": "organization-beta-e2e",
+      "label": "IAM Beta Private Organization",
+      "status": "active"
+    }
+  ],
   "users": [
     {
       "key": "system_admin",
@@ -59,6 +75,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "alpha", "role": "admin" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "admin" }
       ]
     },
     {
@@ -73,6 +92,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "beta", "role": "admin" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "beta_org", "role": "admin" }
       ]
     },
     {
@@ -87,6 +109,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "member" }
       ]
     },
     {
@@ -101,6 +126,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "alpha_org", "role": "member" }
       ]
     },
     {
@@ -115,6 +143,9 @@
       "temporary": false,
       "memberships": [
         { "tenant_key": "beta", "role": "member" }
+      ],
+      "organization_memberships": [
+        { "organization_key": "beta_org", "role": "member" }
       ]
     },
     {
@@ -131,6 +162,21 @@
         { "tenant_key": "alpha", "role": "admin" },
         { "tenant_key": "beta", "role": "member" }
       ]
+    },
+    {
+      "key": "alpha_tenant_member_without_organization",
+      "id": 6110,
+      "email": "iam-alpha-no-organization@example.test",
+      "display_name": "Alpha Tenant Member Without Organization",
+      "role": "user",
+      "account_type": "account",
+      "is_guest": false,
+      "system_admin": false,
+      "temporary": false,
+      "memberships": [
+        { "tenant_key": "alpha", "role": "member" }
+      ],
+      "organization_memberships": []
     },
     {
       "key": "registered_guest",
@@ -190,6 +236,7 @@
       "id": "20000000-0000-4000-8000-000000000101",
       "room_id": "iam-alpha-room",
       "tenant_key": "alpha",
+      "organization_key": "alpha_org",
       "title": "IAM Alpha Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -204,6 +251,7 @@
       "id": "20000000-0000-4000-8000-000000000102",
       "room_id": "iam-beta-room",
       "tenant_key": "beta",
+      "organization_key": "beta_org",
       "title": "IAM Beta Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -216,6 +264,7 @@
       "id": "20000000-0000-4000-8000-000000000103",
       "room_id": "iam-tenantless-room",
       "tenant_key": null,
+      "organization_key": null,
       "title": "IAM Tenantless Access Matrix Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -228,6 +277,7 @@
       "id": "20000000-0000-4000-8000-000000000104",
       "room_id": "iam-beta-cross-org-room",
       "tenant_key": "beta",
+      "organization_key": "beta_org",
       "title": "IAM Beta Cross Organization Private Call",
       "status": "active",
       "starts_at": "2026-05-08T10:00:00.000Z",
@@ -240,6 +290,7 @@
       "id": "20000000-0000-4000-8000-000000000105",
       "room_id": "iam-alpha-ended-room",
       "tenant_key": "alpha",
+      "organization_key": "alpha_org",
       "title": "IAM Alpha Ended Call",
       "status": "ended",
       "starts_at": "2026-05-07T10:00:00.000Z",
@@ -254,6 +305,7 @@
       "id": "20000000-0000-4000-8000-000000000106",
       "room_id": "iam-alpha-disabled-room",
       "tenant_key": "alpha",
+      "organization_key": "alpha_org",
       "title": "IAM Alpha Disabled Call",
       "status": "disabled",
       "starts_at": "2026-05-08T12:00:00.000Z",
@@ -268,6 +320,7 @@
       "id": "20000000-0000-4000-8000-000000000107",
       "room_id": "iam-alpha-deleted-room",
       "tenant_key": "alpha",
+      "organization_key": "alpha_org",
       "title": "IAM Alpha Deleted Call",
       "status": "deleted",
       "deleted": true,
@@ -325,6 +378,20 @@
         "platform_admin": false,
         "requires_admission": true,
         "must_not_restore_membership": true
+      }
+    },
+    {
+      "key": "anonymous_open_logged_in_uses_own_account_waits_for_host",
+      "sprint_groups": ["16"],
+      "link_key": "alpha_open",
+      "principal_user_key": "alpha_normal_user",
+      "expected": {
+        "session_kind": "registered_account",
+        "tenant_role": "member",
+        "tenant_admin": false,
+        "platform_admin": false,
+        "requires_admission": true,
+        "must_keep_authenticated_account": true
       }
     },
     {
@@ -492,6 +559,26 @@
       "key": "direct_join_alpha_normal_user_alpha_active_denied",
       "sprint_groups": ["3"],
       "principal_user_key": "alpha_normal_user",
+      "call_key": "alpha_active",
+      "expected": {
+        "direct_join_allowed": false,
+        "expected_resolve_status": 200,
+        "expected_resolve_state": "forbidden",
+        "expected_resolve_reason": "calls_forbidden",
+        "expected_call_status": 403,
+        "expected_call_error_code": "calls_forbidden",
+        "platform_admin": false,
+        "tenant_admin": false,
+        "guest_list_entry": false,
+        "owner": false,
+        "guest_list_required": true
+      }
+    },
+    {
+      "key": "direct_join_user_without_organization_denied",
+      "journey_key": "e2e_org_011_user_without_organization_no_org_rights",
+      "sprint_groups": ["16"],
+      "principal_user_key": "alpha_tenant_member_without_organization",
       "call_key": "alpha_active",
       "expected": {
         "direct_join_allowed": false,
