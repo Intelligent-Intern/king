@@ -75,22 +75,22 @@ export function createWorkspaceForegroundRecoveryController({
       void publishLocalTracks?.();
     }
 
-    const socketHealthy = isSocketOpen?.() === true
-      && hasRealtimeRoomSync?.() === true
-      && String(callGetter(getConnectionState, '')) === 'online';
+    const socketOpen = isSocketOpen?.() === true;
+    const socketHealthy = socketOpen && String(callGetter(getConnectionState, '')) === 'online';
+    const roomSyncHealthy = hasRealtimeRoomSync?.() === true;
     const sfuExpected = shouldConnectSfu?.() === true;
     const sfuHealthy = !sfuExpected || (isSfuConnected?.() === true && isSfuClientOpen?.() === true);
 
-    if (socketHealthy && sfuHealthy) {
+    if (socketHealthy && roomSyncHealthy && sfuHealthy) {
       requestRoomSnapshot?.();
       return { recovered: true, action: 'snapshot_only' };
     }
 
-    if (!socketHealthy) {
+    if (socketOpen) {
+      requestRoomSnapshot?.();
+    } else {
       resetReconnectAttempt?.();
       void connectSocket?.();
-    } else {
-      requestRoomSnapshot?.();
     }
 
     if (sfuExpected && !sfuHealthy) {
@@ -98,7 +98,9 @@ export function createWorkspaceForegroundRecoveryController({
       initSfu?.();
     }
 
-    return { recovered: true, action: socketHealthy ? 'sfu_recover' : 'socket_reconnect' };
+    if (!socketOpen) return { recovered: true, action: 'socket_reconnect' };
+    if (!roomSyncHealthy) return { recovered: true, action: sfuHealthy ? 'snapshot_backfill' : 'snapshot_backfill_sfu_recover' };
+    return { recovered: true, action: 'sfu_recover' };
   };
 
   return { mark, recover };

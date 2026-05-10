@@ -945,6 +945,7 @@ export function createCallWorkspaceSocketHelpers({
           return;
         }
 
+        const isReconnectOpen = refs.reconnectAttempt.value > 0 || refs.hasRealtimeRoomSync.value === true;
         opened = true;
         clearNegotiationTimer();
         finishConnectInFlight();
@@ -954,6 +955,18 @@ export function createCallWorkspaceSocketHelpers({
         setBackendWebSocketOrigin(socketOrigin);
         clearErrors();
         startPingLoop();
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'info',
+          eventType: 'realtime_websocket_open',
+          code: 'realtime_websocket_open',
+          message: 'Realtime websocket opened and requested authoritative room snapshot backfill.',
+          payload: {
+            reconnect: isReconnectOpen,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+          },
+        });
         requestRoomSnapshot();
         if (refs.usersSourceMode.value === 'directory' && refs.activeTab.value === 'users') {
           void refreshUsersDirectory();
