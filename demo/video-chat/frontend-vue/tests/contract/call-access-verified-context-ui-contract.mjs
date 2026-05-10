@@ -15,6 +15,9 @@ const callAccessSession = read('src/domain/calls/access/callAccessSession.ts');
 const joinView = read('src/domain/calls/access/JoinView.vue');
 const authSession = read('src/domain/auth/session.ts');
 const callAccessJoinSpec = read('tests/e2e/call-access-join.spec.js');
+const personalizedIdentitySpec = read('tests/e2e/call-access-personalized-identity.spec.js');
+const backendCallAccessSession = read('../backend-king-php/domain/calls/call_access_session.php');
+const backendRouteGuard = read('../backend-king-php/tests/call-access-session-route-guard-contract.php');
 
 assert.match(
   admissionGate,
@@ -59,6 +62,16 @@ assert.match(
   'call-access session request must fail safely if verified context exists after local logout',
 );
 assert.match(
+  backendCallAccessSession,
+  /\(\$verifiedUserId > 0 \|\| \$verifiedSessionId !== ''\) && \(\$authenticatedUserId <= 0 \|\| \$authenticatedSessionId === ''\)[\s\S]*'reason' => 'conflict'[\s\S]*'auth' => 'session_context_changed'/,
+  'backend session issuance must reject verified context when no authenticated bearer session is present',
+);
+assert.match(
+  backendRouteGuard,
+  /verified context without bearer should conflict[\s\S]*verified context without bearer must not persist a session/,
+  'backend route guard proof must cover verified context without a bearer session',
+);
+assert.match(
   authSession,
   /export function applySessionEnvelope\(/,
   'auth session envelope application must remain shared after extracting call-access login',
@@ -67,6 +80,37 @@ assert.doesNotMatch(
   authSession,
   /export async function loginWithCallAccess/,
   'call-access login request logic belongs with public join/access helpers',
+);
+
+assert.match(
+  callAccessJoinSpec,
+  /personal call-access link starts a call-scoped session and waits for host admission/,
+  'live public join E2E must keep the logged-out personalized-link backend path',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /logged-out personalized link starts the linked call session without identity proof/,
+  'personalized identity E2E must cover logged-out personalized links',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /expect\(sessionAuthorization\)\.toBe\(''\)[\s\S]*expect\(sessionBody\)\.toBeNull\(\)/,
+  'logged-out personalized E2E must prove no bearer or verified identity proof is sent',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /same-account personalized link sends verified identity proof and adopts only its own session/,
+  'personalized identity E2E must cover same-account personalized links',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /expect\(sessionAuthorization\)\.toBe\(`Bearer \$\{account\.sessionToken\}`\)[\s\S]*expect\(sessionBody\)\.toEqual\(\{\s*verified_user_id:\s*account\.userId,\s*verified_session_id:\s*account\.sessionId,\s*\}\)/,
+  'same-account E2E must prove current bearer and verified user/session proof are sent',
+);
+assert.match(
+  personalizedIdentitySpec,
+  /same-account dialog must not render \$\{value\}/,
+  'same-account E2E must prove unrelated identity data is not rendered',
 );
 
 assert.match(

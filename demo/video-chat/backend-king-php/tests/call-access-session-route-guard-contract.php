@@ -186,6 +186,26 @@ SQL
         'matching logged-in route should bind the linked user'
     );
 
+    $verifiedWithoutBearer = $callSessionRoute(
+        $personalAccessId,
+        ['User-Agent' => 'route-guard-verified-without-bearer', 'Content-Type' => 'application/json'],
+        json_encode([
+            'verified_user_id' => $standardUserId,
+            'verified_session_id' => 'sess_route_guard_standard',
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'sess_route_guard_verified_without_bearer_should_not_issue'
+    );
+    videochat_call_access_session_route_guard_assert((int) ($verifiedWithoutBearer['status'] ?? 0) === 409, 'verified context without bearer should conflict');
+    $verifiedWithoutBearerPayload = videochat_call_access_session_route_guard_decode($verifiedWithoutBearer);
+    videochat_call_access_session_route_guard_assert((string) (($verifiedWithoutBearerPayload['error'] ?? [])['code'] ?? '') === 'call_access_conflict', 'verified context without bearer error code mismatch');
+    videochat_call_access_session_route_guard_assert(
+        (string) (((($verifiedWithoutBearerPayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['auth'] ?? '') === 'session_context_changed',
+        'verified context without bearer should surface context-change mismatch only'
+    );
+    videochat_call_access_session_route_guard_assert_no_leak($verifiedWithoutBearer, [$standardEmail, $standardName, 'Route Guard Secret Personal Call', $personalCallId], 'verified context without bearer response');
+    $verifiedWithoutBearerRows = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_route_guard_verified_without_bearer_should_not_issue'")->fetchColumn();
+    videochat_call_access_session_route_guard_assert($verifiedWithoutBearerRows === 0, 'verified context without bearer must not persist a session');
+
     $wrongAccount = $callSessionRoute(
         $personalAccessId,
         ['Authorization' => 'Bearer sess_route_guard_admin', 'User-Agent' => 'route-guard-wrong-account'],
