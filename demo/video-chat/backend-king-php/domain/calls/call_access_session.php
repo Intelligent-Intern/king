@@ -58,6 +58,32 @@ function videochat_call_access_record_session_context_mismatch(
         );
     }
 
+    $linkedUserId = is_array($targetUser) && is_numeric($targetUser['id'] ?? null) ? (int) $targetUser['id'] : 0;
+    $verifiedAccountSwitched = $verifiedUserId > 0 && $authenticatedUserId > 0 && $verifiedUserId !== $authenticatedUserId;
+    $verifiedSessionSwitched = $verifiedSessionId !== ''
+        && $authenticatedSessionId !== ''
+        && !hash_equals($verifiedSessionId, $authenticatedSessionId);
+    if (
+        ($verifiedAccountSwitched || $verifiedSessionSwitched)
+        && $actorUserId > 0
+        && $linkedUserId > 0
+        && $actorUserId !== $linkedUserId
+        && function_exists('videochat_call_access_record_duplicate_personalized_link_review')
+    ) {
+        videochat_call_access_record_duplicate_personalized_link_review(
+            $pdo,
+            $accessLink,
+            $call,
+            $targetUser,
+            $actorUserId,
+            'session_context_changed',
+            [
+                'session_id' => $authenticatedSessionId,
+                'verified_session_id' => $verifiedSessionId,
+            ]
+        );
+    }
+
     if (function_exists('videochat_audit_record_call_access_strong_mismatch')) {
         videochat_audit_record_call_access_strong_mismatch(
             $pdo,
