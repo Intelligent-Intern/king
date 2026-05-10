@@ -17,6 +17,26 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Call Access Browser E2E Stabilization 02: closed all 20
+  Sprint 02 tickets on local branch `prod-kingrt-do-not-push-to-github` without
+  pushing. The sprint added focused proofs for calendar invite joins, registered
+  invitee handoff, anonymous temporary rights, personalized temp reuse, invite
+  invalidation, duplicate redemption, owner-transfer authority/lifecycle, admin
+  join boundaries, removed members, terminal browser states, stale
+  organization-role revalidation, audit compatibility/redaction, and IAM CI
+  artifact retention. Package scripts and release-gate metadata now run the
+  merged Sprint 02 IAM proof set. Proof: `npm run test:contract:iam-call-access`
+  passed with Docker PHP 8.4 `pdo_sqlite` fallback for backend SQLite checks,
+  `npm run test:e2e:call-access` passed 12 focused browser tests, and
+  `npm run build` passed. Deploy proof: ran
+  `demo/video-chat/scripts/deploy.sh deploy` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`, `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and no push. Post-deploy
+  diagnostics showed app/API/call-app asset probes returning 200,
+  unauthenticated call-app availability returning 401 rather than 500,
+  containers up, and no fatal/panic/500 app-container lines in the recent
+  deploy window.
+
 - 2026-05-07 App Configuration background images extraction: split the
   background image administration tab into
   `AppConfigurationBackgroundImagesTab.vue`,

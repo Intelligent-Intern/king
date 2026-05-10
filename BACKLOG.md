@@ -107,15 +107,8 @@ Rules:
 
 ### Future IAM Sprint Queue
 
-Use this queue only after the active 20-ticket IAM sprint closes.
-
-1. [ ] IAM Sprint 03: harden security-manipulation cases, duplicate device/browser
-   abuse, mismatch verification, and no-data-leak UI states.
-2. [ ] IAM Sprint 03: complete Docker/SQLite backend runtime proof for call
-   access contracts that currently skip in local environments without
-   `pdo_sqlite`.
-3. [ ] IAM Sprint 03: clean redundant IAM branches/worktrees only after their
-   HEAD is merged or their diff is proven superseded by the local no-push branch.
+Moved into active `SPRINT.md` on 2026-05-10 as `IAM Abuse, Runtime Proof, And
+Cleanup Stabilization 03`.
 
 ### Completed/Parked Call App Integration Detail
 
