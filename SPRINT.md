@@ -252,8 +252,16 @@ Sprint Checkboxen:
   and lane proof value from the remaining IAM lane branches.
 - [ ] IAM5-17 Consolidate seed data hygiene, asset cache busting, local run docs,
   and live-proof env audit value into the current IAM gate only if still useful.
-- [ ] IAM5-18 Run the focused IAM browser proof path or repair its local
+- [x] IAM5-18 Run the focused IAM browser proof path or repair its local
   invocation without adding media/background/SFU/Gossip coverage.
+  - Merged worker branch `agent/iam-s5-18-browser-proof-path`.
+  - Added `documentation/iam-sprint-05-browser-proof-path.md`.
+  - Confirmed the maintained focused IAM browser proof path runs without
+    repair and without adding media, background, SFU, Gossip, product UI, or
+    test-file changes.
+  - Proof: `npm run test:e2e:call-access` from
+    `demo/video-chat/frontend-vue` passed with 12 Playwright tests, and
+    `git diff --check` passed.
 - [ ] IAM5-19 Clean merged/superseded Sprint 05 and old IAM worker
   branches/worktrees using contained-HEAD and clean-worktree rules only.
 - [ ] IAM5-20 Build, run the Sprint 05 IAM proof set, deploy without
