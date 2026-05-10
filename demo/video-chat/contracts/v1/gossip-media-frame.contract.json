@@ -1,0 +1,180 @@
+{
+  "contract_name": "king-video-chat-gossip-media-frame",
+  "contract_version": "v1.0.0",
+  "wire_message_type": "gossip.media.frame.v1",
+  "scope": "decentralized-gossip-media-frame-envelope",
+  "purpose": "Carries live encoded media frames over the browser Gossip data lane without exposing SFU wire names, SDP, ICE, tokens, or secrets.",
+  "wire_encoding": "stable_json_envelope_v1",
+  "external_envelope": {
+    "message_type_field": "type",
+    "message_type": "gossip.media.frame.v1",
+    "forbidden_message_types": [
+      "sfu/frame",
+      "sfu.frame",
+      "sfu/frame-chunk",
+      "gossip/server-frame",
+      "call/gossip-server-frame"
+    ],
+    "allow_additional_fields": false
+  },
+  "required_fields": {
+    "type": { "type": "string", "enum": ["gossip.media.frame.v1"] },
+    "contract_version": { "type": "string", "enum": ["v1.0.0"] },
+    "call_id": { "type": "string", "min_length": 1, "max_length": 120 },
+    "room_id": { "type": "string", "min_length": 1, "max_length": 120 },
+    "participant_session_id": { "type": "string", "min_length": 8, "max_length": 160 },
+    "publisher_id": { "type": "string", "min_length": 1, "max_length": 160 },
+    "track_id": { "type": "string", "min_length": 1, "max_length": 160 },
+    "track_kind": { "type": "string", "enum": ["video"] },
+    "frame_kind": { "type": "string", "enum": ["keyframe", "delta"] },
+    "sequence": { "type": "u64", "min": 1, "monotonic_scope": ["call_id", "room_id", "participant_session_id", "track_id"] },
+    "timestamp_unix_ms": { "type": "u64", "min": 1, "source": "publisher_capture_or_encode_time" },
+    "runtime_path": { "type": "string", "enum": ["gossip_rtc_datachannel", "gossip_primary_direct"] },
+    "codec_id": { "type": "string", "enum": ["wlvc_v1", "webcodecs_vp8", "webcodecs_vp9", "webcodecs_av1"] },
+    "profile": { "type": "string", "enum": ["video_720p30"] },
+    "payload_encoding": { "type": "string", "enum": ["base64url"] },
+    "payload": { "type": "string", "encoding": "base64url", "min_length": 1, "max_decoded_bytes": 16777216 }
+  },
+  "optional_fields": {
+    "codec_runtime": {
+      "type": "object",
+      "required": {
+        "codec_id": { "type": "string", "enum": ["wlvc_v1", "webcodecs_vp8", "webcodecs_vp9", "webcodecs_av1"] },
+        "runtime_path": { "type": "string", "enum": ["gossip_rtc_datachannel", "gossip_primary_direct"] },
+        "encoder": { "type": "string", "enum": ["wlvc_wasm", "wlvc_ts", "webcodecs"] }
+      },
+      "allow_additional_fields": false
+    },
+    "dependency": {
+      "type": "object",
+      "required": {
+        "requires_keyframe_before_delta": { "type": "boolean", "value": true },
+        "previous_sequence": { "one_of": [{ "type": "u64", "min": 1 }, { "type": "null" }] }
+      },
+      "allow_additional_fields": false
+    }
+  },
+  "profile": {
+    "id": "video_720p30",
+    "kind": "video",
+    "max_width": 1280,
+    "max_height": 720,
+    "max_fps": 30,
+    "orientation_policy": "preserve_source_aspect_within_720p_bounds",
+    "max_payload_bytes": 16777216,
+    "keyframe_interval_policy": "publisher_controlled_with_receiver_recovery_requests"
+  },
+  "continuity": {
+    "sequence": "strictly_monotonic_per_call_room_participant_session_track",
+    "first_frame_per_track": "keyframe",
+    "delta_without_prior_keyframe": "reject_and_request_keyframe",
+    "gap_handling": "receiver_may_request_missing_frame_or_keyframe",
+    "duplicate_sequence": "drop_duplicate"
+  },
+  "redaction": {
+    "forbidden_fields": [
+      "sdp",
+      "offer",
+      "answer",
+      "candidate",
+      "ice",
+      "ice_candidate",
+      "ice_ufrag",
+      "ice_pwd",
+      "turn_credential",
+      "turn_username",
+      "authorization",
+      "cookie",
+      "token",
+      "access_token",
+      "refresh_token",
+      "secret",
+      "private_key",
+      "shared_secret",
+      "raw_media_key",
+      "plaintext_frame",
+      "decoded_video",
+      "decoded_audio"
+    ],
+    "forbidden_field_pattern": "(?i)(sdp|ice|candidate|token|secret|credential|authorization|cookie|private_key|shared_secret)",
+    "diagnostic_policy": "log frame metadata only; never log payload bytes or transport credentials"
+  },
+  "compatibility": {
+    "first_sprint_decoder_adapter_allowed": true,
+    "adapter_internal_target": "existing_remote_frame_decoder",
+    "adapter_boundary": "after gossip.media.frame.v1 validation and before decode only",
+    "adapter_may_use_sfu_frame_shape_in_memory": true,
+    "adapter_must_not_emit_external_sfu_frame_envelope": true,
+    "external_envelope_must_remain": "gossip.media.frame.v1"
+  },
+  "sample_vectors": [
+    {
+      "name": "first-keyframe-720p30",
+      "frame": {
+        "type": "gossip.media.frame.v1",
+        "contract_version": "v1.0.0",
+        "call_id": "call_123",
+        "room_id": "room_123",
+        "participant_session_id": "psess_12345678",
+        "publisher_id": "user_42",
+        "track_id": "camera_main",
+        "track_kind": "video",
+        "frame_kind": "keyframe",
+        "sequence": 1,
+        "timestamp_unix_ms": 1710000000000,
+        "runtime_path": "gossip_rtc_datachannel",
+        "codec_id": "wlvc_v1",
+        "profile": "video_720p30",
+        "payload_encoding": "base64url",
+        "payload": "AQIDBA"
+      }
+    },
+    {
+      "name": "delta-after-keyframe",
+      "frame": {
+        "type": "gossip.media.frame.v1",
+        "contract_version": "v1.0.0",
+        "call_id": "call_123",
+        "room_id": "room_123",
+        "participant_session_id": "psess_12345678",
+        "publisher_id": "user_42",
+        "track_id": "camera_main",
+        "track_kind": "video",
+        "frame_kind": "delta",
+        "sequence": 2,
+        "timestamp_unix_ms": 1710000000033,
+        "runtime_path": "gossip_rtc_datachannel",
+        "codec_id": "wlvc_v1",
+        "profile": "video_720p30",
+        "payload_encoding": "base64url",
+        "payload": "BQYHCA",
+        "dependency": {
+          "requires_keyframe_before_delta": true,
+          "previous_sequence": 1
+        }
+      }
+    }
+  ],
+  "negative_test_vectors": [
+    {
+      "name": "external-envelope-named-sfu-frame",
+      "input": { "type": "sfu/frame" },
+      "expected_error_code": "wrong_gossip_media_envelope"
+    },
+    {
+      "name": "delta-without-keyframe",
+      "input": { "frame_kind": "delta", "sequence": 1 },
+      "expected_error_code": "missing_initial_keyframe"
+    },
+    {
+      "name": "redacted-sdp-field",
+      "input": { "sdp": "v=0" },
+      "expected_error_code": "forbidden_gossip_media_metadata"
+    },
+    {
+      "name": "redacted-ice-token-field",
+      "input": { "ice_candidate": "candidate:...", "token": "secret" },
+      "expected_error_code": "forbidden_gossip_media_metadata"
+    }
+  ]
+}
