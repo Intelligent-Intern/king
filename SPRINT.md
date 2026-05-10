@@ -201,8 +201,15 @@ Tickets:
     proofs cover sanitizer redaction.
   - Proof: `node tests/contract/call-access-audit-redaction-contract.mjs` passed;
     referenced backend SQLite runtime proofs remain gated by local `pdo_sqlite`.
-- [ ] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
+- [x] IAM-15 Prove Call App/whiteboard access revocation follows IAM call
   admission and removal decisions.
+  - Merged worker branch `agent/iam-s1-15-callapp-revocation`.
+  - Added active call-subject validation for call-app grants and launch-token
+    validation so owners, current participants, and admitted guests keep access
+    while removed participants/guests lose call-app access.
+  - Proof: PHP syntax checks for touched call-app backend files plus
+    `node tests/contract/call-access-callapp-revocation-contract.mjs` and
+    `node tests/contract/call-app-permission-revocation-contract.mjs` passed.
 - [x] IAM-16 Prove frontend route guards and verified-context UI for call-access
   sessions.
   - Merged worker branch `agent/iam-s1-16-route-guards-ui`.
