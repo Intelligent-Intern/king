@@ -287,8 +287,26 @@ Tickets:
     remained untouched as user work.
   - Proof: `git worktree prune --verbose`, contained-HEAD branch scans,
     worktree clean-state scans, and `git diff --check` passed.
-- [ ] IAM3-20 Build, run Sprint 03 IAM proof set, deploy without push/DNS/certbot,
+- [x] IAM3-20 Build, run Sprint 03 IAM proof set, deploy without push/DNS/certbot,
   and collect post-deploy diagnostics before opening the next sprint.
+  - Ran the full Sprint 03 IAM proof gate:
+    `npm run test:contract:iam-call-access`.
+  - Built frontend production assets and checked bundle size:
+    `npm run build` and `npm run test:contract:build-size`.
+  - Deployed without push, DNS automation, or certbot by using direct `rsync`
+    plus remote `docker compose --profile edge --profile turn up -d --build
+    --remove-orphans`.
+  - Post-deploy diagnostics passed: `prod-debug.sh` reported public runtime,
+    app shell, CDN assets, call-app host/CSP, registry, and container status.
+  - Authenticated Call-App availability probe passed:
+    `/api/calls/{id}/call-apps/available?category=all&page=1&page_size=8`
+    returned HTTP 200 with 6 apps, and the probe call was cleaned up.
+  - Remote backend/edge log scan since deploy found no fresh error, exception,
+    fatal, HTTP 500, or Call-App availability failure patterns.
+  - Observed non-blocking deploy noise: `rsync` could not delete remote `.cargo`
+    cache directories, Docker Compose warned that buildx/Bake was unavailable,
+    and old TURN TCP reset lines remain in TURN logs. No second deploy was
+    prepared because app deploy and diagnostics were clean.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned where the remaining tickets can
