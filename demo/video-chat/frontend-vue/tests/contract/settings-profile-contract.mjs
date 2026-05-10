@@ -21,6 +21,7 @@ const notificationPanel = await source('src/layouts/settings/WorkspaceNotificati
 
 for (const key of [
   'settings.about_me',
+  'settings.completed_tours',
   'settings.linkedin_url',
   'settings.x_url',
   'settings.youtube_url',
@@ -47,6 +48,7 @@ assert.match(sessionStore, /aboutMe: ''/, 'session state must carry about profil
 assert.match(sessionStore, /linkedinUrl: ''/, 'session state must carry LinkedIn URL');
 assert.match(sessionStore, /xUrl: ''/, 'session state must carry X.com URL');
 assert.match(sessionStore, /youtubeUrl: ''/, 'session state must carry YouTube URL');
+assert.match(sessionStore, /onboardingBadges: \[\]/, 'session state must carry completed onboarding badges for profile display');
 assert.match(sessionStore, /webAppNotificationsEnabled: false/, 'session state must carry web app notification master switch');
 assert.match(sessionStore, /webAppNotificationSoundEnabled: true/, 'session state must carry web app notification sound switch');
 assert.match(sessionStore, /sessionState\.aboutMe = normalizeString\(user\.about_me\)/, 'session snapshot must apply about_me');
@@ -81,9 +83,11 @@ assert.match(aboutPanel, /settings\.about_me/, 'about settings panel must expose
 assert.match(aboutPanel, /settings\.linkedin_url/, 'about settings panel must expose LinkedIn URL');
 assert.match(aboutPanel, /settings\.x_url/, 'about settings panel must expose X.com URL');
 assert.match(aboutPanel, /settings\.youtube_url/, 'about settings panel must expose YouTube URL');
+assert.match(aboutPanel, /settings\.completed_tours/, 'about settings panel must expose completed tour badges');
+assert.match(aboutPanel, /completedTourBadgeRows/, 'about settings panel must use registry-backed tour badge rows');
 assert.doesNotMatch(aboutPanel, /settings\.email/, 'about settings panel must not expose email address');
 assert.doesNotMatch(aboutPanel, /messenger/i, 'about settings panel must not expose messenger contacts');
-assert.doesNotMatch(aboutPanel, /onboarding/i, 'about settings panel must not expose onboarding badges');
+assert.doesNotMatch(workspaceShell, /:onboarding-badges=/, 'workspace shell must not pass onboarding badge props');
 assert.match(credentialsPanel, /WorkspaceEmailAddressSettings/, 'credentials panel must delegate email address lists to the extracted email settings section');
 assert.match(credentialsPanel, /WorkspacePasswordSettingsForm/, 'credentials panel must delegate password changes to the extracted password form');
 assert.match(credentialsPanel, /useWorkspaceCredentialsSettings\(\{ t \}\)/, 'credentials panel must use the shared credentials composable');
