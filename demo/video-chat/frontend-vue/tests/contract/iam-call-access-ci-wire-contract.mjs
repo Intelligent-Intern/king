@@ -74,8 +74,8 @@ for (const contractPath of requiredIamContractPaths) {
 
 assert.match(
   callAccessE2eScript,
-  /^playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js --workers=1$/,
-  'focused call-access E2E script must stay limited to join and deterministic seed-matrix specs',
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js --workers=1$/,
+  'focused call-access E2E script must stay limited to join and deterministic seed-matrix specs with IAM artifact retention enabled',
 );
 assert.doesNotMatch(
   callAccessE2eScript,
