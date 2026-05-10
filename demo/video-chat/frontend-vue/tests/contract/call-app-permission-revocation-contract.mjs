@@ -12,6 +12,7 @@ async function read(relativePath) {
 const [
   launchDomainSource,
   sessionsDomainSource,
+  sessionLifecycleSource,
   crdtDomainSource,
   routeSource,
   workspaceApiSource,
@@ -25,6 +26,7 @@ const [
 ] = await Promise.all([
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php'),
+  read('demo/video-chat/backend-king-php/domain/call_apps/call_app_session_lifecycle.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/api.ts'),
@@ -43,6 +45,24 @@ assert.match(
   launchDomainSource,
   /function videochat_call_app_launch_subject_grant_state[\s\S]*subject_type = :subject_type[\s\S]*function videochat_call_app_launch_guest_grant_state/s,
   'launch grant resolution must support user and guest subjects through one reconnect-safe lookup',
+);
+
+assert.match(
+  sessionLifecycleSource,
+  /function videochat_call_app_session_installation_available[\s\S]*installations\.status = 'enabled'[\s\S]*entitlements\.status = 'active'[\s\S]*entitlements\.expires_at[\s\S]*catalog\.health_status = 'healthy'/s,
+  'Call App session access must re-check active installation, entitlement expiry, and catalog health',
+);
+
+assert.match(
+  launchDomainSource,
+  /function videochat_call_app_mint_launch_token[\s\S]*videochat_call_app_session_installation_available[\s\S]*app_not_available[\s\S]*function videochat_call_app_validate_launch_token[\s\S]*videochat_call_app_session_installation_available[\s\S]*app_not_available/s,
+  'launch mint and validation must re-check active organization installation and entitlement state after revocation',
+);
+
+assert.match(
+  crdtDomainSource,
+  /function videochat_call_app_crdt_session_for_actor[\s\S]*videochat_call_app_session_installation_available[\s\S]*app_not_available/s,
+  'CRDT bootstrap/replay/append must fail closed when a cached session loses its organization Call App entitlement',
 );
 
 assert.match(
