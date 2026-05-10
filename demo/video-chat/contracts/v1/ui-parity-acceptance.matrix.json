@@ -99,7 +99,9 @@
       "command": "npm run test:e2e:call-access",
       "paths": [
         "frontend-vue/tests/e2e/call-access-join.spec.js",
-        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js"
+        "frontend-vue/tests/e2e/call-access-seed-matrix.spec.js",
+        "frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js",
+        "frontend-vue/tests/e2e/call-access-admin-join-boundaries.spec.js"
       ]
     },
     "frontend:contract:iam-call-access": {
@@ -109,6 +111,19 @@
       "command": "npm run test:contract:iam-call-access",
       "paths": [
         "frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs",
+        "frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs",
+        "frontend-vue/tests/contract/call-access-calendar-invite-join-contract.mjs",
+        "frontend-vue/tests/contract/call-access-registered-logged-out-handoff-contract.mjs",
+        "frontend-vue/tests/contract/call-access-registered-logged-in-invitee-contract.mjs",
+        "frontend-vue/tests/contract/call-access-personalized-temp-reuse-contract.mjs",
+        "frontend-vue/tests/contract/call-access-invite-invalidation-terminal-contract.mjs",
+        "frontend-vue/tests/contract/call-access-duplicate-invite-replay-contract.mjs",
+        "frontend-vue/tests/contract/call-access-owner-transfer-main-contract.mjs",
+        "frontend-vue/tests/contract/owner-transfer-lifecycle-contract.mjs",
+        "frontend-vue/tests/contract/call-access-removed-members-contract.mjs",
+        "frontend-vue/tests/contract/call-access-terminal-browser-flows-contract.mjs",
+        "frontend-vue/tests/contract/call-access-stale-role-org-switch-contract.mjs",
+        "frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs",
         "frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs",
         "frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs",
         "frontend-vue/tests/contract/call-access-link-privacy-contract.mjs",
@@ -124,6 +139,7 @@
         "frontend-vue/tests/contract/call-access-callapp-revocation-contract.mjs",
         "frontend-vue/tests/contract/call-access-route-guard-ui-contract.mjs",
         "frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs",
+        "backend-king-php/tests/call-access-anonymous-temp-rights-contract.php",
         "backend-king-php/tests/call-guest-list-direct-join-contract.sh",
         "backend-king-php/tests/call-access-cross-org-contract.sh",
         "backend-king-php/tests/realtime-lobby-concurrency-contract.sh",
@@ -196,7 +212,11 @@
     {
       "id": "auth_session_route_guards",
       "status": "covered",
-      "readiness_refs": ["Z5 auth store", "Z5 role guards", "Z6 login journey"],
+      "readiness_refs": [
+        "Z5 auth store",
+        "Z5 role guards",
+        "Z6 login journey"
+      ],
       "acceptance": [
         "Unauthenticated routes redirect to login.",
         "Authenticated admin/user sessions route to their role-safe landing pages.",
@@ -212,14 +232,20 @@
         },
         {
           "command_id": "backend:integration:http",
-          "paths": ["backend-king-php/tests/videochat-integration-matrix-http-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/videochat-integration-matrix-http-contract.sh"
+          ]
         }
       ]
     },
     {
       "id": "admin_calls_calendar_invites",
       "status": "covered",
-      "readiness_refs": ["Z5 admin calls CRUD", "Z5 calendar scheduling", "Z5 invite popover/copy/join"],
+      "readiness_refs": [
+        "Z5 admin calls CRUD",
+        "Z5 calendar scheduling",
+        "Z5 invite popover/copy/join"
+      ],
       "acceptance": [
         "Admin call CRUD and calendar surfaces are backed by API contracts.",
         "Invite creation and redeem flows use backend-issued invite data only."
@@ -227,18 +253,26 @@
       "checks": [
         {
           "command_id": "frontend:e2e:ui-parity",
-          "paths": ["frontend-vue/tests/e2e/ui-parity-journeys.spec.js"]
+          "paths": [
+            "frontend-vue/tests/e2e/ui-parity-journeys.spec.js"
+          ]
         },
         {
           "command_id": "backend:integration:http",
-          "paths": ["backend-king-php/tests/videochat-integration-matrix-http-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/videochat-integration-matrix-http-contract.sh"
+          ]
         }
       ]
     },
     {
       "id": "user_dashboard_join_flow",
       "status": "covered",
-      "readiness_refs": ["Z5 user dashboard", "Z3 invite redeem", "Z6 invite journey"],
+      "readiness_refs": [
+        "Z5 user dashboard",
+        "Z3 invite redeem",
+        "Z6 invite journey"
+      ],
       "acceptance": [
         "User dashboard lists owned/invited calls from backend data.",
         "Invite redeem routes users into the backend-authorized workspace context."
@@ -246,18 +280,26 @@
       "checks": [
         {
           "command_id": "frontend:e2e:ui-parity",
-          "paths": ["frontend-vue/tests/e2e/ui-parity-journeys.spec.js"]
+          "paths": [
+            "frontend-vue/tests/e2e/ui-parity-journeys.spec.js"
+          ]
         },
         {
           "command_id": "backend:integration:http",
-          "paths": ["backend-king-php/tests/videochat-integration-matrix-http-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/videochat-integration-matrix-http-contract.sh"
+          ]
         }
       ]
     },
     {
       "id": "workspace_lobby_presence_tabs",
       "status": "covered",
-      "readiness_refs": ["Z5 workspace sidebars/tabs", "Z4 lobby queue", "Z4 presence"],
+      "readiness_refs": [
+        "Z5 workspace sidebars/tabs",
+        "Z4 lobby queue",
+        "Z4 presence"
+      ],
       "acceptance": [
         "Lobby badge and queue rows are server-driven.",
         "Invited users stay in the join modal until admitted.",
@@ -266,11 +308,15 @@
       "checks": [
         {
           "command_id": "frontend:e2e:ui-parity",
-          "paths": ["frontend-vue/tests/e2e/lobby-admission.spec.js"]
+          "paths": [
+            "frontend-vue/tests/e2e/lobby-admission.spec.js"
+          ]
         },
         {
           "command_id": "frontend:e2e:lobby-concurrency",
-          "paths": ["frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"]
+          "paths": [
+            "frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js"
+          ]
         },
         {
           "command_id": "backend:lobby-admission",
@@ -281,14 +327,22 @@
         },
         {
           "command_id": "backend:integration:realtime",
-          "paths": ["backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/videochat-integration-matrix-realtime-contract.sh"
+          ]
         }
       ]
     },
     {
       "id": "chat_files_archive_activity",
       "status": "covered",
-      "readiness_refs": ["Z4 chat", "Z5 chat tab", "BACKLOG #Q-18", "BACKLOG #Q-19", "BACKLOG #Q-21"],
+      "readiness_refs": [
+        "Z4 chat",
+        "Z5 chat tab",
+        "BACKLOG #Q-18",
+        "BACKLOG #Q-19",
+        "BACKLOG #Q-21"
+      ],
       "acceptance": [
         "Oversized paste becomes a safe text attachment instead of an inline websocket payload.",
         "Allowed images/docs are uploadable and unsafe binaries are rejected.",
@@ -315,7 +369,11 @@
     {
       "id": "activity_layout_strategy",
       "status": "covered",
-      "readiness_refs": ["BACKLOG #Q-20", "Z5 call layout", "Z4 reaction/activity"],
+      "readiness_refs": [
+        "BACKLOG #Q-20",
+        "Z5 call layout",
+        "Z4 reaction/activity"
+      ],
       "acceptance": [
         "Admin-selected layout modes and activity strategies normalize deterministically.",
         "Active speaker/movement strategy drives main/mini participant selection within visible limits."
@@ -323,29 +381,40 @@
       "checks": [
         {
           "command_id": "frontend:e2e:matrix",
-          "paths": ["frontend-vue/tests/e2e/call-layout-strategies.spec.js"]
+          "paths": [
+            "frontend-vue/tests/e2e/call-layout-strategies.spec.js"
+          ]
         },
         {
           "command_id": "backend:activity-layout",
-          "paths": ["backend-king-php/tests/realtime-activity-layout-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/realtime-activity-layout-contract.sh"
+          ]
         }
       ]
     },
     {
       "id": "wlvc_wire_contract",
       "status": "covered",
-      "readiness_refs": ["Z1 contract catalog", "Z6 runtime tests"],
+      "readiness_refs": [
+        "Z1 contract catalog",
+        "Z6 runtime tests"
+      ],
       "acceptance": [
         "Frontend and backend agree on WLVC frame package/parse semantics."
       ],
       "checks": [
         {
           "command_id": "frontend:contract:wlvc",
-          "paths": ["frontend-vue/tests/contract/wlvc-wire-contract.mjs"]
+          "paths": [
+            "frontend-vue/tests/contract/wlvc-wire-contract.mjs"
+          ]
         },
         {
           "command_id": "backend:wlvc-wire",
-          "paths": ["backend-king-php/tests/wlvc-wire-contract.sh"]
+          "paths": [
+            "backend-king-php/tests/wlvc-wire-contract.sh"
+          ]
         }
       ]
     },
@@ -353,7 +422,9 @@
       "id": "admin_overview_metrics_binding",
       "status": "gap",
       "release_blocking": true,
-      "readiness_refs": ["Z5 admin dashboard data binding"],
+      "readiness_refs": [
+        "Z5 admin dashboard data binding"
+      ],
       "acceptance": [
         "Admin overview widgets must be populated from backend contracts with no static placeholder metrics."
       ],
@@ -372,7 +443,9 @@
       "id": "participant_list_backend_moderation",
       "status": "gap",
       "release_blocking": true,
-      "readiness_refs": ["Z5 participant list search/pagination/moderation"],
+      "readiness_refs": [
+        "Z5 participant list search/pagination/moderation"
+      ],
       "acceptance": [
         "Participant list search, pagination, and moderation actions must be backend-authorized and not local-only projections."
       ],
@@ -391,7 +464,9 @@
       "id": "control_bar_realtime_actions",
       "status": "gap",
       "release_blocking": true,
-      "readiness_refs": ["Z5 control-bar actions"],
+      "readiness_refs": [
+        "Z5 control-bar actions"
+      ],
       "acceptance": [
         "Raise-hand, reactions, mic/cam/screen, and hangup controls must update realtime/backend state and fan out consistently."
       ],
@@ -410,7 +485,10 @@
       "id": "profile_branding_crop_settings",
       "status": "gap",
       "release_blocking": true,
-      "readiness_refs": ["Z5 avatar settings flow", "Z5 branding/logo settings flow"],
+      "readiness_refs": [
+        "Z5 avatar settings flow",
+        "Z5 branding/logo settings flow"
+      ],
       "acceptance": [
         "Avatar and branding/logo settings need drag/drop, crop/zoom quality, persisted backend updates, and admin-only branding writes."
       ],
@@ -429,7 +507,9 @@
       "id": "global_theme_time_format",
       "status": "gap",
       "release_blocking": true,
-      "readiness_refs": ["Z5 global theme/time-format settings"],
+      "readiness_refs": [
+        "Z5 global theme/time-format settings"
+      ],
       "acceptance": [
         "Theme and time-format settings must apply globally across tables, calendar, modals, workspace timestamps, and persisted session reloads."
       ],

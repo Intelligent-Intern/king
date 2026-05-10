@@ -44,7 +44,7 @@ const iamContractScript = String(scripts['test:contract:iam-call-access'] || '')
 
 assert.match(
   callAccessE2eScript,
-  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js --workers=1$/,
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js tests\/e2e\/call-access-calendar-unregistered-invite\.spec\.js tests\/e2e\/call-access-admin-join-boundaries\.spec\.js --workers=1$/,
   'IAM Call Access E2E command must be stable, focused, serial, and opt into deterministic artifacts',
 );
 assert.match(
