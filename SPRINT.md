@@ -245,9 +245,23 @@ Sprint Checkboxen:
     invitee, registered logged-out handoff, registered invitee extract, invite
     invalidation terminal, terminal browser flows, terminal states, link
     privacy contracts, and `git diff --check` passed.
-- [ ] IAM5-15 Extract Call App IAM boundary proof value for entitlement
+- [x] IAM5-15 Extract Call App IAM boundary proof value for entitlement
   revocation, launch-token reconnect validation, and whiteboard org install
   without touching Call App UI feature work.
+  - Merged worker branch `agent/iam-s5-15-call-app-boundary`.
+  - Added `documentation/iam-sprint-05-call-app-boundary-extraction.md` and
+    `iam-s5-15-call-app-boundary-extraction-contract.mjs`.
+  - Extracted Call App participant-grant revocation, launch-token reconnect
+    validation, iframe no-primary-token boundary, and Whiteboard organization
+    install proof while preserving stronger entitlement/session-staleness
+    revalidation and production org-install command as focused follow-up
+    evidence.
+  - Repaired stale Call App diagnostics contracts to use current planning
+    sources and to prove actual diagnostics redaction for tokens/secrets and
+    raw media/frame payload fields.
+  - Proof: IAM5-15 extraction, Call App revocation, permission revocation,
+    Marketplace-to-call journey, Whiteboard org-install browser proof,
+    iframe-launch, Call Diagnostics, and `git diff --check` passed.
 - [ ] IAM5-16 Extract system-admin, organization-role bootstrap, admin-join,
   and lane proof value from the remaining IAM lane branches.
 - [x] IAM5-17 Consolidate seed data hygiene, asset cache busting, local run docs,
