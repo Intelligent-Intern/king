@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_lifecycle.php';
+
 function videochat_validate_update_call_payload(array $payload): array
 {
     $errors = [];
@@ -196,7 +198,8 @@ function videochat_validate_update_call_payload(array $payload): array
  *   reason: string,
  *   errors: array<string, string>,
  *   call: ?array<string, mixed>,
- *   invite_dispatch: array{global_resend_triggered: bool, explicit_action_required: bool}
+ *   invite_dispatch: array{global_resend_triggered: bool, explicit_action_required: bool},
+ *   lifecycle?: array<string, mixed>
  * }
  */
 function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
@@ -446,6 +449,20 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
         $nextScheduleTimezone,
         $nextScheduleAllDay
     );
+    $scheduleChanged = $nextStartsUnix !== $currentStartsUnix
+        || $nextEndsUnix !== $currentEndsUnix
+        || $nextScheduleTimezone !== videochat_normalize_call_schedule_timezone($existingCall['schedule_timezone'] ?? 'UTC')
+        || $nextScheduleAllDay !== ((int) ($existingCall['schedule_all_day'] ?? 0) === 1);
+    $lifecycle = [
+        'ok' => true,
+        'reason' => 'not_applicable',
+        'transition' => 'rescheduled',
+        'applied' => false,
+        'invalidated_link_count' => 0,
+        'revoked_access_session_count' => 0,
+        'lobby_cleared_count' => 0,
+        'presence_cleared_count' => 0,
+    ];
 
     $pdo->beginTransaction();
     try {
@@ -536,6 +553,25 @@ SQL
         ];
     }
 
+    if ($scheduleChanged) {
+        $lifecycleTenantId = is_int($callTenantId) && $callTenantId > 0 ? $callTenantId : $tenantId;
+        $lifecycleCall = $existingCall;
+        $lifecycleCall['starts_at'] = $nextStartsAt;
+        $lifecycleCall['ends_at'] = $nextEndsAt;
+        $lifecycle = videochat_apply_call_reschedule_lifecycle($pdo, $lifecycleCall, $lifecycleTenantId, $authUserId);
+        $lifecycle['applied'] = true;
+        if (!(bool) ($lifecycle['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'reason' => 'internal_error',
+                'errors' => [],
+                'call' => null,
+                'invite_dispatch' => ['global_resend_triggered' => false, 'explicit_action_required' => true],
+                'lifecycle' => $lifecycle,
+            ];
+        }
+    }
+
     $myParticipation = $authUserId === (int) $existingCall['owner_user_id'];
     if (!$myParticipation) {
         foreach ($nextInternalParticipants as $participant) {
@@ -610,6 +646,7 @@ SQL
             'global_resend_triggered' => false,
             'explicit_action_required' => true,
         ],
+        'lifecycle' => $lifecycle,
     ];
 }
 

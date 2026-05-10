@@ -27,6 +27,7 @@ DEFAULT_CONTRACTS=(
   "call-access-strong-mismatch-privacy-contract.sh"
   "call-access-deleted-ended-disabled-join-contract.sh"
   "call-access-terminal-join-contract.sh"
+  "call-lifecycle-contract.sh"
   "call-calendar-invitation-flow-contract.sh"
   "call-guest-list-direct-join-contract.sh"
   "call-temporary-moderator-contract.sh"
