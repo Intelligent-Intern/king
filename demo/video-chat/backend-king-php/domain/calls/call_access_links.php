@@ -4,6 +4,22 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
 
+function videochat_count_call_access_sessions_for_link(PDO $pdo, string $accessId): int
+{
+    $normalizedAccessId = videochat_normalize_call_access_id($accessId);
+    if ($normalizedAccessId === '' || !videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'access_id')) {
+        return 0;
+    }
+
+    try {
+        $query = $pdo->prepare('SELECT COUNT(*) FROM call_access_sessions WHERE access_id = :access_id');
+        $query->execute([':access_id' => $normalizedAccessId]);
+        return max(0, (int) ($query->fetchColumn() ?: 0));
+    } catch (Throwable) {
+        return 0;
+    }
+}
+
 function videochat_create_call_access_link_for_user(
     PDO $pdo,
     string $callId,
@@ -310,6 +326,120 @@ SQL
             'call' => null,
         ];
     }
+}
+
+function videochat_disable_anonymous_call_access_link(
+    PDO $pdo,
+    string $accessId,
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    $normalizedAccessId = videochat_normalize_call_access_id($accessId);
+    if ($normalizedAccessId === '') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['access_id' => 'invalid_access_id'],
+            'access_link' => null,
+            'call' => null,
+            'audit_event' => null,
+        ];
+    }
+    if (!videochat_tenant_table_has_column($pdo, 'call_access_links', 'disabled_at')) {
+        return [
+            'ok' => false,
+            'reason' => 'unsupported',
+            'errors' => ['access_link' => 'disabled_at_not_supported'],
+            'access_link' => null,
+            'call' => null,
+            'audit_event' => null,
+        ];
+    }
+
+    $accessLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId);
+    if (!is_array($accessLink) || videochat_call_access_link_kind($accessLink) !== 'open') {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => ['access_id' => 'anonymous_link_not_found'],
+            'access_link' => null,
+            'call' => null,
+            'audit_event' => null,
+        ];
+    }
+
+    $tenantId = is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null;
+    $callId = trim((string) ($accessLink['call_id'] ?? ''));
+    $call = function_exists('videochat_fetch_call_for_update') ? videochat_fetch_call_for_update($pdo, $callId, $tenantId) : null;
+    if (!is_array($call)) {
+        $call = [
+            'id' => $callId,
+            'tenant_id' => $tenantId,
+            'status' => '',
+        ];
+    }
+    $accessSessionCount = videochat_count_call_access_sessions_for_link($pdo, $normalizedAccessId);
+    $hadEffect = !videochat_call_access_link_is_disabled($accessLink);
+    $disabledAt = $hadEffect ? gmdate('c') : videochat_call_access_link_disabled_at($accessLink);
+
+    try {
+        $pdo->beginTransaction();
+        if ($hadEffect) {
+            $disable = $pdo->prepare(
+                <<<'SQL'
+UPDATE call_access_links
+SET disabled_at = :disabled_at
+WHERE id = :id
+  AND (disabled_at IS NULL OR trim(disabled_at) = '')
+SQL
+            );
+            $disable->execute([
+                ':id' => $normalizedAccessId,
+                ':disabled_at' => $disabledAt,
+            ]);
+            if ($disable->rowCount() <= 0) {
+                $hadEffect = false;
+            }
+        }
+
+        $freshLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId, $tenantId);
+        if (!is_array($freshLink)) {
+            $freshLink = $accessLink + ['disabled_at' => $disabledAt];
+        }
+        $audit = videochat_audit_record_call_access_link_disabled($pdo, $freshLink, $call, $actorUserId, [
+            ...$context,
+            'had_effect' => $hadEffect,
+            'access_session_count' => $accessSessionCount,
+        ]);
+        if (!(bool) ($audit['ok'] ?? false)) {
+            throw new RuntimeException('audit_write_failed');
+        }
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'audit_failed',
+            'errors' => [],
+            'access_link' => null,
+            'call' => null,
+            'audit_event' => null,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => $hadEffect ? 'disabled' : 'already_disabled',
+        'errors' => [],
+        'access_link' => $freshLink,
+        'call' => $call,
+        'target_user' => null,
+        'access_session_count' => $accessSessionCount,
+        'audit_event' => is_array($audit['event'] ?? null) ? $audit['event'] : null,
+    ];
 }
 
 /**

@@ -17,6 +17,26 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM7-16 link invalidation active-state extraction:
+  fast-forwarded the worker branch to integration baseline `e73009d1` after
+  IAM7-17 merged, then inspected
+  `local/iam-e2e-link-invalidation-active-state` at `d63f78c3` without
+  wholesale merging its broad stale IAM stack. Extracted only the focused
+  current value: persisted `disabled_at` support for open call-access links,
+  active call-access session revalidation against disabled links, and backend
+  proof that personalized links cancelled while a user is in lobby or already
+  in-call fail closed for existing sessions/websocket auth and fresh joins.
+  The same proof disables anonymous open links while guests are in lobby and
+  while already admitted, verifies both browser/device sessions are counted and
+  invalidated, rejects replacement guest/session creation, and keeps HTTP join
+  denials redacted. Disabled-link audit payloads record safe counts and
+  explicit redaction flags instead of raw link, credential, or guest values.
+  Proof: `call-access-link-invalidation-active-state-contract.mjs`, PHP
+  syntax checks, and Docker-backed
+  `IAM_SQLITE_CONTRACTS="call-access-invalidation-contract.sh" demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`.
+  No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
+  were touched.
+
 - 2026-05-10 IAM7-15 invalid/expired anonymous-link extraction:
   inspected `local/iam-e2e-invalid-anonymous-link-proof-20260509` against
   current integration baseline `1d0f11af` and rejected the historical branch as
