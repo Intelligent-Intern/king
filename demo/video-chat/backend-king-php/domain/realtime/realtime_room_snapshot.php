@@ -179,6 +179,193 @@ function videochat_realtime_merge_room_participants(array $localParticipants, ar
     return $participants;
 }
 
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_realtime_room_snapshot_capabilities_by_connection_id(
+    array $presenceState,
+    array $participants,
+    array $persistedCapabilities
+): array {
+    $connectionCapabilities = is_array($presenceState['client_capabilities'] ?? null)
+        ? (array) $presenceState['client_capabilities']
+        : [];
+    $capabilitiesByConnectionId = [];
+
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        $connectionId = trim((string) ($participant['connection_id'] ?? ''));
+        if ($connectionId === '') {
+            continue;
+        }
+
+        $capabilities = [];
+        if (is_array($connectionCapabilities[$connectionId] ?? null)) {
+            $capabilities = (array) $connectionCapabilities[$connectionId];
+        } elseif (is_array($persistedCapabilities[$connectionId] ?? null)) {
+            $capabilities = (array) $persistedCapabilities[$connectionId];
+        } elseif (is_array($participant['client_capabilities'] ?? null)) {
+            $capabilities = (array) $participant['client_capabilities'];
+        }
+
+        if ($capabilities !== []) {
+            $capabilitiesByConnectionId[$connectionId] = videochat_client_capabilities_public_projection($capabilities);
+        }
+    }
+
+    ksort($capabilitiesByConnectionId);
+    return $capabilitiesByConnectionId;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_realtime_room_snapshot_participants_without_legacy_media(array $participants): array
+{
+    $sanitized = [];
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        unset($participant['client_capabilities']);
+        $sanitized[] = $participant;
+    }
+
+    return $sanitized;
+}
+
+/**
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_realtime_room_snapshot_plan_participants_by_session_id(array $mediaSessionPlan): array
+{
+    $bySessionId = [];
+    foreach ((array) ($mediaSessionPlan['participants'] ?? []) as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        $sessionId = trim((string) ($participant['participant_session_id'] ?? ''));
+        if ($sessionId !== '') {
+            $bySessionId[$sessionId] = $participant;
+        }
+    }
+
+    return $bySessionId;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_realtime_room_snapshot_participant_media_state(array $participants, array $mediaSessionPlan): array
+{
+    $planBySessionId = videochat_realtime_room_snapshot_plan_participants_by_session_id($mediaSessionPlan);
+    $participantMediaState = [];
+
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        $connectionId = trim((string) ($participant['connection_id'] ?? ''));
+        if ($connectionId === '') {
+            continue;
+        }
+        $planned = is_array($planBySessionId[$connectionId] ?? null) ? $planBySessionId[$connectionId] : [];
+        $participantMediaState[] = [
+            'connection_id' => $connectionId,
+            'participant_session_id' => (string) ($planned['participant_session_id'] ?? $connectionId),
+            'user_id' => (int) (($participant['user'] ?? [])['id'] ?? 0),
+            'media_state' => (string) ($planned['media_state'] ?? 'waiting_for_capabilities'),
+            'profile' => (string) ($planned['profile'] ?? ''),
+            'transport' => (string) ($planned['transport'] ?? ''),
+            'security_policy' => (string) ($planned['security_policy'] ?? 'required'),
+            'stuck_reason' => (string) ($planned['stuck_reason'] ?? ''),
+        ];
+    }
+
+    return $participantMediaState;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_realtime_room_snapshot_gossip_readiness(array $gossipTopology, array $presenceState, string $roomId): array
+{
+    $roomTelemetry = is_array($presenceState['gossipmesh_telemetry'][$roomId] ?? null)
+        ? (array) $presenceState['gossipmesh_telemetry'][$roomId]
+        : [];
+    $rolloutGate = is_array($roomTelemetry['rollout_gate'] ?? null) ? (array) $roomTelemetry['rollout_gate'] : [];
+    $admittedPeers = is_array($gossipTopology['admitted_peers'] ?? null) ? $gossipTopology['admitted_peers'] : [];
+    $assignedNeighbors = is_array($gossipTopology['assigned_neighbors'] ?? null) ? $gossipTopology['assigned_neighbors'] : [];
+    $topologyReady = $gossipTopology !== []
+        && trim((string) ($gossipTopology['peer_id'] ?? '')) !== ''
+        && (int) ($gossipTopology['topology_epoch'] ?? 0) > 0
+        && count($admittedPeers) > 0;
+
+    return [
+        'topology_ready' => $topologyReady,
+        'telemetry_ready' => (bool) ($rolloutGate['telemetry_ready'] ?? false),
+        'active_allowed' => (bool) ($rolloutGate['active_allowed'] ?? false),
+        'sfu_first' => (bool) ($rolloutGate['sfu_first'] ?? true),
+        'peer_count' => (int) ($roomTelemetry['peer_count'] ?? count($admittedPeers)),
+        'assigned_neighbor_count' => count($assignedNeighbors),
+        'topology_epoch' => (int) ($gossipTopology['topology_epoch'] ?? 0),
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_realtime_room_snapshot_diagnostics(array $presenceState, string $roomId): array
+{
+    $roomTelemetry = is_array($presenceState['gossipmesh_telemetry'][$roomId] ?? null)
+        ? (array) $presenceState['gossipmesh_telemetry'][$roomId]
+        : [];
+
+    return [
+        'gossip_counters' => videochat_gossipmesh_sanitize_telemetry_counters($roomTelemetry['totals'] ?? []),
+        'gossip_peer_count' => (int) ($roomTelemetry['peer_count'] ?? 0),
+        'gossip_transports' => is_array($roomTelemetry['transports'] ?? null) ? (array) $roomTelemetry['transports'] : [],
+        'updated_at_ms' => (int) ($roomTelemetry['updated_at_ms'] ?? 0),
+    ];
+}
+
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<string, mixed>
+ */
+function videochat_realtime_room_snapshot_authoritative_media_session_plan(
+    array $mediaSessionPlan,
+    array $presenceState,
+    string $roomId,
+    array $participants,
+    array $capabilitiesByConnectionId,
+    array $gossipTopology
+): array {
+    return [
+        ...$mediaSessionPlan,
+        'authoritative' => true,
+        'authority' => 'room_snapshot',
+        'capabilities' => [
+            'schema_version' => videochat_client_capabilities_schema_version(),
+            'by_connection_id' => $capabilitiesByConnectionId,
+        ],
+        'participant_media_state' => videochat_realtime_room_snapshot_participant_media_state(
+            $participants,
+            $mediaSessionPlan
+        ),
+        'gossip' => [
+            'topology' => $gossipTopology,
+            'readiness' => videochat_realtime_room_snapshot_gossip_readiness($gossipTopology, $presenceState, $roomId),
+        ],
+        'diagnostics' => videochat_realtime_room_snapshot_diagnostics($presenceState, $roomId),
+    ];
+}
+
 function videochat_realtime_room_snapshot_payload(
     array $presenceState,
     array $connection,
@@ -252,6 +439,25 @@ function videochat_realtime_room_snapshot_payload(
             trim($reason) === '' ? 'snapshot' : trim($reason)
         );
     }
+    $mediaSessionPlan = videochat_media_session_plan_for_snapshot(
+        $presenceState,
+        $connection,
+        $participants,
+        $persistedClientCapabilities
+    );
+    $mediaSessionPlan = videochat_realtime_room_snapshot_authoritative_media_session_plan(
+        $mediaSessionPlan,
+        $presenceState,
+        $roomId,
+        $participants,
+        videochat_realtime_room_snapshot_capabilities_by_connection_id(
+            $presenceState,
+            $participants,
+            $persistedClientCapabilities
+        ),
+        $gossipTopology
+    );
+    $participants = videochat_realtime_room_snapshot_participants_without_legacy_media($participants);
     $viewerConnection = $connection;
     try {
         $viewerConnection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
@@ -292,18 +498,9 @@ function videochat_realtime_room_snapshot_payload(
             'status' => (string) ($ownerAbsence['call_status'] ?? ''),
             'owner_absence' => $ownerAbsence,
         ],
-        'media_session_plan' => videochat_media_session_plan_for_snapshot(
-            $presenceState,
-            $connection,
-            $participants,
-            $persistedClientCapabilities
-        ),
+        'media_session_plan' => $mediaSessionPlan,
         'call_apps' => $callApps,
         'gossip_topology' => $gossipTopology,
-        'call_lifecycle' => [
-            'status' => (string) ($ownerAbsence['call_status'] ?? ''),
-            'owner_absence' => $ownerAbsence,
-        ],
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
         'time' => is_int($nowMs) && $nowMs > 0 ? gmdate('c', (int) floor($nowMs / 1000)) : gmdate('c'),
     ];
@@ -320,7 +517,6 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'media_session_plan' => $payload['media_session_plan'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
         'gossip_topology' => $payload['gossip_topology'] ?? [],
-        'call_lifecycle' => $payload['call_lifecycle'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
