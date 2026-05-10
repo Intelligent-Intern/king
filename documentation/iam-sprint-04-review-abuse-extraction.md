@@ -120,3 +120,19 @@ account-update email confirmation value is unique, but it is not currently
 implemented or wired in this integration branch and cannot be extracted safely
 without importing a broad review/account-confirmation feature set. Keep both
 source worktrees untouched for a manager-owned feature extraction decision.
+
+## IAM7-02 Update
+
+Date: 2026-05-10
+
+The backend manual-review and account-confirmation subset is now extracted by
+`agent/iam7-02-duplicate-review-email` from the narrower
+`agent/iam-e2e-duplicate-review-email` source branch. The current backend now
+has `call_access_review.php`, `call_access_account_confirmation.php`,
+`call-access-duplicate-review-contract.php`, and
+`call-access-email-confirmation-contract.php`.
+
+The older review-abuse and warning-modal worktrees remain parked for frontend
+warning-modal policy, duplicate-race browser proof, identity mismatch flow,
+confirmation dispatch/audit hardening, and broader E2E coverage. Their broad
+source diffs are still not safe narrow cherry-picks.

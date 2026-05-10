@@ -140,3 +140,32 @@ Safe extraction performed in this branch:
   the current repo surface;
 - left product code, package scripts, shared CI wiring, sprint/backlog files,
   and forbidden Background/Gossip/SFU/MediaSecurity/BTGF areas untouched.
+
+## IAM7-02 Current Extraction Update
+
+Date: 2026-05-10
+
+Worker `agent/iam7-02-duplicate-review-email` extracted the focused
+call-access account-confirmation backend subset from
+`agent/iam-e2e-duplicate-review-email` after the Sprint 07 baseline advanced
+through `9c3744e4` and `b413f7de`.
+
+Current implementation now includes:
+
+- `demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php`
+  for account-bound, expiring, one-time account-update confirmations.
+- `demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php`
+  for current-account recipient targeting, manual display-name re-entry,
+  wrong-account denial, replay/expiry denial, no pre-confirm account update,
+  no session rebinding, link-target account isolation, and token fingerprint
+  storage.
+- HTTP route wiring in `demo/video-chat/backend-king-php/http/module_calls_access.php`
+  for account-update confirmation request and confirm endpoints. Development
+  responses may expose a debug token; production responses return `null`.
+
+The safe-dispatch/outbox, superseded-token race hardening, confirmation-specific
+audit helper, frontend confirmation view, and browser E2E journey remain parked
+source value. This extraction does not claim email dispatch acceptance or
+frontend modal coverage; it proves the backend account-confirmation contract
+now exists and keeps raw access ids, confirmation tokens, link-target account
+data, and session ids out of persisted confirmation rows and audit payloads.
