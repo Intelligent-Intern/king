@@ -132,8 +132,8 @@ for (const pathName of [
 
 assert.match(
   sprint,
-  /- \[x\] IAM7-14 Extract or prove identity mismatch review flow/,
-  'SPRINT.md must mark IAM7-14 checked only after implementation and proof',
+  /- \[x\] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility/,
+  'SPRINT.md must mark IAM8-07 checked only after implementation and proof',
 );
 
 process.stdout.write('[call-access-identity-mismatch-review-flow-contract] PASS\n');
