@@ -103,7 +103,7 @@ Sprint Checkboxen:
 - [x] UX6-14 Keep CRUD search/action bars right-aligned with exactly 20px
   spacing and the standard submit icon across the first migrated Admin
   surfaces.
-- [ ] UX6-15 Remove redundant cancel/close buttons where a right-sidebar or
+- [x] UX6-15 Remove redundant cancel/close buttons where a right-sidebar or
   modal already has the standard close affordance.
 - [x] UX6-16 Normalize right-sidebar forms: no border radius, no top/bottom
   border, non-resizable body, and sticky bottom-right submit.
