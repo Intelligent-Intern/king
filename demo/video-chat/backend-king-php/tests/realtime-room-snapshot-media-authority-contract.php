@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/auth_rbac.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 
 function videochat_room_snapshot_media_authority_assert(bool $condition, string $message): void

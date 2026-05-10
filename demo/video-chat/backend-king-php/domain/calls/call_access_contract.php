@@ -494,16 +494,6 @@ SQL
     return strtolower(trim((string) ($row['invite_state'] ?? '')));
 }
 
-function videochat_call_access_link_disabled_at(array $accessLink): string
-{
-    return is_string($accessLink['disabled_at'] ?? null) ? trim((string) $accessLink['disabled_at']) : '';
-}
-
-function videochat_call_access_link_is_disabled(array $accessLink): bool
-{
-    return videochat_call_access_link_disabled_at($accessLink) !== '';
-}
-
 function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink): bool
 {
     if (videochat_call_access_link_is_disabled($accessLink)) {
