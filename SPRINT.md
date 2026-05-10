@@ -83,8 +83,15 @@ Tickets:
   without leaking foreign calendar or call data.
 - [ ] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
   flow and cannot bypass host admission.
-- [ ] IAM2-04 Prove registered invitees who are logged out get a safe login
+- [x] IAM2-04 Prove registered invitees who are logged out get a safe login
   handoff and rebind only to the intended invite.
+  - Merged worker branch `agent/iam-s2-04-registered-logged-out`.
+  - Added `call-access-registered-logged-out-handoff-contract.mjs` proving
+    authenticated route handoff, login redirect sanitization, backend returned
+    access-link rebinding, verified context snapshotting, and fail-closed wrong
+    account/session switch handling.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-registered-logged-out-handoff-contract.mjs`
+    and `git diff --check` passed.
 - [ ] IAM2-05 Prove registered invitees who are already logged in can join only
   the invited call and keep active organization boundaries intact.
 - [ ] IAM2-06 Prove anonymous call links and temporary call-link accounts honor
