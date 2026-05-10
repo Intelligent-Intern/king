@@ -434,10 +434,15 @@ const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const DEFAULT_SETTINGS_TILE = 'personal.about';
 
 const pageTitle = computed(() => {
-  const routeTitleKey = typeof route.meta?.pageTitle_key === 'string' ? route.meta.pageTitle_key.trim() : '';
-  if (routeTitleKey !== '') return t(routeTitleKey);
+  const localizedTitle = route.meta?.localized?.pageTitle;
+  const routeTitleKey = typeof localizedTitle?.key === 'string'
+    ? localizedTitle.key.trim()
+    : (typeof route.meta?.pageTitle_key === 'string' ? route.meta.pageTitle_key.trim() : '');
+  if (routeTitleKey !== '') return t(routeTitleKey, localizedTitle?.params || {});
 
-  const routeTitle = typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '';
+  const routeTitle = typeof localizedTitle?.fallback === 'string'
+    ? localizedTitle.fallback.trim()
+    : (typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '');
   if (routeTitle !== '') return routeTitle;
 
   const mapping = {

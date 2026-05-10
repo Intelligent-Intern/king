@@ -7,7 +7,6 @@ export default {
       path: '/admin/administration/theme-editor',
       name: 'admin-administration-theme-editor',
       roles: ['admin'],
-      pageTitle: 'Theme Editor',
       pageTitle_key: 'navigation.administration.theme_editor',
       actions: [
         {
@@ -33,7 +32,6 @@ export default {
     {
       group: 'administration',
       to: '/admin/administration/theme-editor',
-      label: 'Theme Editor',
       label_key: 'navigation.administration.theme_editor',
       order: 40,
       roles: ['admin'],
@@ -41,4 +39,8 @@ export default {
   ],
   settings_panels: [],
   i18n_namespaces: ['theme_editor'],
+  catalog: {
+    name_key: 'modules.theme_editor',
+    preview_kind: 'theme_editor',
+  },
 };

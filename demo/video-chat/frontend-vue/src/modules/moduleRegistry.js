@@ -22,9 +22,19 @@ export function normalizeModuleDescriptor(descriptor) {
 
 function normalizeCatalogMetadata(catalog, moduleKey) {
   const source = catalog && typeof catalog === 'object' ? catalog : {};
+  const nameKey = typeof source.name_key === 'string' ? source.name_key.trim() : '';
+  const nameFallback = typeof source.name === 'string' ? source.name.trim() : '';
 
   return Object.freeze({
-    name: typeof source.name === 'string' ? source.name.trim() : '',
+    name: nameKey === '' ? nameFallback : '',
+    name_key: nameKey,
+    localized: Object.freeze({
+      name: Object.freeze({
+        key: nameKey,
+        fallback: nameKey === '' ? nameFallback : '',
+        params: Object.freeze({}),
+      }),
+    }),
     preview_kind: typeof source.preview_kind === 'string' ? source.preview_kind.trim() : moduleKey,
     screenshot_path: typeof source.screenshot_path === 'string' ? source.screenshot_path.trim() : '',
   });

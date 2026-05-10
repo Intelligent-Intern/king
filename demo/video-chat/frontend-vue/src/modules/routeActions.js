@@ -22,10 +22,10 @@ export function firstRouteActionByKind(actions = [], kind = '') {
 }
 
 export function routeActionLabel(action = null, translate, fallback = '') {
-  const key = String(action?.label_key || '').trim();
+  const key = String(action?.localized?.label?.key || action?.label_key || '').trim();
   if (key !== '' && typeof translate === 'function') {
-    return translate(key);
+    return translate(key, action?.localized?.label?.params || {});
   }
-  const label = String(action?.label || '').trim();
+  const label = String(action?.localized?.label?.fallback || action?.label || '').trim();
   return label !== '' ? label : fallback;
 }
