@@ -243,8 +243,16 @@ Tickets:
   - Proof: `bash -n demo/video-chat/backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh demo/video-chat/backend-king-php/tests/call-access-cross-org-contract.sh demo/video-chat/backend-king-php/tests/call-access-stale-organization-role-contract.sh`,
     `demo/video-chat/backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh`,
     and `git diff --check` passed.
-- [ ] IAM3-16 Add a single stable IAM backend runtime proof wrapper that runs the
+- [x] IAM3-16 Add a single stable IAM backend runtime proof wrapper that runs the
   Docker fallback contracts and exposes concise failure output.
+  - Merged worker branch `agent/iam-s3-16-docker-runtime-proof-wrapper`.
+  - Added `iam-backend-docker-runtime-proof-wrapper.sh`, which discovers focused
+    `*docker-proof.sh` IAM backend proofs, runs each, reports concise PASS/FAIL
+    lines, and tails bounded failure output.
+  - Proof: `bash -n demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh`,
+    `demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh`,
+    and `git diff --check` passed against the merged IAM3-13/IAM3-14/IAM3-15
+    Docker proof scripts.
 - [ ] IAM3-17 Wire Sprint 03 contract/E2E/runtime proofs into package scripts and
   release-gate metadata after integration.
 - [ ] IAM3-18 Classify dirty IAM worktrees (`codex/iam-call-access-e2e-foundation`,
