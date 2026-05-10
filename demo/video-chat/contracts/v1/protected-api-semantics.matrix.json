@@ -18,6 +18,7 @@
       "route_patterns": [
         "/api/admin/*",
         "/api/moderation/*",
+        "/api/governance/*",
         "/api/user/*",
         "/api/calls*",
         "/api/invite-codes*",
@@ -49,6 +50,37 @@
         }
       },
       "conflict_applicability": "not_applicable_global_guard"
+    },
+    {
+      "id": "governance_admin_route_resource_authorization",
+      "surface": "rest",
+      "route_patterns": [
+        "GET|POST /api/governance/{entity}",
+        "GET|PATCH|DELETE /api/governance/{entity}/{id}",
+        "POST /api/admin/tenancy/export",
+        "POST /api/admin/tenancy/import/dry-run"
+      ],
+      "protected_by": "videochat_tenancy_governance_permission_decision and videochat_tenancy_governance_portability_permission_decision",
+      "source_paths": [
+        "backend-king-php/http/module_tenancy.php",
+        "backend-king-php/domain/tenancy/tenant_administration.php",
+        "backend-king-php/domain/tenancy/governance_portability_jobs.php",
+        "backend-king-php/domain/tenancy/permission_grants.php"
+      ],
+      "contract_paths": [
+        "backend-king-php/tests/governance-route-authorization-contract.sh",
+        "backend-king-php/tests/governance-crud-api-contract.sh",
+        "backend-king-php/tests/tenant-permission-grants-contract.php"
+      ],
+      "semantics": {
+        "forbidden": {
+          "status": 403,
+          "error_codes": [
+            "tenant_governance_forbidden"
+          ]
+        }
+      },
+      "conflict_applicability": "not_applicable_resource_authorization_forbidden_not_conflict"
     },
     {
       "id": "admin_user_create",
