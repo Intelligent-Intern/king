@@ -56,6 +56,22 @@ Purpose:
   and `npm run test:ci:iam-call-access:static`. No push, deploy, Background,
   Gossip, SFU, MediaSecurity, or BTGF files/tests were touched.
 
+- 2026-05-10 IAM7-19 organization-removal active privilege downgrade:
+  inspected `local/iam-e2e-org-removal-active-privilege-downgrade` at
+  `1cf74a3224c472788c18b316ad885425a50c6057` against integration baseline
+  `e73009d1` and rejected it as wholesale input because it carries broad stale
+  IAM changes and parked non-IAM churn. Extracted only the focused current
+  proof: active organization-admin websocket privileges are re-read from
+  current server state, organization removal immediately downgrades active
+  moderation/owner controls fail-closed, explicit call-scoped admission remains
+  participant-only, and tenant membership removal closes active websocket
+  liveness with `tenant_membership_inactive`. Proof:
+  `iam-org-removal-active-privilege-downgrade-contract.mjs`, PHP syntax, and
+  Docker-backed
+  `IAM_SQLITE_CONTRACTS="call-access-org-removal-active-privilege-downgrade-contract.sh" demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`.
+  No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
+  were touched.
+
 - 2026-05-10 IAM7-15 invalid/expired anonymous-link extraction:
   inspected `local/iam-e2e-invalid-anonymous-link-proof-20260509` against
   current integration baseline `1d0f11af` and rejected the historical branch as

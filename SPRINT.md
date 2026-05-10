@@ -104,7 +104,7 @@ Sprint Checkboxen:
   `local/iam-e2e-lobby-management-moderator-rights`.
 - [x] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
   from `local/iam-e2e-local-run-docs-proof-20260509`.
-- [ ] IAM7-19 Extract or prove organization-removal active privilege downgrade
+- [x] IAM7-19 Extract or prove organization-removal active privilege downgrade
   from `local/iam-e2e-org-removal-active-privilege-downgrade`.
 - [ ] IAM7-20 Extract or prove owner-absence realtime sync from
   `local/iam-e2e-owner-absence-realtime-sync`.
