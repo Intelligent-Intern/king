@@ -74,7 +74,7 @@ Sprint Checkboxen:
   `local/iam-e2e-abuse-duplicate-race`.
 - [x] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
   from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
-- [ ] IAM8-03 Extract or prove account reconciliation email confirmation from
+- [x] IAM8-03 Extract or prove account reconciliation email confirmation from
   `local/iam-e2e-account-reconciliation-email`.
 - [x] IAM8-04 Extract or prove admin guest-list main journeys from
   `local/iam-e2e-admin-guestlist-main-journeys`.
