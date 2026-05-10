@@ -206,6 +206,11 @@ jobs:
         if: matrix.shard-index == 1
         run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
 
+      - name: Verify video-chat IAM call-access contract gate
+        if: matrix.shard-index == 1
+        working-directory: demo/video-chat/frontend-vue
+        run: npm run test:contract:iam-call-access
+
       - name: Verify video-chat frontend E2E release gate
         if: matrix.shard-index == 1
         working-directory: demo/video-chat/frontend-vue
