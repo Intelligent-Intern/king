@@ -118,15 +118,15 @@ assert.match(baseSource, /--border-subtle:\s*var\(--color-border\);/, 'shared bo
 assert.match(baseSource, /--bg-input:\s*var\(--color-border\);/, 'text input background must be derived from the border color');
 assert.match(
   baseSource,
-  /input\[type='text'\],[\s\S]*?input\[type='search'\]\s*\{[\s\S]*?background-color:\s*var\(--bg-input\);/,
-  'plain text/search inputs must use the border-derived input background',
+  /input\[type='text'\],[\s\S]*?input\[type='search'\]\s*\{[\s\S]*?background-color:\s*var\(--color-border\);/,
+  'plain text/search inputs must use the King styleguide border color directly',
 );
 assert.match(
   workspaceSharedSource,
-  /\.input,[\s\S]*?\.select\s*\{[\s\S]*?border:\s*1px solid var\(--border-subtle\);[\s\S]*?background:\s*var\(--bg-input\);/,
-  'shared text inputs must use the border-derived input background',
+  /\.input,[\s\S]*?\.select\s*\{[\s\S]*?border:\s*1px solid var\(--color-border\);[\s\S]*?background:\s*var\(--color-border\);[\s\S]*?color:\s*var\(--color-text-primary\);/,
+  'shared text inputs must use direct King styleguide color tokens',
 );
-assert.match(callSettingsSource, /\.ii-select\s*\{[\s\S]*?border:\s*1px solid var\(--border-subtle\);[\s\S]*?background-color:\s*var\(--border-subtle\);/, 'AppSelect background must use the styleguide border color');
-assert.match(callSettingsSource, /\.ii-select option,[\s\S]*?\.ii-select optgroup\s*\{[\s\S]*?background:\s*var\(--border-subtle\);/, 'native select dropdown options must use the styleguide border color');
+assert.match(callSettingsSource, /\.ii-select\s*\{[\s\S]*?border:\s*1px solid var\(--color-border\);[\s\S]*?background-color:\s*var\(--color-border\);[\s\S]*?color:\s*var\(--color-text-primary\);/, 'AppSelect background must use direct King styleguide color tokens');
+assert.match(callSettingsSource, /\.ii-select option,[\s\S]*?\.ii-select optgroup\s*\{[\s\S]*?background:\s*var\(--color-border\);[\s\S]*?color:\s*var\(--color-text-primary\);/, 'native select dropdown options must use direct King styleguide color tokens');
 
 console.log('[theme-palette-contract] PASS');

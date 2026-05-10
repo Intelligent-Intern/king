@@ -400,7 +400,7 @@ function applySelection() {
 .crud-relation-link {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--color-surface-navy);
   color: var(--text-main);
   cursor: pointer;
 }
@@ -417,7 +417,7 @@ function applySelection() {
 }
 
 .crud-relation-link strong {
-  color: var(--accent-cyan);
+  color: var(--color-cyan-hover);
 }
 
 .crud-relation-link:disabled {
@@ -446,8 +446,8 @@ function applySelection() {
 }
 
 .crud-relation-search-field .input {
-  border-color: var(--border-subtle);
-  background-color: var(--bg-input);
+  border-color: var(--color-border);
+  background-color: var(--color-border);
 }
 
 .crud-relation-submit-btn {
@@ -468,7 +468,7 @@ function applySelection() {
   padding: 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--bg-soft);
+  background: var(--color-surface-navy);
 }
 
 .crud-relation-field {

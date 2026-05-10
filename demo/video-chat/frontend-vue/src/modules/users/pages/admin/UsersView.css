@@ -158,7 +158,7 @@
 }
 
 .users-relation-link strong {
-  color: var(--accent-cyan);
+  color: var(--color-cyan-hover);
 }
 
 .users-relation-link span {

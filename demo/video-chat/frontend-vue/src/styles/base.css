@@ -83,7 +83,12 @@ select {
 
 input[type='text'],
 input[type='search'] {
-  background-color: var(--bg-input);
+  background-color: var(--color-border);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-cyan-primary);
 }
 
 * {
