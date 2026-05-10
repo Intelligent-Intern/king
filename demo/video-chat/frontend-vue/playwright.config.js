@@ -98,6 +98,7 @@ const localUse = {
   headless: true,
   screenshot: 'only-on-failure',
   trace: iamCallAccessArtifacts ? 'retain-on-failure' : 'on-first-retry',
+  video: process.env.CI ? 'retain-on-failure' : 'off',
   launchOptions: chromiumExecutablePath !== '' ? {
     executablePath: chromiumExecutablePath,
   } : undefined,

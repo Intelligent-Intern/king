@@ -316,45 +316,88 @@ compose_smoke() {
     -p "${compose_project}"
     -f "${COMPOSE_FILE}"
   )
+  local artifacts_dir="${VIDEOCHAT_SMOKE_ARTIFACTS_DIR:-}"
+
+  if [[ -n "${artifacts_dir}" && "${artifacts_dir}" != /* ]]; then
+    artifacts_dir="$(cd "${ROOT_DIR}/../.." && pwd)/${artifacts_dir}"
+  fi
+
+  compose_with_env() {
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" "$@"
+  }
 
   compose_debug_dump() {
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" ps || true
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" logs --tail 200 videochat-backend-v1 || true
+    compose_with_env ps || true
+    compose_with_env logs --tail 200 videochat-backend-v1 || true
+  }
+
+  collect_compose_artifacts() {
+    local reason="${1:-compose-failure}"
+    local service=""
+
+    if [[ -z "${artifacts_dir}" ]]; then
+      return 0
+    fi
+
+    mkdir -p "${artifacts_dir}"
+    rm -rf \
+      "${artifacts_dir}/playwright-test-results" \
+      "${artifacts_dir}/playwright-report"
+    rm -f \
+      "${artifacts_dir}/manifest.env" \
+      "${artifacts_dir}/compose-ps.txt" \
+      "${artifacts_dir}/compose-all.log" \
+      "${artifacts_dir}/videochat-backend-v1.log" \
+      "${artifacts_dir}/videochat-backend-ws-v1.log" \
+      "${artifacts_dir}/videochat-backend-sfu-v1.log" \
+      "${artifacts_dir}/videochat-frontend-v1.log"
+
+    {
+      printf 'reason=%s\n' "${reason}"
+      date -u '+timestamp_utc=%Y-%m-%dT%H:%M:%SZ'
+      printf 'compose_project=%s\n' "${compose_project}"
+      printf 'backend_port=%s\n' "${compose_backend_port}"
+      printf 'backend_ws_port=%s\n' "${compose_backend_ws_port}"
+      printf 'backend_sfu_port=%s\n' "${compose_backend_sfu_port}"
+      printf 'frontend_port=%s\n' "${compose_frontend_port}"
+      printf 'backend_php_image=%s\n' "${compose_backend_php_image}"
+      printf 'king_extension_api=%s\n' "${king_extension_api:-unknown}"
+      printf 'king_extension_api_candidates=%s\n' "${king_extension_api_candidates:-none}"
+      printf 'host_php_api=%s\n' "${host_php_api:-unknown}"
+    } > "${artifacts_dir}/manifest.env"
+
+    compose_with_env ps > "${artifacts_dir}/compose-ps.txt" 2>&1 || true
+    compose_with_env logs --no-color --timestamps > "${artifacts_dir}/compose-all.log" 2>&1 || true
+
+    for service in videochat-backend-v1 videochat-backend-ws-v1 videochat-backend-sfu-v1 videochat-frontend-v1; do
+      compose_with_env logs --no-color --timestamps --tail 500 "${service}" > "${artifacts_dir}/${service}.log" 2>&1 || true
+    done
+
+    compose_with_env cp videochat-frontend-v1:/app/test-results "${artifacts_dir}/playwright-test-results" >/dev/null 2>&1 || true
+    compose_with_env cp videochat-frontend-v1:/app/playwright-report "${artifacts_dir}/playwright-report" >/dev/null 2>&1 || true
+
+    log "Collected compose failure artifacts in ${artifacts_dir}"
   }
 
   local compose_up_log
   compose_up_log="$(mktemp)"
-  if VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" up -d --build >"${compose_up_log}" 2>&1; then
+  if compose_with_env up -d --build >"${compose_up_log}" 2>&1; then
     rm -f "${compose_up_log}"
   else
     local compose_up_exit=$?
     log "ERROR: docker compose up failed (exit=${compose_up_exit}); dumping output"
     cat "${compose_up_log}" >&2 || true
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" down -v >/dev/null 2>&1 || true
+    if [[ -n "${artifacts_dir}" ]]; then
+      mkdir -p "${artifacts_dir}"
+      cp "${compose_up_log}" "${artifacts_dir}/compose-up.log" || true
+    fi
+    compose_with_env down -v >/dev/null 2>&1 || true
     rm -f "${compose_up_log}"
     return 1
   fi
@@ -362,13 +405,7 @@ compose_smoke() {
   local cleanup_compose_enabled=0
   cleanup_compose() {
     if [[ "${cleanup_compose_enabled:-0}" == "1" ]]; then
-      VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-      VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-      VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-      VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-      VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-      VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-      "${compose_cmd[@]}" down -v >/dev/null 2>&1 || true
+      compose_with_env down -v >/dev/null 2>&1 || true
     fi
   }
   cleanup_compose_enabled=1
@@ -393,6 +430,7 @@ compose_smoke() {
   if [[ "${health_ready}" != "1" ]]; then
     log "ERROR: backend health did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "backend-health-timeout"
     return 1
   fi
 
@@ -407,6 +445,7 @@ compose_smoke() {
   if [[ "${frontend_ready}" != "1" ]]; then
     log "ERROR: frontend did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "frontend-health-timeout"
     return 1
   fi
 
@@ -422,6 +461,7 @@ compose_smoke() {
   if [[ "${runtime_ready}" != "1" ]]; then
     log "ERROR: runtime endpoint did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "runtime-health-timeout"
     return 1
   fi
   printf '%s' "${runtime_response}" | php -r '
@@ -455,6 +495,7 @@ compose_smoke() {
   if [[ "${login_ready}" != "1" ]]; then
     log "ERROR: login endpoint did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "login-health-timeout"
     return 1
   fi
 
@@ -488,6 +529,7 @@ compose_smoke() {
   if [[ "${admin_runtime_ready}" != "1" ]]; then
     log "ERROR: admin runtime endpoint did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "admin-runtime-health-timeout"
     return 1
   fi
 
@@ -533,6 +575,7 @@ compose_smoke() {
   if [[ "${session_ready}" != "1" ]]; then
     log "ERROR: session endpoint did not become ready; dumping compose status/logs"
     compose_debug_dump
+    collect_compose_artifacts "session-health-timeout"
     return 1
   fi
 
@@ -552,33 +595,27 @@ compose_smoke() {
 
   if [[ "${VIDEOCHAT_SMOKE_SKIP_BACKEND_CALL_ACCESS_SESSION_CONTRACT:-0}" != "1" ]]; then
     log "compose backend call-access session contract gate"
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" exec -T videochat-backend-v1 sh -lc "\
+    if ! compose_with_env exec -T videochat-backend-v1 sh -lc "\
       cd \"\${VIDEOCHAT_SMOKE_BACKEND_WORKDIR:-/app}\" && \
-      tests/call-access-session-contract.sh"
+      tests/call-access-session-contract.sh"; then
+      collect_compose_artifacts "backend-call-access-session-contract-failure"
+      return 1
+    fi
   fi
 
   if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_CALL_ACCESS_E2E:-0}" != "1" ]]; then
     local call_access_seed_matrix_json
     call_access_seed_matrix_json="$(tr -d '\n' < "${ROOT_DIR}/contracts/v1/iam-call-access-seeding.matrix.json")"
     log "compose frontend Playwright call-access gate"
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" exec -T \
+    if ! compose_with_env exec -T \
       -e "VIDEOCHAT_CALL_ACCESS_SEED_MATRIX_JSON=${call_access_seed_matrix_json}" \
+      -e "CI=1" \
       videochat-frontend-v1 sh -lc "\
       cd \"\${VIDEOCHAT_SMOKE_FRONTEND_WORKDIR:-/app}\" && \
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
       PLAYWRIGHT_FRONTEND_PORT=4174 \
+      PLAYWRIGHT_IAM_CALL_ACCESS_OUTPUT_DIR='test-results/iam-call-access' \
+      PLAYWRIGHT_IAM_CALL_ACCESS_HTML_REPORT_DIR='playwright-report/iam-call-access' \
       VITE_VIDEOCHAT_BACKEND_ORIGIN='http://videochat-backend-v1:18080' \
       VITE_VIDEOCHAT_BACKEND_PORT='18080' \
       VITE_VIDEOCHAT_WS_ORIGIN='http://videochat-backend-ws-v1:18080' \
@@ -586,23 +623,23 @@ compose_smoke() {
       VITE_VIDEOCHAT_SFU_ORIGIN='http://videochat-backend-sfu-v1:18080' \
       VITE_VIDEOCHAT_SFU_PORT='18080' \
       VITE_VIDEOCHAT_ALLOW_INSECURE_WS='1' \
-      npm run test:e2e:call-access -- --reporter=list --workers=1"
+      npm run test:e2e:call-access -- --reporter=list --workers=1"; then
+      collect_compose_artifacts "frontend-call-access-e2e-failure"
+      return 1
+    fi
   fi
 
   if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_E2E_MATRIX:-0}" != "1" ]]; then
     log "compose frontend Playwright chat/layout matrix gate"
-    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
-    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
-    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
-    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
-    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
-    "${compose_cmd[@]}" exec -T videochat-frontend-v1 sh -lc "\
+    if ! compose_with_env exec -T -e "CI=1" videochat-frontend-v1 sh -lc "\
       cd \"\${VIDEOCHAT_SMOKE_FRONTEND_WORKDIR:-/app}\" && \
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
       PLAYWRIGHT_FRONTEND_PORT=4174 \
       VITE_VIDEOCHAT_BACKEND_ORIGIN='http://127.0.0.1:${compose_backend_port}' \
-      npm run test:e2e:matrix -- --reporter=list"
+      npm run test:e2e:matrix -- --reporter=list"; then
+      collect_compose_artifacts "frontend-matrix-e2e-failure"
+      return 1
+    fi
   fi
 }
 

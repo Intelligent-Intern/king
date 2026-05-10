@@ -123,7 +123,7 @@ assert.match(
 assert.match(ciGate, /--static[\s\S]*Run host-safe IAM command hygiene contracts/, 'CI gate script must document --static');
 assert.match(ciGate, /--sqlite[\s\S]*SQLite IAM backend runtime proof/, 'CI gate script must document --sqlite');
 assert.match(ciGate, /--docker[\s\S]*docker-proof wrappers/, 'CI gate script must document --docker');
-assert.match(ciGate, /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs/, 'CI gate script must keep host-safe static IAM hygiene contracts explicit');
+assert.match(ciGate, /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-ci-artifacts-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs/, 'CI gate script must keep host-safe static IAM hygiene and artifact contracts explicit');
 assert.match(ciGate, /test:contract:iam-call-access/, 'CI gate script must preserve the canonical package gate');
 assert.doesNotMatch(ciGate, bannedCommandPattern, 'CI gate script must not execute parked test gates');
 
