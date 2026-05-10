@@ -154,7 +154,7 @@ assert.match(
 );
 assert.match(
   accessPublic,
-  /if \(\$linkKind === 'personal' && !is_array\(\$targetUser\) && \$participantEmail === ''\)[\s\S]*'reason' => 'not_found'[\s\S]*'access_link' => null[\s\S]*'call' => null[\s\S]*'target_user' => null/,
+  /if \(\$linkKind === 'personal' && !is_array\(\$targetUser\) && \(\$linkedUserId > 0 \|\| \$participantEmail === ''\)\)[\s\S]*'reason' => 'not_found'[\s\S]*'access_link' => null[\s\S]*'call' => null[\s\S]*'target_user' => null/,
   'deleted or disabled personalized target users must produce a safe public not-found state',
 );
 assert.match(
