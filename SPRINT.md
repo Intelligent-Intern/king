@@ -64,8 +64,21 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`
 
 Tickets:
-- [ ] IAM2-01 Inventory remaining IAM browser/worktree candidates and map them
+- [x] IAM2-01 Inventory remaining IAM browser/worktree candidates and map them
   to this sprint without merging stale branches wholesale.
+  - Inventory found 146 clean not-contained IAM candidate worktrees/branches, to
+    be used only as per-ticket reference material.
+  - Dirty IAM candidates remain parked: `codex/iam-duplicate-cleanup-reaudit-20260509`
+    has unresolved/conflict dirt, and `codex/iam-call-access-e2e-foundation`
+    remains dirty in `king-domain-registry`.
+  - No Sprint 01 `agent/iam-s1-*` worktrees remain registered.
+  - Active Sprint 02 workers are isolated in `agent/iam-s2-02-calendar-invite`,
+    `agent/iam-s2-03-unregistered-calendar-guest`,
+    `agent/iam-s2-04-registered-logged-out`,
+    `agent/iam-s2-05-registered-logged-in`,
+    `agent/iam-s2-06-anonymous-temp-rights`, and
+    `agent/iam-s2-07-personalized-temp-reuse`.
+  - Proof: IAM worktree inventory and contained-HEAD scan completed locally.
 - [ ] IAM2-02 Prove calendar invite join links resolve to call-scoped sessions
   without leaking foreign calendar or call data.
 - [ ] IAM2-03 Prove unregistered calendar invitees enter the guest-name/lobby
