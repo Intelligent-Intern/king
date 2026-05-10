@@ -244,10 +244,10 @@
 .ii-select {
   min-width: 0;
   height: 40px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background-color: var(--border-subtle);
-  color: var(--text-primary);
+  background-color: var(--color-border);
+  color: var(--color-text-primary);
   padding: 0 12px;
   color-scheme: dark;
 }
@@ -261,7 +261,7 @@
 
 .ii-select:focus {
   outline: none;
-  border-color: var(--brand-cyan-hover);
+  border-color: var(--color-cyan-hover);
   border-radius: 6px 6px 0 0;
 }
 
@@ -273,14 +273,14 @@
 
 .ii-select option,
 .ii-select optgroup {
-  background: var(--border-subtle);
-  color: var(--text-primary);
+  background: var(--color-border);
+  color: var(--color-text-primary);
 }
 
 .ii-select option:checked,
 .ii-select option:hover {
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
 }
 
 .ii-select:disabled {
