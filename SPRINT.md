@@ -81,7 +81,7 @@ Sprint Checkboxen:
 - [x] GSP02-01 Replace the completed GSP01 checklist with this active 20-item
   sprint, update `EPIC.md` with the Sprint 02 target, and commit the planning
   reset on `kingrt/prod-ready`.
-- [ ] GSP02-02 Inventory chat history and Image Planning reload paths: document
+- [x] GSP02-02 Inventory chat history and Image Planning reload paths: document
   current request/response events, persistence tables, bridge events, access
   decisions and known gaps before code changes.
 - [ ] GSP02-03 Chat archive backend hardening: prove every `chat/send` from an
@@ -146,3 +146,7 @@ Current Loop Notes:
   live chat reporting starts once a valid session is recovered.
 - Audio analysis remains consent-gated and must be requested/confirmed in the
   visible call chat before capture.
+- GSP02-02 proof: `analyse/gsp02-collaboration-persistence-inventory.md`
+  documents the chat archive write/read path, frontend live-chat gap,
+  Image Planning CRDT reload path, missing participant-only asset route,
+  snapshot compaction risk, and the current online diagnostic snapshot.
