@@ -6,6 +6,10 @@ require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
+require_once __DIR__ . '/../http/module_realtime_lobby_security.php';
 
 function videochat_anonymous_temp_rights_assert(bool $condition, string $message): void
 {
@@ -208,6 +212,43 @@ SQL
     return (int) $query->fetchColumn();
 }
 
+function videochat_anonymous_temp_rights_connection(
+    PDO $pdo,
+    callable $openDatabase,
+    string $sessionId,
+    string $callId,
+    string $connectionId
+): array {
+    $auth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($sessionId) . '&room=' . rawurlencode($callId) . '&call_id=' . rawurlencode($callId),
+            'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+        ],
+        'websocket'
+    );
+    videochat_anonymous_temp_rights_assert((bool) ($auth['ok'] ?? false), "{$connectionId}: session should authenticate");
+
+    $resolution = videochat_realtime_resolve_connection_rooms($auth, $callId, $openDatabase, $callId);
+    videochat_anonymous_temp_rights_assert((bool) ($resolution['ok'] ?? false), "{$connectionId}: room resolution should succeed");
+    videochat_anonymous_temp_rights_assert((string) ($resolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), "{$connectionId}: temporary guest should start in lobby");
+    videochat_anonymous_temp_rights_assert((string) ($resolution['pending_room_id'] ?? '') === $callId, "{$connectionId}: pending room should stay call-bound");
+
+    $connection = videochat_presence_connection_descriptor(
+        (array) ($auth['user'] ?? []),
+        $sessionId,
+        $connectionId,
+        'socket-' . $connectionId,
+        (string) ($resolution['initial_room_id'] ?? videochat_realtime_waiting_room_id())
+    );
+    $connection['requested_room_id'] = (string) ($resolution['requested_room_id'] ?? '');
+    $connection['pending_room_id'] = (string) ($resolution['pending_room_id'] ?? '');
+    $connection['requested_call_id'] = $callId;
+
+    return videochat_realtime_connection_with_call_context($connection, $openDatabase);
+}
+
 try {
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[call-access-anonymous-temp-rights-contract] SKIP: pdo_sqlite unavailable\n");
@@ -219,6 +260,9 @@ try {
 
     videochat_bootstrap_sqlite($databasePath);
     $pdo = videochat_open_sqlite_pdo($databasePath);
+    $openDatabase = static function () use ($pdo): PDO {
+        return $pdo;
+    };
     videochat_anonymous_temp_rights_assert(videochat_anonymous_temp_rights_role_id($pdo, 'user') > 0, 'user role should exist');
 
     $unique = bin2hex(random_bytes(5));
@@ -306,6 +350,47 @@ try {
         videochat_anonymous_temp_rights_guest_list_count($pdo, $callAId) === $guestListBefore,
         'anonymous session issuance must not add guest-list rights'
     );
+
+    $guestConnection = videochat_anonymous_temp_rights_connection(
+        $pdo,
+        $openDatabase,
+        'sess_anonymous_temp_rights_guest',
+        $callAId,
+        'conn_anonymous_temp_rights_guest'
+    );
+    videochat_anonymous_temp_rights_assert(
+        videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $guestConnection),
+        'temporary guest should create only a pending lobby row when queueing'
+    );
+    $pendingParticipant = videochat_anonymous_temp_rights_participant($pdo, $callAId, $guestUserId);
+    videochat_anonymous_temp_rights_assert(is_array($pendingParticipant), 'queued temporary guest should have a lobby participant row');
+    videochat_anonymous_temp_rights_assert((string) ($pendingParticipant['invite_state'] ?? '') === 'pending', 'queued temporary guest must remain pending');
+    videochat_anonymous_temp_rights_assert((string) ($pendingParticipant['call_role'] ?? '') === 'participant', 'queued temporary guest must remain participant');
+    videochat_anonymous_temp_rights_assert(
+        videochat_anonymous_temp_rights_guest_list_count($pdo, $callAId) === $guestListBefore,
+        'pending lobby row must not become a guest-list right'
+    );
+
+    $pendingDirectDecision = videochat_decide_call_access_for_user($pdo, $callAId, $guestUserId, 'user', $tenantAId);
+    videochat_anonymous_temp_rights_assert(!(bool) ($pendingDirectDecision['allowed'] ?? true), 'pending temporary guest must not gain direct call access');
+    videochat_anonymous_temp_rights_assert((string) ($pendingDirectDecision['reason'] ?? '') === 'not_on_guest_list', 'pending temporary direct-access denial reason mismatch');
+    $pendingDirectJoin = videochat_user_can_direct_join_call($pdo, $callAId, $guestUserId, 'user', $tenantAId);
+    videochat_anonymous_temp_rights_assert(!(bool) ($pendingDirectJoin['ok'] ?? true), 'pending temporary guest must not gain direct join');
+    videochat_anonymous_temp_rights_assert((string) ($pendingDirectJoin['reason'] ?? '') === 'not_on_guest_list', 'pending temporary direct-join denial reason mismatch');
+
+    $guestConnection = videochat_realtime_connection_with_call_context($guestConnection, $openDatabase);
+    videochat_anonymous_temp_rights_assert((string) ($guestConnection['call_role'] ?? '') === 'participant', 'queued temporary guest call role mismatch');
+    videochat_anonymous_temp_rights_assert(!(bool) ($guestConnection['can_moderate_call'] ?? true), 'queued temporary guest must not moderate lobby');
+    videochat_anonymous_temp_rights_assert(!(bool) ($guestConnection['can_manage_call_owner'] ?? true), 'queued temporary guest must not manage owner');
+    $allowCommand = videochat_lobby_decode_client_frame(json_encode([
+        'type' => 'lobby/allow',
+        'room_id' => $callAId,
+        'target_user_id' => $guestUserId,
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_anonymous_temp_rights_assert((bool) ($allowCommand['ok'] ?? false), 'lobby allow command should decode');
+    $authority = videochat_realtime_authorize_lobby_moderation_command($guestConnection, $allowCommand, $callAId, $openDatabase);
+    videochat_anonymous_temp_rights_assert(!(bool) ($authority['ok'] ?? true), 'queued temporary guest must not authorize lobby admission');
+    videochat_anonymous_temp_rights_assert((string) ($authority['error'] ?? '') === 'forbidden', 'queued temporary lobby denial reason mismatch');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-anonymous-temp-rights-contract] PASS\n");
