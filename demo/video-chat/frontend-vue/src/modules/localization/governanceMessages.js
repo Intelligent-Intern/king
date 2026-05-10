@@ -108,6 +108,7 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.relation.theme': 'Theme',
   'governance.relation.user': 'User',
   'governance.relation.users': 'Users',
+  'governance.save_entity': 'Save {entity}',
   'governance.save_failed': 'Could not save governance record.',
   'governance.screenshot': 'Screenshot',
   'governance.search': 'Search {entity}',

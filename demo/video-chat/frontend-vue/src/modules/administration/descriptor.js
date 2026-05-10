@@ -14,7 +14,7 @@ export default {
         {
           key: 'administration.app_configuration.save',
           label_key: 'administration.save_configuration',
-          kind: 'configure',
+          kind: 'save',
           resource_type: 'app_configuration',
           required_permissions: ['administration.update'],
         },
