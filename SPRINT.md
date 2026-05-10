@@ -87,7 +87,7 @@ Sprint Checkboxen:
 - [ ] UX6-08 Normalize Governance entity semantics for Groups, Organizations,
   Roles, Grants, Policies, Export/Import, Audit Log, Compliance, Modules, and
   Permissions with entity-specific fields, validation, and action names.
-- [ ] UX6-09 Implement the first recursive relation flow proof for User ->
+- [x] UX6-09 Implement the first recursive relation flow proof for User ->
   Group -> Module -> Permission and similar entity references without stacked
   modals.
 - [ ] UX6-10 Replace row-by-row relation label fetching on the proof surfaces

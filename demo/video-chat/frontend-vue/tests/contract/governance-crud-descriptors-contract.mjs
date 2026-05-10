@@ -81,6 +81,10 @@ assert.equal(
   false,
   'groups must receive permissions through their selected modules instead of a detached permission relation',
 );
+assert.ok(
+  GOVERNANCE_CRUD_DESCRIPTORS.groups.fields.some((field) => field.key === 'key'),
+  'group create-in-place must expose the backend group key field for recursive relation drafts',
+);
 
 for (const entity of ['groups', 'organizations', 'roles', 'grants', 'policies', 'compliance']) {
   const descriptor = GOVERNANCE_CRUD_DESCRIPTORS[entity];
