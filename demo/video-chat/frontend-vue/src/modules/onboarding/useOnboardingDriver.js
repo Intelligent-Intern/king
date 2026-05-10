@@ -2,7 +2,8 @@ import { computed, onBeforeUnmount, watch } from 'vue';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 import './onboardingDriver.css';
-import { completeOnboardingTour, sessionState } from '../../domain/auth/session';
+import { sessionState } from '../../domain/auth/session';
+import { completeOnboardingTour } from '../../domain/auth/sessionOnboarding';
 import { moduleAccessContextFromSession } from '../../http/routeAccess.js';
 import { t } from '../localization/i18nRuntime.js';
 import {

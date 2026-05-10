@@ -59,11 +59,30 @@
       </label>
     </div>
 
+    <section v-if="onboardingBadgeRows.length > 0" class="settings-onboarding-badges">
+      <h4>{{ t('settings.completed_tours') }}</h4>
+      <ul class="settings-onboarding-badge-list">
+        <li v-for="badge in onboardingBadgeRows" :key="badge.tour_key" class="settings-onboarding-badge">
+          <span>{{ badge.label }}</span>
+          <time v-if="badge.completed_at" :datetime="badge.completed_at">{{ badge.completed_at }}</time>
+        </li>
+      </ul>
+    </section>
+
   </section>
 </template>
 
 <script setup>
+import { computed } from 'vue';
+import { sessionState } from '../../domain/auth/session';
+import { workspaceModuleRouteRecords } from '../../modules/index.js';
 import { t } from '../../modules/localization/i18nRuntime.js';
+import { buildOnboardingTourRegistry, completedTourBadgeRows } from '../../modules/onboarding/tourRegistry.js';
+
+const onboardingTourRegistry = buildOnboardingTourRegistry(workspaceModuleRouteRecords);
+const onboardingBadgeRows = computed(() => (
+  completedTourBadgeRows(sessionState.onboardingBadges, onboardingTourRegistry, t)
+));
 
 const props = defineProps({
   draft: {
@@ -94,6 +113,48 @@ defineEmits(['avatar-select', 'avatar-drop']);
   min-height: 96px;
   padding-top: 5px;
   resize: vertical;
+}
+
+.settings-onboarding-badges {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.settings-onboarding-badges h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.settings-onboarding-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.settings-onboarding-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.settings-onboarding-badge span,
+.settings-onboarding-badge time {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-onboarding-badge time {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 </style>

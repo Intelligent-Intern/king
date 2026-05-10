@@ -496,6 +496,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'settings.credentials': 'Credentials + E-Mail',
   'settings.change_password': 'Change password',
   'settings.confirmed_emails': 'Confirmed email addresses',
+  'settings.completed_tours': 'Completed tours',
   'settings.current_password': 'Current password',
   'settings.date_display': 'Date display',
   'settings.date_format': 'Date format',

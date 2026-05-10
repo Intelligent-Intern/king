@@ -25,6 +25,20 @@ function videochat_onboarding_contract_decode(array $response): array
     return $decoded;
 }
 
+function videochat_onboarding_contract_badge_completed_at(array $badges, string $tourKey): string
+{
+    foreach ($badges as $badge) {
+        if (!is_array($badge)) {
+            continue;
+        }
+        if ((string) ($badge['tour_key'] ?? '') === $tourKey) {
+            return (string) ($badge['completed_at'] ?? '');
+        }
+    }
+
+    return '';
+}
+
 try {
     $databasePath = sys_get_temp_dir() . '/videochat-onboarding-progress-' . bin2hex(random_bytes(6)) . '.sqlite';
     @unlink($databasePath);
@@ -52,7 +66,7 @@ try {
     $initialSettings = videochat_fetch_user_settings($pdo, $userId, $tenantId);
     videochat_onboarding_contract_assert(is_array($initialSettings), 'initial settings lookup should succeed');
     videochat_onboarding_contract_assert(($initialSettings['onboarding_completed_tours'] ?? []) === [], 'initial completed tours should be empty');
-    videochat_onboarding_contract_assert(!array_key_exists('onboarding_badges', $initialSettings), 'settings must not expose onboarding badges');
+    videochat_onboarding_contract_assert(($initialSettings['onboarding_badges'] ?? null) === [], 'initial onboarding badges should be empty');
 
     $firstCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.users.tour', '2026-05-05T10:00:00+00:00');
     videochat_onboarding_contract_assert((bool) ($firstCompletion['ok'] ?? false), 'first completion should succeed');
@@ -60,6 +74,15 @@ try {
     videochat_onboarding_contract_assert(
         in_array('governance.users.tour', $firstCompletion['onboarding']['completed_tours'] ?? [], true),
         'completed tour key missing from payload'
+    );
+    $settingsAfterCompletion = videochat_fetch_user_settings($pdo, $userId, $tenantId);
+    videochat_onboarding_contract_assert(is_array($settingsAfterCompletion), 'settings lookup after completion should succeed');
+    videochat_onboarding_contract_assert(
+        videochat_onboarding_contract_badge_completed_at(
+            is_array($settingsAfterCompletion['onboarding_badges'] ?? null) ? $settingsAfterCompletion['onboarding_badges'] : [],
+            'governance.users.tour'
+        ) === '2026-05-05T10:00:00+00:00',
+        'settings payload should expose completed tour badge timestamp'
     );
 
     $duplicateCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.users.tour', '2026-05-05T11:00:00+00:00');
@@ -93,6 +116,13 @@ try {
     videochat_onboarding_contract_assert(
         in_array('governance.users.tour', ($authContext['user'] ?? [])['onboarding_completed_tours'] ?? [], true),
         'auth payload should expose completed tours'
+    );
+    videochat_onboarding_contract_assert(
+        videochat_onboarding_contract_badge_completed_at(
+            is_array(($authContext['user'] ?? [])['onboarding_badges'] ?? null) ? ($authContext['user'] ?? [])['onboarding_badges'] : [],
+            'governance.users.tour'
+        ) === '2026-05-05T10:00:00+00:00',
+        'auth payload should expose completed tour badges'
     );
 
     $jsonResponse = static fn (int $status, array $payload): array => [
@@ -138,6 +168,13 @@ try {
     videochat_onboarding_contract_assert(
         in_array('administration.app_configuration.tour', ($endpointPayload['result']['onboarding'] ?? [])['completed_tours'] ?? [], true),
         'endpoint payload should include completed route tour'
+    );
+    videochat_onboarding_contract_assert(
+        videochat_onboarding_contract_badge_completed_at(
+            is_array(($endpointPayload['result']['onboarding'] ?? [])['badges'] ?? null) ? ($endpointPayload['result']['onboarding'] ?? [])['badges'] : [],
+            'administration.app_configuration.tour'
+        ) !== '',
+        'endpoint payload should include completed route tour badge'
     );
 
     $methodResponse = videochat_handle_user_routes(

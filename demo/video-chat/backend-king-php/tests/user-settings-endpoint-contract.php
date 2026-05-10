@@ -31,6 +31,20 @@ function videochat_user_settings_endpoint_decode(array $response): array
     return $payload;
 }
 
+function videochat_user_settings_endpoint_badge_completed_at(array $badges, string $tourKey): string
+{
+    foreach ($badges as $badge) {
+        if (!is_array($badge)) {
+            continue;
+        }
+        if ((string) ($badge['tour_key'] ?? '') === $tourKey) {
+            return (string) ($badge['completed_at'] ?? '');
+        }
+    }
+
+    return '';
+}
+
 try {
     $databasePath = sys_get_temp_dir() . '/videochat-user-settings-endpoint-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
@@ -51,6 +65,8 @@ SQL
     );
     $userId = (int) $userQuery->fetchColumn();
     videochat_user_settings_endpoint_assert($userId > 0, 'expected seeded user account');
+    $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
+    videochat_user_settings_endpoint_assert($tenantId > 0, 'expected seeded default tenant');
 
     $sessionId = 'sess_user_settings_endpoint_contract';
     $insertSession = $pdo->prepare(
@@ -114,6 +130,9 @@ SQL
         'remote_address' => '127.0.0.1',
     ];
 
+    $tourCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.groups.tour', '2026-05-06T10:00:00+00:00');
+    videochat_user_settings_endpoint_assert((bool) ($tourCompletion['ok'] ?? false), 'tour completion should succeed before endpoint settings fetch');
+
     $apiAuthContext = videochat_authenticate_request(
         $pdo,
         [
@@ -124,6 +143,7 @@ SQL
         'rest'
     );
     videochat_user_settings_endpoint_assert((bool) ($apiAuthContext['ok'] ?? false), 'auth context should be valid');
+    $pdo = null;
 
     $getResponse = videochat_handle_user_routes(
         '/api/user/settings',
@@ -149,7 +169,20 @@ SQL
     videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notifications_enabled'] ?? null) === false, 'GET settings web app notifications default mismatch');
     videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notification_sound_enabled'] ?? null) === true, 'GET settings web app notification sound default mismatch');
     videochat_user_settings_endpoint_assert(!array_key_exists('messenger_contacts', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose removed messenger contacts');
-    videochat_user_settings_endpoint_assert(!array_key_exists('onboarding_badges', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose onboarding badges');
+    videochat_user_settings_endpoint_assert(
+        videochat_user_settings_endpoint_badge_completed_at(
+            is_array(($getPayload['settings'] ?? [])['onboarding_badges'] ?? null) ? ($getPayload['settings'] ?? [])['onboarding_badges'] : [],
+            'governance.groups.tour'
+        ) === '2026-05-06T10:00:00+00:00',
+        'GET settings should expose completed onboarding badge timestamp'
+    );
+    videochat_user_settings_endpoint_assert(
+        videochat_user_settings_endpoint_badge_completed_at(
+            is_array(($getPayload['user'] ?? [])['onboarding_badges'] ?? null) ? ($getPayload['user'] ?? [])['onboarding_badges'] : [],
+            'governance.groups.tour'
+        ) === '2026-05-06T10:00:00+00:00',
+        'GET user payload should expose completed onboarding badge timestamp'
+    );
     videochat_user_settings_endpoint_assert(
         count((array) ((($getPayload['localization'] ?? [])['supported_locales'] ?? []))) >= 28,
         'GET settings supported locale metadata missing'
@@ -361,6 +394,7 @@ SQL
         'PATCH settings must not expose removed messenger contacts'
     );
 
+    $pdo = $openDatabase();
     $reauth = videochat_authenticate_request(
         $pdo,
         [
@@ -371,6 +405,7 @@ SQL
         'rest'
     );
     videochat_user_settings_endpoint_assert((bool) ($reauth['ok'] ?? false), 'reauth should stay valid after settings patch');
+    $pdo = null;
 
     $activeWebsocketsBySession = [];
     $issueSessionId = static fn (): string => 'sess_unused_user_settings_endpoint';
@@ -497,7 +532,8 @@ SQL
     videochat_user_settings_endpoint_assert((int) ($deleteEmailResponse['status'] ?? 0) === 200, 'DELETE email status should be 200');
 
     $otherSessionId = 'sess_user_settings_endpoint_other';
-    $pdo->prepare(
+    $sessionWritePdo = $openDatabase();
+    $sessionWritePdo->prepare(
         'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, NULL, NULL)'
     )->execute([
         ':id' => $otherSessionId,
@@ -505,6 +541,7 @@ SQL
         ':issued_at' => gmdate('c', time() - 30),
         ':expires_at' => gmdate('c', time() + 3600),
     ]);
+    $sessionWritePdo = null;
     $passwordResponse = videochat_handle_user_routes(
         '/api/user/password',
         'POST',

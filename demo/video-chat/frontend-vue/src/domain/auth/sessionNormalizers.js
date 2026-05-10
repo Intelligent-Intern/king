@@ -82,6 +82,23 @@ export function normalizeOnboardingCompletedTours(value) {
   return [...new Set(value.map((tourKey) => normalizeString(tourKey).toLowerCase()).filter(Boolean))].sort();
 }
 
+export function normalizeOnboardingBadges(value) {
+  if (!Array.isArray(value)) return [];
+  const badges = [];
+  const seen = new Set();
+  for (const item of value) {
+    const source = item && typeof item === 'object' ? item : {};
+    const tourKey = normalizeString(source.tour_key || source.key).toLowerCase();
+    if (tourKey === '' || seen.has(tourKey)) continue;
+    seen.add(tourKey);
+    badges.push({
+      tour_key: tourKey,
+      completed_at: normalizeString(source.completed_at),
+    });
+  }
+  return badges.sort((a, b) => a.tour_key.localeCompare(b.tour_key));
+}
+
 export function normalizeBooleanPreference(value, fallback = false) {
   if (value === true || value === false) return value;
   if (typeof value === 'number') {

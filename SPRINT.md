@@ -96,7 +96,7 @@ Sprint Checkboxen:
 - [x] UX6-11 Harden Navigation/i18n descriptors so localized keys and structured
   localized fields are the source of truth instead of concatenated English
   descriptions.
-- [ ] UX6-12 Add onboarding tour registry/persistence proof for per-area `?`
+- [x] UX6-12 Add onboarding tour registry/persistence proof for per-area `?`
   entry points, completed-tour badges, and profile display.
 - [ ] UX6-13 Add profile expansion proof through the intended settings/profile
   architecture for about, social, and contact fields.
