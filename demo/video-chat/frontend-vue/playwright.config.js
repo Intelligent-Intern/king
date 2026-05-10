@@ -10,6 +10,9 @@ const allowInsecureWebSockets = process.env.VITE_VIDEOCHAT_ALLOW_INSECURE_WS || 
 const chromiumExecutablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '';
 const productionBrowserSmoke = process.env.PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE === '1'
   || process.env.VIDEOCHAT_PRODUCTION_BROWSER_SMOKE === '1';
+const iamCallAccessArtifacts = process.env.PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS === '1';
+const iamCallAccessArtifactOutputDir = process.env.PLAYWRIGHT_IAM_CALL_ACCESS_OUTPUT_DIR || 'test-results/iam-call-access';
+const iamCallAccessHtmlReportDir = process.env.PLAYWRIGHT_IAM_CALL_ACCESS_HTML_REPORT_DIR || 'playwright-report/iam-call-access';
 
 function withoutTrailingSlash(value) {
   return String(value || '').trim().replace(/\/+$/, '');
@@ -94,7 +97,7 @@ const localUse = {
   baseURL: `http://127.0.0.1:${testPort}`,
   headless: true,
   screenshot: 'only-on-failure',
-  trace: 'on-first-retry',
+  trace: iamCallAccessArtifacts ? 'retain-on-failure' : 'on-first-retry',
   launchOptions: chromiumExecutablePath !== '' ? {
     executablePath: chromiumExecutablePath,
   } : undefined,
@@ -164,7 +167,10 @@ export default defineConfig({
   fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 2 : undefined,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  outputDir: iamCallAccessArtifacts ? iamCallAccessArtifactOutputDir : undefined,
+  reporter: iamCallAccessArtifacts
+    ? [['list'], ['html', { open: 'never', outputFolder: iamCallAccessHtmlReportDir }]]
+    : (process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list'),
   use: productionBrowserSmoke ? productionUse : localUse,
   ...(productionBrowserSmoke
     ? { projects: productionProjects }
