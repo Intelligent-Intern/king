@@ -72,7 +72,7 @@ Sprint Checkboxen:
 - [ ] UX6-03 Classify dirty worktree `agent/l15-org-admin-join-proof`; extract
   only current org-admin realtime role proof that is needed for Admin/Governance
   correctness, otherwise preserve it as parked evidence.
-- [ ] UX6-04 Classify dirty worktree `codex/iam-call-access-e2e-foundation`;
+- [x] UX6-04 Classify dirty worktree `codex/iam-call-access-e2e-foundation`;
   keep it outside active implementation unless it contains deploy-smoke proof
   needed by the current branch.
 - [ ] UX6-05 Reconcile `codex/iam-duplicate-cleanup-reaudit-20260509`; clean
