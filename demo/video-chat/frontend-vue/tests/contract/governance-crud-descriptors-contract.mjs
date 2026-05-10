@@ -190,7 +190,7 @@ const portabilityActions = descriptorPageActions(
 );
 assert.deepEqual(
   portabilityActions.map((action) => [action.kind, actionBarLabel(action, translate)]),
-  [['export', 'Export data'], ['import', 'Import data']],
+  [['export', 'Export tenant data'], ['import', 'Import tenant data']],
   'data portability page action bar must expose locally named export/import actions',
 );
 

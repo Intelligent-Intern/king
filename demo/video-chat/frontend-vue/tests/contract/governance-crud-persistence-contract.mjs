@@ -114,7 +114,8 @@ assert.match(viewSource, /subjects'.*users.*groups.*organizations/s, 'subject pi
 assert.match(viewSource, /resources'.*groups.*organizations/s, 'resource pickers must hydrate persisted group and organization resources');
 assert.match(viewSource, /submitPersistedRow/, 'governance CRUD view must persist backend-backed create and update actions');
 assert.match(viewSource, /isPersistedGovernanceEntity\(key\)\)\s*return false/, 'relation drafts must not fake-create backend-backed entities locally');
-assert.match(viewSource, /portabilityActions/, 'data portability must render explicit export and import route actions');
+assert.match(viewSource, /descriptorPageActions/, 'data portability must render explicit export and import route actions through descriptor page actions');
+assert.match(viewSource, /runGovernancePageAction/, 'data portability page actions must use the shared Governance action runner');
 assert.match(viewSource, /downloadPortabilityExport/, 'completed export jobs must trigger a JSON download from the returned job result');
 assert.match(viewSource, /downloadPortabilityResult/, 'existing data portability job rows must expose their returned JSON result');
 

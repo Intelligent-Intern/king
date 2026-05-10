@@ -8,7 +8,7 @@ const PORTABILITY_SCOPE_OPTIONS = Object.freeze([
 
 const PORTABILITY_SCOPE_FIELD = Object.freeze({
   key: 'scope_type',
-  label_key: 'governance.field.scope_type',
+  label_key: 'governance.field.portability_scope',
   type: 'enum',
   options: PORTABILITY_SCOPE_OPTIONS,
   required: true,
@@ -50,8 +50,8 @@ export function dataPortabilityModalTitle(entityKey = '', modalMode = '') {
 export function dataPortabilitySubmitLabel(entityKey = '', modalMode = '') {
   if (!isDataPortabilityEntity(entityKey) || !isDataPortabilityActionKind(modalMode)) return '';
   return modalMode === 'import'
-    ? 'governance.action.import_data'
-    : 'governance.action.export_data';
+    ? 'governance.action.import_tenant_data'
+    : 'governance.action.export_tenant_data';
 }
 
 export function dataPortabilityPayloadFromForm(modalMode = '', form = {}, relationships = {}) {
