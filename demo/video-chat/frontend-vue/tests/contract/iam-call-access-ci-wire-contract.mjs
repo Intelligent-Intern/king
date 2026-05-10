@@ -32,7 +32,18 @@ const lobbyConcurrencyScript = String(scripts['test:e2e:lobby-concurrency'] || '
 
 const requiredIamContractPaths = [
   'frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs',
+  'frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs',
   'frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs',
+  'frontend-vue/tests/contract/call-access-forged-identifiers-contract.mjs',
+  'frontend-vue/tests/contract/call-access-tampered-verified-context-contract.mjs',
+  'frontend-vue/tests/contract/call-access-duplicate-device-browser-contract.mjs',
+  'frontend-vue/tests/contract/call-access-logout-login-switch-contract.mjs',
+  'frontend-vue/tests/contract/call-access-mismatch-no-leak-states-contract.mjs',
+  'frontend-vue/tests/contract/call-access-anonymous-guest-manipulation-contract.mjs',
+  'frontend-vue/tests/contract/call-access-temp-call-link-boundaries-contract.mjs',
+  'frontend-vue/tests/contract/call-access-disabled-links-fail-closed-contract.mjs',
+  'frontend-vue/tests/contract/call-access-kicked-rejoin-denial-contract.mjs',
+  'frontend-vue/tests/contract/call-access-permission-change-active-call-contract.mjs',
   'frontend-vue/tests/contract/call-access-calendar-invite-join-contract.mjs',
   'frontend-vue/tests/contract/call-access-registered-logged-out-handoff-contract.mjs',
   'frontend-vue/tests/contract/call-access-registered-logged-in-invitee-contract.mjs',
@@ -48,6 +59,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-verified-context-ui-contract.mjs',
   'frontend-vue/tests/contract/call-access-strong-mismatch-privacy-contract.mjs',
   'frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs',
+  'frontend-vue/tests/contract/call-access-guest-list-membership-docker-proof-contract.mjs',
   'frontend-vue/tests/contract/call-access-link-privacy-contract.mjs',
   'frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs',
   'frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs',
@@ -68,6 +80,13 @@ const requiredIamContractPaths = [
   'backend-king-php/tests/call-access-membership-removal-contract.sh',
   'backend-king-php/tests/call-access-stale-organization-role-contract.sh',
   'backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh',
+  'backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh',
+];
+
+const requiredIamSupportingPaths = [
+  'backend-king-php/tests/call-access-anonymous-temp-rights-docker-proof.sh',
+  'backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh',
+  'backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh',
 ];
 
 assert.notEqual(iamContractScript, '', 'package.json must expose test:contract:iam-call-access');
@@ -124,6 +143,17 @@ const iamCommandPaths = new Set(Array.isArray(iamCommand.paths) ? iamCommand.pat
 for (const contractPath of requiredIamContractPaths) {
   assert.ok(iamCommandPaths.has(contractPath), `IAM contract command metadata must list ${contractPath}`);
 }
+for (const supportingPath of requiredIamSupportingPaths) {
+  assert.ok(
+    iamCommandPaths.has(supportingPath),
+    `IAM contract command metadata must list Docker runtime proof support path ${supportingPath}`,
+  );
+}
+assert.match(
+  readText('demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh'),
+  /find "\$\{SCRIPT_DIR\}" -maxdepth 1 -type f -name '\*docker-proof\.sh'/,
+  'IAM Docker runtime wrapper must discover the listed Docker proof scripts from the backend tests directory',
+);
 
 const callAccessCommand = matrix.commands?.['frontend:e2e:call-access'] || {};
 assert.deepEqual(

@@ -253,8 +253,17 @@ Tickets:
     `demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh`,
     and `git diff --check` passed against the merged IAM3-13/IAM3-14/IAM3-15
     Docker proof scripts.
-- [ ] IAM3-17 Wire Sprint 03 contract/E2E/runtime proofs into package scripts and
+- [x] IAM3-17 Wire Sprint 03 contract/E2E/runtime proofs into package scripts and
   release-gate metadata after integration.
+  - Merged worker branch `agent/iam-s3-17-proof-wiring`.
+  - Wired the Sprint 03 IAM proof set into
+    `test:contract:iam-call-access`, the IAM CI-wire contract, and
+    `ui-parity-acceptance.matrix.json`.
+  - Kept the gate scoped to IAM call-access proofs plus the focused backend
+    Docker runtime wrapper; no Background, Gossip, SFU, MediaSecurity, or BTGF
+    checks were added.
+  - Proof: `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    `npm run test:contract:iam-call-access`, and `git diff --check` passed.
 - [x] IAM3-18 Classify dirty IAM worktrees (`codex/iam-call-access-e2e-foundation`,
   `codex/iam-duplicate-cleanup-reaudit-20260509`) as keep, superseded, or
   manual without discarding unmerged user work.
