@@ -17,6 +17,21 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM7-15 invalid/expired anonymous-link extraction:
+  inspected `local/iam-e2e-invalid-anonymous-link-proof-20260509` against
+  current integration baseline `1d0f11af` and rejected the historical branch as
+  wholesale input because it also carries broad stale IAM and parked media/test
+  churn. Extracted only the missing current proof for open anonymous call-access
+  links: malformed ids, unknown UUIDs, and expired anonymous links fail closed
+  before session issuance, temporary guest creation, lobby/participant rows,
+  link touch, or audit-event creation. Backend HTTP/domain denials redact call,
+  participant, owner, guest, raw link, and session values. Proof:
+  `call-access-invalid-expired-anonymous-link-contract.mjs`, PHP syntax, and
+  Docker-backed
+  `IAM_SQLITE_CONTRACTS="call-access-invalid-expired-anonymous-link-contract.sh" demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`.
+  No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
+  were touched.
+
 - 2026-05-10 IAM7-13 foreign link review audit scoping extraction:
   inspected `local/iam-e2e-foreign-link-review-audit` at
   `c7fa0f7bd98480e718b397f0a2bf1cb0b29e5b8c` and extracted only the focused
