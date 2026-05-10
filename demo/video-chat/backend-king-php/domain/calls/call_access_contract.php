@@ -160,11 +160,16 @@ SELECT
     calls.id AS resolved_call_id,
     calls.room_id AS resolved_room_id,
     calls.status AS resolved_call_status,
+    cp.invite_state AS participant_invite_state,
     users.email AS resolved_user_email,
     users.password_hash AS resolved_user_password_hash
 FROM call_access_sessions
 LEFT JOIN call_access_links ON call_access_links.id = call_access_sessions.access_id
 LEFT JOIN calls ON calls.id = call_access_sessions.call_id
+LEFT JOIN call_participants cp
+    ON cp.call_id = call_access_sessions.call_id
+   AND cp.user_id = call_access_sessions.user_id
+   AND cp.source = 'internal'
 LEFT JOIN users ON users.id = call_access_sessions.user_id
 WHERE call_access_sessions.session_id = :session_id
 LIMIT 1
@@ -257,6 +262,10 @@ SQL
     }
     if ($linkKind !== (string) ($binding['link_kind'] ?? 'personal')) {
         return $fail('call_access_binding_mismatch');
+    }
+    $participantInviteState = strtolower(trim((string) ($row['participant_invite_state'] ?? '')));
+    if (in_array($participantInviteState, ['cancelled', 'declined'], true)) {
+        return $fail('call_access_participant_removed');
     }
 
     $currentUnix = $nowUnix ?? time();
