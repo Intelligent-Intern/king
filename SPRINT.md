@@ -250,8 +250,17 @@ Sprint Checkboxen:
   without touching Call App UI feature work.
 - [ ] IAM5-16 Extract system-admin, organization-role bootstrap, admin-join,
   and lane proof value from the remaining IAM lane branches.
-- [ ] IAM5-17 Consolidate seed data hygiene, asset cache busting, local run docs,
+- [x] IAM5-17 Consolidate seed data hygiene, asset cache busting, local run docs,
   and live-proof env audit value into the current IAM gate only if still useful.
+  - Merged worker branch `agent/iam-s5-17-seed-cache-run-docs`.
+  - Added `documentation/iam-sprint-05-seed-cache-run-docs-extraction.md` and
+    `iam-s5-17-seed-cache-run-docs-contract.mjs`.
+  - Consolidated useful seed data hygiene, asset cache busting, local run docs,
+    and live-proof environment audit evidence into the current IAM gate while
+    leaving superseded broad runbook churn out of the sprint.
+  - Proof: IAM5-17 seed/cache/run-docs contract, IAM call-access E2E foundation,
+    direct-join rights, asset cache busting, prod-debug observability
+    contracts, and `git diff --check` passed.
 - [x] IAM5-18 Run the focused IAM browser proof path or repair its local
   invocation without adding media/background/SFU/Gossip coverage.
   - Merged worker branch `agent/iam-s5-18-browser-proof-path`.
