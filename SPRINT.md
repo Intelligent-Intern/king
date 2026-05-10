@@ -72,8 +72,16 @@ Sprint Checkboxen:
     `bash -n demo/video-chat/scripts/smoke.sh`, and `git diff --check` passed.
   - Dirty source worktree `/home/jochen/projects/king.site/worktrees/king-domain-registry`
     was not reset, deleted, or modified.
-- [ ] IAM4-02 Resolve/classify dirty `codex/iam-duplicate-cleanup-reaudit-20260509`
+- [x] IAM4-02 Resolve/classify dirty `codex/iam-duplicate-cleanup-reaudit-20260509`
   conflict state without losing user work or broad staged proof intent.
+  - Merged worker branch `agent/iam-s4-02-duplicate-cleanup-classify`.
+  - Added `documentation/iam-sprint-04-duplicate-cleanup-classification.md`
+    and `iam-duplicate-cleanup-classification-contract.mjs`.
+  - Classified the unresolved source worktree as `manual`; no conflict stages,
+    staged proof edits, source files, or dirty worktree state were modified.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/iam-duplicate-cleanup-classification-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    and `git diff --check` passed.
 - [ ] IAM4-03 Inventory all non-contained `local/iam-e2e-*proof-3` worktrees and
   rank them by unique IAM proof value versus Sprint 03.
 - [ ] IAM4-04 Extract any stronger logout/login-switch and account-switch proof
