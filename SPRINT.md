@@ -201,8 +201,15 @@ Sprint Checkboxen:
     passed.
   - Playwright target was skipped by worker because local `@playwright/test`
     was unavailable in the worktree.
-- [ ] IAM4-12 Extract remaining deleted-disabled and remaining-sprint-gap proof
+- [x] IAM4-12 Extract remaining deleted-disabled and remaining-sprint-gap proof
   value from their `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-12-remaining-proof-extract`.
+  - Added `documentation/iam-sprint-04-remaining-proof-extract-evidence.md`.
+  - Classified the remaining deleted-disabled value as already extracted by
+    IAM4-06, and the remaining sprint-gap guest-list value as superseded by the
+    current stronger direct-join and SQLite runtime aggregate proofs.
+  - Proof: terminal frontend contracts, focused terminal/guest-list SQLite
+    runtime proof, and `git diff --check` passed.
 - [ ] IAM4-13 Extract review-abuse cross-browser and warning-modal policy proof
   value from their `proof-3` branches.
 - [ ] IAM4-14 Extract system-admin deleted/ended proof value from
