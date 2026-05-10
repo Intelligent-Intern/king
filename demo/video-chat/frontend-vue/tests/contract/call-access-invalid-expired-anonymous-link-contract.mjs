@@ -24,7 +24,7 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const publicAccess = read('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
 const sessionAccess = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const sprint = read('SPRINT.md');
-const readiness = read('READYNESS_TRACKER.md');
+const readiness = read('documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md');
 const evidence = read('documentation/iam7-15-invalid-expired-anonymous-link.md');
 
 const iamScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
@@ -109,9 +109,9 @@ assert.ok(
   'release matrix must list IAM7-15 backend wrapper',
 );
 assert.match(
-  sprint,
-  /\[x\] IAM7-15 Extract or prove invalid\/expired anonymous-link handling/,
-  'SPRINT.md must mark IAM7-15 complete after focused proof verification',
+  `${evidence}\n${readiness}`,
+  /IAM7-15[\s\S]*invalid\/expired anonymous-link|invalid\/expired anonymous-link[\s\S]*IAM7-15/,
+  'completed IAM7-15 proof must remain discoverable outside active root sprint history',
 );
 assert.match(
   readiness,

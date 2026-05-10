@@ -25,6 +25,7 @@ function requireMatch(source, pattern, message) {
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+const sqliteAggregate = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-edge-error-matrix-contract.php');
 const backendShell = read('demo/video-chat/backend-king-php/tests/call-access-edge-error-matrix-contract.sh');
 const callAccessPublic = read('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
@@ -53,6 +54,11 @@ requireIncludes(
   ciGate,
   '../backend-king-php/tests/call-access-edge-error-matrix-contract.sh',
   'IAM CI SQLite gate must include the edge/error matrix backend proof',
+);
+requireIncludes(
+  sqliteAggregate,
+  '"call-access-edge-error-matrix-contract.sh"',
+  'IAM SQLite aggregate must include the edge/error matrix backend proof',
 );
 requireIncludes(
   backendShell,

@@ -30,7 +30,9 @@ function videochat_realtime_call_role_context_for_room_user(
 ): array {
     $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
-    $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
+    $isAdmin = function_exists('videochat_user_has_system_admin_call_rights')
+        ? videochat_user_has_system_admin_call_rights($pdo, $userId, $authRole)
+        : videochat_normalize_role_slug($authRole) === 'admin';
     $fallback = [
         'call_id' => '',
         'call_role' => 'participant',

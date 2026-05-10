@@ -154,8 +154,8 @@ assert.match(
 );
 assert.match(
   accessPublic,
-  /if \(\$linkKind === 'personal' && !is_array\(\$targetUser\) && \(\$linkedUserId > 0 \|\| \$participantEmail === ''\)\)[\s\S]*'reason' => 'not_found'[\s\S]*'access_link' => null[\s\S]*'call' => null[\s\S]*'target_user' => null/,
-  'deleted or disabled personalized target users must produce a safe public not-found state',
+  /\$linkKind === 'personal'[\s\S]*!is_array\(\$targetUser\)[\s\S]*videochat_call_access_email_target_is_external_invitee\(\$pdo, \$accessLink, \$participantEmail\)[\s\S]*'reason' => 'not_found'[\s\S]*'access_link' => null[\s\S]*'call' => null[\s\S]*'target_user' => null/,
+  'deleted or disabled personalized target users must produce a safe public not-found state while preserving true external email invitees',
 );
 assert.match(
   callAccessPrivacyContract,

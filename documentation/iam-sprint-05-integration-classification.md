@@ -139,7 +139,7 @@ The strongest current rule remains: mine focused proof value, then prove it on
 
 Wholesale merge risk is high because the branch would:
 
-- Reintroduce stale `SPRINT.md` and `READYNESS_TRACKER.md` state.
+- Reintroduce stale `SPRINT.md` state and archived completion-tracker state.
 - Delete current Sprint 03/04 IAM classification and extraction evidence docs.
 - Modify `demo/video-chat/frontend-vue/package.json`, `.github/workflows/ci.yml`,
   release matrix metadata, and smoke scripts outside this ticket scope.

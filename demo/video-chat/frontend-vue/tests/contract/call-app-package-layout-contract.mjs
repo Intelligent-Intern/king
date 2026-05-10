@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -32,6 +33,26 @@ function assertArrayIncludes(array, value, message) {
   assert(array.includes(value), message)
 }
 
+function trackedFiles(relativePath) {
+  const output = execFileSync('git', ['ls-files', relativePath], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  })
+
+  return output.split('\n').filter(Boolean)
+}
+
+function assertNoFiles(relativePaths, message) {
+  assert(relativePaths.length === 0, `${message}: ${relativePaths.join(', ')}`)
+}
+
+function rootMarkdownFiles() {
+  return fs.readdirSync(repoRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
+    .map((entry) => entry.name)
+    .sort()
+}
+
 assert(fs.existsSync(callAppRoot), 'demo/call-app root must exist')
 assert(fs.existsSync(whiteboardRoot), 'demo/call-app/whiteboard package must exist')
 assert(fs.existsSync(planningImageRoot), 'demo/call-app/planning-image package must exist')
@@ -40,8 +61,158 @@ assert(fs.existsSync(presentationRoot), 'demo/call-app/presentation package must
 assert(fs.existsSync(spreadsheetRoot), 'demo/call-app/spreadsheet package must exist')
 assert(fs.existsSync(callDiagnosticsRoot), 'demo/call-app/call-diagnostics package must exist')
 
+const appKeys = [
+  'whiteboard',
+  'planning-image',
+  'text-document',
+  'presentation',
+  'spreadsheet',
+  'call-diagnostics',
+]
+const appPackageRequiredFiles = [
+  'call-app.manifest.json',
+  'mcp.descriptor.json',
+  'crdt.schema.json',
+  'health.descriptor.json',
+  'public/index.html',
+]
+const appPackageRuntimeFiles = appKeys.flatMap((appKey) => [
+  `public/${appKey}.css`,
+  `public/${appKey}.js`,
+])
+const allowedCallAppPackageRoots = appKeys.map((appKey) => `demo/call-app/${appKey}/`)
+const trackedCallAppFiles = trackedFiles('demo/call-app')
+const misplacedCallAppFiles = trackedCallAppFiles.filter((file) => (
+  file !== 'demo/call-app/README.md'
+  && !allowedCallAppPackageRoots.some((allowedRoot) => file.startsWith(allowedRoot))
+))
+assertNoFiles(
+  misplacedCallAppFiles,
+  'tracked Call App package files must live under demo/call-app/<app-key>/',
+)
+
+const trackedDistCallAppFiles = trackedFiles('demo/video-chat/frontend-vue/dist/call-app')
+assertNoFiles(
+  trackedDistCallAppFiles,
+  'frontend dist/call-app must not contain tracked Call App package mirrors',
+)
+
+const allowedRootMarkdownFiles = new Set(['README.md', 'BACKLOG.md', 'SPRINT.md'])
+const extraRootMarkdownFiles = rootMarkdownFiles().filter((file) => !allowedRootMarkdownFiles.has(file))
+assertNoFiles(
+  extraRootMarkdownFiles,
+  'root Markdown must stay limited to README.md, BACKLOG.md, and SPRINT.md',
+)
+
+const packageDirectoryNames = fs.readdirSync(callAppRoot, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort()
+const expectedPackageDirectoryNames = [...appKeys].sort()
+assert(
+  JSON.stringify(packageDirectoryNames) === JSON.stringify(expectedPackageDirectoryNames),
+  `demo/call-app package directories must match app keys: ${packageDirectoryNames.join(', ')}`,
+)
+
+for (const appKey of appKeys) {
+  const packageRoot = path.join(callAppRoot, appKey)
+  const packageFiles = [
+    ...appPackageRequiredFiles,
+    `public/${appKey}.css`,
+    `public/${appKey}.js`,
+  ]
+
+  for (const requiredFile of packageFiles) {
+    assert(fs.existsSync(path.join(packageRoot, requiredFile)), `${appKey} package must include ${requiredFile}`)
+  }
+
+  const packageManifest = readJson(`demo/call-app/${appKey}/call-app.manifest.json`)
+  assert(packageManifest.schema_version === 'king.call_app.manifest.v1', `${appKey} manifest schema version mismatch`)
+  assert(packageManifest.app_key === appKey, `${appKey} manifest app_key must match its package directory`)
+  assert(packageManifest.status === 'runtime_ready', `${appKey} package must advertise runtime_ready status`)
+  assert(packageManifest.semantic_dns?.service_type === 'call_app', `${appKey} manifest must declare Semantic-DNS call_app service type`)
+  assert(packageManifest.semantic_dns?.mother_node_registration?.required === true, `${appKey} manifest must require mother-node registration`)
+  assert(packageManifest.marketplace?.order_scope === 'organization', `${appKey} manifest marketplace order scope must be organization`)
+  assert(packageManifest.marketplace?.requires_installation === true, `${appKey} manifest must require organization installation before call use`)
+  assert(
+    ['allowed_by_default', 'blocked_by_default'].includes(packageManifest.default_participant_access),
+    `${appKey} manifest default participant access must be explicit`,
+  )
+  assert(packageManifest.iframe?.entrypoint === 'public/index.html', `${appKey} iframe entrypoint must be package-local`)
+  assert(packageManifest.iframe?.receives_primary_session_token === false, `${appKey} iframe must not receive the primary session token`)
+  assert(packageManifest.iframe?.bridge_protocol === 'king.call_app.iframe.v1', `${appKey} iframe bridge protocol mismatch`)
+  assertArrayIncludes(packageManifest.iframe?.sandbox, 'allow-scripts', `${appKey} iframe sandbox must allow scripts for the app runtime`)
+  assert(!packageManifest.iframe?.sandbox?.includes('allow-same-origin'), `${appKey} iframe sandbox must not allow same-origin by default`)
+
+  const packageMcpDescriptor = readJson(`demo/call-app/${appKey}/mcp.descriptor.json`)
+  assert(packageMcpDescriptor.schema_version === 'king.call_app.mcp_descriptor.v1', `${appKey} MCP descriptor schema mismatch`)
+  assert(packageMcpDescriptor.service_name === `call_app.${appKey}.mcp`, `${appKey} MCP service name mismatch`)
+
+  const packageCrdtSchema = readJson(`demo/call-app/${appKey}/crdt.schema.json`)
+  assert(packageCrdtSchema.schema_version === 'king.call_app.crdt_schema.v1', `${appKey} CRDT schema version mismatch`)
+  assert(packageCrdtSchema.protocol === 'king.call_app.crdt.v1', `${appKey} CRDT protocol mismatch`)
+
+  const packageHealth = readJson(`demo/call-app/${appKey}/health.descriptor.json`)
+  assert(packageHealth.schema_version === 'king.call_app.health_descriptor.v1', `${appKey} health descriptor schema mismatch`)
+  const packageHealthPaths = packageHealth.checks.map((check) => check.path)
+  const healthCheckedFiles = packageFiles.filter((file) => file !== 'health.descriptor.json')
+  for (const healthPath of healthCheckedFiles) {
+    assertArrayIncludes(packageHealthPaths, healthPath, `${appKey} health descriptor missing check for ${healthPath}`)
+  }
+
+  const packageIframe = read(`demo/call-app/${appKey}/public/index.html`)
+  const packageRuntime = read(`demo/call-app/${appKey}/public/${appKey}.js`)
+  const packageBundle = `${packageIframe}\n${packageRuntime}`
+  assert(packageIframe.includes('king.call_app.iframe.v1'), `${appKey} iframe entrypoint must declare bridge protocol`)
+  assert(packageIframe.includes(`${appKey}.css`), `${appKey} iframe entrypoint must load its package stylesheet`)
+  assert(packageIframe.includes(`${appKey}.js`), `${appKey} iframe entrypoint must load its package runtime`)
+  assert(packageRuntime.includes("message.type === 'call_app.launch'"), `${appKey} iframe runtime must wait for launch message`)
+  assert(packageRuntime.includes("'call_app.ready'"), `${appKey} iframe runtime must emit ready message after launch`)
+  assert(packageRuntime.includes('primary_session_token_received: false'), `${appKey} iframe runtime must not accept a primary session token`)
+  assert(!packageBundle.includes('sessionToken'), `${appKey} iframe bundle must not reference parent session tokens`)
+  assert(!packageBundle.includes('Authorization'), `${appKey} iframe bundle must not reference authorization headers`)
+}
+
+const appPackageSourceBasenames = new Set([
+  ...appPackageRequiredFiles.filter((file) => !file.includes('/')).map((file) => path.posix.basename(file)),
+  ...appPackageRuntimeFiles.map((file) => path.posix.basename(file)),
+])
+const appPackageSourcePathSuffixes = new Set([
+  ...appPackageRequiredFiles,
+  ...appPackageRuntimeFiles,
+])
+const allowedHostBridgeSourcePrefixes = [
+  'demo/video-chat/frontend-vue/src/domain/realtime/callApps/',
+  'demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js',
+]
+const allowedBackendPathPrefixes = [
+  'demo/video-chat/backend-king-php/domain/call_apps/',
+  'demo/video-chat/backend-king-php/http/module_call_apps.php',
+  'demo/video-chat/backend-king-php/support/call_app_',
+]
+const trackedBackendFiles = trackedFiles('demo/video-chat/backend-king-php')
+const trackedFrontendSourceFiles = trackedFiles('demo/video-chat/frontend-vue/src')
+const frontendSourcePackageMirrors = trackedFrontendSourceFiles.filter((file) => {
+  const basename = path.posix.basename(file)
+  const sourceSuffix = file.replace('demo/video-chat/frontend-vue/src/', '')
+  return appPackageSourceBasenames.has(basename) || appPackageSourcePathSuffixes.has(sourceSuffix)
+})
+assertNoFiles(
+  frontendSourcePackageMirrors,
+  'frontend src must not contain Call App package source files as a second source of truth',
+)
+assert(
+  allowedHostBridgeSourcePrefixes.every((allowedPath) => trackedFrontendSourceFiles.some((file) => file.startsWith(allowedPath))),
+  'frontend host/bridge Call App paths must remain explicitly allowed',
+)
+assert(
+  allowedBackendPathPrefixes.every((allowedPath) => trackedBackendFiles.some((file) => file.startsWith(allowedPath))),
+  'backend Call App paths must remain explicitly allowed outside the app package source scan',
+)
+
 const readme = read('demo/call-app/README.md')
 assert(readme.includes('demo/call-app/<app-key>/'), 'README must document the package root convention')
+assert(readme.includes('repository-root special-purpose Markdown'), 'README must document the root Markdown boundary')
 for (const requiredFile of [
   'call-app.manifest.json',
   'mcp.descriptor.json',

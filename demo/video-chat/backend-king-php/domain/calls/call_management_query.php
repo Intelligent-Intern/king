@@ -98,9 +98,13 @@ function videochat_user_has_system_admin_call_rights(PDO $pdo, int $authUserId, 
     }
 
     try {
+        $hasPasswordHashColumn = videochat_tenant_table_has_column($pdo, 'users', 'password_hash');
+        $hasStatusColumn = videochat_tenant_table_has_column($pdo, 'users', 'status');
+        $passwordHashSelect = $hasPasswordHashColumn ? 'users.password_hash' : "'' AS password_hash";
+        $statusSelect = $hasStatusColumn ? 'users.status' : "'active' AS status";
         $query = $pdo->prepare(
-            <<<'SQL'
-SELECT users.email, users.password_hash, users.status, roles.slug AS role_slug
+            <<<SQL
+SELECT users.email, {$passwordHashSelect}, {$statusSelect}, roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
 WHERE users.id = :user_id

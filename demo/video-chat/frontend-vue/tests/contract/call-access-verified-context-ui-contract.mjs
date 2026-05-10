@@ -5,9 +5,14 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
+const repoRoot = path.resolve(root, '..', '..', '..');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
+}
+
+function readRepo(relativePath) {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
 const admissionGate = read('src/domain/calls/access/admissionGate.ts');
@@ -18,6 +23,7 @@ const callAccessJoinSpec = read('tests/e2e/call-access-join.spec.js');
 const personalizedIdentitySpec = read('tests/e2e/call-access-personalized-identity.spec.js');
 const backendCallAccessSession = read('../backend-king-php/domain/calls/call_access_session.php');
 const backendRouteGuard = read('../backend-king-php/tests/call-access-session-route-guard-contract.php');
+const parallelAccountTabsNote = readRepo('analyse/IAM11-13-parallel-account-tabs-proof.md');
 
 assert.match(
   admissionGate,
@@ -213,6 +219,11 @@ assert.match(
   callAccessJoinSpec,
   /requests\.a\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.b\.joinGetCount\)\.toBe\(1\)[\s\S]*requests\.a\.sessionPostCount\)\.toBe\(1\)[\s\S]*requests\.b\.sessionPostCount\)\.toBe\(1\)/,
   'parallel-account E2E must guard against reload loops or duplicate session POSTs in either context',
+);
+assert.match(
+  parallelAccountTabsNote,
+  /IAM11-13[\s\S]*same personalized link in parallel contexts keeps account sessions isolated[\s\S]*two browser contexts[\s\S]*Bearer \$\{accountA\.sessionToken\}[\s\S]*Bearer \$\{accountB\.sessionToken\}[\s\S]*storedB\.sessionToken[\s\S]*not\.toBe\(accountA\.issuedCallAccessToken\)/,
+  'IAM11-13 analyse note must document the parallel account-tabs identity/session isolation proof',
 );
 
 console.log('[call-access-verified-context-ui-contract] PASS');

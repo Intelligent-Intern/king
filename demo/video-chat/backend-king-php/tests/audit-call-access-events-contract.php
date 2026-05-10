@@ -58,6 +58,11 @@ try {
         exit(0);
     }
 
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX=1');
+    $outboxPath = sys_get_temp_dir() . '/videochat-audit-call-access-events-outbox-' . bin2hex(random_bytes(6)) . '.log';
+    @unlink($outboxPath);
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH=' . $outboxPath);
+
     $databasePath = sys_get_temp_dir() . '/videochat-audit-call-access-events-' . bin2hex(random_bytes(6)) . '.sqlite';
     @unlink($databasePath);
 
@@ -367,4 +372,9 @@ try {
     if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
         @unlink($databasePath);
     }
+    if (isset($outboxPath) && is_string($outboxPath) && is_file($outboxPath)) {
+        @unlink($outboxPath);
+    }
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX');
+    putenv('VIDEOCHAT_EMAIL_OUTBOX_PATH');
 }

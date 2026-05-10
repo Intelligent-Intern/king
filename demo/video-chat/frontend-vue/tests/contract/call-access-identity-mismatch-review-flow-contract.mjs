@@ -27,6 +27,7 @@ const verifiedContextContract = read('demo/video-chat/frontend-vue/tests/contrac
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const sprint = read('SPRINT.md');
+const auditEvidence = read('documentation/iam-sprint-04-audit-proof-extract-evidence.md');
 
 assert.match(
   sessionDomain,
@@ -132,9 +133,9 @@ for (const pathName of [
 }
 
 assert.match(
-  sprint,
-  /- \[x\] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility/,
-  'SPRINT.md must mark IAM8-07 checked only after implementation and proof',
+  `${auditEvidence}\n${sprint}`,
+  /audit-alias-followup-proof[\s\S]*audit event alias contract follow-up|audit event alias contract follow-up[\s\S]*audit-alias-followup-proof/,
+  'completed IAM8-07 audit-alias proof must remain discoverable outside active root sprint history',
 );
 
 process.stdout.write('[call-access-identity-mismatch-review-flow-contract] PASS\n');

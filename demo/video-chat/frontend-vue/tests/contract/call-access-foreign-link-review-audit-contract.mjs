@@ -22,11 +22,12 @@ function functionBody(source, name) {
 const reviewHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const auditEvents = read('demo/video-chat/backend-king-php/domain/audit/audit_events.php');
 const backendContract = read('demo/video-chat/backend-king-php/tests/call-access-foreign-link-review-audit-contract.php');
+const backendWrapper = read('demo/video-chat/backend-king-php/tests/call-access-foreign-link-review-audit-contract.sh');
 const backendAggregate = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 const uiMatrix = read('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const sprint = read('SPRINT.md');
-const readiness = read('READYNESS_TRACKER.md');
+const readiness = read('documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md');
 const docs = read('documentation/iam7-13-foreign-link-review-audit.md');
 
 const reviewTenantBody = functionBody(reviewHelper, 'videochat_call_access_review_tenant_id');
@@ -81,14 +82,19 @@ assert.match(
   'IAM SQLite aggregate must run the foreign-link review audit backend contract',
 );
 assert.match(
+  backendWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-foreign-link-review-audit-contract\.php/s,
+  'foreign-link review audit wrapper must delegate through the Docker-capable SQLite runner',
+);
+assert.match(
   uiMatrix,
   /frontend-vue\/tests\/contract\/call-access-foreign-link-review-audit-contract\.mjs[\s\S]*backend-king-php\/tests\/call-access-foreign-link-review-audit-contract\.sh/,
   'release-gate metadata must list the foreign-link review audit frontend and backend contracts',
 );
 assert.match(
-  sprint,
-  /\[x\] IAM7-13 Extract or prove foreign link review audit scoping/,
-  'SPRINT.md must mark IAM7-13 complete after verification',
+  `${docs}\n${readiness}`,
+  /IAM7-13[\s\S]*foreign link review audit|foreign link review audit[\s\S]*IAM7-13/,
+  'completed IAM7-13 proof must remain discoverable outside active root sprint history',
 );
 assert.match(
   docs,

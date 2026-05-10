@@ -126,7 +126,7 @@ Frontend client integration decision:
 
 Runtime contract-test coverage:
 - `realtime-gossipmesh-runtime-contract.php` covers admitted-member filtering, rejected-member accounting, deterministic topology, bounded neighbor fanout, relay candidate ranking, duplicate suppression, TTL expiry, protected-envelope validation, route planning, relay fallback, and failure cases for plaintext data, missing envelope contract, duplicate frames, unknown publishers, and unavailable relays.
-- `725-gossipmesh-runtime-coverage-contract.phpt` pins that the runtime exposes only backend-owned helpers for protected-envelope routing and that the coverage remains wired into `SPRINT.md` and `READYNESS_TRACKER.md`.
+- `725-gossipmesh-runtime-coverage-contract.phpt` pins that the runtime exposes only backend-owned helpers for protected-envelope routing and that the coverage remains wired into `SPRINT.md` plus the archived completion tracker.
 
 Production documentation:
 - `documentation/gossipmesh.md` is now allowed because the production runtime contract exists and is covered by tests.
@@ -218,4 +218,4 @@ Explicit WLVC regression checks:
 
 Q-15 WLVC outcome:
 - Remaining codec/WASM/Kalman experiment diffs are either ported with targeted tests or explicitly classified as superseded by the current stronger implementation.
-- The closed outcome is recorded in `READYNESS_TRACKER.md` and pinned by `extension/tests/738-wlvc-q15-outcome-contract.phpt`.
+- The closed outcome is recorded in the archived completion tracker and pinned by `extension/tests/738-wlvc-q15-outcome-contract.phpt`.

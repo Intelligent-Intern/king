@@ -272,6 +272,21 @@ SQL
     videochat_call_access_session_route_guard_assert($openAccessId !== '', 'open access id should be present');
 
     $guestCountBeforeOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
+    $openAnonymous = $callSessionRoute(
+        $openAccessId,
+        ['User-Agent' => 'route-guard-open-anonymous', 'Content-Type' => 'application/json'],
+        json_encode(['guest_name' => 'Route Guard Anonymous Guest'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        'sess_route_guard_open_guest'
+    );
+    videochat_call_access_session_route_guard_assert((int) ($openAnonymous['status'] ?? 0) === 200, 'open link should issue an isolated guest user');
+    $openAnonymousPayload = videochat_call_access_session_route_guard_decode($openAnonymous);
+    $openAnonymousUserId = (int) (((($openAnonymousPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0));
+    videochat_call_access_session_route_guard_assert($openAnonymousUserId > 0, 'anonymous open link should return a guest user id');
+    videochat_call_access_session_route_guard_assert($openAnonymousUserId !== $adminUserId && $openAnonymousUserId !== $standardUserId, 'anonymous open link must not bind an existing account');
+    videochat_call_access_session_route_guard_assert((bool) (((($openAnonymousPayload['result'] ?? [])['user'] ?? [])['is_guest'] ?? false)) === true, 'anonymous open link user should be a guest');
+    $guestCountAfterAnonymousOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
+    videochat_call_access_session_route_guard_assert($guestCountAfterAnonymousOpenJoin === $guestCountBeforeOpenJoin + 1, 'anonymous open link should create exactly one temporary guest');
+
     $openLoggedIn = $callSessionRoute(
         $openAccessId,
         ['Authorization' => 'Bearer sess_route_guard_admin', 'User-Agent' => 'route-guard-open', 'Content-Type' => 'application/json'],
@@ -284,7 +299,7 @@ SQL
     videochat_call_access_session_route_guard_assert($openUserId === $adminUserId, 'open link should keep the authenticated user');
     videochat_call_access_session_route_guard_assert((bool) (((($openPayload['result'] ?? [])['user'] ?? [])['is_guest'] ?? true)) === false, 'open link user should not be a guest');
     $guestCountAfterOpenJoin = (int) $pdo->query("SELECT COUNT(*) FROM users WHERE email LIKE 'guest+%@videochat.local'")->fetchColumn();
-    videochat_call_access_session_route_guard_assert($guestCountAfterOpenJoin === $guestCountBeforeOpenJoin, 'logged-in open link must not create a temporary guest');
+    videochat_call_access_session_route_guard_assert($guestCountAfterOpenJoin === $guestCountAfterAnonymousOpenJoin, 'logged-in open link must not create a temporary guest');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-session-route-guard-contract] PASS\n");

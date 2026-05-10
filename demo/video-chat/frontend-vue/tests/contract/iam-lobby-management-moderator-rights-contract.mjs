@@ -46,7 +46,8 @@ function functionBody(source, name) {
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
-const sprint = readText('SPRINT.md');
+const anonymousLobbyEvidence = readText('documentation/iam7-01-anonymous-lobby.md');
+const lobbyModeratorEvidence = readText('documentation/iam7-17-lobby-management-moderator-rights.md');
 const callManagementContract = readText('demo/video-chat/backend-king-php/domain/calls/call_management_contract.php');
 const callManagementQuery = readText('demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
 const realtimeRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
@@ -105,6 +106,21 @@ assert.match(
   /host waiting snapshot[\s\S]*host admitted logged-in participant[\s\S]*temporary moderator waiting snapshot[\s\S]*temporary moderator admission[\s\S]*temporary moderator admitted anonymous guest[\s\S]*temporary moderator rejection[\s\S]*temporary moderator rejected anonymous guest[\s\S]*organization admin waiting snapshot[\s\S]*organization admin admission[\s\S]*organization admin rejected anonymous guest[\s\S]*system admin waiting snapshot[\s\S]*system admin admission[\s\S]*system admin rejected anonymous guest[\s\S]*unauthorized waiting-user lobby controls[\s\S]*queued participant must not authorize self admission/s,
   'anonymous lobby backend proof must separate owner/admin/moderator/user/guest lobby rights',
 );
+assert.match(
+  anonymousLobbyContract,
+  /logged-in FFA open link should keep the authenticated account[\s\S]*logged-in invite-only open link should keep the authenticated account[\s\S]*logged-out invite-only open link should create a separate guest/s,
+  'anonymous lobby backend proof must pin logged-in account preservation separately from logged-out guest creation',
+);
+assert.match(
+  anonymousLobbyEvidence,
+  /logged-in open-link use keeps the authenticated account[\s\S]*logged-in open-link sessions without their own direct\s+call rights[\s\S]*logged-out free-for-all open links issue isolated temporary guest identities[\s\S]*logged-out invite-only open-link sessions do not gain guest-list\/direct-join\s+rights/s,
+  'IAM7 anonymous lobby evidence must match the current logged-in-account and logged-out-guest split',
+);
+assert.doesNotMatch(
+  anonymousLobbyEvidence,
+  /logged-in open-link use does not promote the authenticated account|including a logged-in browser, create separate\s+guest users/,
+  'IAM7 anonymous lobby evidence must not claim logged-in open links mint isolated guests',
+);
 for (const tempModeratorNeedle of [
   'server-side moderator grant should authorize lobby controls',
   'temporary moderator must not manage owner transfer',
@@ -155,9 +171,9 @@ for (const backendProof of [
   assert.ok(sqliteRuntimeProof.includes(`"${backendProof}"`), `SQLite IAM proof must include ${backendProof}`);
 }
 assert.match(
-  sprint,
-  /- \[x\] IAM7-17 Extract or prove lobby management moderator rights from[\s\S]*`local\/iam-e2e-lobby-management-moderator-rights`/,
-  'SPRINT.md must close IAM7-17 only when this proof is wired',
+  lobbyModeratorEvidence,
+  /IAM7-17 Lobby Management Moderator Rights[\s\S]*`local\/iam-e2e-lobby-management-moderator-rights`[\s\S]*Verification targets:[\s\S]*call-access-anonymous-lobby-contract\.php[\s\S]*iam-call-access-sqlite-runtime-proof\.sh/s,
+  'IAM7-17 evidence doc must preserve the lobby moderator proof source and verification targets',
 );
 
 process.stdout.write('[iam-lobby-management-moderator-rights-contract] PASS\n');

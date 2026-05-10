@@ -18,6 +18,26 @@ demo/call-app/<app-key>/
   public/<app-key>.js
 ```
 
+Package boundary:
+
+- `demo/call-app/<app-key>/` is the source package boundary for each Call App.
+  App sources, package manifests, MCP descriptors, CRDT schemas, health
+  descriptors, and iframe assets belong here.
+- `demo/video-chat/frontend-vue/src/domain/realtime/callApps` is the video-call
+  host integration. It owns the host shell, iframe bridge, launch context,
+  permission handoff, and parent/app protocol handling; it is not the app source
+  package.
+- `demo/video-chat/backend-king-php/domain/call_apps` is the King runtime
+  domain. It owns availability, runtime/session state, launch tokens, CRDT
+  envelopes, snapshots, replay, audit, grants, and Marketplace installation
+  behavior; it is not the app source package.
+- `demo/video-chat/frontend-vue/dist/call-app` is a generated build artifact for
+  served Call App assets. Do not treat it as source and do not make source
+  changes there.
+- Call App package notes and checks belong in this package tree, active
+  `SPRINT.md`/`BACKLOG.md` items, or archived documentation. Do not add
+  repository-root special-purpose Markdown files for individual Call Apps.
+
 Required package contracts:
 
 - `call-app.manifest.json` is the canonical package manifest.

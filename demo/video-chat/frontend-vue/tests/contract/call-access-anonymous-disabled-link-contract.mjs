@@ -57,8 +57,8 @@ assert.match(
 );
 assert.match(
   backendShell,
-  /pdo_sqlite[\s\S]*call-access-anonymous-disabled-link-contract\.php/,
-  'backend shell wrapper must run the disabled anonymous SQLite proof with host-safe skip behavior',
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-anonymous-disabled-link-contract\.php/,
+  'backend shell wrapper must run the disabled anonymous SQLite proof through the shared Docker-capable SQLite runner',
 );
 
 assert.match(

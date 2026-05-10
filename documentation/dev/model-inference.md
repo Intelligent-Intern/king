@@ -1,12 +1,13 @@
 # King Model Inference Demo
 
 This directory is the active build-out of a first-class **inference-serving**
-role on top of the King native runtime. It maps to tracker sections **V**
-(AI/SLM Platform) and **Z** (Inference Serving) in `READYNESS_TRACKER.md`.
+role on top of the King native runtime. Historical tracker sections **V**
+(AI/SLM Platform) and **Z** (Inference Serving) are archived under
+`documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md`.
 
-The landed local inference and RAG proof is recorded in
-`READYNESS_TRACKER.md`. Remaining distributed inference, model placement, and
-fine-tuning work lives in `BACKLOG.md` Batch 4.
+The landed local inference and RAG proof is recorded in the archived completion
+tracker. Remaining distributed inference, model placement, and fine-tuning work
+lives in `BACKLOG.md` Batch 4.
 
 ---
 
@@ -552,14 +553,13 @@ demo/model-inference/
 
 ## Related
 
-- `EPIC.md` — stable charter + non-negotiables
+- `documentation/archive/root-md-2026-05-10/EPIC.md` — archived charter + non-negotiables
   (no-capability-claim-without-proof, no-simulated-as-real,
   no-contract-shrink).
 - `BACKLOG.md` — open model-placement, distributed inference, and fine-tuning work.
 - `documentation/project-assessment.md` — what is verified now (post-merge sweep, not
   here).
-- `READYNESS_TRACKER.md` — long-form closure tracker including V / W / X /
-  Y / Z / AA sections this demo starts unfencing.
+- `documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md` — archived long-form closure tracker including V / W / X / Y / Z / AA sections this demo starts unfencing.
 - `demo/video-chat/` — structural convention this demo mirrors (module
   dispatcher, contract catalog, `*-contract.sh` tests, compose smoke).
 - `demo/userland/flow-php/src/McpServiceDiscovery.php` —

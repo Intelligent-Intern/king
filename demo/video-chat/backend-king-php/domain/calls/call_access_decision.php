@@ -121,12 +121,28 @@ function videochat_decide_call_access_for_user(
 
     $participantInactive = is_array($participant) && in_array($inviteState, ['declined', 'cancelled'], true);
     $participantPending = is_array($participant) && $inviteState === 'pending';
-    if (is_array($participant) && !$participantInactive && !$participantPending) {
+    $freeForAllParticipantRequiresAdmission = $accessMode === 'free_for_all'
+        && is_array($participant)
+        && $inviteState === 'invited';
+    if (is_array($participant) && !$participantInactive && !$participantPending && !$freeForAllParticipantRequiresAdmission) {
         return videochat_call_access_decision_result(
             true,
             'allowed',
             'internal_participant',
             'call',
+            $call,
+            $callRole,
+            $callRole,
+            $inviteState
+        );
+    }
+
+    if ($freeForAllParticipantRequiresAdmission) {
+        return videochat_call_access_decision_result(
+            false,
+            'not_on_guest_list',
+            'none',
+            'none',
             $call,
             $callRole,
             $callRole,

@@ -47,6 +47,7 @@ const callAccessPublic = read('demo/video-chat/backend-king-php/domain/calls/cal
 const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const realtimeCallContext = read('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
+const websocketLobby = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_lobby.php');
 const lobbySync = read('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby_sync.php');
 const authSupport = read('demo/video-chat/backend-king-php/support/auth.php');
 const joinView = read('demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue');
@@ -91,9 +92,9 @@ assert.match(
   'session issuance must inherit copied-link revocation before minting a new call-scoped session',
 );
 assert.match(
-  websocketCommands,
-  /if \(\$lobbyAction === 'lobby\/remove'\)[\s\S]*videochat_realtime_mark_call_participant_invite_state_by_user_id\([\s\S]*'cancelled'[\s\S]*\['pending', 'allowed', 'accepted'\]/,
-  'host removal from lobby or admitted state must persist a revoked participant state, not restore invite access',
+  websocketLobby,
+  /\$nextInviteState = match \(\$requestedAction\) \{[\s\S]*'lobby\/kick' => 'invited'[\s\S]*default => 'cancelled'[\s\S]*videochat_realtime_mark_call_participant_invite_state_by_user_id\([\s\S]*\$nextInviteState[\s\S]*\['pending', 'allowed', 'accepted'\]/,
+  'host kick must clear the current admission to invited while host remove remains revoked',
 );
 assert.match(
   realtimeCallContext,

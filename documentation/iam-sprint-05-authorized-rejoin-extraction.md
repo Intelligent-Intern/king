@@ -66,6 +66,33 @@ wiring. It cross-checks the current runtime and existing maintained contracts so
 the branch-specific proof value is visible without importing the broad source
 branches.
 
+## IAM11-04 Recheck
+
+Rechecked on 2026-05-10 for IAM11-04 against
+`local/iam-e2e-authorized-rejoin-main` at `039b9a41`. The branch value remains
+the same focused behavior: registered guest-list users, system admins, and
+same-organization admins can leave and rejoin the same call with the same
+session context; room recovery requests authoritative snapshot backfill; and
+`left_at` is cleared on the accepted rejoin while forged admin, pending lobby,
+kicked, removed, and role-invalidated paths stay fail-closed.
+
+Current integration already proves that value through the maintained
+authorized-rejoin static extraction, realtime-scope contract, and backend
+authorized-rejoin PHP contract. The old Playwright E2E from the source branch
+was not ported because the maintained contracts cover the branch behavior
+without importing broad browser fixture and seed-matrix changes.
+
+IAM11-04 proof commands:
+
+- `node tests/contract/call-access-authorized-rejoin-extract-contract.mjs`
+  passed from `demo/video-chat/frontend-vue`.
+- `node tests/contract/call-access-realtime-scope-contract.mjs` passed from
+  `demo/video-chat/frontend-vue`.
+- `php -l ../backend-king-php/tests/call-access-authorized-rejoin-contract.php`
+  passed from `demo/video-chat/frontend-vue`.
+- `../backend-king-php/tests/call-access-authorized-rejoin-contract.sh`
+  skipped on host PHP because `pdo_sqlite` is unavailable.
+
 ## Non-ported Source Changes
 
 The old authorized-rejoin branches also contain broad backend domain changes,

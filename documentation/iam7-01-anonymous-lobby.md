@@ -11,19 +11,21 @@ matrix additions, and frontend E2E harness changes. It was not merged wholesale.
 
 ## Current Contract
 
-Current prod keeps the stronger temporary-open-link boundary that later sprint
-work established:
+Current prod keeps the account-safe open-link boundary that later sprint work
+established:
 
-- logged-in open-link use does not promote the authenticated account into the
-  call;
-- open links issue isolated temporary guest identities;
-- free-for-all open links still enter directly after session issuance;
-- invite-only open-link sessions do not gain guest-list/direct-join rights at
-  issuance and must explicitly queue in the King lobby.
+- logged-in open-link use keeps the authenticated account and the existing
+  account session; it does not mint or adopt a temporary guest identity;
+- logged-in open-link sessions without their own direct call rights are put into
+  `pending` and must wait in the King lobby;
+- logged-out free-for-all open links issue isolated temporary guest identities
+  and enter directly after session issuance;
+- logged-out invite-only open-link sessions do not gain guest-list/direct-join
+  rights at issuance and must explicitly queue in the King lobby.
 
-That means the historical expectations that logged-in open links reuse the
-authenticated account and that all open links wait for host admission were not
-ported. They conflict with current maintained contracts such as
+That means the historical expectation that all open links wait for host
+admission was not ported. Reintroducing it would conflict with current
+maintained contracts such as
 `call-access-session-route-guard-contract.php`,
 `call-access-admin-prevention-contract.php`, and
 `call-access-session-contract.php`.
@@ -36,11 +38,14 @@ with a Docker-aware runner at
 
 The proof covers the current split:
 
-- free-for-all open links still create an isolated guest and enter the bound room
-  directly;
-- invite-only open-link sessions, including a logged-in browser, create separate
-  guest users and do not create participant rows at issuance;
-- invite-only open-link guests resolve to `waiting-room` until lobby admission;
+- logged-in free-for-all and invite-only open-link sessions keep the
+  authenticated account and persist a `pending` participant row when the account
+  has no direct call rights;
+- logged-out free-for-all open links create an isolated guest and enter the
+  bound room directly;
+- logged-out invite-only open-link sessions create separate guest users without
+  participant rows at issuance;
+- queued open-link users resolve to `waiting-room` until lobby admission;
 - a queued guest cannot self-admit;
 - owner, same-organization admin, and system admin can admit queued open-link
   guests;
@@ -62,6 +67,6 @@ Two minimal runtime fixes were required for the contract to pass honestly:
 
 `agent/iam-e2e-anonymous-lobby` is redundant for the current prod contract after
 this extraction. Its remaining parked value is historical only: it documents an
-older product direction where logged-in open links reused the authenticated
-account and free-for-all open links waited for host admission. Reintroducing
-that behavior would be a product contract change, not an IAM7 cleanup.
+older product direction where every open-link path waited for host admission.
+Reintroducing that behavior for logged-out free-for-all links would be a product
+contract change, not an IAM7 cleanup.

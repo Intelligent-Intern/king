@@ -253,10 +253,11 @@ SQL
     videochat_call_access_session_assert(is_array($externalJoinResponse), 'external join response should be an array');
     videochat_call_access_session_assert((int) ($externalJoinResponse['status'] ?? 0) === 200, 'external join status should be 200');
     $externalJoinPayload = videochat_call_access_session_decode($externalJoinResponse);
+    $externalJoinResult = is_array($externalJoinPayload['result'] ?? null) ? $externalJoinPayload['result'] : [];
     videochat_call_access_session_assert((string) ((($externalJoinPayload['result'] ?? [])['call'] ?? [])['id'] ?? '') === $externalCallId, 'external join call id mismatch');
     videochat_call_access_session_assert((string) (($externalJoinPayload['result'] ?? [])['link_kind'] ?? '') === 'personal', 'external join must stay personal');
-    videochat_call_access_session_assert((($externalJoinPayload['result'] ?? [])['target_user'] ?? 'sentinel') === null, 'external join must not fabricate target user');
-    videochat_call_access_session_assert((bool) (($externalJoinPayload['result'] ?? [])['requires_guest_name'] ?? false), 'external join must require guest name');
+    videochat_call_access_session_assert(array_key_exists('target_user', $externalJoinResult) && $externalJoinResult['target_user'] === null, 'external join must not fabricate target user');
+    videochat_call_access_session_assert((bool) ($externalJoinResult['requires_guest_name'] ?? false), 'external join must require guest name');
 
     $externalMissingName = videochat_handle_call_routes(
         '/api/call-access/' . $externalAccessId . '/session',
@@ -303,6 +304,7 @@ SQL
     videochat_call_access_session_assert($externalGuestUserId > 0, 'external guest user id should be present');
     videochat_call_access_session_assert((bool) (((($externalSessionPayload['result'] ?? [])['user'] ?? [])['is_guest'] ?? false)), 'external guest session user should be marked as guest');
     videochat_call_access_session_assert((bool) (($externalSessionPayload['result'] ?? [])['requires_guest_name'] ?? false), 'external session payload should retain guest-name contract');
+    $pdo = $openDatabase();
     $externalBinding = videochat_fetch_call_access_session_binding($pdo, $externalSessionId);
     videochat_call_access_session_assert(is_array($externalBinding), 'external guest session binding should validate');
     videochat_call_access_session_assert((string) ($externalBinding['link_kind'] ?? '') === 'personal', 'external binding must stay personal');
@@ -414,6 +416,7 @@ SQL
         'open guest should inherit owner logout landing url for session'
     );
 
+    $pdo = $openDatabase();
     $openBinding = videochat_fetch_call_access_session_binding($pdo, $openSessionId);
     videochat_call_access_session_assert(is_array($openBinding), 'open guest session binding should be persisted');
     videochat_call_access_session_assert((string) ($openBinding['access_id'] ?? '') === $openAccessId, 'open binding access id mismatch');

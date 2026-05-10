@@ -3,6 +3,7 @@ import {
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRelay.js';
+import { createCallWorkspaceMediaCapabilityBridge } from './mediaCapabilityPlanBridge.ts';
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
@@ -92,6 +93,12 @@ export function createCallWorkspaceSocketHelpers({
     sfuRemoteLayerPreferenceLastAtMs: 0,
     sfuRemoteLayerPreferenceLastAction: '',
   };
+  const mediaCapabilityPlanBridge = createCallWorkspaceMediaCapabilityBridge({
+    callbacks: {
+      captureClientDiagnostic,
+    },
+    refs,
+  });
 
   function sfuTransportStateForSocketLifecycle() {
     if (refs.sfuTransportState && typeof refs.sfuTransportState === 'object') {
@@ -356,6 +363,7 @@ export function createCallWorkspaceSocketHelpers({
         }
       }
       clearAdmissionGate();
+      void mediaCapabilityPlanBridge.sendClientCapabilities('system_welcome', payload);
       requestRoomSnapshot();
       if (refs.desiredRoomId.value !== welcomeRoom) {
         void sendRoomJoin(refs.desiredRoomId.value);
@@ -365,6 +373,8 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'room/snapshot') {
       applyRoomSnapshot(payload);
+      mediaCapabilityPlanBridge.handleRoomSnapshotMediaSessionPlan(payload);
+      void mediaCapabilityPlanBridge.sendClientCapabilities('room_snapshot', payload);
       applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
       return;
     }

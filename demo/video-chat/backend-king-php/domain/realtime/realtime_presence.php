@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/error_envelope.php';
 require_once __DIR__ . '/../../support/tenant_context.php';
+require_once __DIR__ . '/realtime_client_capabilities.php';
 require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
 
 function videochat_presence_state_init(): array
@@ -195,7 +196,7 @@ function videochat_presence_connection_descriptor(
  */
 function videochat_presence_public_connection(array $connection): array
 {
-    return [
+    $publicConnection = [
         'connection_id' => (string) ($connection['connection_id'] ?? ''),
         'room_id' => (string) ($connection['room_id'] ?? ''),
         'tenant_id' => is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null,
@@ -210,6 +211,13 @@ function videochat_presence_public_connection(array $connection): array
         ],
         'connected_at' => (string) ($connection['connected_at'] ?? ''),
     ];
+    if (is_array($connection['client_capabilities'] ?? null)) {
+        $publicConnection['client_capabilities'] = videochat_client_capabilities_public_projection(
+            (array) $connection['client_capabilities']
+        );
+    }
+
+    return $publicConnection;
 }
 
 /**

@@ -4,6 +4,37 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
 
+function videochat_call_access_email_target_is_external_invitee(PDO $pdo, array $accessLink, string $participantEmail): bool
+{
+    $callId = trim((string) ($accessLink['call_id'] ?? ''));
+    if ($callId === '' || $participantEmail === '') {
+        return false;
+    }
+
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT source, invite_state
+FROM call_participants
+WHERE call_id = :call_id
+  AND lower(email) = lower(:email)
+ORDER BY CASE WHEN source = 'external' THEN 0 ELSE 1 END ASC
+LIMIT 1
+SQL
+    );
+    $query->execute([
+        ':call_id' => $callId,
+        ':email' => $participantEmail,
+    ]);
+    $row = $query->fetch();
+    if (!is_array($row)) {
+        return false;
+    }
+
+    $source = strtolower(trim((string) ($row['source'] ?? '')));
+    $inviteState = videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited');
+    return $source === 'external' && !in_array($inviteState, ['cancelled', 'declined'], true);
+}
+
 function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
 {
     $normalizedAccessId = videochat_normalize_call_access_id($accessId);
@@ -112,7 +143,15 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         $tenantId,
         false
     );
-    if ($linkKind === 'personal' && !is_array($targetUser)) {
+    if (
+        $linkKind === 'personal'
+        && !is_array($targetUser)
+        && (
+            $linkedUserId > 0
+            || $participantEmail === ''
+            || !videochat_call_access_email_target_is_external_invitee($pdo, $accessLink, $participantEmail)
+        )
+    ) {
         return [
             'ok' => false,
             'reason' => 'not_found',

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_guest_list_audit.php';
 require_once __DIR__ . '/call_lifecycle.php';
 
 function videochat_validate_update_call_payload(array $payload): array
@@ -433,6 +434,14 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
             $participantEmailMap[$email] = true;
         }
     }
+    $guestListAuditChanges = $participantsNeedUpdate
+        ? videochat_guest_list_audit_diff(
+            (array) ($currentParticipants['internal'] ?? []),
+            (array) ($currentParticipants['external'] ?? []),
+            $nextInternalParticipants,
+            $nextExternalParticipants
+        )
+        : [];
 
     $updatedAt = gmdate('c');
     $nextStartsAt = gmdate('c', $nextStartsUnix);
@@ -536,6 +545,16 @@ SQL
                     ':joined_at' => null,
                     ':left_at' => null,
                 ]);
+            }
+
+            if (!videochat_guest_list_audit_record_changes(
+                $pdo,
+                is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null,
+                (string) $existingCall['id'],
+                $authUserId,
+                $guestListAuditChanges
+            )) {
+                throw new RuntimeException('guest_list_audit_write_failed');
             }
         }
 

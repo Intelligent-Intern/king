@@ -10,104 +10,136 @@ Rules:
 - Work one checkbox at a time unless the user explicitly expands scope.
 - A checkbox is only closed after implementation and proof.
 - Do not weaken King v1 contracts to make the sprint smaller.
+- Root planning Markdown stays limited to `README.md`, `BACKLOG.md`, and
+  `SPRINT.md`; do not add new root Markdown planning files.
 - Do not grow `CallWorkspaceView.vue` or other oversized files; extract focused
   helpers/components when adding behavior.
 - Use the local branch `prod-kingrt-do-not-push-to-github` for integration.
-- Do not push. Deploy only when the active sprint proof is green.
+- Do not push.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: IAM Branch Cleanup, Current Proof, And Stale-Diff Closure 10
+## Sprint: IAM Call Access Proof Consolidation And Test Gate 12
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Active as of 2026-05-10 after Sprint 09 deploy and diagnostics.
+- Active as of 2026-05-10 after completion of `IAM Call Access, Branch
+  Hygiene, And Deploy Gate 11`.
 - Local-only integration branch. Do not push to GitHub.
-- Worker branches/worktrees must use short-lived non-`codex` names and merge
-  back into the local no-push branch after proof.
-- Background, Gossip, SFU, MediaSecurity, BTGF, and their tests remain parked
-  unless the user explicitly reopens them.
-
-User-facing problem:
-- Sprint 09 closed the previous IAM proof batch, but many stale local IAM
-  branch heads remain unmerged because they contain broad historical diffs.
-- The next batch must extract only current proof/runtime value from 20 more
-  local IAM branches, or prove that the current integration already contains
-  the value and document the branch as cleanup-only.
+- IAM11 is closed as active work; its proof stays in the touched contracts,
+  `analyse/`, `documentation/`, and local git history.
+- Actual deploy, DNS, and certbot steps are out of scope for this sprint.
 
 Sprint goal:
-- Close exactly 20 IAM proof/cleanup tickets from the next local-branch batch.
-- For each historical branch, classify whether the current integration already
-  contains the behavior; if not, extract the smallest current proof/runtime
-  change needed.
-- Keep stale branch artifacts out of the integration branch unless they are
-  clean, contained, current, and proven.
-- Clean worker worktrees/branches after they are merged, clean, and ancestor of
-  the local no-push branch.
-- Build/deploy locally only after the active sprint proof is green, without
-  push, DNS automation, or certbot issuance.
+- Consolidate the IAM11 runtime changes into a stable, rerunnable
+  call-access proof gate.
+- Remove stale proof drift after the root Markdown cleanup and component
+  extraction.
+- Make host/Docker SQLite behavior explicit so local skips do not hide missing
+  proof.
+- Keep Call-App entitlement, launch-token, guest-list, audit, lobby, owner,
+  org-admin, and session-state contracts explicit and current.
 
 Execution boundary:
 - No pushes.
-- No DNS or certbot automation.
-- No Background/Gossip/SFU/MediaSecurity/BTGF implementation or tests.
+- No DNS, certbot, or production deploy automation.
+- Do not discard dirty worktrees or stale branch diffs unless they are proven
+  merged or the user explicitly approves removal.
 - Do not merge whole historical IAM branches blindly; inspect and extract only
-  current value.
-- Do not discard dirty worktrees unless their changes are proven merged or the
-  user explicitly approves removal.
-- Use worker branches/worktrees that do not start with `codex/`.
+  current runtime or proof value.
+- Do not reopen Background, Gossip, SFU, MediaSecurity, BTGF, or VCAP work
+  unless a focused regression directly blocks one of the tickets below.
+- Keep `CallWorkspaceView.vue` and other oversized files trending down when
+  runtime work becomes necessary.
 
 Proof anchors:
 - `BACKLOG.md`
-- `READYNESS_TRACKER.md`
+- `analyse/`
 - `documentation/`
 - `demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json`
-- `demo/video-chat/frontend-vue/package.json`
 - `demo/video-chat/frontend-vue/tests/contract/`
 - `demo/video-chat/frontend-vue/tests/e2e/`
 - `demo/video-chat/backend-king-php/domain/calls/`
 - `demo/video-chat/backend-king-php/domain/realtime/`
 - `demo/video-chat/backend-king-php/tests/`
+- local branch/worktree inventory
+- local deploy gate command output
 
 Sprint Checkboxen:
-- [ ] IAM10-01 Extract or prove delete/end terminal call states from
-  `local/iam-e2e-delete-end-terminal-proof-2`.
-- [ ] IAM10-02 Extract or prove anonymous-link org-admin rights from
-  `local/iam-e2e-anonymous-link-org-admin-rights`.
-- [ ] IAM10-03 Extract or prove authorized rejoin main journey from
-  `local/iam-e2e-authorized-rejoin-main`.
-- [ ] IAM10-04 Extract or prove owner-transfer permission audit from
-  `local/iam-e2e-owner-transfer-permission-audit`.
-- [ ] IAM10-05 Extract or prove review-abuse cross-browser behavior from
-  `local/iam-e2e-review-abuse-cross-browser-proof-3`.
-- [ ] IAM10-06 Extract or prove duplicate-abuse race behavior from
-  `local/iam-e2e-abuse-duplicate-race`.
-- [ ] IAM10-07 Extract or prove foreign personalized mismatch behavior from
-  `local/iam-e2e-foreign-personalized-mismatch`.
-- [ ] IAM10-08 Extract or prove guest-list management audit behavior from
-  `local/iam-e2e-guest-list-management-audit-proof-2`.
-- [ ] IAM10-09 Extract or prove invite invalidation behavior from
-  `local/iam-e2e-invite-invalidation`.
-- [ ] IAM10-10 Extract or prove owner-leave explicit-end behavior from
-  `local/iam-e2e-owner-leave-explicit-end-proof`.
-- [ ] IAM10-11 Extract or prove guest owner-transfer revocation behavior from
-  `local/iam-e2e-guest-owner-transfer-revocation`.
-- [ ] IAM10-12 Extract or prove parallel account tabs behavior from
-  `local/iam-e2e-parallel-account-tabs`.
-- [ ] IAM10-13 Extract or prove remaining lobby concurrency behavior from
-  `local/iam-e2e-lobby-concurrency-remaining`.
-- [ ] IAM10-14 Extract or prove owner-transfer lifecycle behavior from
-  `local/iam-e2e-owner-transfer-lifecycle-proof-3`.
-- [ ] IAM10-15 Extract or prove light mismatch logging behavior from
-  `local/iam-e2e-light-mismatch-logging-proof-2`.
-- [ ] IAM10-16 Extract or prove org-admin owner-transfer policy behavior from
-  `local/iam-e2e-org-admin-owner-transfer-policy`.
-- [ ] IAM10-17 Extract or prove system-admin edge cases from
-  `local/iam-e2e-system-admin-edge-cases`.
-- [ ] IAM10-18 Extract or prove temp-user kick/rejoin behavior from
-  `local/iam-e2e-temp-user-kick-rejoin`.
-- [ ] IAM10-19 Extract or prove reschedule stale-link safety from
-  `local/iam-e2e-reschedule-stale-link-safety`.
-- [ ] IAM10-20 Extract or prove disabled-user session revocation from
-  `local/iam-e2e-disabled-user-session-revocation`.
+- [x] IAM12-01 Rebaseline the completed IAM11 integration diff and record the
+  current no-push/no-deploy proof state.
+- [x] IAM12-02 Remove stale IAM proof text that still says closed IAM11 items
+  remain open, blocked, or unproven.
+- [x] IAM12-03 Fix the `test:ci:iam-call-access:static` drift around
+  `documentation/iam7-08-call-app-entitlement-revocation.md`.
+- [x] IAM12-04 Standardize IAM PHP SQLite wrappers so each call-access runtime
+  proof either runs through Docker fallback or documents an intentional host
+  skip.
+- [x] IAM12-05 Ensure audit call-access runtime proofs are included in the
+  aggregate Docker-capable IAM gate.
+- [x] IAM12-06 Ensure every IAM11 runtime proof is covered by
+  `iam-call-access-sqlite-runtime-proof.sh` or the backend Docker gate.
+- [ ] IAM12-07 Reconcile strong personalized-link mismatch UI proof after
+  `CallAccessJoinFooter.vue` extraction.
+- [ ] IAM12-08 Reconcile invalid/expired anonymous-link proof with archived
+  readiness references.
+- [ ] IAM12-09 Reconcile foreign-link review audit proof with archived readiness
+  references and redaction markers.
+- [ ] IAM12-10 Reconcile identity-mismatch review proof with audit marker
+  preservation and redaction.
+- [ ] IAM12-11 Reconcile lobby management moderator-rights proof with
+  kick/reject/remove lifecycle semantics.
+- [ ] IAM12-12 Reconcile org-removal active-privilege downgrade proof with
+  database-backed admin authority.
+- [ ] IAM12-13 Reconcile owner-absence realtime sync proof with current
+  presence and room-snapshot behavior.
+- [ ] IAM12-14 Reconcile Call-App entitlement revocation proof with package
+  boundaries under `demo/call-app/<app-key>`.
+- [ ] IAM12-15 Reconcile Call-App launch-token reconnect proof with current
+  route/session behavior.
+- [ ] IAM12-16 Reconcile registered invitee logged-in/logged-out handoff proof
+  with current session route guards.
+- [ ] IAM12-17 Reconcile guest-list lifecycle cleanup proof with current owner,
+  moderator, and temporary-guest behavior.
+- [ ] IAM12-18 Prepare a branch/worktree cleanup dry run for clean ancestors of
+  `prod-kingrt-do-not-push-to-github` without deleting unproven dirty work.
+- [ ] IAM12-19 Make the visible checkout/root Markdown state unambiguous without
+  overwriting parked Background work.
+- [ ] IAM12-20 Final sprint proof: IAM aggregate gate, frontend build, diff
+  hygiene, branch-hygiene note, and no push/deploy/DNS/certbot action.
+
+Current Loop Notes:
+- IAM12 opened after IAM11 completed with all 20 checkboxes closed.
+- IAM12-01 proof: `analyse/IAM12-01-rebaseline-and-scope-split.md` records the
+  current integration state and the required IAM-only versus parked
+  VCAP/media-plan split before any commit, deploy, or branch cleanup.
+- IAM12-02 proof: `analyse/IAM12-02-stale-proof-text.md` records the stale
+  IAM11-08 proof conflict and its correction. The IAM11-08 proof note now
+  points at the current correct-host decline/update-confirm-email E2E and
+  contract coverage instead of saying the item remains open.
+- IAM12-03 proof: `analyse/IAM12-03-static-gate-drift.md` records the
+  Call-App entitlement revocation documentation drift and the focused fix.
+  `node tests/contract/iam9-06-call-app-entitlement-revocation-contract.mjs`
+  and `npm run test:ci:iam-call-access:static` passed.
+- IAM12-05 proof: `analyse/IAM12-05-audit-runtime-proof-gate.md` records the
+  audit-events, audit-membership, and foreign-link-review audit runtime wiring
+  into the Docker-capable SQLite aggregate. Direct audit wrappers, focused
+  static contracts, `npm run test:ci:iam-call-access:sqlite`,
+  `npm run test:ci:iam-call-access:static`, and `git diff --check` passed.
+- IAM12-06 proof: `analyse/IAM12-06-iam11-runtime-proof-gate.md` records the
+  IAM11/current runtime proof inventory cleanup. Authority, decision, privacy,
+  session-fixation, and edge/error matrix runtime proofs are now covered by
+  `iam-call-access-sqlite-runtime-proof.sh`; Docker discovery stayed scoped to
+  `*docker-proof.sh`. Focused direct wrappers, focused aggregate/static checks,
+  `npm run test:ci:iam-call-access:sqlite`,
+  `npm run test:ci:iam-call-access:static`,
+  `npm run test:ci:iam-call-access:docker`, and `git diff --check` passed.
+- IAM12-19 partial proof: the visible main checkout is still on the dirty parked
+  `codex/bgf-06-background-diagnostics` branch, but its root Markdown files were
+  moved into `documentation/archive/root-md-2026-05-10/`. It now shows only
+  `README.md`, `BACKLOG.md`, and `SPRINT.md` in the root. Parked Background
+  implementation files were not touched.
+- Current known drift to close first: stale IAM proof notes, static IAM gate
+  documentation drift, and inconsistent host/Docker SQLite wrappers.
+- No push, no deploy, no DNS, no certbot.
