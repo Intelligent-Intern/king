@@ -10,6 +10,7 @@ async function source(relativePath) {
 
 const pageFrame = await source('src/components/admin/AdminPageFrame.vue');
 const pageHeader = await source('src/components/AppPageHeader.vue');
+const pageActionBar = await source('src/components/admin/AdminPageActionBar.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
 const searchToolbar = await source('src/components/admin/AdminSearchToolbar.vue');
 const listController = await source('src/components/admin/useAdminListController.js');
@@ -51,6 +52,9 @@ assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field-main\)
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field\)[\s\S]*?flex:\s*0 1 360px;/, 'admin toolbar search fields must keep a stable desktop width');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.ii-select\)[\s\S]*?flex:\s*0 0 180px;/, 'admin toolbar selects must align beside the search submit control');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
+assert.match(pageActionBar, /actionBarLabel/, 'shared admin page action bar must resolve descriptor labels through i18n metadata');
+assert.match(pageActionBar, /v-for="action in actions"/, 'shared admin page action bar must render descriptor-provided actions');
+assert.match(pageActionBar, /admin-page-action-bar[\s\S]*?justify-content:\s*flex-end;/, 'shared admin page action bar must stay right-aligned');
 assert.match(searchToolbar, /AppIconButton[\s\S]*icons\/send\.png/, 'shared admin search toolbar must own the standard submit icon');
 assert.match(searchToolbar, /defineEmits\(\['update:modelValue', 'submit'\]\)/, 'shared admin search toolbar must expose v-model and submit events');
 assert.match(searchToolbar, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'shared admin search toolbar must own stable search field sizing');
@@ -92,6 +96,8 @@ for (const [name, file] of [
 }
 
 assert.match(governanceModal, /AppSidePanelShell/, 'governance CRUD form must use the shared right side panel shell');
+assert.match(governance, /AdminPageActionBar/, 'governance CRUD page actions must use the shared descriptor action bar');
+assert.doesNotMatch(governance, /<button v-if="createAction"/, 'governance CRUD must not keep a hardcoded create page button');
 assert.doesNotMatch(governanceModal, /AppModalShell/, 'governance CRUD form must not open as a centered modal');
 assert.doesNotMatch(governanceModal, /\bmaximizable\b/, 'governance CRUD side panel must not expose maximize or resize controls');
 assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature panel must not hardcode maximize controls');

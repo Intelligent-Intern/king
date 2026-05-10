@@ -72,6 +72,19 @@ function mutableRowActions(permissionRoot, resourceType) {
   ]);
 }
 
+function mutableFormActions(permissionRoot, resourceType) {
+  return Object.freeze([
+    {
+      key: `${permissionRoot}.save`,
+      kind: 'save',
+      label_key: 'governance.save_entity',
+      icon: '/assets/orgas/kingrt/icons/send.png',
+      resource_type: resourceType,
+      required_permissions: [`${permissionRoot}.update`],
+    },
+  ]);
+}
+
 const BASE_FIELDS = Object.freeze([
   textField('name', 'governance.name', { required: true }),
   textField('key', 'governance.key'),
@@ -100,6 +113,7 @@ function descriptor(entityKey, config) {
     table_columns: Object.freeze(config.table_columns || BASE_COLUMNS),
     allowed_actions: Object.freeze(config.allowed_actions || []),
     row_actions: Object.freeze(config.row_actions || []),
+    form_actions: Object.freeze(config.form_actions || []),
     search_fields: Object.freeze(config.search_fields || ['name', 'key', 'description', 'status']),
   });
 }
@@ -120,6 +134,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('users', 'user'),
+    form_actions: mutableFormActions('users', 'user'),
     search_fields: Object.freeze(['display_name', 'email', 'status']),
   }),
   groups: descriptor('groups', {
@@ -143,6 +158,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.groups', 'group'),
+    form_actions: mutableFormActions('governance.groups', 'group'),
     search_fields: Object.freeze(['name', 'description', 'status']),
   }),
   organizations: descriptor('organizations', {
@@ -155,6 +171,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.organizations', 'organization'),
+    form_actions: mutableFormActions('governance.organizations', 'organization'),
   }),
   modules: descriptor('modules', {
     resource_type: 'module',
@@ -191,6 +208,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.roles', 'role'),
+    form_actions: mutableFormActions('governance.roles', 'role'),
   }),
   grants: descriptor('grants', {
     resource_type: 'permission_grant',
@@ -216,6 +234,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.grants', 'permission_grant'),
+    form_actions: mutableFormActions('governance.grants', 'permission_grant'),
     search_fields: Object.freeze(['name', 'subject_type', 'description', 'status']),
   }),
   policies: descriptor('policies', {
@@ -227,6 +246,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.policies', 'policy'),
+    form_actions: mutableFormActions('governance.policies', 'policy'),
   }),
   'audit-log': descriptor('audit-log', {
     resource_type: 'audit_log',
@@ -298,6 +318,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.compliance', 'compliance_rule'),
+    form_actions: mutableFormActions('governance.compliance', 'compliance_rule'),
     search_fields: Object.freeze(['name', 'key', 'severity', 'description', 'status']),
   }),
 };
