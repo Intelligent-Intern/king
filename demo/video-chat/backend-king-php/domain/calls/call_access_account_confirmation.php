@@ -116,6 +116,9 @@ function videochat_call_access_account_confirmation_normalize_origin(string $ori
     if ($candidate === '') {
         return '';
     }
+    if (preg_match('#^[A-Za-z][A-Za-z0-9+.-]*://#', $candidate) === 1 && !preg_match('#^https?://#i', $candidate)) {
+        return '';
+    }
     if (!preg_match('#^https?://#i', $candidate)) {
         $candidate = 'https://' . $candidate;
     }
@@ -180,6 +183,13 @@ function videochat_call_access_account_confirmation_frontend_origin(array $optio
     }
 
     return 'https://app.kingrt.com';
+}
+
+function videochat_call_access_account_confirmation_origin(): string
+{
+    return videochat_call_access_account_confirmation_frontend_origin([
+        'frontend_origin' => (string) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN') ?: getenv('VIDEOCHAT_FRONTEND_ORIGIN') ?: 'https://app.kingrt.com'),
+    ]);
 }
 
 function videochat_build_call_access_account_confirmation_url(string $token, array $options = []): string
