@@ -27,11 +27,20 @@ const ciWorkflow = readText('.github/workflows/ci.yml');
 
 const scripts = packageJson.scripts || {};
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
+const iamLocalRunDocsScript = String(scripts['test:contract:iam-local-run-docs'] || '');
+const iamCiGateScript = String(scripts['test:ci:iam-call-access'] || '');
+const iamStaticGateScript = String(scripts['test:ci:iam-call-access:static'] || '');
+const iamSqliteGateScript = String(scripts['test:ci:iam-call-access:sqlite'] || '');
+const iamDockerGateScript = String(scripts['test:ci:iam-call-access:docker'] || '');
+const iamFullGateScript = String(scripts['test:ci:iam-call-access:full'] || '');
 const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
 const lobbyConcurrencyScript = String(scripts['test:e2e:lobby-concurrency'] || '');
+const bannedGatePattern = /test:contract:(background|media)|background-|media-reconnect|media-security|sfu-|gossip-/;
+const bannedCommandPattern = /npm run test:contract:(background|media|sfu|gossip)|node tests\/contract\/(?:background-|media-security|sfu-|gossip-)|\.\.\/backend-king-php\/tests\/realtime-gossip/i;
 
 const requiredIamContractPaths = [
   'frontend-vue/tests/contract/iam-call-access-ci-wire-contract.mjs',
+  'frontend-vue/tests/contract/iam-local-run-docs-contract.mjs',
   'frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs',
   'frontend-vue/tests/contract/iam-sprint-04-focused-wire-contract.mjs',
   'frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs',
@@ -114,8 +123,38 @@ const requiredIamSupportingPaths = [
 assert.notEqual(iamContractScript, '', 'package.json must expose test:contract:iam-call-access');
 assert.doesNotMatch(
   iamContractScript,
-  /test:contract:(background|media)|background-|media-reconnect|media-security|sfu-|gossip-/,
+  bannedGatePattern,
   'IAM call-access contract gate must not invoke media, background, SFU, or gossip gates',
+);
+assert.equal(
+  iamLocalRunDocsScript,
+  'node tests/contract/iam-local-run-docs-contract.mjs',
+  'package.json must expose a stable local IAM run docs contract script',
+);
+assert.equal(
+  iamCiGateScript,
+  '../scripts/iam-call-access-ci-gate.sh --full',
+  'package.json must expose the canonical local IAM CI gate wrapper',
+);
+assert.equal(
+  iamStaticGateScript,
+  '../scripts/iam-call-access-ci-gate.sh --static',
+  'package.json must expose the host-safe static IAM CI gate wrapper',
+);
+assert.equal(
+  iamSqliteGateScript,
+  '../scripts/iam-call-access-ci-gate.sh --sqlite',
+  'package.json must expose the SQLite IAM backend proof wrapper',
+);
+assert.equal(
+  iamDockerGateScript,
+  '../scripts/iam-call-access-ci-gate.sh --docker',
+  'package.json must expose the IAM Docker fallback proof wrapper',
+);
+assert.equal(
+  iamFullGateScript,
+  '../scripts/iam-call-access-ci-gate.sh --full',
+  'package.json must expose the explicit full IAM CI gate wrapper',
 );
 for (const contractPath of requiredIamContractPaths) {
   const scriptPath = contractPath.startsWith('frontend-vue/')
@@ -175,6 +214,43 @@ assert.match(
   readText('demo/video-chat/backend-king-php/tests/iam-backend-docker-runtime-proof-wrapper.sh'),
   /find "\$\{SCRIPT_DIR\}" -maxdepth 1 -type f -name '\*docker-proof\.sh'/,
   'IAM Docker runtime wrapper must discover the listed Docker proof scripts from the backend tests directory',
+);
+const iamCiGatePath = path.join(repoRoot, 'demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+const iamCiGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+assert.ok(
+  (fs.statSync(iamCiGatePath).mode & 0o111) !== 0,
+  'IAM CI gate wrapper must be executable',
+);
+assert.doesNotMatch(
+  iamCiGate,
+  bannedCommandPattern,
+  'IAM CI gate wrapper must not execute parked Background/Gossip/SFU/Media gates',
+);
+assert.match(
+  iamCiGate,
+  /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs/,
+  'IAM CI gate wrapper must keep the host-safe static hygiene contracts explicit',
+);
+assert.match(
+  iamCiGate,
+  /--sqlite[\s\S]*iam-call-access-sqlite-runtime-proof\.sh/,
+  'IAM CI gate wrapper must expose the SQLite backend proof mode',
+);
+assert.match(
+  iamCiGate,
+  /--docker[\s\S]*iam-backend-docker-runtime-proof-wrapper\.sh/,
+  'IAM CI gate wrapper must expose Docker proof wrapper mode',
+);
+const sqliteProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
+assert.match(
+  sqliteProof,
+  /Host PHP lacks pdo_sqlite; using container fallback/,
+  'IAM SQLite runtime proof must announce Docker fallback when host pdo_sqlite is missing',
+);
+assert.match(
+  sqliteProof,
+  /docker-php-ext-install pdo_sqlite/,
+  'IAM SQLite runtime proof must install pdo_sqlite inside the Docker fallback when needed',
 );
 
 const callAccessCommand = matrix.commands?.['frontend:e2e:call-access'] || {};

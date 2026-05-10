@@ -102,7 +102,7 @@ Sprint Checkboxen:
   `local/iam-e2e-link-invalidation-active-state`.
 - [x] IAM7-17 Extract or prove lobby management moderator rights from
   `local/iam-e2e-lobby-management-moderator-rights`.
-- [ ] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
+- [x] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
   from `local/iam-e2e-local-run-docs-proof-20260509`.
 - [ ] IAM7-19 Extract or prove organization-removal active privilege downgrade
   from `local/iam-e2e-org-removal-active-privilege-downgrade`.
