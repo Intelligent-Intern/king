@@ -424,6 +424,125 @@ SQL
  *   ok: bool,
  *   reason: string,
  *   errors: array<string, string>,
+ *   state?: string,
+ *   call: ?array<string, mixed>,
+ *   lifecycle?: array<string, mixed>|null,
+ *   left_at?: string
+ * }
+ */
+function videochat_leave_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
+{
+    $isSystemAdmin = videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $isSystemAdmin ? null : $tenantId);
+    if ($existingCall === null) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    $currentStatus = strtolower(trim((string) ($existingCall['status'] ?? '')));
+    $isOwner = $authUserId > 0 && $authUserId === (int) ($existingCall['owner_user_id'] ?? 0);
+    if ($isOwner) {
+        if ($currentStatus === 'ended') {
+            return [
+                'ok' => true,
+                'reason' => 'already_ended',
+                'errors' => [],
+                'state' => 'ended',
+                'call' => videochat_build_call_payload($pdo, $existingCall, $authUserId),
+                'lifecycle' => null,
+            ];
+        }
+
+        $end = videochat_end_call($pdo, $callId, $authUserId, $authRole, $tenantId);
+        if (!(bool) ($end['ok'] ?? false)) {
+            return $end;
+        }
+
+        return [
+            ...$end,
+            'reason' => 'owner_left_ended',
+            'state' => 'ended',
+        ];
+    }
+
+    $participant = $pdo->prepare(
+        <<<'SQL'
+SELECT joined_at, left_at
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+    );
+    $participant->execute([
+        ':call_id' => (string) ($existingCall['id'] ?? $callId),
+        ':user_id' => $authUserId,
+    ]);
+    $participantRow = $participant->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($participantRow)) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+
+    if (!in_array($currentStatus, ['scheduled', 'active'], true)) {
+        return [
+            'ok' => true,
+            'reason' => 'terminal_call',
+            'errors' => [],
+            'state' => $currentStatus === '' ? 'unavailable' : $currentStatus,
+            'call' => videochat_build_call_payload($pdo, $existingCall, $authUserId),
+            'lifecycle' => null,
+        ];
+    }
+
+    $leftAt = trim((string) ($participantRow['left_at'] ?? ''));
+    $joinedAt = trim((string) ($participantRow['joined_at'] ?? ''));
+    if ($joinedAt !== '' && $leftAt === '') {
+        $leftAt = gmdate('c');
+        $markLeft = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_participants
+SET left_at = :left_at
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+  AND joined_at IS NOT NULL
+  AND joined_at <> ''
+  AND (left_at IS NULL OR left_at = '')
+SQL
+        );
+        $markLeft->execute([
+            ':left_at' => $leftAt,
+            ':call_id' => (string) ($existingCall['id'] ?? $callId),
+            ':user_id' => $authUserId,
+        ]);
+    }
+
+    return [
+        'ok' => true,
+        'reason' => $joinedAt === '' ? 'not_joined' : 'left',
+        'errors' => [],
+        'state' => 'left',
+        'left_at' => $leftAt,
+        'call' => videochat_build_call_payload($pdo, $existingCall, $authUserId),
+        'lifecycle' => null,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
  *   deleted_count: int
  * }
  */

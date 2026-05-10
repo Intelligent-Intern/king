@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/../calls/call_lifecycle.php';
 require_once __DIR__ . '/realtime_call_presence_db.php';
 
 const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;
@@ -517,20 +518,34 @@ SQL
         'transition' => 'ended',
         'invalidated_link_count' => 0,
         'revoked_access_session_count' => 0,
+        'lobby_cleared_count' => 0,
         'presence_cleared_count' => 0,
     ];
     if ($transitioned) {
-        $lifecycle['invalidated_link_count'] = videochat_realtime_owner_absence_disable_call_access_links(
+        $tenantId = is_numeric($snapshot['tenant_id'] ?? null) ? (int) $snapshot['tenant_id'] : null;
+        $lifecycle = videochat_apply_call_terminal_lifecycle(
             $pdo,
-            $snapshotCallId,
-            $endedAt
+            [
+                'id' => $snapshotCallId,
+                'room_id' => $snapshotRoomId,
+                'owner_user_id' => is_numeric($snapshot['owner_user_id'] ?? null) ? (int) $snapshot['owner_user_id'] : 0,
+                'tenant_id' => $tenantId,
+                'status' => 'ended',
+            ],
+            'ended',
+            $tenantId,
+            null
         );
-        $lifecycle['revoked_access_session_count'] = videochat_realtime_owner_absence_revoke_call_access_sessions(
-            $pdo,
-            $snapshotCallId,
-            $endedAt
-        );
-        $lifecycle['presence_cleared_count'] = videochat_realtime_owner_absence_clear_presence($pdo, $snapshotCallId);
+        if (!(bool) ($lifecycle['ok'] ?? false)) {
+            return [
+                ...$snapshot,
+                'call_status' => 'ended',
+                'transitioned' => true,
+                'status' => 'error',
+                'error' => 'owner_absence_lifecycle_failed',
+                'lifecycle' => $lifecycle,
+            ];
+        }
     }
 
     return [
