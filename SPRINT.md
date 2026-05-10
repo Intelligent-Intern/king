@@ -111,7 +111,7 @@ Sprint Checkboxen:
   remove hard-coded non-token colors on the migrated surfaces.
 - [x] UX6-18 Replace wrong generic create actions on readonly/system catalog
   pages with correct entity-specific actions or no action.
-- [ ] UX6-19 Prove page headings use the standard `h1` size and avoid
+- [x] UX6-19 Prove page headings use the standard `h1` size and avoid
   unreachable/overlapping content on the migrated Admin/Governance routes.
 - [ ] UX6-20 Run final proof, build, deploy without push/DNS/certbot, collect
   post-deploy diagnostics, and update readiness evidence.
