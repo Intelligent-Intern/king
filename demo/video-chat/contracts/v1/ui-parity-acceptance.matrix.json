@@ -178,7 +178,11 @@
         "backend-king-php/tests/call-access-foreign-link-review-audit-contract.sh",
         "backend-king-php/tests/call-access-invalid-expired-anonymous-link-contract.sh",
         "backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh",
-        "backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh"
+        "backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh",
+        "frontend-vue/tests/contract/iam-lobby-management-moderator-rights-contract.mjs",
+        "backend-king-php/tests/call-access-anonymous-lobby-contract.sh",
+        "backend-king-php/tests/call-temporary-moderator-contract.sh",
+        "backend-king-php/tests/realtime-lobby-security-contract.sh"
       ]
     },
     "frontend:contract:wlvc": {

@@ -73,6 +73,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-cross-org-contract.mjs',
   'frontend-vue/tests/contract/call-access-foreign-link-review-audit-contract.mjs',
   'frontend-vue/tests/contract/call-access-invalid-expired-anonymous-link-contract.mjs',
+  'frontend-vue/tests/contract/iam-lobby-management-moderator-rights-contract.mjs',
   'frontend-vue/tests/contract/call-access-terminal-states-contract.mjs',
   'frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs',
   'frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs',
@@ -101,6 +102,9 @@ const requiredIamSupportingPaths = [
   'backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.sh',
   'backend-king-php/tests/call-access-foreign-link-review-audit-contract.sh',
   'backend-king-php/tests/call-access-invalid-expired-anonymous-link-contract.sh',
+  'backend-king-php/tests/call-access-anonymous-lobby-contract.sh',
+  'backend-king-php/tests/call-temporary-moderator-contract.sh',
+  'backend-king-php/tests/realtime-lobby-security-contract.sh',
   'backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh',
   'backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh',
 ];

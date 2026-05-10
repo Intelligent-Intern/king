@@ -39,7 +39,8 @@ SQL
  *   room_id: string,
  *   call_id: string,
  *   role: string,
- *   call_role: string
+ *   call_role: string,
+ *   effective_call_role: string
  * }
  */
 function videochat_realtime_authorize_lobby_moderation_command(
@@ -58,6 +59,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => '',
             'role' => 'user',
             'call_role' => 'participant',
+            'effective_call_role' => 'participant',
         ];
     }
 
@@ -74,6 +76,16 @@ function videochat_realtime_authorize_lobby_moderation_command(
             $serverRole,
             $tenantId
         );
+        if ($requestedCallId !== '' && videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '') === '') {
+            $context = videochat_realtime_call_role_context_for_room_user(
+                $pdo,
+                $normalizedRoomId,
+                $userId,
+                '',
+                $serverRole,
+                $tenantId
+            );
+        }
     } catch (Throwable) {
         return [
             'ok' => false,
@@ -82,11 +94,15 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => '',
             'role' => 'user',
             'call_role' => 'participant',
+            'effective_call_role' => 'participant',
         ];
     }
 
     $callId = videochat_realtime_normalize_call_id((string) ($context['call_id'] ?? ''), '');
     $callRole = videochat_normalize_call_participant_role((string) ($context['call_role'] ?? 'participant'));
+    $effectiveCallRole = videochat_normalize_call_participant_role(
+        (string) ($context['effective_call_role'] ?? $callRole)
+    );
     if ($callId === '' || !(bool) ($context['can_moderate'] ?? false)) {
         return [
             'ok' => false,
@@ -95,6 +111,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
             'call_id' => $callId,
             'role' => $serverRole,
             'call_role' => $callRole,
+            'effective_call_role' => $effectiveCallRole,
         ];
     }
 
@@ -105,6 +122,7 @@ function videochat_realtime_authorize_lobby_moderation_command(
         'call_id' => $callId,
         'role' => $serverRole,
         'call_role' => $callRole,
+        'effective_call_role' => $effectiveCallRole,
     ];
 }
 

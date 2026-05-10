@@ -32,6 +32,18 @@ Purpose:
   No push, deploy, Background, Gossip, SFU, MediaSecurity, or BTGF files/tests
   were touched.
 
+- 2026-05-10 IAM7-17 lobby management moderator rights extraction:
+  inspected `local/iam-e2e-lobby-management-moderator-rights` at
+  `98c4b1d545b779d009da295b67af6d22c9d4b943` against current integration
+  baseline `1d0f11afa375b7c538f13c5d2075366104a60272` and extracted only the
+  focused lobby-moderator proof. Lobby moderation now uses server-derived
+  `can_moderate_call` or global admin context at the lower state gate, while
+  participant-row moderator authority fails closed for cancelled or declined
+  rows. The proof separates owner, organization admin, system admin, temporary
+  moderator, normal user, and guest admission/rejection behavior and keeps
+  temporary moderators from inheriting owner/admin privileges. No push, deploy,
+  Background, Gossip, SFU, MediaSecurity, or BTGF files/tests were touched.
+
 - 2026-05-10 IAM7-13 foreign link review audit scoping extraction:
   inspected `local/iam-e2e-foreign-link-review-audit` at
   `c7fa0f7bd98480e718b397f0a2bf1cb0b29e5b8c` and extracted only the focused
