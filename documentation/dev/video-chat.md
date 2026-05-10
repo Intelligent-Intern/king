@@ -195,6 +195,32 @@ curl -sS -X POST "$BASE/api/calls/$CALL_ID/access-link" \
 The generated `join_path` is UUID-based and points to a real new call (not only seeded demo calls).
 Call responses include persisted `schedule` metadata so calendar views do not infer local dates or durations in the frontend.
 
+## IAM Call-Access CI Gates
+
+IAM proof is split between host-safe command checks, backend runtime proofs, and
+the compose-backed browser gate:
+
+```bash
+cd demo/video-chat/frontend-vue
+npm run test:ci:iam-call-access
+```
+
+The compose smoke is the CI/browser path. Canonical CI shard 1 runs it with a
+failure artifact directory:
+
+```bash
+VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
+VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
+VIDEOCHAT_SMOKE_ARTIFACTS_DIR=compat-artifacts/video-chat-smoke \
+bash demo/video-chat/scripts/smoke.sh
+```
+
+On failure, GitHub Actions uploads `video-chat-smoke-e2e-failure-artifacts`.
+The artifact directory includes `playwright-test-results`,
+`playwright-report` when Playwright generated it, `manifest.env`,
+`compose-ps.txt`, `compose-all.log`, and separate backend, websocket, SFU, and
+frontend container logs.
+
 ## Can We Run This On A Server?
 
 Short answer:

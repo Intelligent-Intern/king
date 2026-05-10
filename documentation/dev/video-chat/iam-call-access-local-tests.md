@@ -13,7 +13,7 @@ npm run test:ci:iam-call-access:static
 ```
 
 This runs the host-safe IAM command-hygiene contracts:
-`iam-call-access-ci-wire-contract.mjs` and
+`iam-call-access-ci-wire-contract.mjs`, `iam-ci-artifacts-contract.mjs`, and
 `iam-local-run-docs-contract.mjs`. The IAM gate does not invoke Background,
 Gossip, SFU, MediaSecurity, or BTGF gates.
 
@@ -104,6 +104,8 @@ bash demo/video-chat/scripts/smoke.sh
 
 Artifacts include `playwright-test-results`, `playwright-report` when present,
 `manifest.env`, `compose-ps.txt`, `compose-all.log`, and per-service logs.
+In canonical CI, shard 1 uploads this directory as
+`video-chat-smoke-e2e-failure-artifacts` when the compose smoke fails.
 
 Use `VIDEOCHAT_SMOKE_SKIP_IAM_CI_GATE=1` only for local debugging after the
 host-safe IAM gate has already passed in the same checkout.

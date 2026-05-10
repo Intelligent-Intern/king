@@ -44,6 +44,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs',
   'frontend-vue/tests/contract/iam-sprint-04-focused-wire-contract.mjs',
   'frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs',
+  'frontend-vue/tests/contract/iam-ci-artifacts-contract.mjs',
   'frontend-vue/tests/contract/call-access-forged-identifiers-contract.mjs',
   'frontend-vue/tests/contract/call-access-tampered-verified-context-contract.mjs',
   'frontend-vue/tests/contract/call-access-duplicate-device-browser-contract.mjs',
@@ -233,8 +234,8 @@ assert.doesNotMatch(
 );
 assert.match(
   iamCiGate,
-  /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs/,
-  'IAM CI gate wrapper must keep the host-safe static hygiene contracts explicit',
+  /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-ci-artifacts-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs/,
+  'IAM CI gate wrapper must keep the host-safe static hygiene and artifact contracts explicit',
 );
 assert.match(
   iamCiGate,
