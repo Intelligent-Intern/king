@@ -257,8 +257,18 @@ Sprint Checkboxen:
   - Generated artifacts were left only in the worker worktree:
     `playwright-report/iam-call-access/index.html` and
     `test-results/iam-call-access/.last-run.json`.
-- [ ] IAM4-17 Ensure IAM browser artifacts and failure output remain retained
+- [x] IAM4-17 Ensure IAM browser artifacts and failure output remain retained
   and redacted for call-access E2E diagnostics.
+  - Merged worker branch `agent/iam-s4-17-browser-artifacts-redaction`.
+  - Strengthened `call-access-ci-artifacts-contract.mjs` so focused IAM E2E
+    specs do not write raw ad hoc artifacts or console diagnostics, while
+    Playwright failure traces/screenshots remain retained under deterministic
+    IAM artifact/report directories.
+  - Pinned audit/redaction coverage for access/session ids, tokens, cookies,
+    SDP, and ICE in the IAM artifact gate.
+  - Proof: artifact contract, CI-wire contract, audit compatibility/redaction
+    contracts, strong-mismatch audit-redaction contract, and `git diff --check`
+    passed.
 - [ ] IAM4-18 Clean merged/superseded Sprint 04 worker branches/worktrees using
   contained-HEAD and clean-worktree rules only.
 - [ ] IAM4-19 Wire accepted Sprint 04 proofs into IAM package scripts,
