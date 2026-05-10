@@ -76,7 +76,7 @@ Sprint Checkboxen:
   management from `agent/iam-e2e-owner-transfer-temp-mods`.
 - [x] IAM7-04 Extract or prove personalized call-access identity handling from
   `agent/iam-e2e-personalized-identity`.
-- [ ] IAM7-05 Extract or prove IAM audit-log completeness from
+- [x] IAM7-05 Extract or prove IAM audit-log completeness from
   `local/iam-e2e-audit-log-completeness`.
 - [ ] IAM7-06 Extract or prove calendar invitation edge safe states from
   `local/iam-e2e-calendar-edge-safe-states`.
