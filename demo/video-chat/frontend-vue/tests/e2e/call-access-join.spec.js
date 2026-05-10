@@ -7,6 +7,12 @@ import {
   createPersonalAccessJoinPath,
   installMediaDeviceShim,
 } from './helpers/nativeAudioTransferHarness.js';
+import {
+  createCallAccessMatrixPage,
+  getSeedAccessLink,
+  getSeedCall,
+  getSeedUser,
+} from './helpers/callAccessSeedMatrix.js';
 
 const sessionStorageKey = 'ii_videocall_v1_session';
 
@@ -156,6 +162,154 @@ test('invalid call-access link renders safe state without foreign call data', as
     await expect(joinDialog).not.toContainText(foreignTitle);
     await expect(joinDialog).not.toContainText(foreignEmail);
     await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test('external guest join link requires display name, creates temporary guest, and waits in lobby until admitted', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const link = getSeedAccessLink('alpha_open');
+  const call = getSeedCall(link.call_key);
+  const anonymousGuest = getSeedUser(link.anonymous_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const guestName = `IAM Temp Guest ${Date.now()}`;
+  const sessionRequests = [];
+
+  expect(accessId, 'open join path must contain the backend-issued access id').not.toBe('');
+  expect(anonymousGuest.temporary).toBe(true);
+  expect(anonymousGuest.is_guest).toBe(true);
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: 'anonymous_temporary_guest_has_no_system_admin_rights',
+  });
+
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST'
+      && request.url().includes(`/api/call-access/${accessId}/session`)
+    ) {
+      sessionRequests.push(parseJsonPostData(request));
+    }
+  });
+
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+    const joinPayload = await joinResponse.json();
+    expect(joinPayload?.status).toBe('ok');
+    expect(joinPayload?.result?.link_kind).toBe('open');
+    expect(joinPayload?.result?.call?.id).toBe(call.id);
+    expect(joinPayload?.result?.call?.title).toBe(call.title);
+    expect(JSON.stringify(joinPayload)).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential)\b/i);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(call.title);
+    await expect(joinDialog).toContainText('Free-for-all link');
+
+    const guestNameInput = joinDialog.getByPlaceholder('Enter your display name');
+    await expect(guestNameInput).toBeVisible();
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    await expect(joinDialog).toContainText('Name is required for this link.');
+    await page.waitForTimeout(250);
+    expect(sessionRequests).toEqual([]);
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await guestNameInput.fill(guestName);
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionPayload = await sessionResponse.json();
+    expect(sessionRequests).toEqual([{ guest_name: guestName }]);
+    expect(sessionPayload?.status).toBe('ok');
+    expect(sessionPayload?.result?.link_kind).toBe('open');
+    expect(sessionPayload?.result?.user?.id).toBe(anonymousGuest.id);
+    expect(sessionPayload?.result?.user?.display_name).toBe(guestName);
+    expect(sessionPayload?.result?.user?.is_guest).toBe(true);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(false);
+    expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.room_id).toBe(call.room_id);
+    expect(JSON.stringify(sessionPayload)).not.toMatch(/\b(?:sdp|ice|candidate|media_token|turn_credential)\b/i);
+
+    await expect(joinDialog).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 20_000 });
+    expect(page.url()).toContain(`/join/${accessId}`);
+    expect(page.url()).not.toContain('/workspace/call');
+
+    const socketFramesBeforeAdmission = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+    expect(socketFramesBeforeAdmission.some((frame) => (
+      frame?.type === 'lobby/queue/join'
+      && frame?.room_id === call.room_id
+    ))).toBe(true);
+
+    const storedSession = await page.evaluate((key) => {
+      try {
+        return JSON.parse(localStorage.getItem(key) || '{}');
+      } catch {
+        return {};
+      }
+    }, sessionStorageKey);
+    expect(storedSession.sessionToken).toBe(sessionPayload?.result?.session?.token);
+    expect(storedSession.sessionId).toBe(sessionPayload?.result?.session?.id);
+
+    const sessionIdentity = await page.evaluate(async () => {
+      const { sessionState } = await import('/src/domain/auth/session.ts');
+      return {
+        userId: sessionState.userId,
+        displayName: sessionState.displayName,
+        accountType: sessionState.accountType,
+        isGuest: sessionState.isGuest,
+      };
+    });
+    expect(sessionIdentity).toEqual({
+      userId: anonymousGuest.id,
+      displayName: guestName,
+      accountType: 'guest',
+      isGuest: true,
+    });
+
+    await page.waitForTimeout(250);
+    expect(page.url()).toContain(`/join/${accessId}`);
+
+    const admissionSnapshotDelivered = await page.evaluate(({ callId, roomId, userId, displayName }) => {
+      const sockets = window.__iamCallAccessSockets || [];
+      const socket = [...sockets].reverse().find((candidate) => candidate?.readyState === WebSocket.OPEN) || sockets[sockets.length - 1];
+      if (!socket || typeof socket.emit !== 'function') return false;
+      socket.emit({
+        type: 'lobby/snapshot',
+        room_id: roomId,
+        call_id: callId,
+        pending: [],
+        admitted: [
+          {
+            user_id: userId,
+            display_name: displayName,
+            admitted_by_role: 'owner',
+          },
+        ],
+        rejected: [],
+      });
+      return true;
+    }, {
+      callId: call.id,
+      roomId: call.room_id,
+      userId: anonymousGuest.id,
+      displayName: guestName,
+    });
+    expect(admissionSnapshotDelivered).toBe(true);
+    await expect(page).toHaveURL(new RegExp(`/workspace/call/${call.id.replaceAll('-', '\\-')}\\?entry=invite`), {
+      timeout: 20_000,
+    });
   } finally {
     await context.close();
   }
