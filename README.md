@@ -494,11 +494,14 @@ It is supposed to look like one native system with a PHP-facing control surface.
 
 Core documents:
 
-- [`EPIC.md`](EPIC.md): stable v1 charter and release exit criteria.
-- [`BACKLOG.md`](BACKLOG.md): open work split into release batches.
-- [`SPRINT.md`](SPRINT.md): active branch scope only.
-- [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md): completion log only.
+- [`BACKLOG.md`](BACKLOG.md): open and parked work.
+- [`SPRINT.md`](SPRINT.md): active branch scope.
 - [`documentation/`](documentation/README.md): handbook and developer docs.
+
+Root Markdown is kept to the active set: `README.md`, `BACKLOG.md`, and
+`SPRINT.md`. Historical root planning and tracker files are archived under
+[`documentation/archive/root-md-2026-05-10/`](documentation/archive/root-md-2026-05-10/);
+cleanup notes live in [`analyse/`](analyse/).
 
 ## Build
 

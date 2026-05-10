@@ -40,6 +40,7 @@ const authorizedRejoinBackend = readText('demo/video-chat/backend-king-php/tests
 const sqliteRuntimeProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const directJoinRightsContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs');
 const decisionContract = readText('demo/video-chat/backend-king-php/tests/call-access-decision-contract.php');
+const decisionWrapper = readText('demo/video-chat/backend-king-php/tests/call-access-decision-contract.sh');
 const membershipRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const kickedRejoinContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-kicked-rejoin-denial-contract.mjs');
 const removedMembersContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-removed-members-contract.mjs');
@@ -151,6 +152,16 @@ assert.match(
   decisionContract,
   /internal participant should be allowed[\s\S]*removed tenant member should keep call-scoped participant access[\s\S]*removed call participant should not retain invite-only access/s,
   'backend decision proof must allow current participants while denying removed participant rows',
+);
+assert.match(
+  decisionWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-decision-contract\.php/s,
+  'backend decision proof must run through the Docker-capable SQLite wrapper',
+);
+assert.match(
+  sqliteRuntimeProof,
+  /call-access-decision-contract\.sh/,
+  'SQLite IAM runtime proof must execute the decision backend contract',
 );
 assert.match(
   membershipRemovalContract,

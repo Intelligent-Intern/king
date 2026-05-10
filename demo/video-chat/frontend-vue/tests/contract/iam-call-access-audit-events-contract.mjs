@@ -43,6 +43,7 @@ const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/ca
 const callAccessAccountConfirmation = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
 const backendAuditContract = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.php');
 const backendAuditWrapper = read('demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.sh');
+const backendAuditMembershipWrapper = read('demo/video-chat/backend-king-php/tests/audit-call-access-membership-contract.sh');
 const sqliteAggregate = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
 
@@ -148,6 +149,11 @@ assert.match(
 );
 assert.match(
   backendAuditContract,
+  /VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_FORCE_OUTBOX=1[\s\S]*videochat-audit-call-access-events-outbox-[\s\S]*VIDEOCHAT_EMAIL_OUTBOX_PATH=[\s\S]*putenv\('VIDEOCHAT_EMAIL_OUTBOX_PATH'\)/s,
+  'backend audit contract must isolate confirmation email writes in a temporary outbox',
+);
+assert.match(
+  backendAuditContract,
   /call-created audit must not log titles[\s\S]*invitation audit must not persist raw access id[\s\S]*raw_guest_identity_logged[\s\S]*strong mismatch audit must not log raw session identifiers/s,
   'backend audit contract must pin redaction for titles, access ids, guest identity, and sessions',
 );
@@ -158,8 +164,13 @@ assert.match(
 );
 assert.match(
   backendAuditWrapper,
-  /pdo_sqlite[\s\S]*audit-call-access-events-contract\.php/s,
-  'backend audit wrapper must skip cleanly without local pdo_sqlite and run the PHP proof when available',
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*audit-call-access-events-contract\.php[\s\S]*basename "\$\{BASH_SOURCE\[0\]\}"/s,
+  'backend audit wrapper must delegate through the Docker-capable SQLite runner',
+);
+assert.match(
+  backendAuditMembershipWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*audit-call-access-membership-contract\.php[\s\S]*basename "\$\{BASH_SOURCE\[0\]\}"/s,
+  'backend audit membership wrapper must delegate through the Docker-capable SQLite runner',
 );
 
 for (const [helper, proof] of [
@@ -182,6 +193,11 @@ assert.match(
   sqliteAggregate,
   /audit-call-access-events-contract\.sh/,
   'IAM SQLite aggregate must run the backend audit-events proof',
+);
+assert.match(
+  sqliteAggregate,
+  /audit-call-access-membership-contract\.sh/,
+  'IAM SQLite aggregate must run the backend audit membership/redaction proof',
 );
 
 process.stdout.write('[iam-call-access-audit-events-contract] PASS\n');

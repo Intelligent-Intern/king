@@ -61,4 +61,4 @@ separate IAM9-14 baseline branch
 Playwright spec name, and does not broaden package E2E wiring.
 
 No Background, Gossip, SFU, MediaSecurity, BTGF, `SPRINT.md`, `BACKLOG.md`, or
-`READYNESS_TRACKER.md` files were edited.
+archived tracker files were edited.

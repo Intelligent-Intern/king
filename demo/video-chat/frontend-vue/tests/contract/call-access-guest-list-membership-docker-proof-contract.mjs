@@ -22,13 +22,13 @@ const iamSqliteRuntime = readText('demo/video-chat/backend-king-php/tests/iam-ca
 
 assert.match(
   guestListWrapper,
-  /SKIP: pdo_sqlite is not available for \$\{PHP_BIN\}/,
-  'baseline guest-list wrapper still documents the host-PHP pdo_sqlite skip this proof replaces',
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-guest-list-direct-join-contract\.php/s,
+  'guest-list wrapper must delegate through the Docker-capable SQLite runner',
 );
 assert.match(
   membershipWrapper,
-  /SKIP: pdo_sqlite is not available for \$\{PHP_BIN\}/,
-  'baseline membership-removal wrapper still documents the host-PHP pdo_sqlite skip this proof replaces',
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-membership-removal-contract\.php/s,
+  'membership-removal wrapper must delegate through the Docker-capable SQLite runner',
 );
 
 assert.match(

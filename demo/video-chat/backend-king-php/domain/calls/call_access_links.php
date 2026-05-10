@@ -108,17 +108,17 @@ function videochat_create_call_access_link_for_user(
 
     $isOpenLinkRequest = $linkKind === 'open';
 
+    $targetEmail = $isOpenLinkRequest ? '' : videochat_normalize_call_access_email(
+        is_string($options['participant_email'] ?? null) ? (string) $options['participant_email'] : null
+    );
     $targetUserId = $isOpenLinkRequest
         ? 0
         : (is_numeric($options['participant_user_id'] ?? null)
             ? (int) $options['participant_user_id']
-            : $authUserId);
+            : ($targetEmail !== '' ? 0 : $authUserId));
     if ($targetUserId < 0) {
         $targetUserId = 0;
     }
-    $targetEmail = $isOpenLinkRequest ? '' : videochat_normalize_call_access_email(
-        is_string($options['participant_email'] ?? null) ? (string) $options['participant_email'] : null
-    );
 
     $ownerUserId = (int) (($call['owner']['user_id'] ?? 0));
     $actsForAnotherTarget = $isOpenLinkRequest || $targetUserId !== $authUserId || ($targetUserId <= 0 && $targetEmail !== '');

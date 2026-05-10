@@ -3,7 +3,8 @@
 Purpose:
 - This file is the parked and future backlog only.
 - `SPRINT.md` is the only list of active top-priority work.
-- `READYNESS_TRACKER.md` is the completion log.
+- Root planning files were cleaned up; archived completion trackers are
+  not active root planning sources.
 - Historical detail stays in git history, not in this file.
 
 Rules:
@@ -59,7 +60,8 @@ refactor items moved into active Sprint 06 on 2026-05-10.
 
 - Compatibility anchor for existing smoke/deployment contracts.
 - Active release work lives in `SPRINT.md`.
-- Completion evidence and rollout history live in `READYNESS_TRACKER.md`.
+- Completion evidence and rollout history stay in git history and surviving
+  release notes after the root markdown cleanup.
 - If new production-readiness work becomes active again, move it into `SPRINT.md` instead of expanding this parked section.
 - Keep Hetzner-specific discovery behind provider abstractions.
 - Correct live call and participant counts.
@@ -82,6 +84,12 @@ refactor items moved into active Sprint 06 on 2026-05-10.
 
 ## Parked From Sprint Cleanup 2026-05-09
 
+### Completed Video Call v1 Capability And Media Plan Foundation
+
+Completed on 2026-05-10. Keep proof in commit history, contracts, readiness
+documentation, and `analyse/video-call-v1-contract-map.md`; reopen only
+concrete regressions, not the completed active checklist.
+
 ### Parked From Sprint Reset 2026-05-10
 
 1. [ ] Video Call Stabilization and Internal Diagnostics are paused as active
@@ -93,31 +101,58 @@ refactor items moved into active Sprint 06 on 2026-05-10.
    historical hotfixes. Reopen only new concrete defects, not the old sprint
    checklist.
 4. [ ] Call App diagnostics/telemetry improvements remain available as future
-   work, but IAM call-access test stabilization is now the active priority.
+   work. The focused IAM/call-access batch now lives in `SPRINT.md`; do not
+   duplicate its active checklist here.
+
+### Completed Interruption: Root Markdown Cleanup
+
+Root markdown cleanup interrupted the IAM10 sprint on 2026-05-10 and completed
+as root-planning context cleanup. IAM10 remains parked as historical context;
+the focused replacement active sprint now lives in `SPRINT.md`.
+
+1. [ ] Preserve the IAM10 branch-cleanup intent and local proof context without
+   duplicating an active sprint checklist here.
+2. [ ] Do not duplicate the active IAM11 checklist from `SPRINT.md` here.
+3. [ ] Do not restore archived tracker documents as active root-file
+   dependencies.
 
 ### Future IAM Sprint Queue
 
 Sprint 03, `IAM Abuse, Runtime Proof, And Cleanup Stabilization 03`, and
 Sprint 04, `IAM Cleanup, Proof Consolidation, And Browser Stability 04`,
-completed and moved to `READYNESS_TRACKER.md` on 2026-05-10.
+were completed before the 2026-05-10 root markdown cleanup.
 
 Sprint 05, `IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`,
-completed and moved to readiness evidence on 2026-05-10.
+was completed before the 2026-05-10 root markdown cleanup.
 
 Sprint 07, `IAM Remaining Proof And Branch Cleanup 07`, completed and moved to
-readiness evidence on 2026-05-10.
+historical evidence before the 2026-05-10 root markdown cleanup.
 
 Sprint 08, `IAM Session, Audit, Guestlist, And Terminal Proof 08`, completed
-and moved to readiness evidence on 2026-05-10.
+before the 2026-05-10 root markdown cleanup.
 
 Sprint 09, `IAM Calendar, Edge States, And Call-App Boundary Proof 09`,
-completed and moved to readiness evidence on 2026-05-10.
+completed before the 2026-05-10 root markdown cleanup.
 
 Sprint 10, `IAM Branch Cleanup, Current Proof, And Stale-Diff Closure 10`,
-moved the next local IAM proof/cleanup batch into active `SPRINT.md` on
-2026-05-10. Do not duplicate its active checkbox list here.
+was parked because root markdown cleanup interrupted it on 2026-05-10. A new
+focused IAM/call-access active sprint now lives in `SPRINT.md`; do not duplicate
+that checkbox list here.
 
 ### Completed/Parked Call App Integration Detail
+
+This section is parked/historical context only. If `SPRINT.md` names an active
+Call-App Package Boundary sprint, that sprint is authoritative and this backlog
+must not be read as blocking, superseding, or contradicting it.
+
+### Future Call App Package Boundary Work
+
+1. [ ] Plan any `text-document` to `word` rename as a real migration, not a
+   string-only cleanup. `text-document` is currently a persisted app key across
+   Marketplace catalog entries, organization installations, call app sessions,
+   CRDT documents, MCP metadata, Semantic-DNS registration, package paths, and
+   contract tests. A future rename needs alias/redirect behavior or data
+   migration before changing the canonical key.
 
 1. [ ] Prior `Collaborative Office Call Apps And Operator Feedback` sprint detail
    was removed from `SPRINT.md`. Keep follow-up defects here, not in the active

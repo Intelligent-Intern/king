@@ -5,7 +5,7 @@
 > This file records what is actually verified now.
 > `README.md` stays product-level.
 > `SPRINT.md` is the single moving roadmap and execution queue.
-> `READYNESS_TRACKER.md` is the long-form closure tracker.
+> Historical closure trackers are archived under `documentation/archive/`.
 
 ## Executive Summary
 
@@ -210,12 +210,12 @@ The repo no longer treats every imaginable future check as the active queue.
 
 The model is now:
 
-- `EPIC.md`
-  stable charter, pillars, and exit criteria
+- `documentation/archive/root-md-2026-05-10/EPIC.md`
+  archived charter, pillars, and exit criteria
 - `SPRINT.md`
   the active executable open items distilled from the larger completion tracker
-- `READYNESS_TRACKER.md`
-  the broad long-form completion checklist with verified checks and still-open closure gates
+- `documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md`
+  archived broad completion checklist with verified checks and still-open closure gates
 - `documentation/project-assessment.md`
   verified state and caveats
 
@@ -224,18 +224,16 @@ queue until it is split into a repo-local executable leaf.
 
 ## Source Of Truth Boundaries
 
-Use the root documents like this:
+Use the planning documents like this:
 
 - `README.md`
   stable product description
-- `EPIC.md`
-  stable charter and release bar
 - `SPRINT.md`
   single moving roadmap and open execution queue
-- `READYNESS_TRACKER.md`
-  long-form completion tracker and broad closure reference
 - `documentation/project-assessment.md`
   verified current state and caveats
+- `documentation/archive/root-md-2026-05-10/`
+  archived former root planning and closure references
 - `CONTRIBUTE`
   workflow and verification discipline
 - `stubs/king.php`

@@ -25,8 +25,11 @@ const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls
 const callAccessSession = readText('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
 const moduleCallsAccess = readText('demo/video-chat/backend-king-php/http/module_calls_access.php');
 const auditMembershipContract = readText('demo/video-chat/backend-king-php/tests/audit-call-access-membership-contract.php');
+const auditMembershipWrapper = readText('demo/video-chat/backend-king-php/tests/audit-call-access-membership-contract.sh');
+const sqliteAggregate = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const strongMismatchContract = readText('demo/video-chat/backend-king-php/tests/call-access-strong-mismatch-privacy-contract.php');
 const sessionFixationContract = readText('demo/video-chat/backend-king-php/tests/call-access-session-fixation-contract.php');
+const sessionFixationWrapper = readText('demo/video-chat/backend-king-php/tests/call-access-session-fixation-contract.sh');
 const membershipRemovalAudit = functionBody(auditEvents, 'videochat_audit_record_membership_removal');
 const linkOpenAudit = functionBody(auditEvents, 'videochat_audit_record_call_access_link_open');
 const callScopedContinuedAudit = functionBody(auditEvents, 'videochat_audit_record_call_scoped_access_continued');
@@ -125,6 +128,16 @@ assert.match(
   'backend audit membership proof must retain fingerprints instead of raw identifiers',
 );
 assert.match(
+  auditMembershipWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*audit-call-access-membership-contract\.php/s,
+  'backend audit membership proof must run through the Docker-capable SQLite wrapper',
+);
+assert.match(
+  sqliteAggregate,
+  /audit-call-access-events-contract\.sh[\s\S]*audit-call-access-membership-contract\.sh/s,
+  'IAM SQLite aggregate must run audit events before the membership/redaction runtime proof',
+);
+assert.match(
   strongMismatchContract,
   /wrong-user join response[\s\S]*wrong-host session response[\s\S]*unverified-host session response/s,
   'strong-mismatch proof must cover denied/auth/mismatch response redaction cases',
@@ -138,6 +151,16 @@ assert.match(
   sessionFixationContract,
   /session_id_not_available[\s\S]*session_context_changed[\s\S]*not_bound_to_current_user[\s\S]*call_access_binding_mismatch/s,
   'session-fixation proof must cover auth and binding-mismatch failure compatibility',
+);
+assert.match(
+  sessionFixationWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-session-fixation-contract\.php/s,
+  'session-fixation runtime proof must run through the Docker-capable SQLite wrapper',
+);
+assert.match(
+  sqliteAggregate,
+  /call-access-session-fixation-contract\.sh/,
+  'IAM SQLite aggregate must run the session-fixation runtime proof',
 );
 
 process.stdout.write('[call-access-audit-redaction-contract] PASS\n');

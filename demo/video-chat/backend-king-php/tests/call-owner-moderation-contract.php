@@ -44,6 +44,29 @@ SQL
     return $userId;
 }
 
+function videochat_owner_moderation_seed_guest_user(PDO $pdo, string $displayName): int
+{
+    $roleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    videochat_owner_moderation_assert($roleId > 0, 'expected seeded user role for guest account');
+
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, NULL, :role_id, 'active', '24h', 'dark', :updated_at)
+SQL
+    );
+    $insert->execute([
+        ':email' => 'guest+' . bin2hex(random_bytes(6)) . '@videochat.local',
+        ':display_name' => $displayName,
+        ':role_id' => $roleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $userId = (int) $pdo->lastInsertId();
+    videochat_owner_moderation_assert($userId > 0, 'inserted guest user id should be positive');
+    return $userId;
+}
+
 function videochat_owner_moderation_connection(
     PDO $pdo,
     array &$presenceState,
@@ -247,12 +270,13 @@ SQL
     $participantUserId = videochat_owner_moderation_seed_user($pdo, 'owner-moderation-participant@example.com', 'Owner Moderation Participant');
     $nextOwnerUserId = videochat_owner_moderation_seed_user($pdo, 'owner-moderation-next-owner@example.com', 'Owner Moderation Next Owner');
     $waitingUserId = videochat_owner_moderation_seed_user($pdo, 'owner-moderation-waiting@example.com', 'Owner Moderation Waiting');
+    $guestUserId = videochat_owner_moderation_seed_guest_user($pdo, 'Owner Moderation Guest Participant');
 
     $created = videochat_create_call($pdo, $ownerUserId, [
         'title' => 'Owner Moderation Contract',
         'starts_at' => '2026-06-10T09:00:00Z',
         'ends_at' => '2026-06-10T10:00:00Z',
-        'internal_participant_user_ids' => [$participantUserId, $nextOwnerUserId],
+        'internal_participant_user_ids' => [$participantUserId, $nextOwnerUserId, $guestUserId],
     ]);
     videochat_owner_moderation_assert((bool) ($created['ok'] ?? false), 'owner-owned call should be created');
     $callId = (string) (($created['call'] ?? [])['id'] ?? '');
@@ -332,6 +356,20 @@ SQL
     videochat_owner_moderation_assert(!(bool) ($participantOwnerTransfer['ok'] ?? true), 'normal participant must not transfer ownership');
     videochat_owner_moderation_assert((string) ($participantOwnerTransfer['reason'] ?? '') === 'forbidden', 'participant transfer error mismatch');
 
+    $guestParticipantOwnerTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $participantUserId,
+        'owner',
+        $guestUserId,
+        'user'
+    );
+    videochat_owner_moderation_assert(!(bool) ($guestParticipantOwnerTransfer['ok'] ?? true), 'guest participant must not transfer ownership');
+    videochat_owner_moderation_assert((string) ($guestParticipantOwnerTransfer['reason'] ?? '') === 'forbidden', 'guest participant transfer error mismatch');
+    $guestParticipantContext = videochat_call_role_context_for_room_user($pdo, $roomId, $guestUserId);
+    videochat_owner_moderation_assert((string) ($guestParticipantContext['call_role'] ?? '') === 'participant', 'guest participant should resolve only participant role');
+    videochat_owner_moderation_assert(!(bool) ($guestParticipantContext['can_manage_owner'] ?? true), 'guest participant must not expose owner-transfer capability');
+
     $ownerTransfer = videochat_update_call_participant_role(
         $pdo,
         $callId,
@@ -340,12 +378,30 @@ SQL
         $ownerUserId,
         'user'
     );
-    videochat_owner_moderation_assert((bool) ($ownerTransfer['ok'] ?? false), 'current owner should transfer ownership');
+    videochat_owner_moderation_assert(
+        (bool) ($ownerTransfer['ok'] ?? false),
+        'current owner should transfer ownership: ' . json_encode([
+            'reason' => $ownerTransfer['reason'] ?? null,
+            'errors' => $ownerTransfer['errors'] ?? null,
+        ], JSON_UNESCAPED_SLASHES)
+    );
     videochat_owner_moderation_assert(videochat_owner_moderation_owner_count($pdo, $callId) === 1, 'transfer should leave exactly one owner participant row');
 
     $oldOwnerContext = videochat_call_role_context_for_room_user($pdo, $roomId, $ownerUserId);
     videochat_owner_moderation_assert((string) ($oldOwnerContext['call_role'] ?? '') === 'participant', 'old owner should be demoted to participant');
     videochat_owner_moderation_assert(!(bool) ($oldOwnerContext['can_moderate'] ?? true), 'old owner should lose call moderation controls');
+    videochat_owner_moderation_assert(!(bool) ($oldOwnerContext['can_manage_owner'] ?? true), 'old owner should lose owner-transfer capability');
+
+    $demotedOwnerTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $participantUserId,
+        'owner',
+        $ownerUserId,
+        'user'
+    );
+    videochat_owner_moderation_assert(!(bool) ($demotedOwnerTransfer['ok'] ?? true), 'demoted owner must not transfer ownership after revocation');
+    videochat_owner_moderation_assert((string) ($demotedOwnerTransfer['reason'] ?? '') === 'forbidden', 'demoted owner transfer error mismatch');
 
     $newOwnerContext = videochat_call_role_context_for_room_user($pdo, $roomId, $nextOwnerUserId);
     videochat_owner_moderation_assert((string) ($newOwnerContext['call_role'] ?? '') === 'owner', 'new owner should resolve owner role');
@@ -371,6 +427,40 @@ SQL
         videochat_owner_moderation_command('lobby/allow', $roomId, $waitingUserId)
     );
     videochat_owner_moderation_assert((bool) ($newOwnerAllow['ok'] ?? false), 'new owner should moderate after transfer');
+
+    $removeRevokedParticipants = videochat_update_call($pdo, $callId, $nextOwnerUserId, 'user', [
+        'internal_participant_user_ids' => [$participantUserId],
+    ]);
+    videochat_owner_moderation_assert((bool) ($removeRevokedParticipants['ok'] ?? false), 'new owner should remove revoked participants from call roster');
+
+    $removedOldOwnerContext = videochat_call_role_context_for_room_user($pdo, $roomId, $ownerUserId);
+    videochat_owner_moderation_assert((string) ($removedOldOwnerContext['call_id'] ?? '') === '', 'removed old owner should have no call role context');
+    videochat_owner_moderation_assert(!(bool) ($removedOldOwnerContext['can_manage_owner'] ?? true), 'removed old owner must not retain owner-transfer capability');
+    $removedOldOwnerTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $participantUserId,
+        'owner',
+        $ownerUserId,
+        'user'
+    );
+    videochat_owner_moderation_assert(!(bool) ($removedOldOwnerTransfer['ok'] ?? true), 'removed old owner must not transfer ownership');
+    videochat_owner_moderation_assert((string) ($removedOldOwnerTransfer['reason'] ?? '') === 'forbidden', 'removed old owner transfer error mismatch');
+
+    $removedGuestContext = videochat_call_role_context_for_room_user($pdo, $roomId, $guestUserId);
+    videochat_owner_moderation_assert((string) ($removedGuestContext['call_id'] ?? '') === '', 'removed guest participant should have no call role context');
+    videochat_owner_moderation_assert(!(bool) ($removedGuestContext['can_manage_owner'] ?? true), 'removed guest participant must not retain owner-transfer capability');
+    $removedGuestTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $participantUserId,
+        'owner',
+        $guestUserId,
+        'user'
+    );
+    videochat_owner_moderation_assert(!(bool) ($removedGuestTransfer['ok'] ?? true), 'removed guest participant must not transfer ownership');
+    videochat_owner_moderation_assert((string) ($removedGuestTransfer['reason'] ?? '') === 'forbidden', 'removed guest participant transfer error mismatch');
+    videochat_owner_moderation_assert(videochat_owner_moderation_owner_count($pdo, $callId) === 1, 'revocation should still leave exactly one owner participant row');
 
     $adminOwnedCall = videochat_create_call($pdo, $adminUserId, [
         'title' => 'Admin Owner Moderation Contract',

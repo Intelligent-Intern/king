@@ -233,6 +233,10 @@ function videochat_audit_sanitize_payload(mixed $value, int $depth = 0): mixed
         }
         $index++;
         $stringKey = is_string($key) ? $key : (string) $key;
+        if (is_string($key) && is_bool($entry) && preg_match('/^raw_[a-z0-9_-]+_logged$/', strtolower($stringKey)) === 1) {
+            $sanitized[$key] = $entry;
+            continue;
+        }
         if (is_string($key) && is_bool($entry) && preg_match('/^[a-z0-9_-]+_logged$/', strtolower($stringKey)) === 1) {
             $sanitized[$key] = $entry;
             continue;
@@ -442,6 +446,41 @@ function videochat_audit_record_call_created(PDO $pdo, array $call, int $actorUs
             'title_logged' => false,
             'raw_guest_identifiers_logged' => false,
         ] + videochat_audit_sanitize_payload($context),
+    ]);
+}
+
+function videochat_audit_record_call_owner_transferred(
+    PDO $pdo,
+    int $tenantId,
+    string $callId,
+    int $actorUserId,
+    int $previousOwnerUserId,
+    int $nextOwnerUserId,
+    array $context = []
+): array {
+    $ownerCount = is_numeric($context['owner_count'] ?? null) ? (int) $context['owner_count'] : 0;
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => $tenantId > 0 ? $tenantId : null,
+        'event_type' => 'call_owner_transferred',
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'target_user_id' => $nextOwnerUserId > 0 ? $nextOwnerUserId : null,
+        'call_id' => $callId,
+        'resource_type' => 'call_owner',
+        'resource_id' => $callId,
+        'resource_fingerprint' => videochat_audit_fingerprint($callId),
+        'payload' => [
+            'audit_scope' => 'iam_owner_transfer',
+            'previous_owner_user_id' => $previousOwnerUserId,
+            'new_owner_user_id' => $nextOwnerUserId,
+            'actor_role' => strtolower(trim((string) ($context['actor_role'] ?? 'user'))) ?: 'user',
+            'exactly_one_owner_required' => true,
+            'one_owner_invariant_preserved' => $ownerCount === 1,
+            'owner_participant_count' => $ownerCount,
+            'old_owner_admin_preserved' => (bool) ($context['old_owner_admin_preserved'] ?? false),
+            'raw_credential_identifier_logged' => false,
+            'raw_call_identifier_logged' => false,
+        ],
     ]);
 }
 

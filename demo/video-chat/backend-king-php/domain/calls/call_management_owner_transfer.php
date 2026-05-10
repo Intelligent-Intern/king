@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/call_management_contract.php';
 require_once __DIR__ . '/call_management_query.php';
+require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/call_guest_list_audit.php';
 
 /**
  * @return array<int, int>
@@ -138,6 +140,33 @@ SQL
     return (int) $query->fetchColumn();
 }
 
+function videochat_call_owner_transfer_user_role(PDO $pdo, int $userId): string
+{
+    if ($userId <= 0) {
+        return 'user';
+    }
+
+    try {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.id = :user_id
+  AND users.status = 'active'
+LIMIT 1
+SQL
+        );
+        $query->execute([':user_id' => $userId]);
+        $row = $query->fetch();
+    } catch (Throwable) {
+        return 'user';
+    }
+
+    $role = is_array($row) ? strtolower(trim((string) ($row['role_slug'] ?? ''))) : '';
+    return $role !== '' ? $role : 'user';
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -181,6 +210,14 @@ function videochat_update_call_participant_role(
             'ok' => false,
             'reason' => 'validation_failed',
             'errors' => ['target_user_id' => 'must_be_positive_int'],
+            'call' => null,
+        ];
+    }
+    if (in_array((string) ($existingCall['status'] ?? ''), ['cancelled', 'ended'], true)) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['status' => 'immutable_for_edit'],
             'call' => null,
         ];
     }
@@ -240,7 +277,7 @@ function videochat_update_call_participant_role(
 
     $targetParticipantQuery = $pdo->prepare(
         <<<'SQL'
-SELECT user_id, source, call_role
+SELECT user_id, source, call_role, invite_state
 FROM call_participants
 WHERE call_id = :call_id
   AND user_id = :user_id
@@ -279,6 +316,7 @@ SQL
     }
 
     $updatedAt = gmdate('c');
+    $auditEvent = null;
     $pdo->beginTransaction();
     try {
         if ($normalizedTargetRole === 'owner') {
@@ -328,6 +366,37 @@ SQL
             if (videochat_call_owner_transfer_current_owner_count($pdo, (string) ($existingCall['id'] ?? '')) !== 1) {
                 throw new RuntimeException('owner_transfer_invariant_failed');
             }
+
+            $auditTenantId = is_numeric($existingCall['tenant_id'] ?? null)
+                ? (int) $existingCall['tenant_id']
+                : (is_int($tenantId) && $tenantId > 0 ? $tenantId : 0);
+            $previousOwnerRole = videochat_call_owner_transfer_user_role($pdo, $currentOwnerUserId);
+            $ownerCount = videochat_call_owner_transfer_current_owner_count($pdo, (string) ($existingCall['id'] ?? ''));
+            $oldOwnerAdminPreserved = videochat_can_administer_call(
+                $pdo,
+                (string) ($existingCall['id'] ?? ''),
+                $previousOwnerRole,
+                $currentOwnerUserId,
+                $targetUserId,
+                $auditTenantId > 0 ? $auditTenantId : null
+            );
+            $audit = videochat_audit_record_call_owner_transferred(
+                $pdo,
+                $auditTenantId,
+                (string) ($existingCall['id'] ?? ''),
+                $authUserId,
+                $currentOwnerUserId,
+                $targetUserId,
+                [
+                    'actor_role' => $authRole,
+                    'old_owner_admin_preserved' => $oldOwnerAdminPreserved,
+                    'owner_count' => $ownerCount,
+                ]
+            );
+            if (!(bool) ($audit['ok'] ?? false)) {
+                throw new RuntimeException('owner_transfer_audit_failed');
+            }
+            $auditEvent = is_array($audit['event'] ?? null) ? $audit['event'] : null;
         } else {
             $updateParticipantRole = $pdo->prepare(
                 <<<'SQL'
@@ -349,6 +418,28 @@ SQL
                 ':updated_at' => $updatedAt,
                 ':id' => (string) ($existingCall['id'] ?? ''),
             ]);
+
+            $beforeAudit = videochat_guest_list_audit_normalize_entry([
+                'user_id' => $targetUserId,
+                'source' => 'internal',
+                'call_role' => $normalizedCurrentRole,
+                'invite_state' => videochat_normalize_call_invite_state($targetParticipant['invite_state'] ?? 'invited'),
+            ]);
+            $afterAudit = $beforeAudit;
+            $afterAudit['call_role'] = $normalizedTargetRole;
+            if (!videochat_guest_list_audit_record_changes(
+                $pdo,
+                is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null,
+                (string) ($existingCall['id'] ?? ''),
+                $authUserId,
+                [[
+                    'mutation' => 'updated',
+                    'before' => $beforeAudit,
+                    'after' => $afterAudit,
+                ]]
+            )) {
+                throw new RuntimeException('guest_list_audit_write_failed');
+            }
         }
 
         $pdo->commit();
@@ -383,5 +474,6 @@ SQL
         'reason' => 'updated',
         'errors' => [],
         'call' => videochat_build_call_payload($pdo, $updatedCall, $authUserId),
+        'audit_event' => $auditEvent,
     ];
 }

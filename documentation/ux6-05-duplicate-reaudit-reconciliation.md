@@ -72,7 +72,7 @@ The current branch has already preserved the prior IAM reconciliation evidence:
 - `documentation/iam-sprint-04-duplicate-cleanup-classification.md`
 - `documentation/iam-sprint-05-duplicate-cleanup-family.md`
 - `documentation/iam-sprint-05-remaining-inventory.md`
-- `READYNESS_TRACKER.md`
+- `documentation/archive/root-md-2026-05-10/READYNESS_TRACKER.md`
 
 Focused contracts passed on the current branch:
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../../support/tenant_migrations.php';
+require_once __DIR__ . '/call_guest_list_audit.php';
 
 function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload, ?int $tenantId = null): array
 {
@@ -208,6 +209,11 @@ SQL
                 ':joined_at' => null,
                 ':left_at' => null,
             ]);
+        }
+
+        $auditChanges = videochat_guest_list_audit_initial_changes($internalParticipants, $externalParticipants);
+        if (!videochat_guest_list_audit_record_changes($pdo, $effectiveTenantId, $callId, (int) $owner['id'], $auditChanges)) {
+            throw new RuntimeException('guest_list_audit_write_failed');
         }
 
         $pdo->commit();

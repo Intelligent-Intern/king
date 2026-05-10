@@ -159,23 +159,18 @@
             </div>
           </div>
 
-          <footer class="calls-modal-footer calls-modal-footer-enter">
-            <p v-if="state.admissionMessage" class="calls-enter-admission-status" role="status" aria-live="polite">
-              {{ state.admissionMessage }}
-            </p>
-            <p v-if="state.joinError" class="calls-inline-error calls-enter-footer-error">
-              {{ state.joinError }}
-            </p>
-            <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">{{ t('common.cancel') }}</button>
-            <button
-              class="btn btn-cyan"
-              type="button"
-              :disabled="state.joining || state.waitingForAdmission"
-              @click="startSessionAndJoin"
-            >
-              {{ state.waitingForAdmission ? t('public.join.waiting_for_host') : (state.joining ? t('public.join.joining') : t('public.join.join_call')) }}
-            </button>
-          </footer>
+          <CallAccessJoinFooter
+            :admission-message="state.admissionMessage"
+            :join-error="state.joinError"
+            :joining="state.joining"
+            :mismatch="state.personalizedMismatch"
+            :waiting-for-admission="state.waitingForAdmission"
+            @cancel="goToLogin"
+            @decline-update="declinePersonalizedMismatchUpdate"
+            @request-confirmation="requestPersonalizedMismatchUpdateConfirmation"
+            @start-join="startSessionAndJoin"
+            @verify-host="verifyPersonalizedMismatchHost"
+          />
         </template>
       </section>
     </div>
@@ -218,6 +213,12 @@ import {
   callAccessVerifiedContextFromSession,
   safeCallAccessInvalidMessage,
 } from './admissionGate';
+import CallAccessJoinFooter from './CallAccessJoinFooter.vue';
+import {
+  applyPersonalizedMismatchError,
+  createPersonalizedMismatchState,
+  resetPersonalizedMismatchState,
+} from './callAccessPersonalizedMismatch';
 import { loginWithCallAccess } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
 
@@ -256,6 +257,7 @@ const state = reactive({
   previewError: '',
   micLevelPercent: 0,
   verifiedAccessContext: null,
+  personalizedMismatch: createPersonalizedMismatchState(),
 });
 
 const {
@@ -298,6 +300,7 @@ function resetJoinContextDetails() {
   state.admissionMessage = '';
   state.joinError = '';
   state.verifiedAccessContext = null;
+  resetPersonalizedMismatchState(state.personalizedMismatch);
 }
 
 function showSafeInvalidAccessState() {
@@ -681,6 +684,10 @@ function goToLogin() {
 }
 
 async function startSessionAndJoin() {
+  return startSessionAndJoinWithOptions({});
+}
+
+async function startSessionAndJoinWithOptions(extraOptions = {}) {
   if (state.joining || state.waitingForAdmission || state.loadingContext || state.contextError) return;
   if (state.requiresGuestName && String(state.guestName || '').trim() === '') {
     state.joinError = t('public.join.name_required');
@@ -694,9 +701,16 @@ async function startSessionAndJoin() {
   const result = await loginWithCallAccess(accessId, {
     guestName: state.requiresGuestName ? state.guestName : '',
     verifiedContext: state.verifiedAccessContext,
+    hostName: state.personalizedMismatch.visible ? state.personalizedMismatch.hostName : '',
+    ...extraOptions,
   });
   if (!result.ok) {
     state.joining = false;
+    const mismatchError = applyPersonalizedMismatchError(state.personalizedMismatch, result, t);
+    if (mismatchError !== '') {
+      state.joinError = mismatchError;
+      return;
+    }
     const errorPayload = result.errorCode ? { error: { code: result.errorCode } } : null;
     state.joinError = localizedApiErrorMessage(errorPayload, t('public.join.start_session_failed'));
     return;
@@ -706,6 +720,27 @@ async function startSessionAndJoin() {
   state.callId = normalizeCallId(call.id || state.callId);
   state.roomId = normalizeRoomId(call.room_id || state.roomId || 'lobby');
   startAdmissionWait(accessId);
+}
+
+async function verifyPersonalizedMismatchHost() {
+  if (state.personalizedMismatch.hostName.trim() === '') return;
+  await startSessionAndJoinWithOptions({});
+}
+
+async function declinePersonalizedMismatchUpdate() {
+  await startSessionAndJoinWithOptions({
+    mismatchUpdateDecision: 'decline',
+  });
+}
+
+async function requestPersonalizedMismatchUpdateConfirmation() {
+  await startSessionAndJoinWithOptions({
+    mismatchUpdateDecision: 'request_confirmation',
+    profileUpdate: {
+      first_name: state.personalizedMismatch.firstName,
+      last_name: state.personalizedMismatch.lastName,
+    },
+  });
 }
 
 watch(

@@ -33,7 +33,11 @@ const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helper
 const ownerModeration = readText('demo/video-chat/backend-king-php/tests/call-owner-moderation-contract.php');
 const lobbySecurity = readText('demo/video-chat/backend-king-php/tests/realtime-lobby-security-contract.php');
 const orgAdmin = readText('demo/video-chat/backend-king-php/tests/org-admin-call-rights-contract.php');
+const orgAdminWrapper = readText('demo/video-chat/backend-king-php/tests/org-admin-call-rights-contract.sh');
 const systemAdmin = readText('demo/video-chat/backend-king-php/tests/system-admin-call-rights-contract.php');
+const systemAdminWrapper = readText('demo/video-chat/backend-king-php/tests/system-admin-call-rights-contract.sh');
+const ownerTransferWrapper = readText('demo/video-chat/backend-king-php/tests/call-owner-transfer-contract.sh');
+const sqliteAggregate = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const lobbySecurityModule = readText('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
 const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const realtimeCallRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
@@ -165,5 +169,21 @@ assert.match(systemAdmin, /system admin should transfer owner on foreign-tenant 
 assert.match(systemAdmin, /system admin rights should remain after owner transfer/, 'system admin rights must survive owner transfer');
 assert.match(systemAdmin, /regular user must not simulate system admin through role string/, 'regular users must not forge system-admin authority');
 assert.match(systemAdmin, /temporary account must not receive system-admin call rights even with admin role data/, 'temporary accounts must not gain system-admin admission authority');
+
+for (const [wrapperName, wrapperSource, contractName] of [
+  ['system-admin-call-rights-contract.sh', systemAdminWrapper, 'system-admin-call-rights-contract.php'],
+  ['org-admin-call-rights-contract.sh', orgAdminWrapper, 'org-admin-call-rights-contract.php'],
+  ['call-owner-transfer-contract.sh', ownerTransferWrapper, 'call-owner-transfer-contract.php'],
+]) {
+  assert.match(
+    wrapperSource,
+    new RegExp(`sqlite-contract-runner\\.sh[\\s\\S]*run_videochat_sqlite_contract[\\s\\S]*${contractName.replace(/\./g, '\\.')}`),
+    `${wrapperName} must delegate through the Docker-capable SQLite runner`,
+  );
+  assert.ok(
+    sqliteAggregate.includes(`"${wrapperName}"`),
+    `IAM SQLite aggregate must include IAM11 authority proof ${wrapperName}`,
+  );
+}
 
 process.stdout.write('[call-access-admission-boundaries-contract] PASS\n');

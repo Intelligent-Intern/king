@@ -36,6 +36,8 @@ const joinView = readRepo('demo/video-chat/frontend-vue/src/domain/calls/access/
 const routeResolution = readRepo('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/routeResolution.ts');
 const callAccessJoinSpec = readRepo('demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js');
 const backendPrivacyContract = readRepo('demo/video-chat/backend-king-php/tests/call-access-privacy-contract.php');
+const backendPrivacyWrapper = readRepo('demo/video-chat/backend-king-php/tests/call-access-privacy-contract.sh');
+const sqliteAggregate = readRepo('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const inviteCopyContract = readRepo('demo/video-chat/backend-king-php/tests/invite-code-copy-boundary-contract.php');
 const inviteRedeemContract = readRepo('demo/video-chat/backend-king-php/tests/invite-code-redeem-endpoint-contract.php');
 const callCreateEndpointContract = readRepo('demo/video-chat/backend-king-php/tests/call-create-endpoint-contract.php');
@@ -148,6 +150,16 @@ assert.match(
   backendPrivacyContract,
   /guessedAccessId = '11111111-1111-4111-8111-111111111111'[\s\S]*guessed join should return 404[\s\S]*guessed join response/,
   'backend privacy contract must prove guessed call-access ids return redacted 404 payloads',
+);
+assert.match(
+  backendPrivacyWrapper,
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-privacy-contract\.php/s,
+  'backend privacy runtime proof must run through the Docker-capable SQLite wrapper',
+);
+assert.match(
+  sqliteAggregate,
+  /call-access-privacy-contract\.sh/,
+  'IAM SQLite aggregate must run the backend privacy runtime proof',
 );
 assert.match(
   inviteCopyContract,

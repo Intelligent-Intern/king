@@ -83,6 +83,9 @@ function videochat_realtime_presence_db_prune(PDO $pdo, ?int $nowMs = null): voi
             videochat_realtime_presence_db_retention_ms()
         ),
     ]);
+    if (function_exists('videochat_client_capabilities_prune')) {
+        videochat_client_capabilities_prune($pdo, $effectiveNowMs);
+    }
 }
 
 function videochat_realtime_presence_db_upsert(PDO $pdo, array $connection, ?int $nowMs = null): bool
@@ -172,6 +175,9 @@ function videochat_realtime_remove_call_presence(callable $openDatabase, array $
         videochat_realtime_presence_db_bootstrap($pdo);
         $statement = $pdo->prepare('DELETE FROM realtime_presence_connections WHERE connection_id = :connection_id');
         $statement->execute([':connection_id' => $connectionId]);
+        if (function_exists('videochat_client_capabilities_remove_connection')) {
+            videochat_client_capabilities_remove_connection($pdo, $connectionId);
+        }
     } catch (Throwable) {
         return;
     }

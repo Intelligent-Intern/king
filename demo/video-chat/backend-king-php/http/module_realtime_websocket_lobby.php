@@ -165,9 +165,11 @@ function videochat_realtime_apply_lobby_remove_result(
 
     $requestedAction = (string) ($lobbyResult['requested_action'] ?? $lobbyResult['action'] ?? '');
     foreach ($removedUserIds as $removedUserId) {
-        $nextInviteState = $requestedAction === 'lobby/reject'
-            ? videochat_realtime_lobby_reject_persistence_state($openDatabase, $removedCallId, $removedUserId)
-            : 'cancelled';
+        $nextInviteState = match ($requestedAction) {
+            'lobby/kick' => 'invited',
+            'lobby/reject' => videochat_realtime_lobby_reject_persistence_state($openDatabase, $removedCallId, $removedUserId),
+            default => 'cancelled',
+        };
         videochat_realtime_mark_call_participant_invite_state_by_user_id(
             $openDatabase,
             $removedCallId,

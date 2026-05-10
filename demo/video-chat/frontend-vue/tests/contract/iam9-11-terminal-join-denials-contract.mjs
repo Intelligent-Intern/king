@@ -127,8 +127,8 @@ assert.match(
 );
 assert.match(
   shellProof,
-  /"\$\{PHP_BIN\}" "\$\{SCRIPT_DIR\}\/call-access-deleted-ended-disabled-join-contract\.php"/,
-  'shell wrapper must execute the extracted deleted/ended/disabled runtime proof',
+  /sqlite-contract-runner\.sh[\s\S]*run_videochat_sqlite_contract[\s\S]*call-access-deleted-ended-disabled-join-contract\.php/,
+  'shell wrapper must execute the extracted deleted/ended/disabled runtime proof through the shared Docker-capable SQLite runner',
 );
 
 assert.equal(

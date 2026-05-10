@@ -6,6 +6,7 @@ require_once __DIR__ . '/../call_apps/call_app_sessions.php';
 require_once __DIR__ . '/realtime_activity_layout.php';
 require_once __DIR__ . '/realtime_call_context.php';
 require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
+require_once __DIR__ . '/realtime_media_session_plan.php';
 require_once __DIR__ . '/realtime_owner_absence.php';
 require_once __DIR__ . '/realtime_presence.php';
 
@@ -201,6 +202,14 @@ function videochat_realtime_room_snapshot_payload(
         videochat_presence_room_participants($presenceState, $roomId, $tenantId > 0 ? $tenantId : null),
         videochat_realtime_db_room_participants($openDatabase, $connection, $nowMs)
     );
+    $persistedClientCapabilities = [];
+    if ($callId !== '' && $roomId !== '') {
+        try {
+            $persistedClientCapabilities = videochat_client_capabilities_fetch_room($openDatabase(), $callId, $roomId);
+        } catch (Throwable) {
+            $persistedClientCapabilities = [];
+        }
+    }
     $ownerAbsence = videochat_realtime_owner_absence_disabled_payload();
     if ($callId !== '' && $roomId !== '') {
         try {
@@ -292,6 +301,12 @@ function videochat_realtime_room_snapshot_payload(
             'status' => (string) ($ownerAbsence['call_status'] ?? ''),
             'owner_absence' => $ownerAbsence,
         ],
+        'media_session_plan' => videochat_media_session_plan_for_snapshot(
+            $presenceState,
+            $connection,
+            $participants,
+            $persistedClientCapabilities
+        ),
         'call_apps' => $callApps,
         'gossip_topology' => $gossipTopology,
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
@@ -307,6 +322,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'layout' => $payload['layout'] ?? [],
         'activity' => $payload['activity'] ?? [],
         'call_lifecycle' => $payload['call_lifecycle'] ?? [],
+        'media_session_plan' => $payload['media_session_plan'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
         'gossip_topology' => $payload['gossip_topology'] ?? [],
         'viewer' => $payload['viewer'] ?? [],

@@ -453,13 +453,14 @@ function videochat_issue_session_for_call_access(
                 'pending'
             );
         } elseif (!$openLinkUsesAuthenticatedUser && !$openInviteOnlyLink) {
+            $openGuestInviteState = $callAccessMode === 'free_for_all' ? 'allowed' : 'invited';
             videochat_ensure_internal_call_participant(
                 $pdo,
                 (string) ($call['id'] ?? ''),
                 $userId,
                 (string) ($targetUser['email'] ?? ''),
                 (string) ($targetUser['display_name'] ?? ''),
-                'allowed'
+                $openGuestInviteState
             );
             $callDecision = videochat_decide_call_access_for_user(
                 $pdo,

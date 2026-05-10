@@ -26,7 +26,7 @@ Documentation policy for this README:
 
 - this is a living spec for the active video-call stack
 - update it on every commit that changes behavior, contracts, runtime paths, or UX flow
-- keep it aligned with `SPRINT.md`, `READYNESS_TRACKER.md`, and the active contract tests
+- keep it aligned with `SPRINT.md`, `BACKLOG.md`, `analyse/`, and the active contract tests
 
 Latest commit-level progress:
 

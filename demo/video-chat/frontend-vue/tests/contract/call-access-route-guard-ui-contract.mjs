@@ -19,6 +19,7 @@ const router = readFrontend('src/http/router.ts');
 const routeAccess = readFrontend('src/http/routeAccess.js');
 const loginView = readFrontend('src/domain/auth/LoginView.vue');
 const joinView = readFrontend('src/domain/calls/access/JoinView.vue');
+const joinFooter = readFrontend('src/domain/calls/access/CallAccessJoinFooter.vue');
 const admissionGate = readFrontend('src/domain/calls/access/admissionGate.ts');
 const callAccessSession = readFrontend('src/domain/calls/access/callAccessSession.ts');
 const routeResolution = readFrontend('src/domain/realtime/workspace/callWorkspace/routeResolution.ts');
@@ -164,8 +165,8 @@ assert.match(
   'public join UI must pass the frozen verified context into session issuance',
 );
 assert.match(
-  joinView,
-  /state\.admissionMessage[\s\S]*role="status"[\s\S]*aria-live="polite"/,
+  `${joinView}\n${joinFooter}`,
+  /state\.admissionMessage[\s\S]*admissionMessage[\s\S]*role="status"[\s\S]*aria-live="polite"/,
   'public join UI must render admission wait and reconnect state through an accessible live status',
 );
 assert.match(
