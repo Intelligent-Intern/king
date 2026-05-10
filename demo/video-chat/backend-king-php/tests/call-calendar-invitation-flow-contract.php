@@ -106,6 +106,17 @@ function videochat_calendar_invitation_flow_booking_payload(string $slotId, stri
     ];
 }
 
+function videochat_calendar_invitation_flow_core_access_snapshot(array $access): array
+{
+    return [
+        'id' => (string) ($access['id'] ?? ''),
+        'call_id' => (string) ($access['call_id'] ?? ''),
+        'participant_user_id' => (int) ($access['participant_user_id'] ?? 0),
+        'participant_email' => (string) ($access['participant_email'] ?? ''),
+        'expires_at' => (string) ($access['expires_at'] ?? ''),
+    ];
+}
+
 function videochat_calendar_invitation_flow_assert_stale_link_closed(PDO $pdo, string $accessId, array $needles, string $context): void
 {
     $resolution = videochat_resolve_call_access_public($pdo, $accessId);
@@ -206,6 +217,12 @@ try {
     videochat_calendar_invitation_flow_assert($firstAccessId !== '' && $secondAccessId !== '', 'both bookings should return access ids');
     videochat_calendar_invitation_flow_assert($firstAccessId !== $secondAccessId, 'multiple invitees must receive different personalized links');
     videochat_calendar_invitation_flow_assert($firstCallId !== '' && $secondCallId !== '' && $firstCallId !== $secondCallId, 'calendar bookings should create separate appointment calls');
+    foreach ([$firstAccessId, $secondAccessId] as $accessId) {
+        videochat_calendar_invitation_flow_assert(
+            preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/', $accessId) === 1,
+            'personalized calendar link id must be a non-sequential v4 uuid'
+        );
+    }
 
     $firstAccess = videochat_calendar_invitation_flow_fetch_access($pdo, $firstAccessId, $tenantId);
     $secondAccess = videochat_calendar_invitation_flow_fetch_access($pdo, $secondAccessId, $tenantId);
@@ -260,6 +277,15 @@ SQL
     videochat_calendar_invitation_flow_assert((string) ($participant['call_role'] ?? '') === 'participant', 'temporary invitee should not be elevated');
     videochat_calendar_invitation_flow_assert((string) ($participant['invite_state'] ?? '') === 'invited', 'temporary invitee should start invited');
 
+    $firstBookingRow = videochat_calendar_invitation_flow_fetch_booking($pdo, $firstAccessId);
+    videochat_calendar_invitation_flow_assert((string) ($firstBookingRow['first_name'] ?? '') === 'Ada', 'booking should persist first name');
+    videochat_calendar_invitation_flow_assert((string) ($firstBookingRow['last_name'] ?? '') === 'Lovelace', 'booking should persist last name');
+    videochat_calendar_invitation_flow_assert((string) ($firstBookingRow['email'] ?? '') === $registeredInviteeEmail, 'booking should persist form email');
+    videochat_calendar_invitation_flow_assert(
+        str_contains((string) ($firstBookingRow['message'] ?? ''), 'Calendar invitation edge-state contract'),
+        'booking should persist form message'
+    );
+
     $resolve = videochat_resolve_call_access_public($pdo, $firstAccessId);
     videochat_calendar_invitation_flow_assert((bool) ($resolve['ok'] ?? false), 'bound calendar link should resolve');
     videochat_calendar_invitation_flow_assert((int) (($resolve['target_user'] ?? [])['id'] ?? 0) === $firstTemporaryUserId, 'resolve should target the bound temporary account');
@@ -282,6 +308,7 @@ SQL
         ['authenticated_user_id' => $otherUserId, 'authenticated_session_id' => 'sess_other_account']
     );
     videochat_calendar_invitation_flow_assert(!(bool) ($wrongAccountSession['ok'] ?? true), 'another authenticated account must not claim the link');
+    videochat_calendar_invitation_flow_assert((string) ($wrongAccountSession['reason'] ?? '') === 'forbidden', 'wrong authenticated account should be forbidden');
     videochat_calendar_invitation_flow_assert(videochat_calendar_invitation_flow_session_user_id($pdo, 'sess_calendar_invite_wrong_account') === 0, 'wrong-account denial must not persist a session');
 
     $firstSession = videochat_issue_session_for_call_access(
@@ -320,6 +347,24 @@ SQL
         [$secondAccessId, $secondCallId, $secondEmail, 'Grace Hopper', (string) ($secondBookingRow['message'] ?? '')],
         'cancelled calendar appointment link'
     );
+
+    $firstAccessBeforeUnrelatedChange = videochat_calendar_invitation_flow_core_access_snapshot(
+        videochat_calendar_invitation_flow_fetch_access($pdo, $firstAccessId, $tenantId)
+    );
+    $firstBookingBeforeUnrelatedChange = videochat_calendar_invitation_flow_fetch_booking($pdo, $firstAccessId);
+    $changedStartsAt = gmdate('Y-m-d\T12:00:00\Z', $day + 86400);
+    $changedEndsAt = gmdate('Y-m-d\T13:00:00\Z', $day + 86400);
+    $updateSecondAppointment = videochat_update_call($pdo, $secondCallId, $ownerUserId, 'admin', [
+        'starts_at' => $changedStartsAt,
+        'ends_at' => $changedEndsAt,
+    ], $tenantId);
+    videochat_calendar_invitation_flow_assert((bool) ($updateSecondAppointment['ok'] ?? false), 'owner should be able to move second appointment call');
+    $firstAccessAfterUnrelatedChange = videochat_calendar_invitation_flow_core_access_snapshot(
+        videochat_calendar_invitation_flow_fetch_access($pdo, $firstAccessId, $tenantId)
+    );
+    $firstBookingAfterUnrelatedChange = videochat_calendar_invitation_flow_fetch_booking($pdo, $firstAccessId);
+    videochat_calendar_invitation_flow_assert($firstAccessAfterUnrelatedChange === $firstAccessBeforeUnrelatedChange, 'moving one appointment must not modify unrelated personalized invitation link');
+    videochat_calendar_invitation_flow_assert($firstBookingAfterUnrelatedChange === $firstBookingBeforeUnrelatedChange, 'moving one appointment must not modify unrelated booking form data');
 
     $pdo->prepare('UPDATE appointment_bookings SET call_id = :call_id, updated_at = :updated_at WHERE access_id = :access_id')->execute([
         ':call_id' => $secondCallId,
