@@ -38,6 +38,36 @@ function videochat_audit_fingerprint(mixed $value): string
     return 'sha256:' . hash('sha256', $normalized);
 }
 
+function videochat_audit_canonical_iam_event_type(string $eventType): string
+{
+    $normalized = strtolower(trim($eventType));
+    if ($normalized === '') {
+        return '';
+    }
+
+    $aliases = [
+        'call_access_admission_allowed' => 'call_access_admitted',
+        'call_access_allowed' => 'call_access_admitted',
+        'call_access_granted' => 'call_access_admitted',
+        'call_access_invitation_opened' => 'call_access_link_opened',
+        'call_access_join_link_opened' => 'call_access_link_opened',
+        'call_access_opened' => 'call_access_link_opened',
+        'call_access_rejected' => 'call_access_denied',
+        'call_access_session_created' => 'call_scoped_access_continued',
+        'call_access_session_issued' => 'call_scoped_access_continued',
+        'call_access_forbidden' => 'call_access_denied',
+        'call_admission_allowed' => 'call_access_admitted',
+        'call_admission_denied' => 'call_access_denied',
+        'call_owner_transferred' => 'call_access_role_changed',
+        'call_participant_role_updated' => 'call_access_role_changed',
+        'organization_membership_removed' => 'membership_removed',
+        'participant_role_updated' => 'call_access_role_changed',
+        'tenant_membership_removed' => 'membership_removed',
+    ];
+
+    return $aliases[$normalized] ?? $normalized;
+}
+
 function videochat_audit_payload_key_is_sensitive(string $key): bool
 {
     $normalized = strtolower(trim($key));
@@ -70,6 +100,87 @@ function videochat_audit_sanitize_scalar(mixed $value): mixed
     }
 
     return $text;
+}
+
+function videochat_audit_artifact_key_is_sensitive(string $key): bool
+{
+    $normalized = strtolower(trim($key));
+    if ($normalized === '') {
+        return false;
+    }
+    if (videochat_audit_payload_key_is_sensitive($normalized)) {
+        return true;
+    }
+
+    return preg_match(
+        '/(^|[_-])(access[_-]?link|call|call[_-]?id|display[_-]?name|email|guest|host|invite|invitation|join[_-]?path|join[_-]?url|link|participant|private|raw[_-]?access|title)([_-]|$)/',
+        $normalized
+    ) === 1;
+}
+
+function videochat_audit_redact_artifact_text(string $value): string
+{
+    $text = trim($value);
+    if ($text === '') {
+        return '';
+    }
+
+    $patterns = [
+        '/\bBearer\s+[A-Za-z0-9._~+\/=-]{8,}\b/i',
+        '/\b(?:authorization|cookie|set-cookie)\s*[:=]\s*[^;\r\n]+/i',
+        '/\b(?:token|session|session_id|access_id|secret|password|invite_secret)\s*[:=]\s*[A-Za-z0-9._~+\/=-]{6,}/i',
+        '#/join/[A-Za-z0-9._-]{8,}#i',
+        '#/api/call-access/[A-Za-z0-9._-]{8,}(?:/(?:join|session))?#i',
+        '/\b[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\b/i',
+        '/\bcandidate:[^\r\n]+/i',
+        '/v=0\r?\n(?:[^\r\n]*\r?\n?){0,20}/i',
+        '/\b(?:sdp|ice|candidate|media|frame|webrtc|rtp|srtp|dtls)[_-]?[A-Za-z0-9]*\s*[:=]\s*[^,\r\n}]+/i',
+        '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/',
+    ];
+    foreach ($patterns as $pattern) {
+        $text = preg_replace($pattern, '[redacted:audit_artifact]', $text) ?? '[redacted:audit_artifact]';
+    }
+    if (strlen($text) > 500) {
+        $text = substr($text, 0, 500);
+    }
+
+    return $text;
+}
+
+function videochat_audit_redact_artifact_payload(mixed $value, int $depth = 0, string $key = ''): mixed
+{
+    if ($depth > 6) {
+        return '[truncated]';
+    }
+    if ($key !== '' && videochat_audit_artifact_key_is_sensitive($key)) {
+        return '[redacted:audit_artifact]';
+    }
+    if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+        return $value;
+    }
+    if (is_string($value)) {
+        return videochat_audit_redact_artifact_text($value);
+    }
+    if (is_object($value)) {
+        $value = get_object_vars($value);
+    }
+    if (!is_array($value)) {
+        return videochat_audit_redact_artifact_text((string) $value);
+    }
+
+    $redacted = [];
+    $index = 0;
+    foreach ($value as $childKey => $entry) {
+        if ($index >= 80) {
+            $redacted['truncated'] = true;
+            break;
+        }
+        $index++;
+        $stringKey = is_string($childKey) ? $childKey : (string) $childKey;
+        $redacted[$childKey] = videochat_audit_redact_artifact_payload($entry, $depth + 1, $stringKey);
+    }
+
+    return $redacted;
 }
 
 function videochat_audit_sanitize_payload(mixed $value, int $depth = 0): mixed
@@ -144,7 +255,7 @@ SQL
 
 function videochat_audit_record_event(PDO $pdo, array $event): array
 {
-    $eventType = strtolower(trim((string) ($event['event_type'] ?? '')));
+    $eventType = videochat_audit_canonical_iam_event_type((string) ($event['event_type'] ?? ''));
     if ($eventType === '' || preg_match('/^[a-z0-9_.:-]{1,120}$/', $eventType) !== 1) {
         return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['event_type' => 'invalid'], 'event' => null];
     }
@@ -295,7 +406,7 @@ function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
     }
     if (is_string($filters['event_type'] ?? null) && trim((string) $filters['event_type']) !== '') {
         $where[] = 'event_type = :event_type';
-        $params[':event_type'] = strtolower(trim((string) $filters['event_type']));
+        $params[':event_type'] = videochat_audit_canonical_iam_event_type((string) $filters['event_type']);
     }
     if (is_string($filters['call_id'] ?? null) && trim((string) $filters['call_id']) !== '') {
         $where[] = 'call_id = :call_id';
