@@ -26,6 +26,73 @@ function videochat_call_app_launch_token_hash(string $token): string
     return hash('sha256', trim($token));
 }
 
+function videochat_call_app_launch_timestamp_after(string $candidate, string $baseline): bool
+{
+    $candidateUnix = strtotime(trim($candidate));
+    $baselineUnix = strtotime(trim($baseline));
+    if ($candidateUnix === false || $baselineUnix === false) {
+        return false;
+    }
+
+    return $candidateUnix > $baselineUnix;
+}
+
+function videochat_call_app_launch_session_availability(PDO $pdo, array $sessionRecord, string $issuedAt = ''): array
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT
+    installations.status AS installation_status,
+    installations.updated_at AS installation_updated_at,
+    entitlements.status AS entitlement_status,
+    entitlements.expires_at AS entitlement_expires_at,
+    entitlements.updated_at AS entitlement_updated_at,
+    catalog.health_status AS catalog_health_status
+FROM call_app_sessions sessions
+INNER JOIN organization_call_app_installations installations ON installations.id = sessions.installation_id
+INNER JOIN organization_call_app_entitlements entitlements ON entitlements.id = installations.entitlement_id
+INNER JOIN call_app_catalog_entries catalog
+    ON catalog.app_key = sessions.app_key
+   AND catalog.app_version = sessions.app_version
+WHERE sessions.id = :session_row_id
+  AND sessions.tenant_id = :tenant_id
+LIMIT 1
+SQL
+    );
+    $statement->execute([
+        ':session_row_id' => (int) ($sessionRecord['id'] ?? 0),
+        ':tenant_id' => (int) ($sessionRecord['tenant_id'] ?? 0),
+    ]);
+    $row = $statement->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) {
+        return ['ok' => false, 'reason' => 'app_not_available'];
+    }
+
+    if ((string) ($row['installation_status'] ?? '') !== 'enabled') {
+        return ['ok' => false, 'reason' => 'installation_disabled'];
+    }
+    if ((string) ($row['entitlement_status'] ?? '') !== 'active') {
+        return ['ok' => false, 'reason' => 'entitlement_not_active'];
+    }
+    $expiresAt = trim((string) ($row['entitlement_expires_at'] ?? ''));
+    if ($expiresAt !== '' && strtotime($expiresAt) <= time()) {
+        return ['ok' => false, 'reason' => 'entitlement_expired'];
+    }
+    if ((string) ($row['catalog_health_status'] ?? '') !== 'healthy') {
+        return ['ok' => false, 'reason' => 'app_unhealthy'];
+    }
+
+    if (trim($issuedAt) !== '') {
+        foreach (['installation_updated_at', 'entitlement_updated_at'] as $field) {
+            if (videochat_call_app_launch_timestamp_after((string) ($row[$field] ?? ''), $issuedAt)) {
+                return ['ok' => false, 'reason' => 'token_stale_after_entitlement_change'];
+            }
+        }
+    }
+
+    return ['ok' => true, 'reason' => ''];
+}
+
 function videochat_call_app_launch_subject_grant(PDO $pdo, int $tenantId, array $sessionRecord, string $subjectType, ?int $userId, string $guestId): array
 {
     $normalizedSubjectType = strtolower(trim($subjectType));
@@ -133,6 +200,32 @@ function videochat_call_app_launch_guest_grant_state(PDO $pdo, int $tenantId, ar
     return videochat_call_app_launch_subject_grant_state($pdo, $tenantId, $sessionRecord, 'guest', null, $guestId);
 }
 
+function videochat_call_app_launch_subject_changed_after(PDO $pdo, int $tenantId, array $sessionRecord, string $subjectType, ?int $userId, string $guestId, string $issuedAt): bool
+{
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT MAX(CASE WHEN updated_at > changed_at THEN updated_at ELSE changed_at END) AS last_changed_at
+FROM call_app_participant_grants
+WHERE tenant_id = :tenant_id
+  AND app_session_id = :app_session_id
+  AND subject_type = :subject_type
+  AND (
+      (:subject_type = 'user' AND user_id = :user_id)
+      OR (:subject_type = 'guest' AND guest_id = :guest_id)
+  )
+SQL
+    );
+    $statement->execute([
+        ':tenant_id' => $tenantId,
+        ':app_session_id' => (int) ($sessionRecord['id'] ?? 0),
+        ':subject_type' => strtolower(trim($subjectType)),
+        ':user_id' => (int) ($userId ?? 0) > 0 ? (int) $userId : null,
+        ':guest_id' => trim($guestId),
+    ]);
+
+    return videochat_call_app_launch_timestamp_after((string) $statement->fetchColumn(), $issuedAt);
+}
+
 function videochat_call_app_launch_capabilities(array $session, string $grantState, array $permissionActions = []): array
 {
     $app = is_array($session['app'] ?? null) ? $session['app'] : [];
@@ -212,6 +305,10 @@ function videochat_call_app_mint_launch_token(PDO $pdo, int $tenantId, string $s
     }
     if ((string) ($record['status'] ?? '') !== 'active') {
         return ['ok' => false, 'reason' => 'session_not_active'];
+    }
+    $availability = videochat_call_app_launch_session_availability($pdo, $record);
+    if (!(bool) ($availability['ok'] ?? false)) {
+        return ['ok' => false, 'reason' => (string) ($availability['reason'] ?? 'app_not_available')];
     }
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $actorUserId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
@@ -313,11 +410,23 @@ SQL
     if (!is_array($record) || !is_array($session)) {
         return ['ok' => false, 'reason' => 'session_not_found'];
     }
+    $issuedAt = (string) ($tokenRow['issued_at'] ?? '');
+    $activatedAt = (string) ($record['activated_at'] ?? '');
+    if ($activatedAt !== '' && videochat_call_app_launch_timestamp_after($activatedAt, $issuedAt)) {
+        return ['ok' => false, 'reason' => 'token_stale_after_session_reactivation'];
+    }
+    $availability = videochat_call_app_launch_session_availability($pdo, $record, $issuedAt);
+    if (!(bool) ($availability['ok'] ?? false)) {
+        return ['ok' => false, 'reason' => (string) ($availability['reason'] ?? 'app_not_available')];
+    }
     if (videochat_call_app_is_internal_admin_app_key((string) ($record['app_key'] ?? '')) && !videochat_call_app_user_can_use_internal_admin_apps($pdo, $userId)) {
         return ['ok' => false, 'reason' => 'internal_admin_required'];
     }
     if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $userId, '')) {
         return ['ok' => false, 'reason' => 'participant_not_in_call'];
+    }
+    if (videochat_call_app_launch_subject_changed_after($pdo, $tenantId, $record, 'user', $userId, '', $issuedAt)) {
+        return ['ok' => false, 'reason' => 'token_stale_after_grant_change'];
     }
 
     $grant = videochat_call_app_launch_subject_grant($pdo, $tenantId, $record, 'user', $userId, '');
