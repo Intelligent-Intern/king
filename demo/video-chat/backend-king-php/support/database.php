@@ -129,6 +129,11 @@ function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
             'permission_actions_json',
             'ALTER TABLE call_app_participant_grants ADD COLUMN permission_actions_json TEXT NOT NULL DEFAULT \'["read","write","delete"]\'',
         ],
+        [
+            'call_access_links',
+            'disabled_at',
+            'ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT',
+        ],
     ];
 
     foreach ($additiveColumns as [$tableName, $columnName, $sql]) {
