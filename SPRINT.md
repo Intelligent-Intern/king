@@ -254,9 +254,11 @@ Sprint Checkboxen:
   - `npm ci` was required because the worker worktree had no `node_modules`.
   - Proof: `npm run test:e2e:call-access` passed 12/12 focused IAM browser
     tests; `git diff --check` passed.
-  - Generated artifacts were left only in the worker worktree:
+  - Generated artifacts were temporary in the worker worktree:
     `playwright-report/iam-call-access/index.html` and
-    `test-results/iam-call-access/.last-run.json`.
+    `test-results/iam-call-access/.last-run.json`; that artifact-only worker
+    was removed during IAM4-18 cleanup after IAM4-17 pinned artifact retention
+    and redaction behavior.
 - [x] IAM4-17 Ensure IAM browser artifacts and failure output remain retained
   and redacted for call-access E2E diagnostics.
   - Merged worker branch `agent/iam-s4-17-browser-artifacts-redaction`.
@@ -276,8 +278,9 @@ Sprint Checkboxen:
   - No stale administrative worktree entries were found by
     `git worktree prune --dry-run --verbose`.
   - Cleanup deletion was deferred for protected active Sprint 04 lanes during
-    the worker check; manager cleanup runs after IAM4-19 merge and before
-    IAM4-20 deploy.
+    the worker check; after IAM4-19 merged, the manager removed the remaining
+    contained `agent/iam-s4-*` worktrees/branches and `git worktree prune`
+    found no stale entries.
 - [x] IAM4-19 Wire accepted Sprint 04 proofs into IAM package scripts,
   CI-wire contract, and release-gate metadata after integration.
   - Merged worker branch `agent/iam-s4-19-ci-wire-matrix-proof` with manual
