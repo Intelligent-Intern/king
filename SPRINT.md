@@ -229,8 +229,15 @@ Tickets:
   - Proof: `node tests/contract/call-access-realtime-scope-contract.mjs` passed.
     Backend reconnect shell proof skipped the SQLite runtime phase locally after
     non-SQLite assertions because `pdo_sqlite` is unavailable.
-- [ ] IAM-18 Wire the IAM contract/E2E subset into stable package scripts and CI
+- [x] IAM-18 Wire the IAM contract/E2E subset into stable package scripts and CI
   release-gate metadata.
+  - Merged worker branch `agent/iam-s1-18-ci-wire`.
+  - Wired `test:contract:iam-call-access` into package scripts, canonical CI,
+    and release-gate metadata, then expanded the gate after integration to cover
+    all merged IAM-01..IAM-19 contract and backend runtime proofs.
+  - Proof: `node tests/contract/iam-call-access-ci-wire-contract.mjs`,
+    `npm run test:e2e:release-gate`, `npm run test:contract:iam-call-access`,
+    and `git diff --check` passed.
 - [x] IAM-19 Run backend/runtime proof in the strongest available local test
   environment; document any `pdo_sqlite` limitation instead of weakening tests.
   - Merged worker branch `agent/iam-s1-19-runtime-proof`.
