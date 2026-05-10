@@ -111,8 +111,21 @@ Tickets:
     `../backend-king-php/tests/call-access-session-route-guard-contract.sh`
     (SQLite phase skipped because host PHP lacks `pdo_sqlite`), and
     `git diff --check` passed.
-- [ ] IAM2-06 Prove anonymous call links and temporary call-link accounts honor
+- [x] IAM2-06 Prove anonymous call links and temporary call-link accounts honor
   org-admin restrictions and do not elevate direct-join rights.
+  - Merged worker branch `agent/iam-s2-06-anonymous-temp-rights`.
+  - Adjusted open invite-only session issuance so anonymous temporary guests can
+    enter the lobby/admission path without being inserted as allowed direct-join
+    participants.
+  - Added `call-access-anonymous-temp-rights-contract.php` proving org-admin
+    rights do not cross tenant/org boundaries, temporary accounts do not inherit
+    org-admin powers, and anonymous sessions do not grant guest-list/direct-join
+    rights.
+  - Proof: PHP lint passed, `iam-call-access-sqlite-runtime-proof.sh` passed via
+    container fallback, and Docker PHP 8.4 with `pdo_sqlite` ran
+    `call-access-admin-prevention-contract.php`,
+    `call-guest-list-direct-join-contract.php`, and
+    `call-access-anonymous-temp-rights-contract.php`.
 - [ ] IAM2-07 Prove personalized temporary accounts cannot be reused across
   another account, browser, or organization.
 - [ ] IAM2-08 Prove invite invalidation after reschedule, delete, end, disable,
