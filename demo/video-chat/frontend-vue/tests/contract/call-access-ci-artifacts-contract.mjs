@@ -36,11 +36,34 @@ function assertNoArtifactSecretMetadata(value, label) {
   );
 }
 
+function assertNoRawBrowserArtifactWriters(source, label) {
+  assert.doesNotMatch(
+    source,
+    /\btestInfo\.(?:attach|outputPath)\b|\bwriteFile(?:Sync)?\b|\bfs\.(?:writeFile|writeFileSync|appendFile|appendFileSync)\b/,
+    `${label} must not write raw per-test artifacts outside Playwright retained-failure output`,
+  );
+  assert.doesNotMatch(
+    source,
+    /\bconsole\.(?:debug|error|info|log|warn)\s*\(/,
+    `${label} must not print raw browser/session diagnostics into failure logs`,
+  );
+}
+
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const playwrightConfig = readText('demo/video-chat/frontend-vue/playwright.config.js');
 const scripts = packageJson.scripts || {};
 const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
+const focusedIamE2eSources = [
+  'demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js',
+  'demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js',
+  'demo/video-chat/frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js',
+  'demo/video-chat/frontend-vue/tests/e2e/call-access-admin-join-boundaries.spec.js',
+  'demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js',
+];
+const auditRedactionContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
+const auditCompatibilityContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs');
+const strongMismatchAuditRedactionContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs');
 
 assert.match(
   callAccessE2eScript,
@@ -52,6 +75,17 @@ assert.match(
   /node tests\/contract\/call-access-ci-artifacts-contract\.mjs/,
   'IAM contract gate must run the CI artifact contract before browser proof drift can merge',
 );
+for (const redactionContract of [
+  'call-access-audit-redaction-contract.mjs',
+  'call-access-audit-event-compatibility-contract.mjs',
+  'call-access-strong-mismatch-audit-redaction-contract.mjs',
+]) {
+  assert.match(
+    iamContractScript,
+    new RegExp(`node tests/contract/${redactionContract.replace(/\./g, '\\.')}`),
+    `IAM contract gate must keep ${redactionContract} wired for artifact/log redaction coverage`,
+  );
+}
 
 assert.match(
   playwrightConfig,
@@ -102,6 +136,30 @@ assert.doesNotMatch(
   playwrightConfig.match(/iamCallAccessArtifactOutputDir[\s\S]*?iamCallAccessHtmlReportDir[\s\S]*?;/)?.[0] || '',
   /Date\.now|Math\.random|crypto\.randomUUID|process\.pid|testInfo\.title|testInfo\.project/i,
   'IAM artifact paths must not be generated from dynamic titles, ids, or runtime data',
+);
+
+for (const sourcePath of focusedIamE2eSources) {
+  assertNoRawBrowserArtifactWriters(readText(sourcePath), sourcePath);
+}
+assert.match(
+  auditRedactionContract,
+  /audit sanitizer must cover raw call-access ids, session ids, and tokens/,
+  'IAM artifact proof must keep audit redaction coverage for access/session ids and tokens',
+);
+assert.match(
+  auditCompatibilityContract,
+  /raw-token-should-not-persist[\s\S]*raw-cookie-should-not-persist/,
+  'IAM artifact proof must keep artifact payload redaction coverage for tokens and cookies',
+);
+assert.match(
+  auditCompatibilityContract,
+  /'sdp'\s*=>[\s\S]*v=0[\s\S]*'ice_candidate'\s*=>[\s\S]*candidate:1/,
+  'IAM artifact proof must keep artifact payload redaction coverage for SDP and ICE',
+);
+assert.match(
+  strongMismatchAuditRedactionContract,
+  /artifact redaction must cover bearer tokens, cookies, ICE candidates, and SDP blobs/,
+  'IAM artifact proof must keep strong-mismatch retained artifact redaction coverage',
 );
 
 process.stdout.write('[call-access-ci-artifacts-contract] PASS\n');
