@@ -109,7 +109,7 @@ Sprint Checkboxen:
   border, non-resizable body, and sticky bottom-right submit.
 - [ ] UX6-17 Normalize inputs/selects to the 12 King styleguide color tokens and
   remove hard-coded non-token colors on the migrated surfaces.
-- [ ] UX6-18 Replace wrong generic create actions on readonly/system catalog
+- [x] UX6-18 Replace wrong generic create actions on readonly/system catalog
   pages with correct entity-specific actions or no action.
 - [ ] UX6-19 Prove page headings use the standard `h1` size and avoid
   unreachable/overlapping content on the migrated Admin/Governance routes.
