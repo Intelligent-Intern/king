@@ -58,6 +58,10 @@ defineProps({
   justify-content: space-between;
 }
 
+.admin-page-frame-head :deep(.app-page-header-actions) {
+  gap: 20px;
+}
+
 .admin-page-frame-toolbar {
   gap: 20px;
   column-gap: 20px;

@@ -100,7 +100,7 @@ Sprint Checkboxen:
   entry points, completed-tour badges, and profile display.
 - [ ] UX6-13 Add profile expansion proof through the intended settings/profile
   architecture for about, social, and contact fields.
-- [ ] UX6-14 Keep CRUD search/action bars right-aligned with exactly 20px
+- [x] UX6-14 Keep CRUD search/action bars right-aligned with exactly 20px
   spacing and the standard submit icon across the first migrated Admin
   surfaces.
 - [ ] UX6-15 Remove redundant cancel/close buttons where a right-sidebar or
