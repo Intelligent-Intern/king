@@ -98,13 +98,13 @@ Sprint Checkboxen:
 - [x] GSP02-07 Sprint reporting contract: every completed checkbox requires a
   live chat status message, a fresh DB/chat read, and any user reply folded into
   the next issue before work continues.
-- [ ] GSP02-08 Chat poll cadence: during active work, check the live call chat at
+- [x] GSP02-08 Chat poll cadence: during active work, check the live call chat at
   least every 60 seconds after a status post and answer direct instructions in
   the room through the normal WebSocket `chat/send` path.
-- [ ] GSP02-09 Supervised chat monitor: add a local monitor runner with PID, log
+- [x] GSP02-09 Supervised chat monitor: add a local monitor runner with PID, log
   file, dry-run mode and stop command; it reads chat safely and does not expose
   tokens, cookies, sessions, SDP, ICE or media payloads.
-- [ ] GSP02-10 Monitor watchdog: document and implement the manager-side check
+- [x] GSP02-10 Monitor watchdog: document and implement the manager-side check
   that verifies the chat monitor is alive at least every 15 minutes and restarts
   it only with an explicit reason in the log.
 - [ ] GSP02-11 DB sync terminology cleanup: remove misleading "archive only"
@@ -129,9 +129,10 @@ Sprint Checkboxen:
 - [ ] GSP02-19 Operator checkbox removal: remove the operator feedback checkbox
   from call chat UI and keep backend feedback storage dormant unless a future
   explicit control reintroduces it.
-- [ ] GSP02-20 Consent-gated audio loop contract: only capture/analyze call audio
-  when visible participants consent in chat; record notes without raw audio or
-  secrets.
+- [ ] GSP02-20 Call audio talk path: diagnose and fix why participants cannot
+  hear each other, while keeping any capture/analysis consent-gated and never
+  storing raw audio or secrets; after talk audio works, evaluate TTS output and
+  consent-gated STT chat notes as explicit follow-up work.
 - [ ] GSP02-21 Image Planning CRDT audit: prove which operations already replay
   after reload and why uploaded image bytes, metadata or selected state may be
   missing across sessions.
@@ -206,9 +207,9 @@ Sprint Checkboxen:
 - [ ] GSP02-47 Browser proof batch: multi-participant proof that chat history and
   Image Planning images survive reload while unauthorized users cannot fetch
   image assets.
-- [ ] GSP02-48 Predeploy gate: run lint/build/contracts/smoke relevant to the
+- [x] GSP02-48 Predeploy gate: run lint/build/contracts/smoke relevant to the
   touched paths and post a live chat summary before deployment.
-- [ ] GSP02-49 Deploy: deploy from local `kingrt/prod-ready` without push, DNS
+- [x] GSP02-49 Deploy: deploy from local `kingrt/prod-ready` without push, DNS
   automation or certbot; include asset version and deployment commit in chat.
 - [ ] GSP02-50 Postdeploy debug loop: run 5 to 10 diagnostics loops, collect all
   unique errors before any second deploy, post loop summaries in chat, update
@@ -283,3 +284,32 @@ Current Loop Notes:
 - Latest live-chat instruction: Jendrik replied `deploy it` at DB sequence
   `262`; next action is local commit and production deploy from
   `kingrt/prod-ready` without push, DNS automation or certbot.
+- GSP02-48/GSP02-49 proof: committed local `6ccf0c0d` on `kingrt/prod-ready`,
+  deployed with `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0` and
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, no push. Production reports
+  asset version `20260510160000`, app/API/cdn/call-app hosts are reachable,
+  containers are up, and the authenticated DB-tail API returned HTTP 200 with
+  44 messages, first seq `221`, last seq `264`, `direction=latest`,
+  `limit=50`.
+- Latest live-chat instruction after deploy: Jendrik confirmed `ok chat history
+  loads.. now fix sound so we can talk` at DB sequence `264`. Reply posted from
+  `Codex Reporter`; active next issue is GSP02-20 audio talk path.
+- GSP02-08 proof: `live-chat-monitor.sh once` read the production DB-backed chat
+  tail through sequence `268`, the room instructions were folded into this
+  sprint, and `Codex Reporter` replied through normal websocket `chat/send`
+  with `chat/ack` for message `chat_04f61f244d42153327825e07`.
+- GSP02-09 proof: `demo/video-chat/scripts/live-chat-monitor.sh` now supports
+  `start|stop|status|once|post|dry-run|run`, stores PID, heartbeat and logs
+  under `demo/video-chat/.local/live-chat-monitor/`, reads only `seq`, time,
+  sender, role and text from `call_chat_messages`, and posts status through the
+  existing websocket chat path without logging tokens or full websocket URLs.
+- GSP02-10 proof: the monitor watchdog command checks process and heartbeat
+  staleness with a 900 second default, restarts only with a logged reason, and
+  `start` detaches via `setsid` when available so the tool shell cannot reap the
+  process group. A live status check showed PID `2384508` running with
+  heartbeat `2026-05-10T16:11:53Z`.
+- Latest live-chat instruction: Alexander asked at DB sequence `270` why sound
+  is not using Gossip like video. Next active work remains GSP02-20: inspect and
+  unblock the current audio talk path first, then fold TTS/STT follow-ups from
+  Jendrik sequence `266` through `268` into the audio lane.
