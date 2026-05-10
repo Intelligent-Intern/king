@@ -134,6 +134,53 @@ function assertBidirectionalBoundedTopology(hints) {
   }
 }
 
+function assertActiveGossipGateUsesPlanGatedPrimaryProof() {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8'));
+  const activeGate = String(packageJson.scripts?.['test:contract:gossip'] || '');
+
+  assert.ok(
+    activeGate.includes('gsp01-18-gossip-primary-plan-frame-contract.mjs'),
+    'active Gossip release gate must include the plan-gated gossip_primary proof',
+  );
+  for (const staleContract of [
+    'gossip-harness-faults-contract.mjs',
+    'gossip-local-5-peer-network-harness-contract.mjs',
+    'gossip-telemetry-contract.mjs',
+    'gossip-rollout-gate-contract.mjs',
+    'gossip-sfu-baseline-rollout-gate-contract.mjs',
+    'gossip-native-recovery-contract.mjs',
+    'gossip-dedicated-neighbor-lifecycle-contract.mjs',
+    'gossip-neighbor-renegotiate-stack-contract.mjs',
+    'gossip-authoritative-topology-repair-contract.mjs',
+    'realtime-gossipmesh-runtime-contract.sh',
+    'gossip-publisher-pipeline-decoupling-contract.mjs',
+    'gossip-primary-fallback-backtrace-contract.mjs',
+    'gossip-media-carrier-integration-smoke-contract.mjs',
+    'gossip-sfu-dual-carrier-continuity-contract.mjs',
+    'gossip-stale-target-pruning-contract.mjs',
+    'gossip-neighbor-health-repair-contract.mjs',
+    'gossip-neighbor-health-topology-repair-contract.mjs',
+    'gossip-native-binary-data-plane-contract.mjs',
+    'kingrt-three-user-regression-harness-contract.mjs',
+    'gossip-docs-process-contract.mjs',
+  ]) {
+    assert.equal(
+      activeGate.includes(staleContract),
+      false,
+      `active Gossip release gate must not require stale contract ${staleContract}`,
+    );
+  }
+  assert.ok(
+    activeGate.includes('gossip-media-frame-v1-contract.mjs')
+      && activeGate.includes('gossip-primary-health-gate-contract.mjs')
+      && activeGate.includes('gossip-server-no-media-fanout-contract.mjs')
+      && activeGate.includes('../backend-king-php/tests/realtime-gossipmesh-room-state-topology-contract.sh')
+      && activeGate.includes('gossip-outbound-live-publication-contract.mjs')
+      && activeGate.includes('gossip-live-receive-decode-route-contract.mjs'),
+    'active Gossip release gate must retain current gossip_primary frame, health, no-fanout, topology, receive, and publication proofs',
+  );
+}
+
 function encodedFrameFor(peerId, frameLabel) {
   const bytes = encoder.encode(`${peerId}:${frameLabel}`);
   return {
@@ -467,6 +514,8 @@ async function runPlanToGossipScenario({
 let server = null;
 
 try {
+  assertActiveGossipGateUsesPlanGatedPrimaryProof();
+
   server = await createServer({
     configFile: path.resolve(frontendRoot, 'vite.config.js'),
     logLevel: 'error',
