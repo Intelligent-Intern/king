@@ -146,6 +146,32 @@ try {
     videochat_audit_call_access_events_assert(!(bool) ($wrongSession['ok'] ?? true), 'wrong account should be denied');
     videochat_audit_call_access_events_assert((string) ($wrongSession['reason'] ?? '') === 'forbidden', 'wrong account denial should be forbidden');
     videochat_audit_call_access_events_assert($wrongSessionIssuerCalls === 0, 'wrong account must not allocate a session id');
+
+    $personalAccessLink = is_array($personalAccess['access_link'] ?? null) ? $personalAccess['access_link'] : [];
+    $personalCall = is_array($createPersonal['call'] ?? null) ? $createPersonal['call'] : [];
+    $correctHostName = 'Audit Completeness Correct Host Name';
+    $correctHostAttempt = videochat_call_access_record_host_verification_attempt(
+        $pdo,
+        $personalAccessLink,
+        $personalCall,
+        $adminUserId,
+        $correctHostName,
+        'correct_host_name'
+    );
+    videochat_audit_call_access_events_assert((bool) ($correctHostAttempt['ok'] ?? false), 'correct host-name verification attempt should audit');
+
+    $accountUpdateSessionId = 'sess_audit_completeness_account_update';
+    $accountUpdateDisplayName = 'Audit Completeness Account Update Request';
+    $accountUpdate = videochat_call_access_request_account_update_confirmation(
+        $pdo,
+        $personalAccessId,
+        $adminUserId,
+        ['display_name' => $accountUpdateDisplayName],
+        ['session_id' => $accountUpdateSessionId]
+    );
+    videochat_audit_call_access_events_assert((bool) ($accountUpdate['ok'] ?? false), 'account-update confirmation request should audit');
+    $accountUpdateToken = (string) ($accountUpdate['token'] ?? '');
+
     foreach ([
         'call_access_host_verification_succeeded' => 'correct_host_name',
         'call_access_host_verification_failed' => 'wrong_host_name',
@@ -219,6 +245,7 @@ try {
         'call_access_account_compared',
         'call_access_host_name_verified',
         'call_access_host_name_verification_failed',
+        'call_access_account_update_confirmation_requested',
         'call_access_strong_mismatch_denied',
     ] as $eventType) {
         videochat_audit_call_access_events_assert(isset($eventsByType[$eventType]), "audit event missing: {$eventType}");
@@ -257,6 +284,13 @@ try {
     $hostFailedPayload = (array) ((($eventsByType['call_access_host_name_verification_failed'][0] ?? [])['payload'] ?? []));
     videochat_audit_call_access_events_assert((string) ($hostFailedPayload['canonical_event_type'] ?? '') === 'call_access_host_name_verification_failed', 'host failure alias should persist canonical event marker');
     videochat_audit_call_access_events_assert((bool) ($hostFailedPayload['host_name_logged'] ?? true) === false, 'host failure alias must not log host name');
+
+    $accountUpdatePayload = (array) (($eventsByType['call_access_account_update_confirmation_requested'][0] ?? [])['payload'] ?? []);
+    videochat_audit_call_access_events_assert((bool) ($accountUpdatePayload['manual_reentry_required'] ?? false), 'account-update audit should require manual re-entry');
+    videochat_audit_call_access_events_assert((bool) ($accountUpdatePayload['confirmation_identifier_logged'] ?? true) === false, 'account-update audit must not log confirmation identifiers');
+    videochat_audit_call_access_events_assert((bool) ($accountUpdatePayload['session_identifier_logged'] ?? true) === false, 'account-update audit must not log raw session identifiers');
+    videochat_audit_call_access_events_assert(!videochat_audit_call_access_events_payload_has_key($accountUpdatePayload, 'confirmation_token'), 'account-update audit must not log confirmation token');
+
     foreach ([
         'call_access_host_verification_succeeded' => 'call_access_host_name_verified',
         'call_access_host_verification_failed' => 'call_access_host_name_verification_failed',
@@ -290,10 +324,14 @@ try {
         $switchedAuthSessionId,
         'sess_audit_completeness_switched_should_not_issue',
         $wrongAuthSessionId,
+        $accountUpdateSessionId,
+        $accountUpdateToken,
         $openSessionId,
         'sess_audit_completeness_wrong_should_not_issue',
         'Audit Completeness Open Guest',
         'Audit Completeness Wrong Host Name',
+        $correctHostName,
+        $accountUpdateDisplayName,
         $personalTitle,
         $openTitle,
     ] as $forbiddenText) {
@@ -305,6 +343,7 @@ try {
         videochat_audit_fingerprint($matchedAuthSessionId),
         videochat_audit_fingerprint($switchedAuthSessionId),
         videochat_audit_fingerprint($wrongAuthSessionId),
+        videochat_audit_fingerprint($accountUpdateSessionId),
     ] as $requiredFingerprint) {
         videochat_audit_call_access_events_assert(str_contains($encodedEvents, $requiredFingerprint), 'audit events missing fingerprint: ' . $requiredFingerprint);
     }
