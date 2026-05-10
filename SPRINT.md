@@ -71,8 +71,18 @@ Tickets:
   user, tenant, or call after frontend storage manipulation.
 - [ ] IAM3-04 Prove duplicate device/browser personalized-link redemption stays
   deterministic under parallel tabs and does not leak private invite metadata.
-- [ ] IAM3-05 Prove account logout/login switching across two browsers cannot
+- [x] IAM3-05 Prove account logout/login switching across two browsers cannot
   reuse the previous viewer's call-access session.
+  - Merged worker branch `agent/iam-s3-05-logout-login-switch`.
+  - Added `call-access-logout-login-switch-contract.mjs` proving logout clears
+    local viewer state, a later login cannot reuse the previous verified
+    call-access context, and parallel browser contexts keep bearer tokens
+    isolated.
+  - Proof: `node tests/contract/call-access-logout-login-switch-contract.mjs`,
+    `node tests/contract/call-access-account-isolation-contract.mjs`,
+    `node tests/contract/call-access-registered-logged-in-invitee-contract.mjs`,
+    `node tests/contract/call-access-registered-logged-out-handoff-contract.mjs`,
+    and `git diff --check` passed.
 - [ ] IAM3-06 Prove mismatch verification blocks wrong host/account identities
   with no foreign person, call, calendar, or organization data in UI payloads.
 - [ ] IAM3-07 Prove anonymous guest display-name manipulation cannot escalate to
