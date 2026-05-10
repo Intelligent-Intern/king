@@ -7,7 +7,6 @@ import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
-const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
 const RETRYABLE_RECONNECT_BACKFILL_REASONS = Object.freeze([
   'access_session_binding_unavailable',
   'realtime_backfill_unavailable',
@@ -18,7 +17,6 @@ const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/control-state',
   'call/ice',
   'call/media-quality-pressure',
-  MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE,
   'call/offer',
 ]);
 
@@ -56,7 +54,6 @@ export function createCallWorkspaceSocketHelpers({
     handleAssetVersionSocketPayload,
     handleCallAppPresenceSignal = () => false,
     handleGossipNeighborSignal = () => false,
-    handleMediaSecuritySignal,
     handleNativeSignalingEvent,
     hideLobbyJoinToast,
     mediaDebugLog,
@@ -72,7 +69,6 @@ export function createCallWorkspaceSocketHelpers({
     requestRoomSnapshot,
     resetPeerControlState,
     scheduleNativeOfferRetryForUserId,
-    sendMediaSecuritySync,
     sendRoomJoin,
     setAdmissionGate,
     setBackendWebSocketOrigin,
@@ -84,7 +80,6 @@ export function createCallWorkspaceSocketHelpers({
 
   const {
     callStateSignalTypes,
-    mediaSecuritySignalTypes,
     reconnectDelayMs,
     strictStabilityPolicy,
   } = constants;
@@ -130,33 +125,16 @@ export function createCallWorkspaceSocketHelpers({
     const normalizedTargetUserId = Number(failedTargetUserId || 0);
     const normalizedError = String(signalingError || '').trim().toLowerCase();
     const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
-    const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);
-    const failedStaleTargetPruningSignal = failedMediaSecuritySignal
-      || STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
+    const failedStaleTargetPruningSignal = STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
 
     const shouldPruneTargetNotInRoom = targetIsKnown
       && normalizedError === 'target_not_in_room'
       && failedStaleTargetPruningSignal;
-    const prunedTargetNotInRoom = shouldPruneTargetNotInRoom
-      ? removeParticipantLocallyAfterHangup(normalizedTargetUserId)
-      : false;
-
-    if (shouldPruneTargetNotInRoom && failedMediaSecuritySignal && typeof requestWlvcFullFrameKeyframe === 'function') {
-      requestWlvcFullFrameKeyframe('media_security_target_not_in_room_pruned', {
-        requested_action: 'force_full_keyframe',
-        request_full_keyframe: true,
-        target_user_id: normalizedTargetUserId,
-      });
+    if (shouldPruneTargetNotInRoom) {
+      removeParticipantLocallyAfterHangup(normalizedTargetUserId);
     }
 
     requestRoomSnapshot();
-    if (failedMediaSecuritySignal) {
-      const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;
-      setTimeout(() => {
-        void sendMediaSecuritySync(shouldForceMediaSecurityRekey);
-      }, 500);
-      return;
-    }
 
     if (targetIsKnown && normalizedError !== 'target_not_in_room') {
       scheduleNativeOfferRetryForUserId(normalizedTargetUserId, 'signaling_publish_retry');
@@ -168,8 +146,7 @@ export function createCallWorkspaceSocketHelpers({
     const normalizedTargetUserId = Number(failedTargetUserId || 0);
     if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return false;
     if (String(signalingError || '').trim().toLowerCase() !== 'target_not_in_room') return false;
-    return mediaSecuritySignalTypes.includes(failedCommandType)
-      || STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
+    return STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
   }
 
   function handleMediaQualityPressure(payloadBody, sender) {
@@ -283,17 +260,13 @@ export function createCallWorkspaceSocketHelpers({
 
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
-    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'call/gossip-server-frame', 'gossip/recovery/request', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
+    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'call/gossip-server-frame', 'gossip/recovery/request', ...callStateSignalTypes].includes(type)) return;
 
     const sender = typeof payload.sender === 'object' ? payload.sender : {};
     const senderUserId = Number(sender.user_id || 0);
     const payloadBody = typeof payload.payload === 'object' ? payload.payload : null;
     if (type === 'call/gossip-topology' || String(payloadBody?.kind || payloadBody?.type || '').trim().toLowerCase() === 'topology_hint') {
       if (applyGossipTopologyHint(payload)) return;
-    }
-    if (mediaSecuritySignalTypes.includes(type)) {
-      void handleMediaSecuritySignal(type, senderUserId, payloadBody || {});
-      return;
     }
     if (handleGossipNeighborSignal(type, senderUserId, payloadBody || {})) return;
 
@@ -318,33 +291,6 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === CALL_APP_PRESENCE_SIGNAL_TYPE) {
       handleCallAppPresenceSignal(payloadBody || {}, sender);
-      return;
-    }
-
-    if (type === MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE) {
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'media_security_sync_request_received',
-        code: 'media_security_sync_request_received',
-        message: 'A remote receiver requested a media-security resync before video reconnect.',
-        payload: {
-          sender_user_id: senderUserId,
-          requester_user_id: Number(payloadBody?.requester_user_id || senderUserId || 0),
-          source_reason: String(payloadBody?.reason || '').trim(),
-          source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
-          media_runtime_path: refs.mediaRuntimePath.value,
-        },
-        immediate: true,
-      });
-      void sendMediaSecuritySync(true);
-      if (typeof requestWlvcFullFrameKeyframe === 'function') {
-        requestWlvcFullFrameKeyframe('media_security_sync_request_received', {
-          requested_action: 'force_full_keyframe',
-          request_full_keyframe: true,
-          sender_user_id: senderUserId,
-        });
-      }
       return;
     }
 
@@ -992,33 +938,18 @@ export function createCallWorkspaceSocketHelpers({
         opened = true;
         clearNegotiationTimer();
         finishConnectInFlight();
-        const isReconnectOpen = refs.reconnectAttempt.value > 0;
         refs.reconnectAttempt.value = 0;
         refs.connectionState.value = 'online';
         refs.connectionReason.value = 'ready';
         setBackendWebSocketOrigin(socketOrigin);
         clearErrors();
         startPingLoop();
-        refs.clearMediaSecuritySignalCaches();
-        refs.startMediaSecurityHandshakeWatchdog();
-        captureClientDiagnostic({
-          category: 'media',
-          level: 'info',
-          eventType: 'media_security_handshake_started_after_ws_open',
-          code: 'media_security_handshake_started_after_ws_open',
-          message: 'WebSocket opened and media-security handshake caches were cleared.',
-          payload: {
-            reconnect: isReconnectOpen,
-            connection_state: refs.connectionState.value,
-          },
-        });
         requestRoomSnapshot();
         if (refs.usersSourceMode.value === 'directory' && refs.activeTab.value === 'users') {
           void refreshUsersDirectory();
         }
         void syncControlStateToPeers();
         void syncModerationStateToPeers();
-        void sendMediaSecuritySync(false);
       });
 
       socket.addEventListener('message', handleSocketMessage);
@@ -1039,7 +970,6 @@ export function createCallWorkspaceSocketHelpers({
 
         clearNegotiationTimer();
         clearPingTimer();
-        refs.clearMediaSecurityHandshakeWatchdog();
         if (refs.socketRef.value === socket) {
           refs.socketRef.value = null;
         }

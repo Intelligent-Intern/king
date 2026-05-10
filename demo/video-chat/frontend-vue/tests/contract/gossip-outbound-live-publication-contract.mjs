@@ -7,6 +7,7 @@ const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspacePath = path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLanePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const mediaStackPath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/mediaStack.ts')
+const socketLifecyclePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts')
 const publisherPipelinePath = path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts')
 const publisherFrameDispatchPath = path.join(frontendRoot, 'src/domain/realtime/local/publisherFrameDispatch.ts')
 const packagePath = path.join(frontendRoot, 'package.json')
@@ -15,6 +16,7 @@ const callWorkspace = fs.readFileSync(callWorkspacePath, 'utf8')
 const gossipDataLane = fs.readFileSync(gossipDataLanePath, 'utf8')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const mediaStack = fs.readFileSync(mediaStackPath, 'utf8')
+const socketLifecycle = fs.readFileSync(socketLifecyclePath, 'utf8')
 const publisherPipeline = fs.readFileSync(publisherPipelinePath, 'utf8')
 const publisherFrameDispatch = fs.readFileSync(publisherFrameDispatchPath, 'utf8')
 const packageJson = fs.readFileSync(packagePath, 'utf8')
@@ -106,6 +108,22 @@ assert(
 assert(
   /publishLocalEncodedFrameToGossip = \(\) => false/.test(publisherPipeline),
   'publisher pipeline must default the gossip hook to a no-op for non-gossip callers',
+)
+assert(
+  !callWorkspace.includes('createCallWorkspaceMediaSecurityRuntime')
+    && !callWorkspace.includes('createMediaSecuritySession'),
+  'call workspace must not attach the media-security runtime in gossip_primary mode',
+)
+assert(
+  /const MEDIA_SECURITY_SIGNAL_TYPES = Object\.freeze\(\[\]\);/.test(callWorkspace)
+    && /protectedMediaEnabled:\s*false/.test(callWorkspace),
+  'gossip_primary must publish transport-only frames without media-security signal handling',
+)
+assert(
+  !socketLifecycle.includes('media-security')
+    && !socketLifecycle.includes('media_security')
+    && !socketLifecycle.includes('MediaSecurity'),
+  'websocket lifecycle must not run media-security handshake, sync, or sender-key handling',
 )
 
 const sfuSendIndex = publisherFrameDispatch.indexOf('sendClient.sendEncodedFrame(frame)')

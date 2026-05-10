@@ -49,7 +49,6 @@ import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspa
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
 import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
-import { createCallWorkspaceMediaSecurityRuntime } from './workspace/callWorkspace/mediaSecurityRuntime';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
 import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace/lifecycle';
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
@@ -72,7 +71,6 @@ import {
   streamHasTracks,
 } from './native/peerMedia';
 import { SFUClient } from '../../lib/sfu/sfuClient';
-import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './media/security';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
   ALONE_IDLE_COUNTDOWN_MS,
@@ -183,14 +181,10 @@ import {
   ACTIVITY_MOTION_SAMPLE_MS,
   ACTIVITY_PUBLISH_INTERVAL_MS,
   CALL_STATE_SIGNAL_TYPES,
-  MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
-  MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
-  MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
   MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
   NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS,
   NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS,
   NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS,
-  NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS,
   REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS,
   REMOTE_SFU_FRAME_DROP_LOG_COOLDOWN_MS,
   REMOTE_SFU_FRAME_STALE_TTL_MS,
@@ -214,7 +208,6 @@ import {
   SFU_BACKGROUND_SNAPSHOT_TILE_HEIGHT,
   SFU_BACKGROUND_SNAPSHOT_TILE_WIDTH,
   SFU_BACKPRESSURE_LOG_COOLDOWN_MS,
-  SFU_PROTECTED_MEDIA_ENABLED,
   SFU_WLVC_MAX_DELTA_FRAME_BYTES,
   SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES,
   SFU_SELECTIVE_TILE_BASE_REFRESH_MS,
@@ -233,11 +226,15 @@ import {
   extractDiagnosticMessage,
 } from './workspace/callWorkspace/clientDiagnostics';
 import {
-  createMediaSecurityTargetHelpers,
   defaultNativeAudioBridgeFailureMessage,
 } from './workspace/callWorkspace/mediaSecurityTargets';
 import { createSfuTransportState } from './workspace/callWorkspace/sfuTransport';
 import { t } from '../../modules/localization/i18nRuntime.js';
+
+const MEDIA_SECURITY_SIGNAL_TYPES = Object.freeze([]);
+const MediaSecuritySession = Object.freeze({
+  supportsNativeTransforms: () => false,
+});
 
 const route = useRoute(); const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
@@ -425,25 +422,9 @@ let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
 let wlvcEncodeInFlight = false;
 const sfuTransportState = createSfuTransportState();
-let mediaSecuritySyncInFlight = false;
-let mediaSecuritySyncHintLastAtMs = 0;
-let mediaSecuritySyncPending = false;
-let mediaSecuritySyncPendingForceRekey = false;
-let mediaSecurityResyncTimer = null;
-let mediaSecurityResyncForceRekey = false;
-const mediaSecurityHelloSignalsSent = new Set();
-const mediaSecuritySenderKeySignalsSent = new Set();
-const mediaSecurityRecoveryLastByUserId = new Map();
-// Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
-const mediaSecurityHelloSentAtByUserId = new Map();
-const mediaSecurityHandshakeRetryingByUserId = new Set();
-const mediaSecurityHandshakeRetryCountByUserId = new Map();
-const mediaSecuritySfuPublisherFirstSeenAtByUserId = new Map();
-const nativeFrameErrorLastLogByKey = new Map();
 const nativeAudioBridgeBlockDiagnosticsSent = new Set();
 const nativeAudioTrackRecoveryAttemptsByUserId = new Map();
 const nativeAudioBridgeQuarantineByUserId = new Map();
-let mediaSecurityHandshakeWatchdogTimer = null;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const fullscreenVideoUserId = ref(0);
@@ -583,14 +564,30 @@ const {
   workspaceSidebarState,
 });
 
-let canProtectCurrentSfuTargets, clearMediaSecurityHandshakeWatchdog, clearMediaSecurityResyncTimer;
-let clearMediaSecuritySfuPublisherSeen, clearMediaSecuritySignalCaches, currentMediaSecurityRuntimePath;
-let ensureMediaSecuritySession, ensureNativeAudioBridgeSecurityReady, handleMediaSecuritySignal;
-let hintMediaSecuritySync, mediaSecurityTargetIds, nativeAudioBridgeIsQuarantined;
-let nativeAudioSecurityBannerMessage, noteMediaSecuritySfuPublisherSeen, recoverMediaSecurityForPublisher;
-let reportNativeAudioBridgeFailure, resyncNativeAudioBridgePeerAfterSecurityReady, scheduleMediaSecurityParticipantSync;
-let sendMediaSecurityHello, shouldBypassNativeAudioProtectionForPeer, shouldRecoverMediaSecurityFromFrameError;
-let shouldSendTransportOnlySfuFrame, startMediaSecurityHandshakeWatchdog, syncMediaSecurityWithParticipants;
+let canProtectCurrentSfuTargets = () => false;
+let clearMediaSecurityHandshakeWatchdog = () => {};
+let clearMediaSecurityResyncTimer = () => {};
+let clearMediaSecuritySfuPublisherSeen = () => {};
+let clearMediaSecuritySignalCaches = () => {};
+let currentMediaSecurityRuntimePath = () => 'gossip_primary';
+let ensureMediaSecuritySession = () => null;
+let ensureNativeAudioBridgeSecurityReady = async () => true;
+let handleMediaSecuritySignal = () => {};
+let hintMediaSecuritySync = () => {};
+let mediaSecurityTargetIds = () => [];
+let nativeAudioBridgeIsQuarantined = () => false;
+let nativeAudioSecurityBannerMessage = computed(() => '');
+let noteMediaSecuritySfuPublisherSeen = () => false;
+let recoverMediaSecurityForPublisher = () => {};
+let reportNativeAudioBridgeFailure = () => {};
+let resyncNativeAudioBridgePeerAfterSecurityReady = () => {};
+let scheduleMediaSecurityParticipantSync = () => {};
+let sendMediaSecurityHello = async () => false;
+let shouldBypassNativeAudioProtectionForPeer = () => false;
+let shouldRecoverMediaSecurityFromFrameError = () => false;
+let shouldSendTransportOnlySfuFrame = () => true;
+let startMediaSecurityHandshakeWatchdog = () => {};
+let syncMediaSecurityWithParticipants = async () => {};
 let appendChatMessage = () => {};
 let applyActivitySnapshot = () => {};
 let applyCallLayoutPayload = () => {};
@@ -878,102 +875,6 @@ const {
 });
 const { activeCallAppSession, callAppWorkspaceMiniParticipants, applyCallAppsRoomState } = createCallAppWorkspaceState({ connectedParticipantUsers, miniVideoParticipants: liveMiniVideoParticipants, nextTick, renderCallVideoLayout: () => renderCallVideoLayout() });
 
-const mediaSecurityRuntimeState = {
-  mediaSecuritySyncInFlight,
-  mediaSecuritySyncHintLastAtMs,
-  mediaSecuritySyncPending,
-  mediaSecuritySyncPendingForceRekey,
-  mediaSecurityResyncTimer,
-  mediaSecurityResyncForceRekey,
-  mediaSecurityHelloSignalsSent,
-  mediaSecuritySenderKeySignalsSent,
-  mediaSecurityRecoveryLastByUserId,
-  mediaSecurityHelloSentAtByUserId,
-  mediaSecurityHandshakeRetryingByUserId,
-  mediaSecurityHandshakeRetryCountByUserId,
-  mediaSecuritySfuPublisherFirstSeenAtByUserId,
-  nativeFrameErrorLastLogByKey,
-  nativeAudioBridgeQuarantineByUserId,
-  mediaSecurityHandshakeWatchdogTimer,
-};
-
-({
-  canProtectCurrentSfuTargets,
-  clearMediaSecurityHandshakeWatchdog,
-  clearMediaSecurityResyncTimer,
-  clearMediaSecuritySfuPublisherSeen,
-  clearMediaSecuritySignalCaches,
-  currentMediaSecurityRuntimePath,
-  ensureMediaSecuritySession,
-  ensureNativeAudioBridgeSecurityReady,
-  handleMediaSecuritySignal,
-  hintMediaSecuritySync,
-  mediaSecurityTargetIds,
-  nativeAudioBridgeIsQuarantined,
-  nativeAudioSecurityBannerMessage,
-  noteMediaSecuritySfuPublisherSeen,
-  recoverMediaSecurityForPublisher,
-  reportNativeAudioBridgeFailure,
-  resyncNativeAudioBridgePeerAfterSecurityReady,
-  scheduleMediaSecurityParticipantSync,
-  sendMediaSecurityHello,
-  shouldBypassNativeAudioProtectionForPeer,
-  shouldRecoverMediaSecurityFromFrameError,
-  shouldSendTransportOnlySfuFrame,
-  startMediaSecurityHandshakeWatchdog,
-  syncMediaSecurityWithParticipants,
-} = createCallWorkspaceMediaSecurityRuntime({
-  callbacks: {
-    attachMediaSecurityNativeReceiversForPeer: (peer) => attachMediaSecurityNativeReceiversForPeer(peer),
-    captureClientDiagnostic,
-    captureClientDiagnosticError,
-    createMediaSecuritySession,
-    createMediaSecurityTargetHelpers,
-    defaultNativeAudioBridgeFailureMessage,
-    ensureNativePeerConnection: (userId) => ensureNativePeerConnection(userId),
-    extractDiagnosticMessage,
-    mediaDebugLog,
-    nativeAudioSecurityTelemetrySnapshot: () => nativeAudioSecurityTelemetrySnapshot(),
-    requestRoomSnapshot: () => requestRoomSnapshot(),
-    scheduleNativeAudioTrackRecovery: (peer, reason, options) => scheduleNativeAudioTrackRecovery(peer, reason, options),
-    scheduleNativePeerAudioTrackDeadline: (peer) => scheduleNativePeerAudioTrackDeadline(peer),
-    sendNativeOffer: (peer) => sendNativeOffer(peer),
-    sendSocketFrame,
-    setNativePeerAudioBridgeState: (peer, nextState, message) => setNativePeerAudioBridgeState(peer, nextState, message),
-    shouldSyncNativeLocalTracksBeforeOffer: (peer) => shouldSyncNativeLocalTracksBeforeOffer(peer),
-    syncNativePeerLocalTracks: (peer) => syncNativePeerLocalTracks(peer),
-    synchronizeNativePeerMediaElements: (peer) => synchronizeNativePeerMediaElements(peer),
-  },
-  constants: {
-    mediaSecurityHandshakeTimeoutMs: MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
-    mediaSecurityHandshakeRetryTimeoutsMs: MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
-    mediaSecurityHandshakeWatchdogIntervalMs: MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
-    mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
-    nativeFrameErrorLogCooldownMs: NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS,
-    sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
-    strictStabilityPolicy: CALL_STABILITY_POLICY,
-    MediaSecuritySession,
-  },
-  refs: {
-    activeCallId,
-    activeRoomId,
-    activeSocketCallId,
-    connectedParticipantUsers,
-    currentUserId,
-    hasRealtimeRoomSync,
-    isNativeWebRtcRuntimePath,
-    isSocketOnline,
-    isWlvcRuntimePath,
-    mediaRuntimeCapabilities,
-    mediaRuntimePath,
-    mediaSecuritySessionRef,
-    mediaSecurityStateVersion,
-    nativeAudioBridgeStatusVersion,
-    nativePeerConnectionsRef,
-  },
-  state: mediaSecurityRuntimeState,
-}));
-
 configureCallWorkspaceClientDiagnosticsContext({
   callbacks: {
     nativeAudioSecurityTelemetrySnapshot: () => nativeAudioSecurityTelemetrySnapshot(),
@@ -1147,7 +1048,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     localTrackRecoveryMaxDelayMs: LOCAL_TRACK_RECOVERY_MAX_DELAY_MS,
     MediaSecuritySession,
     miniVideoSlotId,
-    protectedMediaEnabled: SFU_PROTECTED_MEDIA_ENABLED,
+    protectedMediaEnabled: false,
     remoteFrameActivityMarkIntervalMs: REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS,
     remoteSfuFrameDropLogCooldownMs: REMOTE_SFU_FRAME_DROP_LOG_COOLDOWN_MS,
     remoteSfuFrameStaleTtlMs: REMOTE_SFU_FRAME_STALE_TTL_MS,
