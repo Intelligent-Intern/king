@@ -127,6 +127,13 @@ function videochat_issue_session_for_call_access(
         }
         $targetUser = is_array($guestCreate['user'] ?? null) ? $guestCreate['user'] : null;
         $createdPersonalGuest = $linkKind === 'personal';
+        if (is_array($targetUser)) {
+            videochat_audit_record_temporary_account_created($pdo, $targetUser, $tenantId, [
+                'call_id' => (string) ($call['id'] ?? ''),
+                'source' => $linkKind === 'open' ? 'anonymous_call_access_link' : 'personal_call_access_link',
+                'tenant_membership_attached' => is_int($tenantId) && $tenantId > 0,
+            ]);
+        }
     }
 
     if (!is_array($targetUser)) {
@@ -156,6 +163,11 @@ function videochat_issue_session_for_call_access(
     }
 
     if ($linkKind === 'personal' && !$createdPersonalGuest && $verifiedUserId > 0 && $verifiedUserId !== $userId) {
+        videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $targetUser, $verifiedUserId, 'strong_mismatch', [
+            'session_id' => $verifiedSessionId,
+            'stage' => 'verified_context',
+        ]);
+
         return [
             'ok' => false,
             'reason' => 'conflict',
@@ -167,6 +179,12 @@ function videochat_issue_session_for_call_access(
         ];
     }
     if ($linkKind === 'personal' && !$createdPersonalGuest && $authenticatedUserId > 0 && $authenticatedUserId !== $userId) {
+        videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $targetUser, $authenticatedUserId, 'strong_mismatch', [
+            'session_id' => $authenticatedSessionId,
+            'stage' => 'session_authentication',
+            'host_name_verified' => false,
+        ]);
+
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -180,6 +198,10 @@ function videochat_issue_session_for_call_access(
             'call' => null,
         ];
     }
+    $matchedAccountComparison = $linkKind === 'personal'
+        && !$createdPersonalGuest
+        && $authenticatedUserId > 0
+        && $authenticatedUserId === $userId;
 
     $callAccessMode = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only');
     $openInviteOnlyLink = $linkKind === 'open' && $callAccessMode === 'invite_only';
@@ -357,6 +379,12 @@ SQL
             'access_link' => null,
             'call' => null,
         ];
+    }
+    if ($matchedAccountComparison) {
+        videochat_audit_record_call_access_account_compared($pdo, $accessLink, $call, $targetUser, $authenticatedUserId, 'matched', [
+            'session_id' => $authenticatedSessionId,
+            'stage' => 'session_issue',
+        ]);
     }
     if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
         videochat_audit_record_call_scoped_access_continued($pdo, $accessLink, $call, $targetUser, $sessionId);
