@@ -103,7 +103,7 @@ Sprint Checkboxen:
   `local/iam-e2e-edge-error-matrix-proof`.
 - [x] IAM9-16 Extract or prove IAM edge safe states from
   `local/iam-e2e-edge-safe-states-proof-2`.
-- [ ] IAM9-17 Extract or prove email confirmation race hardening from
+- [x] IAM9-17 Extract or prove email confirmation race hardening from
   `local/iam-e2e-email-confirmation-race-hardening`.
 - [x] IAM9-18 Extract or prove secure expiring account update confirmations from
   `local/iam-e2e-email-confirmation-secure-expiry`.
