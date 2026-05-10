@@ -136,7 +136,7 @@ Sprint Checkboxen:
 - [x] GSP01-18 Test gate: add/convert focused contract and E2E proof for two
   and three participants seeing video through gossip with SFU disabled and no
   background regression harness in the release path.
-- [ ] GSP01-19 Predeploy gate: run local build/contracts, `prod-debug.sh`
+- [x] GSP01-19 Predeploy gate: run local build/contracts, `prod-debug.sh`
   preflight, HTTP/API/WS checks and branch hygiene on `kingrt/prod-ready`; fix
   all distinct failures before deploying.
 - [ ] GSP01-20 Deploy and debug loop: deploy without push/DNS/certbot, run 5 to
@@ -281,6 +281,21 @@ Current Loop Notes:
 - GSP01-19 sprint sync: commit `cb3cdbca` recorded the `50176df2` build
   unblock and remaining focused contract failure in this sprint file without
   closing the predeploy gate.
+- GSP01-19 proof: final local predeploy gate on `kingrt/prod-ready` passed:
+  `npm run build`, `npm run test:contract:gossip`,
+  `node tests/contract/gossip-media-carrier-integration-smoke-contract.mjs`,
+  `node tests/contract/gossip-publisher-pipeline-decoupling-contract.mjs`,
+  `node tests/contract/sfu-strict-720p30-runtime-contract.mjs`,
+  `npx playwright test tests/e2e/gossip-frame-pixel-proof.spec.js --workers=1`,
+  deploy script syntax checks, `check-deploy-idempotency.sh`,
+  `prod-debug-observability-contract.mjs`, `prod-debug.sh` dry-run, and
+  read-only `prod-debug.sh` with `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1`.
+  Public probes returned 200 for API runtime/version, app shell, CDN assets,
+  call-app host and registry host. Marketplace and lobby websocket returned
+  auth-required 401 without a session; SFU websocket returned 404, classified
+  non-blocking for this sprint because SFU is parked from the active path.
+  Branch hygiene is clean: no `kingrt/gsp01-*` worker branches remain, and the
+  only remaining worktrees are `main` and `kingrt/prod-ready`.
 - GSP01-20 diagnostics dry-run prep: merge commit `d4840e45` integrated
   `analyse/gsp01-20-diagnostics-dryrun.md`, documenting safe local dry-run
   diagnostics and excluded deploy/DNS/certbot paths. GSP01-20 remains open
