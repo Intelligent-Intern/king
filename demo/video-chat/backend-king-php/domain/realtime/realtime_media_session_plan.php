@@ -21,9 +21,11 @@ function videochat_media_session_plan_allowed_states(): array
 {
     return [
         'waiting_for_capabilities',
-        'sending_720p30',
-        'receive_only',
-        'video_unavailable',
+        'waiting_for_gossip',
+        'streaming_720p30',
+        'throttled_50',
+        'throttled_25',
+        'stuck_not_sending',
         'blocked_capability',
         'left',
     ];
@@ -42,25 +44,34 @@ function videochat_media_session_plan_state(array $capabilities, bool $left = fa
     $runtime = is_array($capabilities['runtime'] ?? null) ? (array) $capabilities['runtime'] : [];
     $constraints = is_array($capabilities['constraints'] ?? null) ? (array) $capabilities['constraints'] : [];
     $camera = (bool) ($media['camera'] ?? false);
-    $microphone = (bool) ($media['microphone'] ?? false);
     $camera720p30 = (bool) ($media['camera_720p30'] ?? false)
         || ((int) ($constraints['video_width'] ?? 0) >= 1280
             && (int) ($constraints['video_height'] ?? 0) >= 720
             && (int) ($constraints['video_fps'] ?? 0) >= 30);
-    $canReceive = (bool) ($runtime['websocket'] ?? false)
-        && ((bool) ($runtime['webrtc'] ?? false) || (bool) ($runtime['webassembly'] ?? false));
+    $hasGossipTransport = (bool) ($runtime['websocket'] ?? false);
 
-    if ($camera && $camera720p30 && $canReceive) {
-        return 'sending_720p30';
+    if ($camera && $camera720p30 && $hasGossipTransport) {
+        return 'streaming_720p30';
     }
-    if (!$camera && ($canReceive || $microphone)) {
-        return 'receive_only';
-    }
-    if (!$canReceive) {
-        return 'blocked_capability';
+    if ($hasGossipTransport) {
+        return 'waiting_for_gossip';
     }
 
-    return 'video_unavailable';
+    return 'blocked_capability';
+}
+
+function videochat_media_session_plan_is_sending_state(string $state): bool
+{
+    return in_array($state, ['streaming_720p30', 'throttled_50', 'throttled_25'], true);
+}
+
+function videochat_media_session_plan_epoch(array $input): int
+{
+    $explicitEpoch = (int) ($input['plan_epoch'] ?? 0);
+    $previousEpoch = (int) ($input['previous_plan_epoch'] ?? 0);
+    $participantCount = count((array) ($input['participants'] ?? []));
+
+    return max(1, $explicitEpoch, $previousEpoch + 1, $participantCount);
 }
 
 /**
@@ -86,9 +97,12 @@ function videochat_media_session_plan_build(array $input): array
                 ?? ($capabilities['participant_session_id'] ?? ($participant['connection_id'] ?? ''))
             ),
             'media_state' => $state,
-            'profile' => $state === 'sending_720p30' ? '720p30' : '',
-            'transport' => $state === 'sending_720p30' ? 'webrtc_native' : '',
+            'profile' => videochat_media_session_plan_is_sending_state($state) ? '720p30' : '',
+            'transport' => videochat_media_session_plan_is_sending_state($state) ? 'gossip' : '',
             'security_policy' => $state === 'blocked_capability' ? 'blocked' : 'required',
+            'stuck_reason' => $state === 'stuck_not_sending'
+                ? (string) ($participant['stuck_reason'] ?? 'not_sending')
+                : '',
         ];
     }
 
@@ -96,7 +110,11 @@ function videochat_media_session_plan_build(array $input): array
         'schema_version' => videochat_media_session_plan_schema_version(),
         'call_id' => (string) ($input['call_id'] ?? ''),
         'room_id' => (string) ($input['room_id'] ?? ''),
-        'plan_epoch' => (int) ($input['plan_epoch'] ?? 1),
+        'plan_epoch' => videochat_media_session_plan_epoch([
+            'plan_epoch' => $input['plan_epoch'] ?? 0,
+            'previous_plan_epoch' => $input['previous_plan_epoch'] ?? 0,
+            'participants' => $participants,
+        ]),
         'participants' => $participants,
         'state_catalog' => videochat_media_session_plan_allowed_states(),
         'generated_at' => gmdate('c'),
@@ -124,6 +142,7 @@ function videochat_media_session_plan_public_projection(array $plan): array
             'profile' => (string) ($participant['profile'] ?? ''),
             'transport' => (string) ($participant['transport'] ?? ''),
             'security_policy' => (string) ($participant['security_policy'] ?? 'required'),
+            'stuck_reason' => $state === 'stuck_not_sending' ? (string) ($participant['stuck_reason'] ?? 'not_sending') : '',
         ];
     }
 
@@ -170,9 +189,10 @@ function videochat_call_media_state_event(array $connection, array $capabilities
         'participant' => [
             'participant_session_id' => $participantSessionId,
             'media_state' => $state,
-            'profile' => $state === 'sending_720p30' ? '720p30' : '',
-            'transport' => $state === 'sending_720p30' ? 'webrtc_native' : '',
+            'profile' => videochat_media_session_plan_is_sending_state($state) ? '720p30' : '',
+            'transport' => videochat_media_session_plan_is_sending_state($state) ? 'gossip' : '',
             'security_policy' => $state === 'blocked_capability' ? 'blocked' : 'required',
+            'stuck_reason' => $state === 'stuck_not_sending' ? 'not_sending' : '',
         ],
         'state_catalog' => $allowedStates,
         'reason' => trim($reason) === '' ? 'client_capabilities' : trim($reason),
@@ -225,7 +245,10 @@ function videochat_media_session_plan_for_snapshot(
     return videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
         'call_id' => $callId,
         'room_id' => $roomId,
-        'plan_epoch' => max(1, count($planParticipants)),
+        'plan_epoch' => videochat_media_session_plan_epoch([
+            'previous_plan_epoch' => (int) ($presenceState['media_session_plan_epoch'] ?? 0),
+            'participants' => $planParticipants,
+        ]),
         'participants' => $planParticipants,
     ]));
 }
