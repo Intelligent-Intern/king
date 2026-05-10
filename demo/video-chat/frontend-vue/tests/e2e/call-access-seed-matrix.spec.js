@@ -8,6 +8,7 @@ import {
   getSeedScenario,
   getSeedUser,
   installStoredSeedSession,
+  seedCallKeys,
   seedUserKeys,
   sessionStorageKey,
   tenantSnapshotForSeedUser,
@@ -18,10 +19,16 @@ const directJoinPermissionCases = [
   'direct_join_system_admin_beta_active_allowed',
   'direct_join_system_admin_tenantless_active_allowed',
   'direct_join_alpha_org_admin_alpha_active_allowed',
+  'direct_join_beta_org_admin_beta_active_allowed',
   'direct_join_registered_guest_alpha_active_allowed',
   'direct_join_alpha_call_owner_alpha_active_allowed',
   'direct_join_alpha_org_admin_beta_active_denied',
+  'direct_join_alpha_org_admin_beta_cross_org_private_denied',
   'direct_join_alpha_normal_user_alpha_active_denied',
+  'direct_join_beta_normal_user_beta_active_denied',
+  'direct_join_system_admin_alpha_ended_denied',
+  'direct_join_alpha_owner_alpha_disabled_denied',
+  'direct_join_alpha_owner_alpha_deleted_hidden',
 ];
 
 async function createDirectJoinProbePage(browser, baseURL, { principalUserKey, callKey }) {
@@ -71,17 +78,42 @@ test('IAM call-access seed matrix covers required principals without temporary a
     'beta_org_admin',
     'alpha_call_owner',
     'alpha_normal_user',
+    'beta_normal_user',
     'registered_guest',
     'removed_invited_member',
     'temporary_personalized_guest',
     'temporary_anonymous_guest',
   ]));
 
+  expect(seedCallKeys()).toEqual(expect.arrayContaining([
+    'alpha_active',
+    'beta_active',
+    'tenantless_active',
+    'beta_cross_org_private',
+    'alpha_ended',
+    'alpha_disabled',
+    'alpha_deleted',
+  ]));
+
   const systemAdminScenario = getSeedScenario('system_admin_join_any_organization_call_without_guest_list');
-  expect(systemAdminScenario.call_keys).toEqual(expect.arrayContaining(['alpha_active', 'beta_active', 'tenantless_active']));
+  expect(systemAdminScenario.call_keys).toEqual(expect.arrayContaining([
+    'alpha_active',
+    'beta_active',
+    'beta_cross_org_private',
+    'tenantless_active',
+  ]));
   expect(systemAdminScenario.expected.guest_list_required).toBe(false);
   expect(systemAdminScenario.expected.can_manage_lobby).toBe(true);
   expect(systemAdminScenario.expected.platform_admin).toBe(true);
+
+  for (const [callKey, status] of [
+    ['alpha_ended', 'ended'],
+    ['alpha_disabled', 'disabled'],
+    ['alpha_deleted', 'deleted'],
+  ]) {
+    const call = getSeedCall(callKey);
+    expect(call.status).toBe(status);
+  }
 
   for (const userKey of ['temporary_personalized_guest', 'temporary_anonymous_guest']) {
     const user = getSeedUser(userKey);
@@ -119,20 +151,31 @@ test('Direct Join Permissions seed matrix enforces direct call-ref API access', 
         expect.soft(responses.storedSession.sessionToken, `${scenarioKey} stored session token`).toMatch(/^sess_iam_seed_/);
 
         expect.soft(responses.resolve.status, `${scenarioKey} resolve HTTP status`).toBe(expected.expected_resolve_status);
-        expect.soft(responses.resolve.payload?.status, `${scenarioKey} resolve envelope`).toBe('ok');
         if (expected.direct_join_allowed === true) {
+          expect.soft(responses.resolve.payload?.status, `${scenarioKey} resolve envelope`).toBe('ok');
           expect.soft(responses.resolve.payload?.result?.state, `${scenarioKey} resolve state`).toBe(expected.expected_resolve_state);
           expect.soft(responses.resolve.payload?.result?.call?.id, `${scenarioKey} resolved call id`).toBe(call.id);
           expect.soft(responses.call.status, `${scenarioKey} call HTTP status`).toBe(expected.expected_call_status);
           expect.soft(responses.call.payload?.status, `${scenarioKey} call envelope`).toBe('ok');
           expect.soft(responses.call.payload?.call?.id, `${scenarioKey} fetched call id`).toBe(call.id);
-        } else {
+        } else if (expected.expected_resolve_status === 200) {
+          expect.soft(responses.resolve.payload?.status, `${scenarioKey} resolve denied envelope`).toBe('ok');
           expect.soft(responses.resolve.payload?.result?.state, `${scenarioKey} resolve denied state`).toBe(expected.expected_resolve_state);
           expect.soft(responses.resolve.payload?.result?.reason, `${scenarioKey} resolve denied reason`).toBe(expected.expected_resolve_reason);
           expect.soft(responses.resolve.payload?.result?.call ?? null, `${scenarioKey} resolve denied call`).toBeNull();
           expect.soft(responses.call.status, `${scenarioKey} call denied HTTP status`).toBe(expected.expected_call_status);
           expect.soft(responses.call.payload?.status, `${scenarioKey} call denied envelope`).toBe('error');
           expect.soft(responses.call.payload?.error?.code, `${scenarioKey} call denied code`).toBe(expected.expected_call_error_code);
+        } else {
+          expect.soft(responses.resolve.payload?.status, `${scenarioKey} resolve hidden envelope`).toBe('error');
+          expect.soft(responses.resolve.payload?.error?.code, `${scenarioKey} resolve hidden code`).toBe(expected.expected_resolve_error_code);
+          expect.soft(responses.call.status, `${scenarioKey} call denied HTTP status`).toBe(expected.expected_call_status);
+          expect.soft(responses.call.payload?.status, `${scenarioKey} call denied envelope`).toBe('error');
+          expect.soft(responses.call.payload?.error?.code, `${scenarioKey} call denied code`).toBe(expected.expected_call_error_code);
+        }
+        if (expected.private_call_payload_forbidden === true) {
+          expect.soft(responses.resolve.payload?.result?.call ?? null, `${scenarioKey} terminal resolve private call`).toBeNull();
+          expect.soft(responses.call.payload?.call ?? null, `${scenarioKey} terminal GET private call`).toBeNull();
         }
       } finally {
         await context.close();
