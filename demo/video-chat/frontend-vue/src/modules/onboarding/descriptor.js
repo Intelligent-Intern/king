@@ -7,7 +7,7 @@ export default {
   settings_panels: [],
   i18n_namespaces: ['onboarding'],
   catalog: {
-    name: 'Onboarding',
+    name_key: 'modules.onboarding',
     preview_kind: 'onboarding',
   },
 };

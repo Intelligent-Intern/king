@@ -7,7 +7,6 @@ export default {
       path: '/admin/administration/marketplace',
       name: 'admin-administration-marketplace',
       roles: ['admin'],
-      pageTitle: 'Marketplace',
       pageTitle_key: 'navigation.administration.marketplace',
       actions: [
         {
@@ -33,7 +32,6 @@ export default {
     {
       group: 'administration',
       to: '/admin/administration/marketplace',
-      label: 'Marketplace',
       label_key: 'navigation.administration.marketplace',
       order: 10,
       roles: ['admin'],
@@ -41,4 +39,8 @@ export default {
   ],
   settings_panels: [],
   i18n_namespaces: ['marketplace'],
+  catalog: {
+    name_key: 'modules.marketplace',
+    preview_kind: 'marketplace',
+  },
 };

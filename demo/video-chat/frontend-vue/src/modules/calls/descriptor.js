@@ -18,7 +18,7 @@ export default {
   settings_panels: [],
   i18n_namespaces: ['calls'],
   catalog: {
-    name: 'Video Calls',
+    name_key: 'modules.calls',
     preview_kind: 'calls',
   },
 };

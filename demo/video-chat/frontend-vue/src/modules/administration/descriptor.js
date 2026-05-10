@@ -7,7 +7,6 @@ export default {
       path: '/admin/administration/app-configuration',
       name: 'admin-administration-app-configuration',
       roles: ['admin'],
-      pageTitle: 'App Configuration',
       pageTitle_key: 'navigation.administration.app_configuration',
       required_permissions: ['administration.read'],
       actions: [
@@ -34,7 +33,6 @@ export default {
     {
       group: 'administration',
       to: '/admin/administration/app-configuration',
-      label: 'App Configuration',
       label_key: 'navigation.administration.app_configuration',
       order: 30,
       roles: ['admin'],
@@ -43,4 +41,8 @@ export default {
   ],
   settings_panels: [],
   i18n_namespaces: ['administration'],
+  catalog: {
+    name_key: 'modules.administration',
+    preview_kind: 'administration',
+  },
 };

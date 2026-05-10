@@ -123,8 +123,8 @@ function toggleGroup(item) {
 }
 
 function navigationLabel(item) {
-  const key = String(item?.label_key || '').trim();
-  return key !== '' ? t(key) : String(item?.label || '');
+  const key = String(item?.localized?.label?.key || item?.label_key || '').trim();
+  return key !== '' ? t(key, item?.localized?.label?.params || {}) : String(item?.localized?.label?.fallback || item?.label || '');
 }
 
 function groupToggleLabel(item) {
