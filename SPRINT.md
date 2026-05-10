@@ -223,8 +223,17 @@ Tickets:
     `demo/video-chat/backend-king-php/tests/call-access-anonymous-temp-rights-docker-proof.sh`,
     and `git diff --check` passed. Host direct PHP still skips when `pdo_sqlite`
     is unavailable.
-- [ ] IAM3-14 Convert direct host-PHP SQLite skips into deterministic Docker PHP
+- [x] IAM3-14 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for guest-list direct join and membership removal.
+  - Merged worker branch `agent/iam-s3-14-guest-list-membership-docker-proof`.
+  - Added `call-access-guest-list-membership-docker-proof.sh` plus a frontend
+    contract proving the wrapper runs the existing guest-list direct-join and
+    membership-removal PHP contracts through Docker when host `pdo_sqlite` is
+    unavailable.
+  - Proof: `node tests/contract/call-access-guest-list-membership-docker-proof-contract.mjs`,
+    `../backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh`,
+    and `git diff --check` passed. Direct host scripts skip without
+    `pdo_sqlite`; Docker execution passed both wrapped contracts.
 - [ ] IAM3-15 Convert direct host-PHP SQLite skips into deterministic Docker PHP
   runtime proof for cross-org and stale-organization-role checks.
 - [ ] IAM3-16 Add a single stable IAM backend runtime proof wrapper that runs the
