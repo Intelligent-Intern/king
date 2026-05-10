@@ -22,11 +22,7 @@ const socketLifecycle = fs.readFileSync(socketLifecyclePath, 'utf8')
 const publisherPipeline = fs.readFileSync(publisherPipelinePath, 'utf8')
 const publisherFrameDispatch = fs.readFileSync(publisherFrameDispatchPath, 'utf8')
 const packageJson = fs.readFileSync(packagePath, 'utf8')
-const relayPublishStart = gossipDataLane.indexOf('function publishLocalEncodedFrameToServerRelay(frame)')
-const relayPublishEnd = gossipDataLane.indexOf('function serverRelayFrameDedupeKey', relayPublishStart)
-const relayPublishBody = relayPublishStart >= 0 && relayPublishEnd > relayPublishStart
-  ? gossipDataLane.slice(relayPublishStart, relayPublishEnd)
-  : ''
+const featureFlags = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/featureFlags.ts'), 'utf8')
 
 function assert(condition, message) {
   if (!condition) {
@@ -68,39 +64,25 @@ assert(
   'outbound gossip frames must have local per-track sequences that reset with the live controller',
 )
 assert(
-  /function relaySocketUrlForCall\(\)[\s\S]*parsed\.searchParams\.set\('relay', 'media'\)/.test(callWorkspace)
-    && /relaySocketUrl:\s*relaySocketUrlForCall/.test(callWorkspace),
-  'call workspace must provide a dedicated relay=media websocket URL to the gossip data lane',
+  !callWorkspace.includes('relaySocketUrlForCall')
+    && !callWorkspace.includes("relay', 'media'")
+    && !callWorkspace.includes('relay=media'),
+  'call workspace must not open a dedicated gossip server relay websocket',
 )
 assert(
-  /function ensureGossipServerRelaySocket\(\)[\s\S]*new WebSocket\(relayUrl\)[\s\S]*socket\.addEventListener\('message', handleGossipServerRelaySocketMessage\)/.test(gossipDataLane)
-    && /function sendGossipServerRelayPayload\(socket,\s*payload\)[\s\S]*socket\.send\(JSON\.stringify\(payload\)\)/.test(gossipDataLane)
-    && /const socket = ensureGossipServerRelaySocket\(\);[\s\S]*sendGossipServerRelayPayload\(socket,\s*outboundPayload\)/.test(relayPublishBody)
-    && !/sendSocketFrame\(/.test(relayPublishBody),
-  'server relay primary must publish media over a dedicated relay websocket instead of the control websocket',
+  /function publishLocalEncodedFrameToGossip\(frame\)[\s\S]*const directGossipPrimary = VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary;[\s\S]*controller\.publishFrame\((String\(currentUserId\.value \|\| ''\)|peerId),\s*msg\);/.test(workspaceGossipSurface)
+    && !gossipDataLane.includes('publishLocalEncodedFrameToServerRelay'),
+  'gossip_primary must publish directly through the browser gossip controller, not through a server relay',
 )
 assert(
-  gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;') > gossipDataLane.indexOf('function publishLocalEncodedFrameToGossip(frame)')
-    && gossipDataLane.indexOf('if (strictGossipMediaDisabled(\'disableGossipPublish\')) return false;') > gossipDataLane.indexOf('if (publishLocalEncodedFrameToServerRelay(frame)) return true;'),
-  'dedicated server relay must send before local Gossip policy gates can block publishing',
+  !socketLifecycle.includes('call/gossip-server-frame')
+    && /handleGossipNeighborSignal:\s*\(\.\.\.args\) => handleGossipRecoveryOpsMessage\(\.\.\.args\) \|\| ensureGossipNeighborLifecycle\(\)\?\.handleGossipNeighborSignal\?\.\(\.\.\.args\) \|\| false/.test(gossipDataLane),
+  'active websocket and gossip-neighbor paths must not consume gossip server relay frames',
 )
 assert(
-  /if \(nowMs < gossipServerRelayReconnectAfterMs && !VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary\)/.test(gossipDataLane)
-    && /if \(VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary\) \{[\s\S]*rememberPendingGossipServerRelayPayload\(outboundPayload\);[\s\S]*gossipServerRelayReconnectAfterMs = 0;[\s\S]*ensureGossipServerRelaySocket\(\);[\s\S]*return true;/.test(relayPublishBody),
-  'gossip_primary server relay must queue and reconnect immediately instead of dropping into shadow mode when the relay socket is closed',
-)
-assert(
-  /let pendingGossipServerRelayPayload = null;/.test(gossipDataLane)
-    && /function rememberPendingGossipServerRelayPayload\(payload\)[\s\S]*currentFrameType === 'keyframe'/.test(gossipDataLane)
-    && /if \(socket\.readyState === WebSocket\.CONNECTING\) \{[\s\S]*rememberPendingGossipServerRelayPayload\(outboundPayload\);[\s\S]*return true;/.test(relayPublishBody)
-    && /socket\.addEventListener\('open', \(\) => \{[\s\S]*flushPendingGossipServerRelayPayload\(socket\);/.test(gossipDataLane),
-  'server relay must queue the first encoded frame while the dedicated websocket is still connecting and flush it on open',
-)
-assert(
-  /const serverRelayReceivedFrameIds = new Map\(\);/.test(gossipDataLane)
-    && /function rememberServerRelayReceivedFrame\(frame,\s*body\)[\s\S]*serverRelayReceivedFrameIds\.has\(key\)/.test(gossipDataLane)
-    && /if \(!rememberServerRelayReceivedFrame\(frame,\s*body\)\) return true;/.test(gossipDataLane),
-  'server relay receive path must suppress duplicate frame delivery from multiple sockets',
+  !featureFlags.includes('GOSSIP_SERVER_RELAY_CONFIG')
+    && !featureFlags.includes('VITE_VIDEOCHAT_GOSSIP_SERVER_RELAY'),
+  'gossip server relay config must not exist in the frontend feature flags',
 )
 assert(
   /publishLocalEncodedFrameToGossip,/.test(workspaceGossipSurface)

@@ -102,8 +102,8 @@ assert(gossipDataLane.includes('lastGossipRolloutGateState?.gossip_topology_heal
 
 assert(publisherPipeline.includes('VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary'), 'publisher pipeline must branch on gossip_primary')
 assert(
-  /const gossipFirst = \(VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary \|\| GOSSIP_SERVER_RELAY_CONFIG\.primary\)[\s\S]*if \(gossipFirst\)[\s\S]*publishGossipFrame/.test(publisherFrameDispatch),
-  'gossip_primary and the server relay primary mode must publish before optional SFU send through the dispatch helper',
+  /const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary && suppressGossipPrimary !== true[\s\S]*if \(gossipFirst\)[\s\S]*publishGossipFrame/.test(publisherFrameDispatch),
+  'gossip_primary must publish through browser gossip before optional SFU send through the dispatch helper',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline),

@@ -653,29 +653,11 @@ function sendSocketFrame(payload) {
     return false;
   }
 }
-function relaySocketUrlForCall() {
-  const targetRoomId = normalizeRoomId(activeRoomId.value || desiredRoomId.value || 'lobby');
-  const targetCallId = normalizeSocketCallId(activeSocketCallId.value || activeCallId.value || '');
-  const socketOrigins = resolveBackendWebSocketOriginCandidates();
-  for (const socketOrigin of socketOrigins) {
-    const socketUrl = socketUrlForRoom(targetRoomId, socketOrigin, targetCallId);
-    if (!socketUrl) continue;
-    try {
-      const parsed = new URL(socketUrl);
-      parsed.searchParams.set('relay', 'media');
-      return parsed.toString();
-    } catch {
-      return socketUrl;
-    }
-  }
-  return '';
-}
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
   getAssignedGossipNeighborCount,
   handleGossipNeighborSignal,
-  ensureGossipServerRelaySocket,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -685,19 +667,10 @@ const {
     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
     defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
-    relaySocketUrl: relaySocketUrlForCall,
     sendSocketFrame,
   },
   policy: CALL_STABILITY_POLICY,
 });
-watch(
-  () => [connectionState.value, activeRoomId.value, activeSocketCallId.value, currentUserId.value],
-  () => {
-    if (connectionState.value !== 'online') return;
-    ensureGossipServerRelaySocket();
-  },
-  { immediate: true }
-);
 const workspaceForegroundRecovery = createWorkspaceForegroundRecoveryController({
   connectSocket: () => connectSocket(),
   getArmed: () => workspaceReconnectAfterForeground, getConnectionState: () => connectionState.value,
