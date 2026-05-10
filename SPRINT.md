@@ -173,8 +173,21 @@ Tickets:
     `node tests/contract/call-access-invite-invalidation-terminal-contract.mjs`,
     `node tests/contract/call-access-terminal-states-contract.mjs`, and
     `git diff --check` passed.
-- [ ] IAM3-10 Prove kicked or removed participants cannot rejoin via cached
+- [x] IAM3-10 Prove kicked or removed participants cannot rejoin via cached
   call-access sessions, stale tabs, or copied join URLs.
+  - Merged worker branch `agent/iam-s3-10-kicked-rejoin-denial`.
+  - Revalidated cached call-access sessions against the current internal
+    participant row and treated `cancelled`/`declined` invite states as terminal
+    for stale queue, copied-link, and stale-tab rejoin attempts.
+  - Lobby removal now persists removed participants as `cancelled`, and queue or
+    join paths no longer revive removed participants back to `pending` or
+    `allowed`.
+  - Added `call-access-kicked-rejoin-denial-contract.mjs`.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-kicked-rejoin-denial-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-removed-members-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-terminal-states-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-route-guard-ui-contract.mjs`,
+    `php -l` on the three touched PHP files, and `git diff --check` passed.
 - [x] IAM3-11 Prove active-call permission changes revoke stale UI actions and
   realtime room snapshots without forcing media/background regressions.
   - Merged worker branch `agent/iam-s3-11-permission-change-active-call`.
