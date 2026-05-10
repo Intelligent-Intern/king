@@ -45,6 +45,7 @@ export function createCallWorkspaceGossipDataLane({
   let gossipServerRelaySocketKey = '';
   let gossipServerRelayReconnectAfterMs = 0;
   let lastGossipServerRelayDiagnosticAtMs = 0;
+  let pendingGossipServerRelayPayload = null;
   const serverRelayReceivedFrameIds = new Map();
 
   function strictGossipMediaDisabled(flag = 'disableGossipMediaRepair') {
@@ -124,6 +125,45 @@ export function createCallWorkspaceGossipDataLane({
     }
   }
 
+  function rememberPendingGossipServerRelayPayload(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    const nextFrameType = String(payload?.payload?.frame_type || '').trim().toLowerCase();
+    const currentFrameType = String(pendingGossipServerRelayPayload?.payload?.frame_type || '').trim().toLowerCase();
+    if (currentFrameType === 'keyframe' && nextFrameType !== 'keyframe') {
+      return true;
+    }
+    pendingGossipServerRelayPayload = payload;
+    return true;
+  }
+
+  function sendGossipServerRelayPayload(socket, payload) {
+    if (!(socket instanceof WebSocket) || socket.readyState !== WebSocket.OPEN) return false;
+    if (Number(socket.bufferedAmount || 0) > GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT) {
+      captureGossipServerRelayDiagnostic('buffered_amount_limit', 'warning', {
+        buffered_amount: Number(socket.bufferedAmount || 0),
+        buffered_bytes_limit: GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT,
+      });
+      return false;
+    }
+    try {
+      socket.send(JSON.stringify(payload));
+      return true;
+    } catch {
+      closeGossipServerRelaySocket('send_failed');
+      gossipServerRelayReconnectAfterMs = Date.now() + GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS;
+      captureGossipServerRelayDiagnostic('send_failed', 'warning', {}, true);
+      return false;
+    }
+  }
+
+  function flushPendingGossipServerRelayPayload(socket) {
+    const pendingPayload = pendingGossipServerRelayPayload;
+    if (!pendingPayload) return false;
+    if (!sendGossipServerRelayPayload(socket, pendingPayload)) return false;
+    pendingGossipServerRelayPayload = null;
+    return true;
+  }
+
   function handleGossipServerRelaySocketMessage(event) {
     let payload;
     try {
@@ -189,6 +229,7 @@ export function createCallWorkspaceGossipDataLane({
       if (gossipServerRelaySocket !== socket) return;
       gossipServerRelayReconnectAfterMs = 0;
       captureGossipServerRelayDiagnostic('open', 'info', {}, true);
+      flushPendingGossipServerRelayPayload(socket);
     });
     socket.addEventListener('message', handleGossipServerRelaySocketMessage);
     socket.addEventListener('error', () => {
@@ -681,36 +722,26 @@ export function createCallWorkspaceGossipDataLane({
     const msg = gossipFrameMessageFromEncodedFrame(frame, serverRelayFrameSequenceByTrack, true);
     if (!msg) return false;
     gossipRecoveryState.rememberPublishedFrame(msg);
+    const outboundPayload = {
+      type: 'gossip/server-frame',
+      lane: 'media',
+      room_id: String(activeRoomId() || '').trim(),
+      call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
+      payload: msg,
+    };
     const socket = ensureGossipServerRelaySocket();
     if (!(socket instanceof WebSocket)) return false;
+    if (socket.readyState === WebSocket.CONNECTING) {
+      rememberPendingGossipServerRelayPayload(outboundPayload);
+      return true;
+    }
     if (socket.readyState !== WebSocket.OPEN) {
       captureGossipServerRelayDiagnostic('socket_not_open', 'warning', {
         ready_state: Number(socket.readyState),
       });
       return false;
     }
-    if (Number(socket.bufferedAmount || 0) > GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT) {
-      captureGossipServerRelayDiagnostic('buffered_amount_limit', 'warning', {
-        buffered_amount: Number(socket.bufferedAmount || 0),
-        buffered_bytes_limit: GOSSIP_SERVER_RELAY_BUFFERED_BYTES_LIMIT,
-      });
-      return false;
-    }
-    try {
-      socket.send(JSON.stringify({
-        type: 'gossip/server-frame',
-        lane: 'media',
-        room_id: String(activeRoomId() || '').trim(),
-        call_id: String(activeSocketCallId() || activeCallId() || '').trim(),
-        payload: msg,
-      }));
-      return true;
-    } catch {
-      closeGossipServerRelaySocket('send_failed');
-      gossipServerRelayReconnectAfterMs = Date.now() + GOSSIP_SERVER_RELAY_RECONNECT_DELAY_MS;
-      captureGossipServerRelayDiagnostic('send_failed', 'warning', {}, true);
-      return false;
-    }
+    return sendGossipServerRelayPayload(socket, outboundPayload);
   }
 
   function serverRelayFrameDedupeKey(frame, body) {
@@ -1157,6 +1188,7 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipFrameSequenceByTrack.clear();
     serverRelayFrameSequenceByTrack.clear();
     serverRelayReceivedFrameIds.clear();
+    pendingGossipServerRelayPayload = null;
     closeGossipServerRelaySocket('teardown');
     gossipRecoveryState.clear();
     assignedGossipNeighborIds.clear();

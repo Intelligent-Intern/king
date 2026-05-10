@@ -62,9 +62,17 @@ assert(
 )
 assert(
   /function ensureGossipServerRelaySocket\(\)[\s\S]*new WebSocket\(relayUrl\)[\s\S]*socket\.addEventListener\('message', handleGossipServerRelaySocketMessage\)/.test(gossipDataLane)
-    && /const socket = ensureGossipServerRelaySocket\(\);[\s\S]*socket\.send\(JSON\.stringify\(\{[\s\S]*type:\s*'gossip\/server-frame'/.test(relayPublishBody)
+    && /function sendGossipServerRelayPayload\(socket,\s*payload\)[\s\S]*socket\.send\(JSON\.stringify\(payload\)\)/.test(gossipDataLane)
+    && /const socket = ensureGossipServerRelaySocket\(\);[\s\S]*sendGossipServerRelayPayload\(socket,\s*outboundPayload\)/.test(relayPublishBody)
     && !/sendSocketFrame\(/.test(relayPublishBody),
   'server relay primary must publish media over a dedicated relay websocket instead of the control websocket',
+)
+assert(
+  /let pendingGossipServerRelayPayload = null;/.test(gossipDataLane)
+    && /function rememberPendingGossipServerRelayPayload\(payload\)[\s\S]*currentFrameType === 'keyframe'/.test(gossipDataLane)
+    && /if \(socket\.readyState === WebSocket\.CONNECTING\) \{[\s\S]*rememberPendingGossipServerRelayPayload\(outboundPayload\);[\s\S]*return true;/.test(relayPublishBody)
+    && /socket\.addEventListener\('open', \(\) => \{[\s\S]*flushPendingGossipServerRelayPayload\(socket\);/.test(gossipDataLane),
+  'server relay must queue the first encoded frame while the dedicated websocket is still connecting and flush it on open',
 )
 assert(
   /const serverRelayReceivedFrameIds = new Map\(\);/.test(gossipDataLane)
