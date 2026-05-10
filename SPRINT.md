@@ -102,7 +102,7 @@ Sprint Checkboxen:
   `local/iam-e2e-ci-docs-gate`.
 - [ ] IAM8-16 Extract or prove core organization session journeys from
   `local/iam-e2e-core-org-session-journey`.
-- [ ] IAM8-17 Extract or prove cross-org active organization switching from
+- [x] IAM8-17 Extract or prove cross-org active organization switching from
   `local/iam-e2e-cross-org-active-org-switch`.
 - [ ] IAM8-18 Extract or prove terminal call lifecycle states from
   `local/iam-e2e-delete-end-terminal-proof-2`.
