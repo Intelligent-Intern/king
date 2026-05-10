@@ -70,7 +70,7 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [ ] IAM8-01 Extract or prove duplicate personalized-link race detection from
+- [x] IAM8-01 Extract or prove duplicate personalized-link race detection from
   `local/iam-e2e-abuse-duplicate-race`.
 - [x] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
   from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
