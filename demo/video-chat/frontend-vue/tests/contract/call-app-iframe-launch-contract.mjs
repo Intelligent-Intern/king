@@ -24,7 +24,9 @@ const [
   frontendDockerfile,
   edgeDockerfile,
   lifecycleTestSource,
-  sprintSource,
+  callAppDiagnosticsSource,
+  diagnosticTailBridgeSource,
+  diagnosticsDomainSource,
 ] = await Promise.all([
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
@@ -40,7 +42,9 @@ const [
   read('demo/video-chat/frontend-vue/Dockerfile'),
   read('demo/video-chat/edge/Dockerfile'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
-  read('SPRINT.md'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnostics.js'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnosticTailBridge.js'),
+  read('demo/video-chat/backend-king-php/domain/call_apps/call_app_diagnostics.php'),
 ]);
 
 const whiteboardSource = `${iframeSource}\n${iframeRuntimeSource}`;
@@ -223,9 +227,21 @@ assert.match(
 );
 
 assert.match(
-  sprintSource,
-  /Do not expose tokens[\s\S]*media\s+frame data in diagnostics/,
-  'SPRINT.md must keep the no-token/no-media-data iframe diagnostics boundary in the active stabilization sprint',
+  callAppDiagnosticsSource,
+  /function sensitiveDiagnosticKey[\s\S]*token\|authorization\|password\|secret\|credential\|cookie[\s\S]*media_frame\|video_frame\|encoded_frame\|raw_frame\|pixel_buffer\|canvas_pixels[\s\S]*filter\(\(\[key\]\) => !sensitiveDiagnosticKey\(key\)\)/,
+  'Call App diagnostics must drop token-like keys and raw media/frame data before window or console emission',
+);
+
+assert.match(
+  diagnosticTailBridgeSource,
+  /function secretLikeKey[\s\S]*token\|authorization\|password\|secret\|credential\|cookie\|session[\s\S]*function mediaFrameLikeKey[\s\S]*media_frame\|video_frame\|encoded_frame\|raw_frame\|pixel_buffer\|canvas_pixels[\s\S]*secretLikeKey\(normalizedKey\) \|\| mediaFrameLikeKey\(normalizedKey\)/,
+  'Call Diagnostics tail bridge must redact tokens and raw media/frame payload fields before iframe delivery',
+);
+
+assert.match(
+  diagnosticsDomainSource,
+  /function videochat_call_diagnostics_redaction_reason[\s\S]*media_frame\|video_frame\|encoded_frame\|raw_frame\|pixel_buffer\|canvas_pixels[\s\S]*return 'media_frame'[\s\S]*token\|authorization\|cookie\|set_cookie\|password\|secret\|credential/,
+  'backend Call Diagnostics telemetry redaction must redact raw media/frame data as well as secrets',
 );
 
 console.log('[call-app-iframe-launch-contract] PASS');

@@ -84,6 +84,12 @@ function videochat_call_diagnostics_redaction_reason(string $key, mixed $value):
     if (preg_match('/(^|_)(session|token|cookie|connection|participant|call_app_session)_?(count|total)s?$/', $normalizedKey) === 1) {
         return '';
     }
+    if (
+        preg_match('/(^|_)((media|video|audio|image|canvas|pixel|encoded|raw)_)?frame_(data|payload|blob|buffer|bytes)($|_)/', $normalizedKey) === 1
+        || preg_match('/(^|_)(media_frame|video_frame|encoded_frame|raw_frame|pixel_buffer|canvas_pixels)($|_)/', $normalizedKey) === 1
+    ) {
+        return 'media_frame';
+    }
     if (preg_match('/(^|_)(token|authorization|cookie|set_cookie|password|secret|credential|api_key|apikey|private_key|jwt)(_|$)/', $normalizedKey) === 1) {
         return 'secret';
     }
