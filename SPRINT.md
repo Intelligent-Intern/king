@@ -87,9 +87,20 @@ Tickets:
   - Small clean worker candidates:
     `agent/iam-e2e-fixtures-foundation` and
     `agent/iam-e2e-rejoin-kick-membership`.
-- [ ] IAM-02 Restore a clean deterministic IAM seed matrix covering system admin,
+- [x] IAM-02 Restore a clean deterministic IAM seed matrix covering system admin,
   tenant admins, owners, normal members, registered guests, temporary guests,
   deleted/ended/disabled calls, and cross-org calls.
+  - Merged worker branch `agent/iam-s1-02-seed-matrix`.
+  - Seed matrix now includes beta normal member denial plus ended, disabled, and
+    deleted call cases; seed routes keep denied/terminal payloads free of private
+    call objects and call identifiers.
+  - Integrated with IAM-03/IAM-07 by allowing terminal direct-join denials to
+    use terminal status reasons instead of masquerading as `calls_forbidden`.
+  - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`,
+    `node tests/contract/call-access-direct-join-rights-contract.mjs`,
+    `node tests/contract/call-access-cross-org-contract.mjs`, and
+    `npx playwright test tests/e2e/call-access-seed-matrix.spec.js --workers=1
+    --reporter=list` passed.
 - [x] IAM-03 Make `iam-call-access-e2e-foundation-contract.mjs` pass against the
   seed matrix without fixture drift.
   - Merged worker branch `agent/iam-s1-03-foundation-contract`.

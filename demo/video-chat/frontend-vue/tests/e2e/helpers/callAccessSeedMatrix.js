@@ -630,7 +630,7 @@ export async function installCallAccessSeedRoutes(context) {
           error: {
             code: callFailure.errorCode,
             message: callFailure.message,
-            details: { call_id: call.id, reason: callFailure.reason },
+            details: { reason: callFailure.reason },
           },
         });
         return;
