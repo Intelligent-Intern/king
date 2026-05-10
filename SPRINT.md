@@ -16,13 +16,13 @@ Rules:
 - Do not push. Deploy only when the active sprint proof is green.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: IAM Calendar, Edge States, And Call-App Boundary Proof 09
+## Sprint: IAM Branch Cleanup, Current Proof, And Stale-Diff Closure 10
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Active as of 2026-05-10 after Sprint 08 deploy.
+- Active as of 2026-05-10 after Sprint 09 deploy and diagnostics.
 - Local-only integration branch. Do not push to GitHub.
 - Worker branches/worktrees must use short-lived non-`codex` names and merge
   back into the local no-push branch after proof.
@@ -30,21 +30,21 @@ Status:
   unless the user explicitly reopens them.
 
 User-facing problem:
-- Sprint 08 closed the previous active IAM batch, but many historical local IAM
-  branches still remain unmerged because their branch heads carry broad stale
-  diffs.
-- The next batch must extract only the still-useful current proof/runtime value
-  around audit completeness, calendar invitation edge states, Call App IAM
-  boundaries, cross-org foreign joins, terminal joins, duplicate-device abuse,
-  fail-closed edge errors, and email confirmation safety.
+- Sprint 09 closed the previous IAM proof batch, but many stale local IAM
+  branch heads remain unmerged because they contain broad historical diffs.
+- The next batch must extract only current proof/runtime value from 20 more
+  local IAM branches, or prove that the current integration already contains
+  the value and document the branch as cleanup-only.
 
 Sprint goal:
-- Close exactly 20 IAM proof tickets from the next local-branch batch.
+- Close exactly 20 IAM proof/cleanup tickets from the next local-branch batch.
 - For each historical branch, classify whether the current integration already
   contains the behavior; if not, extract the smallest current proof/runtime
   change needed.
 - Keep stale branch artifacts out of the integration branch unless they are
   clean, contained, current, and proven.
+- Clean worker worktrees/branches after they are merged, clean, and ancestor of
+  the local no-push branch.
 - Build/deploy locally only after the active sprint proof is green, without
   push, DNS automation, or certbot issuance.
 
@@ -71,43 +71,43 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [x] IAM9-01 Extract or prove audit log completeness from
-  `local/iam-e2e-audit-log-completeness`.
-- [x] IAM9-02 Extract or prove calendar invitation edge safe states from
-  `local/iam-e2e-calendar-edge-safe-states`.
-- [x] IAM9-03 Extract or prove calendar invitation temporary account flow from
-  `local/iam-e2e-calendar-invitation-flow`.
-- [x] IAM9-04 Extract or prove unregistered calendar main journey from
-  `local/iam-e2e-calendar-unregistered-main-journey`.
-- [x] IAM9-05 Extract or prove call-access safe-screen privacy from
-  `local/iam-e2e-call-access-safe-screen-final`.
-- [x] IAM9-06 Extract or prove Call App entitlement revocation from
-  `local/iam-e2e-call-app-entitlement-revocation`.
-- [x] IAM9-07 Extract or prove Call App launch-token reconnect validation from
-  `local/iam-e2e-call-app-launch-token-reconnect`.
-- [x] IAM9-08 Extract or prove cross-org foreign join edges from
-  `local/iam-e2e-cross-org-foreign-join-edges`.
-- [x] IAM9-09 Extract or prove remaining cross-org IAM rows from
-  `local/iam-e2e-cross-org-remaining-proof-2`.
-- [x] IAM9-10 Extract or prove adjacent terminal join denials from
-  `local/iam-e2e-deleted-ended-disabled-followup-proof-3`.
-- [x] IAM9-11 Extract or prove deleted/ended/disabled join denials from
-  `local/iam-e2e-deleted-ended-disabled-join`.
-- [x] IAM9-12 Extract or prove deleted/ended join hardening from
-  `local/iam-e2e-deleted-ended-join-hardening`.
-- [x] IAM9-13 Extract or prove duplicate link abuse across devices from
-  `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
-- [x] IAM9-14 Extract or prove duplicate link abuse device/browser baseline from
-  `local/iam-e2e-duplicate-link-abuse-device-browser`.
-- [x] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
-  `local/iam-e2e-edge-error-matrix-proof`.
-- [x] IAM9-16 Extract or prove IAM edge safe states from
-  `local/iam-e2e-edge-safe-states-proof-2`.
-- [x] IAM9-17 Extract or prove email confirmation race hardening from
-  `local/iam-e2e-email-confirmation-race-hardening`.
-- [x] IAM9-18 Extract or prove secure expiring account update confirmations from
-  `local/iam-e2e-email-confirmation-secure-expiry`.
-- [x] IAM9-19 Extract or prove multiple pending account confirmations from
-  `local/iam-e2e-email-multiple-pending-proof`.
-- [x] IAM9-20 Extract or prove email safe texts and dispatch audit from
-  `local/iam-e2e-email-safe-texts-and-dispatch-audit`.
+- [ ] IAM10-01 Extract or prove delete/end terminal call states from
+  `local/iam-e2e-delete-end-terminal-proof-2`.
+- [ ] IAM10-02 Extract or prove anonymous-link org-admin rights from
+  `local/iam-e2e-anonymous-link-org-admin-rights`.
+- [ ] IAM10-03 Extract or prove authorized rejoin main journey from
+  `local/iam-e2e-authorized-rejoin-main`.
+- [ ] IAM10-04 Extract or prove owner-transfer permission audit from
+  `local/iam-e2e-owner-transfer-permission-audit`.
+- [ ] IAM10-05 Extract or prove review-abuse cross-browser behavior from
+  `local/iam-e2e-review-abuse-cross-browser-proof-3`.
+- [ ] IAM10-06 Extract or prove duplicate-abuse race behavior from
+  `local/iam-e2e-abuse-duplicate-race`.
+- [ ] IAM10-07 Extract or prove foreign personalized mismatch behavior from
+  `local/iam-e2e-foreign-personalized-mismatch`.
+- [ ] IAM10-08 Extract or prove guest-list management audit behavior from
+  `local/iam-e2e-guest-list-management-audit-proof-2`.
+- [ ] IAM10-09 Extract or prove invite invalidation behavior from
+  `local/iam-e2e-invite-invalidation`.
+- [ ] IAM10-10 Extract or prove owner-leave explicit-end behavior from
+  `local/iam-e2e-owner-leave-explicit-end-proof`.
+- [ ] IAM10-11 Extract or prove guest owner-transfer revocation behavior from
+  `local/iam-e2e-guest-owner-transfer-revocation`.
+- [ ] IAM10-12 Extract or prove parallel account tabs behavior from
+  `local/iam-e2e-parallel-account-tabs`.
+- [ ] IAM10-13 Extract or prove remaining lobby concurrency behavior from
+  `local/iam-e2e-lobby-concurrency-remaining`.
+- [ ] IAM10-14 Extract or prove owner-transfer lifecycle behavior from
+  `local/iam-e2e-owner-transfer-lifecycle-proof-3`.
+- [ ] IAM10-15 Extract or prove light mismatch logging behavior from
+  `local/iam-e2e-light-mismatch-logging-proof-2`.
+- [ ] IAM10-16 Extract or prove org-admin owner-transfer policy behavior from
+  `local/iam-e2e-org-admin-owner-transfer-policy`.
+- [ ] IAM10-17 Extract or prove system-admin edge cases from
+  `local/iam-e2e-system-admin-edge-cases`.
+- [ ] IAM10-18 Extract or prove temp-user kick/rejoin behavior from
+  `local/iam-e2e-temp-user-kick-rejoin`.
+- [ ] IAM10-19 Extract or prove reschedule stale-link safety from
+  `local/iam-e2e-reschedule-stale-link-safety`.
+- [ ] IAM10-20 Extract or prove disabled-user session revocation from
+  `local/iam-e2e-disabled-user-session-revocation`.
