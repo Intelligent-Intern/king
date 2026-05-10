@@ -204,8 +204,19 @@ Sprint Checkboxen:
     guest-list membership Docker backend proof, and `git diff --check` passed.
     The adjacent cleanup audit assertion is documented as a follow-up, not
     merged into this ticket.
-- [ ] IAM5-12 Extract temporary guest, direct-join, temporary moderator, and
+- [x] IAM5-12 Extract temporary guest, direct-join, temporary moderator, and
   kicked temporary-user proof value from the temp-access branches.
+  - Merged worker branch `agent/iam-s5-12-temp-access`.
+  - Added `documentation/iam-sprint-05-temp-access-extraction.md` and
+    `call-access-temp-access-remaining-extract-contract.mjs`.
+  - Extracted temporary guest link boundaries, personalized temp-link reuse,
+    direct-join rights, kicked temporary-user denial, and temporary moderator
+    owner-transfer proof while keeping source-only backend product changes as
+    follow-up evidence outside this doc/contract extraction ticket.
+  - Proof: temp-access remaining extract, temp call-link boundaries,
+    personalized temp reuse, direct-join rights, kicked rejoin denial,
+    owner-transfer temp-moderator, guest-list membership Docker backend proof,
+    anonymous temp-rights Docker backend proof, and `git diff --check` passed.
 - [ ] IAM5-13 Extract email confirmation, account reconciliation, and safe
   dispatch/audit proof value from the account-confirmation branches.
 - [ ] IAM5-14 Extract calendar invite, unregistered invitee, and reschedule
