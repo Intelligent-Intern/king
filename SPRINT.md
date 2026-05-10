@@ -162,8 +162,21 @@ Sprint Checkboxen:
     link privacy, mismatch no-leak, strong mismatch privacy, removed-members
     contracts, backend cross-org/stale-role Docker fallbacks, and
     `git diff --check` passed.
-- [ ] IAM5-09 Extract owner absence, owner timeout, and owner-leave proof value
+- [x] IAM5-09 Extract owner absence, owner timeout, and owner-leave proof value
   from the owner-absence/timeout branches.
+  - Merged worker branch `agent/iam-s5-09-owner-absence`.
+  - Added `documentation/iam-sprint-05-owner-absence-extraction.md` and
+    `call-access-owner-absence-extract-contract.mjs`.
+  - Extracted owner absence, timeout, and owner-leave evidence as server-side
+    presence tracking, 15 minute absence, final five minute countdown, terminal
+    cleanup expectations, and explicit owner-end distinction. Owner-timeout
+    runtime wiring remains backend follow-up evidence, not active Sprint 05
+    scope.
+  - Proof: owner-absence extract, terminal states, invite invalidation terminal,
+    terminal browser flows, disabled-links fail-closed, owner-transfer lifecycle,
+    owner-transfer main/temp-moderator, permission-change, audit
+    compatibility/redaction contracts, owner-moderation backend wrapper
+    (`pdo_sqlite` persistence skipped locally), and `git diff --check` passed.
 - [x] IAM5-10 Extract owner-transfer main journey, rejoin, and permission-audit
   proof value from the remaining owner-transfer branches.
   - Merged worker branch `agent/iam-s5-10-owner-transfer`.
