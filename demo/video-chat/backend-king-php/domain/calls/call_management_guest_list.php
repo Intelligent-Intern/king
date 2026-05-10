@@ -74,6 +74,16 @@ function videochat_user_can_direct_join_call(
         ];
     }
 
+    if (videochat_user_is_organization_admin_for_call($pdo, $call, $authUserId, $tenantId)) {
+        return [
+            'ok' => true,
+            'reason' => 'organization_admin',
+            'call_id' => $callId,
+            'room_id' => $roomId,
+            'guest_list_entry' => null,
+        ];
+    }
+
     if (videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only') === 'free_for_all') {
         return [
             'ok' => true,
@@ -122,6 +132,15 @@ SQL
             'call_id' => $callId,
             'room_id' => $roomId,
             'guest_list_entry' => $normalizedEntry,
+        ];
+    }
+    if ($inviteState === 'pending') {
+        return [
+            'ok' => false,
+            'reason' => 'not_on_guest_list',
+            'call_id' => $callId,
+            'room_id' => $roomId,
+            'guest_list_entry' => null,
         ];
     }
 
