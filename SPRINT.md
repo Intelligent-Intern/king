@@ -190,8 +190,20 @@ Sprint Checkboxen:
   - Proof: owner-transfer remaining extract, owner-transfer main, lifecycle,
     temp-moderator, permission-change, audit compatibility contracts,
     owner-moderation/org-admin backend wrappers, and `git diff --check` passed.
-- [ ] IAM5-11 Extract guest-list management, owner management, and revocation
+- [x] IAM5-11 Extract guest-list management, owner management, and revocation
   proof value from the remaining guest-list branches.
+  - Merged worker branch `agent/iam-s5-11-guest-list`.
+  - Added `documentation/iam-sprint-05-guest-list-extraction.md` and
+    `call-access-guest-list-remaining-extract-contract.mjs`.
+  - Extracted maintained guest-list direct-join, revocation, membership
+    removal, and owner-management proof while keeping source-only add/remove,
+    merge/restore, audit helper, and granular cleanup behavior as backend
+    follow-up evidence.
+  - Proof: guest-list remaining extract, membership Docker proof contract,
+    direct-join rights, removed-members, guest-list revocation extraction,
+    guest-list membership Docker backend proof, and `git diff --check` passed.
+    The adjacent cleanup audit assertion is documented as a follow-up, not
+    merged into this ticket.
 - [ ] IAM5-12 Extract temporary guest, direct-join, temporary moderator, and
   kicked temporary-user proof value from the temp-access branches.
 - [ ] IAM5-13 Extract email confirmation, account reconciliation, and safe
