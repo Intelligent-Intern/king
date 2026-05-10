@@ -67,6 +67,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/call-access-safe-screen-final-contract.mjs"
   "node tests/contract/call-access-anonymous-disabled-link-contract.mjs"
   "node tests/contract/iam9-02-calendar-edge-safe-states-contract.mjs"
+  "node tests/contract/iam9-07-call-app-launch-token-reconnect-contract.mjs"
 )
 
 run_static_gate() {
