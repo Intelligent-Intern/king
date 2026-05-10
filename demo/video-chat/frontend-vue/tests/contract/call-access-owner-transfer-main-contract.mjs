@@ -39,7 +39,8 @@ const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
 
 const callsModule = readText(repoRoot, 'demo/video-chat/backend-king-php/http/module_calls.php');
-const callManagement = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
+const callManagementEntrypoint = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_management.php');
+const callManagement = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_management_owner_transfer.php');
 const callAccessDecision = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_access_decision.php');
 const realtimeContext = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const realtimeRoleContext = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
@@ -56,6 +57,11 @@ try {
     /preg_match\('#\^\/api\/calls\/\(\[A-Za-z0-9\._-\]\{1,200\}\)\/participants\/\(\\d\+\)\/role\$\#'[\s\S]*\$method !== 'PATCH'[\s\S]*\$targetRole = \(string\) \(\$payload\['role'\] \?\? \(\$payload\['call_role'\] \?\? ''\)\)[\s\S]*videochat_update_call_participant_role\(\$pdo, \$callId, \$targetUserId, \$targetRole, \$authenticatedUserId, \$authenticatedUserRole, videochat_tenant_id_from_auth_context\(\$apiAuthContext\)\)[\s\S]*'state' => 'participant_role_updated'/,
     'participant role endpoint must route PATCH role updates through the call-scoped owner-transfer domain function',
   );
+  assert.match(
+    callManagementEntrypoint,
+    /require_once __DIR__ \. '\/call_management_owner_transfer\.php';/,
+    'call management entrypoint must load the focused owner-transfer extraction',
+  );
 
   const updateRoleBody = functionBody(callManagement, 'videochat_update_call_participant_role');
   assert.match(
@@ -65,7 +71,7 @@ try {
   );
   assert.match(
     updateRoleBody,
-    /if \(\$normalizedTargetRole === 'owner'\) \{[\s\S]*if \(!\$isOwner && !\$isAdmin\)[\s\S]*'owner_transfer_requires_current_owner'/,
+    /if \(\$normalizedTargetRole === 'owner'\) \{[\s\S]*if \(!\$isOwner && !\$isSystemAdmin\)[\s\S]*'owner_transfer_requires_current_owner'/,
     'owner transfer must require the current owner or a system admin',
   );
   assert.match(
@@ -80,8 +86,8 @@ try {
   );
   assert.match(
     updateRoleBody,
-    /UPDATE call_participants\s+SET call_role = 'participant'\s+WHERE call_id = :call_id\s+AND user_id = :user_id\s+AND source = 'internal'[\s\S]*':user_id' => \$currentOwnerUserId/,
-    'owner transfer must demote the previous owner participant row to participant',
+    /UPDATE call_participants\s+SET call_role = 'participant'\s+WHERE call_id = :call_id\s+AND source = 'internal'\s+AND user_id IS NOT NULL\s+AND user_id <> :target_user_id\s+AND call_role = 'owner'[\s\S]*':target_user_id' => \$targetUserId/,
+    'owner transfer must demote every previous owner participant row to participant',
   );
   assert.match(
     updateRoleBody,
@@ -90,7 +96,7 @@ try {
   );
   assert.match(
     updateRoleBody,
-    /\$updatedCall = videochat_fetch_call_for_update\(\$pdo, \(string\) \(\$existingCall\['id'\] \?\? ''\), \$isSystemAdmin \? null : \$tenantId\)[\s\S]*videochat_build_call_payload\(\$pdo, \$updatedCall, \$authUserId\)/,
+    /\$resultTenantId = \$isSystemAdmin && is_numeric\(\$existingCall\['tenant_id'\] \?\? null\)[\s\S]*\$updatedCall = videochat_fetch_call_for_update\(\$pdo, \(string\) \(\$existingCall\['id'\] \?\? ''\), \$resultTenantId\)[\s\S]*videochat_build_call_payload\(\$pdo, \$updatedCall, \$authUserId\)/,
     'role update response must rebuild the call payload from the post-transfer call state',
   );
 
