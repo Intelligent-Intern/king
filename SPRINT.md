@@ -100,7 +100,7 @@ Sprint Checkboxen:
   `local/iam-e2e-invalid-anonymous-link-proof-20260509`.
 - [ ] IAM7-16 Extract or prove link invalidation active states from
   `local/iam-e2e-link-invalidation-active-state`.
-- [ ] IAM7-17 Extract or prove lobby management moderator rights from
+- [x] IAM7-17 Extract or prove lobby management moderator rights from
   `local/iam-e2e-lobby-management-moderator-rights`.
 - [ ] IAM7-18 Extract or prove local IAM E2E run docs and CI command hygiene
   from `local/iam-e2e-local-run-docs-proof-20260509`.

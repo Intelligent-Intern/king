@@ -12,6 +12,7 @@ DEFAULT_CONTRACTS=(
   "call-access-admin-prevention-contract.sh"
   "call-access-cross-org-contract.sh"
   "call-access-foreign-link-review-audit-contract.sh"
+  "call-access-anonymous-lobby-contract.sh"
   "call-access-membership-removal-contract.sh"
   "call-access-session-route-guard-contract.sh"
   "call-access-safe-screen-privacy-contract.sh"
@@ -21,6 +22,8 @@ DEFAULT_CONTRACTS=(
   "call-access-terminal-join-contract.sh"
   "call-calendar-invitation-flow-contract.sh"
   "call-guest-list-direct-join-contract.sh"
+  "call-temporary-moderator-contract.sh"
+  "realtime-lobby-security-contract.sh"
 )
 
 if [[ -n "${IAM_SQLITE_CONTRACTS:-}" ]]; then

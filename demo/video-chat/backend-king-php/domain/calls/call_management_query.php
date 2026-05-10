@@ -144,11 +144,12 @@ function videochat_user_is_call_moderator(PDO $pdo, string $callId, int $authUse
 
     $roleQuery = $pdo->prepare(
         <<<'SQL'
-SELECT call_role
+SELECT call_participants.call_role, call_participants.invite_state, calls.status
 FROM call_participants
-WHERE call_id = :call_id
-  AND user_id = :user_id
-  AND source = 'internal'
+INNER JOIN calls ON calls.id = call_participants.call_id
+WHERE call_participants.call_id = :call_id
+  AND call_participants.user_id = :user_id
+  AND call_participants.source = 'internal'
 LIMIT 1
 SQL
     );
@@ -157,7 +158,18 @@ SQL
         ':user_id' => $authUserId,
     ]);
 
-    $callRole = videochat_normalize_call_participant_role((string) ($roleQuery->fetchColumn() ?: 'participant'));
+    $row = $roleQuery->fetch();
+    if (!is_array($row)) {
+        return false;
+    }
+    if (!in_array(strtolower(trim((string) ($row['status'] ?? ''))), ['active', 'scheduled'], true)) {
+        return false;
+    }
+    if (!videochat_call_invite_state_allows_scoped_role($row['invite_state'] ?? 'invited')) {
+        return false;
+    }
+
+    $callRole = videochat_normalize_call_participant_role((string) ($row['call_role'] ?? 'participant'));
     return $callRole === 'owner' || $callRole === 'moderator';
 }
 

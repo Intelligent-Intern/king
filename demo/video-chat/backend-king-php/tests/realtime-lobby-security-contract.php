@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
 function videochat_realtime_lobby_security_assert(bool $condition, string $message): void
@@ -108,6 +109,27 @@ SQL
     ], JSON_UNESCAPED_SLASHES));
     videochat_realtime_lobby_security_assert((bool) ($allowCommand['ok'] ?? false), 'allow command should decode while ignoring forged ids');
     videochat_realtime_lobby_security_assert(videochat_realtime_lobby_command_requires_moderation($allowCommand), 'allow command must require moderation');
+    videochat_realtime_lobby_security_assert(
+        !videochat_lobby_can_moderate([
+            'role' => 'user',
+            'raw_role' => 'moderator',
+            'call_role' => 'moderator',
+            'can_moderate_call' => false,
+        ]),
+        'forged raw moderator/call_role state must not pass the lower lobby gate without server-derived authority'
+    );
+    videochat_realtime_lobby_security_assert(
+        videochat_lobby_can_moderate([
+            'role' => 'user',
+            'call_role' => 'moderator',
+            'can_moderate_call' => true,
+        ]),
+        'server-derived call moderation flag should pass the lower lobby gate'
+    );
+    videochat_realtime_lobby_security_assert(
+        videochat_lobby_can_moderate(['role' => 'admin', 'can_moderate_call' => false]),
+        'server-derived admin role should pass the lower lobby gate'
+    );
 
     $ownerConnection = [
         'user_id' => 10,
@@ -132,6 +154,14 @@ SQL
     $moderatorAuthority = videochat_realtime_authorize_lobby_moderation_command($moderatorConnection, $allowCommand, 'room-secure', $openDatabase);
     videochat_realtime_lobby_security_assert((bool) ($moderatorAuthority['ok'] ?? false), 'DB moderator should be authorized even if connection call_role is stale');
     videochat_realtime_lobby_security_assert((string) ($moderatorAuthority['call_role'] ?? '') === 'moderator', 'moderator authority must come from DB call role');
+    videochat_realtime_lobby_security_assert((string) ($moderatorAuthority['effective_call_role'] ?? '') === 'moderator', 'moderator effective role mismatch');
+
+    $pdo->exec("UPDATE call_participants SET invite_state = 'cancelled' WHERE call_id = 'call-secure' AND user_id = 40");
+    $cancelledModeratorAuthority = videochat_realtime_authorize_lobby_moderation_command($moderatorConnection, $allowCommand, 'room-secure', $openDatabase);
+    videochat_realtime_lobby_security_assert(!(bool) ($cancelledModeratorAuthority['ok'] ?? true), 'cancelled moderator participant row must lose lobby authority');
+    videochat_realtime_lobby_security_assert((string) ($cancelledModeratorAuthority['error'] ?? '') === 'forbidden', 'cancelled moderator denial reason mismatch');
+    videochat_realtime_lobby_security_assert((string) ($cancelledModeratorAuthority['call_role'] ?? '') === 'moderator', 'cancelled moderator should preserve stored call_role for audit context');
+    $pdo->exec("UPDATE call_participants SET invite_state = 'allowed' WHERE call_id = 'call-secure' AND user_id = 40");
 
     $adminConnection = [
         'user_id' => 30,
