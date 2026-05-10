@@ -197,20 +197,26 @@ try {
     $linkName = 'Foreign Link Target ' . $secret;
     $currentEmail = 'current-' . $secret . '@example.test';
     $currentName = 'Current Account ' . $secret;
+    $invalidConfigEmail = 'invalid-config-' . $secret . '@example.test';
+    $invalidConfigName = 'Invalid Config Account ' . $secret;
     $confirmedName = 'Re Entered Confirmed Name ' . $secret;
+    $invalidConfigPendingName = 'Invalid Config Pending Name ' . $secret;
     $supersededPendingName = 'Superseded Pending Name ' . $secret;
     $latestPendingName = 'Latest Pending Name ' . $secret;
 
     $hostUserId = videochat_call_access_email_confirmation_create_user($pdo, $adminRoleId, $hostEmail, $hostName);
     $linkUserId = videochat_call_access_email_confirmation_create_user($pdo, $userRoleId, $linkEmail, $linkName);
     $currentUserId = videochat_call_access_email_confirmation_create_user($pdo, $userRoleId, $currentEmail, $currentName);
+    $invalidConfigUserId = videochat_call_access_email_confirmation_create_user($pdo, $userRoleId, $invalidConfigEmail, $invalidConfigName);
     videochat_tenant_attach_user($pdo, $hostUserId, $defaultTenantId, 'owner');
     videochat_tenant_attach_user($pdo, $linkUserId, $defaultTenantId, 'member');
     videochat_tenant_attach_user($pdo, $currentUserId, $defaultTenantId, 'member');
+    videochat_tenant_attach_user($pdo, $invalidConfigUserId, $defaultTenantId, 'member');
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_current', $currentUserId, $defaultTenantId);
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_browser_b', $currentUserId, $defaultTenantId);
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_expired_pending', $currentUserId, $defaultTenantId, -60);
     videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_link_target', $linkUserId, $defaultTenantId);
+    videochat_call_access_email_confirmation_insert_session($pdo, 'sess_confirmation_invalid_email_config', $invalidConfigUserId, $defaultTenantId);
 
     $createCall = videochat_create_call($pdo, $hostUserId, [
         'title' => 'Confirmation Private Call ' . $secret,
@@ -277,6 +283,40 @@ try {
         videochat_call_access_email_confirmation_assert(is_array($response), "{$method} {$path} should return a response");
         return $response;
     };
+
+    $invalidConfiguredOrigin = 'javascript://invalid-email-config.example/'
+        . rawurlencode($accessId)
+        . '?host=' . rawurlencode($hostEmail)
+        . '&session=sess_confirmation_invalid_email_config';
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN=' . $invalidConfiguredOrigin);
+    putenv('VIDEOCHAT_FRONTEND_ORIGIN=' . $invalidConfiguredOrigin);
+    $invalidConfigBeforeUser = videochat_call_access_email_confirmation_user($pdo, $invalidConfigUserId);
+    $invalidConfigRequest = videochat_call_access_request_account_update_confirmation(
+        $pdo,
+        $accessId,
+        $invalidConfigUserId,
+        ['display_name' => $invalidConfigPendingName],
+        ['session_id' => 'sess_confirmation_invalid_email_config']
+    );
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN=https://app.kingrt.test');
+    putenv('VIDEOCHAT_FRONTEND_ORIGIN');
+    videochat_call_access_email_confirmation_assert((bool) ($invalidConfigRequest['ok'] ?? false), 'invalid email configuration should still create a pending confirmation');
+    $invalidConfigToken = (string) ($invalidConfigRequest['token'] ?? '');
+    videochat_call_access_email_confirmation_assert($invalidConfigToken !== '', 'invalid email configuration should create a confirmation token');
+    $invalidConfigConfirmationUrl = (string) ($invalidConfigRequest['confirmation_url'] ?? '');
+    videochat_call_access_email_confirmation_assert(
+        str_starts_with($invalidConfigConfirmationUrl, 'https://app.kingrt.com/account-update-confirmation?'),
+        'invalid email configuration should fall back to safe confirmation origin without leaking private call data'
+    );
+    videochat_call_access_email_confirmation_assert(str_contains($invalidConfigConfirmationUrl, rawurlencode($invalidConfigToken)), 'invalid email configuration fallback link should carry only the account-update token');
+    videochat_call_access_email_confirmation_assert_no_needles(
+        $invalidConfigConfirmationUrl,
+        [$invalidConfiguredOrigin, $accessId, $callId, $hostEmail, $hostName, $linkEmail, $linkName, $currentEmail, $currentName, 'sess_confirmation_invalid_email_config'],
+        'invalid email configuration confirmation url'
+    );
+    $invalidConfigAfterUser = videochat_call_access_email_confirmation_user($pdo, $invalidConfigUserId);
+    videochat_call_access_email_confirmation_assert((string) ($invalidConfigBeforeUser['display_name'] ?? '') === $invalidConfigName, 'invalid email configuration baseline account mismatch');
+    videochat_call_access_email_confirmation_assert((string) ($invalidConfigAfterUser['display_name'] ?? '') === $invalidConfigName, 'invalid email configuration must leave account unchanged before confirmation');
 
     $firstRequest = videochat_call_access_request_account_update_confirmation(
         $pdo,
@@ -433,7 +473,7 @@ try {
     $confirmationDump = json_encode($confirmationRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_call_access_email_confirmation_assert_no_needles(
         $confirmationDump,
-        [$firstToken, $olderToken, $newerToken, $expiredToken, $accessId, $linkEmail, $hostEmail, $currentEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target'],
+        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
         'confirmation storage'
     );
     videochat_call_access_email_confirmation_assert(str_contains($confirmationDump, videochat_audit_fingerprint($firstToken)), 'confirmation storage should keep token fingerprint');
@@ -482,7 +522,7 @@ try {
     $auditDump = json_encode($auditRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_call_access_email_confirmation_assert_no_needles(
         $auditDump,
-        [$firstToken, $olderToken, $newerToken, $expiredToken, $accessId, $linkEmail, $hostEmail, $currentEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target'],
+        [$firstToken, $olderToken, $newerToken, $expiredToken, $invalidConfigToken, $invalidConfiguredOrigin, $accessId, $linkEmail, $hostEmail, $currentEmail, $invalidConfigEmail, 'sess_confirmation_current', 'sess_confirmation_browser_b', 'sess_confirmation_expired_pending', 'sess_confirmation_link_target', 'sess_confirmation_invalid_email_config'],
         'confirmation audit'
     );
 
@@ -495,6 +535,8 @@ try {
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_WINDOW_SECONDS');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_TTL_SECONDS');
+    putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN');
+    putenv('VIDEOCHAT_FRONTEND_ORIGIN');
     putenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER');
     if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
         @unlink($databasePath);

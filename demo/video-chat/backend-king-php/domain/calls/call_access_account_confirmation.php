@@ -110,6 +110,37 @@ function videochat_call_access_account_confirmation_ttl_seconds(): int
     return max(300, min(86_400, $seconds));
 }
 
+function videochat_call_access_account_confirmation_origin(): string
+{
+    $candidate = trim((string) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN') ?: getenv('VIDEOCHAT_FRONTEND_ORIGIN') ?: ''));
+    if ($candidate === '') {
+        return 'https://app.kingrt.com';
+    }
+    if (preg_match('#^[A-Za-z][A-Za-z0-9+.-]*://#', $candidate) === 1 && !preg_match('#^https?://#i', $candidate)) {
+        return 'https://app.kingrt.com';
+    }
+    if (!preg_match('#^https?://#i', $candidate)) {
+        $candidate = 'https://' . $candidate;
+    }
+    $parts = parse_url($candidate);
+    if (!is_array($parts) || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)) {
+        return 'https://app.kingrt.com';
+    }
+    $host = strtolower(trim((string) ($parts['host'] ?? '')));
+    if ($host === '') {
+        return 'https://app.kingrt.com';
+    }
+    $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+    return strtolower((string) $parts['scheme']) . '://' . $host . $port;
+}
+
+function videochat_call_access_account_confirmation_url(string $token): string
+{
+    return videochat_call_access_account_confirmation_origin()
+        . '/account-update-confirmation?token='
+        . rawurlencode(trim($token));
+}
+
 function videochat_call_access_account_confirmation_rate_limit(): int
 {
     $limit = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT') ?: 3);
@@ -433,6 +464,7 @@ SQL
         'recipient_user_id' => $authenticatedUserId,
         'sent_to_logged_in_account' => true,
         'sent_to_link_account' => false,
+        'confirmation_url' => videochat_call_access_account_confirmation_url($token),
         'superseded_pending_count' => $supersededPendingCount,
     ];
 }
