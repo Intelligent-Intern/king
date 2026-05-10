@@ -66,8 +66,16 @@ Proof anchors:
 - `documentation/iam-sprint-04-worker-cleanup-evidence.md`
 
 Sprint Checkboxen:
-- [ ] IAM5-01 Build a fresh remaining IAM branch/worktree inventory and rank
+- [x] IAM5-01 Build a fresh remaining IAM branch/worktree inventory and rank
   branches by unique proof value, dirtiness, containment, and cleanup risk.
+  - Merged worker branch `agent/iam-s5-01-inventory`.
+  - Added `documentation/iam-sprint-05-remaining-inventory.md`.
+  - Inventoried 192 matching local IAM/call-access branches and 155 matching
+    worktrees, classified dirty/conflicted preservation blockers, ranked
+    IAM5-02..IAM5-18 extraction families, and recorded cleanup rules for clean
+    contained branches only.
+  - Proof: `git diff --check HEAD~1..HEAD` passed in the worker and
+    `git diff --check HEAD^..HEAD` passed after merge.
 - [x] IAM5-02 Classify `iam-e2e-integration` as merge candidate, superseded
   evidence, or cleanup anchor against `prod-kingrt-do-not-push-to-github`.
   - Merged worker branch `agent/iam-s5-02-integration-classify`.
