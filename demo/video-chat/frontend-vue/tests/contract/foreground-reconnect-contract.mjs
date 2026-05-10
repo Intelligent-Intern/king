@@ -71,9 +71,9 @@ try {
   assert.match(foregroundRecovery, /export function shouldArmWorkspaceForegroundRecovery\(context = null, documentRef = null\)/, 'workspace foreground recovery must expose a call-workspace visibility guard');
   assert.match(foregroundRecovery, /reason === 'pagehide'[\s\S]*reason === 'document_hidden'/, 'workspace foreground recovery guard must preserve true pagehide/document-hidden recovery');
   assert.match(foregroundRecovery, /if \(shouldAcquireLocalMedia\?\.\(\) === true && hasLiveLocalMedia\?\.\(\) !== true\) \{[\s\S]*void publishLocalTracks\?\.\(\);/, 'workspace foreground recovery must reacquire local media when preview/tracks are gone');
-  assert.match(foregroundRecovery, /const socketHealthy = isSocketOpen\?\.\(\) === true[\s\S]*hasRealtimeRoomSync\?\.\(\) === true[\s\S]*getConnectionState/, 'workspace foreground recovery must classify healthy sockets before reconnecting');
-  assert.match(foregroundRecovery, /if \(socketHealthy && sfuHealthy\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*action: 'snapshot_only'/, 'healthy foreground recovery must request a snapshot instead of recycling sockets');
-  assert.match(foregroundRecovery, /resetReconnectAttempt\?\.\(\);[\s\S]*void connectSocket\?\.\(\);/, 'unhealthy foreground recovery must still reconnect the realtime socket');
+  assert.match(foregroundRecovery, /const socketOpen = isSocketOpen\?\.\(\) === true;[\s\S]*const socketHealthy = socketOpen && String\(callGetter\(getConnectionState, ''\)\) === 'online';[\s\S]*const roomSyncHealthy = hasRealtimeRoomSync\?\.\(\) === true;/, 'workspace foreground recovery must classify open sockets separately from snapshot sync before reconnecting');
+  assert.match(foregroundRecovery, /if \(socketHealthy && roomSyncHealthy && sfuHealthy\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*action: 'snapshot_only'/, 'healthy foreground recovery must request a snapshot instead of recycling sockets');
+  assert.match(foregroundRecovery, /if \(socketOpen\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*\} else \{[\s\S]*resetReconnectAttempt\?\.\(\);[\s\S]*void connectSocket\?\.\(\);/, 'foreground recovery must request snapshot backfill for open sockets and reconnect only closed sockets');
   assert.match(foregroundRecovery, /if \(sfuExpected && !sfuHealthy\) \{[\s\S]*recycleSfu\?\.\(\);[\s\S]*initSfu\?\.\(\);/, 'unhealthy SFU foreground recovery must recycle stale SFU state');
   assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*if \(shouldArmWorkspaceForegroundRecovery\(context, typeof document !== 'undefined' \? document : null\)\) \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);[\s\S]*\}/, 'workspace background callback must guard reconnect arming against visible focus churn');
   assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
@@ -305,13 +305,21 @@ try {
 
   recoveryArmed = true;
   recoveryEvents.length = 0;
+  roomSynced = false;
+  assert.equal(recovery.recover().action, 'snapshot_backfill', 'open socket without room sync should request snapshot backfill');
+  assert.deepEqual(recoveryEvents, ['snapshot'], 'open unsynced socket recovery must not reconnect websocket/media sessions');
+
+  recoveryArmed = true;
+  recoveryEvents.length = 0;
   socketOpen = false;
-  assert.equal(recovery.recover().action, 'socket_reconnect', 'unhealthy socket foreground recovery should reconnect');
-  assert.deepEqual(recoveryEvents, ['reset-reconnect', 'connect'], 'unhealthy socket recovery must not recycle healthy SFU');
+  roomSynced = false;
+  assert.equal(recovery.recover().action, 'socket_reconnect', 'closed socket foreground recovery should reconnect');
+  assert.deepEqual(recoveryEvents, ['reset-reconnect', 'connect'], 'closed socket recovery must not recycle healthy SFU');
 
   recoveryArmed = true;
   recoveryEvents.length = 0;
   socketOpen = true;
+  roomSynced = true;
   sfuConnected = false;
   assert.equal(recovery.recover().action, 'sfu_recover', 'healthy socket with unhealthy SFU should recover SFU only');
   assert.deepEqual(recoveryEvents, ['snapshot', 'recycle-sfu', 'init-sfu'], 'SFU-only recovery must keep the realtime socket open');
