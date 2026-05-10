@@ -34,6 +34,9 @@ const linkPrivacy = read('demo/video-chat/frontend-vue/tests/contract/call-acces
 const auditCompatibility = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs');
 const auditRedaction = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 const strongMismatchAudit = read('demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs');
+const confirmationHelper = read('demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php');
+const confirmationBackendContract = read('demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php');
+const callAccessRoutes = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
 
 for (const branch of [
   'local/iam-e2e-account-reconciliation-email',
@@ -58,15 +61,21 @@ for (const head of [
   requireIncludes(evidence, head, `evidence must record ${head}`);
 }
 
-for (const sourceOnlyPath of [
+for (const integratedPath of [
   'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php',
-  'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php',
   'demo/video-chat/backend-king-php/tests/call-access-email-confirmation-contract.php',
+]) {
+  assert.equal(exists(integratedPath), true, `focused account-confirmation backend path must be extracted: ${integratedPath}`);
+  requireIncludes(evidence, integratedPath, `evidence must list extracted account-confirmation path ${integratedPath}`);
+}
+
+for (const sourceOnlyPath of [
+  'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php',
   'demo/video-chat/frontend-vue/src/domain/calls/access/AccountUpdateConfirmationView.vue',
   'demo/video-chat/frontend-vue/tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs',
 ]) {
-  assert.equal(exists(sourceOnlyPath), false, `source-only account-confirmation path must remain absent: ${sourceOnlyPath}`);
-  requireIncludes(evidence, sourceOnlyPath, `evidence must list absent source-only path ${sourceOnlyPath}`);
+  assert.equal(exists(sourceOnlyPath), false, `still-parked account-confirmation path must remain absent: ${sourceOnlyPath}`);
+  requireIncludes(evidence, sourceOnlyPath, `evidence must list parked source-only path ${sourceOnlyPath}`);
 }
 
 for (const [pattern, message] of [
@@ -89,6 +98,14 @@ for (const [pattern, message] of [
   [
     /No backend runtime, frontend route\/view, package script, CI wiring, `SPRINT\.md`,\s+or `BACKLOG\.md` change was made/,
     'evidence must document write-scope compliance',
+  ],
+  [
+    /IAM7-02 Current Extraction Update/,
+    'evidence must record current IAM7-02 account-confirmation extraction',
+  ],
+  [
+    /This extraction does not claim email dispatch acceptance or\s+frontend modal coverage/,
+    'evidence must keep dispatch and frontend modal value parked',
   ],
 ]) {
   requireMatch(evidence, pattern, message);
@@ -133,12 +150,42 @@ for (const eventType of [
 
 const iamGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
 for (const sourceOnlyTarget of [
-  'call-access-email-confirmation-contract.php',
   'call-access-email-safe-texts-dispatch-audit-contract.mjs',
   'AccountUpdateConfirmationView.vue',
 ]) {
   assert.equal(iamGate.includes(sourceOnlyTarget), false, `IAM gate must not claim unsupported account-confirmation target ${sourceOnlyTarget}`);
 }
+
+requireMatch(
+  confirmationHelper,
+  /CREATE TABLE IF NOT EXISTS call_access_account_update_confirmations[\s\S]*token_fingerprint TEXT NOT NULL UNIQUE/s,
+  'current account-confirmation helper must persist token fingerprints, not raw tokens',
+);
+requireMatch(
+  confirmationHelper,
+  /required_manual_reentry[\s\S]*sent_to_logged_in_account' => true[\s\S]*sent_to_link_account' => false/s,
+  'current account-confirmation helper must target the current account and require manual re-entry',
+);
+requireMatch(
+  confirmationHelper,
+  /'token' => 'account_bound'[\s\S]*'token' => 'already_consumed'[\s\S]*'token' => 'expired'/s,
+  'current account-confirmation helper must reject wrong-account, replayed, and expired tokens',
+);
+assert.doesNotMatch(
+  confirmationHelper,
+  /UPDATE sessions SET user_id/,
+  'account confirmation must not rebind sessions',
+);
+requireMatch(
+  callAccessRoutes,
+  /account-update-confirmation[\s\S]*debug_confirmation_token[\s\S]*production[\s\S]*null/s,
+  'route wiring must expose account-confirmation requests without production token disclosure',
+);
+requireMatch(
+  confirmationBackendContract,
+  /confirmation must be sent to current logged-in email[\s\S]*account data must not update before confirmation[\s\S]*confirmation must not rebind the current session[\s\S]*confirmation storage should keep token fingerprint/s,
+  'backend confirmation contract must prove current-account targeting, no early update, token fingerprinting, and no session rebinding',
+);
 
 requireMatch(
   accountIsolation,

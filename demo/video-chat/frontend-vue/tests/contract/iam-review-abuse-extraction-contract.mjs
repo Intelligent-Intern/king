@@ -36,6 +36,11 @@ assert.match(
 );
 assert.match(
   evidence,
+  /IAM7-02 Update[\s\S]*backend manual-review and account-confirmation subset is now extracted/,
+  'review-abuse evidence must record the later IAM7-02 backend extraction',
+);
+assert.match(
+  evidence,
   /source worktrees were\s+not deleted, reset, rebased, checked out, cleaned, or modified/,
   'evidence must document non-destructive handling of both source worktrees',
 );
@@ -76,21 +81,30 @@ for (const invariant of [
   assert.match(evidence, invariant, `evidence must preserve review-abuse invariant ${invariant}`);
 }
 
-for (const sourceOnlyPath of [
+for (const integratedPath of [
   'demo/video-chat/backend-king-php/domain/calls/call_access_review.php',
   'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation.php',
+  'demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php',
+]) {
+  assert.equal(
+    exists(integratedPath),
+    true,
+    `IAM7-02 backend extraction path must now be present: ${integratedPath}`,
+  );
+}
+
+for (const sourceOnlyPath of [
   'demo/video-chat/backend-king-php/domain/calls/call_access_account_confirmation_audit.php',
   'demo/video-chat/backend-king-php/domain/calls/call_access_identity.php',
   'demo/video-chat/frontend-vue/src/domain/calls/access/AccountUpdateConfirmationView.vue',
   'demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-review-email.spec.js',
   'demo/video-chat/frontend-vue/tests/e2e/call-access-duplicate-race.spec.js',
-  'demo/video-chat/backend-king-php/tests/call-access-duplicate-review-contract.php',
   'demo/video-chat/backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.php',
 ]) {
   assert.equal(
     exists(sourceOnlyPath),
     false,
-    `manual review/account-confirmation source-only path must not be treated as extracted: ${sourceOnlyPath}`,
+    `still-parked review/account-confirmation source-only path must not be treated as extracted: ${sourceOnlyPath}`,
   );
 }
 
@@ -156,7 +170,6 @@ for (const requiredPath of [
 for (const broadSourceOnlyTarget of [
   'call-access-duplicate-review-email.spec.js',
   'call-access-duplicate-race.spec.js',
-  'call-access-duplicate-review-contract.php',
   'call-access-identity-mismatch-review-flow-contract.php',
   'call-access-duplicate-review-email-contract.mjs',
   'call-access-identity-mismatch-review-flow-contract.mjs',
