@@ -99,8 +99,15 @@ Tickets:
   - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` and
     `npm run test:contract:iam-call-access` passed; backend SQLite shell proofs
     skipped locally because `pdo_sqlite` is unavailable.
-- [ ] IAM-04 Prove direct join permissions for platform admin, tenant admin,
+- [x] IAM-04 Prove direct join permissions for platform admin, tenant admin,
   call owner, guest-list participant, and denied normal member.
+  - Merged worker branch `agent/iam-s1-04-direct-join-rights`.
+  - Added `call-access-direct-join-rights-contract.mjs` proving direct-join
+    authorization is limited to platform admin, tenant admin, call owner, or
+    guest-list participant, with normal tenant members denied.
+  - Proof: `node tests/contract/call-access-direct-join-rights-contract.mjs`,
+    `node tests/contract/iam-call-access-e2e-foundation-contract.mjs`, and
+    `node tests/contract/call-access-cross-org-contract.mjs` passed.
 - [ ] IAM-05 Prove external guest join links require display name, create a
   temporary guest identity, and wait in lobby until admitted.
 - [ ] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
