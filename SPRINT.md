@@ -84,7 +84,7 @@ Sprint Checkboxen:
 - [x] UX6-07 Wire backend route authorization proof for tenant/resource grant
   evaluation on Governance/Admin resource actions beyond simple role/path
   checks.
-- [ ] UX6-08 Normalize Governance entity semantics for Groups, Organizations,
+- [x] UX6-08 Normalize Governance entity semantics for Groups, Organizations,
   Roles, Grants, Policies, Export/Import, Audit Log, Compliance, Modules, and
   Permissions with entity-specific fields, validation, and action names.
 - [x] UX6-09 Implement the first recursive relation flow proof for User ->

@@ -101,7 +101,7 @@ const governanceActions = {
   modules: [
     {
       key: 'governance.modules.inspect',
-      label_key: 'governance.action.inspect_catalog',
+      label_key: 'governance.action.inspect_module_catalog',
       kind: 'inspect',
       resource_type: 'module',
       required_permissions: ['governance.read'],
@@ -154,16 +154,16 @@ const governanceActions = {
   'data-portability': [
     {
       key: 'governance.data_portability.export',
-      label_key: 'governance.action.export_data',
+      label_key: 'governance.action.export_tenant_data',
       kind: 'export',
-      resource_type: 'tenant_export_job',
+      resource_type: 'tenant_export_import_job',
       required_permissions: ['governance.data_portability.export'],
     },
     {
       key: 'governance.data_portability.import',
-      label_key: 'governance.action.import_data',
+      label_key: 'governance.action.import_tenant_data',
       kind: 'import',
-      resource_type: 'tenant_import_job',
+      resource_type: 'tenant_export_import_job',
       required_permissions: ['governance.data_portability.import'],
     },
   ],
