@@ -148,7 +148,7 @@ SQL
         return $response;
     };
 
-    $dispatchCallApps = static function (string $method, string $uri, array $auth) use (
+    $dispatchCallApps = static function (string $method, string $uri, array $auth, ?array $payload = null) use (
         $jsonResponse,
         $errorResponse,
         $decodeJsonBody,
@@ -159,7 +159,7 @@ SQL
             'method' => $method,
             'uri' => $uri,
             'path' => $routePath,
-            'body' => '',
+            'body' => is_array($payload) ? json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '',
         ];
         $response = videochat_handle_call_app_routes(
             $routePath,
@@ -254,13 +254,20 @@ SQL
     videochat_call_app_marketplace_entitlement_assert(count($availableApps) === 1 && (string) ($availableApps[0]['app_key'] ?? '') === 'whiteboard', 'post-install Whiteboard must appear in call availability');
     videochat_call_app_marketplace_entitlement_assert((string) (($availableApps[0]['installation'] ?? [])['status'] ?? '') === 'enabled', 'post-install call availability must use enabled organization installation');
 
-    $singleAfterInstall = $dispatch('GET', '/api/marketplace/call-apps/whiteboard', $adminAuth);
-    $singleAfterInstallPayload = videochat_call_app_marketplace_entitlement_decode($singleAfterInstall);
-    videochat_call_app_marketplace_entitlement_assert((string) ((($singleAfterInstallPayload['app'] ?? [])['organization'] ?? [])['status'] ?? '') === 'installed', 'single catalog entry must show installed organization state after install');
-    videochat_call_app_marketplace_entitlement_assert(
-        (bool) (((($singleAfterInstallPayload['app'] ?? [])['organization_actions'] ?? [])['verify_installation'] ?? [])['available'] ?? false) === true,
-        'single catalog entry must expose verify installation action after install'
-    );
+    $sessionCreate = $dispatchCallApps('POST', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth, [
+        'app_key' => 'whiteboard',
+        'default_app_policy' => 'allowed_by_default',
+    ]);
+    $sessionCreatePayload = videochat_call_app_marketplace_entitlement_decode($sessionCreate);
+    videochat_call_app_marketplace_entitlement_assert((int) ($sessionCreate['status'] ?? 0) === 201, 'pre-revoke Call App session start should return 201');
+    $sessionId = (string) (((($sessionCreatePayload['result'] ?? [])['session'] ?? [])['id'] ?? ''));
+    videochat_call_app_marketplace_entitlement_assert($sessionId !== '', 'pre-revoke Call App session id missing');
+
+    $preRevokeLaunch = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
+    $preRevokeLaunchPayload = videochat_call_app_marketplace_entitlement_decode($preRevokeLaunch);
+    $preRevokeLaunchToken = (string) (($preRevokeLaunchPayload['result'] ?? [])['launch_token'] ?? '');
+    videochat_call_app_marketplace_entitlement_assert((int) ($preRevokeLaunch['status'] ?? 0) === 201, 'pre-revoke launch token should be issued');
+    videochat_call_app_marketplace_entitlement_assert($preRevokeLaunchToken !== '', 'pre-revoke launch token missing');
 
     $disable = $dispatch('PATCH', '/api/marketplace/call-apps/whiteboard/installations/' . rawurlencode($installationId), $adminAuth, [
         'status' => 'disabled',
@@ -269,12 +276,102 @@ SQL
     videochat_call_app_marketplace_entitlement_assert((int) ($disable['status'] ?? 0) === 200, 'disable should return 200');
     videochat_call_app_marketplace_entitlement_assert((string) ((($disablePayload['result'] ?? [])['installation'] ?? [])['status'] ?? '') === 'disabled', 'installation should be disabled');
 
+    $availableAfterInstallationDisable = $dispatchCallApps('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=whiteboard&page=1&page_size=8', $adminAuth);
+    $availableAfterInstallationDisablePayload = videochat_call_app_marketplace_entitlement_decode($availableAfterInstallationDisable);
+    videochat_call_app_marketplace_entitlement_assert((int) ($availableAfterInstallationDisable['status'] ?? 0) === 200, 'post-disable call availability should return 200');
+    videochat_call_app_marketplace_entitlement_assert(((array) (($availableAfterInstallationDisablePayload['result'] ?? [])['apps'] ?? [])) === [], 'disabled organization installation must remove Whiteboard from call availability');
+
+    $launchAfterInstallationDisable = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
+    $launchAfterInstallationDisablePayload = videochat_call_app_marketplace_entitlement_decode($launchAfterInstallationDisable);
+    videochat_call_app_marketplace_entitlement_assert((int) ($launchAfterInstallationDisable['status'] ?? 0) === 409, 'disabled organization installation must block launch for existing sessions');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-disable launch must fail because the app is unavailable');
+
+    $validateAfterInstallationDisable = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
+        'launch_token' => $preRevokeLaunchToken,
+    ]);
+    $validateAfterInstallationDisablePayload = videochat_call_app_marketplace_entitlement_decode($validateAfterInstallationDisable);
+    videochat_call_app_marketplace_entitlement_assert((int) ($validateAfterInstallationDisable['status'] ?? 0) === 401, 'disabled organization installation must invalidate existing launch tokens');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterInstallationDisablePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-disable launch-token validation must fail because the app is unavailable');
+
     $enable = $dispatch('PATCH', '/api/marketplace/call-apps/whiteboard/installations/' . rawurlencode($installationId), $adminAuth, [
         'status' => 'enabled',
     ]);
     $enablePayload = videochat_call_app_marketplace_entitlement_decode($enable);
     videochat_call_app_marketplace_entitlement_assert((int) ($enable['status'] ?? 0) === 200, 'enable should return 200');
     videochat_call_app_marketplace_entitlement_assert((string) ((($enablePayload['result'] ?? [])['installation'] ?? [])['status'] ?? '') === 'enabled', 'installation should be enabled');
+
+    $pdo->prepare(
+        <<<'SQL'
+UPDATE organization_call_app_entitlements
+SET status = 'revoked', updated_at = :updated_at
+WHERE tenant_id = :tenant_id
+  AND app_key = 'whiteboard'
+SQL
+    )->execute([
+        ':updated_at' => gmdate('c'),
+        ':tenant_id' => $tenantId,
+    ]);
+
+    $availableAfterEntitlementRevoke = $dispatchCallApps('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=whiteboard&page=1&page_size=8', $adminAuth);
+    $availableAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($availableAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($availableAfterEntitlementRevoke['status'] ?? 0) === 200, 'post-revoke call availability should return 200');
+    videochat_call_app_marketplace_entitlement_assert(((array) (($availableAfterEntitlementRevokePayload['result'] ?? [])['apps'] ?? [])) === [], 'revoked organization entitlement must remove Whiteboard from call availability');
+
+    $sessionAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth, [
+        'app_key' => 'whiteboard',
+        'default_app_policy' => 'allowed_by_default',
+    ]);
+    $sessionAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($sessionAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($sessionAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block Call App session start');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($sessionAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke session start must fail because the app is unavailable');
+
+    $sessionActivateAfterEntitlementRevoke = $dispatchCallApps('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth, [
+        'status' => 'active',
+    ]);
+    $sessionActivateAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($sessionActivateAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($sessionActivateAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block stale session activation');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($sessionActivateAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke session activation must fail because the app is unavailable');
+
+    $launchAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
+    $launchAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($launchAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($launchAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block launch for existing sessions');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($launchAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke launch must fail because the app is unavailable');
+
+    $validateAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
+        'launch_token' => $preRevokeLaunchToken,
+    ]);
+    $validateAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($validateAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($validateAfterEntitlementRevoke['status'] ?? 0) === 401, 'revoked organization entitlement must invalidate existing launch tokens');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($validateAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke launch-token validation must fail because the app is unavailable');
+
+    $bootstrapAfterEntitlementRevoke = $dispatchCallApps('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
+    $bootstrapAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($bootstrapAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($bootstrapAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block cached CRDT bootstrap');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($bootstrapAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke CRDT bootstrap must fail because the app is unavailable');
+
+    $appendAfterEntitlementRevoke = $dispatchCallApps('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
+        'operation' => [
+            'operation_id' => 'op_after_entitlement_revoke',
+            'payload_type' => 'sticky_note.add',
+            'payload' => ['id' => 'note-after-revoke', 'text' => 'blocked'],
+        ],
+    ]);
+    $appendAfterEntitlementRevokePayload = videochat_call_app_marketplace_entitlement_decode($appendAfterEntitlementRevoke);
+    videochat_call_app_marketplace_entitlement_assert((int) ($appendAfterEntitlementRevoke['status'] ?? 0) === 409, 'revoked organization entitlement must block cached CRDT append');
+    videochat_call_app_marketplace_entitlement_assert((string) (((($appendAfterEntitlementRevokePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'app_not_available', 'post-revoke CRDT append must fail because the app is unavailable');
+
+    $reactivatedOrder = $dispatch('POST', '/api/marketplace/call-apps/whiteboard/orders', $adminAuth);
+    $reactivatedOrderPayload = videochat_call_app_marketplace_entitlement_decode($reactivatedOrder);
+    videochat_call_app_marketplace_entitlement_assert((int) ($reactivatedOrder['status'] ?? 0) === 201, 're-order after revoke should return 201');
+    videochat_call_app_marketplace_entitlement_assert((string) (($reactivatedOrderPayload['result'] ?? [])['state'] ?? '') === 'reactivated', 're-order after revoke must reactivate the entitlement');
+
+    $singleAfterInstall = $dispatch('GET', '/api/marketplace/call-apps/whiteboard', $adminAuth);
+    $singleAfterInstallPayload = videochat_call_app_marketplace_entitlement_decode($singleAfterInstall);
+    videochat_call_app_marketplace_entitlement_assert((string) ((($singleAfterInstallPayload['app'] ?? [])['organization'] ?? [])['status'] ?? '') === 'installed', 'single catalog entry must show installed organization state after install');
+    videochat_call_app_marketplace_entitlement_assert(
+        (bool) (((($singleAfterInstallPayload['app'] ?? [])['organization_actions'] ?? [])['verify_installation'] ?? [])['available'] ?? false) === true,
+        'single catalog entry must expose verify installation action after install'
+    );
 
     $duplicateOrder = $dispatch('POST', '/api/marketplace/call-apps/whiteboard/orders', $adminAuth);
     $duplicateOrderPayload = videochat_call_app_marketplace_entitlement_decode($duplicateOrder);
