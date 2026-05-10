@@ -68,6 +68,62 @@ SQL
     return (bool) $query->fetchColumn();
 }
 
+function videochat_realtime_room_has_any_call(
+    PDO $pdo,
+    string $roomId,
+    string $preferredCallId = '',
+    ?int $tenantId = null
+): bool {
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '' || $normalizedRoomId === videochat_realtime_waiting_room_id()) {
+        return false;
+    }
+
+    $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
+    $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+        ? '  AND calls.tenant_id = :tenant_id'
+        : '';
+    $callWhere = $normalizedPreferredCallId !== '' ? '  AND calls.id = :call_id' : '';
+    $query = $pdo->prepare(
+        <<<SQL
+SELECT 1
+FROM calls
+WHERE calls.room_id = :room_id
+{$tenantWhere}
+{$callWhere}
+LIMIT 1
+SQL
+    );
+    $params = [':room_id' => $normalizedRoomId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    if ($callWhere !== '') {
+        $params[':call_id'] = $normalizedPreferredCallId;
+    }
+    $query->execute($params);
+
+    return (bool) $query->fetchColumn();
+}
+
+function videochat_realtime_room_is_terminal_call_scope(
+    PDO $pdo,
+    string $roomId,
+    string $preferredCallId = '',
+    ?int $tenantId = null
+): bool {
+    $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
+    if (videochat_realtime_room_has_active_call($pdo, $roomId, $normalizedPreferredCallId, $tenantId)) {
+        return false;
+    }
+
+    if ($normalizedPreferredCallId !== '') {
+        return true;
+    }
+
+    return videochat_realtime_room_has_any_call($pdo, $roomId, '', $tenantId);
+}
+
 /**
  * @param array<int, string> $fromStates
  */
@@ -583,32 +639,9 @@ function videochat_realtime_connection_can_bypass_admission_for_room(
     }
 
     $connectionRole = videochat_normalize_role_slug((string) ($connection['role'] ?? ''));
-    if ($connectionRole === 'admin') {
-        return true;
-    }
-
-    $connectionCallRole = videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant'));
     $requestedCallId = videochat_realtime_normalize_call_id((string) ($connection['requested_call_id'] ?? ''), '');
-    $requestedRoomId = videochat_presence_normalize_room_id((string) ($connection['requested_room_id'] ?? ''), '');
-    $pendingRoomId = videochat_presence_normalize_room_id((string) ($connection['pending_room_id'] ?? ''), '');
-    if (
-        in_array($connectionCallRole, ['owner', 'moderator'], true)
-        && ($requestedRoomId === $normalizedRoomId || $pendingRoomId === $normalizedRoomId)
-    ) {
-        return true;
-    }
-
-    $connectionInviteState = videochat_realtime_normalize_call_invite_state($connection['invite_state'] ?? 'invited');
-    if (
-        videochat_realtime_call_context_allows_admission_bypass([
-            'invite_state' => $connectionInviteState,
-            'joined_at' => trim((string) ($connection['joined_at'] ?? '')),
-            'left_at' => trim((string) ($connection['left_at'] ?? '')),
-            'can_moderate' => false,
-        ])
-        && ($requestedRoomId === $normalizedRoomId || $pendingRoomId === $normalizedRoomId)
-    ) {
-        return true;
+    if ($requestedCallId === '') {
+        $requestedCallId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     }
 
     $connectionUserId = (int) ($connection['user_id'] ?? 0);
@@ -647,8 +680,9 @@ function videochat_realtime_connection_can_join_call_scoped_room(
     }
 
     $currentRoomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
-    if ($currentRoomId === $normalizedRoomId) {
-        return true;
+    $requestedCallId = videochat_realtime_normalize_call_id((string) ($connection['requested_call_id'] ?? ''), '');
+    if ($requestedCallId === '') {
+        $requestedCallId = videochat_realtime_normalize_call_id((string) ($connection['active_call_id'] ?? ''), '');
     }
 
     try {
@@ -658,11 +692,19 @@ function videochat_realtime_connection_can_join_call_scoped_room(
             return false;
         }
 
-        if (!videochat_realtime_room_has_active_call($pdo, $normalizedRoomId, '', $tenantId)) {
+        if (videochat_realtime_room_is_terminal_call_scope($pdo, $normalizedRoomId, $requestedCallId, $tenantId)) {
+            return false;
+        }
+
+        if (!videochat_realtime_room_has_active_call($pdo, $normalizedRoomId, $requestedCallId, $tenantId)) {
             return true;
         }
     } catch (Throwable) {
         return false;
+    }
+
+    if ($currentRoomId === $normalizedRoomId) {
+        return true;
     }
 
     return videochat_realtime_connection_can_bypass_admission_for_room($connection, $normalizedRoomId, $openDatabase);
@@ -722,6 +764,23 @@ function videochat_realtime_resolve_connection_rooms(
         $resolvedRequestedRoomId = 'lobby';
     }
 
+    $terminalRequestedCallScope = false;
+    if ($resolvedRequestedRoomId !== '' && $resolvedRequestedRoomId !== videochat_realtime_waiting_room_id()) {
+        try {
+            $pdo = $openDatabase();
+            $terminalRequestedCallScope = videochat_realtime_room_is_terminal_call_scope(
+                $pdo,
+                $resolvedRequestedRoomId,
+                $normalizedRequestedCallId,
+                $tenantId
+            );
+        } catch (Throwable) {
+            if ($requiresAuthoritativeBackfill) {
+                return videochat_realtime_room_resolution_backfill_unavailable();
+            }
+        }
+    }
+
     $user = is_array($websocketAuth['user'] ?? null) ? $websocketAuth['user'] : [];
     $userId = (int) ($user['id'] ?? 0);
     $userRole = (string) ($user['role'] ?? 'user');
@@ -756,7 +815,7 @@ function videochat_realtime_resolve_connection_rooms(
         }
     }
 
-    $canBypassLobby = videochat_normalize_role_slug($userRole) === 'admin';
+    $canBypassLobby = !$terminalRequestedCallScope && videochat_normalize_role_slug($userRole) === 'admin';
     if (!$canBypassLobby && $userId > 0) {
         try {
             $pdo = $openDatabase();
