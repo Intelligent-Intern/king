@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/realtime_owner_absence.php';
+
 function videochat_realtime_presence_has_room_membership(
     array $presenceState,
     string $roomId,
@@ -311,8 +313,26 @@ function videochat_realtime_send_synced_lobby_snapshot_to_connection(
         videochat_realtime_connection_tenant_id($connection)
     );
 
+    $payloadConnection = $connection;
+    try {
+        $payloadConnection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
+        $payloadConnection = videochat_realtime_owner_absence_downgrade_absent_owner_connection(
+            $openDatabase(),
+            $payloadConnection,
+            $nowUnixMs
+        );
+    } catch (Throwable) {
+        $payloadConnection = [
+            ...$connection,
+            'call_role' => 'participant',
+            'effective_call_role' => 'participant',
+            'can_moderate_call' => false,
+            'can_manage_call_owner' => false,
+        ];
+    }
+
     $payload = videochat_lobby_snapshot_payload($lobbyState, $roomId, $reason, $nowUnixMs);
-    $payload = videochat_lobby_snapshot_payload_for_connection($payload, $connection);
+    $payload = videochat_lobby_snapshot_payload_for_connection($payload, $payloadConnection);
     $signature = videochat_realtime_lobby_snapshot_signature($payload);
     $sent = videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender);
 
@@ -342,8 +362,26 @@ function videochat_realtime_send_synced_lobby_snapshot_to_connection_if_changed(
         videochat_realtime_connection_tenant_id($connection)
     );
 
+    $payloadConnection = $connection;
+    try {
+        $payloadConnection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
+        $payloadConnection = videochat_realtime_owner_absence_downgrade_absent_owner_connection(
+            $openDatabase(),
+            $payloadConnection,
+            $nowUnixMs
+        );
+    } catch (Throwable) {
+        $payloadConnection = [
+            ...$connection,
+            'call_role' => 'participant',
+            'effective_call_role' => 'participant',
+            'can_moderate_call' => false,
+            'can_manage_call_owner' => false,
+        ];
+    }
+
     $payload = videochat_lobby_snapshot_payload($lobbyState, $roomId, $reason, $nowUnixMs);
-    $payload = videochat_lobby_snapshot_payload_for_connection($payload, $connection);
+    $payload = videochat_lobby_snapshot_payload_for_connection($payload, $payloadConnection);
     $signature = videochat_realtime_lobby_snapshot_signature($payload);
     if ($signature !== '' && $signature === $lastSignature) {
         return false;

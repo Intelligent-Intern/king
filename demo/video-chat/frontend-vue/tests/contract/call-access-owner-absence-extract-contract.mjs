@@ -56,9 +56,14 @@ for (const section of [
   requireIncludes(evidence, section, `evidence must include ${section}`);
 }
 
-for (const missingPath of [
+for (const portedPath of [
   'demo/video-chat/backend-king-php/domain/realtime/realtime_owner_absence.php',
-  'demo/video-chat/backend-king-php/tests/call-access-owner-timeout-contract.php',
+  'demo/video-chat/backend-king-php/tests/call-access-owner-absence-realtime-sync-contract.php',
+]) {
+  assert.equal(exists(portedPath), true, `IAM7-20 must keep owner-absence backend proof path ported: ${portedPath}`);
+}
+
+for (const missingPath of [
   'demo/video-chat/frontend-vue/src/domain/realtime/OwnerAbsenceCountdownBanner.vue',
   'demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/ownerAbsenceState.js',
 ]) {
@@ -76,7 +81,7 @@ for (const phrase of [
   'anonymous, and open call-access links',
   'ended_reason: owner_explicit_end',
   'No separate local branch matching `*owner*timeout*audit*` was found.',
-  'runtime itself as implemented on current prod',
+  'IAM7-20 follow-up ports the backend owner-absence realtime runtime',
 ]) {
   requireIncludes(evidence, phrase, `evidence must preserve extracted proof value: ${phrase}`);
 }
@@ -124,7 +129,7 @@ requireMatch(
 );
 requireMatch(
   activePermissionChange,
-  /backend realtime role context must recompute active-call owner\/moderator\/admin authority from current DB rows[\s\S]*room snapshot permission refresh must not be implemented as browser reload or websocket reconnect/,
+  /backend realtime role context must recompute active-call owner, moderator, admin, and org-admin authority from current DB rows[\s\S]*room snapshot permission refresh must not be implemented as browser reload or websocket reconnect/,
   'active-call permission proof must keep realtime authority server-driven',
 );
 
