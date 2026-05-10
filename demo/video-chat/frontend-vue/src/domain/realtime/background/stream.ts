@@ -15,6 +15,8 @@ import { BACKGROUND_PIPELINE_STAGE_NAMES, BACKGROUND_PIPELINE_STAGE_STATES } fro
 
 const LONG_RAF_FRAME_MS = 300;
 const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;
+const SEGMENT_ERROR_UNAVAILABLE_THRESHOLD = 3;
+const PRODUCTION_MASK_UNAVAILABLE_ERROR = 'production_category_mask_unavailable';
 function resolveProcessingSpec(sourceWidth, sourceHeight, sourceFps, maxProcessWidth, maxProcessFps) {
   const inW = Math.max(1, Math.round(toNumber(sourceWidth, 1280)));
   const inH = Math.max(1, Math.round(toNumber(sourceHeight, 720)));
@@ -48,6 +50,26 @@ function normalizeBackgroundFilterRuntimeConfig(options = {}) {
     statsIntervalMs: Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3)))),
   };
 }
+
+function normalizeSegmentationUnavailableReason(value, fallback = 'segmentation_unavailable') {
+  const normalized = String(value || '').trim().toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '_')
+    .replace(/^[_:.-]+|[_:.-]+$/g, '');
+  return normalized || fallback;
+}
+
+function resolveSegmentErrorUnavailable(segmentation = {}) {
+  const reason = normalizeSegmentationUnavailableReason(segmentation?.segmentErrorReason, '');
+  if (!reason) return null;
+  const count = Math.max(0, Math.round(Number(segmentation?.segmentErrorCount) || 0));
+  const fatal = segmentation?.segmentErrorFatal === true || reason === PRODUCTION_MASK_UNAVAILABLE_ERROR;
+  if (!fatal && count < SEGMENT_ERROR_UNAVAILABLE_THRESHOLD) return null;
+  return {
+    reason: fatal ? reason : 'worker_segment_errors_repeated',
+    failures: [`${reason}:${count || 1}`],
+  };
+}
+
 async function waitForVideoReady(video) {
   if (video.readyState >= 2) return;
   await new Promise((resolve) => {
@@ -257,6 +279,19 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     }
   }
 
+  function enterSegmentationUnavailable(reason, failures = []) {
+    notifySegmentationUnavailable(reason, failures);
+    segmenterStage.reset();
+    compositorStage.reset();
+    releaseSegmentationBackend({ keepWarm: true });
+    compositorStage.render({
+      hasMatteMask: false,
+      mode: 'off',
+      sourceFrame: null,
+    });
+    markReady();
+  }
+
   async function ensureSegmentationBackend() {
     if (segmentationBackend || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) return segmentationBackend;
     if (segmentationBackendInitPromise) return segmentationBackendInitPromise;
@@ -368,6 +403,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     }
     if (runtimeConfig.mode === 'off') {
       segmenterStage.reset();
+      compositorStage.reset();
       releaseSegmentationBackend({ keepWarm: true });
     }
     syncPipelineStageStates();
@@ -412,9 +448,16 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
       : { detectSampleMs: null, matteMaskValues: null };
-    const matteRejection = canRunSegmentation
+    const segmentErrorUnavailable = canRunSegmentation
+      ? resolveSegmentErrorUnavailable(segmentation)
+      : null;
+    const matteRejection = canRunSegmentation && !segmentErrorUnavailable
       ? resolveBackgroundMatteRejection(segmentation)
       : null;
+    if (segmentErrorUnavailable) {
+      enterSegmentationUnavailable(segmentErrorUnavailable.reason, segmentErrorUnavailable.failures);
+      return;
+    }
     if (matteRejection) {
       captureBackgroundMatteRejectionDiagnostic({
         backend: segmentationBackendKind,
@@ -425,6 +468,10 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
         mode: runtimeConfig.mode,
         reason: matteRejection.reason,
       });
+      enterSegmentationUnavailable(matteRejection.reason, [
+        `${matteRejection.maskKind}:${matteRejection.reason}`,
+      ]);
+      return;
     }
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;

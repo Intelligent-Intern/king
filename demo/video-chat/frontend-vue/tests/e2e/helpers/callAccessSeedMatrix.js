@@ -37,6 +37,7 @@ function byKey(rows, label) {
 export const iamCallAccessSeedMatrix = Object.freeze(readSeedMatrix());
 
 const tenantIndex = byKey(iamCallAccessSeedMatrix.tenants, 'tenant');
+const organizationIndex = byKey(iamCallAccessSeedMatrix.organizations || [], 'organization');
 const userIndex = byKey(iamCallAccessSeedMatrix.users, 'user');
 const callIndex = byKey(iamCallAccessSeedMatrix.calls, 'call');
 const accessLinkIndex = byKey(iamCallAccessSeedMatrix.access_links, 'access link');
@@ -51,6 +52,10 @@ function requiredRow(index, key, label) {
 
 export function getSeedTenant(key) {
   return clone(requiredRow(tenantIndex, key, 'tenant'));
+}
+
+export function getSeedOrganization(key) {
+  return clone(requiredRow(organizationIndex, key, 'organization'));
 }
 
 export function getSeedUser(key) {
@@ -87,9 +92,19 @@ function tenantForCall(call) {
   return tenantKey === '' ? null : requiredRow(tenantIndex, tenantKey, 'tenant');
 }
 
+function organizationForCall(call) {
+  const organizationKey = typeof call?.organization_key === 'string' ? call.organization_key : '';
+  return organizationKey === '' ? null : requiredRow(organizationIndex, organizationKey, 'organization');
+}
+
 function membershipForTenant(user, tenantKey) {
   return (Array.isArray(user?.memberships) ? user.memberships : [])
     .find((membership) => String(membership?.tenant_key || '') === tenantKey) || null;
+}
+
+function membershipForOrganization(user, organizationKey) {
+  return (Array.isArray(user?.organization_memberships) ? user.organization_memberships : [])
+    .find((membership) => String(membership?.organization_key || '') === organizationKey) || null;
 }
 
 function permissionsFor(user, membershipRole) {
@@ -180,7 +195,9 @@ function participantPayload(user, callRole = 'participant', inviteState = 'allow
   };
 }
 
-function callPayload(call, viewerUser = null, inviteState = 'pending') {
+function callPayload(call, viewerUser = null, inviteState = 'pending', options = {}) {
+  const payloadOptions = options && typeof options === 'object' ? options : {};
+  const includeViewerIfMissing = payloadOptions.includeViewerIfMissing !== false;
   const owner = requiredRow(userIndex, call.owner_user_key, 'user');
   const guestUsers = (Array.isArray(call.guest_list_user_keys) ? call.guest_list_user_keys : [])
     .map((key) => requiredRow(userIndex, key, 'user'));
@@ -188,9 +205,14 @@ function callPayload(call, viewerUser = null, inviteState = 'pending') {
     participantPayload(owner, 'owner', 'allowed'),
     ...guestUsers.map((user) => participantPayload(user, 'participant', 'allowed')),
   ];
-  if (viewerUser && !internal.some((participant) => Number(participant.user_id) === Number(viewerUser.id))) {
+  const viewerHasParticipantRow = viewerUser
+    ? internal.some((participant) => Number(participant.user_id) === Number(viewerUser.id))
+    : false;
+  if (includeViewerIfMissing && viewerUser && !viewerHasParticipantRow) {
     internal.push(participantPayload(viewerUser, 'participant', inviteState));
   }
+  const viewerIsOwner = viewerUser && Number(viewerUser.id) === Number(owner.id);
+  const viewerHasParticipation = Boolean(viewerUser && (viewerHasParticipantRow || includeViewerIfMissing || viewerIsOwner));
 
   return {
     id: call.id,
@@ -205,11 +227,122 @@ function callPayload(call, viewerUser = null, inviteState = 'pending') {
       internal,
       external: [],
     },
-    my_participation: viewerUser ? {
+    my_participation: viewerHasParticipation ? {
       call_role: Number(viewerUser.id) === Number(owner.id) ? 'owner' : 'participant',
       invite_state: inviteState,
-    } : null,
+    } : false,
   };
+}
+
+function seedUserIsSystemAdmin(user) {
+  return user?.system_admin === true && String(user?.role || '').trim().toLowerCase() === 'admin';
+}
+
+function seedUserIsOrganizationAdminForCall(user, call) {
+  const organization = organizationForCall(call);
+  if (!organization) return false;
+  const membership = membershipForOrganization(user, String(organization.key || ''));
+  return String(membership?.role || '').trim().toLowerCase() === 'admin';
+}
+
+function directJoinDecisionFor(user, call) {
+  const status = String(call?.status || '').trim().toLowerCase();
+  if (!['scheduled', 'active'].includes(status)) {
+    return {
+      allowed: false,
+      reason: 'call_not_joinable_from_status',
+      source: 'none',
+      scope: 'none',
+      can_manage_lobby: false,
+      can_admit: false,
+      can_reject: false,
+      can_kick: false,
+    };
+  }
+
+  if (seedUserIsSystemAdmin(user)) {
+    return {
+      allowed: true,
+      reason: 'system_admin',
+      source: 'system_admin',
+      scope: 'system',
+      can_manage_lobby: true,
+      can_admit: true,
+      can_reject: true,
+      can_kick: true,
+    };
+  }
+
+  const isOwner = String(call?.owner_user_key || '') === String(user?.key || '');
+  if (isOwner) {
+    return {
+      allowed: true,
+      reason: 'owner',
+      source: 'owner',
+      scope: 'call',
+      can_manage_lobby: true,
+      can_admit: true,
+      can_reject: true,
+      can_kick: true,
+    };
+  }
+
+  if (seedUserIsOrganizationAdminForCall(user, call)) {
+    return {
+      allowed: true,
+      reason: 'organization_admin',
+      source: 'organization_admin',
+      scope: 'organization',
+      can_manage_lobby: true,
+      can_admit: true,
+      can_reject: true,
+      can_kick: true,
+    };
+  }
+
+  if (String(call?.access_mode || 'invite_only').trim().toLowerCase() === 'free_for_all') {
+    return {
+      allowed: true,
+      reason: 'free_for_all',
+      source: 'free_for_all',
+      scope: 'call',
+      can_manage_lobby: false,
+      can_admit: false,
+      can_reject: false,
+      can_kick: false,
+    };
+  }
+
+  const guestListKeys = Array.isArray(call?.guest_list_user_keys) ? call.guest_list_user_keys : [];
+  if (guestListKeys.includes(user?.key)) {
+    return {
+      allowed: true,
+      reason: 'guest_list',
+      source: 'guest_list',
+      scope: 'call',
+      can_manage_lobby: false,
+      can_admit: false,
+      can_reject: false,
+      can_kick: false,
+    };
+  }
+
+  return {
+    allowed: false,
+    reason: 'not_on_guest_list',
+    source: 'none',
+    scope: 'none',
+    can_manage_lobby: false,
+    can_admit: false,
+    can_reject: false,
+    can_kick: false,
+  };
+}
+
+export function directJoinDecisionForSeedUser(userKey, callKey) {
+  const user = requiredRow(userIndex, userKey, 'user');
+  const call = requiredRow(callIndex, callKey, 'call');
+  return clone(directJoinDecisionFor(user, call));
 }
 
 function accessLinkPayload(link, call, targetUser = null) {
@@ -238,10 +371,10 @@ function callAccessSessionId(link, user) {
   return `sess_iam_call_access_${String(link.key).replace(/[^a-z0-9_]+/gi, '_')}_${String(user.key).replace(/[^a-z0-9_]+/gi, '_')}`;
 }
 
-export function storedSessionForSeedUser(userKey, callKey = 'alpha_active') {
+export function storedSessionForSeedUser(userKey, callKey = 'alpha_active', overrides = {}) {
   const user = requiredRow(userIndex, userKey, 'user');
   const call = requiredRow(callIndex, callKey, 'call');
-  return {
+  const baseSession = {
     role: user.role,
     displayName: user.display_name,
     email: user.email,
@@ -255,14 +388,29 @@ export function storedSessionForSeedUser(userKey, callKey = 'alpha_active') {
     expiresAt: '2030-01-01T00:00:00.000Z',
     tenant: tenantSnapshotFor(user, call),
   };
+  const normalizedOverrides = overrides && typeof overrides === 'object' ? overrides : {};
+  return {
+    ...baseSession,
+    ...clone(normalizedOverrides),
+    tenant: normalizedOverrides.tenant && typeof normalizedOverrides.tenant === 'object'
+      ? {
+        ...(baseSession.tenant || {}),
+        ...clone(normalizedOverrides.tenant),
+        permissions: {
+          ...((baseSession.tenant || {}).permissions || {}),
+          ...(normalizedOverrides.tenant.permissions || {}),
+        },
+      }
+      : baseSession.tenant,
+  };
 }
 
-export async function installStoredSeedSession(context, userKey, callKey = 'alpha_active') {
+export async function installStoredSeedSession(context, userKey, callKey = 'alpha_active', overrides = {}) {
   await context.addInitScript(
     ({ key, value }) => {
       localStorage.setItem(key, JSON.stringify(value));
     },
-    { key: sessionStorageKey, value: storedSessionForSeedUser(userKey, callKey) },
+    { key: sessionStorageKey, value: storedSessionForSeedUser(userKey, callKey, overrides) },
   );
 }
 
@@ -356,8 +504,38 @@ function resolveAccessLinkById(accessId) {
   return [...accessLinkIndex.values()].find((link) => String(link.id).toLowerCase() === normalizedAccessId) || null;
 }
 
-export async function installCallAccessSeedRoutes(context) {
+export async function installCallAccessSeedRoutes(context, options = {}) {
   const issuedSessions = new Map();
+  const routeOptions = options && typeof options === 'object' ? options : {};
+  const decisionLog = Array.isArray(routeOptions.decisionLog) ? routeOptions.decisionLog : null;
+
+  function sessionRecordForRequest(request) {
+    const token = bearerToken(request);
+    return issuedSessions.get(token) || seededSessionRecordFromToken(token);
+  }
+
+  function logDirectJoinDecision({ request, user, call, decision }) {
+    if (!decisionLog) return;
+    decisionLog.push({
+      method: request.method(),
+      pathname: new URL(request.url()).pathname,
+      authorization: request.headers().authorization || '',
+      user_key: String(user?.key || ''),
+      user_id: Number(user?.id || 0),
+      call_key: String(call?.key || ''),
+      call_id: String(call?.id || ''),
+      allowed: Boolean(decision?.allowed),
+      reason: String(decision?.reason || ''),
+      source: String(decision?.source || ''),
+      scope: String(decision?.scope || ''),
+      can_manage_lobby: Boolean(decision?.can_manage_lobby),
+    });
+  }
+
+  function callByRef(callRef) {
+    const normalizedCallRef = String(callRef || '').trim();
+    return [...callIndex.values()].find((row) => row.id === normalizedCallRef || row.room_id === normalizedCallRef) || null;
+  }
 
   await context.route('**/api/**', async (route) => {
     const request = route.request();
@@ -460,11 +638,42 @@ export async function installCallAccessSeedRoutes(context) {
     const resolveMatch = url.pathname.match(/^\/api\/calls\/resolve\/([^/]+)$/);
     if (resolveMatch && request.method() === 'GET') {
       const callRef = decodeURIComponent(resolveMatch[1] || '');
-      const call = [...callIndex.values()].find((row) => row.id === callRef || row.room_id === callRef);
-      if (!call) {
-        await fulfillJson(route, 404, {
+      const record = sessionRecordForRequest(request);
+      if (!record) {
+        await fulfillJson(route, 401, {
           status: 'error',
-          error: { code: 'calls_not_found', message: 'Call does not exist.' },
+          error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      const call = callByRef(callRef);
+      if (!call) {
+        await fulfillJson(route, 200, {
+          status: 'ok',
+          result: {
+            state: 'not_found',
+            resolved_as: '',
+            reason: 'route_call_ref_not_found',
+            access_link: null,
+            call: null,
+          },
+          time: '2026-05-08T10:00:00.000Z',
+        });
+        return;
+      }
+      const decision = directJoinDecisionFor(record.user, call);
+      logDirectJoinDecision({ request, user: record.user, call, decision });
+      if (!decision.allowed) {
+        await fulfillJson(route, 200, {
+          status: 'ok',
+          result: {
+            state: 'forbidden',
+            resolved_as: 'call_id',
+            reason: 'calls_forbidden',
+            access_link: null,
+            call: null,
+          },
+          time: '2026-05-08T10:00:00.000Z',
         });
         return;
       }
@@ -472,8 +681,10 @@ export async function installCallAccessSeedRoutes(context) {
         status: 'ok',
         result: {
           state: 'resolved',
-          resolved_as: 'call',
-          call: callPayload(call),
+          resolved_as: 'call_id',
+          access_link: null,
+          call: callPayload(call, record.user, 'allowed', { includeViewerIfMissing: false }),
+          access_decision: decision,
         },
         time: '2026-05-08T10:00:00.000Z',
       });
@@ -483,7 +694,15 @@ export async function installCallAccessSeedRoutes(context) {
     const callMatch = url.pathname.match(/^\/api\/calls\/([^/]+)$/);
     if (callMatch && request.method() === 'GET') {
       const callId = decodeURIComponent(callMatch[1] || '');
-      const call = [...callIndex.values()].find((row) => row.id === callId || row.room_id === callId);
+      const record = sessionRecordForRequest(request);
+      if (!record) {
+        await fulfillJson(route, 401, {
+          status: 'error',
+          error: { code: 'auth_failed', message: 'A valid session token is required.' },
+        });
+        return;
+      }
+      const call = callByRef(callId);
       if (!call) {
         await fulfillJson(route, 404, {
           status: 'error',
@@ -491,9 +710,18 @@ export async function installCallAccessSeedRoutes(context) {
         });
         return;
       }
+      const decision = directJoinDecisionFor(record.user, call);
+      logDirectJoinDecision({ request, user: record.user, call, decision });
+      if (!decision.allowed) {
+        await fulfillJson(route, 403, {
+          status: 'error',
+          error: { code: 'calls_forbidden', message: 'You are not allowed to view this call.' },
+        });
+        return;
+      }
       await fulfillJson(route, 200, {
         status: 'ok',
-        call: callPayload(call),
+        call: callPayload(call, record.user, 'allowed', { includeViewerIfMissing: false }),
         time: '2026-05-08T10:00:00.000Z',
       });
       return;

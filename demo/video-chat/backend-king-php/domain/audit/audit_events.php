@@ -281,6 +281,36 @@ function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $ac
     ]);
 }
 
+function videochat_audit_record_call_owner_transfer(
+    PDO $pdo,
+    array $call,
+    int $actorUserId,
+    int $previousOwnerUserId,
+    int $newOwnerUserId,
+    array $context = []
+): array {
+    $ownerCount = is_numeric($context['owner_count'] ?? null) ? (int) $context['owner_count'] : 0;
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($call['tenant_id'] ?? null) ? (int) $call['tenant_id'] : null,
+        'event_type' => 'call_owner_transferred',
+        'actor_user_id' => $actorUserId,
+        'target_user_id' => $newOwnerUserId,
+        'call_id' => (string) ($call['id'] ?? ''),
+        'resource_type' => 'call_owner',
+        'resource_id' => (string) ($call['id'] ?? ''),
+        'resource_fingerprint' => videochat_audit_fingerprint((string) ($call['id'] ?? '')),
+        'payload' => [
+            'previous_owner_user_id' => $previousOwnerUserId,
+            'new_owner_user_id' => $newOwnerUserId,
+            'old_owner_admin_preserved' => (bool) ($context['old_owner_admin_preserved'] ?? false),
+            'one_owner_invariant_preserved' => $ownerCount === 1,
+            'owner_participant_count' => $ownerCount,
+            'raw_call_identifier_logged' => false,
+        ],
+    ]);
+}
+
 function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
 {
     if (!videochat_audit_bootstrap($pdo)) {

@@ -1028,3 +1028,276 @@ test('strong personalized-link mismatch wrong host denial gives no access and le
     await context.close();
   }
 });
+
+test('strong personalized-link mismatch correct host supports decline and update-confirm-email without foreign data', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const callId = 'strong-mismatch-correct-host-call';
+  const safeCallTitle = 'Strong Mismatch Host Verification';
+  const correctHostName = 'Known Current Host';
+  const linkInviteeName = 'Foreign Correct Host Invitee';
+  const linkInviteeEmail = 'foreign-correct-host-invitee@example.invalid';
+  const realHostEmail = 'private-correct-host@example.invalid';
+  const temporaryForeignAccountId = 'temporary-foreign-account-should-not-update';
+  const currentUser = {
+    userId: 3,
+    email: 'correct-host-current-user@example.invalid',
+    displayName: 'Correct Host Current User',
+    sessionId: 'sess_correct_host_current_user',
+    sessionToken: 'sess_correct_host_current_user',
+    expiresAt: '2026-09-01T10:00:00Z',
+  };
+  const foreignNeedles = [
+    linkInviteeName,
+    linkInviteeEmail,
+    realHostEmail,
+    temporaryForeignAccountId,
+  ];
+
+  async function runBranch({ accessId, decision }) {
+    const { context, page } = await createPublicJoinPage(browser, baseURL);
+    const sessionBodies = [];
+
+    try {
+      await context.addInitScript(({ key, session }) => {
+        localStorage.setItem(key, JSON.stringify(session));
+        class FakeAdmissionSocket {
+          static CONNECTING = 0;
+          static OPEN = 1;
+          static CLOSING = 2;
+          static CLOSED = 3;
+
+          constructor() {
+            this.readyState = FakeAdmissionSocket.CONNECTING;
+            this.listeners = {};
+            setTimeout(() => {
+              this.readyState = FakeAdmissionSocket.OPEN;
+              this.listeners.open?.forEach((listener) => listener({ type: 'open' }));
+            }, 0);
+          }
+
+          addEventListener(type, listener) {
+            this.listeners[type] = this.listeners[type] || [];
+            this.listeners[type].push(listener);
+          }
+
+          send() {}
+
+          close() {
+            this.readyState = FakeAdmissionSocket.CLOSED;
+          }
+        }
+        window.WebSocket = FakeAdmissionSocket;
+      }, {
+        key: sessionStorageKey,
+        session: {
+          sessionId: currentUser.sessionId,
+          sessionToken: currentUser.sessionToken,
+          expiresAt: currentUser.expiresAt,
+        },
+      });
+
+      await page.route('**/api/auth/session-state', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'ok',
+            result: { state: 'authenticated' },
+            session: {
+              id: currentUser.sessionId,
+              token: currentUser.sessionToken,
+              expires_at: currentUser.expiresAt,
+            },
+            user: {
+              id: currentUser.userId,
+              email: currentUser.email,
+              display_name: currentUser.displayName,
+              role: 'user',
+              status: 'active',
+            },
+            tenant: {
+              id: 1,
+              uuid: 'tenant-1',
+              label: 'Intelligent Intern',
+              role: 'member',
+              permissions: { tenant_admin: false },
+            },
+          }),
+        });
+      });
+
+      await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'ok',
+            result: {
+              state: 'resolved',
+              access_link: { id: accessId },
+              link_kind: 'personal',
+              call: {
+                id: callId,
+                room_id: 'lobby',
+                title: safeCallTitle,
+              },
+              target_hint: { participant_email: null },
+              join_path: `/join/${accessId}`,
+            },
+          }),
+        });
+      });
+
+      await page.route(`**/api/call-access/${accessId}/session`, async (route) => {
+        const requestBody = parseJsonPostData(route.request()) || {};
+        sessionBodies.push(requestBody);
+
+        const hostName = String(requestBody.host_name || '');
+        const updateDecision = String(requestBody.mismatch_update_decision || '');
+        if (hostName === '') {
+          await route.fulfill({
+            status: 403,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              status: 'error',
+              error: {
+                code: 'call_access_forbidden',
+                message: 'Call access link is not available for your session.',
+                details: {
+                  mismatch: 'strong_personalized_link',
+                  fields: {
+                    host_name: 'not_verified',
+                  },
+                },
+              },
+            }),
+          });
+          return;
+        }
+
+        if (hostName === correctHostName && updateDecision === '') {
+          await route.fulfill({
+            status: 409,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              status: 'error',
+              error: {
+                code: 'call_access_update_decision_required',
+                message: 'Choose how to continue.',
+                details: {
+                  mismatch: 'strong_personalized_link',
+                  fields: {
+                    host_name: 'verified',
+                    account_update: 'decision_required',
+                  },
+                },
+              },
+            }),
+          });
+          return;
+        }
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'ok',
+            result: {
+              session: {
+                id: currentUser.sessionId,
+                token: currentUser.sessionToken,
+                expires_at: currentUser.expiresAt,
+              },
+              user: {
+                id: currentUser.userId,
+                email: currentUser.email,
+                display_name: currentUser.displayName,
+                role: 'user',
+              },
+              call: {
+                id: callId,
+                room_id: 'lobby',
+                title: safeCallTitle,
+              },
+              email_confirmation: updateDecision === 'request_confirmation'
+                ? { status: 'sent', recipient_email: currentUser.email }
+                : null,
+            },
+          }),
+        });
+      });
+
+      const joinResponsePromise = page.waitForResponse((response) => (
+        response.url().includes(`/api/call-access/${accessId}/join`)
+        && response.request().method() === 'GET'
+      ));
+      await page.goto(`/join/${accessId}`);
+      const joinResponse = await joinResponsePromise;
+      expect(joinResponse.status()).toBe(200);
+      expectTextDoesNotContain(await joinResponse.text(), foreignNeedles, `${decision} join response`);
+
+      const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+      await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+      await expect(joinDialog).toContainText(safeCallTitle);
+      await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+      await expect(joinDialog.getByLabel('Host name')).toBeVisible();
+      await joinDialog.getByLabel('Host name').fill(correctHostName);
+      await joinDialog.getByRole('button', { name: 'Verify host' }).click();
+      await expect(joinDialog.getByRole('button', { name: 'Continue without updating' })).toBeVisible();
+
+      if (decision === 'decline') {
+        await joinDialog.getByRole('button', { name: 'Continue without updating' }).click();
+      } else {
+        await joinDialog.getByLabel('First name').fill('Manual');
+        await joinDialog.getByLabel('Last name').fill('Correction');
+        await joinDialog.getByRole('button', { name: 'Send confirmation email' }).click();
+      }
+
+      await expect(joinDialog).toContainText(/Connecting lobby connection|Waiting for host|Call owner has been notified/i);
+      for (const value of foreignNeedles) {
+        await expect(joinDialog, `${decision} branch must not render ${value}`).not.toContainText(value);
+      }
+
+      expect(sessionBodies[0]).toEqual({
+        verified_user_id: currentUser.userId,
+        verified_session_id: currentUser.sessionId,
+      });
+      expect(sessionBodies[1]).toEqual({
+        verified_user_id: currentUser.userId,
+        verified_session_id: currentUser.sessionId,
+        host_name: correctHostName,
+      });
+      if (decision === 'decline') {
+        expect(sessionBodies[2]).toEqual({
+          verified_user_id: currentUser.userId,
+          verified_session_id: currentUser.sessionId,
+          host_name: correctHostName,
+          mismatch_update_decision: 'decline',
+        });
+      } else {
+        expect(sessionBodies[2]).toEqual({
+          verified_user_id: currentUser.userId,
+          verified_session_id: currentUser.sessionId,
+          host_name: correctHostName,
+          mismatch_update_decision: 'request_confirmation',
+          profile_update: {
+            first_name: 'Manual',
+            last_name: 'Correction',
+          },
+        });
+      }
+
+      const storedSession = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), sessionStorageKey);
+      expect(storedSession.sessionId).toBe(currentUser.sessionId);
+      expect(storedSession.sessionToken).toBe(currentUser.sessionToken);
+      expect(JSON.stringify(sessionBodies)).not.toContain(linkInviteeName);
+      expect(JSON.stringify(sessionBodies)).not.toContain(linkInviteeEmail);
+      expect(JSON.stringify(sessionBodies)).not.toContain(temporaryForeignAccountId);
+    } finally {
+      await context.close();
+    }
+  }
+
+  await runBranch({ accessId: '66666666-6666-4666-8666-666666666666', decision: 'decline' });
+  await runBranch({ accessId: '77777777-7777-4777-8777-777777777777', decision: 'update-confirm-email' });
+});

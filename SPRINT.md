@@ -1170,6 +1170,15 @@ The sprint is complete when:
 - all new tests are documented
 - the manual checklist is mapped to automated test case IDs
 
+IAM11-18 branch hygiene proof is recorded in
+`analyse/IAM11-18-branch-hygiene-proof.md`. The current inventory finds 192
+IAM-like local branches, 154 checked-out IAM-like worktrees, 2 dirty IAM
+worktrees, no IAM-like branch tips reachable from `main` or
+`develop/1.0.8-beta`, and 134 local IAM-integration safe-to-consider cleanup
+candidates under the `iam-e2e-integration` ancestor plus clean/no-worktree rule.
+No branch or worktree was deleted; dirty and non-ancestor branches remain
+manual.
+
 ---
 
 # E2E Case Checklist
@@ -1213,8 +1222,8 @@ client role cache data all resolve from current backend membership state.
 - [ ] If organization role `Admin` transfers owner rights, old owner keeps admin rights
 - [ ] New owner receives owner rights
 - [ ] New owner receives admin rights in call
-- [ ] After owner transfer, there is exactly one current owner
-- [ ] Former owner without admin role can no longer perform owner actions
+- [x] After owner transfer, there is exactly one current owner
+- [x] Former owner without admin role can no longer perform owner actions
 - [ ] Organization admin can keep call-admin rights after owner transfer
 - [ ] Owner rights cannot be transferred to a non-existent user
 - [ ] Owner rights cannot be transferred across forbidden organization boundaries
@@ -1551,6 +1560,7 @@ controls, and duplicate participant snapshot rows aggregate into one UI row.
 - [ ] API request with forged organization parameter is rejected
 - [x] API request with foreign call ID is rejected
 - [x] Owner transfer request without owner/admin right is rejected
+- [x] Demoted, removed, and guest participants cannot retain owner-transfer capability after revocation
 - [x] Lobby admission request without moderator right is rejected
 - [x] Kick request without moderator right is rejected
 - [ ] Account-data update request without email confirmation is rejected
@@ -1690,6 +1700,11 @@ normal user and an anonymous/open link while a normal user context is present,
 then authenticates the issued sessions and proves role, tenant-admin,
 system-admin, moderator, owner-management, and call-admin checks all remain
 false.
+`call-owner-moderation-contract` now exercises owner-transfer revocation
+directly: a demoted former owner, a removed former owner row, and a removed
+temporary guest participant all resolve without `can_manage_owner` and receive
+`forbidden` from the owner-transfer path while the call still has exactly one
+current owner.
 
 ## 21. Cross-Organization Cases
 

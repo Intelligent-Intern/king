@@ -60,16 +60,30 @@ try {
 
   requireContains(workerBackend, "kind: 'worker-segmenter'", 'Pierre worker backend identity');
   requireContains(workerBackend, "const workerUrl = new URL('./workers/imageSegmenterWorker.js', import.meta.url);", 'worker module boundary');
+  requireContains(workerBackend, 'SEGMENT_ERROR_UNAVAILABLE_THRESHOLD = 3', 'repeated worker segment error quarantine threshold');
+  requireContains(workerBackend, 'terminalSegmentError', 'worker segment error terminal state');
+  assert.match(workerBackend, /else if \(type === 'SEGMENT_RESULT'\) \{\s*const eventSessionId = [\s\S]*?if \(eventSessionId !== sessionId\) \{\s*event\.data\.maskBitmap\?\.close\?\.\(\);\s*return;\s*\}\s*pendingFrame = false;/, 'stale segment results must not clear the current pending frame');
+  assert.match(workerBackend, /else if \(type === 'SEGMENT_ERROR'\) \{\s*const eventSessionId = [\s\S]*?if \(eventSessionId !== sessionId\) return;\s*pendingFrame = false;/, 'stale segment errors must not clear the current pending frame');
   requireContains(worker, 'ImageSegmenter.createFromOptions', 'MediaPipe worker boundary');
   requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'MediaPipe delegate boundary');
   requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'MediaPipe category-mask WebGL boundary');
+  requireContains(worker, "error: 'production_category_mask_unavailable'", 'category-mask unavailable error');
+  requireMissing(worker, 'confidenceMaskValues', 'confidence-mask weaker fallback');
+  requireMissing(worker, 'outputConfidenceMasks', 'confidence-mask output');
   requireMissing(worker, 'Math.exp', 'worker softmax/sigmoid fallback');
   requireMissing(worker, 'softmax', 'worker softmax fallback');
   requireMissing(worker, 'sigmoid', 'worker sigmoid fallback');
+  requireContains(compositor, "drawContainImage(ctx, video, canvas.width, canvas.height);", 'canvas compositor source-visible no-mask render');
+  requireContains(compositor, "gl.uniform1i(locations.uEffect, mode === 'off' || !hasRenderableMask ? 0 : 1);", 'WebGL compositor source-visible no-mask render');
+  requireMissing(compositor, "ctx.filter = mode === 'replace' ? 'none' : `blur(${blurPx}px)`", 'whole-frame blur no-mask fallback');
 
   requireContains(orchestration, 'handleBackgroundReplacementUnavailable({', 'modal prompt trigger');
   requireContains(unavailablePrompt, 'openBackgroundReplacementUnavailablePrompt({', 'prompt state update');
   requireContains(unavailablePrompt, "eventType: 'local_background_replacement_unavailable'", 'field diagnostic');
+  requireContains(stream, 'resolveSegmentErrorUnavailable(segmentation)', 'worker segment errors trigger unavailable path');
+  requireContains(stream, 'enterSegmentationUnavailable(matteRejection.reason', 'rejected mattes trigger unavailable path');
+  assert.match(stream, /if \(runtimeConfig\.mode === 'off'\) \{\s*segmenterStage\.reset\(\);\s*compositorStage\.reset\(\);\s*releaseSegmentationBackend\(\{ keepWarm: true \}\);\s*\}/, 'mode off must reset compositor with segmenter before backend release');
+  requireContains(stream, 'releaseSegmentationBackend({ keepWarm: true });', 'unavailable path stops per-frame failed backend retry');
   requireContains(orchestration, 'createBackgroundFallbackAudioOnlyStream(rawStream)', 'avatar placeholder audio-only local stream');
   requireContains(orchestration, "backgroundFilterBackend = 'avatar_placeholder'", 'avatar backend state');
   requireContains(orchestration, 'syncBackgroundFallbackControlState(true)', 'avatar control-state signal');

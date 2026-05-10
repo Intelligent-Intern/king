@@ -153,18 +153,37 @@ export function createBackgroundRuntimeDiagnosticPayload(details = {}) {
   const model = resolveBackgroundModelDescriptor(details.modelAssetPath);
   const requestedBackend = normalizeCode(details.requestedBackend || details.requested || 'worker-segmenter', 'worker-segmenter');
   const selectedBackend = normalizeCode(details.selectedBackend || details.selected || details.backend || 'none', 'none');
+  const reasonUserChoiceRequired = normalizeCode(
+    details.reasonUserChoiceRequired || details.reason_user_choice_required || 'not_required',
+    'not_required',
+  );
+  const fallbackReason = normalizeCode(
+    details.fallbackReason || details.fallback_reason || details.reason || reasonUserChoiceRequired,
+    reasonUserChoiceRequired,
+  );
+  const failedBackend = normalizeCode(
+    details.failedBackend
+      || details.failed_backend
+      || (failureSignature ? requestedBackend : '')
+      || (reasonUserChoiceRequired !== 'not_required' ? selectedBackend || requestedBackend : 'none'),
+    'none',
+  );
   const payload = {
     browser_family: resolveBackgroundBrowserFamily(),
     backend: selectedBackend || requestedBackend,
+    failed_backend: failedBackend,
     requested_backend: requestedBackend,
     selected_backend: selectedBackend,
+    fallback_reason: fallbackReason,
     model_asset: model.model_asset,
     model_source: model.model_source,
+    gpu_availability: gpu.gpu_available ? normalizeCode(gpu.gpu_api, 'webgl') : 'unavailable',
     gpu_available: Boolean(gpu.gpu_available),
     gpu_api: normalizeCode(gpu.gpu_api, 'none'),
     gpu_failure_signature: normalizeBackgroundFailureSignature(gpu.gpu_failure_signature, ''),
     backend_failure_signature: failureSignature,
-    reason_user_choice_required: normalizeCode(details.reasonUserChoiceRequired || details.reason_user_choice_required || 'not_required', 'not_required'),
+    reason_user_choice_required: reasonUserChoiceRequired,
+    user_choice_required: reasonUserChoiceRequired !== 'not_required',
     failure_count: failures.length,
     failures,
   };
@@ -262,6 +281,8 @@ export function captureBackgroundBackendInitDiagnostic({
       error,
       failures,
       initPhase,
+      failedBackend: failed ? 'worker-segmenter' : 'none',
+      fallbackReason: failed ? 'segmentation_backend_init_failed' : 'not_required',
       reasonUserChoiceRequired: failed ? 'segmentation_backend_init_failed' : 'not_required',
       requestedBackend: 'worker-segmenter',
       selectedBackend: backend,
@@ -348,6 +369,8 @@ export function captureBackgroundMatteRejectionDiagnostic({
       backend,
       backgroundFilterMode: mode,
       detectSampleMs,
+      failedBackend: backend,
+      fallbackReason: normalizedReason,
       maskHeight,
       maskKind,
       maskWidth,
@@ -369,6 +392,8 @@ export function captureBackgroundModalChoiceDiagnostic(choice, details = {}) {
     message: 'Background replacement unavailable modal choice selected.',
     details: {
       ...details,
+      failedBackend: details.failedBackend || details.failed_backend || details.requestedBackend || 'worker-segmenter',
+      fallbackReason: details.fallbackReason || details.fallback_reason || details.reason || 'background_replacement_requires_user_choice',
       modalChoice,
       reasonUserChoiceRequired: details.reasonUserChoiceRequired || details.reason || 'background_replacement_requires_user_choice',
       requestedBackend: details.requestedBackend || 'worker-segmenter',

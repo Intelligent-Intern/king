@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/audit/audit_events.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_directory.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
@@ -19,7 +20,24 @@ function videochat_call_update_assert(bool $condition, string $message): void
     exit(1);
 }
 
+function videochat_call_update_event_type_count(array $events, string $eventType): int
+{
+    $count = 0;
+    foreach ($events as $event) {
+        if (is_array($event) && (string) ($event['event_type'] ?? '') === $eventType) {
+            $count++;
+        }
+    }
+
+    return $count;
+}
+
 try {
+    if (!extension_loaded('pdo_sqlite')) {
+        fwrite(STDOUT, "[call-update-contract] SKIP: pdo_sqlite unavailable\n");
+        exit(0);
+    }
+
     $databasePath = sys_get_temp_dir() . '/videochat-call-update-' . bin2hex(random_bytes(6)) . '.sqlite';
     if (is_file($databasePath)) {
         @unlink($databasePath);
@@ -212,6 +230,76 @@ SQL
         'owner update should require explicit invite action'
     );
 
+    $guestListAuditEvents = videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 50]);
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_added') === 4,
+        'create and replacement update should audit four guest-list additions'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_removed') === 2,
+        'replacement update should audit removed guest-list entries'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_updated') === 0,
+        'replacement update should not report unchanged owner row as guest-list update'
+    );
+    videochat_call_update_assert(
+        videochat_guest_list_audit_event_type('merged', [], []) === 'guest_list_entry_merged',
+        'guest-list audit must reserve merged for duplicate active add normalization'
+    );
+    videochat_call_update_assert(
+        videochat_guest_list_audit_event_type('restored', [], []) === 'guest_list_entry_restored',
+        'guest-list audit must reserve restored for inactive entry reactivation'
+    );
+    $encodedGuestListAudit = json_encode($guestListAuditEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_update_assert(is_string($encodedGuestListAudit), 'guest-list audit events should encode');
+    foreach ([
+        'first-guest@example.com',
+        'second-guest@example.com',
+        'participant-update-call@intelligent-intern.com',
+    ] as $rawAuditText) {
+        videochat_call_update_assert(
+            !str_contains($encodedGuestListAudit, $rawAuditText),
+            'guest-list audit must not leak raw participant email: ' . $rawAuditText
+        );
+    }
+
+    $markSecondGuestPending = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'pending'
+WHERE call_id = :call_id
+  AND lower(email) = lower(:email)
+  AND source = 'external'
+SQL
+    );
+    $markSecondGuestPending->execute([
+        ':call_id' => $callId,
+        ':email' => 'second-guest@example.com',
+    ]);
+    videochat_call_update_assert($markSecondGuestPending->rowCount() === 1, 'setup external guest metadata update should affect one row');
+
+    $metadataOnlyGuestListUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', [
+        'internal_participant_user_ids' => [$moderatorUserId],
+        'external_participants' => [
+            ['email' => 'second-guest@example.com', 'display_name' => 'Second Guest'],
+        ],
+    ]);
+    videochat_call_update_assert($metadataOnlyGuestListUpdate['ok'] === true, 'metadata-only guest-list update should succeed');
+    $updatedGuestListAuditEvents = videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 50]);
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_updated') === 1,
+        'replacement diff should audit non-permission guest-list metadata as updated'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_merged') === 0,
+        'replacement diff must not relabel metadata updates as duplicate merges'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_restored') === 0,
+        'replacement diff must not relabel metadata updates as inactive-entry restores'
+    );
+
     $userOwnedCall = videochat_create_call($pdo, $userUserId, [
         'title' => 'User Owned Admin Transfer',
         'starts_at' => '2026-06-10T13:00:00Z',
@@ -298,6 +386,17 @@ SQL
         'admin'
     );
     videochat_call_update_assert($moderatorRoleUpdate['ok'] === true, 'admin should assign moderator role');
+    $guestListPermissionAuditEvents = videochat_audit_fetch_events($pdo, [
+        'call_id' => $callId,
+        'event_type' => 'guest_list_permission_changed',
+        'limit' => 20,
+    ]);
+    videochat_call_update_assert(count($guestListPermissionAuditEvents) === 1, 'moderator grant should audit one guest-list permission change');
+    $permissionPayload = is_array(($guestListPermissionAuditEvents[0] ?? [])['payload'] ?? null)
+        ? $guestListPermissionAuditEvents[0]['payload']
+        : [];
+    videochat_call_update_assert((string) (($permissionPayload['before'] ?? [])['call_role'] ?? '') === 'participant', 'permission audit before role mismatch');
+    videochat_call_update_assert((string) (($permissionPayload['after'] ?? [])['call_role'] ?? '') === 'moderator', 'permission audit after role mismatch');
 
     $moderatorOpenLink = videochat_create_call_access_link_for_user($pdo, $callId, $moderatorUserId, 'user', [
         'link_kind' => 'open',
