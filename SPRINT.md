@@ -121,7 +121,14 @@ Tickets:
     `node tests/contract/call-access-cross-org-contract.mjs` passed.
 - [ ] IAM-05 Prove external guest join links require display name, create a
   temporary guest identity, and wait in lobby until admitted.
-- [ ] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
+- [x] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
+  - Merged worker branch `agent/iam-s1-06-guest-list-php`.
+  - PHP contract now covers active internal guest-list access, declined entries,
+    external participant rows not counting as guest-list access, and tenant-scoped
+    lookup denial.
+  - Proof: PHP lint passed for the contract and guest-list domain file. Host
+    shell proof skipped because `pdo_sqlite` is unavailable; worker ran the same
+    PHP contract successfully in a disposable PHP container with `pdo_sqlite`.
 - [x] IAM-07 Prove cross-org denial and active-org switch behavior.
   - Merged worker branch `agent/iam-s1-07-cross-org`.
   - Added `call-access-cross-org-contract.mjs` for alpha-admin to beta-call
