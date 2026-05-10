@@ -76,7 +76,7 @@ Sprint Checkboxen:
 - [x] GSP01-01 Root planning reset: keep `EPIC.md` as the active long-form
   epic, move the interrupted IAM12 sprint state to `BACKLOG.md`, and keep this
   sprint as the only active checklist.
-- [ ] GSP01-02 Define `gossip.media.frame.v1`: keyframe/delta type, sequence,
+- [x] GSP01-02 Define `gossip.media.frame.v1`: keyframe/delta type, sequence,
   participant session, call id, room id, codec/runtime marker, 720p30 profile,
   timestamp, redaction rules and no SDP/ICE/tokens/secrets. Decide explicitly
   whether the first sprint maps this envelope into the existing decoder or
@@ -150,6 +150,10 @@ Current Loop Notes:
 - GSP01-01 proof: `EPIC.md` exists in the root, IAM12 follow-up work is parked
   in `BACKLOG.md`, and `SPRINT.md` contains exactly the active 20-item Gossip
   sprint. Commit `452afdcc` created the reset.
+- GSP01-02 proof: `demo/video-chat/contracts/v1/gossip-media-frame.contract.json`
+  defines the external `gossip.media.frame.v1` envelope, and
+  `demo/video-chat/frontend-vue/tests/contract/gossip-media-frame-v1-contract.mjs`
+  passed with `node tests/contract/gossip-media-frame-v1-contract.mjs`.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
