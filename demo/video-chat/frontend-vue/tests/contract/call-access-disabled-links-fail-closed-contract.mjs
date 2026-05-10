@@ -222,8 +222,8 @@ assert.match(
 
 assert.match(
   joinView,
-  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*resetJoinContextDetails\(\);[\s\S]*payload = \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\);[\s\S]*return;[\s\S]*\}/,
-  'public join UI must replace disabled-link backend payloads with a terminal safe UI error',
+  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*resetJoinContextDetails\(\);[\s\S]*payload = payload && typeof payload === 'object'[\s\S]*\? payload[\s\S]*: \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\);[\s\S]*return;[\s\S]*\}/,
+  'public join UI must preserve backend stable error codes while rendering a terminal safe UI error',
 );
 assert.match(
   joinView,
