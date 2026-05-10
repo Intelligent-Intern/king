@@ -171,11 +171,12 @@ try {
     'moderator assignment and revocation must persist on the call participant row',
   );
 
-  const realtimeContextBody = functionBody(realtimeContext, 'videochat_realtime_call_role_context_for_room_user');
+  const realtimeRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
+  const realtimeContextBody = functionBody(realtimeRoleContext, 'videochat_realtime_call_role_context_for_room_user');
   assert.match(
     realtimeContextBody,
-    /calls\.owner_user_id,[\s\S]*cp\.call_role,[\s\S]*\$callRole = 'owner';[\s\S]*'can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/s,
-    'realtime role context must recompute temp moderator rights from persisted call role while keeping owner-management stricter',
+    /\$contextFromRow = static function \(array \$row, bool \$isOrganizationAdmin\)[\s\S]*\$callRole = 'owner';[\s\S]*'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'[\s\S]*calls\.owner_user_id,[\s\S]*cp\.call_role/s,
+    'realtime role context must recompute moderator and org-admin rights from persisted call state while keeping owner-management stricter',
   );
 
   const lobbyAuthBody = functionBody(realtimeLobbySecurity, 'videochat_realtime_authorize_lobby_moderation_command');

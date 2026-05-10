@@ -69,7 +69,7 @@ Sprint Checkboxen:
 - [x] UX6-02 Classify dirty worktree `agent/planning-image-call-app`; compare
   its uncommitted `image-planning` package/test diff with the integrated
   package and preserve any still-relevant non-media value.
-- [ ] UX6-03 Classify dirty worktree `agent/l15-org-admin-join-proof`; extract
+- [x] UX6-03 Classify dirty worktree `agent/l15-org-admin-join-proof`; extract
   only current org-admin realtime role proof that is needed for Admin/Governance
   correctness, otherwise preserve it as parked evidence.
 - [x] UX6-04 Classify dirty worktree `codex/iam-call-access-e2e-foundation`;
