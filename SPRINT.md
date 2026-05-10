@@ -72,11 +72,11 @@ Proof anchors:
 Sprint Checkboxen:
 - [ ] IAM8-01 Extract or prove duplicate personalized-link race detection from
   `local/iam-e2e-abuse-duplicate-race`.
-- [ ] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
+- [x] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
   from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
 - [ ] IAM8-03 Extract or prove account reconciliation email confirmation from
   `local/iam-e2e-account-reconciliation-email`.
-- [ ] IAM8-04 Extract or prove admin guest-list main journeys from
+- [x] IAM8-04 Extract or prove admin guest-list main journeys from
   `local/iam-e2e-admin-guestlist-main-journeys`.
 - [ ] IAM8-05 Extract or prove logged-in anonymous-link organization-admin
   rights from `local/iam-e2e-anonymous-link-org-admin-rights`.
