@@ -513,11 +513,17 @@ SQL
         return ['ok' => false, 'reason' => 'attempt_write_failed'];
     }
 
+    $hostNameVerified = $normalizedOutcome === 'correct_host_name';
+    $canonicalEventType = $hostNameVerified
+        ? 'call_access_host_name_verified'
+        : 'call_access_host_name_verification_failed';
+    $legacyEventTypes = $hostNameVerified
+        ? ['call_access_host_verification_succeeded']
+        : ['call_access_host_verification_failed', 'call_access_host_name_rejected'];
+
     videochat_audit_record_event($pdo, [
         'tenant_id' => videochat_call_access_review_tenant_id($accessLink, $call),
-        'event_type' => $normalizedOutcome === 'correct_host_name'
-            ? 'call_access_host_name_verified'
-            : 'call_access_host_name_rejected',
+        'event_type' => $canonicalEventType,
         'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
         'call_id' => videochat_call_access_review_call_id($accessLink, $call),
         'resource_type' => 'call_access_host_verification',
@@ -527,6 +533,9 @@ SQL
             'action' => 'verify_host_name',
             'outcome' => $normalizedOutcome,
             'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'host_name_verified' => $hostNameVerified,
+            'canonical_event_type' => $canonicalEventType,
+            'legacy_event_types' => $legacyEventTypes,
             'host_name_logged' => false,
             'raw_link_identifier_logged' => false,
             'raw_session_identifier_logged' => false,
