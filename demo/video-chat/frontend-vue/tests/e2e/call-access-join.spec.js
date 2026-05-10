@@ -167,6 +167,183 @@ test('invalid call-access link renders safe state without foreign call data', as
   }
 });
 
+test('stale and denied call-access links render safe screens without private payload data', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const cases = [
+    {
+      label: 'ended link',
+      accessId: '66666666-6666-4666-8666-666666666666',
+      status: 409,
+      code: 'call_access_conflict',
+      expectedText: 'This call link cannot be used for the current call state.',
+      privateNeedles: [
+        'Ended Private Strategy Call',
+        'ended-host@example.invalid',
+        'Ended Invitee',
+        'sess_ended_should_not_bind',
+        'ended-private-call-id',
+      ],
+      result: {
+        call: {
+          id: 'ended-private-call-id',
+          title: 'Ended Private Strategy Call',
+          owner: { email: 'ended-host@example.invalid', display_name: 'Ended Host' },
+        },
+        target_user: { display_name: 'Ended Invitee' },
+      },
+    },
+    {
+      label: 'expired link',
+      accessId: '77777777-7777-4777-8777-777777777777',
+      status: 410,
+      code: 'call_access_expired',
+      expectedText: 'This call link has expired.',
+      privateNeedles: [
+        'Expired Private Strategy Call',
+        'expired-host@example.invalid',
+        'Expired Invitee',
+        'sess_expired_should_not_bind',
+        'tok_expired_should_not_bind',
+        'expired-private-call-id',
+        'expired-private-room-id',
+        'expired-owner-offer-sdp',
+        'candidate:expired-private-ice',
+        'turn:expired-private-token',
+        'media-token-expired-private',
+        'whiteboard-expired-private',
+        'call-app-expired-private-session',
+        'launch-token-expired-private',
+      ],
+      result: {
+        call: {
+          id: 'expired-private-call-id',
+          room_id: 'expired-private-room-id',
+          title: 'Expired Private Strategy Call',
+          owner: { email: 'expired-host@example.invalid', display_name: 'Expired Host' },
+        },
+        target_user: { display_name: 'Expired Invitee' },
+        session: { id: 'sess_expired_should_not_bind', token: 'tok_expired_should_not_bind' },
+        signaling: {
+          sdp: 'expired-owner-offer-sdp',
+          ice: ['candidate:expired-private-ice'],
+          turn_credential: 'turn:expired-private-token',
+          media_token: 'media-token-expired-private',
+        },
+        call_apps: [{
+          app_key: 'whiteboard-expired-private',
+          session_id: 'call-app-expired-private-session',
+          launch_token: 'launch-token-expired-private',
+        }],
+      },
+    },
+    {
+      label: 'deleted link',
+      accessId: '88888888-8888-4888-8888-888888888888',
+      status: 404,
+      code: 'call_access_not_found',
+      expectedText: 'This call link does not exist.',
+      privateNeedles: [
+        'Deleted Private Strategy Call',
+        'deleted-host@example.invalid',
+        'Deleted Invitee',
+        'sess_deleted_should_not_bind',
+        'deleted-private-call-id',
+      ],
+      result: {
+        call: {
+          id: 'deleted-private-call-id',
+          title: 'Deleted Private Strategy Call',
+          owner: { email: 'deleted-host@example.invalid', display_name: 'Deleted Host' },
+        },
+        target_user: { display_name: 'Deleted Invitee' },
+      },
+    },
+    {
+      label: 'disabled user link',
+      accessId: '99999999-9999-4999-8999-999999999999',
+      status: 404,
+      code: 'call_access_not_found',
+      expectedText: 'This call link does not exist.',
+      privateNeedles: [
+        'Disabled User Private Call',
+        'disabled-user@example.invalid',
+        'Disabled Target User',
+        'sess_disabled_should_not_bind',
+        'disabled-user-private-call-id',
+      ],
+      result: {
+        call: {
+          id: 'disabled-user-private-call-id',
+          title: 'Disabled User Private Call',
+        },
+        target_user: {
+          email: 'disabled-user@example.invalid',
+          display_name: 'Disabled Target User',
+        },
+      },
+    },
+  ];
+
+  for (const item of cases) {
+    const { context, page } = await createPublicJoinPage(browser, baseURL);
+    let sessionPostCount = 0;
+    try {
+      await page.route(`**/api/call-access/${item.accessId}/join`, async (route) => {
+        await route.fulfill({
+          status: item.status,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'error',
+            error: {
+              code: item.code,
+              message: `${item.label} hides ${item.privateNeedles[0]}`,
+            },
+            result: item.result,
+          }),
+        });
+      });
+      await page.route(`**/api/call-access/${item.accessId}/session`, async (route) => {
+        sessionPostCount += 1;
+        await route.fulfill({
+          status: item.status,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'error',
+            error: { code: item.code },
+            result: {
+              session: {
+                id: item.privateNeedles.find((value) => String(value).startsWith('sess_')),
+                token: item.privateNeedles.find((value) => String(value).startsWith('sess_')),
+              },
+            },
+          }),
+        });
+      });
+
+      await page.goto(`/join/${item.accessId}`);
+      const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+      await expect(joinDialog, item.label).toBeVisible();
+      await expect(joinDialog, item.label).toContainText(item.expectedText);
+      expectTextDoesNotContain(await joinDialog.innerText(), item.privateNeedles, item.label);
+      await expect(joinDialog.getByRole('button', { name: /^Join call$/ }), item.label).toHaveCount(0);
+      expect(sessionPostCount, `${item.label} must not start a session`).toBe(0);
+
+      const storedSession = await page.evaluate((key) => {
+        try {
+          return JSON.parse(localStorage.getItem(key) || '{}');
+        } catch {
+          return {};
+        }
+      }, sessionStorageKey);
+      expect(JSON.stringify(storedSession), `${item.label} must not store denied session data`).not.toContain('should_not_bind');
+      expect(page.url()).toContain(`/join/${item.accessId}`);
+      expect(page.url()).not.toContain('/workspace/call');
+    } finally {
+      await context.close();
+    }
+  }
+});
+
 test('external guest join link requires display name, creates temporary guest, and waits in lobby until admitted', async ({ browser }) => {
   test.setTimeout(60_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
