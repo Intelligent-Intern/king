@@ -257,6 +257,7 @@ SQL
                         'web_app_notification_call_reminders_enabled' => ((int) ($user['web_app_notification_call_reminders_enabled'] ?? 1)) === 1,
                         'web_app_notification_chat_mentions_enabled' => ((int) ($user['web_app_notification_chat_mentions_enabled'] ?? 1)) === 1,
                         'onboarding_completed_tours' => $onboarding['completed_tours'],
+                        'onboarding_badges' => $onboarding['badges'],
                         'account_type' => $accountType,
                         'is_guest' => $accountType === 'guest',
                         'tenant' => $tenantPayload,
