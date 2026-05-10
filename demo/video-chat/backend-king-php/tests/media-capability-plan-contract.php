@@ -201,6 +201,14 @@ try {
             [
                 'participant_session_id' => 'call-session-alpha',
                 'client_capabilities' => $publicCapabilities,
+                'gossip_readiness' => [
+                    'topology_ready' => true,
+                    'peer_ready' => true,
+                    'peer_count' => 2,
+                    'assigned_neighbor_count' => 1,
+                    'topology_epoch' => 1_778_393_600_000,
+                    'redacted' => true,
+                ],
                 'token' => 'secret-token',
                 'sdp' => "v=0\r\nsecret",
                 'ice_candidates' => ['candidate:private-ice'],
@@ -221,12 +229,12 @@ try {
     videochat_media_capability_plan_assert(($mediaStateEvent['state_catalog'] ?? []) === $expectedStates, 'media state event state catalog mismatch');
     videochat_media_capability_plan_assert((bool) ($mediaStateEvent['redacted'] ?? false), 'media state event must be marked redacted');
     videochat_media_capability_plan_assert(
-        (string) (($mediaStateEvent['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
-        'media state event should expose the computed allowed state'
+        (string) (($mediaStateEvent['participant'] ?? [])['media_state'] ?? '') === 'waiting_for_gossip',
+        'media state event must wait for authoritative gossip readiness'
     );
     videochat_media_capability_plan_assert(
-        (string) (($mediaStateEvent['participant'] ?? [])['transport'] ?? '') === 'gossip',
-        'media state event should expose gossip transport for 720p30 senders'
+        (string) (($mediaStateEvent['participant'] ?? [])['transport'] ?? '') === '',
+        'media state event must not expose gossip transport before readiness'
     );
     videochat_media_capability_plan_assert_no_forbidden_data($mediaStateEvent, 'call/media-state.v1');
 
@@ -252,6 +260,7 @@ try {
         'runtime' => [
             'websocket' => true,
             'webrtc' => true,
+            'wlvc_encoder' => true,
         ],
         'constraints' => [
             'video_width' => 640,
@@ -287,6 +296,14 @@ try {
             [
                 'participant_session_id' => 'call-session-alpha',
                 'client_capabilities' => $publicCapabilities,
+                'gossip_readiness' => [
+                    'topology_ready' => true,
+                    'peer_ready' => true,
+                    'peer_count' => 2,
+                    'assigned_neighbor_count' => 1,
+                    'topology_epoch' => 1_778_393_600_000,
+                    'redacted' => true,
+                ],
             ],
             [
                 'participant_session_id' => 'call-session-receive',
@@ -314,7 +331,7 @@ try {
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-alpha')['media_state'] ?? '') === 'streaming_720p30',
-        '720p30 capabilities must send 720p30'
+        '720p30 capabilities with ready gossip peers must send 720p30'
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-alpha')['transport'] ?? '') === 'gossip',
@@ -325,8 +342,8 @@ try {
         'microphone-only capabilities must be blocked_capability'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'waiting_for_gossip',
-        'non-720p camera capability must be waiting_for_gossip'
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'blocked_capability',
+        'non-720p camera capability must be blocked_capability'
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-blocked')['media_state'] ?? '') === 'blocked_capability',
@@ -337,6 +354,39 @@ try {
         'left participants must stay left'
     );
     videochat_media_capability_plan_assert_no_forbidden_data($statePlan, 'integrated state plan');
+
+    $staleCapabilities = $publicCapabilities;
+    $staleCapabilities['received_at'] = '2026-05-10T00:00:00Z';
+    $readinessTimeoutPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => (strtotime('2026-05-10T00:05:01Z') ?: 0) * 1000,
+        'participants' => [
+            [
+                'participant_session_id' => 'call-session-timeout',
+                'client_capabilities' => $staleCapabilities,
+                'gossip_readiness' => [
+                    'topology_ready' => false,
+                    'peer_ready' => false,
+                    'peer_count' => 1,
+                    'assigned_neighbor_count' => 0,
+                    'topology_epoch' => 1_778_393_600_000,
+                    'reason' => 'gossip_waiting_for_peer',
+                    'redacted' => true,
+                ],
+            ],
+        ],
+    ]));
+    $timedOutParticipant = videochat_media_capability_plan_participant($readinessTimeoutPlan, 'call-session-timeout');
+    videochat_media_capability_plan_assert(
+        ($timedOutParticipant['media_state'] ?? '') === 'stuck_not_sending',
+        'stale gossip readiness wait must become stuck_not_sending'
+    );
+    videochat_media_capability_plan_assert(
+        ($timedOutParticipant['stuck_reason'] ?? '') === 'gossip_readiness_timeout',
+        'stale gossip readiness wait must expose timeout reason'
+    );
+    videochat_media_capability_plan_assert_no_forbidden_data($readinessTimeoutPlan, 'gossip readiness timeout plan');
 
     $restoreConnection = videochat_presence_connection_descriptor(
         [
@@ -400,12 +450,12 @@ try {
     );
     videochat_media_capability_plan_assert_allowed_states($restoredPlan, 'restored media_session_plan.v1');
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['media_state'] ?? '') === 'streaming_720p30',
-        'snapshot plan must restore persisted capabilities'
+        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['media_state'] ?? '') === 'waiting_for_gossip',
+        'snapshot plan must restore persisted capabilities but wait for gossip readiness'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['transport'] ?? '') === 'gossip',
-        'snapshot plan must restore gossip transport'
+        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['transport'] ?? '') === '',
+        'snapshot plan must not restore gossip transport before readiness'
     );
     videochat_media_capability_plan_assert_no_forbidden_data($restoredPlan, 'restored media_session_plan.v1');
 
@@ -427,12 +477,12 @@ try {
     videochat_media_capability_plan_assert(isset($snapshotPayload['media_session_plan']), 'room snapshot must carry media_session_plan');
     videochat_media_capability_plan_assert_allowed_states((array) $snapshotPayload['media_session_plan'], 'snapshot media_session_plan.v1');
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['media_state'] ?? '') === 'streaming_720p30',
-        'room snapshot media_session_plan must use restored capabilities'
+        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['media_state'] ?? '') === 'waiting_for_gossip',
+        'room snapshot media_session_plan must use restored capabilities while waiting for peers'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['transport'] ?? '') === 'gossip',
-        'room snapshot media_session_plan must use gossip transport'
+        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['transport'] ?? '') === '',
+        'room snapshot media_session_plan must not expose gossip transport without peers'
     );
     $signatureWithPlan = videochat_realtime_room_snapshot_signature($snapshotPayload);
     $snapshotWithoutPlan = $snapshotPayload;
@@ -512,6 +562,7 @@ try {
         'runtime' => [
             'websocket' => true,
             'webrtc' => true,
+            'wlvc_encoder' => true,
         ],
         'constraints' => [
             'video_width' => 1280,
@@ -556,12 +607,12 @@ try {
         videochat_media_capability_plan_assert(count($otherMediaEvents) === 0, 'other rooms must not receive media state fanout');
         videochat_media_capability_plan_assert(($peerMediaEvents[0]['state_catalog'] ?? []) === $expectedStates, 'fanout event state catalog mismatch');
         videochat_media_capability_plan_assert(
-            (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
-            'fanout event should expose computed allowed state'
+            (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'waiting_for_gossip',
+            'fanout event must wait for authoritative gossip readiness'
         );
         videochat_media_capability_plan_assert(
-            (string) (($peerMediaEvents[0]['participant'] ?? [])['transport'] ?? '') === 'gossip',
-            'fanout event should expose gossip transport'
+            (string) (($peerMediaEvents[0]['participant'] ?? [])['transport'] ?? '') === '',
+            'fanout event must not expose gossip transport before readiness'
         );
         videochat_media_capability_plan_assert_no_forbidden_data($peerMediaEvents[0], 'call/media-state.v1 fanout');
     } else {

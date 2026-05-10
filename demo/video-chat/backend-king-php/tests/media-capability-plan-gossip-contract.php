@@ -105,6 +105,14 @@ try {
             [
                 'participant_session_id' => 'participant-gossip-a',
                 'client_capabilities' => $publicCapabilities,
+                'gossip_readiness' => [
+                    'topology_ready' => true,
+                    'peer_ready' => true,
+                    'peer_count' => 3,
+                    'assigned_neighbor_count' => 2,
+                    'topology_epoch' => 1_778_393_600_000,
+                    'redacted' => true,
+                ],
             ],
             [
                 'participant_session_id' => 'participant-throttled-50',
@@ -122,7 +130,24 @@ try {
                 'media_state' => 'stuck_not_sending',
                 'stuck_reason' => 'gossip_backpressure_timeout',
             ],
+            [
+                'participant_session_id' => 'participant-readiness-timeout',
+                'client_capabilities' => [
+                    ...$publicCapabilities,
+                    'received_at' => '2026-05-10T00:00:00Z',
+                ],
+                'gossip_readiness' => [
+                    'topology_ready' => false,
+                    'peer_ready' => false,
+                    'peer_count' => 1,
+                    'assigned_neighbor_count' => 0,
+                    'topology_epoch' => 1_778_393_600_000,
+                    'reason' => 'gossip_waiting_for_peer',
+                    'redacted' => true,
+                ],
+            ],
         ],
+        'now_ms' => (strtotime('2026-05-10T00:05:01Z') ?: 0) * 1000,
     ]);
     $projectedPlan = videochat_media_session_plan_public_projection($plan);
     videochat_media_capability_gossip_assert((int) ($projectedPlan['plan_epoch'] ?? 0) === 8, 'plan epoch must advance monotonically');
@@ -141,6 +166,8 @@ try {
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][1]['transport'] ?? '') === 'gossip', 'throttled_50 must keep gossip transport');
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][2]['transport'] ?? '') === 'gossip', 'throttled_25 must keep gossip transport');
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][3]['stuck_reason'] ?? '') === 'gossip_backpressure_timeout', 'stuck state must expose reason');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['media_state'] ?? '') === 'stuck_not_sending', 'readiness timeout must become stuck_not_sending');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['stuck_reason'] ?? '') === 'gossip_readiness_timeout', 'readiness timeout must expose reason');
 
     $frames = [];
     $sender = static function (mixed $socket, array $payload) use (&$frames): bool {
