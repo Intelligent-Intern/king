@@ -45,6 +45,7 @@ const repoRoot = path.resolve(frontendRoot, '../../..');
 const auditEventsPath = path.join(repoRoot, 'demo/video-chat/backend-king-php/domain/audit/audit_events.php');
 
 const auditEvents = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/audit/audit_events.php');
+const callAccessReview = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const auditRedactionContract = readText(repoRoot, 'demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 const auditMembershipContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/audit-call-access-membership-contract.php');
 const strongMismatchContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/call-access-strong-mismatch-privacy-contract.php');
@@ -52,11 +53,20 @@ const callAccessSessionFixationContract = readText(repoRoot, 'demo/video-chat/ba
 
 try {
   const canonicalBody = functionBody(auditEvents, 'videochat_audit_canonical_iam_event_type');
+  const aliasMapBody = functionBody(auditEvents, 'videochat_audit_iam_event_alias_map');
+  assert.match(
+    canonicalBody,
+    /videochat_audit_iam_event_alias_map\(\)/,
+    'canonical IAM event type resolution must use the shared alias map',
+  );
   for (const [legacy, canonical] of [
     ['call_access_invitation_opened', 'call_access_link_opened'],
     ['call_access_join_link_opened', 'call_access_link_opened'],
     ['call_access_session_created', 'call_scoped_access_continued'],
     ['call_access_session_issued', 'call_scoped_access_continued'],
+    ['call_access_host_verification_succeeded', 'call_access_host_name_verified'],
+    ['call_access_host_verification_failed', 'call_access_host_name_verification_failed'],
+    ['call_access_host_name_rejected', 'call_access_host_name_verification_failed'],
     ['tenant_membership_removed', 'membership_removed'],
     ['organization_membership_removed', 'membership_removed'],
     ['call_access_forbidden', 'call_access_denied'],
@@ -69,7 +79,7 @@ try {
     ['call_participant_role_updated', 'call_access_role_changed'],
     ['call_owner_transferred', 'call_access_role_changed'],
   ]) {
-    assert.match(canonicalBody, new RegExp(`'${legacy}'\\s*=>\\s*'${canonical}'`), `${legacy} must canonicalize to ${canonical}`);
+    assert.match(aliasMapBody, new RegExp(`'${legacy}'\\s*=>\\s*'${canonical}'`), `${legacy} must canonicalize to ${canonical}`);
   }
 
   assert.match(
@@ -79,8 +89,8 @@ try {
   );
   assert.match(
     auditEvents,
-    /function videochat_audit_fetch_events[\s\S]*\$params\[':event_type'\] = videochat_audit_canonical_iam_event_type\(\(string\) \$filters\['event_type'\]\)/,
-    'audit reads must canonicalize legacy IAM event aliases for filtered artifact queries',
+    /function videochat_audit_fetch_events[\s\S]*videochat_audit_iam_event_type_filter_values\(\(string\) \$filters\['event_type'\]\)[\s\S]*event_type IN/,
+    'audit reads must include canonical and legacy IAM event aliases for filtered artifact queries',
   );
 
   for (const currentEvent of [
@@ -90,6 +100,8 @@ try {
     'call_access_denied',
     'call_access_admitted',
     'call_access_role_changed',
+    'call_access_host_name_verified',
+    'call_access_host_name_verification_failed',
   ]) {
     const php = `require ${phpLiteral(auditEventsPath)}; echo videochat_audit_canonical_iam_event_type(${phpLiteral(currentEvent)});`;
     const resolved = execFileSync('php', ['-r', php], { encoding: 'utf8' }).trim();
@@ -103,6 +115,9 @@ $aliases = [
   'call_access_rejected',
   'call_access_session_issued',
   'call_access_invitation_opened',
+  'CALL_ACCESS_HOST_VERIFICATION_SUCCEEDED',
+  'call_access_host_verification_failed',
+  'call_access_host_name_rejected',
   'tenant_membership_removed',
   'call_owner_transferred',
   'call_access_allowed'
@@ -129,6 +144,10 @@ $artifact = [
 ];
 echo json_encode([
   'canonical' => $canonical,
+  'filter_values' => [
+    'host_rejected' => videochat_audit_iam_event_type_filter_values('call_access_host_name_rejected'),
+    'host_failed' => videochat_audit_iam_event_type_filter_values('call_access_host_verification_failed'),
+  ],
   'artifact' => videochat_audit_redact_artifact_payload($artifact),
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 `;
@@ -138,10 +157,31 @@ echo json_encode([
     call_access_rejected: 'call_access_denied',
     call_access_session_issued: 'call_scoped_access_continued',
     call_access_invitation_opened: 'call_access_link_opened',
+    CALL_ACCESS_HOST_VERIFICATION_SUCCEEDED: 'call_access_host_name_verified',
+    call_access_host_verification_failed: 'call_access_host_name_verification_failed',
+    call_access_host_name_rejected: 'call_access_host_name_verification_failed',
     tenant_membership_removed: 'membership_removed',
     call_owner_transferred: 'call_access_role_changed',
     call_access_allowed: 'call_access_admitted',
   });
+  assert.deepEqual(
+    new Set(probe.filter_values.host_rejected),
+    new Set([
+      'call_access_host_name_verification_failed',
+      'call_access_host_name_rejected',
+      'call_access_host_verification_failed',
+    ]),
+    'rejected host-name alias filters must include current and legacy event names',
+  );
+  assert.deepEqual(
+    new Set(probe.filter_values.host_failed),
+    new Set([
+      'call_access_host_name_verification_failed',
+      'call_access_host_verification_failed',
+      'call_access_host_name_rejected',
+    ]),
+    'failed host-verification alias filters must include current and legacy event names',
+  );
 
   const artifactText = JSON.stringify(probe.artifact);
   for (const forbidden of [
@@ -167,6 +207,11 @@ echo json_encode([
   assert.match(auditEvents, /'event_type' => 'membership_removed'/, 'membership removal must keep the current canonical audit event name');
   assert.match(auditEvents, /'event_type' => 'call_access_link_opened'/, 'link-open admission must keep the current canonical audit event name');
   assert.match(auditEvents, /'event_type' => 'call_scoped_access_continued'/, 'call-scoped session admission must keep the current canonical audit event name');
+  assert.match(
+    callAccessReview,
+    /'event_type' => \$canonicalEventType[\s\S]*'canonical_event_type' => \$canonicalEventType[\s\S]*'legacy_event_types' => \$legacyEventTypes[\s\S]*'host_name_logged' => false/s,
+    'host-name verification audit must write the canonical event and preserve legacy alias markers without logging host names',
+  );
   assert.match(
     auditRedactionContract,
     /audit sanitizer must cover raw call-access ids, session ids, and tokens/,
