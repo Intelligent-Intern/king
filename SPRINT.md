@@ -107,7 +107,7 @@ Sprint Checkboxen:
   `gossip.media.frame.v1` for planned gossip transport; do not emit `sfu/frame`
   on the active gossip path. Decide whether the sprint uses WebCodecs VP8,
   WLVC, or protected-frame payloads and pin that choice in tests.
-- [ ] GSP01-11 Receiver path: consume `gossip.media.frame.v1`, decode or hand
+- [x] GSP01-11 Receiver path: consume `gossip.media.frame.v1`, decode or hand
   off to the existing renderer, and show remote participant video tiles without
   relying on SFU peer state as the source of truth. Proof must show decoded
   pixels and `frameCount > 0`, not just a created peer or canvas.
@@ -133,7 +133,7 @@ Sprint Checkboxen:
 - [x] GSP01-17 Diagnostics surface: Call Diagnostics must show live
   capabilities, plan epoch, gossip readiness, sender/receiver frame counters,
   dropped frames, backpressure state, stuck reasons and raw redacted events.
-- [ ] GSP01-18 Test gate: add/convert focused contract and E2E proof for two
+- [x] GSP01-18 Test gate: add/convert focused contract and E2E proof for two
   and three participants seeing video through gossip with SFU disabled and no
   background regression harness in the release path.
 - [ ] GSP01-19 Predeploy gate: run local build/contracts, `prod-debug.sh`
@@ -203,6 +203,15 @@ Current Loop Notes:
   remote decoded-canvas renderer entry and diagnostics require decoded pixels
   plus `frameCount >= 1`. This remains open until browser proof shows real
   remote tiles with decoded pixels.
+- GSP01-11 proof: merge commit `30b1447a` adds
+  `tests/e2e/gossip-frame-pixel-proof.spec.js` and a browser harness proving a
+  synthetic/avatar canvas frame passes the `media_session_plan.v1` gate, is
+  published as `gossip.media.frame.v1`, delivered via `GossipController`,
+  adapted by `sfuFrameFromGossipMessage`, rendered through
+  `handleSFUEncodedFrame`, attached to a remote mini tile, and produces decoded
+  pixel readback with `receivedFrameCount > 0` and `frameCount > 0`. Verified
+  with `node tests/contract/gossip-live-receive-decode-route-contract.mjs` and
+  `npx playwright test tests/e2e/gossip-frame-pixel-proof.spec.js --workers=1`.
 - GSP01-12 proof: screenshare Gossip frames carry a stream-scoped
   `screen_share:<ownerUserId>` publisher id, real owner recovery id,
   `publisher_media_source=screen_share`, and synthetic participant ids so
@@ -245,6 +254,13 @@ Current Loop Notes:
   the server lane carries capability ops frames only. The item remains open
   until stale SFU-fallback/regression gate expectations are converted and
   browser proof is attached.
+- GSP01-18 proof: merge commit `f4d0fd38` replaces the active Gossip contract
+  gate with the compact GSP01 proof set, removing old SFU fallback and
+  Background/SFU regression harness requirements from `test:contract:gossip`.
+  Combined with the GSP01-11 browser pixel proof, the test gate now covers
+  two/three-peer Gossip plan publication, no server media fanout, no SFU
+  fallback, live receive/decode routing, and visible decoded pixels. Verified
+  with `npm run test:contract:gossip`.
 - GSP01-19 progress: commit `50176df2` removed the duplicate
   `hostName` declaration in `callAccessSession.ts` that blocked
   `npm run build`. The build now passes on `kingrt/prod-ready`. A focused
