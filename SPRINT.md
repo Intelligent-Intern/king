@@ -278,8 +278,15 @@ Tickets:
     verified, and its clean worker worktree/branch removed.
   - Proof: `git diff --check` passed. No dirty user worktree was reset,
     discarded, rebased, or deleted.
-- [ ] IAM3-19 Clean merged/superseded IAM Sprint 03 worker branches/worktrees
+- [x] IAM3-19 Clean merged/superseded IAM Sprint 03 worker branches/worktrees
   using contained-HEAD and clean-worktree rules only.
+  - Merged worker branch `agent/iam-s3-19-cleanup-evidence`.
+  - Added `documentation/iam-sprint-03-contained-head-cleanup-evidence.md`.
+  - Removed only clean Sprint 03 worker branches/worktrees whose HEADs were
+    contained in `prod-kingrt-do-not-push-to-github`; dirty IAM worktrees
+    remained untouched as user work.
+  - Proof: `git worktree prune --verbose`, contained-HEAD branch scans,
+    worktree clean-state scans, and `git diff --check` passed.
 - [ ] IAM3-20 Build, run Sprint 03 IAM proof set, deploy without push/DNS/certbot,
   and collect post-deploy diagnostics before opening the next sprint.
 
