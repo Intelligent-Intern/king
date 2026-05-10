@@ -4,7 +4,9 @@ Date: 2026-05-10
 
 Scope: classification only. No branch, worktree, or file cleanup was performed. Background, Gossip, SFU, MediaSecurity, and BTGF areas were not modified.
 
-Base used for current-state comparisons: local `prod-kingrt-do-not-push-to-github` at `47290f9f621385ebda9a70bd733990832fa701ff`.
+Initial worker scan base: local `prod-kingrt-do-not-push-to-github` at `47290f9f621385ebda9a70bd733990832fa701ff`.
+Manager post-merge reconciliation was applied after IAM3-14 was merged and its
+clean worker worktree/branch was removed.
 
 ## Scan Summary
 
@@ -14,9 +16,10 @@ Current dirty IAM worktrees from `git worktree list --porcelain` plus `git statu
 | --- | --- | --- | --- | --- |
 | superseded | `/home/jochen/projects/king.site/worktrees/king-domain-registry` | `codex/iam-call-access-e2e-foundation` | `fdf66140153d24e7a1917d1030911cbae767cbf8` | 4 modified files, no unmerged index entries |
 | manual | `/home/jochen/projects/king.site/worktrees/codex-iam-duplicate-cleanup-reaudit-20260509` | `codex/iam-duplicate-cleanup-reaudit-20260509` | `37b13ece6adb42bc77a9fd6739557f8c2190bcaa` | unmerged `package.json`, broad staged IAM contract changes |
-| keep | `/home/jochen/projects/king.site/worktrees/iam-s3-14-guest-list-membership-docker-proof` | `agent/iam-s3-14-guest-list-membership-docker-proof` | `47290f9f621385ebda9a70bd733990832fa701ff` | 2 untracked focused IAM3-14 proof files |
 
 Note: `/home/jochen/projects/king.site/worktrees/iam-s3-12-strong-mismatch-audit-redaction` appeared dirty in an initial scan, but a rescan showed it clean with local commit `002a0e9d`; it is not a current dirty-worktree cleanup candidate.
+
+Note: `/home/jochen/projects/king.site/worktrees/iam-s3-14-guest-list-membership-docker-proof` appeared as a `keep` candidate in the initial worker scan. It has since been committed, merged into `prod-kingrt-do-not-push-to-github`, verified, and removed under the clean-worktree/contained-HEAD rule.
 
 ## Evidence And Recommendations
 
@@ -97,31 +100,11 @@ Evidence:
 
 Recommendation: `manual`. Do not delete or auto-supersede. A human should resolve or extract any unique suite-helper/E2E-suite value, then decide whether the remaining branch is obsolete.
 
-### `agent/iam-s3-14-guest-list-membership-docker-proof`
-
-Worktree: `/home/jochen/projects/king.site/worktrees/iam-s3-14-guest-list-membership-docker-proof`
-
-Dirty files:
-
-```text
-?? demo/video-chat/backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh
-?? demo/video-chat/frontend-vue/tests/contract/call-access-guest-list-membership-docker-proof-contract.mjs
-```
-
-Conflict state: none reported by `git status` for this worktree.
-
-Evidence:
-
-- The branch is at the current base and owns two untracked focused IAM3-14 files.
-- The shell proof runs the existing `call-guest-list-direct-join-contract.sh` and `call-access-membership-removal-contract.sh`.
-- The shell proof detects host `pdo_sqlite`; when host PHP lacks it, it uses a Docker `php:8.4-cli-trixie` fallback and installs/verifies `pdo_sqlite` before running both contracts.
-- The paired frontend contract pins that behavior and proves the underlying guest-list direct-join and membership-removal contracts still carry the expected IAM semantics.
-- Current prod already has the underlying wrappers and broad `iam-call-access-sqlite-runtime-proof.sh`, but it does not have this Docker fallback proof pair.
-
-Recommendation: `keep`. This appears to be focused IAM3-14 user work and should be preserved for owner review or completion.
-
 ## Non-Destructive Handling Notes
 
-- No branches or worktrees were deleted.
+- The worker did not delete branches or worktrees.
+- Post-merge manager cleanup removed only clean Sprint 03 worker branches whose
+  HEADs were ancestors of `prod-kingrt-do-not-push-to-github`.
 - No dirty worktree was reset, checked out, rebased, merged, or cleaned.
-- Dirty files listed above should be treated as user work until their owners explicitly classify them for merge or deletion.
+- Dirty files listed above should be treated as user work until their owners
+  explicitly classify them for merge or deletion.

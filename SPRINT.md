@@ -255,9 +255,20 @@ Tickets:
     Docker proof scripts.
 - [ ] IAM3-17 Wire Sprint 03 contract/E2E/runtime proofs into package scripts and
   release-gate metadata after integration.
-- [ ] IAM3-18 Classify dirty IAM worktrees (`codex/iam-call-access-e2e-foundation`,
+- [x] IAM3-18 Classify dirty IAM worktrees (`codex/iam-call-access-e2e-foundation`,
   `codex/iam-duplicate-cleanup-reaudit-20260509`) as keep, superseded, or
   manual without discarding unmerged user work.
+  - Merged worker branch `agent/iam-s3-18-dirty-worktree-classification`.
+  - Added `documentation/iam-sprint-03-dirty-worktree-classification.md`.
+  - Classified `codex/iam-call-access-e2e-foundation` as `superseded` but not
+    safe to delete automatically because it is dirty user work.
+  - Classified `codex/iam-duplicate-cleanup-reaudit-20260509` as `manual`
+    because it has unresolved `package.json` conflict state plus broad staged
+    IAM edits.
+  - Reconciled the initial IAM3-14 `keep` observation after IAM3-14 was merged,
+    verified, and its clean worker worktree/branch removed.
+  - Proof: `git diff --check` passed. No dirty user worktree was reset,
+    discarded, rebased, or deleted.
 - [ ] IAM3-19 Clean merged/superseded IAM Sprint 03 worker branches/worktrees
   using contained-HEAD and clean-worktree rules only.
 - [ ] IAM3-20 Build, run Sprint 03 IAM proof set, deploy without push/DNS/certbot,
