@@ -65,8 +65,27 @@ function diagnoseOptionalSfuSkip({
   });
 }
 
-function shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished) {
-  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && !gossipPublished;
+function diagnoseGossipPrimaryPublishFailure({
+  captureClientDiagnostic,
+  trackId,
+  mediaRuntimePath,
+}) {
+  safeFunction(captureClientDiagnostic, () => undefined)({
+    category: 'media',
+    level: 'warning',
+    eventType: 'gossip_primary_publish_failed_no_sfu_fallback',
+    code: 'gossip_primary_publish_failed_no_sfu_fallback',
+    message: 'Gossip primary publication failed; planned Gossip media does not fall back to SFU.',
+    payload: diagnosticsPayload({
+      trackId,
+      mediaRuntimePath,
+      extra: {
+        fallback_reason: 'gossip_primary_no_sfu_fallback',
+        gossip_primary_expected: true,
+      },
+    }),
+    immediate: true,
+  });
 }
 
 function isQuietSfuSendFailure(reason, details = {}) {
@@ -107,6 +126,24 @@ export async function dispatchPublisherFrame({
     });
   }
 
+  if (gossipFirst) {
+    if (!gossipPublished) {
+      diagnoseGossipPrimaryPublishFailure({
+        captureClientDiagnostic,
+        trackId,
+        mediaRuntimePath,
+      });
+    }
+    return {
+      ok: gossipPublished,
+      gossipPublished,
+      sfuSent: false,
+      sfuSendOptional: true,
+      sfuFallbackSuppressed: true,
+      postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+    };
+  }
+
   const sendClient = safeFunction(currentOpenSfuClient, () => null)();
   if (!sendClient) {
     if (suppressSfuSendFailures) {
@@ -138,15 +175,10 @@ export async function dispatchPublisherFrame({
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
       };
     }
-    const eventType = shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
-      ? 'sfu_fallback_unavailable_after_gossip_publish_failure'
-      : 'sfu_optional_send_unavailable_after_gossip_publish';
     diagnoseOptionalSfuSkip({
       captureClientDiagnostic,
-      eventType,
-      message: shouldUseSfuFallbackAfterGossipPrimaryPublish(gossipPublished)
-        ? 'SFU fallback is unavailable after Gossip primary publication failed.'
-        : 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
+      eventType: 'sfu_optional_send_unavailable_after_gossip_publish',
+      message: 'SFU send path is unavailable; media carrier mode keeps Gossip publication independent.',
       trackId,
       mediaRuntimePath,
     });
@@ -157,22 +189,6 @@ export async function dispatchPublisherFrame({
       sfuSendOptional: true,
       postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
     };
-  }
-
-  if (gossipFirst && !gossipPublished) {
-    diagnoseOptionalSfuSkip({
-      captureClientDiagnostic,
-      eventType: 'sfu_fallback_after_gossip_primary_publish_failure',
-      message: 'Gossip primary did not publish this frame; SFU fallback is being used to keep live media flowing.',
-      trackId,
-      mediaRuntimePath,
-      failureDetails: {
-        fallback_reason: 'gossip_publish_failed_or_gated',
-        sfu_socket_open: true,
-        gossip_primary_expected: true,
-      },
-      immediate: true,
-    });
   }
 
   const sent = await sendClient.sendEncodedFrame(frame);
