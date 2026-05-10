@@ -143,6 +143,7 @@ SQL
         'rest'
     );
     videochat_user_settings_endpoint_assert((bool) ($apiAuthContext['ok'] ?? false), 'auth context should be valid');
+    $pdo = null;
 
     $getResponse = videochat_handle_user_routes(
         '/api/user/settings',
@@ -393,6 +394,7 @@ SQL
         'PATCH settings must not expose removed messenger contacts'
     );
 
+    $pdo = $openDatabase();
     $reauth = videochat_authenticate_request(
         $pdo,
         [
@@ -403,6 +405,7 @@ SQL
         'rest'
     );
     videochat_user_settings_endpoint_assert((bool) ($reauth['ok'] ?? false), 'reauth should stay valid after settings patch');
+    $pdo = null;
 
     $activeWebsocketsBySession = [];
     $issueSessionId = static fn (): string => 'sess_unused_user_settings_endpoint';
@@ -529,7 +532,8 @@ SQL
     videochat_user_settings_endpoint_assert((int) ($deleteEmailResponse['status'] ?? 0) === 200, 'DELETE email status should be 200');
 
     $otherSessionId = 'sess_user_settings_endpoint_other';
-    $pdo->prepare(
+    $sessionWritePdo = $openDatabase();
+    $sessionWritePdo->prepare(
         'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, NULL, NULL)'
     )->execute([
         ':id' => $otherSessionId,
@@ -537,6 +541,7 @@ SQL
         ':issued_at' => gmdate('c', time() - 30),
         ':expires_at' => gmdate('c', time() + 3600),
     ]);
+    $sessionWritePdo = null;
     $passwordResponse = videochat_handle_user_routes(
         '/api/user/password',
         'POST',
