@@ -848,6 +848,22 @@ function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, 
             'call' => null,
         ];
     }
+    if (!videochat_is_call_joinable_status((string) ($call['status'] ?? ''))) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
+    if ($authUserId > 0 && !is_array(videochat_fetch_active_user_for_call_access($pdo, $authUserId, null, $tenantId, false))) {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'call' => null,
+        ];
+    }
 
     if (!$isSystemAdmin) {
         $isOwner = $authUserId > 0 && $authUserId === (int) ($call['owner_user_id'] ?? 0);
