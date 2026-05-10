@@ -316,6 +316,9 @@ SQL
     if (videochat_call_app_is_internal_admin_app_key((string) ($record['app_key'] ?? '')) && !videochat_call_app_user_can_use_internal_admin_apps($pdo, $userId)) {
         return ['ok' => false, 'reason' => 'internal_admin_required'];
     }
+    if (!videochat_call_app_grant_subject_in_call($pdo, (string) ($record['call_id'] ?? ''), 'user', $userId, '')) {
+        return ['ok' => false, 'reason' => 'participant_not_in_call'];
+    }
 
     $grant = videochat_call_app_launch_subject_grant($pdo, $tenantId, $record, 'user', $userId, '');
     $grantState = (string) ($grant['grant_state'] ?? 'denied');
