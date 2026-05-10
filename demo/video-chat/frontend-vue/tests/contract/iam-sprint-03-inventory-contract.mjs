@@ -309,12 +309,29 @@ const workerBranchPolicy = {
 };
 
 const sprint = fs.readFileSync(path.join(repoRoot, 'SPRINT.md'), 'utf8');
+const backlog = fs.readFileSync(path.join(repoRoot, 'BACKLOG.md'), 'utf8');
+const readiness = fs.readFileSync(path.join(repoRoot, 'READYNESS_TRACKER.md'), 'utf8');
 const dirtyClassification = fs.readFileSync(path.join(repoRoot, 'documentation/iam-sprint-03-dirty-worktree-classification.md'), 'utf8');
 const containedCleanup = fs.readFileSync(path.join(repoRoot, 'documentation/iam-sprint-03-contained-head-cleanup-evidence.md'), 'utf8');
 assert.match(
+  readiness,
+  /2026-05-10 IAM Abuse, Runtime Proof, And Cleanup Stabilization 03:[\s\S]*closed all\s+20 Sprint 03 tickets/,
+  'READYNESS_TRACKER.md must record that Sprint 03 IAM intake is closed',
+);
+assert.match(
+  backlog,
+  /Sprint 03,[\s\S]*completed and moved to `READYNESS_TRACKER\.md` on 2026-05-10/,
+  'BACKLOG.md must park Sprint 03 after closure',
+);
+assert.match(
+  sprint,
+  /## Sprint: IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05/,
+  'SPRINT.md must contain only the active IAM sprint after Sprint 03 closure',
+);
+assert.doesNotMatch(
   sprint,
   /Sprint 03 closed the current IAM abuse\/runtime proof batch and deployed it/,
-  'current SPRINT.md must record that Sprint 03 IAM intake is closed',
+  'closed Sprint 03 detail must not be duplicated in active SPRINT.md',
 );
 for (const ticket of sprint03Tickets) {
   const inventoryMentionsTicket = cleanNotContainedCandidates.some((candidate) => candidate.ticket === ticket)
