@@ -5,6 +5,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/calls/appointment_calendar.php';
+require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
+require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 
 function videochat_calendar_invitation_flow_assert(bool $condition, string $message): void
 {
@@ -85,6 +90,172 @@ function videochat_calendar_invitation_flow_session_user_id(PDO $pdo, string $se
     $query->execute([':id' => $sessionId]);
     $userId = $query->fetchColumn();
     return is_numeric($userId) ? (int) $userId : 0;
+}
+
+function videochat_calendar_invitation_flow_issue_user_session(
+    PDO $pdo,
+    int $userId,
+    string $sessionId,
+    int $tenantId
+): string {
+    $issued = videochat_issue_session_for_user(
+        $pdo,
+        $userId,
+        static fn (): string => $sessionId,
+        43_200,
+        '127.0.0.1',
+        'call-calendar-invitation-flow-contract',
+        time(),
+        $tenantId
+    );
+    videochat_calendar_invitation_flow_assert((bool) ($issued['ok'] ?? false), "user session should issue: {$sessionId}");
+    return (string) (($issued['session'] ?? [])['id'] ?? $sessionId);
+}
+
+function videochat_calendar_invitation_flow_auth(PDO $pdo, string $sessionId): array
+{
+    $auth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($sessionId),
+            'headers' => ['Authorization' => 'Bearer ' . $sessionId],
+        ],
+        'websocket'
+    );
+    videochat_calendar_invitation_flow_assert((bool) ($auth['ok'] ?? false), "session should authenticate: {$sessionId}");
+    return $auth;
+}
+
+function videochat_calendar_invitation_flow_participant(PDO $pdo, string $callId, int $userId): array
+{
+    $query = $pdo->prepare(
+        <<<'SQL'
+SELECT user_id, email, display_name, source, call_role, invite_state, joined_at, left_at
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+    );
+    $query->execute([
+        ':call_id' => $callId,
+        ':user_id' => $userId,
+    ]);
+    $row = $query->fetch(PDO::FETCH_ASSOC);
+    videochat_calendar_invitation_flow_assert(is_array($row), "participant row should exist for {$userId}");
+    return $row;
+}
+
+function videochat_calendar_invitation_flow_assert_invite_state(
+    PDO $pdo,
+    string $callId,
+    int $userId,
+    string $state,
+    string $label
+): void {
+    $participant = videochat_calendar_invitation_flow_participant($pdo, $callId, $userId);
+    videochat_calendar_invitation_flow_assert((string) ($participant['invite_state'] ?? '') === $state, "{$label}: invite state should be {$state}");
+}
+
+function videochat_calendar_invitation_flow_assert_waiting(
+    PDO $pdo,
+    callable $openDatabase,
+    string $sessionId,
+    string $callId,
+    string $label
+): void {
+    $auth = videochat_calendar_invitation_flow_auth($pdo, $sessionId);
+    $resolution = videochat_realtime_resolve_connection_rooms($auth, $callId, $openDatabase, $callId);
+    videochat_calendar_invitation_flow_assert((bool) ($resolution['ok'] ?? false), "{$label}: room resolution should succeed");
+    videochat_calendar_invitation_flow_assert((string) ($resolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), "{$label}: should start in lobby");
+    videochat_calendar_invitation_flow_assert((string) ($resolution['pending_room_id'] ?? '') === $callId, "{$label}: pending room should be the booked call");
+}
+
+function videochat_calendar_invitation_flow_connection(
+    array &$presenceState,
+    PDO $pdo,
+    callable $openDatabase,
+    string $sessionId,
+    string $callId,
+    string $connectionId,
+    string $socket
+): array {
+    $auth = videochat_calendar_invitation_flow_auth($pdo, $sessionId);
+    $resolution = videochat_realtime_resolve_connection_rooms($auth, $callId, $openDatabase, $callId);
+    videochat_calendar_invitation_flow_assert((bool) ($resolution['ok'] ?? false), "{$connectionId}: room resolution should succeed");
+
+    $connection = videochat_presence_connection_descriptor(
+        (array) ($auth['user'] ?? []),
+        $sessionId,
+        $connectionId,
+        $socket,
+        (string) ($resolution['initial_room_id'] ?? videochat_realtime_waiting_room_id())
+    );
+    $connection['requested_room_id'] = (string) ($resolution['requested_room_id'] ?? '');
+    $connection['pending_room_id'] = (string) ($resolution['pending_room_id'] ?? '');
+    $connection['requested_call_id'] = $callId;
+    $connection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
+
+    $join = videochat_presence_join_room(
+        $presenceState,
+        $connection,
+        (string) ($connection['room_id'] ?? videochat_realtime_waiting_room_id()),
+        static fn (mixed $socket, array $payload): bool => true
+    );
+    $connection = (array) ($join['connection'] ?? $connection);
+    $connection = videochat_realtime_connection_with_call_context($connection, $openDatabase);
+    $presenceState['connections'][(string) ($connection['connection_id'] ?? $connectionId)] = $connection;
+
+    return $connection;
+}
+
+function videochat_calendar_invitation_flow_lobby_command(
+    array &$lobbyState,
+    array &$presenceState,
+    array $connection,
+    callable $openDatabase,
+    array $payload,
+    string $label
+): array {
+    $encoded = json_encode($payload, JSON_UNESCAPED_SLASHES);
+    videochat_calendar_invitation_flow_assert(is_string($encoded), "{$label}: lobby command should encode");
+    $command = videochat_lobby_decode_client_frame($encoded);
+    videochat_calendar_invitation_flow_assert((bool) ($command['ok'] ?? false), "{$label}: lobby command should decode");
+
+    $result = videochat_lobby_apply_command(
+        $lobbyState,
+        $presenceState,
+        $connection,
+        $command,
+        static fn (mixed $socket, array $payload): bool => true
+    );
+    videochat_calendar_invitation_flow_assert((bool) ($result['ok'] ?? false), "{$label}: lobby command should apply");
+
+    $action = (string) ($result['action'] ?? '');
+    if ($action === 'lobby/queue/join' && in_array((string) ($result['state'] ?? ''), ['queued', 'already_queued'], true)) {
+        videochat_calendar_invitation_flow_assert(
+            videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $connection),
+            "{$label}: queued participant should persist pending invite state"
+        );
+    }
+
+    if (in_array($action, ['lobby/allow', 'lobby/allow_all'], true)) {
+        $callId = videochat_realtime_connection_call_id($connection);
+        $affectedUserIds = is_array($result['affected_user_ids'] ?? null) ? (array) $result['affected_user_ids'] : [];
+        foreach ($affectedUserIds as $affectedUserId) {
+            $normalizedUserId = (int) $affectedUserId;
+            if ($normalizedUserId > 0) {
+                videochat_calendar_invitation_flow_assert(
+                    videochat_realtime_mark_call_participant_invite_state_by_user_id($openDatabase, $callId, $normalizedUserId, 'allowed', ['pending']),
+                    "{$label}: admitted participant should persist allowed invite state"
+                );
+            }
+        }
+    }
+
+    return $result;
 }
 
 function videochat_calendar_invitation_flow_mutate_uuid(string $uuid): string
@@ -335,6 +506,152 @@ SQL
     $binding = videochat_validate_call_access_session_binding($pdo, 'sess_calendar_invite_reopen', $firstTemporaryUserId);
     videochat_calendar_invitation_flow_assert((bool) ($binding['ok'] ?? false), 'reopened session binding should remain valid before stale state');
     videochat_calendar_invitation_flow_assert((string) ($binding['reason'] ?? '') === 'ok', 'valid binding reason should be ok');
+
+    $secondSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $secondAccessId,
+        static fn (): string => 'sess_calendar_invite_unregistered',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-calendar-invitation-flow-contract']
+    );
+    videochat_calendar_invitation_flow_assert((bool) ($secondSession['ok'] ?? false), 'unregistered calendar invite should issue session');
+    videochat_calendar_invitation_flow_assert(
+        (int) (($secondSession['user'] ?? [])['id'] ?? 0) === $secondTemporaryUserId,
+        'unregistered calendar invite session should use the bound temporary account'
+    );
+    videochat_calendar_invitation_flow_assert(
+        (string) (($secondSession['user'] ?? [])['account_type'] ?? '') === 'guest',
+        'unregistered calendar invite session should remain guest scoped'
+    );
+    videochat_calendar_invitation_flow_assert(
+        (bool) (($secondSession['user'] ?? [])['is_guest'] ?? false),
+        'unregistered calendar invite session should expose guest identity'
+    );
+    videochat_calendar_invitation_flow_assert(
+        videochat_calendar_invitation_flow_session_user_id($pdo, 'sess_calendar_invite_unregistered') === $secondTemporaryUserId,
+        'unregistered calendar invite session binding should point to temporary account'
+    );
+
+    $openDatabase = static function () use ($pdo): PDO {
+        return $pdo;
+    };
+    videochat_calendar_invitation_flow_assert_waiting(
+        $pdo,
+        $openDatabase,
+        'sess_calendar_invite_unregistered',
+        $secondCallId,
+        'unregistered calendar guest before admission'
+    );
+
+    $ownerSessionId = videochat_calendar_invitation_flow_issue_user_session(
+        $pdo,
+        $ownerUserId,
+        'sess_calendar_invite_owner',
+        $tenantId
+    );
+    $presenceState = videochat_presence_state_init();
+    $lobbyState = videochat_lobby_state_init();
+
+    $ownerConnection = videochat_calendar_invitation_flow_connection(
+        $presenceState,
+        $pdo,
+        $openDatabase,
+        $ownerSessionId,
+        $secondCallId,
+        'conn_calendar_invite_owner',
+        'socket_calendar_invite_owner'
+    );
+    videochat_calendar_invitation_flow_assert((string) ($ownerConnection['room_id'] ?? '') === $secondCallId, 'owner should resolve directly to booked call room');
+    videochat_calendar_invitation_flow_assert((bool) ($ownerConnection['can_moderate_call'] ?? false), 'owner should be able to admit calendar guest');
+
+    $guestLobbyConnection = videochat_calendar_invitation_flow_connection(
+        $presenceState,
+        $pdo,
+        $openDatabase,
+        'sess_calendar_invite_unregistered',
+        $secondCallId,
+        'conn_calendar_invite_guest_lobby',
+        'socket_calendar_invite_guest_lobby'
+    );
+    videochat_calendar_invitation_flow_assert(
+        (string) ($guestLobbyConnection['room_id'] ?? '') === videochat_realtime_waiting_room_id(),
+        'unregistered calendar guest should land in lobby before host admission'
+    );
+    videochat_calendar_invitation_flow_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $guestLobbyConnection,
+        $openDatabase,
+        ['type' => 'lobby/queue/join', 'room_id' => $secondCallId],
+        'unregistered calendar guest queue join'
+    );
+    videochat_calendar_invitation_flow_assert_invite_state($pdo, $secondCallId, $secondTemporaryUserId, 'pending', 'unregistered calendar guest queued');
+
+    videochat_calendar_invitation_flow_lobby_command(
+        $lobbyState,
+        $presenceState,
+        $ownerConnection,
+        $openDatabase,
+        ['type' => 'lobby/allow', 'room_id' => $secondCallId, 'target_user_id' => $secondTemporaryUserId],
+        'unregistered calendar guest host admission'
+    );
+    videochat_calendar_invitation_flow_assert_invite_state($pdo, $secondCallId, $secondTemporaryUserId, 'allowed', 'unregistered calendar guest admitted');
+
+    $admittedResolution = videochat_realtime_resolve_connection_rooms(
+        videochat_calendar_invitation_flow_auth($pdo, 'sess_calendar_invite_unregistered'),
+        $secondCallId,
+        $openDatabase,
+        $secondCallId
+    );
+    videochat_calendar_invitation_flow_assert((string) ($admittedResolution['initial_room_id'] ?? '') === $secondCallId, 'admitted unregistered calendar guest should join booked call room');
+    videochat_calendar_invitation_flow_assert((string) ($admittedResolution['pending_room_id'] ?? '') === '', 'admitted unregistered calendar guest should not need lobby approval again');
+
+    $guestCallConnection = videochat_calendar_invitation_flow_connection(
+        $presenceState,
+        $pdo,
+        $openDatabase,
+        'sess_calendar_invite_unregistered',
+        $secondCallId,
+        'conn_calendar_invite_guest_call',
+        'socket_calendar_invite_guest_call'
+    );
+    videochat_realtime_mark_call_participant_joined($openDatabase, $guestCallConnection);
+    $joinedParticipant = videochat_calendar_invitation_flow_participant($pdo, $secondCallId, $secondTemporaryUserId);
+    videochat_calendar_invitation_flow_assert((string) ($joinedParticipant['invite_state'] ?? '') === 'allowed', 'joined unregistered calendar guest should stay allowed');
+    videochat_calendar_invitation_flow_assert(trim((string) ($joinedParticipant['joined_at'] ?? '')) !== '', 'joined unregistered calendar guest should persist joined_at');
+
+    videochat_presence_remove_connection(
+        $presenceState,
+        (string) ($guestCallConnection['connection_id'] ?? ''),
+        static fn (mixed $socket, array $payload): bool => true
+    );
+    videochat_realtime_remove_call_presence($openDatabase, $guestCallConnection);
+    videochat_realtime_mark_call_participant_left($openDatabase, $guestCallConnection, $presenceState);
+    $leftParticipant = videochat_calendar_invitation_flow_participant($pdo, $secondCallId, $secondTemporaryUserId);
+    videochat_calendar_invitation_flow_assert((string) ($leftParticipant['invite_state'] ?? '') === 'allowed', 'leaving admitted unregistered calendar guest should preserve allowed state');
+    videochat_calendar_invitation_flow_assert(trim((string) ($leftParticipant['left_at'] ?? '')) !== '', 'leaving unregistered calendar guest should persist left_at');
+
+    $rejoinResolution = videochat_realtime_resolve_connection_rooms(
+        videochat_calendar_invitation_flow_auth($pdo, 'sess_calendar_invite_unregistered'),
+        $secondCallId,
+        $openDatabase,
+        $secondCallId
+    );
+    videochat_calendar_invitation_flow_assert((string) ($rejoinResolution['initial_room_id'] ?? '') === $secondCallId, 'admitted unregistered calendar guest rejoin should bypass lobby');
+    videochat_calendar_invitation_flow_assert((string) ($rejoinResolution['pending_room_id'] ?? '') === '', 'unregistered calendar guest rejoin must not require a second approval');
+
+    $guestRejoinConnection = videochat_calendar_invitation_flow_connection(
+        $presenceState,
+        $pdo,
+        $openDatabase,
+        'sess_calendar_invite_unregistered',
+        $secondCallId,
+        'conn_calendar_invite_guest_rejoin',
+        'socket_calendar_invite_guest_rejoin'
+    );
+    videochat_realtime_mark_call_participant_joined($openDatabase, $guestRejoinConnection);
+    $rejoinedParticipant = videochat_calendar_invitation_flow_participant($pdo, $secondCallId, $secondTemporaryUserId);
+    videochat_calendar_invitation_flow_assert((string) ($rejoinedParticipant['invite_state'] ?? '') === 'allowed', 'rejoined unregistered calendar guest should remain allowed');
+    videochat_calendar_invitation_flow_assert(trim((string) ($rejoinedParticipant['left_at'] ?? '')) === '', 'rejoining unregistered calendar guest should clear stale left_at');
 
     $secondBookingRow = videochat_calendar_invitation_flow_fetch_booking($pdo, $secondAccessId);
     $pdo->prepare("UPDATE appointment_bookings SET status = 'cancelled', updated_at = :updated_at WHERE access_id = :access_id")->execute([

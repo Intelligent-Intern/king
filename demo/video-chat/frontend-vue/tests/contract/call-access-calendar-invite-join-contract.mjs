@@ -41,6 +41,7 @@ const callAccessSession = readText('demo/video-chat/backend-king-php/domain/call
 const callAccessLinks = readText('demo/video-chat/backend-king-php/domain/calls/call_access_links.php');
 const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
 const callAccessRoutes = readText('demo/video-chat/backend-king-php/http/module_calls_access.php');
+const calendarInvitationFlowContract = readText('demo/video-chat/backend-king-php/tests/call-calendar-invitation-flow-contract.php');
 const tenantContext = readText('demo/video-chat/backend-king-php/support/tenant_context.php');
 const joinView = readText('demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue');
 const callAccessFrontendSession = readText('demo/video-chat/frontend-vue/src/domain/calls/access/callAccessSession.ts');
@@ -109,6 +110,12 @@ requireNoMatch(
   bookingReturnBlock,
   /appointment_blocks|appointment_settings|tenant_permissions|owner_email|owner_user_id/,
   'calendar booking response must not expose private calendar internals or owner/tenant authority data',
+);
+
+requireMatch(
+  calendarInvitationFlowContract,
+  /sess_calendar_invite_unregistered[\s\S]*videochat_calendar_invitation_flow_assert_waiting[\s\S]*lobby\/queue\/join[\s\S]*lobby\/allow[\s\S]*videochat_realtime_mark_call_participant_joined[\s\S]*videochat_realtime_mark_call_participant_left[\s\S]*rejoin must not require a second approval/s,
+  'calendar backend proof must cover unregistered guest lobby, host admission, leave, and rejoin without a second approval',
 );
 
 requireMatch(
