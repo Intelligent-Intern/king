@@ -35,6 +35,26 @@ function videochat_decide_call_access_for_user(
         return videochat_call_access_decision_result(false, 'not_found');
     }
 
+    if (!videochat_call_tenant_is_active($pdo, $call)) {
+        return videochat_call_access_decision_result(
+            false,
+            'tenant_inactive',
+            'none',
+            'none',
+            $call
+        );
+    }
+
+    if (!videochat_call_owner_is_active($call)) {
+        return videochat_call_access_decision_result(
+            false,
+            'call_host_inactive',
+            'none',
+            'none',
+            $call
+        );
+    }
+
     $normalizedCallId = (string) ($call['id'] ?? '');
     $accessMode = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only');
     $ownerUserId = (int) ($call['owner_user_id'] ?? 0);
