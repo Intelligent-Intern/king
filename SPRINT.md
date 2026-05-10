@@ -222,8 +222,15 @@ Tickets:
     local PHP lacks `pdo_sqlite`.
 - [ ] IAM2-16 Prove audit event compatibility across legacy/current IAM event
   names and redacted artifact output.
-- [ ] IAM2-17 Stabilize CI artifacts for IAM browser proof: traces, screenshots,
+- [x] IAM2-17 Stabilize CI artifacts for IAM browser proof: traces, screenshots,
   report naming, and failure redaction.
+  - Merged worker branch `agent/iam-s2-17-ci-artifacts`.
+  - Added `call-access-ci-artifacts-contract.mjs`, enabled focused
+    `PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS` artifact retention for call-access
+    E2E, and made the IAM CI wire contract assert the artifact-enabled command.
+  - Proof: `node tests/contract/call-access-ci-artifacts-contract.mjs`,
+    `node tests/contract/iam-call-access-ci-wire-contract.mjs`, and
+    `git diff --check` passed.
 - [ ] IAM2-18 Wire Sprint 02 proofs into stable package scripts and release-gate
   metadata after integration.
 - [ ] IAM2-19 Clean merged or superseded IAM Sprint 02 worktrees/branches using
