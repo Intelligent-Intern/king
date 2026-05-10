@@ -92,7 +92,7 @@ Sprint Checkboxen:
   `local/iam-e2e-audit-events`.
 - [x] IAM8-11 Extract or prove authorized call rejoin from
   `local/iam-e2e-authorized-rejoin-main`.
-- [ ] IAM8-12 Extract or prove IAM call lifecycle proof value from
+- [x] IAM8-12 Extract or prove IAM call lifecycle proof value from
   `local/iam-e2e-call-lifecycle`.
 - [x] IAM8-13 Extract or prove call creation owner/moderation rights from
   `local/iam-e2e-call-owner-creation-rights`.
