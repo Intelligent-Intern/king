@@ -112,6 +112,7 @@ const requiredIamSupportingPaths = [
   'backend-king-php/tests/call-access-safe-screen-privacy-contract.sh',
   'backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.php',
   'backend-king-php/tests/call-access-identity-mismatch-review-flow-contract.sh',
+  'backend-king-php/tests/call-access-email-confirmation-contract.sh',
   'backend-king-php/tests/call-access-foreign-link-review-audit-contract.sh',
   'backend-king-php/tests/call-access-invalid-expired-anonymous-link-contract.sh',
   'backend-king-php/tests/call-access-invalidation-contract.sh',

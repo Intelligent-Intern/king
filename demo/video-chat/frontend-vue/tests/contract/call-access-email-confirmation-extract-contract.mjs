@@ -186,6 +186,11 @@ requireMatch(
   /confirmation must be sent to current logged-in email[\s\S]*account data must not update before confirmation[\s\S]*confirmation must not rebind the current session[\s\S]*confirmation storage should keep token fingerprint/s,
   'backend confirmation contract must prove current-account targeting, no early update, token fingerprinting, and no session rebinding',
 );
+requireMatch(
+  confirmationBackendContract,
+  /expired pending-confirmation session should be rejected[\s\S]*expired pending-confirmation session must not consume the token[\s\S]*another browser session for same account should confirm[\s\S]*browser-b confirmation user mismatch/s,
+  'backend confirmation contract must reconcile expired sessions and same-account browser confirmation',
+);
 
 requireMatch(
   accountIsolation,
