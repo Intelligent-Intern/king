@@ -75,7 +75,7 @@ Sprint Checkboxen:
 - [x] UX6-04 Classify dirty worktree `codex/iam-call-access-e2e-foundation`;
   keep it outside active implementation unless it contains deploy-smoke proof
   needed by the current branch.
-- [ ] UX6-05 Reconcile `codex/iam-duplicate-cleanup-reaudit-20260509`; clean
+- [x] UX6-05 Reconcile `codex/iam-duplicate-cleanup-reaudit-20260509`; clean
   it up only if the conflict state is proven redundant with already integrated
   IAM evidence.
 - [ ] UX6-06 Implement descriptor-driven page action bars for the first
