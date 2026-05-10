@@ -110,6 +110,32 @@ function videochat_call_access_account_confirmation_ttl_seconds(): int
     return max(300, min(86_400, $seconds));
 }
 
+function videochat_call_access_account_confirmation_rate_limit(): int
+{
+    $limit = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT') ?: 3);
+    return max(1, min(20, $limit));
+}
+
+function videochat_call_access_account_confirmation_rate_window_seconds(): int
+{
+    $seconds = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_WINDOW_SECONDS') ?: 900);
+    return max(60, min(86_400, $seconds));
+}
+
+function videochat_call_access_account_confirmation_invalidate_older_enabled(array $options = []): bool
+{
+    if (array_key_exists('invalidate_older', $options)) {
+        return (bool) $options['invalidate_older'];
+    }
+
+    $value = getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER');
+    if ($value === false || trim((string) $value) === '') {
+        return true;
+    }
+
+    return !in_array(strtolower(trim((string) $value)), ['0', 'false', 'no', 'off'], true);
+}
+
 function videochat_call_access_account_confirmation_normalize_origin(string $origin): string
 {
     $candidate = trim($origin);
@@ -124,6 +150,7 @@ function videochat_call_access_account_confirmation_normalize_origin(string $ori
     if (!is_array($parts)) {
         return '';
     }
+
     $scheme = strtolower((string) ($parts['scheme'] ?? ''));
     $host = strtolower(trim((string) ($parts['host'] ?? '')));
     if (!in_array($scheme, ['http', 'https'], true) || $host === '') {
@@ -164,9 +191,8 @@ function videochat_call_access_account_confirmation_is_secure_origin(string $ori
 
 function videochat_call_access_account_confirmation_frontend_origin(array $options = []): string
 {
-    $configured = is_string($options['frontend_origin'] ?? null) ? trim((string) $options['frontend_origin']) : '';
     $candidates = [
-        $configured,
+        is_string($options['frontend_origin'] ?? null) ? (string) $options['frontend_origin'] : '',
         (string) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_ORIGIN') ?: ''),
         (string) (getenv('VIDEOCHAT_FRONTEND_ORIGIN') ?: ''),
         'https://app.kingrt.com',
@@ -207,8 +233,13 @@ function videochat_call_access_account_confirmation_truthy_env(string $name): bo
     return in_array($value, ['1', 'true', 'yes', 'on'], true);
 }
 
+function videochat_call_access_account_confirmation_delivery_accepted(array $delivery): bool
+{
+    return (bool) ($delivery['sent'] ?? false) || (bool) ($delivery['queued'] ?? false);
+}
+
 /**
- * @return array{sent: bool, channel: string}
+ * @return array{sent: bool, queued: bool, channel: string}
  */
 function videochat_send_call_access_account_update_confirmation_mail(
     string $recipientEmail,
@@ -218,7 +249,7 @@ function videochat_send_call_access_account_update_confirmation_mail(
 ): array {
     $to = strtolower(trim($recipientEmail));
     if ($to === '' || filter_var($to, FILTER_VALIDATE_EMAIL) === false || trim($confirmationUrl) === '') {
-        return ['sent' => false, 'channel' => 'none'];
+        return ['sent' => false, 'queued' => false, 'channel' => 'none'];
     }
 
     $displayName = trim($recipientName);
@@ -241,10 +272,10 @@ function videochat_send_call_access_account_update_confirmation_mail(
     if (!$forceOutbox && function_exists('mail')) {
         try {
             if (@mail($to, $subject, $body, $headers)) {
-                return ['sent' => true, 'channel' => 'mail'];
+                return ['sent' => true, 'queued' => true, 'channel' => 'mail'];
             }
         } catch (Throwable) {
-            // Fall through to the local outbox so confirmations remain inspectable.
+            // Fall through to the local outbox so delivery remains inspectable.
         }
     }
 
@@ -254,35 +285,74 @@ function videochat_send_call_access_account_update_confirmation_mail(
         @mkdir($outboxDir, 0775, true);
     }
     $entry = '[' . gmdate('c') . "] TO={$to}\nSUBJECT={$subject}\n{$body}\n---\n";
-    $written = @file_put_contents($outboxPath, $entry, FILE_APPEND | LOCK_EX);
+    $queued = @file_put_contents($outboxPath, $entry, FILE_APPEND | LOCK_EX) !== false;
 
-    return ['sent' => is_int($written) && $written > 0, 'channel' => 'outbox'];
+    return ['sent' => false, 'queued' => $queued, 'channel' => 'outbox'];
 }
 
-function videochat_call_access_account_confirmation_rate_limit(): int
-{
-    $limit = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_LIMIT') ?: 3);
-    return max(1, min(20, $limit));
+function videochat_call_access_account_confirmation_record_email_dispatch_failed(
+    PDO $pdo,
+    string $tokenFingerprint,
+    array $accessLink,
+    string $accessFingerprint,
+    int $authenticatedUserId,
+    string $sessionFingerprint,
+    array $delivery
+): void {
+    $delete = $pdo->prepare('DELETE FROM call_access_account_update_confirmations WHERE token_fingerprint = :token_fingerprint');
+    $delete->execute([':token_fingerprint' => $tokenFingerprint]);
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_account_update_confirmation_email_dispatch_failed',
+        'actor_user_id' => $authenticatedUserId,
+        'target_user_id' => $authenticatedUserId,
+        'call_id' => (string) ($accessLink['call_id'] ?? ''),
+        'resource_type' => 'call_access_account_update_confirmation',
+        'resource_fingerprint' => $accessFingerprint,
+        'session_fingerprint' => $sessionFingerprint,
+        'payload' => [
+            'delivery_channel' => (string) ($delivery['channel'] ?? 'unknown'),
+            'delivery_succeeded' => false,
+            'delivery_queued' => false,
+            'sent_to_logged_in_account' => true,
+            'sent_to_link_account' => false,
+            'confirmation_identifier_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'recipient_email_logged' => false,
+            'session_identifier_logged' => false,
+        ],
+    ]);
 }
 
-function videochat_call_access_account_confirmation_rate_window_seconds(): int
-{
-    $seconds = (int) (getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_UPDATE_CONFIRMATION_WINDOW_SECONDS') ?: 900);
-    return max(60, min(86_400, $seconds));
-}
-
-function videochat_call_access_account_confirmation_invalidate_older_enabled(array $options = []): bool
-{
-    if (array_key_exists('invalidate_older', $options)) {
-        return (bool) $options['invalidate_older'];
-    }
-
-    $value = getenv('VIDEOCHAT_CALL_ACCESS_ACCOUNT_CONFIRMATION_INVALIDATE_OLDER');
-    if ($value === false || trim((string) $value) === '') {
-        return true;
-    }
-
-    return !in_array(strtolower(trim((string) $value)), ['0', 'false', 'no', 'off'], true);
+function videochat_call_access_account_confirmation_record_account_data_changed(
+    PDO $pdo,
+    array $confirmation,
+    int $userId,
+    array $updatedFields,
+    string $sessionFingerprint = ''
+): void {
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($confirmation['tenant_id'] ?? null) ? (int) $confirmation['tenant_id'] : null,
+        'event_type' => 'call_access_account_data_changed',
+        'actor_user_id' => $userId,
+        'target_user_id' => $userId,
+        'call_id' => (string) ($confirmation['call_id'] ?? ''),
+        'resource_type' => 'call_access_account_update_confirmation',
+        'resource_fingerprint' => (string) ($confirmation['access_fingerprint'] ?? ''),
+        'session_fingerprint' => $sessionFingerprint,
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'confirm_account_update',
+            'result' => 'account_data_changed',
+            'updated_fields' => array_values($updatedFields),
+            'manual_confirmation_required' => true,
+            'confirmation_identifier_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'recipient_email_logged' => false,
+            'session_identifier_logged' => false,
+        ],
+    ]);
 }
 
 function videochat_call_access_account_confirmation_pending_payload(array $manualData): array
@@ -534,60 +604,26 @@ SQL
         $confirmationUrl,
         $expiresAt
     );
-    if (!(bool) ($delivery['sent'] ?? false)) {
-        $delete = $pdo->prepare('DELETE FROM call_access_account_update_confirmations WHERE token_fingerprint = :token_fingerprint AND (consumed_at IS NULL OR trim(consumed_at) = \'\')');
-        $delete->execute([':token_fingerprint' => $tokenFingerprint]);
-        videochat_audit_record_event($pdo, [
-            'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
-            'event_type' => 'call_access_account_update_confirmation_email_dispatch_failed',
-            'actor_user_id' => $authenticatedUserId,
-            'target_user_id' => $authenticatedUserId,
-            'call_id' => (string) ($accessLink['call_id'] ?? ''),
-            'resource_type' => 'call_access_account_update_confirmation',
-            'resource_fingerprint' => $accessFingerprint,
-            'session_fingerprint' => $sessionFingerprint,
-            'payload' => [
-                'channel' => (string) ($delivery['channel'] ?? 'none'),
-                'pending_confirmation_deleted' => true,
-                'raw_link_identifier_logged' => false,
-                'confirmation_identifier_logged' => false,
-                'recipient_email_logged' => false,
-                'session_identifier_logged' => false,
-            ],
-        ]);
+    if (!videochat_call_access_account_confirmation_delivery_accepted($delivery)) {
+        videochat_call_access_account_confirmation_record_email_dispatch_failed(
+            $pdo,
+            $tokenFingerprint,
+            $accessLink,
+            $accessFingerprint,
+            $authenticatedUserId,
+            $sessionFingerprint,
+            $delivery
+        );
 
         return [
             'ok' => false,
-            'reason' => 'confirmation_dispatch_failed',
+            'reason' => 'email_delivery_failed',
             'errors' => [],
             'token' => null,
             'recipient_email' => null,
+            'email_delivery' => $delivery,
         ];
     }
-
-    videochat_audit_record_event($pdo, [
-        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
-        'event_type' => 'call_access_account_update_confirmation_email_dispatched',
-        'actor_user_id' => $authenticatedUserId,
-        'target_user_id' => $authenticatedUserId,
-        'call_id' => (string) ($accessLink['call_id'] ?? ''),
-        'resource_type' => 'call_access_account_update_confirmation',
-        'resource_fingerprint' => $accessFingerprint,
-        'session_fingerprint' => $sessionFingerprint,
-        'payload' => [
-            'channel' => (string) ($delivery['channel'] ?? 'unknown'),
-            'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
-                videochat_call_access_account_confirmation_frontend_origin($options)
-            ),
-            'expires_at' => $expiresAt,
-            'expires_in_seconds' => $ttlSeconds,
-            'raw_link_identifier_logged' => false,
-            'confirmation_identifier_logged' => false,
-            'recipient_email_logged' => false,
-            'session_identifier_logged' => false,
-        ],
-    ]);
-
     if ($supersededPendingCount > 0) {
         videochat_audit_record_event($pdo, [
             'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
@@ -611,6 +647,34 @@ SQL
 
     videochat_audit_record_event($pdo, [
         'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_account_update_confirmation_email_dispatched',
+        'actor_user_id' => $authenticatedUserId,
+        'target_user_id' => $authenticatedUserId,
+        'call_id' => (string) ($accessLink['call_id'] ?? ''),
+        'resource_type' => 'call_access_account_update_confirmation',
+        'resource_fingerprint' => $accessFingerprint,
+        'session_fingerprint' => $sessionFingerprint,
+        'payload' => [
+            'channel' => (string) ($delivery['channel'] ?? 'unknown'),
+            'delivery_channel' => (string) ($delivery['channel'] ?? 'unknown'),
+            'delivery_succeeded' => (bool) ($delivery['sent'] ?? false),
+            'delivery_queued' => (bool) ($delivery['queued'] ?? false),
+            'sent_to_logged_in_account' => true,
+            'sent_to_link_account' => false,
+            'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
+                videochat_call_access_account_confirmation_frontend_origin($options)
+            ),
+            'expires_at' => $expiresAt,
+            'expires_in_seconds' => $ttlSeconds,
+            'confirmation_identifier_logged' => false,
+            'raw_link_identifier_logged' => false,
+            'recipient_email_logged' => false,
+            'session_identifier_logged' => false,
+        ],
+    ]);
+
+    videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
         'event_type' => 'call_access_account_update_confirmation_requested',
         'actor_user_id' => $authenticatedUserId,
         'target_user_id' => $authenticatedUserId,
@@ -627,11 +691,15 @@ SQL
             'request_session_bound' => false,
             'confirmation_account_bound' => true,
             'newer_request_invalidates_older' => videochat_call_access_account_confirmation_invalidate_older_enabled($options),
-            'secure_confirmation_link_sent' => true,
+            'secure_confirmation_link_sent' => videochat_call_access_account_confirmation_is_secure_origin(
+                videochat_call_access_account_confirmation_frontend_origin($options)
+            ),
             'email_delivery_channel' => (string) ($delivery['channel'] ?? 'unknown'),
             'expires_in_seconds' => $ttlSeconds,
+            'expires_at' => $expiresAt,
             'raw_link_identifier_logged' => false,
             'confirmation_identifier_logged' => false,
+            'confirmation_token_logged' => false,
             'recipient_email_logged' => false,
             'session_identifier_logged' => false,
         ],
@@ -871,6 +939,7 @@ SQL
                 'session_identifier_logged' => false,
             ],
         ]);
+        videochat_call_access_account_confirmation_record_account_data_changed($pdo, $row, $userId, ['display_name'], $sessionFingerprint);
 
         return [
             'ok' => true,
