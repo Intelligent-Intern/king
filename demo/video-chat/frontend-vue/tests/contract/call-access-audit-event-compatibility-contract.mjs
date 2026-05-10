@@ -45,8 +45,10 @@ const repoRoot = path.resolve(frontendRoot, '../../..');
 const auditEventsPath = path.join(repoRoot, 'demo/video-chat/backend-king-php/domain/audit/audit_events.php');
 
 const auditEvents = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/audit/audit_events.php');
+const callAccessReview = readText(repoRoot, 'demo/video-chat/backend-king-php/domain/calls/call_access_review.php');
 const auditRedactionContract = readText(repoRoot, 'demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 const auditMembershipContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/audit-call-access-membership-contract.php');
+const auditEventsContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/audit-call-access-events-contract.php');
 const strongMismatchContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/call-access-strong-mismatch-privacy-contract.php');
 const callAccessSessionFixationContract = readText(repoRoot, 'demo/video-chat/backend-king-php/tests/call-access-session-fixation-contract.php');
 
@@ -65,6 +67,9 @@ try {
     ['call_access_allowed', 'call_access_admitted'],
     ['call_access_admission_allowed', 'call_access_admitted'],
     ['call_admission_allowed', 'call_access_admitted'],
+    ['call_access_host_verification_succeeded', 'call_access_host_name_verified'],
+    ['call_access_host_verification_failed', 'call_access_host_name_verification_failed'],
+    ['call_access_host_name_rejected', 'call_access_host_name_verification_failed'],
     ['participant_role_updated', 'call_access_role_changed'],
     ['call_participant_role_updated', 'call_access_role_changed'],
     ['call_owner_transferred', 'call_access_role_changed'],
@@ -90,6 +95,8 @@ try {
     'call_access_denied',
     'call_access_admitted',
     'call_access_role_changed',
+    'call_access_host_name_verified',
+    'call_access_host_name_verification_failed',
   ]) {
     const php = `require ${phpLiteral(auditEventsPath)}; echo videochat_audit_canonical_iam_event_type(${phpLiteral(currentEvent)});`;
     const resolved = execFileSync('php', ['-r', php], { encoding: 'utf8' }).trim();
@@ -105,7 +112,10 @@ $aliases = [
   'call_access_invitation_opened',
   'tenant_membership_removed',
   'call_owner_transferred',
-  'call_access_allowed'
+  'call_access_allowed',
+  'call_access_host_verification_succeeded',
+  'call_access_host_verification_failed',
+  'call_access_host_name_rejected'
 ];
 $canonical = [];
 foreach ($aliases as $alias) {
@@ -141,6 +151,9 @@ echo json_encode([
     tenant_membership_removed: 'membership_removed',
     call_owner_transferred: 'call_access_role_changed',
     call_access_allowed: 'call_access_admitted',
+    call_access_host_verification_succeeded: 'call_access_host_name_verified',
+    call_access_host_verification_failed: 'call_access_host_name_verification_failed',
+    call_access_host_name_rejected: 'call_access_host_name_verification_failed',
   });
 
   const artifactText = JSON.stringify(probe.artifact);
@@ -186,6 +199,16 @@ echo json_encode([
     callAccessSessionFixationContract,
     /session_id_not_available[\s\S]*session_context_changed[\s\S]*not_bound_to_current_user[\s\S]*call_access_binding_mismatch/s,
     'denial compatibility must include fixation, context-switch, wrong-account, and binding-mismatch names',
+  );
+  assert.match(
+    callAccessReview,
+    /function videochat_call_access_record_host_verification_attempt[\s\S]*\$canonicalEventType = \$hostNameVerified[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed[\s\S]*\$legacyEventTypes = \$hostNameVerified[\s\S]*call_access_host_verification_succeeded[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*'event_type' => \$canonicalEventType[\s\S]*'canonical_event_type' => \$canonicalEventType[\s\S]*'legacy_event_types' => \$legacyEventTypes[\s\S]*'host_name_logged' => false/s,
+    'host-name verification audit writer must persist canonical names while retaining legacy alias markers without raw host names',
+  );
+  assert.match(
+    auditEventsContract,
+    /call_access_host_verification_succeeded[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*host alias filter[\s\S]*should read canonical/s,
+    'backend audit event proof must exercise host-verification alias write and read compatibility',
   );
 
   process.stdout.write('[call-access-audit-event-compatibility-contract] PASS\n');

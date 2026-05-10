@@ -61,8 +61,8 @@ assert.match(
 );
 assert.match(
   reviewDomain,
-  /function videochat_call_access_record_host_verification_attempt[\s\S]*host_name_fingerprint[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_rejected[\s\S]*'host_name_logged' => false/,
-  'host verification attempts must be fingerprinted, audited, and never log the raw host name',
+  /function videochat_call_access_record_host_verification_attempt[\s\S]*host_name_fingerprint[\s\S]*call_access_host_name_verified[\s\S]*call_access_host_name_verification_failed[\s\S]*call_access_host_verification_failed[\s\S]*call_access_host_name_rejected[\s\S]*'host_name_logged' => false/,
+  'host verification attempts must be fingerprinted, audited under canonical names, retain aliases, and never log the raw host name',
 );
 
 assert.match(
@@ -82,7 +82,8 @@ for (const sentinel of [
   'wrong host mismatch should be forbidden',
   'second host attempt should be rate-limited',
   'identity mismatch review audit missing',
-  'host-name rejection audit missing',
+  'host-name verification failure audit missing',
+  'legacy host-name rejection audit filter must resolve to canonical failure audit',
   'audit must state raw access ids are not logged',
   'audit must state raw session ids are not logged',
   'audit must state foreign account data is not logged',
@@ -131,8 +132,8 @@ for (const pathName of [
 
 assert.match(
   sprint,
-  /- \[x\] IAM7-14 Extract or prove identity mismatch review flow/,
-  'SPRINT.md must mark IAM7-14 checked only after implementation and proof',
+  /Completed sprint detail is intentionally removed from this file/,
+  'SPRINT.md must keep completed identity-mismatch proof detail out of the active sprint file',
 );
 
 process.stdout.write('[call-access-identity-mismatch-review-flow-contract] PASS\n');
