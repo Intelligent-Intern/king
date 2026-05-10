@@ -175,8 +175,17 @@ Tickets:
     `git diff --check` passed.
 - [ ] IAM3-10 Prove kicked or removed participants cannot rejoin via cached
   call-access sessions, stale tabs, or copied join URLs.
-- [ ] IAM3-11 Prove active-call permission changes revoke stale UI actions and
+- [x] IAM3-11 Prove active-call permission changes revoke stale UI actions and
   realtime room snapshots without forcing media/background regressions.
+  - Merged worker branch `agent/iam-s3-11-permission-change-active-call`.
+  - Added `call-access-permission-change-active-call-contract.mjs` proving role
+    and permission updates revoke stale active-call actions through IAM/realtime
+    state without relying on media/background lifecycle changes.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-permission-change-active-call-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-owner-transfer-main-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs`,
+    and `git diff --check` passed.
 - [ ] IAM3-12 Prove strong mismatch logging records only canonical, redacted IAM
   audit fields and never raw access links, cookies, SDP, ICE, or tokens.
 - [ ] IAM3-13 Convert direct host-PHP SQLite skips into deterministic Docker PHP
