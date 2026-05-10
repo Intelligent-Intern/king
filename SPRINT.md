@@ -185,8 +185,15 @@ Tickets:
     owner-transfer rights.
   - Proof: `node demo/video-chat/frontend-vue/tests/contract/owner-transfer-lifecycle-contract.mjs`
     and `git diff --check` passed.
-- [ ] IAM2-12 Prove admin join boundaries in browser E2E for system admin,
+- [x] IAM2-12 Prove admin join boundaries in browser E2E for system admin,
   org-admin, foreign org-admin, moderator, owner, and member.
+  - Merged worker branch `agent/iam-s2-12-admin-join-boundaries`.
+  - Added `call-access-admin-join-boundaries.spec.js` proving direct-join
+    boundaries for system admin, same-org admin, foreign org-admin, call-scoped
+    moderator, call owner, and plain member; denied cases redact private call
+    payloads.
+  - Proof: `npx playwright test tests/e2e/call-access-admin-join-boundaries.spec.js --workers=1`
+    and `git diff --check` passed.
 - [ ] IAM2-13 Prove removed members and invited users removed from the org lose
   call-access and lobby visibility without data leakage.
 - [ ] IAM2-14 Prove disabled users, deleted users, deleted calls, ended calls,
