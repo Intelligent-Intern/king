@@ -24,7 +24,7 @@ const inviteInvalidationContract = readRepo('demo/video-chat/frontend-vue/tests/
 const terminalBrowserContract = readRepo('demo/video-chat/frontend-vue/tests/contract/call-access-terminal-browser-flows-contract.mjs');
 const terminalStatesContract = readRepo('demo/video-chat/frontend-vue/tests/contract/call-access-terminal-states-contract.mjs');
 const linkPrivacyContract = readRepo('demo/video-chat/frontend-vue/tests/contract/call-access-link-privacy-contract.mjs');
-const unregisteredSpec = readRepo('demo/video-chat/frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js');
+const calendarInvitationBackendContract = readRepo('demo/video-chat/backend-king-php/tests/call-calendar-invitation-flow-contract.php');
 const appointmentBooking = readRepo('demo/video-chat/backend-king-php/domain/calls/appointment_calendar_booking.php');
 const callAccessPublic = readRepo('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
 const callAccessSession = readRepo('demo/video-chat/backend-king-php/domain/calls/call_access_session.php');
@@ -71,13 +71,18 @@ assertMatches(
 );
 assertMatches(
   appointmentBooking,
-  /INSERT INTO call_participants[\s\S]*:source' => 'external'[\s\S]*:invite_state' => 'invited'/,
-  'calendar booking must keep unregistered invitees as external invited participants before session issuance',
+  /function videochat_create_calendar_invitation_guest_user[\s\S]*videochat_create_guest_user_for_call_access\(\$pdo, \$displayName, \$tenantId\)[\s\S]*DELETE FROM tenant_memberships[\s\S]*videochat_fetch_active_user_for_call_access\(\$pdo, \$userId, null, \$tenantId, false\)/,
+  'calendar booking must isolate each invitee into a temporary guest account without tenant membership',
 );
 assertMatches(
   appointmentBooking,
-  /INSERT INTO call_access_links\([\s\S]*:id' => \$accessId[\s\S]*:call_id' => \$callId[\s\S]*:participant_email' => \(string\) \$data\['email'\]/,
-  'calendar booking must bind the generated access id to the generated call and invitee email',
+  /INSERT INTO call_participants[\s\S]*':user_id' => \$temporaryUserId[\s\S]*':email' => \$bookingEmail[\s\S]*':source' => 'internal'[\s\S]*':invite_state' => 'invited'/,
+  'calendar booking must internalize the temporary invitee only as an invited call participant',
+);
+assertMatches(
+  appointmentBooking,
+  /INSERT INTO call_access_links\([\s\S]*id, call_id, participant_user_id, participant_email[\s\S]*:id' => \$accessId[\s\S]*:call_id' => \$callId[\s\S]*:participant_user_id' => \$temporaryUserId[\s\S]*:participant_email' => \$bookingEmail/,
+  'calendar booking must bind the generated access id to the generated call, temporary account, and invitee email metadata',
 );
 assertMatches(
   calendarInviteContract,
@@ -88,32 +93,32 @@ assertMatches(
 assertMatches(
   callAccessContract,
   /function videochat_call_access_requires_guest_name[\s\S]*return \$linkedUserId <= 0 && \$participantEmail !== '' && !is_array\(\$targetUser\);/s,
-  'personal calendar links without a target account must require an invitee display name',
+  'email-only personal links still require an invitee display name when no target user exists',
 );
 assertMatches(
   callAccessSession,
   /if \(\$requiresGuestName\)[\s\S]*videochat_create_guest_user_for_call_access\(\$pdo, \$guestName, \$tenantId\)[\s\S]*\$createdPersonalGuest = \$linkKind === 'personal';/s,
-  'unregistered invitee guest identity must be created only during call-access session issuance',
+  'unbound email-only personal links must create a guest during call-access session issuance',
 );
 assertMatches(
   callAccessSession,
-  /if \(\(\$linkKind === 'open' && !\$openInviteOnlyLink\) \|\| \$createdPersonalGuest\)[\s\S]*videochat_ensure_internal_call_participant[\s\S]*\$linkKind === 'open' \? 'allowed' : 'invited'/s,
-  'unregistered personal invitee must be internalized only as an invited participant after session issuance',
+  /if \(\$createdPersonalGuest\) \{[\s\S]*videochat_ensure_internal_call_participant\([\s\S]*'invited'[\s\S]*\);[\s\S]*\}/,
+  'unbound email-only personal guests must be internalized only as invited participants after session issuance',
 );
 assertMatches(
-  unregisteredSpec,
-  /requires_guest_name\)\.toBe\(true\)[\s\S]*getByPlaceholder\('Enter your display name'\)[\s\S]*Name is required for this link\.[\s\S]*expect\(counters\.session\)\.toBe\(0\)/s,
-  'unregistered calendar browser proof must require a display name before session POST',
+  calendarInvitationBackendContract,
+  /registered logged-out booking must not bind the access link to the existing account[\s\S]*resolve should target the bound temporary account[\s\S]*bound calendar link should not request a guest name/s,
+  'booking-time calendar invitees must resolve to the pre-bound temporary account without a guest-name prompt',
 );
 assertMatches(
-  unregisteredSpec,
-  /guest_name: guestName[\s\S]*account_type\)\.toBe\('guest'\)[\s\S]*tenant_admin[\s\S]*toBe\(false\)[\s\S]*admit_participants[\s\S]*toBe\(false\)/s,
-  'unregistered calendar session must use a least-privilege guest identity',
+  calendarInvitationBackendContract,
+  /personalized calendar link id must be a non-sequential v4 uuid[\s\S]*wrong authenticated account should be forbidden[\s\S]*moving one appointment must not modify unrelated personalized invitation link/s,
+  'calendar invitation flow proof must retain UUID, unrelated-link isolation, and wrong-account denial coverage',
 );
 assertMatches(
-  unregisteredSpec,
-  /toContainText\(\/Call owner has been notified\|Waiting for host\/i[\s\S]*not\.toContain\('\/workspace\/call'\)[\s\S]*expect\(counters\.directCallAccess\)\.toBe\(0\)/s,
-  'unregistered calendar invitee must remain in lobby instead of direct workspace access before admission',
+  calendarInvitationBackendContract,
+  /calendar temporary accounts must not receive tenant membership[\s\S]*stored session binding should point to temporary account[\s\S]*reopening a calendar link must not create another temporary account/s,
+  'calendar invitation sessions must reuse the bound guest account without granting tenant membership',
 );
 
 assertMatches(
