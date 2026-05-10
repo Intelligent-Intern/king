@@ -147,7 +147,14 @@ Tickets:
     `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` passed.
 - [ ] IAM-08 Prove deleted, ended, disabled, and terminal call states do not leak
   private call data and cannot be joined.
-- [ ] IAM-09 Prove membership removal and stale organization-role revalidation.
+- [x] IAM-09 Prove membership removal and stale organization-role revalidation.
+  - Merged worker branch `agent/iam-s1-09-membership-stale-role`.
+  - Membership-removal and stale-role shell proofs now run PHP syntax validation
+    before the `pdo_sqlite` gate, so non-SQLite hosts still catch contract syntax
+    regressions instead of skipping all proof.
+  - Proof: PHP lint passed for both contracts; shell wrappers executed and
+    skipped only the SQLite-backed runtime phase because host PHP lacks
+    `pdo_sqlite`.
 - [ ] IAM-10 Prove owner transfer, moderator, org-admin, and system-admin
   admission boundaries.
 - [ ] IAM-11 Prove lobby queue idempotence, pagination/search stability, and
