@@ -17,6 +17,30 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Cleanup, Proof Consolidation, And Browser Stability 04:
+  closed all 20 Sprint 04 tickets on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint reconciled
+  dirty and stale IAM worktrees, extracted only current stronger proof value
+  from old `proof-3` branches, preserved unresolved/user-owned dirty work, and
+  removed only clean contained Sprint 04 worker branches/worktrees. Accepted
+  proof value now covers terminal deleted/disabled/ended call states, inactive
+  users, logout/login switch fail-closed behavior, registered invitee handoff,
+  temporary moderator/owner-transfer boundaries, guest-list revocation
+  extraction, public-copy safe not-found payloads, system-admin terminal
+  boundaries, IAM artifact retention/redaction, and CI/release-gate wiring.
+  Proof: `npm run test:contract:iam-call-access`, `npm run build`, and
+  `npm run test:contract:build-size` passed; the focused call-access E2E worker
+  separately passed 12/12 tests. Deploy proof: production was synced and
+  restarted by direct `rsync` plus remote `docker compose --profile edge
+  --profile turn up -d --build --remove-orphans`, with no push, DNS automation,
+  or certbot. Post-deploy diagnostics showed app/API/CDN/call-app/runtime
+  probes reachable, containers up, authenticated
+  `/api/calls/{id}/call-apps/available` returning HTTP 200 with six apps, and
+  diagnostics availability returning HTTP 200 for admins. Residual diagnostic
+  finding: the optional deploy smoke still reports `https://sfu.kingrt.com/sfu`
+  as HTTP 404 instead of a websocket routing response; SFU remains parked/manual
+  under the current user boundary and was not changed in this sprint.
+
 - 2026-05-10 IAM Abuse, Runtime Proof, And Cleanup Stabilization 03: closed all
   20 Sprint 03 tickets on local branch `prod-kingrt-do-not-push-to-github`
   without pushing. The sprint added focused IAM abuse/manipulation proofs for

@@ -292,8 +292,28 @@ Sprint Checkboxen:
   - Proof: CI-wire contract, release-gate contract, direct newly wired proof
     contracts, full `npm run test:contract:iam-call-access`, and
     `git diff --check` passed.
-- [ ] IAM4-20 Build, run Sprint 04 IAM proof set, deploy without
+- [x] IAM4-20 Build, run Sprint 04 IAM proof set, deploy without
   push/DNS/certbot, and collect post-deploy diagnostics.
+  - Local proof before deploy passed: `npm run test:contract:iam-call-access`,
+    `npm run build`, and `npm run test:contract:build-size`.
+  - Production deploy used direct `rsync` plus remote `docker compose --env-file
+    .env --env-file .env.local -f docker-compose.v1.yml -f
+    docker-compose.deploy.local.yml --profile edge --profile turn up -d
+    --build --remove-orphans`.
+  - No push, DNS automation, or certbot step was run.
+  - Post-deploy `prod-debug.sh` passed app/API/CDN/call-app/runtime/container
+    probes; containers were up after recreate.
+  - Authenticated call-app availability smoke passed: admin login HTTP 200,
+    `/api/calls/{id}/call-apps/available?category=all&page=1&page_size=8`
+    returned HTTP 200 with six apps (`call-diagnostics`, `planning-image`,
+    `presentation`, `spreadsheet`, `text-document`, `whiteboard`), diagnostics
+    query returned HTTP 200 with `call-diagnostics`, and logout returned HTTP
+    200.
+  - Deploy smoke passed DNS, HTTPS frontend, CDN, call-app host/path, registry,
+    CSP, API health/localization/version, admin-runtime auth boundary, and
+    lobby websocket checks before stopping at the existing SFU host route:
+    `https://sfu.kingrt.com/sfu?room_id=smoke` returned HTTP 404 instead of a
+    websocket routing status. SFU remains parked/manual per sprint boundary.
 
 Loop policy:
 - On `w`, keep up to six worker slots assigned where the remaining tickets can
