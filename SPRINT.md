@@ -86,7 +86,7 @@ Sprint Checkboxen:
   `local/iam-e2e-call-app-entitlement-revocation`.
 - [ ] IAM7-09 Extract or prove Call App launch-token reconnect validation from
   `local/iam-e2e-call-app-launch-token-reconnect`.
-- [ ] IAM7-10 Extract or prove cross-organization foreign join edges from
+- [x] IAM7-10 Extract or prove cross-organization foreign join edges from
   `local/iam-e2e-cross-org-foreign-join-edges`.
 - [ ] IAM7-11 Extract or prove deleted/ended call join hardening from
   `local/iam-e2e-deleted-ended-join-hardening`.
