@@ -139,6 +139,28 @@ expected unauthenticated 401 for marketplace/lobby/ice probes, expected 404 for
 the parked SFU route, and zero recent auth SQL or PHP fatal errors across five
 fast diagnostics loops.
 
+## Sprint 02 Target
+
+Active from 2026-05-10. The next release slice keeps the Gossip media target
+from Sprint 01 and adds collaboration persistence as a hard usability gate:
+
+1. Call chat history must be visible again after reload for admitted call
+   participants, with durable archive storage, cursor backfill and message
+   de-duplication against live websocket append.
+2. The live call chat becomes the preferred operating/reporting channel once a
+   valid session is recovered. Local docs remain authoritative, but loop status
+   should also be posted in the room when available.
+3. Audio input is consent-gated. It can feed sprint notes only after visible
+   participants approve it in chat, and raw audio must not be persisted.
+4. Image Planning call-app uploads must survive parent reload, iframe reload and
+   session replay. The durable state is UUID-based image metadata plus
+   participant-only stored assets, not volatile iframe memory.
+5. Image Planning permissions are explicit per user/action: read, upload and
+   delete. The uploader, admin and moderator can delete; unauthorized users must
+   be denied by backend and UI.
+6. The sprint ends with deploy, 5 to 10 diagnostics loops and grouped fixes
+   before any second deploy.
+
 ## Current Code Anchors
 
 - Backend capability command:
