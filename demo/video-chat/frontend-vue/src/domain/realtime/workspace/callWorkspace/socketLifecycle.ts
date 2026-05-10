@@ -39,6 +39,7 @@ export function createCallWorkspaceSocketHelpers({
     applyTypingEvent,
     applyViewerContext,
     appendChatMessage,
+    bootstrapChatArchive = () => false,
     captureClientDiagnostic,
     clearAdmissionGate,
     clearErrors,
@@ -378,6 +379,7 @@ export function createCallWorkspaceSocketHelpers({
       void mediaCapabilityPlanBridge.sendClientCapabilities('room_snapshot', payload)
         .then(() => mediaCapabilityPlanBridge.applyLocalMediaStateForLastPlan('room_snapshot', payload));
       applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
+      void bootstrapChatArchive('room_snapshot');
       return;
     }
 
@@ -976,6 +978,7 @@ export function createCallWorkspaceSocketHelpers({
           },
         });
         requestRoomSnapshot();
+        void bootstrapChatArchive(isReconnectOpen ? 'websocket_reconnect' : 'websocket_open');
         if (refs.usersSourceMode.value === 'directory' && refs.activeTab.value === 'users') {
           void refreshUsersDirectory();
         }

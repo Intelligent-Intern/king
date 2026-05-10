@@ -90,7 +90,7 @@ Sprint Checkboxen:
 - [x] GSP02-04 Chat history reload API: return the latest room chat history for
   admitted call participants after reload with cursor pagination, redaction and
   no guest/archive leak outside the call.
-- [ ] GSP02-05 Frontend chat bootstrap: on call load and websocket reconnect,
+- [x] GSP02-05 Frontend chat bootstrap: on call load and websocket reconnect,
   backfill archive history before live append, dedupe by message id, preserve
   unread state and never require a manual refresh button.
 - [ ] GSP02-06 Live-call reporting channel: recover or establish a valid session
@@ -161,3 +161,10 @@ Current Loop Notes:
   latest room page in ascending UI order, exposes an older-page cursor, and
   keeps the old forward cursor mode for archive screens. The chat archive
   contract proves latest-tail, older-tail and cross-room exclusion.
+- GSP02-05 proof: `chatArchiveBootstrap.js` loads `/chat-archive` with
+  `room_id`, `tail=1` and `limit`, appends history backfill as normal
+  `chat/message` payloads, and suppresses unread noise through
+  `chatRuntime.ts`. `socketLifecycle.ts` triggers the helper on websocket
+  open/reconnect and room snapshots. Verified with
+  `node tests/contract/chat-archive-bootstrap-contract.mjs` and
+  `npm run build`.

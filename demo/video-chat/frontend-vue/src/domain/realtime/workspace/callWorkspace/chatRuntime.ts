@@ -608,6 +608,7 @@ function appendChatMessage(payload) {
   maybeShowOperatorFeedbackDeploymentToast(payload);
   const message = normalizeChatMessage(payload);
   if (message.text === '' && message.attachments.length === 0) return;
+  const isHistoryBackfill = payload?.history_backfill === true || String(payload?.source || '').trim() === 'chat_archive_bootstrap';
   if (Number.isInteger(message.sender.user_id) && message.sender.user_id > 0) {
     markParticipantActivity(message.sender.user_id, 'chat');
   }
@@ -631,7 +632,9 @@ function appendChatMessage(payload) {
   if (bucket.length > 240) {
     bucket.splice(0, bucket.length - 240);
   }
-  markChatUnread(message);
+  if (!isHistoryBackfill) {
+    markChatUnread(message);
+  }
 }
 
 function applyTypingEvent(payload) {
