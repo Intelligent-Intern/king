@@ -31,9 +31,13 @@ const backendContract = read('backend-king-php/tests/call-access-owner-absence-r
 const backendContractSh = read('backend-king-php/tests/call-access-owner-absence-realtime-sync-contract.sh');
 const sqliteProof = read('backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const packageJson = readJson('frontend-vue/package.json');
+const auditEvents = read('backend-king-php/domain/audit/audit_events.php');
+const iamAuditEvents = read('backend-king-php/domain/audit/iam_audit_events.php');
 
+requireIncludes(auditEvents, "require_once __DIR__ . '/iam_audit_events.php';", 'core audit domain must load IAM audit helpers');
 requireIncludes(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;', '15-minute owner absence timer');
 requireIncludes(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;', '5-minute owner absence countdown');
+requireIncludes(ownerAbsence, "require_once __DIR__ . '/../audit/audit_events.php';", 'owner absence runtime must load audit helpers');
 requireIncludes(ownerAbsence, 'function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'server-clock owner absence snapshot');
 requireIncludes(ownerAbsence, 'function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'server-clock owner absence timeout transition');
 requireIncludes(ownerAbsence, 'function videochat_realtime_owner_absence_stale_owner_left_at_ms(', 'stale owner heartbeat cutoff');
@@ -46,7 +50,26 @@ requireIncludes(ownerAbsence, "$payload['ended_reason'] = 'owner_absent_timeout'
 requireIncludes(ownerAbsence, 'videochat_realtime_owner_absence_disable_call_access_links(', 'timeout link invalidation');
 requireIncludes(ownerAbsence, 'videochat_realtime_owner_absence_revoke_call_access_sessions(', 'timeout session revocation');
 requireIncludes(ownerAbsence, 'videochat_realtime_owner_absence_downgrade_absent_owner_connection(', 'absent owner connection downgrade');
+requireIncludes(ownerAbsence, 'videochat_audit_record_owner_absence_timer_started($pdo, $snapshot)', 'owner absence timer-start audit write');
+requireIncludes(ownerAbsence, 'videochat_audit_record_owner_absence_timer_cancelled($pdo, $snapshot', 'owner absence timer-cancel audit write');
+requireIncludes(ownerAbsence, 'videochat_audit_record_call_implicitly_ended($pdo, $snapshot', 'implicit owner-absence end audit write');
 requireMatch(ownerAbsence, /'call_role'\] = 'participant'[\s\S]*'can_moderate_call'\] = false[\s\S]*'can_manage_call_owner'\] = false/, 'absent owner downgrade must remove active privileges');
+
+for (const helper of [
+  'videochat_audit_record_owner_absence_timer_started',
+  'videochat_audit_record_owner_absence_timer_cancelled',
+  'videochat_audit_record_call_implicitly_ended',
+]) {
+  requireIncludes(iamAuditEvents, `function ${helper}(`, `${helper} helper`);
+}
+for (const eventType of [
+  'call_owner_absence_timer_started',
+  'call_owner_absence_timer_cancelled',
+  'call_implicitly_ended',
+]) {
+  requireIncludes(iamAuditEvents, `'${eventType}'`, `${eventType} audit helper event`);
+  requireIncludes(backendContract, `'${eventType}'`, `${eventType} backend proof assertion`);
+}
 
 requireIncludes(presenceDb, 'function videochat_realtime_presence_db_retention_ms(): int', 'presence retention helper');
 requireIncludes(presenceDb, '20 * 60 * 1000', 'presence retention long enough for owner absence');
@@ -76,6 +99,8 @@ for (const proofNeedle of [
   'countdown_a',
   'participant_refresh',
   'owner_absence_timeout',
+  'owner return should audit-log timer cancellation',
+  'owner timeout should audit-log implicit call end',
   'revoked timeout call-access session must fail closed',
   'timeout denial must redact call payload',
   'stale owner snapshot after timeout must remove owner controls',

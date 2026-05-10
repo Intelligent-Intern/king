@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/realtime_call_presence_db.php';
 
 const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;
@@ -442,7 +443,18 @@ function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId
 {
     $effectiveNowMs = videochat_realtime_owner_absence_effective_now_ms($nowMs);
     $snapshot = videochat_realtime_owner_absence_snapshot($pdo, $callId, $roomId, $effectiveNowMs);
-    if ((string) ($snapshot['status'] ?? '') !== 'ended' || !(bool) ($snapshot['enabled'] ?? false)) {
+    $snapshotStatus = (string) ($snapshot['status'] ?? '');
+    $ownerAbsenceEnabled = (bool) ($snapshot['enabled'] ?? false);
+    if ($ownerAbsenceEnabled && in_array($snapshotStatus, ['monitoring', 'countdown', 'ended'], true)) {
+        videochat_audit_record_owner_absence_timer_started($pdo, $snapshot);
+    }
+    if ($ownerAbsenceEnabled && in_array($snapshotStatus, ['owner_present', 'no_participants'], true)) {
+        videochat_audit_record_owner_absence_timer_cancelled($pdo, $snapshot, [
+            'cancel_reason' => $snapshotStatus === 'no_participants' ? 'no_remaining_participants' : 'owner_returned',
+        ]);
+    }
+
+    if ($snapshotStatus !== 'ended' || !$ownerAbsenceEnabled) {
         return $snapshot;
     }
 
@@ -484,6 +496,9 @@ SQL
         ]);
         $transitioned = $updateCall->rowCount() > 0;
         $pdo->commit();
+        if ($transitioned) {
+            videochat_audit_record_call_implicitly_ended($pdo, $snapshot, ['transitioned' => true]);
+        }
     } catch (Throwable) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();

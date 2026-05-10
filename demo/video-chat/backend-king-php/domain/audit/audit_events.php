@@ -204,7 +204,7 @@ function videochat_audit_sanitize_payload(mixed $value, int $depth = 0): mixed
         }
         $index++;
         $stringKey = is_string($key) ? $key : (string) $key;
-        if (is_string($key) && is_bool($entry) && preg_match('/^raw_[a-z0-9_-]+_logged$/', strtolower($stringKey)) === 1) {
+        if (is_string($key) && is_bool($entry) && preg_match('/^[a-z0-9_-]+_logged$/', strtolower($stringKey)) === 1) {
             $sanitized[$key] = $entry;
             continue;
         }
@@ -595,6 +595,8 @@ function videochat_audit_record_call_scoped_access_continued(PDO $pdo, array $ac
         ],
     ]);
 }
+
+require_once __DIR__ . '/iam_audit_events.php';
 
 function videochat_audit_fetch_events(PDO $pdo, array $filters = []): array
 {

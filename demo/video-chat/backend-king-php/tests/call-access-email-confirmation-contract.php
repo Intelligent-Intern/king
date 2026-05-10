@@ -17,6 +17,20 @@ function videochat_call_access_email_confirmation_assert(bool $condition, string
     exit(1);
 }
 
+function videochat_call_access_email_confirmation_audit_payloads_by_type(array $auditRows): array
+{
+    $payloadsByType = [];
+    foreach ($auditRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $payload = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+        $payloadsByType[(string) ($row['event_type'] ?? '')][] = is_array($payload) ? $payload : [];
+    }
+
+    return $payloadsByType;
+}
+
 function videochat_call_access_email_confirmation_role_id(PDO $pdo, string $role): int
 {
     $query = $pdo->prepare('SELECT id FROM roles WHERE slug = :slug LIMIT 1');
@@ -350,6 +364,30 @@ try {
     videochat_call_access_email_confirmation_assert($auditFailed >= 5, 'failed confirmation attempts should be audit-logged');
     videochat_call_access_email_confirmation_assert($auditSuperseded >= 1, 'superseded confirmation should be audit-logged');
     $auditRows = $pdo->query('SELECT event_type, resource_fingerprint, session_fingerprint, payload_json FROM videochat_audit_events')->fetchAll();
+    $auditPayloadsByType = videochat_call_access_email_confirmation_audit_payloads_by_type($auditRows);
+    $confirmedPayload = (array) (($auditPayloadsByType['call_access_account_update_confirmed'] ?? [])[0] ?? []);
+    videochat_call_access_email_confirmation_assert((string) ($confirmedPayload['audit_scope'] ?? '') === 'iam_call_access', 'confirmed account-update audit scope mismatch');
+    videochat_call_access_email_confirmation_assert((string) ($confirmedPayload['action'] ?? '') === 'confirm_account_update', 'confirmed account-update audit action mismatch');
+    videochat_call_access_email_confirmation_assert((string) ($confirmedPayload['result'] ?? '') === 'confirmed', 'confirmed account-update audit result mismatch');
+    $failurePayloads = (array) ($auditPayloadsByType['call_access_account_update_confirmation_failed'] ?? []);
+    $failureReasons = [];
+    foreach ($failurePayloads as $failurePayload) {
+        if (!is_array($failurePayload)) {
+            continue;
+        }
+        videochat_call_access_email_confirmation_assert((string) ($failurePayload['audit_scope'] ?? '') === 'iam_call_access', 'failed account-update audit scope mismatch');
+        videochat_call_access_email_confirmation_assert((string) ($failurePayload['action'] ?? '') === 'confirm_account_update', 'failed account-update audit action mismatch');
+        videochat_call_access_email_confirmation_assert((string) ($failurePayload['result'] ?? '') === 'failed', 'failed account-update audit result mismatch');
+        videochat_call_access_email_confirmation_assert(($failurePayload['token_logged'] ?? true) === false, 'failed account-update audit must not log tokens');
+        videochat_call_access_email_confirmation_assert(($failurePayload['recipient_email_logged'] ?? true) === false, 'failed account-update audit must not log recipient emails');
+        $failureReasons[] = (string) ($failurePayload['failure_reason'] ?? '');
+    }
+    foreach (['account_bound', 'session_bound', 'already_consumed', 'superseded', 'expired'] as $expectedFailureReason) {
+        videochat_call_access_email_confirmation_assert(
+            in_array($expectedFailureReason, $failureReasons, true),
+            "failed confirmation audit should include {$expectedFailureReason}"
+        );
+    }
     $auditDump = json_encode($auditRows, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
     videochat_call_access_email_confirmation_assert_no_needles(
         $auditDump,
