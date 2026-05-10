@@ -2,6 +2,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
 import { createParticipantActivityState } from './participantActivityState';
 import { createCallWorkspaceModerationSync } from './moderationSync';
+import { mergeScreenShareParticipantRows } from './screenShareParticipants';
 import { createVideoFullscreenToggle } from './videoFullscreenToggle';
 import { isScreenShareMediaSource, isScreenShareUserId, screenShareUserIdForOwner } from '../../screenShareIdentity.js';
 import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
@@ -193,10 +194,19 @@ function participantVisibilityScore(row, nowMs = Date.now()) {
 
 const normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 const currentLayoutMode = computed(() => normalizeCallLayoutMode(normalizedCallLayout.value.mode));
+const callLayoutParticipants = computed(() => {
+  if (mediaRenderVersion && typeof mediaRenderVersion === 'object') {
+    mediaRenderVersion.value;
+  }
+  const remotePeers = remotePeersRef?.value instanceof Map
+    ? remotePeersRef.value.values()
+    : [];
+  return mergeScreenShareParticipantRows(connectedParticipantUsers.value, remotePeers, { source: 'media' });
+});
 const activeScreenShareUserIds = computed(() => {
   const seen = new Set();
   const userIds = [];
-  for (const row of connectedParticipantUsers.value) {
+  for (const row of callLayoutParticipants.value) {
     const screenShareUserId = screenShareUserIdFromParticipant(row);
     if (screenShareUserId <= 0 || seen.has(screenShareUserId)) continue;
     seen.add(screenShareUserId);
@@ -230,7 +240,7 @@ watch(activeScreenShareUserIds, (screenShareUserIds, previousScreenShareUserIds 
 });
 const layoutSelection = computed(() => selectCallLayoutParticipants({
   tick: layoutAutomationTick.value,
-  participants: connectedParticipantUsers.value,
+  participants: callLayoutParticipants.value,
   currentUserId: currentUserId.value,
   pinnedUsers,
   activityByUserId: participantActivityByUserId,
@@ -252,7 +262,7 @@ const gridVideoParticipants = computed(() => (
 ));
 const showMiniParticipantStrip = computed(() => (
   currentLayoutMode.value === 'main_mini'
-  && connectedParticipantUsers.value.length > 1
+  && callLayoutParticipants.value.length > 1
 ));
 
 function remotePeerForParticipant(userId) {

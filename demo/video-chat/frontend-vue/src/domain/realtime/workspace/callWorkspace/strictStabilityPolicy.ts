@@ -1,14 +1,21 @@
 export const CALL_STABILITY_POLICY_ENV_KEY = 'VITE_VIDEOCHAT_CALL_STABILITY_POLICY';
 export const STRICT_720P30_POLICY_MODE = 'strict_720p30';
+export const STRICT_720P30_PROFILE_ID = 'strict_720p30';
+
+export const STRICT_720P30_CONSTRAINTS = Object.freeze({
+  video_width: 1280,
+  video_height: 720,
+  video_fps: 30,
+});
 
 export const STRICT_720P30_VIDEO_PROFILE = Object.freeze({
-  id: STRICT_720P30_POLICY_MODE,
+  id: STRICT_720P30_PROFILE_ID,
   label: 'Strict 720p30',
-  captureWidth: 1280,
-  captureHeight: 720,
-  captureFrameRate: 30,
-  frameWidth: 1280,
-  frameHeight: 720,
+  captureWidth: STRICT_720P30_CONSTRAINTS.video_width,
+  captureHeight: STRICT_720P30_CONSTRAINTS.video_height,
+  captureFrameRate: STRICT_720P30_CONSTRAINTS.video_fps,
+  frameWidth: STRICT_720P30_CONSTRAINTS.video_width,
+  frameHeight: STRICT_720P30_CONSTRAINTS.video_height,
   frameQuality: 40,
   keyFrameInterval: 30,
   encodeIntervalMs: 33,
@@ -41,6 +48,9 @@ const STRICT_720P30_POLICY = Object.freeze({
   disableGossipReceiveRecovery: true,
   disableBackgroundOutgoing: true,
   disableBackgroundTabPolicy: true,
+  disableNativeRuntimeFallback: true,
+  disableRegressionImprovementProbes: true,
+  requireStrict720p30Capability: true,
   strictCaptureOnly: true,
   strictFixedOutputFrame: true,
   disableSelectiveTileTransport: true,
@@ -91,4 +101,24 @@ export function strict720p30VideoProfile(policy) {
   return isStrict720p30Policy(policy) && policy?.fixedVideoProfile
     ? policy.fixedVideoProfile
     : STRICT_720P30_VIDEO_PROFILE;
+}
+
+export function strict720p30Constraints() {
+  return STRICT_720P30_CONSTRAINTS;
+}
+
+export function strict720p30CapabilitySupported(capabilities = {}) {
+  const media = capabilities?.media && typeof capabilities.media === 'object' ? capabilities.media : {};
+  const runtime = capabilities?.runtime && typeof capabilities.runtime === 'object' ? capabilities.runtime : {};
+  const constraints = capabilities?.constraints && typeof capabilities.constraints === 'object'
+    ? capabilities.constraints
+    : {};
+
+  return Boolean(media.camera)
+    && Boolean(media.camera_720p30 ?? media.camera720p30)
+    && Boolean(runtime.websocket)
+    && Boolean(runtime.wlvc_encoder ?? runtime.wlvcEncoder)
+    && Number(constraints.video_width ?? constraints.videoWidth) === STRICT_720P30_CONSTRAINTS.video_width
+    && Number(constraints.video_height ?? constraints.videoHeight) === STRICT_720P30_CONSTRAINTS.video_height
+    && Number(constraints.video_fps ?? constraints.videoFps) === STRICT_720P30_CONSTRAINTS.video_fps;
 }

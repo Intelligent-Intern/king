@@ -1,13 +1,15 @@
-import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
 import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
 import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
+import {
+  gossipFrameMessageFromEncodedFrame,
+  isGossipMediaFrameMessage,
+  sfuFrameFromGossipMessage,
+} from './gossipMediaFrameEnvelope';
 import { createGossipRecoveryState } from './gossipRecoveryState';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
-
-const GOSSIP_MEDIA_FRAME_TYPE = 'gossip.media.frame.v1';
 
 export function createCallWorkspaceGossipDataLane({
   callbacks,
@@ -462,8 +464,21 @@ export function createCallWorkspaceGossipDataLane({
         track_id: String(frame.trackId || ''),
         frame_sequence: Number(frame.frameSequence || 0),
         media_generation: Number(frame.mediaGeneration || 0),
+        contract_version: String(frame.gossipContractVersion || ''),
+        codec_id: String(frame.gossipCodecId || frame.codecId || ''),
+        profile: String(frame.gossipProfile || ''),
+        runtime_path: directGossipPrimary ? 'gossip_primary_direct' : String(frame.transportPath || ''),
+        renderer_path: 'remote_decoded_canvas',
+        renderer_entry: 'handleSFUEncodedFrame',
+        decoded_pixels_required: true,
+        frame_count_min: 1,
       },
     });
+    routeGossipMediaFrameToRenderer(frame, directGossipPrimary);
+    return true;
+  }
+
+  function routeGossipMediaFrameToRenderer(frame, directGossipPrimary) {
     handleSFUEncodedFrame(directGossipPrimary
       ? {
           ...frame,
@@ -474,73 +489,6 @@ export function createCallWorkspaceGossipDataLane({
         }
       : frame);
     return true;
-  }
-
-  function nextFrameSequenceForTrack(sequenceMap, peerId, trackId) {
-    const sequenceKey = `${peerId}:${trackId}`;
-    const frameSequence = Math.max(1, Number(sequenceMap.get(sequenceKey) || 0) + 1);
-    sequenceMap.set(sequenceKey, frameSequence);
-    return frameSequence;
-  }
-
-  function isGossipMediaFrameMessage(msg) {
-    const type = String(msg?.type || '').trim();
-    return type === GOSSIP_MEDIA_FRAME_TYPE || type === 'sfu/frame';
-  }
-
-  function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, plainRelay = false) {
-    if (!frame || typeof frame !== 'object') return null;
-    const peerId = localPeerId();
-    if (peerId === '' || peerId === '0') return null;
-    const trackId = String(frame.trackId || '').trim();
-    if (trackId === '') return null;
-
-    const frameSequence = nextFrameSequenceForTrack(sequenceMap, peerId, trackId);
-    const relayData = plainRelay
-      ? (frame.relayData || frame.plainData || frame.data)
-      : frame.data;
-    const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
-    const dataBase64 = dataBuffer.byteLength > 0 ? arrayBufferToBase64Url(dataBuffer) : '';
-    const protectedFrame = plainRelay ? '' : String(frame.protectedFrame || '').trim();
-    if (dataBase64 === '' && protectedFrame === '') return null;
-    const protectionMode = plainRelay || protectedFrame === ''
-      ? 'transport_only'
-      : String(frame.protectionMode || 'protected');
-    const frameId = String(frame.frameId || frame.frame_id || '').trim()
-      || `gsr_${callId()}_${peerId}_${trackId.replace(/[^A-Za-z0-9_.:-]/g, '_').slice(0, 80)}_${frameSequence}`;
-    return {
-      type: GOSSIP_MEDIA_FRAME_TYPE,
-      envelope_contract: GOSSIP_MEDIA_FRAME_TYPE,
-      protocol_version: 2,
-      frame_id: frameId,
-      route_id: frameId,
-      publisher_id: String(frame.publisherId || peerId),
-      publisher_user_id: String(frame.publisherUserId || peerId),
-      track_id: trackId,
-      timestamp: frame.timestamp,
-      frame_type: String(frame.type || '').trim() === 'keyframe' ? 'keyframe' : 'delta',
-      frame_sequence: frameSequence,
-      sender_sent_at_ms: Date.now(),
-      codec_id: String(frame.codecId || ''),
-      runtime_id: String(frame.runtimeId || ''),
-      protection_mode: protectionMode,
-      data_base64: dataBase64,
-      protected_frame: protectedFrame,
-      payload_chars: protectedFrame !== '' ? protectedFrame.length : dataBase64.length,
-      chunk_count: 1,
-      layout_mode: String(frame.layoutMode || 'full_frame'),
-      layer_id: String(frame.layerId || 'full'),
-      cache_epoch: Math.max(0, Number(frame.cacheEpoch || 0)),
-      tile_columns: Math.max(0, Number(frame.tileColumns || 0)),
-      tile_rows: Math.max(0, Number(frame.tileRows || 0)),
-      tile_width: Math.max(0, Number(frame.tileWidth || 0)),
-      tile_height: Math.max(0, Number(frame.tileHeight || 0)),
-      tile_indices: Array.isArray(frame.tileIndices) ? frame.tileIndices : [],
-      roi_norm_x: Math.max(0, Number(frame.roiNormX || 0)),
-      roi_norm_y: Math.max(0, Number(frame.roiNormY || 0)),
-      roi_norm_width: Math.max(0, Number(frame.roiNormWidth || 0)),
-      roi_norm_height: Math.max(0, Number(frame.roiNormHeight || 0)),
-    };
   }
 
   function publishLocalEncodedFrameToGossip(frame) {
@@ -556,7 +504,12 @@ export function createCallWorkspaceGossipDataLane({
     if (!controller || !frame || typeof frame !== 'object') return false;
     const peerId = localPeerId();
     if (peerId === '' || peerId === '0') return false;
-    const msg = gossipFrameMessageFromEncodedFrame(frame, liveGossipFrameSequenceByTrack, directGossipPrimary);
+    const msg = gossipFrameMessageFromEncodedFrame(frame, liveGossipFrameSequenceByTrack, {
+      peerId,
+      callId: callId(),
+      roomId: roomId(),
+      plainRelay: directGossipPrimary,
+    });
     if (!msg) return false;
     gossipRecoveryState.rememberPublishedFrame(msg);
     controller.publishFrame(peerId, msg);
@@ -794,65 +747,6 @@ export function createCallWorkspaceGossipDataLane({
       immediate: backendVisibleBacktrace,
     });
     return false;
-  }
-
-  function normalizeGossipFrameArrayBuffer(data) {
-    if (data instanceof ArrayBuffer) return data;
-    if (ArrayBuffer.isView(data)) {
-      return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-    }
-    return new ArrayBuffer(0);
-  }
-
-  function sfuFrameFromGossipMessage(msg, delivery) {
-    const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
-    const trackId = String(msg.trackId || msg.track_id || '').trim();
-    if (publisherId === '' || trackId === '') return null;
-    const dataBase64 = String(msg.dataBase64 || msg.data_base64 || msg.payload || '').trim();
-    const frameSequence = Math.max(0, Number(msg.frameSequence ?? msg.frame_sequence ?? 0));
-    const mediaGeneration = Math.max(0, Number(msg.mediaGeneration ?? msg.media_generation ?? 0));
-    return {
-      publisherId,
-      publisherUserId: String(msg.publisherUserId || msg.publisher_user_id || msg.publisher_id || ''),
-      trackId,
-      timestamp: msg.timestamp,
-      data: dataBase64 !== ''
-        ? base64UrlToArrayBuffer(dataBase64)
-        : (msg.data instanceof ArrayBuffer
-          ? msg.data
-          : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0))),
-      dataBase64: dataBase64 || null,
-      type: String(msg.frameType || msg.frame_type || msg.frameType || '').trim() === 'keyframe' ? 'keyframe' : 'delta',
-      protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
-      protectedFrame: String(msg.protectedFrame || msg.protected_frame || ''),
-      protectionMode: String(msg.protectionMode || msg.protection_mode || '') === 'required'
-        ? 'required'
-        : (msg.protectedFrame || msg.protected_frame ? 'protected' : 'transport_only'),
-      protocolVersion: Math.max(1, Number(msg.protocolVersion ?? msg.protocol_version ?? 1)),
-      frameSequence,
-      mediaGeneration,
-      payloadChars: Math.max(0, Number(msg.payloadChars ?? msg.payload_chars ?? dataBase64.length)),
-      chunkCount: Math.max(1, Number(msg.chunkCount ?? msg.chunk_count ?? 1)),
-      frameId: String(msg.frameId || msg.frame_id || delivery?.frame_id || ''),
-      senderSentAtMs: Math.max(0, Number(msg.senderSentAtMs ?? msg.sender_sent_at_ms ?? 0)),
-      codecId: String(msg.codecId || msg.codec_id || ''),
-      runtimeId: String(msg.runtimeId || msg.runtime_id || ''),
-      videoLayer: String(msg.videoLayer || msg.video_layer || ''),
-      outgoingVideoQualityProfile: String(msg.outgoingVideoQualityProfile || msg.outgoing_video_quality_profile || ''),
-      layoutMode: String(msg.layoutMode || msg.layout_mode || 'full_frame'),
-      layerId: String(msg.layerId || msg.layer_id || 'full'),
-      cacheEpoch: Math.max(0, Number(msg.cacheEpoch ?? msg.cache_epoch ?? 0)),
-      tileColumns: Math.max(0, Number(msg.tileColumns ?? msg.tile_columns ?? 0)),
-      tileRows: Math.max(0, Number(msg.tileRows ?? msg.tile_rows ?? 0)),
-      tileWidth: Math.max(0, Number(msg.tileWidth ?? msg.tile_width ?? 0)),
-      tileHeight: Math.max(0, Number(msg.tileHeight ?? msg.tile_height ?? 0)),
-      tileIndices: Array.isArray(msg.tileIndices) ? msg.tileIndices : (Array.isArray(msg.tile_indices) ? msg.tile_indices : []),
-      roiNormX: Math.max(0, Number(msg.roiNormX ?? msg.roi_norm_x ?? 0)),
-      roiNormY: Math.max(0, Number(msg.roiNormY ?? msg.roi_norm_y ?? 0)),
-      roiNormWidth: Math.max(0, Number(msg.roiNormWidth ?? msg.roi_norm_width ?? 0)),
-      roiNormHeight: Math.max(0, Number(msg.roiNormHeight ?? msg.roi_norm_height ?? 0)),
-      transportPath: 'gossip_rtc_datachannel',
-    };
   }
 
   function pruneGossipNeighborForUserId(userId, reason = 'target_not_in_room') {

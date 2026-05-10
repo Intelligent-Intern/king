@@ -90,10 +90,10 @@ Sprint Checkboxen:
 - [x] GSP01-05 Collapse room media truth to one authoritative snapshot shape:
   capabilities, media plan, participant media state and diagnostics counters
   must come from the orchestrator, not parallel legacy producers.
-- [ ] GSP01-06 Frontend capability bridge: send capabilities after admitted
+- [x] GSP01-06 Frontend capability bridge: send capabilities after admitted
   websocket join, retry only when capabilities change, and wait for a matching
   plan epoch before starting local video publication.
-- [ ] GSP01-07 Frontend media state application: local capture/publish/receive
+- [x] GSP01-07 Frontend media state application: local capture/publish/receive
   state must be driven by `media_session_plan.v1`, not local runtime switching
   or remote peer counts.
 - [ ] GSP01-08 Park SFU from the active stream path: no `sfu_first`, no SFU
@@ -103,7 +103,7 @@ Sprint Checkboxen:
 - [x] GSP01-09 Build the gossip readiness barrier: a call may wait up to five
   minutes for planned gossip peers before streaming or marking a participant
   `stuck_not_sending` with a reason.
-- [ ] GSP01-10 Publisher dispatch: encode 720p30 keyframes/deltas and send only
+- [x] GSP01-10 Publisher dispatch: encode 720p30 keyframes/deltas and send only
   `gossip.media.frame.v1` for planned gossip transport; do not emit `sfu/frame`
   on the active gossip path. Decide whether the sprint uses WebCodecs VP8,
   WLVC, or protected-frame payloads and pin that choice in tests.
@@ -111,7 +111,7 @@ Sprint Checkboxen:
   off to the existing renderer, and show remote participant video tiles without
   relying on SFU peer state as the source of truth. Proof must show decoded
   pixels and `frameCount > 0`, not just a created peer or canvas.
-- [ ] GSP01-12 Screenshare parity: screenshare is represented as a participant
+- [x] GSP01-12 Screenshare parity: screenshare is represented as a participant
   media stream in the same gossip envelope/state model and can enter fullscreen
   without special SFU assumptions.
 - [x] GSP01-13 Backpressure ladder: replace active reconnect/restart recovery
@@ -125,7 +125,7 @@ Sprint Checkboxen:
 - [x] GSP01-15 Focus/UI stability: focus loss, tab visibility changes and UI
   clicks must not start reconnect loops; open sockets may request snapshot
   backfill, closed sockets reconnect only for real network closure.
-- [ ] GSP01-16 Strict 720p30 active profile: remove active auto-quality,
+- [x] GSP01-16 Strict 720p30 active profile: remove active auto-quality,
   rescue, downgrade and regression-improvement decisions from the gossip v1
   stream path; current `realtime`/`quality` profiles are not sufficient because
   they do not define 1280x720@30 as the active target. Incompatible clients
@@ -163,8 +163,15 @@ Current Loop Notes:
 - Frontend capability bridge progress: commit `8f2a9769` sends capabilities
   only after admitted `system/welcome`, suppresses duplicate unchanged sends,
   normalizes the Gossip plan catalog, and adds a matching-plan publication gate
-  helper. GSP01-06 remains open until the helper controls the actual local
-  publisher start.
+  helper. The current loop wires that helper into the actual local publisher
+  start/stop path.
+- GSP01-06/GSP01-07 proof: local media publication now waits for socket online,
+  admitted `system/welcome`, stored `client.capabilities.v1/ack`, matching
+  participant session, matching/minimum plan epoch and
+  `media_state=streaming_720p30`. Runtime switching and peer-count-triggered
+  paths call the media-plan gate before publishing. Verified with
+  `node tests/contract/local-media-session-plan-gate-contract.mjs` and
+  `node tests/contract/client-capabilities-media-plan-contract.mjs`.
 - GSP01-05 proof: commit `c78b0820` makes `room/snapshot` carry the
   authoritative media session plan with redacted capabilities,
   participant-media-state, Gossip readiness and diagnostics counters, and
@@ -184,8 +191,25 @@ Current Loop Notes:
   `gossip.media.frame.v1` envelopes and suppresses SFU fallback on
   `gossip_primary` publish failure. `node tests/contract/gossip-live-receive-decode-route-contract.mjs`
   and `node tests/contract/gossip-outbound-live-publication-contract.mjs`
-  passed. GSP01-10/GSP01-11 remain open until the active codec/profile choice
-  and decoded-pixel browser proof are complete.
+  passed. The current loop pins the codec/profile choice; GSP01-11 remains
+  open until decoded-pixel browser proof is complete.
+- GSP01-10 proof: active Gossip publication is pinned to
+  `gossip.media.frame.v1`, contract version `v1.0.0`, profile
+  `video_720p30`, transport-only `gossip_primary_direct` and WLVC as the active
+  codec branch while preserving explicit WebCodecs identifiers. Verified with
+  `node tests/contract/gossip-outbound-live-publication-contract.mjs` and
+  `node tests/contract/gossip-media-frame-v1-contract.mjs`.
+- GSP01-11 progress: `gossip.media.frame.v1` now decodes into the existing
+  remote decoded-canvas renderer entry and diagnostics require decoded pixels
+  plus `frameCount >= 1`. This remains open until browser proof shows real
+  remote tiles with decoded pixels.
+- GSP01-12 proof: screenshare Gossip frames carry a stream-scoped
+  `screen_share:<ownerUserId>` publisher id, real owner recovery id,
+  `publisher_media_source=screen_share`, and synthetic participant ids so
+  fullscreen/layout can treat screenshare as participant media without SFU
+  track announcements. Verified with
+  `node tests/contract/call-screenshare-participant-contract.mjs` and
+  `npm run test:contract:screenshare-fullscreen`.
 - GSP01-13 proof: commit `4fb184f1` adds Gossip DataChannel buffered-amount,
   queue-depth and dropped-frame telemetry into the backpressure ladder.
   `node demo/video-chat/frontend-vue/tests/contract/gossip-backpressure-contract.mjs`
@@ -202,12 +226,28 @@ Current Loop Notes:
   and reconnects only closed sockets. `node demo/video-chat/frontend-vue/tests/contract/foreground-reconnect-contract.mjs`
   and `node demo/video-chat/frontend-vue/tests/contract/realtime-reconnect-browser-contract.mjs`
   passed.
+- GSP01-16 proof: strict `1280x720@30` capability checks now reject DOM/native
+  fallback-only camera senders, block native runtime fallback on active
+  `gossip_primary`, suppress auto-quality/recovery probes and remove SFU
+  fallback availability from Gossip-primary carrier config. Verified with
+  `node tests/contract/sfu-strict-720p30-runtime-contract.mjs`,
+  `node tests/contract/client-capabilities-media-plan-contract.mjs` and
+  `node tests/contract/gossip-media-carrier-mode-contract.mjs`.
 - GSP01-17 proof: Call Diagnostics now includes a Gossip stage and summary
   metrics for capabilities, plan epoch, gossip readiness, sender/receiver frame
   counters, drops, backpressure state, and stuck reason. `node --check` passed
   for the runtime and contract, and
   `node demo/video-chat/frontend-vue/tests/contract/call-app-call-diagnostics-contract.mjs`
   passed.
+- GSP01-18 progress: `node tests/contract/gsp01-18-gossip-primary-plan-frame-contract.mjs`
+  proves two-peer and three-peer admitted capability-plan publication over
+  bidirectional, server-provided, max-five-neighbor Gossip topology, and proves
+  the server lane carries capability ops frames only. The item remains open
+  until stale SFU-fallback/regression gate expectations are converted and
+  browser proof is attached.
+- Audio analysis consent: a permission request was posted in the live call chat
+  on 2026-05-10. Jendrik and Platform Admin agreed; Alexander has not yet
+  explicitly agreed in chat, so no live audio capture or analysis is active.
 - Online call-chat reporting: Playwright/MCP reached
   `https://app.kingrt.com/login?redirect=/workspace/call/39c5b3ea-855b-40fd-b030-c8af1d512605`.
   The page exposes only email/password sign-in and no registration or guest

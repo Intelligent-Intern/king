@@ -21,6 +21,11 @@ import {
 import { createCallWorkspaceRuntimeHealthHelpers } from './runtimeHealth';
 import { createCallWorkspaceVideoLayoutHelpers } from './videoLayout';
 import { createSfuTransportController } from './sfuTransport';
+import {
+  canPublishLocalMediaForActivePlan,
+  registerMediaPlanLocalPublicationCallbacks,
+  requestLocalMediaPublicationForActivePlan,
+} from './mediaCapabilityPlanBridge.ts';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 import { createHybridDecoder } from '../../../../lib/wasm/wasm-codec';
 import { createDecoder as createTsDecoder } from '../../../../lib/wavelet/codec.ts';
@@ -604,6 +609,22 @@ export function createCallWorkspaceMediaStack(options) {
     localPublisherPipeline.teardownLocalPublisher();
   }
 
+  registerMediaPlanLocalPublicationCallbacks({
+    publishLocalTracks: () => localMediaOrchestration.publishLocalTracks(),
+    stopPlanBlockedLocalMedia: teardownLocalPublisherForWorkspace,
+  });
+
+  async function publishLocalTracksForMediaPlan(...args) {
+    return requestLocalMediaPublicationForActivePlan('local_media_publish_request', {}, () => (
+      localMediaOrchestration.publishLocalTracks(...args)
+    ));
+  }
+
+  function publishLocalTracksToSfuIfReadyForMediaPlan(...args) {
+    if (!canPublishLocalMediaForActivePlan({ reason: 'sfu_publish_request' })) return false;
+    return localMediaOrchestration.publishLocalTracksToSfuIfReady(...args);
+  }
+
   function teardownSfuRemotePeers() {
     for (const [, peer] of refs.remotePeersRef.value) {
       const peerUserId = Number(peer?.userId || 0);
@@ -667,6 +688,8 @@ export function createCallWorkspaceMediaStack(options) {
     normalizeSfuPublisherId,
     remoteDecoderRuntimeName,
     renderCallVideoLayout,
+    publishLocalTracks: publishLocalTracksForMediaPlan,
+    publishLocalTracksToSfuIfReady: publishLocalTracksToSfuIfReadyForMediaPlan,
     setSfuRemotePeer,
     sfuTrackListHasVideo,
     sfuTrackRows,
