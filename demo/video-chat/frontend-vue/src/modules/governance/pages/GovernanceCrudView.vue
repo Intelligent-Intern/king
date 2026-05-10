@@ -174,6 +174,7 @@ import {
   isDataPortabilityEntity,
 } from '../dataPortabilityUi.js';
 import { createEntitySummaryCache } from '../entitySummaryCache.js';
+import { validateGovernanceCrudSubmission } from '../governanceEntityValidation.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
 import { relationRowSummary, relationSelectionSnapshot as buildRelationSelectionSnapshot } from '../relationSummaryPayload.js';
 import { useGovernanceCrudFilters } from '../useGovernanceCrudFilters.js';
@@ -348,11 +349,6 @@ function columnStyle(column) {
   return width !== '' ? { width } : {};
 }
 
-function fieldLabel(field) {
-  const key = String(field?.label_key || '').trim();
-  return key !== '' ? t(key) : String(field?.key || '');
-}
-
 function rowDescription(row) {
   const descriptionKey = typeof row?.description_key === 'string' ? row.description_key.trim() : '';
   if (descriptionKey !== '') {
@@ -489,11 +485,15 @@ async function loadGovernanceUserRows() {
 
 async function submitModal() {
   if (mutationPending.value) return;
-  const missingField = modalFields.value.find((field) => (
-    field.required === true && String(form[field.key] || '').trim() === ''
-  ));
-  if (missingField) {
-    formError.value = t('governance.field_required', { field: fieldLabel(missingField) });
+  const validation = validateGovernanceCrudSubmission({
+    fields: modalFields.value,
+    form,
+    relationships: modalRelationships.value,
+    relationSelections,
+    translate: t,
+  });
+  if (!validation.ok) {
+    formError.value = validation.message || t(validation.error_key || 'governance.save_failed');
     return;
   }
 
