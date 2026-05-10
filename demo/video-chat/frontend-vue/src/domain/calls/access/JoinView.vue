@@ -235,7 +235,7 @@ import {
   createPersonalizedMismatchState,
   resetPersonalizedMismatchState,
 } from './callAccessPersonalizedMismatch';
-import { loginWithCallAccess } from './callAccessSession';
+import { loginWithCallAccess, requestCallAccessAccountUpdateConfirmation } from './callAccessSession';
 import { createJoinAccessPreviewController } from './joinPreview';
 import JoinStrongMismatchPanel from './JoinStrongMismatchPanel.vue';
 import { callAccessJoinHeaders, createJoinStrongMismatchFlow, isStrongPersonalizedMismatchPayload } from './joinStrongMismatchFlow';
