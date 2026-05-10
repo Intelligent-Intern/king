@@ -15,6 +15,10 @@ import {
   isScreenShareUserId,
   screenShareOwnerOrUserId,
 } from '../../screenShareIdentity.js';
+import {
+  diagnosePlannedGossipSfuRecoveryParked,
+  plannedGossipTransportActive,
+} from './plannedGossipSfuRecovery.ts';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
@@ -61,6 +65,14 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function strictRemoteVideoRecoveryDisabled() {
     return strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery');
+  }
+
+  function nonRecoveringSfuRecoveryResult(step = 'strict_720p30_disabled') {
+    return {
+      recovered: false,
+      step,
+      steps: [],
+    };
   }
 
   function strictStallRecoveryResult() {
@@ -179,6 +191,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function recoverSfuPublisherBeforeReconnect(publisherId, peer, reason, nowMs = Date.now(), payload = {}) {
     if (strictRemoteVideoRecoveryDisabled()) return strictStallRecoveryResult();
+    if (plannedGossipTransportActive(payload)) {
+      return nonRecoveringSfuRecoveryResult('planned_gossip_sfu_recovery_parked');
+    }
     return runSfuPublisherStallRecoveryLadder({
       captureClientDiagnostic,
       peer,
@@ -253,6 +268,19 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function requestSfuSocketRestartForPeer(reason, peer, payload = {}, nowMs = Date.now(), options = {}) {
     if (!peer || typeof peer !== 'object') return false;
+    if (diagnosePlannedGossipSfuRecoveryParked({
+      captureClientDiagnostic,
+      reason,
+      payload: {
+        ...payload,
+        media_runtime_path: mediaRuntimePath.value,
+        remote_peer_count: remotePeersRef.value.size,
+      },
+      eventType: 'planned_gossip_sfu_socket_restart_parked',
+      message: 'Planned Gossip media parked an SFU socket restart request.',
+      level: 'warning',
+      immediate: true,
+    })) return false;
     if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
     if (!canRequestSfuSocketRestartForPeer(peer, nowMs)) return false;
 
@@ -451,6 +479,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function checkRemoteVideoStalls() {
     if (strictRemoteVideoRecoveryDisabled()) return;
+    if (plannedGossipTransportActive({ media_runtime_path: mediaRuntimePath.value })) return;
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
     const nowMs = Date.now();
@@ -795,7 +824,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     if (timer !== null) {
       clearInterval(timer);
     }
-    if (strictRemoteVideoRecoveryDisabled()) {
+    if (strictRemoteVideoRecoveryDisabled() || plannedGossipTransportActive({ media_runtime_path: mediaRuntimePath.value })) {
       setRemoteVideoStallTimer(null);
       return false;
     }

@@ -47,7 +47,7 @@ async function loadPublisherDispatchForMode(mode) {
     sfuMirror: mode === 'sfu_mirror',
     gossipMayPublishWithoutSfu: gossipPrimary,
     sfuRequiredBeforeGossip: !gossipPrimary,
-    sfuSendIsOptional: gossipPrimary || mode === 'sfu_mirror',
+    sfuSendIsOptional: mode === 'sfu_mirror',
     diagnosticsLabel: gossipPrimary ? 'media_carrier_gossip_primary' : 'media_carrier_sfu_first',
   }
   const source = publisherFrameDispatch

@@ -138,7 +138,7 @@ export async function dispatchPublisherFrame({
       ok: gossipPublished,
       gossipPublished,
       sfuSent: false,
-      sfuSendOptional: true,
+      sfuSendOptional: false,
       sfuFallbackSuppressed: true,
       postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
     };
