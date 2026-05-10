@@ -114,6 +114,7 @@ const { openTour, tourButtonLabel, tourCompleted, tourDefinition } = useOnboardi
 
 .app-page-header-title {
   min-width: 0;
+  max-width: 100%;
 }
 
 .app-page-header-sidebar-btn {
@@ -124,6 +125,8 @@ const { openTour, tourButtonLabel, tourCompleted, tourDefinition } = useOnboardi
   margin: 0;
   font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .app-page-header p {
