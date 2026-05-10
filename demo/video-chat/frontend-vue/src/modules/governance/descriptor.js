@@ -42,6 +42,7 @@ const governanceEntityKeys = {
 const governanceReadonlyReasons = {
   modules: 'governance.readonly.system_catalog',
   permissions: 'governance.readonly.system_catalog',
+  'audit-log': 'governance.readonly.audit_log',
 };
 
 const governancePermissions = Object.freeze([

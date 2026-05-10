@@ -172,6 +172,7 @@ import {
   isDataPortabilityEntity,
 } from '../dataPortabilityUi.js';
 import { createEntitySummaryCache } from '../entitySummaryCache.js';
+import { governanceEmptyStateBody } from '../governanceEmptyState.js';
 import { runGovernancePageAction } from '../governanceExportUi.js';
 import { validateGovernanceCrudSubmission } from '../governanceEntityValidation.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
@@ -283,7 +284,7 @@ const relationNavigatorTitle = computed(() => (
 ));
 const showEmptyState = computed(() => !loading.value && visibleRows.value.length === 0 && !hasActiveFilters.value);
 const emptyStateTitle = computed(() => t('governance.empty_state.title', { entity: pluralLabel.value.toLocaleLowerCase() }));
-const emptyStateBody = computed(() => t('governance.empty_state.body', { entity: singularLabel.value.toLocaleLowerCase() }));
+const emptyStateBody = computed(() => governanceEmptyStateBody({ descriptor: crudDescriptor.value, routeMeta: route.meta, singularLabel: singularLabel.value, translate: t }));
 
 watch(() => route.fullPath, () => {
   resetFilters();
