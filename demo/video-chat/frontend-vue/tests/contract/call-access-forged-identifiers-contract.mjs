@@ -125,8 +125,8 @@ assert.match(
 );
 assert.match(
   joinView,
-  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*payload = \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage/,
-  'public join UI must replace forged-id backend payloads with generic safe copy',
+  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*payload = payload && typeof payload === 'object'[\s\S]*\? payload[\s\S]*: \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage/,
+  'public join UI must preserve forged-id backend stable codes before rendering safe localized copy',
 );
 assert.match(
   callAccessJoinSpec,

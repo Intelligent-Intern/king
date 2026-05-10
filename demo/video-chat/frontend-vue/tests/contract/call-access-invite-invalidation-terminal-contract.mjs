@@ -230,8 +230,8 @@ assert.match(
 
 assert.match(
   joinView,
-  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\)[\s\S]*payload = \{ error:\s*\{ code:\s*'call_access_validation_failed' \} \}[\s\S]*state\.contextError = localizedApiErrorMessage/,
-  'public join UI must collapse terminal invite failures into safe localized copy before rendering entry controls',
+  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\)[\s\S]*payload = payload && typeof payload === 'object'[\s\S]*\? payload[\s\S]*: \{ error:\s*\{ code:\s*'call_access_validation_failed' \} \}[\s\S]*state\.contextError = localizedApiErrorMessage/,
+  'public join UI must preserve terminal invite stable codes before rendering safe localized copy',
 );
 assert.match(
   joinView,

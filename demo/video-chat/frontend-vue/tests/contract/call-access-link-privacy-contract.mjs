@@ -49,8 +49,8 @@ assert.match(
 );
 assert.match(
   joinView,
-  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*payload = \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\);[\s\S]*return;[\s\S]*\}/s,
-  'failed public join resolution must replace backend payloads with a generic invalid-link code',
+  /if \(!response\.ok \|\| !payload \|\| payload\.status !== 'ok'\) \{[\s\S]*payload = payload && typeof payload === 'object'[\s\S]*\? payload[\s\S]*: \{ error: \{ code: 'call_access_validation_failed' \} \};[\s\S]*state\.contextError = localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\);[\s\S]*return;[\s\S]*\}/s,
+  'failed public join resolution must preserve backend stable error codes before localization',
 );
 assert.match(
   joinView,
