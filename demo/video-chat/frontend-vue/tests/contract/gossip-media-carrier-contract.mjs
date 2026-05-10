@@ -128,6 +128,7 @@ assert(roomSnapshot.includes('videochat_gossipmesh_plan_topology'), 'backend top
 assert(roomSnapshot.includes('videochat_gossipmesh_call_topology_payload'), 'backend topology hint emission must send call/gossip-topology payloads')
 assert(roomSnapshot.includes('videochat_realtime_gossipmesh_room_allows_topology'), 'backend topology hints must avoid lobby/waiting-room fanout')
 assert(packageJson.includes('gossip-media-carrier-mode-contract.mjs'), 'gossip contract suite must include media carrier mode contract')
-assert(packageJson.includes('gossip-media-carrier-integration-smoke-contract.mjs'), 'gossip contract suite must include media carrier integration smoke contract')
+assert(packageJson.includes('gsp01-18-gossip-primary-plan-frame-contract.mjs'), 'gossip contract suite must include the plan-gated gossip_primary proof')
+assert(!packageJson.includes('gossip-media-carrier-integration-smoke-contract.mjs'), 'active gossip contract suite must not include the legacy media carrier integration smoke contract')
 
 console.log('[gossip-media-carrier-contract] PASS')
