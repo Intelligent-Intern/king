@@ -6,6 +6,16 @@ function entityId(row) {
   return normalizeString(row?.id || row?.key || row?.email || row?.name);
 }
 
+function uniqueSummaries(summaries = []) {
+  const seen = new Set();
+  return summaries.filter((summary) => {
+    const fingerprint = `${summary.entity_key}:${summary.id}`;
+    if (summary.id === '' || seen.has(fingerprint)) return false;
+    seen.add(fingerprint);
+    return true;
+  });
+}
+
 export function normalizeEntitySummary(entityKey, row = {}) {
   const id = entityId(row);
   return {
@@ -52,7 +62,11 @@ export function createEntitySummaryCache() {
   function upsertSummary(entityKey, row) {
     const summary = normalizeEntitySummary(entityKey, row);
     if (summary.entity_key === '' || summary.id === '') return null;
-    entityMap(summary.entity_key).set(summary.id, summary);
+    const summaries = entityMap(summary.entity_key);
+    summaries.set(summary.id, summary);
+    if (summary.key !== '' && summary.key !== summary.id) {
+      summaries.set(summary.key, summary);
+    }
     hydrateRelationshipSummaries(row?.relationships);
     return summary;
   }
@@ -87,11 +101,11 @@ export function createEntitySummaryCache() {
   }
 
   function getSummaries(entityKey, ids = []) {
-    return ids.map((id) => getSummary(entityKey, id)).filter(Boolean);
+    return uniqueSummaries(ids.map((id) => getSummary(entityKey, id)).filter(Boolean));
   }
 
   function rows(entityKey) {
-    return [...entityMap(entityKey).values()];
+    return uniqueSummaries([...entityMap(entityKey).values()]);
   }
 
   function missingIds(entityKey, ids = []) {

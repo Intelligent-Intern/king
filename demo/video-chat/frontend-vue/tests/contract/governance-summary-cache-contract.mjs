@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createEntitySummaryCache, normalizeEntitySummary } from '../../src/modules/governance/entitySummaryCache.js';
+import {
+  hydrateRelationSelectionSummaries,
+  relationSelectionSummaryRequests,
+} from '../../src/modules/governance/relationSelectionSummaryHydration.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
@@ -43,6 +47,9 @@ assert.equal(summary.name, 'Core Team', 'summary must expose display label');
 
 cache.upsertRows('groups', [summary]);
 assert.equal(cache.getSummary('groups', 'group:core')?.name, 'Core Team', 'cache must return hydrated summaries');
+cache.upsertRows('roles', [{ id: 'role:owner', key: 'tenant.owner', name: 'Tenant Owner', status: 'active' }]);
+assert.equal(cache.getSummary('roles', 'tenant.owner')?.id, 'role:owner', 'cache must resolve summaries by stable key aliases');
+assert.deepEqual(cache.rows('roles').map((row) => row.id), ['role:owner'], 'cache rows must not duplicate id/key aliases');
 cache.upsertSummary('groups', {
   id: 'group:members',
   name: 'Member Group',
@@ -110,20 +117,65 @@ await cache.loadMissingSummaries('groups', ['group:core', 'group:ops'], async ()
   throw new Error('already hydrated rows must not refetch');
 });
 
+const relationSelections = {
+  roles: [
+    { entity_key: 'roles', id: 'contract.role' },
+  ],
+  subject: [
+    { entity_key: 'groups', id: 'group:members' },
+  ],
+};
+const relationDescriptors = [
+  { key: 'roles', target_entity: 'roles' },
+  { key: 'subject', target_entity: 'subjects' },
+];
+assert.deepEqual(
+  relationSelectionSummaryRequests(relationSelections, relationDescriptors),
+  [
+    { entity_key: 'roles', ids: ['contract.role'] },
+    { entity_key: 'groups', ids: ['group:members'] },
+  ],
+  'relation summary hydration must group selected relation ids by normalized entity',
+);
+let hydrationFetchCalls = 0;
+await hydrateRelationSelectionSummaries({
+  selections: relationSelections,
+  relationships: relationDescriptors,
+  entitySummaryCache: cache,
+  fetchSummaryBatch: async (request) => {
+    hydrationFetchCalls += 1;
+    assert.deepEqual(request, { requests: [{ entity_key: 'roles', ids: ['contract.role'] }] }, 'relation hydration must fetch only missing summaries');
+    return {
+      included: {
+        roles: [
+          { id: 'role:contract', key: 'contract.role', name: 'Contract Role', status: 'active' },
+        ],
+      },
+    };
+  },
+});
+assert.equal(hydrationFetchCalls, 1, 'relation hydration must use one missing-summary batch call');
+assert.equal(relationSelections.roles[0].id, 'role:contract', 'relation hydration must replace key-only selections with normalized summaries');
+assert.equal(relationSelections.roles[0].name, 'Contract Role', 'relation hydration must expose hydrated relation labels');
+
 const viewSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 assert.match(viewSource, /createEntitySummaryCache/, 'governance CRUD view must own a normalized summary cache');
 assert.match(viewSource, /entitySummaryCache\.upsertRows/, 'governance CRUD view must hydrate summaries in batches');
+assert.match(viewSource, /hydrateRelationSelectionSummaries/, 'governance CRUD view must batch-hydrate missing relation selections through the cache');
 assert.doesNotMatch(viewSource, /v-for="row in pagedRows"[\s\S]{0,800}fetch\(/, 'row rendering must not fetch relation summaries per row');
 
 const persistenceSource = await source('src/modules/governance/useGovernanceCrudPersistence.js');
 assert.match(persistenceSource, /fetchSummaryBatch/, 'governance persistence must expose a batch summary loader');
 assert.match(persistenceSource, /\/api\/governance\/summaries/, 'batch summaries must use the governance summaries endpoint');
+const hydrationSource = await source('src/modules/governance/relationSelectionSummaryHydration.js');
+assert.match(hydrationSource, /loadMissingSummaryRequests/, 'relation hydration helper must route selected ids through the entity summary cache');
 
 const userTableSource = await source('src/modules/users/pages/components/UsersTable.vue');
 const usersViewSource = await source('src/modules/users/pages/admin/UsersView.vue');
 const userEditorSource = await source('src/modules/users/pages/components/UserEditorModal.vue');
 const marketplaceTableSource = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
 const localizationAdminSource = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
+const localizationEditorSource = await source('src/modules/localization/components/AdministrationLocalizationEditor.vue');
 const themeSettingsSource = await source('src/layouts/settings/WorkspaceThemeSettings.vue');
 const administrationSettingsSource = await source('src/layouts/settings/WorkspaceAdministrationSettings.vue');
 const backendSummarySource = await source('../backend-king-php/domain/tenancy/governance_summaries.php');
@@ -142,9 +194,8 @@ assert.doesNotMatch(userRelationProvider, /governancePersistence\./, 'user relat
 
 assertLoopHasNoRequestCall(marketplaceTableSource, 'v-for="app in rows"', 'marketplace');
 assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="language in pagedLanguages"', 'localization languages');
-assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="resource in preview.resources.slice(0, 8)"', 'localization CSV preview');
-assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="bundle in bundles"', 'localization bundles');
-assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="entry in imports"', 'localization imports');
+assertLoopHasNoRequestCall(localizationEditorSource, 'v-for="language in languages"', 'localization editor locale options', 'option');
+assertLoopHasNoRequestCall(localizationEditorSource, 'v-for="row in translationRows"', 'localization translation rows', 'label');
 assertLoopHasNoRequestCall(themeSettingsSource, 'v-for="theme in pagedThemes"', 'theme management', 'article');
 assertLoopHasNoRequestCall(administrationSettingsSource, 'v-for="(recipient, index) in leadRecipients"', 'administration lead recipients', 'div');
 
@@ -155,6 +206,13 @@ for (const entity of ['users', 'groups', 'organizations', 'roles', 'grants', 'po
     `governance summaries endpoint must support ${entity}`,
   );
 }
+const summaryRowsSource = functionWindow(backendSummarySource, 'videochat_tenancy_governance_summary_rows', 900);
+assert.doesNotMatch(summaryRowsSource, /foreach\s*\(\$ids\s+as\s+\$id\)/, 'summary endpoint dispatch must not loop ids through row-by-row fetches');
+assert.doesNotMatch(
+  summaryRowsSource,
+  /videochat_admin_fetch_user_by_id|videochat_tenancy_fetch_governance_entity|videochat_tenancy_fetch_governance_role|videochat_tenancy_fetch_governance_grant|videochat_tenancy_fetch_governance_policy|videochat_tenancy_governance_portability_fetch_job/,
+  'summary endpoint dispatch must use batched entity loaders instead of per-row fetch helpers',
+);
 assert.match(backendSummarySource, /result' => \['included' => \$included\]/, 'summary endpoint must return included summaries in result payload');
 assert.match(backendSummarySource, /'included' => \$included/, 'summary endpoint must also expose top-level included summaries');
 
