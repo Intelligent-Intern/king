@@ -217,8 +217,21 @@ Sprint Checkboxen:
     personalized temp reuse, direct-join rights, kicked rejoin denial,
     owner-transfer temp-moderator, guest-list membership Docker backend proof,
     anonymous temp-rights Docker backend proof, and `git diff --check` passed.
-- [ ] IAM5-13 Extract email confirmation, account reconciliation, and safe
+- [x] IAM5-13 Extract email confirmation, account reconciliation, and safe
   dispatch/audit proof value from the account-confirmation branches.
+  - Merged worker branch `agent/iam-s5-13-email-confirmation`.
+  - Added `documentation/iam-sprint-05-email-confirmation-extraction.md` and
+    `call-access-email-confirmation-extract-contract.mjs`.
+  - Extracted account-confirmation invariants, account reconciliation, token
+    expiry/supersession, safe dispatch, and audit-redaction requirements as
+    deferred implementation evidence. The current base lacks the backend
+    account-confirmation runtime, audit helper, PHP contract, frontend
+    confirmation view, and safe dispatch/audit contract, so this ticket does
+    not falsely claim runtime support.
+  - Proof: email-confirmation extract, account isolation, logout/login switch,
+    strong-mismatch privacy, link privacy, audit compatibility, audit
+    redaction, strong-mismatch audit redaction contracts, and
+    `git diff --check` passed.
 - [x] IAM5-14 Extract calendar invite, unregistered invitee, and reschedule
   stale-link proof value from the calendar/invite branches.
   - Merged worker branch `agent/iam-s5-14-calendar-invite`.
