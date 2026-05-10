@@ -161,8 +161,8 @@ assert.match(
 
 assert.match(
   accessRoutes,
-  /if \(\$reason === 'not_found'\)[\s\S]*return \$errorResponse\(404,\s*'call_access_not_found'[\s\S]*'access_id' => strtolower\(trim\(\$accessId\)\)/,
-  'public join route must map revoked or deleted invite links to a terminal not-found state',
+  /if \(\$reason === 'not_found'\)[\s\S]*return \$errorResponse\(404,\s*'call_access_not_found',\s*'Call access link does not exist\.'\);/,
+  'public join route must map revoked or deleted invite links to a terminal redacted not-found state',
 );
 assert.match(
   accessRoutes,
