@@ -7,7 +7,6 @@ export default {
       path: '/admin/overview',
       name: 'admin-overview',
       roles: ['admin'],
-      pageTitle: 'Overview',
       pageTitle_key: 'navigation.overview',
       required_permissions: ['users.read'],
       actions: [
@@ -27,7 +26,6 @@ export default {
     {
       group: null,
       to: '/admin/overview',
-      label: 'Overview',
       label_key: 'navigation.overview',
       order: 10,
       roles: ['admin'],
@@ -37,7 +35,6 @@ export default {
   settings_panels: [
     {
       key: 'personal.about',
-      label: 'About Me',
       label_key: 'settings.about',
       roles: ['admin', 'user'],
       order: 10,
@@ -45,7 +42,6 @@ export default {
     },
     {
       key: 'personal.credentials',
-      label: 'Credentials + E-Mail',
       label_key: 'settings.credentials',
       roles: ['admin', 'user'],
       order: 20,
@@ -53,7 +49,6 @@ export default {
     },
     {
       key: 'personal.notifications',
-      label: 'Notifications',
       label_key: 'settings.notifications',
       roles: ['admin', 'user'],
       order: 30,
@@ -63,4 +58,8 @@ export default {
     },
   ],
   i18n_namespaces: ['users'],
+  catalog: {
+    name_key: 'modules.users',
+    preview_kind: 'users',
+  },
 };

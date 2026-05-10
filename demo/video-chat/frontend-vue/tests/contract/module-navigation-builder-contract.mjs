@@ -25,8 +25,20 @@ for (const route of routes) {
   assert.ok(route.meta.module_key, `${route.name} must carry module key metadata`);
   assert.ok(Array.isArray(route.meta.required_permissions), `${route.name} must carry permission metadata`);
   assert.ok(Array.isArray(route.meta.i18nNamespaces), `${route.name} must carry i18n namespace metadata`);
+  assert.ok(route.meta.localized?.pageTitle, `${route.name} must carry structured localized page title metadata`);
+  assert.equal(route.meta.localized.pageTitle.key, route.meta.pageTitle_key, `${route.name} page title key must be source of truth`);
+  if (route.meta.pageTitle_key) {
+    assert.equal(route.meta.pageTitle, '', `${route.name} must not keep a literal page title fallback when a key exists`);
+  }
   assert.equal(typeof route.component, 'function', `${route.name} must keep its descriptor loader`);
   assert.ok(!String(route.meta.source_path || '').startsWith('domain/calls/'), `${route.name} must not route calls`);
+  for (const action of route.meta.actions) {
+    assert.ok(action.localized?.label, `${route.name}:${action.key} action must carry structured localized label metadata`);
+    assert.equal(action.localized.label.key, action.label_key, `${route.name}:${action.key} action label key must be source of truth`);
+    if (action.label_key) {
+      assert.equal(action.label, '', `${route.name}:${action.key} must not keep literal action label fallback when a key exists`);
+    }
+  }
 }
 
 const adminNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, { role: 'admin' });
@@ -36,6 +48,8 @@ assert.ok(adminFlat.some((item) => item.to === '/admin/infrastructure'), 'admin 
 assert.ok(adminNavigation.some((item) => item.key === 'administration'), 'administration group must be built');
 assert.ok(adminNavigation.some((item) => item.key === 'governance'), 'governance group must be built');
 assert.ok(adminFlat.every((item) => typeof item.label_key === 'string'), 'navigation entries must carry translation label keys');
+assert.ok(adminFlat.every((item) => item.localized?.label?.key === item.label_key), 'navigation entries must carry structured localized label metadata');
+assert.ok(adminFlat.every((item) => !item.label_key || item.label === ''), 'navigation keys must be the source of truth over literal labels');
 
 const userNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, { role: 'user' });
 assert.ok(userNavigation.some((item) => item.to === '/calendar'), 'user calendar navigation must be descriptor-built');
@@ -80,6 +94,8 @@ assert.ok(settingsPanels.some((panel) => panel.key === 'personal.theme'), 'user 
 assert.ok(settingsPanels.some((panel) => panel.key === 'personal.localization'), 'user localization settings must remain visible');
 assert.ok(settingsPanels.every((panel) => Array.isArray(panel.required_permissions)), 'settings panels must carry permissions');
 assert.ok(settingsPanels.every((panel) => typeof panel.label_key === 'string'), 'settings panels must carry translation label keys');
+assert.ok(settingsPanels.every((panel) => panel.localized?.label?.key === panel.label_key), 'settings panels must carry structured localized label metadata');
+assert.ok(settingsPanels.every((panel) => !panel.label_key || panel.label === ''), 'settings panel labels must resolve from localization keys');
 
 setActivePinia(createPinia());
 const store = useWorkspaceModuleStore();

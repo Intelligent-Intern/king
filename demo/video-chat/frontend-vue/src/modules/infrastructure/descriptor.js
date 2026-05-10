@@ -7,7 +7,6 @@ export default {
       path: '/admin/infrastructure',
       name: 'admin-infrastructure',
       roles: ['admin'],
-      pageTitle: 'Infrastructure',
       pageTitle_key: 'navigation.infrastructure',
       required_permissions: ['infrastructure.read'],
       actions: [
@@ -27,7 +26,6 @@ export default {
     {
       group: null,
       to: '/admin/infrastructure',
-      label: 'Infrastructure',
       label_key: 'navigation.infrastructure',
       icon: '/assets/orgas/kingrt/icons/desktop.png',
       order: 18,
@@ -37,4 +35,8 @@ export default {
   ],
   settings_panels: [],
   i18n_namespaces: ['infrastructure'],
+  catalog: {
+    name_key: 'modules.infrastructure',
+    preview_kind: 'infrastructure',
+  },
 };

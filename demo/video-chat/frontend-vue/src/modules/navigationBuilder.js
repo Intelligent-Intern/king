@@ -6,7 +6,6 @@ const GROUPS = {
   administration: {
     key: 'administration',
     to: '/admin/administration',
-    label: 'Administration',
     label_key: 'navigation.administration',
     icon: '/assets/orgas/kingrt/icons/gear.png',
     order: 20,
@@ -15,7 +14,6 @@ const GROUPS = {
   governance: {
     key: 'governance',
     to: '/admin/governance',
-    label: 'Governance',
     label_key: 'navigation.governance',
     icon: '/assets/orgas/kingrt/icons/adminon.png',
     order: 30,
@@ -27,16 +25,52 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
+function normalizeLocalizedParams(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).map(([key, param]) => [normalizeString(key), param]).filter(([key]) => key !== ''));
+}
+
+export function normalizeLocalizedField(key = '', fallback = '', params = {}) {
+  const normalizedKey = normalizeString(key);
+  return Object.freeze({
+    key: normalizedKey,
+    fallback: normalizedKey === '' ? normalizeString(fallback) : '',
+    params: Object.freeze(normalizeLocalizedParams(params)),
+  });
+}
+
+function localizedFieldFromSource(source = {}, fieldName, keyName = `${fieldName}_key`) {
+  const value = source && typeof source === 'object' ? source : {};
+  const localized = value.localized && typeof value.localized === 'object' ? value.localized : {};
+  const explicit = localized[fieldName];
+  if (explicit && typeof explicit === 'object') {
+    return normalizeLocalizedField(
+      explicit.key || value[keyName],
+      explicit.fallback || value[fieldName],
+      explicit.params,
+    );
+  }
+  return normalizeLocalizedField(explicit || value[keyName], value[fieldName]);
+}
+
+function localizedFallback(field) {
+  return field?.fallback || '';
+}
+
 function normalizeStringList(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(normalizeString).filter(Boolean))].sort();
+}
+
+function sortableLabel(entry = {}) {
+  return entry.label || entry.localized?.label?.key || entry.label_key || entry.key || entry.to || '';
 }
 
 function sortByOrderThenLabel(a, b, locale = 'en') {
   const orderA = Number.isFinite(Number(a.order)) ? Number(a.order) : 0;
   const orderB = Number.isFinite(Number(b.order)) ? Number(b.order) : 0;
   if (orderA !== orderB) return orderA - orderB;
-  return compareLocalizedStrings(a.label || a.key || a.to || '', b.label || b.key || b.to || '', { locale });
+  return compareLocalizedStrings(sortableLabel(a), sortableLabel(b), { locale });
 }
 
 function routeChildPath(path) {
@@ -97,11 +131,13 @@ export function normalizeActionMetadata(action = {}, fallbackPermissions = []) {
 
   const rawKind = normalizeString(action.kind).toLowerCase();
   const kind = ACTION_KINDS.has(rawKind) ? rawKind : 'custom';
+  const label = localizedFieldFromSource(action, 'label');
 
   return {
     key,
-    label: normalizeString(action.label),
-    label_key: normalizeString(action.label_key),
+    label: localizedFallback(label),
+    label_key: label.key,
+    localized: Object.freeze({ label }),
     icon: normalizeString(action.icon),
     kind,
     resource_type: normalizeString(action.resource_type),
@@ -128,13 +164,16 @@ function normalizeTourMetadata(route = {}, actions = []) {
     ? source.steps
         .map((step, index) => {
           const stepSource = step && typeof step === 'object' ? step : {};
+          const title = localizedFieldFromSource(stepSource, 'title', 'title_key');
+          const body = localizedFieldFromSource(stepSource, 'body', 'body_key');
           return {
             key: normalizeString(stepSource.key) || `step-${index + 1}`,
             selector: normalizeString(stepSource.selector || stepSource.element),
-            title: normalizeString(stepSource.title),
-            title_key: normalizeString(stepSource.title_key),
-            body: normalizeString(stepSource.body),
-            body_key: normalizeString(stepSource.body_key),
+            title: localizedFallback(title),
+            title_key: title.key,
+            body: localizedFallback(body),
+            body_key: body.key,
+            localized: Object.freeze({ title, body }),
             side: normalizeString(stepSource.side),
             align: normalizeString(stepSource.align),
             disable_active_interaction: stepSource.disable_active_interaction !== false,
@@ -143,11 +182,15 @@ function normalizeTourMetadata(route = {}, actions = []) {
         .filter((step) => step.title !== '' || step.title_key !== '' || step.body !== '' || step.body_key !== '')
     : [];
 
+  const title = localizedFieldFromSource(source, 'title', 'title_key');
+  const badge = normalizeLocalizedField(source.badge_key);
+
   return {
     key,
-    title: normalizeString(source.title),
-    title_key: normalizeString(source.title_key),
-    badge_key: normalizeString(source.badge_key),
+    title: localizedFallback(title),
+    title_key: title.key,
+    badge_key: badge.key,
+    localized: Object.freeze({ title, badge }),
     steps,
   };
 }
@@ -168,6 +211,10 @@ export function buildModuleRouteRecords(registry) {
   return registry.routes().map((route) => {
     const requiredPermissions = entryRequiredPermissions(route, modulePermissions.get(route.module_key));
     const actions = routeActionMetadata(route, requiredPermissions);
+    const pageTitle = localizedFieldFromSource(route, 'pageTitle', 'pageTitle_key');
+    const entitySingular = localizedFieldFromSource(route, 'entitySingular', 'entitySingular_key');
+    const entityPlural = localizedFieldFromSource(route, 'entityPlural', 'entityPlural_key');
+    const readonlyReason = normalizeLocalizedField(route.readonly_reason_key);
 
     return {
       path: routeChildPath(route.path),
@@ -176,19 +223,25 @@ export function buildModuleRouteRecords(registry) {
       meta: {
         requiresAuth: true,
         roles: normalizeStringList(route.roles),
-        pageTitle: route.pageTitle,
-        pageTitle_key: route.pageTitle_key || '',
-        entitySingular: route.entitySingular,
-        entitySingular_key: route.entitySingular_key || '',
-        entityPlural: route.entityPlural,
-        entityPlural_key: route.entityPlural_key || '',
+        pageTitle: localizedFallback(pageTitle),
+        pageTitle_key: pageTitle.key,
+        entitySingular: localizedFallback(entitySingular),
+        entitySingular_key: entitySingular.key,
+        entityPlural: localizedFallback(entityPlural),
+        entityPlural_key: entityPlural.key,
+        localized: Object.freeze({
+          pageTitle,
+          entitySingular,
+          entityPlural,
+          readonlyReason,
+        }),
         module_key: route.module_key,
         source_path: route.source_path,
         required_permissions: requiredPermissions,
         i18nNamespaces: normalizeStringList(route.i18n_namespaces),
         actions,
         tour: normalizeTourMetadata(route, actions),
-        readonly_reason_key: normalizeString(route.readonly_reason_key),
+        readonly_reason_key: readonlyReason.key,
       },
     };
   });
@@ -202,11 +255,13 @@ export function buildWorkspaceNavigation(registry, contextInput = {}) {
 
   for (const rawItem of registry.navigation()) {
     const requiredPermissions = entryRequiredPermissions(rawItem, modulePermissions.get(rawItem.module_key));
+    const label = localizedFieldFromSource(rawItem, 'label');
     const item = {
       key: rawItem.key || `${rawItem.module_key}:${rawItem.to}`,
       to: rawItem.to,
-      label: rawItem.label,
-      label_key: rawItem.label_key || '',
+      label: localizedFallback(label),
+      label_key: label.key,
+      localized: Object.freeze({ label }),
       icon: rawItem.icon || DEFAULT_ICON,
       order: rawItem.order,
       roles: normalizeStringList(rawItem.roles),
@@ -226,13 +281,19 @@ export function buildWorkspaceNavigation(registry, contextInput = {}) {
       const definition = GROUPS[groupKey] || {
         key: groupKey,
         to: `/${groupKey}`,
-        label: groupKey,
         label_key: '',
         icon: DEFAULT_ICON,
         order: 100,
         roles: item.roles,
       };
-      grouped.set(groupKey, { ...definition, label_key: definition.label_key || '', children: [] });
+      const groupLabel = localizedFieldFromSource(definition, 'label');
+      grouped.set(groupKey, {
+        ...definition,
+        label: localizedFallback(groupLabel),
+        label_key: groupLabel.key,
+        localized: Object.freeze({ label: groupLabel }),
+        children: [],
+      });
     }
     grouped.get(groupKey).children.push(item);
   }
@@ -251,11 +312,16 @@ export function buildSettingsPanels(registry, contextInput = {}) {
   const modulePermissions = modulePermissionsByKey(registry);
 
   return registry.settingsPanels()
-    .map((panel) => ({
-      ...panel,
-      label_key: panel.label_key || '',
-      required_permissions: entryRequiredPermissions(panel, modulePermissions.get(panel.module_key)),
-    }))
+    .map((panel) => {
+      const label = localizedFieldFromSource(panel, 'label');
+      return {
+        ...panel,
+        label: localizedFallback(label),
+        label_key: label.key,
+        localized: Object.freeze({ ...(panel.localized || {}), label }),
+        required_permissions: entryRequiredPermissions(panel, modulePermissions.get(panel.module_key)),
+      };
+    })
     .filter((panel) => entryAllowsAccess(panel, contextInput, panel.required_permissions))
     .sort((a, b) => sortByOrderThenLabel(a, b, normalizeString(contextInput.locale)));
 }
