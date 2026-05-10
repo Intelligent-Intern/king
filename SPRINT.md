@@ -137,8 +137,19 @@ Sprint Checkboxen:
 - [ ] IAM5-07 Extract duplicate review/abuse proof value from the duplicate
   review branches, including email/review safety only where current contracts
   support it.
-- [ ] IAM5-08 Extract cross-organization remaining proof value from the
+- [x] IAM5-08 Extract cross-organization remaining proof value from the
   cross-org proof branches without weakening tenant isolation.
+  - Merged worker branch `agent/iam-s5-08-cross-org`.
+  - Added `documentation/iam-sprint-05-cross-org-extraction.md` and
+    `call-access-cross-org-extract-contract.mjs`.
+  - Extracted cross-organization proof as target-tenant authorization,
+    active-org least privilege, stale-role revalidation, no-leak denied
+    payloads, and call-scoped invite boundaries while preserving unported
+    positive foreign-link journeys as follow-up evidence.
+  - Proof: cross-org extract, cross-org, stale-role org switch, direct-join,
+    link privacy, mismatch no-leak, strong mismatch privacy, removed-members
+    contracts, backend cross-org/stale-role Docker fallbacks, and
+    `git diff --check` passed.
 - [ ] IAM5-09 Extract owner absence, owner timeout, and owner-leave proof value
   from the owner-absence/timeout branches.
 - [ ] IAM5-10 Extract owner-transfer main journey, rejoin, and permission-audit
