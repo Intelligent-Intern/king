@@ -107,11 +107,12 @@ Rules:
 
 ### Future IAM Sprint Queue
 
-Sprint 03, `IAM Abuse, Runtime Proof, And Cleanup Stabilization 03`, completed
-and moved to `READYNESS_TRACKER.md` on 2026-05-10.
+Sprint 03, `IAM Abuse, Runtime Proof, And Cleanup Stabilization 03`, and
+Sprint 04, `IAM Cleanup, Proof Consolidation, And Browser Stability 04`,
+completed and moved to `READYNESS_TRACKER.md` on 2026-05-10.
 
 The next active IAM cleanup/proof batch is now in `SPRINT.md` as
-`IAM Cleanup, Proof Consolidation, And Browser Stability 04`.
+`IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`.
 
 ### Completed/Parked Call App Integration Detail
 
