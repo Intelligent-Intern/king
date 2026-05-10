@@ -73,7 +73,7 @@ Proof anchors:
 - `demo/video-chat/scripts/prod-debug.sh`
 
 Sprint Checkboxen:
-- [ ] GSP01-01 Root planning reset: keep `EPIC.md` as the active long-form
+- [x] GSP01-01 Root planning reset: keep `EPIC.md` as the active long-form
   epic, move the interrupted IAM12 sprint state to `BACKLOG.md`, and keep this
   sprint as the only active checklist.
 - [ ] GSP01-02 Define `gossip.media.frame.v1`: keyframe/delta type, sequence,
@@ -147,6 +147,9 @@ Sprint Checkboxen:
 Current Loop Notes:
 - `kingrt/prod-ready` is the only integration branch for this sprint.
 - The previous IAM12 checklist is no longer the active sprint.
+- GSP01-01 proof: `EPIC.md` exists in the root, IAM12 follow-up work is parked
+  in `BACKLOG.md`, and `SPRINT.md` contains exactly the active 20-item Gossip
+  sprint. Commit `452afdcc` created the reset.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
