@@ -72,6 +72,7 @@ function videochat_realtime_apply_lobby_remove_result(
     }
     $activeTargetUserIds = videochat_realtime_lobby_result_user_ids($lobbyResult, 'active_target_user_ids');
     $activeTargetSet = array_fill_keys($activeTargetUserIds, true);
+    $requestedAction = (string) ($lobbyResult['requested_action'] ?? $lobbyResult['action'] ?? '');
     $persistedRemovedUserIds = [];
     $persistedActiveTargetUserIds = [];
 
@@ -82,11 +83,16 @@ function videochat_realtime_apply_lobby_remove_result(
                 $persistedActiveTargetUserIds[] = $removedUserId;
             }
         } else {
+            $nextInviteState = match ($requestedAction) {
+                'lobby/kick' => 'invited',
+                'lobby/reject' => videochat_realtime_lobby_reject_persistence_state($openDatabase, $removedCallId, $removedUserId),
+                default => 'cancelled',
+            };
             if (videochat_realtime_mark_call_participant_invite_state_by_user_id(
                 $openDatabase,
                 $removedCallId,
                 $removedUserId,
-                'invited',
+                $nextInviteState,
                 ['pending', 'allowed', 'accepted']
             )) {
                 $persistedRemovedUserIds[] = $removedUserId;
@@ -127,6 +133,34 @@ function videochat_realtime_apply_lobby_remove_result(
         'removed_user_ids' => $persistedRemovedUserIds,
         'active_target_user_ids' => $persistedActiveTargetUserIds,
     ];
+}
+
+function videochat_realtime_lobby_reject_persistence_state(callable $openDatabase, string $callId, int $userId): string
+{
+    try {
+        $pdo = $openDatabase();
+        if (!function_exists('videochat_tenant_table_has_column') || !videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'session_id')) {
+            return 'invited';
+        }
+
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT 1
+FROM call_access_sessions
+WHERE call_id = :call_id
+  AND user_id = :user_id
+LIMIT 1
+SQL
+        );
+        $statement->execute([
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+        ]);
+
+        return $statement->fetchColumn() !== false ? 'cancelled' : 'invited';
+    } catch (Throwable) {
+        return 'cancelled';
+    }
 }
 
 function videochat_realtime_disconnect_removed_call_participants(

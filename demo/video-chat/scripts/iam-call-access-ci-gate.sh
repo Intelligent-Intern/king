@@ -80,6 +80,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam9-19-multiple-pending-confirmations-contract.mjs"
   "node tests/contract/iam9-16-edge-safe-states-contract.mjs"
   "node tests/contract/iam9-17-email-confirmation-race-contract.mjs"
+  "node tests/contract/iam-active-call-kick-contract.mjs"
 )
 
 run_static_gate() {

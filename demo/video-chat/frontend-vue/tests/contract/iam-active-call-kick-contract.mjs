@@ -19,6 +19,7 @@ function read(relativePath) {
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const realtimeModule = read('demo/video-chat/backend-king-php/http/module_realtime.php');
 const activeKickModule = read('demo/video-chat/backend-king-php/http/module_realtime_active_call_kick.php');
+const websocketLobby = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_lobby.php');
 const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
 const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
 const websocketRoute = read('demo/video-chat/backend-king-php/http/module_realtime_websocket.php');
@@ -30,6 +31,7 @@ const callWorkspaceView = read('demo/video-chat/frontend-vue/src/domain/realtime
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-rejoin-kick-membership.spec.js');
 const matrixHarness = read('demo/video-chat/frontend-vue/tests/e2e/helpers/videochatMatrixHarness.js');
 const lobbyCommandPersistence = `${websocketCommands}\n${lobbyPersistence}`;
+const lobbyCommandPath = `${websocketCommands}\n${websocketLobby}`;
 
 assert.match(
   iamCallAccessContractSuiteText,
@@ -58,9 +60,19 @@ assert.match(
   'lobby remove/kick must treat an active room participant as an affected active target',
 );
 assert.match(
-  websocketCommands,
+  lobbyCommandPath,
   /videochat_realtime_lobby_remove_result_for_active_call_target/,
   'websocket command path must promote DB-backed active targets instead of returning target_not_found',
+);
+assert.match(
+  websocketLobby,
+  /module_realtime_active_call_kick\.php/,
+  'websocket lobby path must import the shared active-call kick helper instead of redeclaring remove persistence',
+);
+assert.doesNotMatch(
+  websocketLobby,
+  /function\s+videochat_realtime_apply_lobby_remove_result\s*\(/,
+  'websocket lobby path must not redeclare the shared lobby remove result helper',
 );
 assert.match(
   lobbyCommandPersistence,
