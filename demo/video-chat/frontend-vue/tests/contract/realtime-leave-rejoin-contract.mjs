@@ -23,6 +23,7 @@ function readRepo(relativePath) {
 try {
   const socketLifecycle = readFrontend('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const workspaceLifecycle = readFrontend('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
+  const orchestration = readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.ts');
   assert.match(
     socketLifecycle,
     /function closeSocket\(options = \{\}\)[\s\S]*const leaveRoom = options\?\.leaveRoom === true;/,
@@ -42,6 +43,35 @@ try {
     workspaceLifecycle,
     /closeSocket\(\{ leaveRoom: true \}\);/,
     'workspace unmount must explicitly leave the realtime room',
+  );
+  assert.match(
+    orchestration,
+    /async function reportExplicitCallLeave\(\)[\s\S]*apiRequest\(`\/api\/calls\/\$\{encodeURIComponent\(callId\)\}\/leave`, \{[\s\S]*method: 'POST'/,
+    'workspace explicit hangup must notify the backend leave endpoint',
+  );
+  assert.match(
+    orchestration,
+    /void reportExplicitCallLeave\(\);/,
+    'workspace hangup must report explicit leave before routing away',
+  );
+
+  const moduleCalls = readRepo('demo/video-chat/backend-king-php/http/module_calls.php');
+  assert.match(
+    moduleCalls,
+    /require_once __DIR__ \. '\/module_calls_leave\.php';[\s\S]*videochat_handle_call_leave_routes\(/,
+    'backend call module must dispatch the call leave endpoint',
+  );
+  const moduleCallsLeave = readRepo('demo/video-chat/backend-king-php/http/module_calls_leave.php');
+  assert.match(
+    moduleCallsLeave,
+    /\/api\/calls\/\(\[A-Za-z0-9\._-\]\{1,200\}\)\/leave\$/,
+    'backend must expose an authenticated call leave endpoint',
+  );
+  const callManagementCancel = readRepo('demo/video-chat/backend-king-php/domain/calls/call_management_cancel.php');
+  assert.match(
+    callManagementCancel,
+    /function videochat_leave_call\(PDO \$pdo, string \$callId, int \$authUserId, string \$authRole, \?int \$tenantId = null\): array[\s\S]*\$isOwner[\s\S]*videochat_end_call\(/,
+    'backend owner leave must route through the terminal end-call lifecycle',
   );
 
   const edge = readRepo('demo/video-chat/edge/edge.php');

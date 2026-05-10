@@ -177,6 +177,66 @@ function videochat_iam720_count(PDO $pdo, string $sql, array $params = []): int
     return max(0, (int) ($statement->fetchColumn() ?: 0));
 }
 
+function videochat_iam720_link_count(PDO $pdo, string $callId): int
+{
+    return videochat_iam720_count(
+        $pdo,
+        'SELECT COUNT(*) FROM call_access_links WHERE call_id = :call_id',
+        [':call_id' => $callId]
+    );
+}
+
+function videochat_iam720_session_exists(PDO $pdo, string $sessionId): bool
+{
+    return videochat_iam720_count(
+        $pdo,
+        'SELECT COUNT(*) FROM sessions WHERE id = :session_id',
+        [':session_id' => $sessionId]
+    ) === 1;
+}
+
+function videochat_iam720_session_revoked(PDO $pdo, string $sessionId): bool
+{
+    return videochat_iam720_count(
+        $pdo,
+        'SELECT COUNT(*) FROM sessions WHERE id = :session_id AND revoked_at IS NOT NULL AND revoked_at <> \'\'',
+        [':session_id' => $sessionId]
+    ) === 1;
+}
+
+function videochat_iam720_user_status(PDO $pdo, int $userId): string
+{
+    $statement = $pdo->prepare('SELECT status FROM users WHERE id = :user_id LIMIT 1');
+    $statement->execute([':user_id' => $userId]);
+
+    return strtolower(trim((string) ($statement->fetchColumn() ?: '')));
+}
+
+function videochat_iam720_invite_state(PDO $pdo, string $callId, int $userId): string
+{
+    $statement = $pdo->prepare('SELECT invite_state FROM call_participants WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
+    $statement->execute([':call_id' => $callId, ':user_id' => $userId]);
+
+    return strtolower(trim((string) ($statement->fetchColumn() ?: '')));
+}
+
+function videochat_iam720_create_open_link(PDO $pdo, string $callId, int $ownerUserId, int $tenantId): string
+{
+    $link = videochat_create_call_access_link_for_user(
+        $pdo,
+        $callId,
+        $ownerUserId,
+        'user',
+        ['link_kind' => 'open'],
+        $tenantId
+    );
+    videochat_iam720_assert((bool) ($link['ok'] ?? false), 'anonymous owner absence timeout link should be created');
+    $accessId = (string) (($link['access_link'] ?? [])['id'] ?? '');
+    videochat_iam720_assert($accessId !== '', 'anonymous owner absence timeout access id should be present');
+
+    return $accessId;
+}
+
 function videochat_iam720_set_invite_state(PDO $pdo, string $callId, int $userId, string $inviteState): void
 {
     $statement = $pdo->prepare(
@@ -600,6 +660,69 @@ SQL
     videochat_iam720_assert((string) ($staleTimeoutViewer['effective_call_role'] ?? '') === 'participant', 'stale owner snapshot after timeout must downgrade role');
     videochat_iam720_assert(!(bool) ($staleTimeoutViewer['can_moderate'] ?? true), 'stale owner snapshot after timeout must remove moderation');
     videochat_iam720_assert(!(bool) ($staleTimeoutViewer['can_manage_owner'] ?? true), 'stale owner snapshot after timeout must remove owner controls');
+
+    $anonymousCall = videochat_iam720_prepare_call(
+        $pdo,
+        $tenantId,
+        $ownerUserId,
+        [$participantTwoId],
+        'IAM720 Owner Absence Anonymous Link Timeout'
+    );
+    $anonymousCallId = (string) ($anonymousCall['id'] ?? '');
+    $anonymousRoomId = (string) ($anonymousCall['room_id'] ?? '');
+    $pdo->prepare("UPDATE calls SET access_mode = 'free_for_all' WHERE id = :call_id")->execute([':call_id' => $anonymousCallId]);
+    $anonymousAccessId = videochat_iam720_create_open_link($pdo, $anonymousCallId, $ownerUserId, $tenantId);
+    $anonymousSessionId = 'sess_iam720_owner_timeout_anonymous_guest';
+    $anonymousSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $anonymousAccessId,
+        static fn (): string => $anonymousSessionId,
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        ['guest_name' => 'IAM720 Owner Timeout Anonymous Guest']
+    );
+    videochat_iam720_assert((bool) ($anonymousSession['ok'] ?? false), 'owner-timeout anonymous session should issue before timeout');
+    $anonymousGuestId = (int) (($anonymousSession['user'] ?? [])['id'] ?? 0);
+    videochat_iam720_assert($anonymousGuestId > 0, 'owner-timeout anonymous guest id should be present');
+    videochat_iam720_assert(videochat_iam720_link_count($pdo, $anonymousCallId) >= 1, 'owner-timeout anonymous setup should have an open link');
+
+    $anonymousPresence = videochat_presence_state_init();
+    $anonymousStartMs = 1_779_300_000_000;
+    $anonymousOwner = videochat_iam720_connection($pdo, $anonymousPresence, $anonymousRoomId, $anonymousCallId, $ownerUserId, 'IAM720 Owner', 'owner', $tenantId, $anonymousStartMs, 'anonymous-owner');
+    $anonymousParticipant = videochat_iam720_connection($pdo, $anonymousPresence, $anonymousRoomId, $anonymousCallId, $participantTwoId, 'IAM720 Participant Two', 'participant', $tenantId, $anonymousStartMs + 1000, 'anonymous-participant');
+    $anonymousOwnerLeftMs = $anonymousStartMs + 60_000;
+    videochat_iam720_leave($pdo, $anonymousPresence, $anonymousOwner, $anonymousOwnerLeftMs);
+    $anonymousTimeoutMs = $anonymousOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS + 1000;
+    videochat_realtime_presence_db_upsert($pdo, $anonymousParticipant, $anonymousTimeoutMs);
+    $anonymousEndedSnapshot = videochat_iam720_snapshot($pdo, $anonymousPresence, $anonymousParticipant, $anonymousTimeoutMs, 'owner_absence_anonymous_timeout');
+    $anonymousEnded = (array) (($anonymousEndedSnapshot['call_lifecycle'] ?? [])['owner_absence'] ?? []);
+    videochat_iam720_assert((string) ($anonymousEnded['status'] ?? '') === 'ended', 'owner-timeout anonymous-link call should end automatically');
+    $anonymousLifecycle = (array) ($anonymousEnded['lifecycle'] ?? []);
+    videochat_iam720_assert((int) ($anonymousLifecycle['invalidated_link_count'] ?? 0) >= 1, 'owner-timeout anonymous end should invalidate anonymous link');
+    videochat_iam720_assert((int) ($anonymousLifecycle['revoked_access_session_count'] ?? 0) >= 1, 'owner-timeout anonymous end should revoke anonymous session');
+    videochat_iam720_assert(videochat_iam720_link_count($pdo, $anonymousCallId) === 0, 'owner-timeout anonymous end should delete call access links');
+    videochat_iam720_assert((string) (videochat_resolve_call_access_public($pdo, $anonymousAccessId)['reason'] ?? '') === 'not_found', 'owner-timeout anonymous ended link should be safe not-found');
+    $lateAnonymousSession = videochat_issue_session_for_call_access(
+        $pdo,
+        $anonymousAccessId,
+        static fn (): string => 'sess_iam720_owner_timeout_late_anonymous',
+        ['client_ip' => '127.0.0.1', 'user_agent' => $label],
+        ['guest_name' => 'IAM720 Late Anonymous Guest']
+    );
+    videochat_iam720_assert(!(bool) ($lateAnonymousSession['ok'] ?? true), 'owner-timeout ended anonymous link must not issue a new session');
+    videochat_iam720_assert(!videochat_iam720_session_exists($pdo, 'sess_iam720_owner_timeout_late_anonymous'), 'owner-timeout denied late anonymous session must not be stored');
+    videochat_iam720_assert(videochat_iam720_session_revoked($pdo, $anonymousSessionId), 'owner-timeout anonymous end should revoke anonymous session');
+    $anonymousAuthAfterTimeout = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/ws?session=' . rawurlencode($anonymousSessionId) . '&call_id=' . rawurlencode($anonymousCallId),
+            'headers' => ['Authorization' => 'Bearer ' . $anonymousSessionId],
+        ],
+        'websocket'
+    );
+    videochat_iam720_assert(!(bool) ($anonymousAuthAfterTimeout['ok'] ?? true), 'revoked owner-timeout anonymous session must fail closed');
+    videochat_iam720_assert(videochat_iam720_user_status($pdo, $anonymousGuestId) === 'disabled', 'owner-timeout anonymous end should disable anonymous temporary guest');
+    videochat_iam720_assert(videochat_iam720_invite_state($pdo, $anonymousCallId, $anonymousGuestId) === 'cancelled', 'owner-timeout anonymous end should cancel anonymous temporary participant');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[{$label}] PASS\n");
