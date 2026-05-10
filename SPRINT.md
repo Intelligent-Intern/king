@@ -16,13 +16,13 @@ Rules:
 - Do not push. Deploy only when the active sprint proof is green.
 - Do not run DNS or certbot automation unless a new domain is explicitly added.
 
-## Sprint: IAM Session, Audit, Guestlist, And Terminal Proof 08
+## Sprint: IAM Calendar, Edge States, And Call-App Boundary Proof 09
 
 Branch:
 - `prod-kingrt-do-not-push-to-github`
 
 Status:
-- Active as of 2026-05-10 after Sprint 07 deploy.
+- Active as of 2026-05-10 after Sprint 08 deploy.
 - Local-only integration branch. Do not push to GitHub.
 - Worker branches/worktrees must use short-lived non-`codex` names and merge
   back into the local no-push branch after proof.
@@ -30,12 +30,13 @@ Status:
   unless the user explicitly reopens them.
 
 User-facing problem:
-- Sprint 07 closed the last active IAM batch, but many historical local IAM
+- Sprint 08 closed the previous active IAM batch, but many historical local IAM
   branches still remain unmerged because their branch heads carry broad stale
   diffs.
 - The next batch must extract only the still-useful current proof/runtime value
-  around session switching, audit compatibility, guest-list journeys, terminal
-  call states, and disabled-user/link behavior.
+  around audit completeness, calendar invitation edge states, Call App IAM
+  boundaries, cross-org foreign joins, terminal joins, duplicate-device abuse,
+  fail-closed edge errors, and email confirmation safety.
 
 Sprint goal:
 - Close exactly 20 IAM proof tickets from the next local-branch batch.
@@ -70,43 +71,43 @@ Proof anchors:
 - `demo/video-chat/backend-king-php/tests/`
 
 Sprint Checkboxen:
-- [x] IAM8-01 Extract or prove duplicate personalized-link race detection from
-  `local/iam-e2e-abuse-duplicate-race`.
-- [x] IAM8-02 Extract or prove duplicate abuse after logout/login user switch
-  from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
-- [x] IAM8-03 Extract or prove account reconciliation email confirmation from
-  `local/iam-e2e-account-reconciliation-email`.
-- [x] IAM8-04 Extract or prove admin guest-list main journeys from
-  `local/iam-e2e-admin-guestlist-main-journeys`.
-- [x] IAM8-05 Extract or prove logged-in anonymous-link organization-admin
-  rights from `local/iam-e2e-anonymous-link-org-admin-rights`.
-- [x] IAM8-06 Extract or prove anonymous temporary access rights from
-  `local/iam-e2e-anonymous-temp-rights-proof-2`.
-- [x] IAM8-07 Extract or prove IAM audit event alias follow-up compatibility
-  from `local/iam-e2e-audit-alias-followup-proof-3`.
-- [x] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
-  logging from `local/iam-e2e-audit-confirmation-implicit`.
-- [x] IAM8-09 Extract or prove host-verification audit event aliases from
-  `local/iam-e2e-audit-event-compat-proof-3`.
-- [x] IAM8-10 Extract or prove IAM audit event contract coverage from
-  `local/iam-e2e-audit-events`.
-- [x] IAM8-11 Extract or prove authorized call rejoin from
-  `local/iam-e2e-authorized-rejoin-main`.
-- [x] IAM8-12 Extract or prove IAM call lifecycle proof value from
-  `local/iam-e2e-call-lifecycle`.
-- [x] IAM8-13 Extract or prove call creation owner/moderation rights from
-  `local/iam-e2e-call-owner-creation-rights`.
-- [x] IAM8-14 Extract or prove IAM E2E CI failure artifact handling from
-  `local/iam-e2e-ci-artifacts-proof-2`.
-- [x] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
-  `local/iam-e2e-ci-docs-gate`.
-- [x] IAM8-16 Extract or prove core organization session journeys from
-  `local/iam-e2e-core-org-session-journey`.
-- [x] IAM8-17 Extract or prove cross-org active organization switching from
-  `local/iam-e2e-cross-org-active-org-switch`.
-- [x] IAM8-18 Extract or prove terminal call lifecycle states from
-  `local/iam-e2e-delete-end-terminal-proof-2`.
-- [x] IAM8-19 Extract or prove disabled anonymous call-access links from
-  `local/iam-e2e-disabled-anonymous-links`.
-- [x] IAM8-20 Extract or prove disabled user session revocation / Call App token
-  binding from `local/iam-e2e-disabled-user-session-revocation`.
+- [ ] IAM9-01 Extract or prove audit log completeness from
+  `local/iam-e2e-audit-log-completeness`.
+- [ ] IAM9-02 Extract or prove calendar invitation edge safe states from
+  `local/iam-e2e-calendar-edge-safe-states`.
+- [ ] IAM9-03 Extract or prove calendar invitation temporary account flow from
+  `local/iam-e2e-calendar-invitation-flow`.
+- [ ] IAM9-04 Extract or prove unregistered calendar main journey from
+  `local/iam-e2e-calendar-unregistered-main-journey`.
+- [ ] IAM9-05 Extract or prove call-access safe-screen privacy from
+  `local/iam-e2e-call-access-safe-screen-final`.
+- [ ] IAM9-06 Extract or prove Call App entitlement revocation from
+  `local/iam-e2e-call-app-entitlement-revocation`.
+- [ ] IAM9-07 Extract or prove Call App launch-token reconnect validation from
+  `local/iam-e2e-call-app-launch-token-reconnect`.
+- [ ] IAM9-08 Extract or prove cross-org foreign join edges from
+  `local/iam-e2e-cross-org-foreign-join-edges`.
+- [ ] IAM9-09 Extract or prove remaining cross-org IAM rows from
+  `local/iam-e2e-cross-org-remaining-proof-2`.
+- [ ] IAM9-10 Extract or prove adjacent terminal join denials from
+  `local/iam-e2e-deleted-ended-disabled-followup-proof-3`.
+- [ ] IAM9-11 Extract or prove deleted/ended/disabled join denials from
+  `local/iam-e2e-deleted-ended-disabled-join`.
+- [ ] IAM9-12 Extract or prove deleted/ended join hardening from
+  `local/iam-e2e-deleted-ended-join-hardening`.
+- [ ] IAM9-13 Extract or prove duplicate link abuse across devices from
+  `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
+- [ ] IAM9-14 Extract or prove duplicate link abuse device/browser baseline from
+  `local/iam-e2e-duplicate-link-abuse-device-browser`.
+- [ ] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
+  `local/iam-e2e-edge-error-matrix-proof`.
+- [ ] IAM9-16 Extract or prove IAM edge safe states from
+  `local/iam-e2e-edge-safe-states-proof-2`.
+- [ ] IAM9-17 Extract or prove email confirmation race hardening from
+  `local/iam-e2e-email-confirmation-race-hardening`.
+- [ ] IAM9-18 Extract or prove secure expiring account update confirmations from
+  `local/iam-e2e-email-confirmation-secure-expiry`.
+- [ ] IAM9-19 Extract or prove multiple pending account confirmations from
+  `local/iam-e2e-email-multiple-pending-proof`.
+- [ ] IAM9-20 Extract or prove email safe texts and dispatch audit from
+  `local/iam-e2e-email-safe-texts-and-dispatch-audit`.
