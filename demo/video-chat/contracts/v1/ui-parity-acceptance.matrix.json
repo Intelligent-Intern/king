@@ -115,6 +115,7 @@
         "frontend-vue/tests/contract/iam-sprint-03-inventory-contract.mjs",
         "frontend-vue/tests/contract/iam-sprint-04-focused-wire-contract.mjs",
         "frontend-vue/tests/contract/call-access-ci-artifacts-contract.mjs",
+        "frontend-vue/tests/contract/iam-ci-artifacts-contract.mjs",
         "frontend-vue/tests/contract/call-access-forged-identifiers-contract.mjs",
         "frontend-vue/tests/contract/call-access-tampered-verified-context-contract.mjs",
         "frontend-vue/tests/contract/call-access-duplicate-device-browser-contract.mjs",
