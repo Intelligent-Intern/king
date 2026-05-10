@@ -1,16 +1,12 @@
 <template>
   <AdminPageFrame class="governance-crud-view" :title="title">
-    <template #actions>
-      <button v-if="createAction" class="btn btn-cyan" type="button" @click="openCreateModal">{{ createButtonLabel }}</button>
-      <button
-        v-for="action in portabilityActions"
-        :key="action.key"
-        class="btn"
-        type="button"
-        @click="openPortabilityModal(action)"
-      >
-        {{ routeActionLabel(action, t, action.key) }}
-      </button>
+    <template v-if="pageActions.length > 0" #actions>
+      <AdminPageActionBar
+        :actions="pageActions"
+        :aria-label="t('governance.actions')"
+        :label-params="{ entity: singularLabel }"
+        @select="handlePageAction"
+      />
     </template>
 
     <template #toolbar>
@@ -150,6 +146,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
+import AdminPageActionBar from '../../../components/admin/AdminPageActionBar.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import { sessionState } from '../../../domain/auth/session';
@@ -161,6 +158,7 @@ import GovernanceModulePreview from '../components/GovernanceModulePreview.vue';
 import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import GovernanceOrganizationsView from './GovernanceOrganizationsView.vue';
+import { actionBarLabel, descriptorActionsForContext, descriptorPageActions, descriptorSubmitActionForMode } from '../../actionBars.js';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { descriptorAllowsAction, GOVERNANCE_CRUD_DESCRIPTORS, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
 import {
@@ -174,6 +172,7 @@ import {
   isDataPortabilityEntity,
 } from '../dataPortabilityUi.js';
 import { createEntitySummaryCache } from '../entitySummaryCache.js';
+import { runGovernancePageAction } from '../governanceExportUi.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
 import { relationRowSummary, relationSelectionSnapshot as buildRelationSelectionSnapshot } from '../relationSummaryPayload.js';
 import { useGovernanceCrudFilters } from '../useGovernanceCrudFilters.js';
@@ -181,7 +180,7 @@ import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
 import { entryAllowsAccess } from '../../navigationBuilder.js';
-import { firstRouteActionByKind, routeActionLabel, routeActionsForContext } from '../../routeActions.js';
+import { firstRouteActionByKind, routeActionsForContext } from '../../routeActions.js';
 import './GovernanceCrudView.css';
 
 const route = useRoute();
@@ -222,6 +221,8 @@ const singularLabel = computed(() => routeLabel('entitySingular', 'entitySingula
 const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key', title.value));
 const routeActionContext = computed(() => moduleAccessContextFromSession(sessionState));
 const availableRouteActions = computed(() => routeActionsForContext(route, routeActionContext.value));
+const pageActions = computed(() => descriptorPageActions(crudDescriptor.value, availableRouteActions.value));
+const formActions = computed(() => descriptorActionsForContext(crudDescriptor.value.form_actions || [], routeActionContext.value));
 const tableColumns = computed(() => crudDescriptor.value.table_columns || []);
 const descriptorModalFields = computed(() => (crudDescriptor.value.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'
@@ -242,13 +243,7 @@ const createAction = computed(() => (
     ? firstRouteActionByKind(availableRouteActions.value, 'create')
     : null
 ));
-const portabilityActions = computed(() => {
-  if (!isDataPortabilityEntity(entityKey.value)) return [];
-  return availableRouteActions.value.filter((action) => (
-    isDataPortabilityActionKind(action.kind) && descriptorAllowsAction(crudDescriptor.value, action.kind)
-  ));
-});
-const createButtonLabel = computed(() => routeActionLabel(createAction.value, t, t('governance.create')));
+const createButtonLabel = computed(() => actionBarLabel(createAction.value, t, t('governance.create'), { entity: singularLabel.value }));
 const {
   query,
   statusFilter,
@@ -275,7 +270,9 @@ const modalTitle = computed(() => {
 const modalSubmitLabel = computed(() => {
   const portabilitySubmitKey = dataPortabilitySubmitLabel(entityKey.value, modalMode.value);
   if (portabilitySubmitKey !== '') return t(portabilitySubmitKey);
-  return modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value;
+  const submitAction = descriptorSubmitActionForMode(modalMode.value, pageActions.value, formActions.value);
+  const fallback = modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value;
+  return actionBarLabel(submitAction, t, fallback, { entity: singularLabel.value });
 });
 const relationNavigatorTitle = computed(() => (
   relationNavigatorRelation.value
@@ -412,6 +409,10 @@ function openCreateModal() {
   modalMode.value = 'create';
   resetForm();
   modalOpen.value = true;
+}
+
+function handlePageAction(action) {
+  runGovernancePageAction(action, { entityKey: entityKey.value, rows: filteredRows.value, openCreate: openCreateModal, openPortability: openPortabilityModal });
 }
 
 function openPortabilityModal(action) {
@@ -733,8 +734,7 @@ function rowActionIcon(action) {
 }
 
 function rowActionTitle(action) {
-  const key = String(action?.label_key || '').trim();
-  return key !== '' ? t(key, { entity: singularLabel.value }) : String(action?.key || '');
+  return actionBarLabel(action, t, String(action?.key || ''), { entity: singularLabel.value });
 }
 
 async function handleRowAction(action, row) {

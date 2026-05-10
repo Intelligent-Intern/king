@@ -78,7 +78,7 @@ Sprint Checkboxen:
 - [x] UX6-05 Reconcile `codex/iam-duplicate-cleanup-reaudit-20260509`; clean
   it up only if the conflict state is proven redundant with already integrated
   IAM evidence.
-- [ ] UX6-06 Implement descriptor-driven page action bars for the first
+- [x] UX6-06 Implement descriptor-driven page action bars for the first
   Governance/Admin proof surfaces: create/edit/delete/import/export/save actions
   must be described, permission-filtered, and locally named per entity.
 - [ ] UX6-07 Wire backend route authorization proof for tenant/resource grant

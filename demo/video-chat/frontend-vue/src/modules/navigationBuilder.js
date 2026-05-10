@@ -89,7 +89,7 @@ export function entryRequiredPermissions(entry, modulePermissions = []) {
   return ownPermissions.length > 0 ? ownPermissions : normalizeStringList(modulePermissions);
 }
 
-const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'configure', 'inspect', 'tour', 'custom']);
+const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'save', 'configure', 'inspect', 'tour', 'custom']);
 
 export function normalizeActionMetadata(action = {}, fallbackPermissions = []) {
   const key = normalizeString(action.key);
