@@ -90,7 +90,7 @@ Sprint Checkboxen:
   `local/iam-e2e-audit-event-compat-proof-3`.
 - [x] IAM8-10 Extract or prove IAM audit event contract coverage from
   `local/iam-e2e-audit-events`.
-- [ ] IAM8-11 Extract or prove authorized call rejoin from
+- [x] IAM8-11 Extract or prove authorized call rejoin from
   `local/iam-e2e-authorized-rejoin-main`.
 - [ ] IAM8-12 Extract or prove IAM call lifecycle proof value from
   `local/iam-e2e-call-lifecycle`.
