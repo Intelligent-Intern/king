@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/module_realtime_lobby_security.php';
+require_once __DIR__ . '/module_realtime_active_call_kick.php';
 
 function videochat_realtime_handle_lobby_websocket_command(
     array $lobbyCommand,
@@ -48,6 +49,13 @@ function videochat_realtime_handle_lobby_websocket_command(
         $presenceConnection,
         $lobbyCommand,
         $deferredLobbySender
+    );
+    $lobbyResult = videochat_realtime_lobby_remove_result_for_active_call_target(
+        $lobbyResult,
+        $lobbyCommand,
+        $presenceConnection,
+        $lobbyCommandRoomId,
+        $openDatabase
     );
     if (!(bool) ($lobbyResult['ok'] ?? false)) {
         videochat_realtime_send_lobby_command_error($websocket, $lobbyCommand, $lobbyResult, (string) ($presenceConnection['room_id'] ?? 'lobby'));
@@ -138,7 +146,14 @@ function videochat_realtime_apply_successful_lobby_command(
     }
 
     if ($lobbyAction === 'lobby/remove') {
-        videochat_realtime_apply_lobby_remove_result($lobbyResult, $lobbyState, $presenceConnection, $openDatabase, $lobbyResultRoomId);
+        videochat_realtime_apply_lobby_remove_result(
+            $lobbyResult,
+            $lobbyState,
+            $presenceState,
+            $presenceConnection,
+            $openDatabase,
+            $lobbyResultRoomId
+        );
     }
 
     if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
@@ -146,74 +161,6 @@ function videochat_realtime_apply_successful_lobby_command(
     }
 
     return ['ok' => true, 'error' => ''];
-}
-
-function videochat_realtime_apply_lobby_remove_result(
-    array $lobbyResult,
-    array &$lobbyState,
-    array $presenceConnection,
-    callable $openDatabase,
-    string $lobbyResultRoomId
-): void {
-    $removedCallId = videochat_realtime_connection_call_id($presenceConnection);
-    $removedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
-        ? array_values(array_filter(array_map('intval', (array) $lobbyResult['affected_user_ids']), static fn (int $id): bool => $id > 0))
-        : [];
-    if ($removedCallId === '' || $removedUserIds === []) {
-        return;
-    }
-
-    $requestedAction = (string) ($lobbyResult['requested_action'] ?? $lobbyResult['action'] ?? '');
-    foreach ($removedUserIds as $removedUserId) {
-        $nextInviteState = match ($requestedAction) {
-            'lobby/kick' => 'invited',
-            'lobby/reject' => videochat_realtime_lobby_reject_persistence_state($openDatabase, $removedCallId, $removedUserId),
-            default => 'cancelled',
-        };
-        videochat_realtime_mark_call_participant_invite_state_by_user_id(
-            $openDatabase,
-            $removedCallId,
-            $removedUserId,
-            $nextInviteState,
-            ['pending', 'allowed', 'accepted']
-        );
-    }
-    videochat_realtime_sync_lobby_room_from_database(
-        $lobbyState,
-        $openDatabase,
-        $lobbyResultRoomId,
-        $removedCallId,
-        null,
-        videochat_realtime_connection_tenant_id($presenceConnection)
-    );
-}
-
-function videochat_realtime_lobby_reject_persistence_state(callable $openDatabase, string $callId, int $userId): string
-{
-    try {
-        $pdo = $openDatabase();
-        if (!function_exists('videochat_tenant_table_has_column') || !videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'session_id')) {
-            return 'invited';
-        }
-
-        $statement = $pdo->prepare(
-            <<<'SQL'
-SELECT 1
-FROM call_access_sessions
-WHERE call_id = :call_id
-  AND user_id = :user_id
-LIMIT 1
-SQL
-        );
-        $statement->execute([
-            ':call_id' => $callId,
-            ':user_id' => $userId,
-        ]);
-
-        return $statement->fetchColumn() !== false ? 'cancelled' : 'invited';
-    } catch (Throwable) {
-        return 'cancelled';
-    }
 }
 
 function videochat_realtime_apply_lobby_admission_result(

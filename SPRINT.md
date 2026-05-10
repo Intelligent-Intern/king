@@ -301,8 +301,10 @@ Current Loop Notes:
   diagnostics and excluded deploy/DNS/certbot paths. GSP01-20 remains open
   until an authorized deploy plus 5 to 10 diagnostics loops are actually run.
 - Audio analysis consent: a permission request was posted in the live call chat
-  on 2026-05-10. Jendrik and Platform Admin agreed; Alexander has not yet
-  explicitly agreed in chat, so no live audio capture or analysis is active.
+  on 2026-05-10. Jendrik, Platform Admin and Alexander explicitly agreed in
+  chat. Audio analysis may be added to future `w` loops only via temporary
+  chunks and without raw audio retention, subject to available local capture
+  and transcription tooling.
 - Online call-chat reporting: Playwright/MCP reached
   `https://app.kingrt.com/login?redirect=/workspace/call/39c5b3ea-855b-40fd-b030-c8af1d512605`.
   The page exposes only email/password sign-in and no registration or guest
@@ -314,6 +316,32 @@ Current Loop Notes:
   the active path, keep the server as peer discovery/topology only, connect each
   peer to up to five bidirectional neighbors, and exchange frames peer-to-peer
   without ordering guarantees in this sprint.
+- GSP01-20 deploy attempt 1: authorized deploy from `kingrt/prod-ready` ran
+  with no push, DNS disabled and certbot skipped. The deploy aborted at
+  `backend-health` because `videochat-backend-v1` and
+  `videochat-backend-ws-v1` entered restart loops. Read-only `prod-debug.sh`
+  grouped the distinct failure as a PHP fatal duplicate declaration:
+  `videochat_realtime_apply_lobby_remove_result()` existed in both
+  `module_realtime_active_call_kick.php` and
+  `module_realtime_websocket_lobby.php`. Public API/WS therefore returned 502;
+  SFU stayed 404 as expected for this sprint; TURN connection resets were
+  classified as non-blocking noise. The second deploy is blocked until this
+  grouped fatal is fixed and verified.
+- GSP01-20 grouped fix progress: the duplicate lobby-remove implementation was
+  consolidated into `module_realtime_active_call_kick.php`, the WebSocket lobby
+  path now imports that helper and passes `presenceState`, and the active-kick
+  contract now proves the helper is not redeclared. Verified locally with PHP
+  lint for `module_realtime_active_call_kick.php`,
+  `module_realtime_websocket_lobby.php`, and `module_realtime.php`,
+  `php -r "require 'demo/video-chat/backend-king-php/http/module_realtime.php';"`,
+  `node demo/video-chat/frontend-vue/tests/contract/iam-active-call-kick-contract.mjs`,
+  `node tests/contract/gsp01-18-gossip-primary-plan-frame-contract.mjs`, and
+  `npm run test:contract:gossip`; `npm run build` also passed. A broader
+  `iam-call-access-ci-gate.sh --static` run still fails earlier on the
+  existing duplicate matrix key `alpha_ended` in
+  `iam-call-access-seeding.matrix.json`, unrelated to the deploy fatal and not
+  folded into this emergency deploy fix. GSP01-20 remains open until the
+  second deploy and 5 to 10 diagnostics loops pass.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
