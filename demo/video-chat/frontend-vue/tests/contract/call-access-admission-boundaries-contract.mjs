@@ -36,6 +36,7 @@ const orgAdmin = readText('demo/video-chat/backend-king-php/tests/org-admin-call
 const systemAdmin = readText('demo/video-chat/backend-king-php/tests/system-admin-call-rights-contract.php');
 const lobbySecurityModule = readText('demo/video-chat/backend-king-php/http/module_realtime_lobby_security.php');
 const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeCallRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
 
 const users = byKey(seedMatrix.users, 'user');
 const calls = byKey(seedMatrix.calls, 'call');
@@ -115,11 +116,21 @@ assert.match(
 );
 assert.match(
   realtimeCallContext,
-  /can_moderate' => \$isAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
-  'realtime call context must limit moderation to admin, owner, or moderator',
+  /require_once __DIR__ \. '\/realtime_call_role_context\.php'/,
+  'realtime call context must load the focused role resolver extraction',
 );
 assert.match(
-  realtimeCallContext,
+  realtimeCallRoleContext,
+  /videochat_user_is_organization_admin_for_call\(\$pdo, \$organizationAdminPreferredRow, \$userId, \$tenantId\)[\s\S]*return \$contextFromRow\(\$organizationAdminPreferredRow, true\)/,
+  'realtime role context must bind same-organization admins even without a guest-list row',
+);
+assert.match(
+  realtimeCallRoleContext,
+  /can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
+  'realtime role context must allow same-organization admin moderation without granting owner-transfer authority',
+);
+assert.match(
+  realtimeCallRoleContext,
   /can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
   'owner-transfer authority must be stricter than general moderation authority',
 );
