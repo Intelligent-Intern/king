@@ -1,4 +1,125 @@
 import { isScreenShareUserId } from '../../screenShareIdentity.js';
+import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+
+function normalizedMediaSecurityTransportLabel(value) {
+  return String(value || '').trim().toLowerCase().replace(/-/g, '_');
+}
+
+export function isPlannedGossipMediaSecurityTransport(context = {}) {
+  const source = context && typeof context === 'object' ? context : { mediaRuntimePath: context };
+  const labels = [
+    source.mediaRuntimePath,
+    source.mediaSecurityRuntimePath,
+    source.runtimePath,
+    source.transportPath,
+    source.carrierMode,
+  ].map(normalizedMediaSecurityTransportLabel);
+  if (labels.some((label) => (
+    label === 'gossip'
+    || label === 'gossip_primary'
+    || label === 'gossip_primary_direct'
+    || label === 'gossip_rtc_datachannel'
+    || label === 'planned_gossip'
+  ))) {
+    return true;
+  }
+  const carrierIsGossipPrimary = Object.prototype.hasOwnProperty.call(source, 'gossipPrimary')
+    ? source.gossipPrimary === true
+    : VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary;
+  const dataLaneMode = normalizedMediaSecurityTransportLabel(source.gossipDataLaneMode);
+  const dataLaneIsActive = source.gossipDataLaneActive === true
+    || dataLaneMode === 'active'
+    || (!Object.prototype.hasOwnProperty.call(source, 'gossipDataLaneActive')
+      && dataLaneMode === ''
+      && GOSSIP_DATA_LANE_CONFIG.mode === 'active');
+  return carrierIsGossipPrimary && dataLaneIsActive;
+}
+
+export function createMediaSecurityGossipParking({
+  captureClientDiagnostic = () => {},
+  currentMediaSecurityRuntimePath = () => '',
+  mediaDebugLog = () => {},
+  mediaRuntimePath = {},
+  state = {},
+} = {}) {
+  function mediaRuntimePathValue() {
+    const value = mediaRuntimePath && typeof mediaRuntimePath === 'object' && 'value' in mediaRuntimePath
+      ? mediaRuntimePath.value
+      : mediaRuntimePath;
+    return String(value || '').trim();
+  }
+
+  function mediaSecurityPlannedGossipParkingLastByKey() {
+    if (!(state.mediaSecurityPlannedGossipParkingLastByKey instanceof Map)) {
+      state.mediaSecurityPlannedGossipParkingLastByKey = new Map();
+    }
+    return state.mediaSecurityPlannedGossipParkingLastByKey;
+  }
+
+  function shouldParkMediaSecurityForPlannedGossip(reason = '') {
+    if (!isPlannedGossipMediaSecurityTransport({
+      mediaRuntimePath: mediaRuntimePathValue(),
+      mediaSecurityRuntimePath: currentMediaSecurityRuntimePath(),
+    })) {
+      return false;
+    }
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    if (normalizedReason === '') return true;
+    return [
+      'downgrade_attempt',
+      'hello_participant_set',
+      'media_security_sync_hint',
+      'participant_set',
+      'protect_frame_unavailable',
+      'publisher_recovery',
+      'receiver_media_frame_error',
+      'remote_sync',
+      'sender_key',
+      'sfu_publish_security_gate',
+      'signal_failed',
+      'sync_participant',
+      'wrong_epoch',
+      'wrong_key_id',
+    ].some((prefix) => normalizedReason.startsWith(prefix));
+  }
+
+  function diagnoseMediaSecurityPlannedGossipParking(reason = 'unspecified', extraPayload = {}) {
+    const normalizedReason = String(reason || 'unspecified').trim().toLowerCase() || 'unspecified';
+    const payload = extraPayload && typeof extraPayload === 'object' ? { ...extraPayload } : {};
+    const diagnosticKey = [
+      normalizedReason,
+      Number(payload.sender_user_id || payload.target_user_id || 0),
+      String(payload.error_code || ''),
+      String(payload.track_id || ''),
+    ].join(':');
+    const nowMs = Date.now();
+    const parkingDiagnostics = mediaSecurityPlannedGossipParkingLastByKey();
+    const lastDiagnosticMs = Number(parkingDiagnostics.get(diagnosticKey) || 0);
+    if ((nowMs - lastDiagnosticMs) < 1000) return true;
+    parkingDiagnostics.set(diagnosticKey, nowMs);
+    mediaDebugLog('[MediaSecurity] planned Gossip parking', { reason: normalizedReason, ...payload });
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_planned_gossip_parking',
+      code: 'media_security_planned_gossip_parking',
+      message: 'MediaSecurity condition was diagnosed but did not block planned Gossip media transport.',
+      payload: {
+        reason: normalizedReason,
+        media_runtime_path: mediaRuntimePathValue(),
+        media_security_runtime_path: currentMediaSecurityRuntimePath(),
+        planned_transport: 'gossip',
+        ...payload,
+      },
+    });
+    return true;
+  }
+
+  return {
+    diagnoseMediaSecurityPlannedGossipParking,
+    shouldParkMediaSecurityForPlannedGossip,
+  };
+}
 
 export function defaultNativeAudioBridgeFailureMessage() {
   return 'Audio is unavailable because protected audio transform setup failed on this device.';

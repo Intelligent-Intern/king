@@ -119,7 +119,7 @@ Sprint Checkboxen:
   `stuck_not_sending` plus diagnostics reason. Gossip DataChannel
   `bufferedAmount`, queue depth and dropped delta/keyframe counters must feed
   the ladder.
-- [ ] GSP01-14 MediaSecurity parking for this path: sender-key mismatch,
+- [x] GSP01-14 MediaSecurity parking for this path: sender-key mismatch,
   participant transcript recovery and key-wrap delay must not block planned
   gossip frame send/receive in this sprint; log the condition instead.
 - [x] GSP01-15 Focus/UI stability: focus loss, tab visibility changes and UI
@@ -191,6 +191,12 @@ Current Loop Notes:
   `node demo/video-chat/frontend-vue/tests/contract/gossip-backpressure-contract.mjs`
   and `node demo/video-chat/frontend-vue/tests/contract/gossip-telemetry-contract.mjs`
   passed.
+- GSP01-14 proof: planned Gossip transport now parks MediaSecurity blocking
+  conditions as `media_security_planned_gossip_parking` diagnostics instead of
+  closing the send/receive gate. Verified with
+  `node tests/contract/gossip-media-security-parking-contract.mjs`,
+  `node tests/contract/media-security-idempotent-sender-key-contract.mjs`,
+  and `node tests/contract/gossip-sfu-dual-carrier-continuity-contract.mjs`.
 - GSP01-15 proof: commit `24a075d3` separates open sockets from room snapshot
   sync during foreground recovery, requests snapshot backfill for live sockets,
   and reconnects only closed sockets. `node demo/video-chat/frontend-vue/tests/contract/foreground-reconnect-contract.mjs`
