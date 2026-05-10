@@ -84,8 +84,19 @@ Sprint Checkboxen:
     and `git diff --check` passed.
 - [ ] IAM4-03 Inventory all non-contained `local/iam-e2e-*proof-3` worktrees and
   rank them by unique IAM proof value versus Sprint 03.
-- [ ] IAM4-04 Extract any stronger logout/login-switch and account-switch proof
+- [x] IAM4-04 Extract any stronger logout/login-switch and account-switch proof
   value from `local/iam-e2e-abuse-logout-login-switch-proof-3`.
+  - Merged worker branch `agent/iam-s4-04-logout-switch-extract`.
+  - Added `call-access-logout-switch-extract-contract.mjs`.
+  - Extracted the unique same-browser logout/login-switch proof: frozen verified
+    call-access context plus changed bearer token must fail closed with
+    `409 call_access_conflict` / `session_context_changed` and must not rebind
+    local session state or leak private invite/review data.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-logout-switch-extract-contract.mjs`,
+    `call-access-logout-login-switch-contract.mjs`,
+    `call-access-account-isolation-contract.mjs`,
+    `call-access-duplicate-invite-replay-contract.mjs`, and `git diff --check`
+    passed.
 - [ ] IAM4-05 Extract any stronger audit alias/event compatibility proof value
   from the audit `proof-3` branches.
 - [ ] IAM4-06 Extract deleted/ended/disabled terminal-state proof value from the
