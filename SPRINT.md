@@ -100,7 +100,7 @@ Sprint Checkboxen:
   `local/iam-e2e-ci-artifacts-proof-2`.
 - [x] IAM8-15 Extract or prove IAM call-access CI gate split/docs from
   `local/iam-e2e-ci-docs-gate`.
-- [ ] IAM8-16 Extract or prove core organization session journeys from
+- [x] IAM8-16 Extract or prove core organization session journeys from
   `local/iam-e2e-core-org-session-journey`.
 - [x] IAM8-17 Extract or prove cross-org active organization switching from
   `local/iam-e2e-cross-org-active-org-switch`.
