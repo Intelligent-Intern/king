@@ -107,8 +107,11 @@ completed and moved to readiness evidence on 2026-05-10.
 Sprint 07, `IAM Remaining Proof And Branch Cleanup 07`, completed and moved to
 readiness evidence on 2026-05-10.
 
-Sprint 08, `IAM Session, Audit, Guestlist, And Terminal Proof 08`, moved the
-next local IAM proof batch into active `SPRINT.md` on 2026-05-10. Do not
+Sprint 08, `IAM Session, Audit, Guestlist, And Terminal Proof 08`, completed
+and moved to readiness evidence on 2026-05-10.
+
+Sprint 09, `IAM Calendar, Edge States, And Call-App Boundary Proof 09`, moved
+the next local IAM proof batch into active `SPRINT.md` on 2026-05-10. Do not
 duplicate its active checkbox list here.
 
 ### Completed/Parked Call App Integration Detail

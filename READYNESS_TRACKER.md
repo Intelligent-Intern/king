@@ -17,6 +17,33 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Session, Audit, Guestlist, And Terminal Proof 08 closeout:
+  completed all 20 IAM8 checkboxes on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint extracted or
+  re-proved focused current IAM/call-access value from stale historical
+  branches covering duplicate personalized-link races, account reconciliation,
+  admin guest-list journeys, anonymous temporary access, audit aliases and
+  event coverage, authorized rejoin, call lifecycle, owner/moderation rights,
+  CI artifact handling, CI docs/gates, core organization session journeys,
+  cross-org active organization switching, terminal call lifecycle states,
+  disabled anonymous links, and disabled-user/Call App token binding. Worker
+  branches/worktrees were merged back into the no-push branch and removed after
+  clean ancestry checks. Final proof included focused PHP syntax checks,
+  frontend contract checks, IAM static gate checks, Docker-backed SQLite proof
+  runs for host-PHP `pdo_sqlite` gaps, `npm run build`, and
+  `npm run test:contract:build-size`. Deploy proof: ran
+  `demo/video-chat/scripts/deploy.sh deploy` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, with no push, DNS writes, or certbot
+  issuance. Post-deploy diagnostics showed production asset version
+  `20260510082956`, app/API/call-app assets reachable, schema v57 applied,
+  SFU explicitly disabled, unauthenticated `call-apps/available` returning
+  HTTP 401 instead of HTTP 500, and no recent Backend/WS/Edge
+  error/exception/fatal/HTTP 500 log matches apart from known TURN reset noise.
+  Background, Gossip, SFU, MediaSecurity, BTGF, and their tests remained
+  parked/manual.
+
 - 2026-05-10 IAM Remaining Proof And Branch Cleanup 07 closeout:
   completed all 20 IAM7 checkboxes on local branch
   `prod-kingrt-do-not-push-to-github` without pushing. The sprint extracted or
