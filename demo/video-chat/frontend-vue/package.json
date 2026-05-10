@@ -92,7 +92,8 @@
     "test:ci:iam-call-access:static": "../scripts/iam-call-access-ci-gate.sh --static",
     "test:ci:iam-call-access:sqlite": "../scripts/iam-call-access-ci-gate.sh --sqlite",
     "test:ci:iam-call-access:docker": "../scripts/iam-call-access-ci-gate.sh --docker",
-    "test:ci:iam-call-access:full": "../scripts/iam-call-access-ci-gate.sh --full"
+    "test:ci:iam-call-access:full": "../scripts/iam-call-access-ci-gate.sh --full",
+    "test:contract:iam9-11-terminal-join-denials": "node tests/contract/iam9-11-terminal-join-denials-contract.mjs && ../backend-king-php/tests/call-access-deleted-ended-disabled-join-contract.sh"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",
