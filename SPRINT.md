@@ -164,8 +164,19 @@ Sprint Checkboxen:
     `git diff --check` passed.
 - [ ] IAM5-09 Extract owner absence, owner timeout, and owner-leave proof value
   from the owner-absence/timeout branches.
-- [ ] IAM5-10 Extract owner-transfer main journey, rejoin, and permission-audit
+- [x] IAM5-10 Extract owner-transfer main journey, rejoin, and permission-audit
   proof value from the remaining owner-transfer branches.
+  - Merged worker branch `agent/iam-s5-10-owner-transfer`.
+  - Added `documentation/iam-sprint-05-owner-transfer-extraction.md` and
+    `call-access-owner-transfer-remaining-extract-contract.mjs`.
+  - Extracted owner-transfer main journey, rejoin, and permission refresh proof
+    against maintained owner-transfer contracts. Preserved owner-transfer audit
+    mutation writes as backend follow-up and rejected broader org-admin
+    owner-transfer authority because current policy keeps owner-management
+    stricter than moderation.
+  - Proof: owner-transfer remaining extract, owner-transfer main, lifecycle,
+    temp-moderator, permission-change, audit compatibility contracts,
+    owner-moderation/org-admin backend wrappers, and `git diff --check` passed.
 - [ ] IAM5-11 Extract guest-list management, owner management, and revocation
   proof value from the remaining guest-list branches.
 - [ ] IAM5-12 Extract temporary guest, direct-join, temporary moderator, and
