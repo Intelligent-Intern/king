@@ -205,8 +205,16 @@ Tickets:
   admission and removal decisions.
 - [ ] IAM-16 Prove frontend route guards and verified-context UI for call-access
   sessions.
-- [ ] IAM-17 Prove realtime websocket room scope and reconnect/backfill under IAM
+- [x] IAM-17 Prove realtime websocket room scope and reconnect/backfill under IAM
   session changes.
+  - Merged worker branch `agent/iam-s1-17-realtime-scope`.
+  - Added `call-access-realtime-scope-contract.mjs` proving websocket room/call
+    query binding, current-session reconnect, fail-closed missing session,
+    welcome/snapshot backfill, backend binding mismatch handling, and retryable
+    reconnect backfill failures.
+  - Proof: `node tests/contract/call-access-realtime-scope-contract.mjs` passed.
+    Backend reconnect shell proof skipped the SQLite runtime phase locally after
+    non-SQLite assertions because `pdo_sqlite` is unavailable.
 - [ ] IAM-18 Wire the IAM contract/E2E subset into stable package scripts and CI
   release-gate metadata.
 - [ ] IAM-19 Run backend/runtime proof in the strongest available local test
