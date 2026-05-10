@@ -76,6 +76,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam9-11-terminal-join-denials-contract.mjs"
   "node tests/contract/iam9-13-duplicate-abuse-devices-contract.mjs"
   "node tests/contract/call-access-edge-error-matrix-contract.mjs"
+  "node tests/contract/iam9-19-multiple-pending-confirmations-contract.mjs"
 )
 
 run_static_gate() {
