@@ -234,3 +234,91 @@ function videochat_gossipmesh_room_state_payloads_by_peer(
 
     return $payloads;
 }
+
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_gossipmesh_room_readiness_by_connection_id(
+    string $callId,
+    string $roomId,
+    array $participants,
+    ?int $epochMs = null,
+    array $options = []
+): array {
+    $safeCallId = videochat_gossipmesh_safe_id($callId);
+    $safeRoomId = videochat_gossipmesh_safe_id($roomId);
+    if ($safeCallId === '' || $safeRoomId === '') {
+        return [];
+    }
+
+    try {
+        $topologyPlan = videochat_gossipmesh_plan_topology(
+            $safeCallId,
+            $safeRoomId,
+            videochat_gossipmesh_members_from_room_participants($participants),
+            [
+                'seed' => (string) ($options['seed'] ?? 'room_readiness'),
+                'max_neighbors' => VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS,
+                'forward_count' => VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
+            ]
+        );
+    } catch (Throwable) {
+        return [];
+    }
+
+    $memberIds = [];
+    foreach ((array) ($topologyPlan['members'] ?? []) as $member) {
+        if (!is_array($member)) {
+            continue;
+        }
+        $memberId = videochat_gossipmesh_safe_id($member['id'] ?? '');
+        if ($memberId !== '') {
+            $memberIds[$memberId] = true;
+        }
+    }
+
+    $peerCount = count($memberIds);
+    $topologyEpoch = $epochMs ?? (int) floor(microtime(true) * 1000);
+    $readiness = [];
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+
+        $connectionId = trim((string) ($participant['connection_id'] ?? ''));
+        $user = is_array($participant['user'] ?? null) ? (array) $participant['user'] : [];
+        $peerId = videochat_gossipmesh_safe_id($user['id'] ?? ($participant['user_id'] ?? ''));
+        if ($connectionId === '' || $peerId === '') {
+            continue;
+        }
+
+        $neighbors = is_array($topologyPlan['topology'][$peerId] ?? null) ? (array) $topologyPlan['topology'][$peerId] : [];
+        $assignedNeighborCount = count($neighbors);
+        $admitted = (bool) ($memberIds[$peerId] ?? false);
+        $ready = $admitted && $peerCount > 1 && $assignedNeighborCount > 0 && $topologyEpoch > 0;
+        $reason = 'gossip_ready';
+        if (!$admitted) {
+            $reason = 'gossip_peer_not_admitted';
+        } elseif ($peerCount <= 1) {
+            $reason = 'gossip_waiting_for_peer';
+        } elseif ($assignedNeighborCount <= 0) {
+            $reason = 'gossip_waiting_for_assigned_neighbor';
+        } elseif ($topologyEpoch <= 0) {
+            $reason = 'gossip_topology_unavailable';
+        }
+
+        $readiness[$connectionId] = [
+            'topology_ready' => $ready,
+            'peer_ready' => $ready,
+            'peer_count' => $peerCount,
+            'assigned_neighbor_count' => $assignedNeighborCount,
+            'topology_epoch' => $topologyEpoch,
+            'reason' => $reason,
+            'redacted' => true,
+        ];
+    }
+
+    ksort($readiness);
+    return $readiness;
+}

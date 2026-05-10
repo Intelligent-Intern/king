@@ -143,7 +143,7 @@ foreach ($participantMediaState as $row) {
     }
 }
 videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-owner']['media_state'] ?? '') === 'streaming_720p30', 'owner media state must come from the authoritative plan');
-videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['media_state'] ?? '') === 'waiting_for_gossip', 'peer media state must come from the authoritative plan');
+videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['media_state'] ?? '') === 'blocked_capability', 'peer media state must block non-720p capability from the authoritative plan');
 
 $gossip = is_array($plan['gossip'] ?? null) ? $plan['gossip'] : [];
 videochat_room_snapshot_media_authority_assert((string) (($gossip['topology'] ?? [])['type'] ?? '') === 'topology_hint', 'authoritative plan must carry gossip topology');

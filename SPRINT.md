@@ -100,7 +100,7 @@ Sprint Checkboxen:
   fallback, no SFU socket restart as media recovery while the plan transport is
   gossip. Plan/deploy config must make `gossip_primary` and
   `VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active` explicit.
-- [ ] GSP01-09 Build the gossip readiness barrier: a call may wait up to five
+- [x] GSP01-09 Build the gossip readiness barrier: a call may wait up to five
   minutes for planned gossip peers before streaming or marking a participant
   `stuck_not_sending` with a reason.
 - [ ] GSP01-10 Publisher dispatch: encode 720p30 keyframes/deltas and send only
@@ -172,6 +172,14 @@ Current Loop Notes:
   the touched files; runtime execution is still blocked by the existing
   duplicate `videochat_call_access_link_disabled_at()` definition in
   `domain/calls/call_access_contract.php`.
+- GSP01-09 proof: backend readiness now computes per-connection Gossip
+  readiness from the server topology, requires more than one peer plus assigned
+  neighbors before `streaming_720p30`, and marks stale waits after 300000 ms as
+  `stuck_not_sending` with `gossip_readiness_timeout`. Verified with `php -l`
+  plus `php demo/video-chat/backend-king-php/tests/media-capability-plan-contract.php`,
+  `php demo/video-chat/backend-king-php/tests/media-capability-plan-gossip-contract.php`,
+  `php demo/video-chat/backend-king-php/tests/realtime-room-snapshot-media-authority-contract.php`,
+  and `php demo/video-chat/backend-king-php/tests/realtime-gossipmesh-room-state-topology-contract.php`.
 - Gossip route progress: commit `4618a59a` publishes external
   `gossip.media.frame.v1` envelopes and suppresses SFU fallback on
   `gossip_primary` publish failure. `node tests/contract/gossip-live-receive-decode-route-contract.mjs`
@@ -199,6 +207,12 @@ Current Loop Notes:
   The page exposes only email/password sign-in and no registration or guest
   join link in this context, so no live room reports can be posted until a
   valid app session or real guest/invite link is available.
+- Call-chat update: after the guest join link was provided, `Codex Reporter`
+  joined the call, greeted Alexander and Jendrik in English, and is reading the
+  chat. Alexander clarified the active architecture target: remove SFU from
+  the active path, keep the server as peer discovery/topology only, connect each
+  peer to up to five bidirectional neighbors, and exchange frames peer-to-peer
+  without ordering guarantees in this sprint.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip

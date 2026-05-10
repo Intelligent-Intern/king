@@ -301,19 +301,25 @@ function videochat_realtime_room_snapshot_gossip_readiness(array $gossipTopology
     $rolloutGate = is_array($roomTelemetry['rollout_gate'] ?? null) ? (array) $roomTelemetry['rollout_gate'] : [];
     $admittedPeers = is_array($gossipTopology['admitted_peers'] ?? null) ? $gossipTopology['admitted_peers'] : [];
     $assignedNeighbors = is_array($gossipTopology['assigned_neighbors'] ?? null) ? $gossipTopology['assigned_neighbors'] : [];
+    $peerCount = (int) ($roomTelemetry['peer_count'] ?? count($admittedPeers));
+    $assignedNeighborCount = count($assignedNeighbors);
+    $peerReady = $peerCount > 1 && $assignedNeighborCount > 0;
     $topologyReady = $gossipTopology !== []
         && trim((string) ($gossipTopology['peer_id'] ?? '')) !== ''
         && (int) ($gossipTopology['topology_epoch'] ?? 0) > 0
-        && count($admittedPeers) > 0;
+        && count($admittedPeers) > 1
+        && $peerReady;
 
     return [
         'topology_ready' => $topologyReady,
+        'peer_ready' => $peerReady,
         'telemetry_ready' => (bool) ($rolloutGate['telemetry_ready'] ?? false),
         'active_allowed' => (bool) ($rolloutGate['active_allowed'] ?? false),
         'sfu_first' => (bool) ($rolloutGate['sfu_first'] ?? true),
-        'peer_count' => (int) ($roomTelemetry['peer_count'] ?? count($admittedPeers)),
-        'assigned_neighbor_count' => count($assignedNeighbors),
+        'peer_count' => $peerCount,
+        'assigned_neighbor_count' => $assignedNeighborCount,
         'topology_epoch' => (int) ($gossipTopology['topology_epoch'] ?? 0),
+        'readiness_timeout_ms' => videochat_media_session_plan_gossip_readiness_timeout_ms(),
     ];
 }
 
@@ -435,20 +441,31 @@ function videochat_realtime_room_snapshot_payload(
         }
     }
     $gossipTopology = [];
+    $gossipReadinessByConnectionId = [];
     if ($callId !== '' && $roomId !== '') {
+        $topologyEpochMs = is_int($nowMs) && $nowMs > 0 ? $nowMs : null;
         $gossipTopology = videochat_gossipmesh_room_state_payload(
             $callId,
             $roomId,
             $participants,
             (string) ((int) ($connection['user_id'] ?? 0)),
-            trim($reason) === '' ? 'snapshot' : trim($reason)
+            trim($reason) === '' ? 'snapshot' : trim($reason),
+            $topologyEpochMs
+        );
+        $gossipReadinessByConnectionId = videochat_gossipmesh_room_readiness_by_connection_id(
+            $callId,
+            $roomId,
+            $participants,
+            $topologyEpochMs
         );
     }
     $mediaSessionPlan = videochat_media_session_plan_for_snapshot(
         $presenceState,
         $connection,
         $participants,
-        $persistedClientCapabilities
+        $persistedClientCapabilities,
+        $gossipReadinessByConnectionId,
+        $nowMs
     );
     $mediaSessionPlan = videochat_realtime_room_snapshot_authoritative_media_session_plan(
         $mediaSessionPlan,
