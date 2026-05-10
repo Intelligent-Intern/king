@@ -115,7 +115,7 @@ assert.match(
 );
 assert.match(
   snapshotBody,
-  /'viewer' => \[[\s\S]*'call_id' => \(string\) \(\$connection\['active_call_id'\][\s\S]*'effective_call_role' => videochat_normalize_call_participant_role\([\s\S]*'can_moderate' => \(bool\) \(\$connection\['can_moderate_call'\] \?\? false\)/,
+  /\$viewerConnection = videochat_realtime_connection_with_call_context\(\$connection, \$openDatabase\);[\s\S]*videochat_realtime_owner_absence_downgrade_absent_owner_connection[\s\S]*'viewer' => \[[\s\S]*'call_id' => \(string\) \(\$viewerConnection\['active_call_id'\][\s\S]*'effective_call_role' => videochat_normalize_call_participant_role\([\s\S]*'can_moderate' => \(bool\) \(\$viewerConnection\['can_moderate_call'\] \?\? false\)/,
   'room snapshots must publish downgraded active-call viewer privileges',
 );
 

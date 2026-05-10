@@ -123,7 +123,7 @@ try {
   );
   assert.match(
     realtimeRoleContext,
-    /'can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner',/,
+    /\$scopedRoleActive =[\s\S]*videochat_call_invite_state_allows_scoped_role\(\$inviteState\)[\s\S]*'can_moderate' => \$isAdmin[\s\S]*\|\| \$isOrganizationAdmin[\s\S]*\|\| \(\$scopedRoleActive && in_array\(\$callRole, \['owner', 'moderator'\], true\)\),[\s\S]*'can_manage_owner' => \$isAdmin \|\| \(\$scopedRoleActive && \$callRole === 'owner'\),/,
     'realtime role context must not leave demoted previous owners with owner-management controls while preserving org-admin moderation',
   );
   assert.match(

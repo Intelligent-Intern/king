@@ -126,12 +126,12 @@ assert.match(
 );
 assert.match(
   realtimeCallRoleContext,
-  /can_moderate' => \$isAdmin \|\| \$isOrganizationAdmin \|\| in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
+  /\$scopedRoleActive =[\s\S]*videochat_call_invite_state_allows_scoped_role\(\$inviteState\)[\s\S]*can_moderate' => \$isAdmin[\s\S]*\$isOrganizationAdmin[\s\S]*\$scopedRoleActive && in_array\(\$callRole, \['owner', 'moderator'\], true\)/,
   'realtime role context must allow same-organization admin moderation without granting owner-transfer authority',
 );
 assert.match(
   realtimeCallRoleContext,
-  /can_manage_owner' => \$isAdmin \|\| \$callRole === 'owner'/,
+  /can_manage_owner' => \$isAdmin \|\| \(\$scopedRoleActive && \$callRole === 'owner'\)/,
   'owner-transfer authority must be stricter than general moderation authority',
 );
 
