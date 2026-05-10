@@ -234,8 +234,8 @@ assert.doesNotMatch(
 );
 assert.match(
   iamCiGate,
-  /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-ci-artifacts-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs[\s\S]*call-access-safe-screen-final-contract\.mjs/,
-  'IAM CI gate wrapper must keep the host-safe static hygiene, artifact, and safe-screen privacy contracts explicit',
+  /STATIC_CONTRACTS=\([\s\S]*iam-call-access-ci-wire-contract\.mjs[\s\S]*iam-ci-artifacts-contract\.mjs[\s\S]*iam-local-run-docs-contract\.mjs[\s\S]*call-access-safe-screen-final-contract\.mjs[\s\S]*iam9-06-call-app-entitlement-revocation-contract\.mjs/,
+  'IAM CI gate wrapper must keep the host-safe static hygiene, artifact, safe-screen privacy, and Call App entitlement revocation contracts explicit',
 );
 assert.match(
   iamCiGate,
