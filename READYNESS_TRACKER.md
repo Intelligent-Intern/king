@@ -17,6 +17,27 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Remaining Proof And Branch Cleanup 07 closeout:
+  completed all 20 IAM7 checkboxes on local branch
+  `prod-kingrt-do-not-push-to-github` without pushing. The sprint extracted or
+  re-proved focused current IAM/call-access value from stale historical
+  branches, preserved Background/Gossip/SFU/MediaSecurity/BTGF work as parked,
+  cleaned short-lived IAM7 worker branches/worktrees after merge, and aligned
+  stale static IAM contracts with scoped realtime authority and owner-absence
+  downgrade semantics instead of weakening runtime behavior. Final proof:
+  `npm run test:contract:iam-call-access`, `npm run build`, and
+  `npm run test:contract:build-size` passed. Deploy proof: ran
+  `demo/video-chat/scripts/deploy.sh deploy` with
+  `VIDEOCHAT_DEPLOY_SKIP_CERTBOT=1`,
+  `VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=0`, and
+  `VIDEOCHAT_DEPLOY_HCLOUD_DNS=0`, with no push, DNS writes, or certbot
+  issuance. Post-deploy diagnostics showed production asset version
+  `20260510071928`, app/API/call-app assets reachable, SFU explicitly
+  disabled, no recent Backend/WS/Edge error/exception/fatal/HTTP 500 log
+  matches, unauthenticated `call-apps/available` returning HTTP 401, and the
+  stale browser-provided call id returning authenticated HTTP 404
+  `calls_not_found` instead of HTTP 500.
+
 - 2026-05-10 IAM7-20 owner-absence realtime sync extraction:
   inspected `local/iam-e2e-owner-absence-realtime-sync` at
   `72dd4d81d1e8431e940808890f232b78cf6f8a70` against integration baseline
