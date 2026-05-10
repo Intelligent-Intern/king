@@ -86,7 +86,7 @@ Sprint Checkboxen:
   from `local/iam-e2e-audit-alias-followup-proof-3`.
 - [ ] IAM8-08 Extract or prove audit confirmation and owner-absence implicit
   logging from `local/iam-e2e-audit-confirmation-implicit`.
-- [ ] IAM8-09 Extract or prove host-verification audit event aliases from
+- [x] IAM8-09 Extract or prove host-verification audit event aliases from
   `local/iam-e2e-audit-event-compat-proof-3`.
 - [ ] IAM8-10 Extract or prove IAM audit event contract coverage from
   `local/iam-e2e-audit-events`.
