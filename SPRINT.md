@@ -132,8 +132,18 @@ Sprint Checkboxen:
     `demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh`,
     frontend terminal contracts, PHP syntax checks, and `git diff --check`
     passed.
-- [ ] IAM4-07 Extract duplicate-abuse device/browser proof value from
+- [x] IAM4-07 Extract duplicate-abuse device/browser proof value from
   `local/iam-e2e-duplicate-abuse-device-browser-proof-3`.
+  - Merged worker branch `agent/iam-s4-07-duplicate-abuse-extract`.
+  - Added `documentation/iam-sprint-04-duplicate-abuse-device-browser-extract-evidence.md`.
+  - Classified the stale source branch as fully superseded by current focused
+    duplicate-device/browser, duplicate-abuse, invite-replay, verified-context,
+    no-rebind, and redaction contracts; no source code was ported.
+  - Proof: `call-access-duplicate-device-browser-contract.mjs`,
+    `call-access-duplicate-abuse-contract.mjs`,
+    `call-access-duplicate-invite-replay-contract.mjs`,
+    `call-access-logout-login-switch-contract.mjs`,
+    `iam-call-access-ci-wire-contract.mjs`, and `git diff --check` passed.
 - [x] IAM4-08 Extract guest-list revocation proof value from
   `local/iam-e2e-guest-list-revocation-proof-3`.
   - Merged worker branch `agent/iam-s4-08-guest-list-revocation-extract`.
