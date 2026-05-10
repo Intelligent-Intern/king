@@ -309,9 +309,27 @@ const workerBranchPolicy = {
 };
 
 const sprint = fs.readFileSync(path.join(repoRoot, 'SPRINT.md'), 'utf8');
+const dirtyClassification = fs.readFileSync(path.join(repoRoot, 'documentation/iam-sprint-03-dirty-worktree-classification.md'), 'utf8');
+const containedCleanup = fs.readFileSync(path.join(repoRoot, 'documentation/iam-sprint-03-contained-head-cleanup-evidence.md'), 'utf8');
+assert.match(
+  sprint,
+  /Sprint 03 closed the current IAM abuse\/runtime proof batch and deployed it/,
+  'current SPRINT.md must record that Sprint 03 IAM intake is closed',
+);
 for (const ticket of sprint03Tickets) {
-  assert.ok(sprint.includes(ticket), `SPRINT.md must list ${ticket}`);
+  const inventoryMentionsTicket = cleanNotContainedCandidates.some((candidate) => candidate.ticket === ticket)
+    || runtimeProofSources.some((candidate) => candidate.ticket === ticket)
+    || dirtyManualCandidates.some((candidate) => candidate.ticket === ticket);
+  assert.ok(inventoryMentionsTicket, `Sprint 03 inventory must retain ${ticket}`);
 }
+assert.ok(
+  dirtyClassification.includes('codex/iam-duplicate-cleanup-reaudit-20260509'),
+  'Sprint 03 dirty-worktree evidence must retain duplicate cleanup classification',
+);
+assert.ok(
+  containedCleanup.includes('Contained-HEAD Cleanup Evidence'),
+  'Sprint 03 contained-head cleanup evidence must remain available after Sprint 04 starts',
+);
 
 for (const candidate of cleanNotContainedCandidates) {
   assertWorktree(candidate);
