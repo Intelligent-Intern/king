@@ -24,26 +24,16 @@ Rules:
 
 ### Governance UX, Recursive CRUD, Permissions, And Onboarding
 
-1. [ ] Descriptor-driven page action bars: create/edit/delete/import/export/save actions must be described, permission-filtered, and locally named per entity instead of generic page-local buttons.
-2. [ ] Backend route authorization: wire tenant/resource grant evaluation into Governance/Admin resource actions beyond role/path checks.
-3. [ ] Governance entity semantics: Groups, Organizations, Roles, Grants, Policies, Export/Import, Audit Log, Compliance, Modules, and Permissions need entity-specific fields, validation, and correct action names.
-4. [ ] Recursive relation flow: implement linked `+1` selection/creation flow for User -> Group -> Module -> Permission and similar entity references without stacked modals.
-5. [ ] Relation data loading: replace row-by-row relation label fetches with normalized rows, included summaries, batch summary endpoints, and frontend entity caches.
-6. [ ] Navigation/i18n hardening: descriptors should use localization keys as the source of truth and render structured localized fields instead of concatenated English descriptions.
-7. [ ] Onboarding tours: add per-area `?` tour entry points, persisted completion badges, and profile display for completed tours.
-8. [ ] Profile expansion: add about/social/contact fields only through the intended settings/profile architecture, not one-off UI state.
+Moved into active Sprint 06 on 2026-05-10.
 
 ### Admin UX And Visual Standards
 
-1. [ ] Keep CRUD search/action bars right-aligned with exactly 20px spacing and the standard submit icon.
-2. [ ] Remove redundant cancel/close buttons where a right-sidebar or modal already has the standard close affordance.
-3. [ ] Normalize right-sidebar forms: no border radius, no top/bottom border, non-resizable, sticky bottom-right submit.
-4. [ ] Normalize inputs/selects to the 12 King styleguide color tokens and remove hard-coded non-token colors.
-5. [ ] Replace wrong generic create actions on readonly/system catalog pages with correct entity-specific actions or no action.
-6. [ ] Keep page headings as the standard `h1` size and avoid unreachable/overlapping content.
-7. [ ] Theme management still needs persisted screenshot previews after save; iframe mini-app preview cards and the main-content editor are now contract-pinned.
-8. [ ] Localization admin still needs two-language side-by-side editing and removal of CSV/source/bundle/import-history UI from the active path.
-9. [ ] App Configuration still needs dropzone-based background image upload/crop/filter flow and metadata-free UI without search.
+The action-bar, sidebar, token, create-action, and heading cleanup items moved
+into active Sprint 06 on 2026-05-10.
+
+1. [ ] Theme management still needs persisted screenshot previews after save; iframe mini-app preview cards and the main-content editor are now contract-pinned.
+2. [ ] Localization admin still needs two-language side-by-side editing and removal of CSV/source/bundle/import-history UI from the active path.
+3. [ ] App Configuration still needs dropzone-based background image upload/crop/filter flow and metadata-free UI without search.
 
 ### Calendar And Booking
 
@@ -55,15 +45,15 @@ Rules:
 
 ### Clean Refactoring With Composables And Components
 
-1. [ ] CRUD scaffold: roll the shared list/search scaffold beyond Marketplace and extract remaining entity action-bar semantics; list controller, search toolbar, shared table frame, and one non-call CRUD migration are now contract-pinned.
-2. [ ] Right-sidebar/forms: roll the shared side-panel form state/submit footer beyond the Governance, Marketplace, and User editor proof surfaces, then close any remaining route-specific close/cancel variants after contract review.
-3. [ ] Governance/User Management: finish breadcrumb/draft-create extraction and broader recursive-flow browser proof; relation navigator, picker table, row sectioning, shared Governance relationship payload normalizer, and User -> Group -> Module -> Permission contracts are now pinned.
-4. [ ] Settings/Profile: extract settings registry and shared section frame; credentials and merged localization/date/time panels are now extracted and contract-pinned.
-5. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-6. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
-7. [ ] Localization/Admin text: extract the remaining API/state composable and broader save proof; the two-locale editor matrix, locale pair selectors, entry matrix, CSV-free active path, and existing save route wiring are now contract-pinned.
-8. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
-9. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
+The CRUD scaffold, right-sidebar/forms, and Governance/User Management
+refactor items moved into active Sprint 06 on 2026-05-10.
+
+1. [ ] Settings/Profile: extract settings registry and shared section frame; credentials and merged localization/date/time panels are now extracted and contract-pinned.
+2. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
+3. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
+4. [ ] Localization/Admin text: extract the remaining API/state composable and broader save proof; the two-locale editor matrix, locale pair selectors, entry matrix, CSV-free active path, and existing save route wiring are now contract-pinned.
+5. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
+6. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
 
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 
@@ -111,8 +101,8 @@ Sprint 03, `IAM Abuse, Runtime Proof, And Cleanup Stabilization 03`, and
 Sprint 04, `IAM Cleanup, Proof Consolidation, And Browser Stability 04`,
 completed and moved to `READYNESS_TRACKER.md` on 2026-05-10.
 
-The next active IAM cleanup/proof batch is now in `SPRINT.md` as
-`IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`.
+Sprint 05, `IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`,
+completed and moved to readiness evidence on 2026-05-10.
 
 ### Completed/Parked Call App Integration Detail
 
@@ -217,16 +207,9 @@ The next active IAM cleanup/proof batch is now in `SPRINT.md` as
 
 ### Branch/Worktree Cleanup Holding Area
 
-1. [ ] Classify dirty worktree `agent/call-app-remove-session`; likely redundant
-   with the integrated Call App removal flow, but do not discard until compared.
-2. [ ] Classify dirty worktree `agent/planning-image-call-app`; compare the
-   uncommitted `image-planning` package/test diff with the integrated package.
-3. [ ] Classify dirty worktree `agent/l15-org-admin-join-proof`; only integrate
-   the realtime org-admin role diff if it is required for call stabilization.
-4. [ ] Classify dirty worktree `codex/iam-call-access-e2e-foundation`; keep it
-   outside the active sprint unless needed for deploy smoke stability.
-5. [ ] Clean up `codex/iam-duplicate-cleanup-reaudit-20260509` only after its
-   conflict state is proven redundant with `iam-e2e-integration`.
+Moved into active Sprint 06 on 2026-05-10. Keep dirty worktrees intact until
+their Sprint 06 classification tickets prove whether changes are merged,
+preserved, or need explicit user approval before removal.
 
 ## Cleanup Notes
 
