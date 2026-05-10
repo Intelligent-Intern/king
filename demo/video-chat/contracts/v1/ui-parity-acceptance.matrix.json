@@ -183,7 +183,9 @@
         "backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh",
         "backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh",
         "frontend-vue/tests/contract/iam-lobby-management-moderator-rights-contract.mjs",
+        "frontend-vue/tests/contract/iam-org-removal-active-privilege-downgrade-contract.mjs",
         "backend-king-php/tests/call-access-anonymous-lobby-contract.sh",
+        "backend-king-php/tests/call-access-org-removal-active-privilege-downgrade-contract.sh",
         "backend-king-php/tests/call-temporary-moderator-contract.sh",
         "backend-king-php/tests/realtime-lobby-security-contract.sh"
       ]

@@ -17,6 +17,7 @@ DEFAULT_CONTRACTS=(
   "call-access-invalidation-contract.sh"
   "call-access-anonymous-lobby-contract.sh"
   "call-access-membership-removal-contract.sh"
+  "call-access-org-removal-active-privilege-downgrade-contract.sh"
   "call-access-session-route-guard-contract.sh"
   "call-access-safe-screen-privacy-contract.sh"
   "call-access-stale-organization-role-contract.sh"
