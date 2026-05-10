@@ -12,6 +12,7 @@ async function read(relativePath) {
 const [
   launchDomainSource,
   sessionsDomainSource,
+  launchRetirementSource,
   crdtDomainSource,
   routeSource,
   workspaceApiSource,
@@ -25,6 +26,7 @@ const [
 ] = await Promise.all([
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php'),
+  read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_token_retirement.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/api.ts'),
@@ -52,7 +54,25 @@ assert.match(
 );
 
 assert.match(
-  sessionsDomainSource,
+  launchDomainSource,
+  /function videochat_call_app_launch_session_availability[\s\S]*organization_call_app_installations[\s\S]*organization_call_app_entitlements[\s\S]*entitlement_not_active[\s\S]*token_stale_after_entitlement_change/s,
+  'launch token mint and reconnect validation must recheck current installation and entitlement state',
+);
+
+assert.match(
+  launchDomainSource,
+  /function videochat_call_app_launch_subject_changed_after[\s\S]*call_app_participant_grants[\s\S]*token_stale_after_grant_change/s,
+  'launch token reconnect validation must reject tokens issued before a later participant grant change',
+);
+
+assert.match(
+  launchDomainSource,
+  /activated_at[\s\S]*token_stale_after_session_reactivation/s,
+  'launch token reconnect validation must reject tokens issued before session reactivation',
+);
+
+assert.match(
+  launchRetirementSource,
   /function videochat_call_app_retire_launch_tokens_for_grant[\s\S]*UPDATE call_app_launch_tokens[\s\S]*issued_to_user_id/s,
   'denying a user grant must retire that user subject active launch tokens',
 );
@@ -161,6 +181,18 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
+  /cross-call launch token replay must fail closed[\s\S]*token_not_found[\s\S]*expired launch token must fail reconnect validation[\s\S]*token_expired/s,
+  'backend lifecycle contract must prove cross-call and expired launch tokens fail closed',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /launch token validation must fail after entitlement revocation[\s\S]*entitlement_not_active[\s\S]*launch token mint must fail while entitlement is revoked/s,
+  'backend lifecycle contract must prove launch tokens cannot reconnect through revoked entitlements',
+);
+
+assert.match(
+  lifecycleTestSource,
   /guest grant should inherit default allow[\s\S]*guest grant state must apply across reconnect lookups/s,
   'backend lifecycle contract must cover guest grant reconnect semantics',
 );
@@ -169,6 +201,12 @@ assert.match(
   lifecycleTestSource,
   /denied participant launch must not allow CRDT read[\s\S]*denied participant must not bootstrap private CRDT state[\s\S]*denied participant must not replay private CRDT state/s,
   'backend lifecycle contract must prove revoked participants receive no private CRDT state',
+);
+
+assert.match(
+  lifecycleTestSource,
+  /status-only launch token must not gain CRDT rights after read-only reconnect[\s\S]*token_revoked[\s\S]*pre-inactivation launch token must not revive after session reactivation[\s\S]*token_stale_after_session_reactivation/s,
+  'backend lifecycle contract must prove replayed status and pre-reactivation launch tokens fail closed',
 );
 
 assert.match(
