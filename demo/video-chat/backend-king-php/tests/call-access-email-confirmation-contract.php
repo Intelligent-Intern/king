@@ -453,6 +453,9 @@ try {
     videochat_call_access_email_confirmation_assert($auditSuperseded >= 1, 'superseded confirmation should be audit-logged');
     $auditRows = $pdo->query('SELECT event_type, resource_fingerprint, session_fingerprint, payload_json FROM videochat_audit_events')->fetchAll();
     $auditPayloadsByType = videochat_call_access_email_confirmation_audit_payloads_by_type($auditRows);
+    $requestedPayload = (array) (($auditPayloadsByType['call_access_account_update_confirmation_requested'] ?? [])[0] ?? []);
+    videochat_call_access_email_confirmation_assert(($requestedPayload['request_session_bound'] ?? false) === false, 'requested account-update audit must not mark confirmations as session-bound');
+    videochat_call_access_email_confirmation_assert(($requestedPayload['confirmation_account_bound'] ?? false) === true, 'requested account-update audit must mark confirmations as account-bound');
     $confirmedPayload = (array) (($auditPayloadsByType['call_access_account_update_confirmed'] ?? [])[0] ?? []);
     videochat_call_access_email_confirmation_assert((string) ($confirmedPayload['audit_scope'] ?? '') === 'iam_call_access', 'confirmed account-update audit scope mismatch');
     videochat_call_access_email_confirmation_assert((string) ($confirmedPayload['action'] ?? '') === 'confirm_account_update', 'confirmed account-update audit action mismatch');
@@ -470,7 +473,7 @@ try {
         videochat_call_access_email_confirmation_assert(($failurePayload['recipient_email_logged'] ?? true) === false, 'failed account-update audit must not log recipient emails');
         $failureReasons[] = (string) ($failurePayload['failure_reason'] ?? '');
     }
-    foreach (['account_bound', 'session_bound', 'already_consumed', 'superseded', 'expired'] as $expectedFailureReason) {
+    foreach (['account_bound', 'already_consumed', 'superseded', 'expired'] as $expectedFailureReason) {
         videochat_call_access_email_confirmation_assert(
             in_array($expectedFailureReason, $failureReasons, true),
             "failed confirmation audit should include {$expectedFailureReason}"
