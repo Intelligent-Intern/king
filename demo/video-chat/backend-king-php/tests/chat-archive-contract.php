@@ -229,6 +229,12 @@ SQL
                 'display_name' => 'Archive Participant',
                 'role' => 'user',
             ],
+            'metadata' => [
+                'safe_note' => 'kept for audit',
+                'authorization' => 'Bearer should-not-be-stored',
+                'session_token' => 'session-secret',
+                'data_url' => 'data:image/png;base64,' . base64_encode('fake image bytes'),
+            ],
             'server_unix_ms' => 1776600000001,
             'server_time' => '2026-04-19T12:00:01Z',
         ],
@@ -248,6 +254,24 @@ SQL
     videochat_chat_archive_contract_assert((bool) ($appendFirst['ok'] ?? false), 'first archive append should succeed');
     videochat_chat_archive_contract_assert((bool) ($appendSecond['ok'] ?? false), 'second archive append should succeed');
     videochat_chat_archive_contract_assert(isset($objects[(string) ($appendFirst['object_key'] ?? '')]), 'archive snapshot should be written to object store');
+    $duplicateAppend = videochat_chat_archive_append_message($pdo, $callId, $roomId, $firstEvent);
+    videochat_chat_archive_contract_assert((bool) ($duplicateAppend['ok'] ?? false), 'duplicate archive append should be idempotent success');
+    videochat_chat_archive_contract_assert((string) ($duplicateAppend['reason'] ?? '') === 'already_archived', 'duplicate archive append reason mismatch');
+    $rowCount = (int) $pdo->query('SELECT COUNT(*) FROM call_chat_messages WHERE call_id = ' . $pdo->quote($callId))->fetchColumn();
+    videochat_chat_archive_contract_assert($rowCount === 2, 'duplicate archive append must not add rows');
+
+    $storedMessageJson = (string) $pdo->query('SELECT message_json FROM call_chat_messages WHERE message_id = ' . $pdo->quote('chat_archive_msg_001') . ' LIMIT 1')->fetchColumn();
+    $storedMessage = json_decode($storedMessageJson, true);
+    videochat_chat_archive_contract_assert(is_array($storedMessage), 'stored message json should decode');
+    videochat_chat_archive_contract_assert((string) (($storedMessage['metadata'] ?? [])['safe_note'] ?? '') === 'kept for audit', 'safe archive metadata should remain');
+    videochat_chat_archive_contract_assert((string) (($storedMessage['metadata'] ?? [])['authorization'] ?? '') === '[REDACTED]', 'authorization metadata must be redacted');
+    videochat_chat_archive_contract_assert((string) (($storedMessage['metadata'] ?? [])['session_token'] ?? '') === '[REDACTED]', 'session token metadata must be redacted');
+    videochat_chat_archive_contract_assert((string) (($storedMessage['metadata'] ?? [])['data_url'] ?? '') === '[REDACTED_MEDIA_PAYLOAD]', 'media payload metadata must be redacted');
+    $storedSnapshotRaw = $objects[(string) ($appendFirst['object_key'] ?? '')] ?? '';
+    $storedSnapshotJson = is_array($storedSnapshotRaw) ? (string) ($storedSnapshotRaw['binary'] ?? '') : (string) $storedSnapshotRaw;
+    $storedSnapshot = json_decode($storedSnapshotJson, true);
+    videochat_chat_archive_contract_assert(is_array($storedSnapshot), 'archive object snapshot should decode');
+    videochat_chat_archive_contract_assert((string) (($storedSnapshot['message']['metadata'] ?? [])['authorization'] ?? '') === '[REDACTED]', 'archive object snapshot must redact authorization metadata');
 
     $participantArchive = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', ['limit' => 1]);
     videochat_chat_archive_contract_assert((bool) ($participantArchive['ok'] ?? false), 'participant archive fetch should succeed');
@@ -256,11 +280,15 @@ SQL
     videochat_chat_archive_contract_assert(count($archive['messages'] ?? []) === 1, 'pagination limit should return one message');
     videochat_chat_archive_contract_assert((bool) (($archive['pagination'] ?? [])['has_next'] ?? false), 'pagination should have next page');
     videochat_chat_archive_contract_assert(count((($archive['messages'][0] ?? [])['attachments'] ?? [])) === 2, 'message should include attachment chips');
+    videochat_chat_archive_contract_assert((int) (($archive['messages'][0] ?? [])['seq'] ?? 0) > 0, 'archive message should include monotonic seq');
+    videochat_chat_archive_contract_assert((string) (($archive['messages'][0] ?? [])['client_message_id'] ?? '') === 'client-1', 'archive message should expose client message id for reload dedupe');
+    videochat_chat_archive_contract_assert((string) (($archive['messages'][0]['sender'] ?? [])['role'] ?? '') === 'user', 'archive message should expose sender role');
 
     $nextCursor = (int) (($archive['pagination'] ?? [])['next_cursor'] ?? 0);
     $nextPage = videochat_chat_archive_fetch($pdo, $callId, $participantUserId, 'user', ['cursor' => $nextCursor, 'limit' => 50]);
     videochat_chat_archive_contract_assert((bool) ($nextPage['ok'] ?? false), 'next archive page should load');
     videochat_chat_archive_contract_assert(count(($nextPage['archive']['messages'] ?? [])) === 1, 'next page should return second message');
+    videochat_chat_archive_contract_assert((int) (($nextPage['archive']['messages'][0] ?? [])['seq'] ?? 0) > $nextCursor, 'next page should advance monotonic seq');
 
     $allArchive = videochat_chat_archive_fetch($pdo, $callId, $ownerUserId, 'user', ['limit' => 50]);
     $groups = (($allArchive['archive'] ?? [])['files'] ?? [])['groups'] ?? [];

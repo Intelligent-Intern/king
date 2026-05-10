@@ -84,7 +84,7 @@ Sprint Checkboxen:
 - [x] GSP02-02 Inventory chat history and Image Planning reload paths: document
   current request/response events, persistence tables, bridge events, access
   decisions and known gaps before code changes.
-- [ ] GSP02-03 Chat archive backend hardening: prove every `chat/send` from an
+- [x] GSP02-03 Chat archive backend hardening: prove every `chat/send` from an
   admitted call participant is stored durably with room, call, sender, role,
   attachments metadata, monotonic sequence and redacted payload.
 - [ ] GSP02-04 Chat history reload API: return the latest room chat history for
@@ -150,3 +150,9 @@ Current Loop Notes:
   documents the chat archive write/read path, frontend live-chat gap,
   Image Planning CRDT reload path, missing participant-only asset route,
   snapshot compaction risk, and the current online diagnostic snapshot.
+- GSP02-03 proof: `chat_archive.php` now redacts token/session/cookie/secret
+  keys and data/media payloads before storing archive JSON snapshots, exposes
+  `client_message_id` with fetched messages for reload de-dupe, and the
+  `chat-archive-contract.sh` runner proves idempotent append, monotonic `seq`,
+  sender role, attachment metadata and redaction via the Docker SQLite fallback
+  when host PHP lacks `pdo_sqlite`.

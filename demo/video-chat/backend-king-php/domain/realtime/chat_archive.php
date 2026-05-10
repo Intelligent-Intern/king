@@ -58,6 +58,12 @@ function videochat_chat_archive_object_key(string $callId, string $roomId, strin
     return 'vcarch_' . $callHash . '_' . $roomHash . '_' . $messageHash;
 }
 
+function videochat_chat_archive_decode_json(string $json, mixed $fallback): mixed
+{
+    $decoded = json_decode($json, true);
+    return json_last_error() === JSON_ERROR_NONE ? $decoded : $fallback;
+}
+
 function videochat_chat_archive_store_put(string $objectKey, string $json): bool
 {
     $override = $GLOBALS['videochat_chat_archive_store_put'] ?? null;
@@ -149,6 +155,71 @@ function videochat_chat_archive_file_kind_matches(array $attachment, string $fil
         'document' => in_array($group, ['office', 'documents'], true),
         default => true,
     };
+}
+
+function videochat_chat_archive_should_redact_key(string $key): bool
+{
+    $normalized = strtolower(trim($key));
+    if ($normalized === '') {
+        return false;
+    }
+
+    foreach (['authorization', 'cookie', 'set_cookie', 'session_cookie'] as $exactKey) {
+        if ($normalized === $exactKey) {
+            return true;
+        }
+    }
+
+    foreach (['token', 'secret', 'password', 'credential', 'session'] as $needle) {
+        if (str_contains($normalized, $needle)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function videochat_chat_archive_should_redact_media_key(string $key): bool
+{
+    $normalized = strtolower(trim($key));
+    return in_array($normalized, [
+        'data_url',
+        'dataurl',
+        'media_payload',
+        'frame_data',
+        'image_data',
+        'encoded_frame',
+        'binary_frame',
+        'raw_payload',
+    ], true);
+}
+
+function videochat_chat_archive_redact_payload(mixed $value, string $key = ''): mixed
+{
+    if (videochat_chat_archive_should_redact_key($key)) {
+        return '[REDACTED]';
+    }
+    if (videochat_chat_archive_should_redact_media_key($key)) {
+        return '[REDACTED_MEDIA_PAYLOAD]';
+    }
+
+    if (is_string($value)) {
+        if (preg_match('#^data:(image|video|audio)/[A-Za-z0-9.+-]+;base64,#i', $value) === 1) {
+            return '[REDACTED_MEDIA_PAYLOAD]';
+        }
+        return $value;
+    }
+
+    if (!is_array($value)) {
+        return $value;
+    }
+
+    $redacted = [];
+    foreach ($value as $childKey => $childValue) {
+        $redacted[$childKey] = videochat_chat_archive_redact_payload($childValue, is_string($childKey) ? $childKey : '');
+    }
+
+    return $redacted;
 }
 
 /**
@@ -356,17 +427,25 @@ function videochat_chat_archive_append_message(PDO $pdo, string $callId, string 
         return ['ok' => false, 'reason' => 'invalid_sender', 'message_id' => $messageId, 'object_key' => ''];
     }
 
-    $messageJson = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $archivedMessage = videochat_chat_archive_redact_payload($message);
+    $messageJson = json_encode($archivedMessage, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($messageJson) || $messageJson === '') {
         return ['ok' => false, 'reason' => 'invalid_message_json', 'message_id' => $messageId, 'object_key' => ''];
+    }
+
+    $archivedEvent = videochat_chat_archive_redact_payload($event);
+    if (is_array($archivedEvent)) {
+        $archivedEvent['message'] = $archivedMessage;
+    } else {
+        $archivedEvent = $event;
     }
 
     $snapshot = [
         'version' => 1,
         'call_id' => $normalizedCallId,
         'room_id' => $normalizedRoomId,
-        'event' => $event,
-        'message' => $message,
+        'event' => $archivedEvent,
+        'message' => $archivedMessage,
         'archived_at' => gmdate('c'),
     ];
     $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -662,9 +741,14 @@ SQL
         }
         $messageId = (string) ($row['message_id'] ?? '');
         $nextCursor = (int) ($row['seq'] ?? 0);
+        $storedMessage = videochat_chat_archive_decode_json((string) ($row['message_json'] ?? ''), []);
+        $clientMessageId = is_array($storedMessage) && is_string($storedMessage['client_message_id'] ?? null)
+            ? trim((string) $storedMessage['client_message_id'])
+            : '';
         $messages[] = [
             'seq' => (int) ($row['seq'] ?? 0),
             'id' => $messageId,
+            'client_message_id' => $clientMessageId !== '' ? $clientMessageId : null,
             'text' => (string) ($row['text'] ?? ''),
             'sender' => [
                 'user_id' => (int) ($row['sender_user_id'] ?? 0),
