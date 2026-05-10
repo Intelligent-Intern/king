@@ -245,6 +245,21 @@ SQL
     if (!is_string($row['link_id'] ?? null) || trim((string) $row['link_id']) === '') {
         return $fail('call_access_link_invalidated');
     }
+    if (
+        function_exists('videochat_call_access_calendar_link_is_invalidated')
+        && videochat_call_access_calendar_link_is_invalidated($pdo, [
+            'id' => (string) ($row['link_id'] ?? ''),
+            'call_id' => (string) ($row['link_call_id'] ?? ''),
+            'participant_user_id' => is_numeric($row['link_participant_user_id'] ?? null)
+                ? (int) $row['link_participant_user_id']
+                : null,
+            'participant_email' => is_string($row['link_participant_email'] ?? null)
+                ? (string) $row['link_participant_email']
+                : null,
+        ])
+    ) {
+        return $fail('call_access_link_invalidated');
+    }
     if (!is_string($row['resolved_call_id'] ?? null) || trim((string) $row['resolved_call_id']) === '') {
         return $fail('call_access_binding_mismatch');
     }
@@ -433,6 +448,11 @@ SQL
 
 function videochat_call_access_link_is_invalidated(PDO $pdo, array $accessLink): bool
 {
+    if (function_exists('videochat_call_access_calendar_link_is_invalidated')
+        && videochat_call_access_calendar_link_is_invalidated($pdo, $accessLink)) {
+        return true;
+    }
+
     return in_array(videochat_call_access_participant_invite_state($pdo, $accessLink), ['cancelled', 'declined'], true);
 }
 
