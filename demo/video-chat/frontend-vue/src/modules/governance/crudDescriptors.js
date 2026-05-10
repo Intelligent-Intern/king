@@ -132,6 +132,8 @@ function descriptor(entityKey, config) {
     resource_type: config.resource_type || entityKey,
     endpoint: config.endpoint || `/api/governance/${entityKey}`,
     readonly: config.readonly === true,
+    readonly_reason_key: config.readonly_reason_key || '',
+    empty_state_body_key: config.empty_state_body_key || '',
     selection_mode: config.selection_mode || 'single',
     fields: Object.freeze(config.fields || BASE_FIELDS),
     relationships: Object.freeze(config.relationships || []),
@@ -227,6 +229,7 @@ const descriptors = {
   modules: descriptor('modules', {
     resource_type: 'module',
     readonly: true,
+    readonly_reason_key: 'governance.readonly.system_catalog',
     endpoint: '/api/governance/module-catalog',
     fields: Object.freeze([]),
     table_columns: Object.freeze([
@@ -248,6 +251,7 @@ const descriptors = {
   permissions: descriptor('permissions', {
     resource_type: 'permission',
     readonly: true,
+    readonly_reason_key: 'governance.readonly.system_catalog',
     endpoint: '/api/governance/permission-catalog',
     fields: Object.freeze([]),
     table_columns: Object.freeze([
@@ -353,6 +357,7 @@ const descriptors = {
   'audit-log': descriptor('audit-log', {
     resource_type: 'audit_log',
     readonly: true,
+    readonly_reason_key: 'governance.readonly.audit_log',
     endpoint: '/api/governance/audit-log',
     fields: Object.freeze([]),
     table_columns: Object.freeze([
@@ -372,6 +377,7 @@ const descriptors = {
   'data-portability': descriptor('data-portability', {
     resource_type: 'tenant_export_import_job',
     endpoint: '/api/governance/data-portability-jobs',
+    empty_state_body_key: 'governance.empty_state.data_portability_body',
     fields: Object.freeze([
       enumField('job_type', 'governance.field.portability_job_type', JOB_TYPE_OPTIONS, { readonly: true, default: 'export' }),
       enumField('scope_type', 'governance.field.portability_scope', PORTABILITY_SCOPE_OPTIONS, { readonly: true, default: 'organization' }),
