@@ -66,6 +66,7 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-guest-list-membership-docker-proof-contract.mjs',
   'frontend-vue/tests/contract/iam-guest-list-revocation-extraction-contract.mjs',
   'frontend-vue/tests/contract/call-access-link-privacy-contract.mjs',
+  'frontend-vue/tests/contract/call-access-safe-screen-final-contract.mjs',
   'frontend-vue/tests/contract/iam-call-access-e2e-foundation-contract.mjs',
   'frontend-vue/tests/contract/call-access-direct-join-rights-contract.mjs',
   'frontend-vue/tests/contract/call-access-cross-org-contract.mjs',
@@ -91,6 +92,8 @@ const requiredIamContractPaths = [
 
 const requiredIamSupportingPaths = [
   'backend-king-php/tests/call-access-anonymous-temp-rights-docker-proof.sh',
+  'backend-king-php/tests/call-access-safe-screen-privacy-contract.php',
+  'backend-king-php/tests/call-access-safe-screen-privacy-contract.sh',
   'backend-king-php/tests/call-access-guest-list-membership-docker-proof.sh',
   'backend-king-php/tests/call-access-cross-org-stale-role-docker-proof.sh',
 ];
