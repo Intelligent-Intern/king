@@ -17,6 +17,29 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-10 IAM Abuse, Runtime Proof, And Cleanup Stabilization 03: closed all
+  20 Sprint 03 tickets on local branch `prod-kingrt-do-not-push-to-github`
+  without pushing. The sprint added focused IAM abuse/manipulation proofs for
+  forged identifiers, tampered verified context, duplicate device/browser use,
+  logout/login switching, mismatch no-leak states, anonymous guest
+  manipulation, temporary call-link boundaries, disabled link fail-closed
+  behavior, kicked/removed rejoin denial, active-call permission revocation,
+  and strong-mismatch audit redaction. It replaced local `pdo_sqlite` skips with
+  deterministic Docker PHP runtime proofs for anonymous temporary rights,
+  guest-list/membership removal, and cross-org/stale-role checks, then wired the
+  merged proof set into the IAM call-access gate and release metadata.
+  VCS cleanup evidence classified dirty IAM worktrees without discarding user
+  work and removed only clean contained Sprint 03 worker branches/worktrees.
+  Proof: `npm run test:contract:iam-call-access`, `npm run build`,
+  `npm run test:contract:build-size`, and backend Docker runtime wrappers
+  passed. Deploy proof: synced and restarted production via direct `rsync` plus
+  remote `docker compose --profile edge --profile turn up -d --build
+  --remove-orphans`, with no push, DNS automation, or certbot. Post-deploy
+  diagnostics showed app/API/CDN/call-app hosts reachable, containers up,
+  authenticated `/api/calls/{id}/call-apps/available` returning HTTP 200 with
+  6 apps, and no fresh backend/edge error, exception, fatal, HTTP 500, or
+  Call-App availability failure log patterns after deploy.
+
 - 2026-05-10 IAM Call Access Browser E2E Stabilization 02: closed all 20
   Sprint 02 tickets on local branch `prod-kingrt-do-not-push-to-github` without
   pushing. The sprint added focused proofs for calendar invite joins, registered
