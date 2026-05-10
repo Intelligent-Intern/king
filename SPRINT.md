@@ -80,7 +80,7 @@ Sprint Checkboxen:
   `local/iam-e2e-audit-log-completeness`.
 - [x] IAM7-06 Extract or prove calendar invitation edge safe states from
   `local/iam-e2e-calendar-edge-safe-states`.
-- [ ] IAM7-07 Extract or prove call-access safe-screen privacy from
+- [x] IAM7-07 Extract or prove call-access safe-screen privacy from
   `local/iam-e2e-call-access-safe-screen-final`.
 - [ ] IAM7-08 Extract or prove Call App entitlement revocation from
   `local/iam-e2e-call-app-entitlement-revocation`.
