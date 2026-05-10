@@ -134,9 +134,21 @@ Sprint Checkboxen:
   - Proof: lobby-admission extract, lobby-concurrency,
     admission-boundaries, audit compatibility/redaction contracts,
     `realtime-lobby-contract.sh`, and `git diff --check` passed.
-- [ ] IAM5-07 Extract duplicate review/abuse proof value from the duplicate
+- [x] IAM5-07 Extract duplicate review/abuse proof value from the duplicate
   review branches, including email/review safety only where current contracts
   support it.
+  - Merged worker branch `agent/iam-s5-07-duplicate-review`.
+  - Added `documentation/iam-sprint-05-duplicate-review-extraction.md` and
+    `call-access-duplicate-review-extract-contract.mjs`.
+  - Extracted current supported duplicate-abuse, denied-state privacy, and
+    audit-redaction proof. Manual-review, host-verification,
+    light-mismatch, and account-update email-confirmation behavior remains
+    deferred implementation evidence because the required runtime/UI files are
+    absent from the current base.
+  - Proof: duplicate-review extract, duplicate device/browser, duplicate abuse,
+    duplicate invite replay, mismatch no-leak, strong mismatch privacy/audit,
+    link privacy, audit compatibility/redaction, review-abuse extraction
+    contracts, and `git diff --check` passed.
 - [x] IAM5-08 Extract cross-organization remaining proof value from the
   cross-org proof branches without weakening tenant isolation.
   - Merged worker branch `agent/iam-s5-08-cross-org`.
