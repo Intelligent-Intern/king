@@ -210,8 +210,18 @@ Sprint Checkboxen:
     current stronger direct-join and SQLite runtime aggregate proofs.
   - Proof: terminal frontend contracts, focused terminal/guest-list SQLite
     runtime proof, and `git diff --check` passed.
-- [ ] IAM4-13 Extract review-abuse cross-browser and warning-modal policy proof
+- [x] IAM4-13 Extract review-abuse cross-browser and warning-modal policy proof
   value from their `proof-3` branches.
+  - Merged worker branch `agent/iam-s4-13-review-abuse-extract`.
+  - Added `documentation/iam-sprint-04-review-abuse-extraction.md` and
+    `iam-review-abuse-extraction-contract.mjs`.
+  - Classified duplicate-abuse session isolation as already covered by current
+    stable proofs, and warning-modal/manual-review/account-confirmation as
+    unique but `manual/deferred extraction` because its implementation files are
+    source-only and broad.
+  - Proof: `iam-review-abuse-extraction-contract.mjs`,
+    duplicate-abuse/no-leak/strong-mismatch/audit-redaction contracts,
+    `iam-call-access-ci-wire-contract.mjs`, and `git diff --check` passed.
 - [ ] IAM4-14 Extract system-admin deleted/ended proof value from
   `local/iam-e2e-system-admin-deleted-ended-proof-3`.
 - [ ] IAM4-15 Convert accepted old-branch value into focused Sprint 04 contracts
