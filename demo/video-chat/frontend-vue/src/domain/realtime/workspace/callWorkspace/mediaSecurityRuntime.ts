@@ -16,6 +16,10 @@ import {
   shouldRunMediaSecurityParticipantMismatchRecovery,
   MEDIA_SECURITY_PARTICIPANT_MISMATCH_RECOVERY_WINDOW_MS,
 } from './mediaSecuritySenderKeyRecovery';
+import {
+  createMediaSecurityGossipParking,
+  isPlannedGossipMediaSecurityTransport,
+} from './mediaSecurityTargets';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceMediaSecurityRuntime({
@@ -72,8 +76,28 @@ export function createCallWorkspaceMediaSecurityRuntime({
   } = refs;
 
   function currentMediaSecurityRuntimePath() {
+    if (isPlannedGossipMediaSecurityTransport({ mediaRuntimePath: mediaRuntimePath.value })) {
+      return 'gossip_primary';
+    }
     if (isNativeWebRtcRuntimePath()) return 'webrtc_native';
     return 'wlvc_sfu';
+  }
+
+  const {
+    diagnoseMediaSecurityPlannedGossipParking,
+    shouldParkMediaSecurityForPlannedGossip,
+  } = createMediaSecurityGossipParking({
+    captureClientDiagnostic,
+    currentMediaSecurityRuntimePath,
+    mediaDebugLog,
+    mediaRuntimePath,
+    state,
+  });
+
+  function parkMediaSecurityForPlannedGossip(reason = 'unspecified', payload = {}) {
+    if (!shouldParkMediaSecurityForPlannedGossip(reason)) return false;
+    diagnoseMediaSecurityPlannedGossipParking(reason, payload);
+    return true;
   }
 
   function normalizeRemoteMediaSecurityUserId(userId) {
@@ -144,6 +168,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
     const targetIds = remoteMediaSecurityEligibleTargetIds();
     if (targetIds.length <= 0) return;
+    if (parkMediaSecurityForPlannedGossip('sender_key_handshake_timeout', { target_user_ids: targetIds })) return;
 
     const session = ensureMediaSecuritySession();
     const nowMs = Date.now();
@@ -212,11 +237,16 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
+    const reasonLabel = String(reason || 'unspecified').trim() || 'unspecified';
+    if (parkMediaSecurityForPlannedGossip(reasonLabel, {
+        force_rekey: Boolean(forceRekey),
+        target_user_ids: remoteMediaSecurityTargetIds(),
+        eligible_target_user_ids: remoteMediaSecurityEligibleTargetIds(),
+    })) return;
     if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
 
     state.mediaSecurityResyncForceRekey = state.mediaSecurityResyncForceRekey || Boolean(forceRekey);
     const resyncReasons = mediaSecurityResyncReasonSet();
-    const reasonLabel = String(reason || 'unspecified').trim() || 'unspecified';
     resyncReasons.add(reasonLabel);
     if (state.mediaSecurityResyncTimer !== null) return;
 
@@ -336,6 +366,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
     if ((nowMs - state.mediaSecuritySyncHintLastAtMs) < 1000) return;
     state.mediaSecuritySyncHintLastAtMs = nowMs;
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
+    if (parkMediaSecurityForPlannedGossip(reason, {
+        target_user_ids: targetUserIds,
+        ...extraPayload,
+    })) return;
 
     if (!strictPolicyEnabled(strictStabilityPolicy, 'coalesceMediaSecurityHandshakeDiagnostics')) {
       captureClientDiagnostic({
@@ -468,7 +502,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
   });
 
   function canProtectCurrentSfuTargets() {
-    return sfuPublishGate.canProtectCurrentSfuTargets();
+    const canProtect = sfuPublishGate.canProtectCurrentSfuTargets();
+    if (canProtect) return true;
+    if (parkMediaSecurityForPlannedGossip('sender_key_gate_waiting', {
+        target_user_ids: remoteMediaSecurityTargetIds(),
+        eligible_target_user_ids: remoteMediaSecurityEligibleTargetIds(),
+    })) {
+      return true;
+    }
+    return false;
   }
 
   function incomingMediaSecurityHelloResponseKey(senderUserId, payloadBody, session) {
@@ -537,6 +579,17 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const staleHash = normalizeMediaSecurityParticipantSetHash(staleParticipantSetHash);
     const currentHash = currentMediaSecurityParticipantSetHash(activeSession);
     const normalizedDirection = String(direction || 'receiver').trim().toLowerCase();
+    if (parkMediaSecurityForPlannedGossip('sender_key_participant_mismatch', {
+        direction: normalizedDirection,
+        sender_user_id: normalizedSenderUserId,
+        signal_type: signalType,
+        peer_state: String(peerState || ''),
+        peer_has_wrapping_key: Boolean(peerHasWrappingKey),
+        stale_participant_set_hash: staleHash,
+        current_participant_set_hash: currentHash,
+    })) {
+      return true;
+    }
     const recoveryKey = mediaSecurityParticipantMismatchRecoveryKey({
       activeRoomId: activeRoomId.value,
       runtimePath: currentMediaSecurityRuntimePath(),
@@ -603,6 +656,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const ready = await session.ensureReady();
     if (!ready) {
       mediaSecurityStateVersion.value += 1;
+      if (parkMediaSecurityForPlannedGossip('sender_key_generation_not_ready', {
+          target_user_id: normalizedTargetId,
+          security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      })) {
+        return true;
+      }
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -687,6 +746,19 @@ export function createCallWorkspaceMediaSecurityRuntime({
     } catch (error) {
       const errorCode = mediaSecurityErrorCode(error);
       if (errorCode === 'participant_set_mismatch') {
+        if (shouldParkMediaSecurityForPlannedGossip(errorCode)) {
+          const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+          parkMediaSecurityForPlannedGossip('sender_key_participant_mismatch', {
+            target_user_id: normalizedTargetId,
+            error_code: errorCode,
+            direction: 'outgoing',
+            peer_state: String(peer?.state || ''),
+            peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+            stale_participant_set_hash: peer?.participantSetHash,
+            security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+          });
+          return true;
+        }
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
         await recoverMediaSecuritySenderKeyParticipantMismatch({
           direction: 'outgoing',
@@ -703,6 +775,14 @@ export function createCallWorkspaceMediaSecurityRuntime({
     }
     if (!signal) {
       const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      if (parkMediaSecurityForPlannedGossip('sender_key_not_ready', {
+          target_user_id: normalizedTargetId,
+          peer_state: String(peer?.state || ''),
+          peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+          security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      })) {
+        return true;
+      }
       const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
       const shouldRefreshHello = helloSentAt <= 0 || (Date.now() - helloSentAt) >= 750;
       if (shouldRefreshHello) {
@@ -798,6 +878,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
     } catch (error) {
       const errorCode = mediaSecurityErrorCode(error);
       if (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt') {
+        if (parkMediaSecurityForPlannedGossip('sync_participant_set_recover', {
+            error_code: errorCode,
+            force_rekey: errorCode === 'downgrade_attempt' || forceRekey,
+            target_user_ids: remoteMediaSecurityTargetIds(),
+            eligible_target_user_ids: remoteMediaSecurityEligibleTargetIds(),
+            security: mediaSecuritySessionRef.value?.telemetrySnapshot?.(currentMediaSecurityRuntimePath()) || null,
+        })) {
+          return;
+        }
         clearMediaSecuritySignalCaches();
         requestRoomSnapshot();
         startMediaSecurityHandshakeWatchdog();
@@ -840,10 +929,16 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   function shouldRecoverMediaSecurityFromFrameError(error) {
     const errorCode = mediaSecurityErrorCode(error);
-    return errorCode === 'wrong_key_id'
+    const recoverable = errorCode === 'wrong_key_id'
       || errorCode === 'wrong_epoch'
       || errorCode === 'participant_set_mismatch'
       || errorCode === 'downgrade_attempt';
+    if (recoverable && parkMediaSecurityForPlannedGossip('receiver_media_frame_error', {
+        error_code: errorCode,
+    })) {
+      return false;
+    }
+    return recoverable;
   }
 
   function isRemoteNativeFrameError(direction, senderUserId = 0) {
@@ -909,6 +1004,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
   function requestRemoteMediaSecuritySync(publisherUserId, reason = 'media_security_recovery', extraPayload = {}) {
     const normalizedUserId = Number(publisherUserId || 0);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
+    if (parkMediaSecurityForPlannedGossip(reason, {
+        target_user_id: normalizedUserId,
+        ...extraPayload,
+    })) {
+      return false;
+    }
     const nowMs = Date.now();
     const payload = extraPayload && typeof extraPayload === 'object' ? { ...extraPayload } : {};
     const throttleKey = String(payload.recovery_throttle_key || `remote-sync:${normalizedUserId}`);
@@ -932,6 +1033,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
   function recoverMediaSecurityForPublisher(publisherUserId) {
     const normalizedUserId = Number(publisherUserId || 0);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+    if (parkMediaSecurityForPlannedGossip('receiver_media_frame_error', {
+        sender_user_id: normalizedUserId,
+    })) {
+      return;
+    }
     const nowMs = Date.now();
     const lastRecoveryMs = Number(state.mediaSecurityRecoveryLastByUserId.get(normalizedUserId) || 0);
     if ((nowMs - lastRecoveryMs) < 3000) return;
