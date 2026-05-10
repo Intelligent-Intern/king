@@ -35,9 +35,11 @@ const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helper
 const backendCrossOrgContract = readText('demo/video-chat/backend-king-php/tests/call-access-cross-org-contract.php');
 
 const alphaAdmin = getSeedUser('alpha_org_admin');
+const alphaAdminBetaMember = getSeedUser('alpha_admin_beta_member');
 const betaAdmin = getSeedUser('beta_org_admin');
 const betaCall = getSeedCall('beta_active');
 const crossOrgDenied = getSeedScenario('direct_join_alpha_org_admin_beta_active_denied');
+const activeSwitchDenied = getSeedScenario('direct_join_alpha_admin_beta_member_active_switch_denied');
 
 assert.equal(betaCall.tenant_key, 'beta', 'beta_active call must remain bound to the beta organization');
 assert.equal(crossOrgDenied.principal_user_key, 'alpha_org_admin', 'cross-org denied scenario must use the alpha org admin');
@@ -53,6 +55,10 @@ assert.equal(crossOrgDenied.expected.platform_admin, false, 'cross-org denial mu
 
 assert.equal(membershipsFor(alphaAdmin, 'alpha').length, 1, 'alpha org admin must have exactly one alpha membership');
 assert.equal(membershipsFor(alphaAdmin, 'beta').length, 0, 'alpha org admin must not have beta membership in the seed matrix');
+assert.equal(membershipsFor(alphaAdminBetaMember, 'alpha').length, 1, 'active-switch alpha admin must have exactly one alpha membership');
+assert.equal(membershipsFor(alphaAdminBetaMember, 'beta').length, 1, 'active-switch alpha admin must have exactly one beta member membership');
+assert.equal(membershipsFor(alphaAdminBetaMember, 'alpha')[0].role, 'admin', 'active-switch alpha membership must be admin');
+assert.equal(membershipsFor(alphaAdminBetaMember, 'beta')[0].role, 'member', 'active-switch beta membership must stay member');
 assert.equal(membershipsFor(betaAdmin, 'beta').length, 1, 'beta org admin must have exactly one beta membership');
 assert.equal(membershipsFor(betaAdmin, 'alpha').length, 0, 'beta org admin must not have alpha membership in the seed matrix');
 
@@ -68,10 +74,31 @@ assert.equal(betaSwitchedSession.tenant.role, 'member', 'active-org switch fallb
 assert.equal(betaSwitchedSession.tenant.permissions.tenant_admin, false, 'active-org switch must not mint beta tenant-admin rights');
 assert.equal(betaSwitchedSession.tenant.permissions.platform_admin, false, 'active-org switch must not mint platform-admin rights');
 
+const multiTenantAlphaSession = storedSessionForSeedUser('alpha_admin_beta_member', 'alpha_active');
+assert.equal(multiTenantAlphaSession.tenant.slug, 'iam-alpha', 'multi-tenant active-org switch proof must start in alpha');
+assert.equal(multiTenantAlphaSession.tenant.permissions.tenant_admin, true, 'multi-tenant proof must start with alpha admin rights');
+
+const multiTenantBetaSession = storedSessionForSeedUser('alpha_admin_beta_member', 'beta_active');
+assert.equal(multiTenantBetaSession.tenant.slug, 'iam-beta', 'multi-tenant active-org switch proof must resolve beta');
+assert.equal(multiTenantBetaSession.tenant.membership_id > 0, true, 'multi-tenant active-org switch should use the real beta membership');
+assert.equal(multiTenantBetaSession.tenant.role, 'member', 'multi-tenant active-org switch must keep beta role as member');
+assert.equal(multiTenantBetaSession.tenant.permissions.tenant_admin, false, 'multi-tenant active-org switch must not carry alpha admin rights into beta');
+assert.equal(multiTenantBetaSession.tenant.permissions.platform_admin, false, 'multi-tenant active-org switch must not mint platform-admin rights');
+assert.equal(activeSwitchDenied.principal_user_key, 'alpha_admin_beta_member', 'active-switch denial must use the multi-tenant alpha admin');
+assert.equal(activeSwitchDenied.call_key, 'beta_active', 'active-switch denial must target the beta call');
+assert.equal(activeSwitchDenied.expected.active_org_switch, true, 'active-switch denial must be marked as active-org switching proof');
+assert.equal(activeSwitchDenied.expected.direct_join_allowed, false, 'active switch must not grant beta call access');
+assert.equal(activeSwitchDenied.expected.tenant_admin, false, 'active switch denial must not expose beta tenant-admin rights');
+
 assert.match(
   seedMatrixSpec,
   /direct_join_alpha_org_admin_beta_active_denied/,
   'seed-matrix browser spec must exercise the alpha-admin to beta-call cross-org denial',
+);
+assert.match(
+  seedMatrixSpec,
+  /direct_join_alpha_admin_beta_member_active_switch_denied/,
+  'seed-matrix browser spec must exercise the multi-tenant active-org switch denial',
 );
 assert.match(
   seedMatrixSpec,
@@ -127,6 +154,11 @@ assert.match(
   backendCrossOrgContract,
   /active organization switch must not mint organization B membership[\s\S]*tenant_membership_inactive/s,
   'backend cross-org contract must prove active-org switch does not create membership',
+);
+assert.match(
+  backendCrossOrgContract,
+  /multi-tenant active switch should expose organization B tenant context[\s\S]*multi-tenant active switch must not grant organization B tenant-admin permissions[\s\S]*multi-tenant active switch must not grant organization B call permission/s,
+  'backend cross-org contract must prove multi-tenant active-org switching keeps call access least-privilege',
 );
 assert.match(
   backendCrossOrgContract,
