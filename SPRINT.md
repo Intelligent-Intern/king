@@ -90,8 +90,15 @@ Tickets:
 - [ ] IAM-02 Restore a clean deterministic IAM seed matrix covering system admin,
   tenant admins, owners, normal members, registered guests, temporary guests,
   deleted/ended/disabled calls, and cross-org calls.
-- [ ] IAM-03 Make `iam-call-access-e2e-foundation-contract.mjs` pass against the
+- [x] IAM-03 Make `iam-call-access-e2e-foundation-contract.mjs` pass against the
   seed matrix without fixture drift.
+  - Merged worker branch `agent/iam-s1-03-foundation-contract`.
+  - Contract now derives Direct Join Permissions scenarios from
+    `iam-call-access-seeding.matrix.json`, asserts exact spec/matrix parity, and
+    derives denied direct-join checks from the matrix.
+  - Proof: `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` and
+    `npm run test:contract:iam-call-access` passed; backend SQLite shell proofs
+    skipped locally because `pdo_sqlite` is unavailable.
 - [ ] IAM-04 Prove direct join permissions for platform admin, tenant admin,
   call owner, guest-list participant, and denied normal member.
 - [ ] IAM-05 Prove external guest join links require display name, create a
