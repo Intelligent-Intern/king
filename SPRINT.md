@@ -220,8 +220,17 @@ Tickets:
   - Proof: `node tests/contract/call-access-stale-role-org-switch-contract.mjs`
     and `git diff --check` passed; backend shell proofs skipped on host because
     local PHP lacks `pdo_sqlite`.
-- [ ] IAM2-16 Prove audit event compatibility across legacy/current IAM event
+- [x] IAM2-16 Prove audit event compatibility across legacy/current IAM event
   names and redacted artifact output.
+  - Merged worker branch `agent/iam-s2-16-audit-artifacts`.
+  - Added canonical IAM audit event aliases and artifact redaction helpers in
+    `audit_events.php`, plus
+    `call-access-audit-event-compatibility-contract.mjs`.
+  - Proof: `node demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs`,
+    `node demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs`,
+    `php -l demo/video-chat/backend-king-php/domain/audit/audit_events.php`,
+    Docker PHP 8.4 `pdo_sqlite` `audit-call-access-membership-contract.php`,
+    and `git diff --check` passed.
 - [x] IAM2-17 Stabilize CI artifacts for IAM browser proof: traces, screenshots,
   report naming, and failure redaction.
   - Merged worker branch `agent/iam-s2-17-ci-artifacts`.
