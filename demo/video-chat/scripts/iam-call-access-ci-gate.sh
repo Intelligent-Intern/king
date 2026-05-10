@@ -70,6 +70,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam9-02-calendar-edge-safe-states-contract.mjs"
   "node tests/contract/iam9-07-call-app-launch-token-reconnect-contract.mjs"
   "node tests/contract/iam9-10-terminal-followup-denials-contract.mjs"
+  "node tests/contract/iam9-12-deleted-ended-hardening-contract.mjs"
   "node tests/contract/call-access-cross-org-foreign-join-contract.mjs"
 )
 

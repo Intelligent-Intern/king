@@ -29,6 +29,7 @@ DEFAULT_CONTRACTS=(
   "call-access-stale-organization-role-contract.sh"
   "call-access-strong-mismatch-privacy-contract.sh"
   "call-access-deleted-ended-disabled-join-contract.sh"
+  "call-access-deleted-ended-hardening-contract.sh"
   "call-access-terminal-join-contract.sh"
   "call-lifecycle-contract.sh"
   "call-calendar-invitation-flow-contract.sh"
