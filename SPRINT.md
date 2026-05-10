@@ -73,7 +73,7 @@ Proof anchors:
 Sprint Checkboxen:
 - [x] IAM9-01 Extract or prove audit log completeness from
   `local/iam-e2e-audit-log-completeness`.
-- [ ] IAM9-02 Extract or prove calendar invitation edge safe states from
+- [x] IAM9-02 Extract or prove calendar invitation edge safe states from
   `local/iam-e2e-calendar-edge-safe-states`.
 - [ ] IAM9-03 Extract or prove calendar invitation temporary account flow from
   `local/iam-e2e-calendar-invitation-flow`.
