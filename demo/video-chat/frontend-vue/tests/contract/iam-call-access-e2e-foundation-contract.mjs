@@ -37,16 +37,25 @@ const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls
 const scripts = packageJson.scripts || {};
 const callAccessScript = String(scripts['test:e2e:call-access'] || '');
 const matrixScript = String(scripts['test:e2e:matrix'] || '');
-const directJoinScenarioKeys = [
-  'direct_join_system_admin_alpha_active_allowed',
-  'direct_join_system_admin_beta_active_allowed',
-  'direct_join_system_admin_tenantless_active_allowed',
-  'direct_join_alpha_org_admin_alpha_active_allowed',
-  'direct_join_alpha_org_admin_beta_active_denied',
-  'direct_join_registered_guest_alpha_active_allowed',
-  'direct_join_alpha_normal_user_alpha_active_denied',
-  'direct_join_alpha_call_owner_alpha_active_allowed',
-];
+const seedScenarios = Array.isArray(callAccessSeedMatrix.scenarios) ? callAccessSeedMatrix.scenarios : [];
+const directJoinScenarioKeys = seedScenarios
+  .filter((scenario) => (
+    typeof scenario?.call_key === 'string'
+    && typeof scenario?.principal_user_key === 'string'
+    && typeof scenario?.expected?.direct_join_allowed === 'boolean'
+  ))
+  .map((scenario) => String(scenario.key || '').trim())
+  .filter(Boolean);
+const deniedDirectJoinScenarioKeys = seedScenarios
+  .filter((scenario) => (
+    directJoinScenarioKeys.includes(String(scenario?.key || '').trim())
+    && scenario?.expected?.direct_join_allowed === false
+  ))
+  .map((scenario) => String(scenario.key || '').trim());
+const directJoinCasesMatch = seedMatrixSpec.match(/const\s+directJoinPermissionCases\s*=\s*\[([\s\S]*?)\];/);
+const directJoinCasesInSpec = directJoinCasesMatch
+  ? [...directJoinCasesMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map((match) => match[1])
+  : [];
 
 assert.match(
   callAccessScript,
@@ -116,6 +125,12 @@ assert.match(
 );
 const seedScenarioKeys = new Set((callAccessSeedMatrix.scenarios || []).map((scenario) => scenario?.key));
 const seedScenariosByKey = new Map((callAccessSeedMatrix.scenarios || []).map((scenario) => [scenario?.key, scenario]));
+assert.ok(directJoinScenarioKeys.length > 0, 'seed matrix must define Direct Join Permissions scenarios');
+assert.deepEqual(
+  [...directJoinCasesInSpec].sort(),
+  [...directJoinScenarioKeys].sort(),
+  'seed-matrix spec Direct Join Permissions cases must exactly match the seed matrix',
+);
 for (const scenarioKey of directJoinScenarioKeys) {
   assert.ok(
     seedScenarioKeys.has(scenarioKey),
@@ -127,10 +142,7 @@ for (const scenarioKey of directJoinScenarioKeys) {
     `seed-matrix spec must exercise Direct Join Permissions scenario ${scenarioKey}`,
   );
 }
-for (const scenarioKey of [
-  'direct_join_alpha_org_admin_beta_active_denied',
-  'direct_join_alpha_normal_user_alpha_active_denied',
-]) {
+for (const scenarioKey of deniedDirectJoinScenarioKeys) {
   const expected = seedScenariosByKey.get(scenarioKey)?.expected || {};
   assert.equal(expected.expected_resolve_status, 200, `${scenarioKey} resolve denial must keep production HTTP 200 envelope`);
   assert.equal(expected.expected_resolve_state, 'forbidden', `${scenarioKey} resolve denial must be forbidden`);
