@@ -101,7 +101,7 @@ Sprint Checkboxen:
   `local/iam-e2e-duplicate-link-abuse-device-browser`.
 - [x] IAM9-15 Extract or prove IAM edge error matrix fail-closed paths from
   `local/iam-e2e-edge-error-matrix-proof`.
-- [ ] IAM9-16 Extract or prove IAM edge safe states from
+- [x] IAM9-16 Extract or prove IAM edge safe states from
   `local/iam-e2e-edge-safe-states-proof-2`.
 - [ ] IAM9-17 Extract or prove email confirmation race hardening from
   `local/iam-e2e-email-confirmation-race-hardening`.
