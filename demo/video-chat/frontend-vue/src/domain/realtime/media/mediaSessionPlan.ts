@@ -2,9 +2,11 @@ export const MEDIA_SESSION_PLAN_SCHEMA_VERSION = 'king.video.media_session_plan.
 
 export const CALL_MEDIA_STATE_VALUES = Object.freeze([
   'waiting_for_capabilities',
-  'sending_720p30',
-  'receive_only',
-  'video_unavailable',
+  'waiting_for_gossip',
+  'streaming_720p30',
+  'throttled_50',
+  'throttled_25',
+  'stuck_not_sending',
   'blocked_capability',
   'left',
 ]);
@@ -21,6 +23,10 @@ function intValue(value: unknown, fallback = 0): number {
   return Number.isFinite(numeric) ? Math.max(0, Math.floor(numeric)) : fallback;
 }
 
+function planEpochValue(value: unknown): number {
+  return Math.max(1, intValue(value, 1));
+}
+
 function normalizeState(value: unknown): string {
   const normalized = stringValue(value, 'waiting_for_capabilities').toLowerCase();
   return STATE_SET.has(normalized) ? normalized : 'blocked_capability';
@@ -33,7 +39,8 @@ export function normalizeMediaSessionPlanV1(input: Record<string, any> = {}) {
     schema_version: MEDIA_SESSION_PLAN_SCHEMA_VERSION,
     call_id: stringValue(input.call_id ?? input.callId),
     room_id: stringValue(input.room_id ?? input.roomId),
-    plan_epoch: intValue(input.plan_epoch ?? input.planEpoch, 1),
+    plan_epoch: planEpochValue(input.plan_epoch ?? input.planEpoch),
+    state_catalog: CALL_MEDIA_STATE_VALUES,
     participants: participants
       .filter((participant) => participant && typeof participant === 'object')
       .map((participant) => ({
@@ -42,6 +49,7 @@ export function normalizeMediaSessionPlanV1(input: Record<string, any> = {}) {
         profile: stringValue(participant.profile),
         transport: stringValue(participant.transport),
         security_policy: stringValue(participant.security_policy ?? participant.securityPolicy, 'required'),
+        stuck_reason: stringValue(participant.stuck_reason ?? participant.stuckReason),
       })),
   };
 }
@@ -66,4 +74,31 @@ export function mediaSessionPlanDiagnosticPayload(plan: Record<string, any> = {}
     participant_count: normalized.participants.length,
     state_counts: stateCounts,
   };
+}
+
+export function findMediaSessionPlanParticipant(plan: Record<string, any> = {}, participantSessionId = '') {
+  const normalized = normalizeMediaSessionPlanV1(plan);
+  const sessionId = stringValue(participantSessionId);
+  if (sessionId === '') return null;
+
+  return normalized.participants.find((participant) => (
+    participant.participant_session_id === sessionId
+  )) || null;
+}
+
+export function mediaSessionPlanAllowsLocalPublication(plan: Record<string, any> = {}, {
+  callId = '',
+  roomId = '',
+  participantSessionId = '',
+  minPlanEpoch = 1,
+}: Record<string, any> = {}) {
+  const normalized = normalizeMediaSessionPlanV1(plan);
+  const normalizedCallId = stringValue(callId);
+  const normalizedRoomId = stringValue(roomId);
+  if (normalizedCallId !== '' && normalized.call_id !== normalizedCallId) return false;
+  if (normalizedRoomId !== '' && normalized.room_id !== normalizedRoomId) return false;
+  if (normalized.plan_epoch < planEpochValue(minPlanEpoch)) return false;
+
+  const participant = findMediaSessionPlanParticipant(normalized, participantSessionId);
+  return participant?.media_state === 'streaming_720p30';
 }

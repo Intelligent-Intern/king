@@ -57,6 +57,9 @@ try {
   assert.match(bridgeSource, /export function createCallWorkspaceMediaCapabilityBridge/);
   assert.match(bridgeSource, /export function resolveClientCapabilitiesContext/);
   assert.match(bridgeSource, /export function hasSnapshotMediaSessionPlan/);
+  assert.match(bridgeSource, /isAdmittedWebsocketJoinPayload/);
+  assert.match(bridgeSource, /capabilityChangeKey/);
+  assert.match(bridgeSource, /canPublishLocalMediaForLastPlan/);
   assert.match(socketLifecycleSource, /createCallWorkspaceMediaCapabilityBridge/);
   assert.match(socketLifecycleSource, /sendClientCapabilities\('system_welcome', payload\)/);
   assert.match(socketLifecycleSource, /handleRoomSnapshotMediaSessionPlan\(payload\)/);
@@ -187,9 +190,11 @@ try {
 
   assert.deepEqual(planModule.CALL_MEDIA_STATE_VALUES, [
     'waiting_for_capabilities',
-    'sending_720p30',
-    'receive_only',
-    'video_unavailable',
+    'waiting_for_gossip',
+    'streaming_720p30',
+    'throttled_50',
+    'throttled_25',
+    'stuck_not_sending',
     'blocked_capability',
     'left',
   ]);
@@ -202,9 +207,9 @@ try {
     participants: [
       {
         participant_session_id: 'call-session-alpha',
-        media_state: 'sending_720p30',
+        media_state: 'streaming_720p30',
         profile: '720p30',
-        transport: 'webrtc_native',
+        transport: 'gossip',
         security_policy: 'required',
         token: 'secret-token',
         sdp: 'v=0',
@@ -220,10 +225,11 @@ try {
   assert.deepEqual(plan.participants, [
     {
       participant_session_id: 'call-session-alpha',
-      media_state: 'sending_720p30',
+      media_state: 'streaming_720p30',
       profile: '720p30',
-      transport: 'webrtc_native',
+      transport: 'gossip',
       security_policy: 'required',
+      stuck_reason: '',
     },
   ]);
   assertNoForbiddenData(plan, 'media_session_plan.v1');
@@ -237,9 +243,9 @@ try {
       participants: [
         {
           participantSessionId: 'call-session-alpha',
-          mediaState: 'SENDING_720P30',
+          mediaState: 'STREAMING_720P30',
           profile: '720p30',
-          transport: 'webrtc_native',
+          transport: 'gossip',
           securityPolicy: 'required',
           token: 'secret-token',
           sdp: 'v=0',
@@ -257,7 +263,7 @@ try {
         },
         {
           participant_session_id: 'call-session-gamma',
-          media_state: 'receive_only',
+          media_state: 'waiting_for_gossip',
           profile: '',
           transport: '',
           security_policy: 'required',
@@ -272,10 +278,11 @@ try {
   assert.deepEqual(snapshotPlan.participants, [
     {
       participant_session_id: 'call-session-alpha',
-      media_state: 'sending_720p30',
+      media_state: 'streaming_720p30',
       profile: '720p30',
-      transport: 'webrtc_native',
+      transport: 'gossip',
       security_policy: 'required',
+      stuck_reason: '',
     },
     {
       participant_session_id: 'call-session-beta',
@@ -283,13 +290,15 @@ try {
       profile: '4k',
       transport: 'sfu_unknown',
       security_policy: 'blocked',
+      stuck_reason: '',
     },
     {
       participant_session_id: 'call-session-gamma',
-      media_state: 'receive_only',
+      media_state: 'waiting_for_gossip',
       profile: '',
       transport: '',
       security_policy: 'required',
+      stuck_reason: '',
     },
   ]);
   assert.ok(snapshotPlan.participants.every((participant) => planModule.CALL_MEDIA_STATE_VALUES.includes(participant.media_state)));
@@ -299,7 +308,7 @@ try {
     mediaSessionPlan: {
       callId: 'call-beta',
       roomId: 'room-beta',
-      planEpoch: 2,
+      planEpoch: 0,
       participants: [
         {
           participantSessionId: 'call-session-delta',
@@ -311,20 +320,23 @@ try {
   });
   assert.equal(camelCaseSnapshotPlan.call_id, 'call-beta');
   assert.equal(camelCaseSnapshotPlan.room_id, 'room-beta');
+  assert.equal(camelCaseSnapshotPlan.plan_epoch, 1);
+  assert.deepEqual(camelCaseSnapshotPlan.state_catalog, planModule.CALL_MEDIA_STATE_VALUES);
   assert.equal(camelCaseSnapshotPlan.participants[0].media_state, 'left');
 
   const diagnostic = planModule.mediaSessionPlanDiagnosticPayload(snapshotPlan);
   assert.equal(diagnostic.schema_version, 'king.video.media_session_plan.v1');
   assert.equal(diagnostic.participant_count, 3);
   assert.deepEqual(Object.keys(diagnostic.state_counts), planModule.CALL_MEDIA_STATE_VALUES);
-  assert.equal(diagnostic.state_counts.sending_720p30, 1);
+  assert.equal(diagnostic.state_counts.streaming_720p30, 1);
   assert.equal(diagnostic.state_counts.blocked_capability, 1);
-  assert.equal(diagnostic.state_counts.receive_only, 1);
+  assert.equal(diagnostic.state_counts.waiting_for_gossip, 1);
   assert.equal(diagnostic.state_counts.waiting_for_capabilities, 0);
   assertNoForbiddenData(diagnostic, 'media_session_plan.v1 diagnostic');
 
   const sentFrames = [];
   const diagnostics = [];
+  let screenShare = true;
   const bridge = bridgeModule.createCallWorkspaceMediaCapabilityBridge({
     refs: {
       activeCallId: { value: 'call-alpha' },
@@ -342,6 +354,10 @@ try {
     buildClientCapabilities: async ({ participantSessionId }) => ({
       ...capabilities,
       participant_session_id: participantSessionId,
+      media: {
+        ...capabilities.media,
+        screen_share: screenShare,
+      },
       token: 'secret-token',
       cookie: 'cookie=value',
       sdp: 'v=0',
@@ -351,10 +367,36 @@ try {
     }),
   });
 
-  const bridgeSent = await bridge.sendClientCapabilities('system_welcome', {
+  const pendingAdmissionSent = await bridge.sendClientCapabilities('system_welcome', {
+    type: 'system/welcome',
+    call_id: 'call-alpha',
+    active_room_id: 'room-alpha',
+    connection_id: 'call-session-alpha',
+    admission: {
+      requires_admission: true,
+      pending_room_id: 'room-alpha',
+    },
+  });
+  assert.equal(pendingAdmissionSent, false);
+  assert.equal(sentFrames.length, 0);
+
+  const prematureSnapshotSent = await bridge.sendClientCapabilities('room_snapshot', {
+    type: 'room/snapshot',
     call_id: 'call-alpha',
     room_id: 'room-alpha',
     participant_session_id: 'call-session-alpha',
+  });
+  assert.equal(prematureSnapshotSent, false);
+  assert.equal(sentFrames.length, 0);
+
+  const bridgeSent = await bridge.sendClientCapabilities('system_welcome', {
+    type: 'system/welcome',
+    call_id: 'call-alpha',
+    active_room_id: 'room-alpha',
+    connection_id: 'call-session-alpha',
+    admission: {
+      requires_admission: false,
+    },
   });
   assert.equal(bridgeSent, true);
   assert.equal(sentFrames.length, 1);
@@ -370,9 +412,27 @@ try {
   assert.equal(duplicateBridgeSent, false);
   assert.equal(sentFrames.length, 1);
 
+  screenShare = false;
+  const changedBridgeSent = await bridge.sendClientCapabilities('room_snapshot', {
+    call_id: 'call-alpha',
+    room_id: 'room-alpha',
+    participant_session_id: 'call-session-alpha',
+  });
+  assert.equal(changedBridgeSent, true);
+  assert.equal(sentFrames.length, 2);
+  assert.equal(sentFrames[1].media.screen_share, false);
+  assertNoForbiddenData(sentFrames[1], 'bridge changed client.capabilities.v1 frame');
+
+  assert.equal(bridge.canPublishLocalMediaForLastPlan({
+    call_id: 'call-alpha',
+    room_id: 'room-alpha',
+    participant_session_id: 'call-session-alpha',
+  }), false);
+
   const handledPlan = bridge.handleRoomSnapshotMediaSessionPlan({
     media_session_plan: {
       ...plan,
+      plan_epoch: 3,
       token: 'secret-token',
       sdp: 'v=0',
       ice_candidates: ['candidate:private'],
@@ -384,6 +444,22 @@ try {
   assert.deepEqual(bridge.getLastMediaSessionPlan(), handledPlan);
   assert.equal(bridge.getLastMediaSessionPlanDiagnostic().participant_count, 1);
   assert.equal(bridge.getLastMediaSessionPlanDiagnostic().media_session_plan_present, true);
+  assert.equal(bridge.canPublishLocalMediaForLastPlan({
+    call_id: 'call-alpha',
+    room_id: 'room-alpha',
+    participant_session_id: 'call-session-alpha',
+  }), true);
+  assert.equal(bridge.canPublishLocalMediaForLastPlan({
+    call_id: 'call-alpha',
+    room_id: 'room-alpha',
+    participant_session_id: 'call-session-beta',
+  }), false);
+  assert.equal(planModule.mediaSessionPlanAllowsLocalPublication(handledPlan, {
+    callId: 'call-alpha',
+    roomId: 'room-alpha',
+    participantSessionId: 'call-session-alpha',
+    minPlanEpoch: 4,
+  }), false);
   assertNoForbiddenData(handledPlan, 'bridge media_session_plan.v1');
   assertNoForbiddenData(bridge.getLastMediaSessionPlanDiagnostic(), 'bridge media plan diagnostic');
   assert.ok(diagnostics.some((diagnostic) => diagnostic.eventType === 'client_capabilities_sent'));

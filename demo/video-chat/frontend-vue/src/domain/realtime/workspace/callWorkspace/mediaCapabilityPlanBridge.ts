@@ -3,6 +3,7 @@ import {
   buildClientCapabilitiesV1,
 } from '../../media/clientCapabilities.ts';
 import {
+  mediaSessionPlanAllowsLocalPublication,
   mediaSessionPlanDiagnosticPayload,
   normalizeMediaSessionPlanFromSnapshot,
   normalizeMediaSessionPlanV1,
@@ -38,6 +39,25 @@ function snapshotHasMediaSessionPlan(snapshot: any): boolean {
 
 export function hasSnapshotMediaSessionPlan(snapshot: any): boolean {
   return snapshotHasMediaSessionPlan(snapshot);
+}
+
+function payloadType(payload: Record<string, any> = {}): string {
+  return stringValue(payload.type).toLowerCase();
+}
+
+function isAdmittedWebsocketJoinPayload(payload: Record<string, any> = {}): boolean {
+  const type = payloadType(payload);
+  if (type !== 'system/welcome') return false;
+  const admission = payload.admission && typeof payload.admission === 'object' ? payload.admission : {};
+  return admission.requires_admission !== true;
+}
+
+function stableJson(value: any): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((entry) => stableJson(entry)).join(',')}]`;
+  return `{${Object.keys(value).sort().map((key) => (
+    `${JSON.stringify(key)}:${stableJson(value[key])}`
+  )).join(',')}}`;
 }
 
 export function resolveClientCapabilitiesContext(refs: Record<string, any> = {}, payload: Record<string, any> = {}) {
@@ -76,16 +96,36 @@ export function createCallWorkspaceMediaCapabilityBridge({
   const captureClientDiagnostic = typeof callbacks.captureClientDiagnostic === 'function'
     ? callbacks.captureClientDiagnostic
     : () => {};
+  let admittedWebsocketJoin = false;
+  let admittedWebsocketJoinKey = '';
   let capabilitySendInFlightKey = '';
-  let lastCapabilitySendSuccessKey = '';
+  let lastCapabilitySendAttemptKey = '';
   let lastMediaSessionPlan = normalizeMediaSessionPlanV1({});
   let lastMediaSessionPlanDiagnostic = mediaSessionPlanDiagnosticPayload(lastMediaSessionPlan);
+  let lastCapabilityPlanGateContext = {
+    callId: '',
+    roomId: '',
+    participantSessionId: '',
+    minPlanEpoch: 1,
+  };
 
   function capabilitySendKey(context: Record<string, string>): string {
     return [
       context.callId || 'unknown_call',
       context.roomId || 'unknown_room',
       context.participantSessionId || 'server_connection',
+    ].join('|');
+  }
+
+  function capabilityChangeKey(context: Record<string, string>, frame: Record<string, any>): string {
+    return [
+      capabilitySendKey(context),
+      stableJson({
+        participant_session_id: frame.participant_session_id,
+        media: frame.media,
+        runtime: frame.runtime,
+        constraints: frame.constraints,
+      }),
     ].join('|');
   }
 
@@ -113,7 +153,15 @@ export function createCallWorkspaceMediaCapabilityBridge({
     if (typeof refs.sendSocketFrame !== 'function') return false;
     const context = resolveClientCapabilitiesContext(refs, sourcePayload);
     const key = capabilitySendKey(context);
-    if (capabilitySendInFlightKey === key || lastCapabilitySendSuccessKey === key) return false;
+    if (isAdmittedWebsocketJoinPayload(sourcePayload)) {
+      if (admittedWebsocketJoinKey !== key) {
+        lastCapabilitySendAttemptKey = '';
+      }
+      admittedWebsocketJoin = true;
+      admittedWebsocketJoinKey = key;
+    }
+    if (!admittedWebsocketJoin) return false;
+    if (capabilitySendInFlightKey === key) return false;
 
     capabilitySendInFlightKey = key;
     try {
@@ -125,9 +173,15 @@ export function createCallWorkspaceMediaCapabilityBridge({
         roomId: context.roomId,
         reason,
       });
+      const changeKey = capabilityChangeKey(context, frame);
+      if (lastCapabilitySendAttemptKey === changeKey) return false;
+      lastCapabilitySendAttemptKey = changeKey;
       const sent = refs.sendSocketFrame(frame) === true;
       if (sent) {
-        lastCapabilitySendSuccessKey = key;
+        lastCapabilityPlanGateContext = {
+          ...context,
+          minPlanEpoch: lastMediaSessionPlan.plan_epoch,
+        };
         captureCapabilityDiagnostic(frame, reason);
       }
       return sent;
@@ -182,7 +236,24 @@ export function createCallWorkspaceMediaCapabilityBridge({
     return lastMediaSessionPlanDiagnostic;
   }
 
+  function canPublishLocalMediaForLastPlan(sourcePayload: Record<string, any> = {}) {
+    const context = {
+      ...lastCapabilityPlanGateContext,
+      ...Object.fromEntries(
+        Object.entries(resolveClientCapabilitiesContext(refs, sourcePayload))
+          .filter(([, value]) => stringValue(value) !== ''),
+      ),
+    };
+    return mediaSessionPlanAllowsLocalPublication(lastMediaSessionPlan, {
+      callId: context.callId,
+      roomId: context.roomId,
+      participantSessionId: context.participantSessionId,
+      minPlanEpoch: context.minPlanEpoch,
+    });
+  }
+
   return {
+    canPublishLocalMediaForLastPlan,
     getLastMediaSessionPlan,
     getLastMediaSessionPlanDiagnostic,
     handleRoomSnapshotMediaSessionPlan,
