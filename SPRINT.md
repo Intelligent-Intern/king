@@ -139,7 +139,7 @@ Sprint Checkboxen:
 - [x] GSP01-19 Predeploy gate: run local build/contracts, `prod-debug.sh`
   preflight, HTTP/API/WS checks and branch hygiene on `kingrt/prod-ready`; fix
   all distinct failures before deploying.
-- [ ] GSP01-20 Deploy and debug loop: deploy without push/DNS/certbot, run 5 to
+- [x] GSP01-20 Deploy and debug loop: deploy without push/DNS/certbot, run 5 to
   10 diagnostics loops, collect all unique errors, prepare a second deploy only
   after grouped fixes, update `EPIC.md`, then refill `SPRINT.md` with the next
   20 issues.
@@ -353,6 +353,17 @@ Current Loop Notes:
   `call-access-binding-host-verified-select-contract.mjs`, and a Docker
   `pdo_sqlite` SQL smoke that prepares and executes
   `videochat_validate_call_access_session_binding()` against minimal tables.
+- GSP01-20 deploy attempt 3 proof: deploy completed successfully from
+  `kingrt/prod-ready` with no push, DNS disabled and certbot skipped. Public
+  production output reported `https://app.kingrt.com/`,
+  `https://api.kingrt.com/health`, `wss://ws.kingrt.com/ws`, SFU disabled and
+  TURN on `turn.kingrt.com:3478`. Post-deploy diagnostics showed runtime 200,
+  version 200, app/CDN/call-app/registry 200, marketplace and lobby websocket
+  401 without a session, and SFU 404 as expected. Five fast diagnostics loops
+  returned `runtime=200`, unauthenticated `ice=401`, unauthenticated `ws=401`,
+  and `recent_auth_sql_errors=0` every time. Remote logs no longer show
+  `hostVerifiedSelect`, SQL `near ","`, auth backend errors, session probe
+  failures or PHP fatals after the final recreate.
 - Existing capability and media-plan code is a starting point, not yet the hard
   orchestration contract.
 - Existing gossip tests may be useful as source material, but old SFU/Gossip
