@@ -250,6 +250,14 @@ Current Loop Notes:
   `npm run build`. The build now passes on `kingrt/prod-ready`. A focused
   `call-access-verified-context-ui-contract.mjs` run still fails on existing
   personalized identity wording, outside this duplicate-declaration fix.
+  GSP01-19 remains open for the rest of the predeploy gate.
+- GSP01-19 sprint sync: commit `cb3cdbca` recorded the `50176df2` build
+  unblock and remaining focused contract failure in this sprint file without
+  closing the predeploy gate.
+- GSP01-20 diagnostics dry-run prep: merge commit `d4840e45` integrated
+  `analyse/gsp01-20-diagnostics-dryrun.md`, documenting safe local dry-run
+  diagnostics and excluded deploy/DNS/certbot paths. GSP01-20 remains open
+  until an authorized deploy plus 5 to 10 diagnostics loops are actually run.
 - Audio analysis consent: a permission request was posted in the live call chat
   on 2026-05-10. Jendrik and Platform Admin agreed; Alexander has not yet
   explicitly agreed in chat, so no live audio capture or analysis is active.
