@@ -181,7 +181,9 @@ function videochat_issue_session_for_call_access(
         ];
     }
 
-    if ($linkKind === 'open' || $createdPersonalGuest) {
+    $callAccessMode = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only');
+    $openInviteOnlyLink = $linkKind === 'open' && $callAccessMode === 'invite_only';
+    if (($linkKind === 'open' && !$openInviteOnlyLink) || $createdPersonalGuest) {
         videochat_ensure_internal_call_participant(
             $pdo,
             (string) ($call['id'] ?? ''),
@@ -199,7 +201,7 @@ function videochat_issue_session_for_call_access(
         $userRole,
         $tenantId
     );
-    if (!(bool) ($callDecision['allowed'] ?? false)) {
+    if (!(bool) ($callDecision['allowed'] ?? false) && !$openInviteOnlyLink) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
