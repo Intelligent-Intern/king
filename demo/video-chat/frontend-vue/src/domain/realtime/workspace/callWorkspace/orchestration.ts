@@ -1,4 +1,5 @@
 import { isScreenShareUserId } from '../../screenShareIdentity.js';
+import { apiRequest } from '../api';
 
 export function createCallWorkspaceOrchestrationHelpers({
   vue,
@@ -75,6 +76,23 @@ export function createCallWorkspaceOrchestrationHelpers({
     setManualSocketClose,
   } = state;
 
+  async function reportExplicitCallLeave() {
+    const callId = String(activeCallId.value || activeSocketCallId.value || '').trim();
+    if (callId === '') return;
+
+    try {
+      await apiRequest(`/api/calls/${encodeURIComponent(callId)}/leave`, {
+        method: 'POST',
+        timeoutMs: 2500,
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.message.trim() !== ''
+        ? error.message.trim()
+        : 'Could not update call leave state.';
+      setNotice(message, 'error');
+    }
+  }
+
   function hangupCall() {
     controlState.handRaised = false;
     controlState.cameraEnabled = false;
@@ -106,6 +124,8 @@ export function createCallWorkspaceOrchestrationHelpers({
         },
       });
     }
+
+    void reportExplicitCallLeave();
 
     const callEntryMode = String(route.query.entry || '').trim().toLowerCase();
     if (callEntryMode === 'invite' && refs.isGuestSession()) {
