@@ -88,7 +88,7 @@ Sprint Checkboxen:
   logging from `local/iam-e2e-audit-confirmation-implicit`.
 - [x] IAM8-09 Extract or prove host-verification audit event aliases from
   `local/iam-e2e-audit-event-compat-proof-3`.
-- [ ] IAM8-10 Extract or prove IAM audit event contract coverage from
+- [x] IAM8-10 Extract or prove IAM audit event contract coverage from
   `local/iam-e2e-audit-events`.
 - [ ] IAM8-11 Extract or prove authorized call rejoin from
   `local/iam-e2e-authorized-rejoin-main`.
