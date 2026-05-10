@@ -104,7 +104,14 @@ Tickets:
 - [ ] IAM-05 Prove external guest join links require display name, create a
   temporary guest identity, and wait in lobby until admitted.
 - [ ] IAM-06 Prove backend guest-list direct-join behavior in the PHP contract.
-- [ ] IAM-07 Prove cross-org denial and active-org switch behavior.
+- [x] IAM-07 Prove cross-org denial and active-org switch behavior.
+  - Merged worker branch `agent/iam-s1-07-cross-org`.
+  - Added `call-access-cross-org-contract.mjs` for alpha-admin to beta-call
+    denial, active-org switch least-privilege behavior, and no private call-data
+    leak on denied resolve/fetch payloads.
+  - Removed private `call_id` echo from denied seed-route call-fetch details.
+  - Proof: `node tests/contract/call-access-cross-org-contract.mjs` and
+    `node tests/contract/iam-call-access-e2e-foundation-contract.mjs` passed.
 - [ ] IAM-08 Prove deleted, ended, disabled, and terminal call states do not leak
   private call data and cannot be joined.
 - [ ] IAM-09 Prove membership removal and stale organization-role revalidation.
