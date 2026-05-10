@@ -50,6 +50,15 @@ const deniedDirectJoinScenarioKeys = seedScenarios
   .filter((scenario) => (
     directJoinScenarioKeys.includes(String(scenario?.key || '').trim())
     && scenario?.expected?.direct_join_allowed === false
+    && scenario?.expected?.expected_resolve_reason === 'calls_forbidden'
+    && scenario?.expected?.expected_call_error_code === 'calls_forbidden'
+  ))
+  .map((scenario) => String(scenario.key || '').trim());
+const terminalDirectJoinScenarioKeys = seedScenarios
+  .filter((scenario) => (
+    directJoinScenarioKeys.includes(String(scenario?.key || '').trim())
+    && scenario?.expected?.direct_join_allowed === false
+    && typeof scenario?.expected?.expected_call_status_value === 'string'
   ))
   .map((scenario) => String(scenario.key || '').trim());
 const directJoinCasesMatch = seedMatrixSpec.match(/const\s+directJoinPermissionCases\s*=\s*\[([\s\S]*?)\];/);
@@ -149,6 +158,19 @@ for (const scenarioKey of deniedDirectJoinScenarioKeys) {
   assert.equal(expected.expected_resolve_reason, 'calls_forbidden', `${scenarioKey} resolve denial reason must match production`);
   assert.equal(expected.expected_call_status, 403, `${scenarioKey} call GET denial must be HTTP 403`);
   assert.equal(expected.expected_call_error_code, 'calls_forbidden', `${scenarioKey} call GET denial code must match production`);
+}
+for (const scenarioKey of terminalDirectJoinScenarioKeys) {
+  const expected = seedScenariosByKey.get(scenarioKey)?.expected || {};
+  assert.match(
+    String(expected.expected_call_status_value || ''),
+    /^(ended|disabled|deleted)$/,
+    `${scenarioKey} terminal direct-join scenario must pin a safe terminal status`,
+  );
+  assert.notEqual(
+    expected.expected_resolve_reason,
+    'calls_forbidden',
+    `${scenarioKey} terminal direct-join scenario must not masquerade as a normal permission denial`,
+  );
 }
 assert.match(
   seedMatrixSpec,
