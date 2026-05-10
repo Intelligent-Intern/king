@@ -308,6 +308,76 @@ SQL
         'replacement diff must not relabel metadata updates as inactive-entry restores'
     );
 
+    $guestListAuditEvents = videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 50]);
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_added') === 4,
+        'create and replacement update should audit four guest-list additions'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_removed') === 2,
+        'replacement update should audit removed guest-list entries'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($guestListAuditEvents, 'guest_list_entry_updated') === 0,
+        'replacement update should not report unchanged owner row as guest-list update'
+    );
+    videochat_call_update_assert(
+        videochat_guest_list_audit_event_type('merged', [], []) === 'guest_list_entry_merged',
+        'guest-list audit must reserve merged for duplicate active add normalization'
+    );
+    videochat_call_update_assert(
+        videochat_guest_list_audit_event_type('restored', [], []) === 'guest_list_entry_restored',
+        'guest-list audit must reserve restored for inactive entry reactivation'
+    );
+    $encodedGuestListAudit = json_encode($guestListAuditEvents, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_update_assert(is_string($encodedGuestListAudit), 'guest-list audit events should encode');
+    foreach ([
+        'first-guest@example.com',
+        'second-guest@example.com',
+        'participant-update-call@intelligent-intern.com',
+    ] as $rawAuditText) {
+        videochat_call_update_assert(
+            !str_contains($encodedGuestListAudit, $rawAuditText),
+            'guest-list audit must not leak raw participant email: ' . $rawAuditText
+        );
+    }
+
+    $markSecondGuestPending = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'pending'
+WHERE call_id = :call_id
+  AND lower(email) = lower(:email)
+  AND source = 'external'
+SQL
+    );
+    $markSecondGuestPending->execute([
+        ':call_id' => $callId,
+        ':email' => 'second-guest@example.com',
+    ]);
+    videochat_call_update_assert($markSecondGuestPending->rowCount() === 1, 'setup external guest metadata update should affect one row');
+
+    $metadataOnlyGuestListUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', [
+        'internal_participant_user_ids' => [$moderatorUserId],
+        'external_participants' => [
+            ['email' => 'second-guest@example.com', 'display_name' => 'Second Guest'],
+        ],
+    ]);
+    videochat_call_update_assert($metadataOnlyGuestListUpdate['ok'] === true, 'metadata-only guest-list update should succeed');
+    $updatedGuestListAuditEvents = videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 50]);
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_updated') === 1,
+        'replacement diff should audit non-permission guest-list metadata as updated'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_merged') === 0,
+        'replacement diff must not relabel metadata updates as duplicate merges'
+    );
+    videochat_call_update_assert(
+        videochat_call_update_event_type_count($updatedGuestListAuditEvents, 'guest_list_entry_restored') === 0,
+        'replacement diff must not relabel metadata updates as inactive-entry restores'
+    );
+
     $userOwnedCall = videochat_create_call($pdo, $userUserId, [
         'title' => 'User Owned Admin Transfer',
         'starts_at' => '2026-06-10T13:00:00Z',

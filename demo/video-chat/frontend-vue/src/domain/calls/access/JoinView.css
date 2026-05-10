@@ -116,6 +116,25 @@
   width: 100%;
 }
 
+.call-access-mismatch-panel {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.call-access-mismatch-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.call-access-mismatch-field .input {
+  width: 100%;
+}
+
 .calls-enter-preview-frame {
   position: relative;
   width: min(100%, 560px);
@@ -339,6 +358,10 @@
 
   .calls-modal-footer-enter {
     flex-wrap: wrap;
+  }
+
+  .call-access-mismatch-panel {
+    grid-template-columns: 1fr;
   }
 
   .calls-modal-footer-enter .btn-cyan {
