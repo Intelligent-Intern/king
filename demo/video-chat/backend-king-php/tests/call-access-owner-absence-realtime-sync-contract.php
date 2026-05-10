@@ -143,6 +143,32 @@ function videochat_iam720_call_status(PDO $pdo, string $callId): string
     return strtolower(trim((string) ($statement->fetchColumn() ?: '')));
 }
 
+function videochat_iam720_audit_events_by_type(PDO $pdo, string $callId): array
+{
+    $eventsByType = [];
+    foreach (videochat_audit_fetch_events($pdo, ['call_id' => $callId, 'limit' => 100]) as $event) {
+        if (is_array($event)) {
+            $eventsByType[(string) ($event['event_type'] ?? '')][] = $event;
+        }
+    }
+
+    return $eventsByType;
+}
+
+function videochat_iam720_audit_payload_dump(array $eventsByType, array $eventTypes): string
+{
+    $payloads = [];
+    foreach ($eventTypes as $eventType) {
+        foreach ((array) ($eventsByType[(string) $eventType] ?? []) as $event) {
+            if (is_array($event)) {
+                $payloads[] = (array) ($event['payload'] ?? []);
+            }
+        }
+    }
+
+    return json_encode($payloads, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '';
+}
+
 function videochat_iam720_count(PDO $pdo, string $sql, array $params = []): int
 {
     $statement = $pdo->prepare($sql);
@@ -423,6 +449,17 @@ SQL
     videochat_iam720_assert(videochat_iam720_left_at($pdo, $staleCallId, $ownerUserId) === '', 'owner return should clear materialized left_at');
     $returnedAuthority = videochat_realtime_authorize_lobby_moderation_command($returnedOwner, $allowCommand, $staleRoomId, $openDatabase);
     videochat_iam720_assert((bool) ($returnedAuthority['ok'] ?? false), 'returned owner should regain lobby authority from current server presence');
+    $returnAuditByType = videochat_iam720_audit_events_by_type($pdo, $staleCallId);
+    videochat_iam720_assert(count($returnAuditByType['call_owner_absence_timer_started'] ?? []) >= 1, 'owner absence timer start should be audit-logged');
+    videochat_iam720_assert(count($returnAuditByType['call_owner_absence_timer_cancelled'] ?? []) >= 1, 'owner return should audit-log timer cancellation');
+    $returnCancelPayload = (array) (($returnAuditByType['call_owner_absence_timer_cancelled'][0] ?? [])['payload'] ?? []);
+    videochat_iam720_assert((string) ($returnCancelPayload['cancel_reason'] ?? '') === 'owner_returned', 'owner return audit cancel reason mismatch');
+    $returnAuditDump = videochat_iam720_audit_payload_dump($returnAuditByType, [
+        'call_owner_absence_timer_started',
+        'call_owner_absence_timer_cancelled',
+    ]);
+    videochat_iam720_assert(!str_contains($returnAuditDump, $staleRoomId), 'owner return audit must not log raw room id');
+    videochat_iam720_assert(str_contains($returnAuditDump, videochat_audit_fingerprint($staleRoomId)), 'owner return audit should keep room fingerprint');
 
     $syncCall = videochat_iam720_prepare_call(
         $pdo,
@@ -512,6 +549,23 @@ SQL
     $timeoutLifecycle = (array) ($timeoutAbsence['lifecycle'] ?? []);
     videochat_iam720_assert((int) ($timeoutLifecycle['invalidated_link_count'] ?? 0) >= 1, 'owner timeout should disable call-access links');
     videochat_iam720_assert((int) ($timeoutLifecycle['revoked_access_session_count'] ?? 0) >= 1, 'owner timeout should revoke call-access sessions');
+    $timeoutAuditByType = videochat_iam720_audit_events_by_type($pdo, $timeoutCallId);
+    videochat_iam720_assert(count($timeoutAuditByType['call_owner_absence_timer_started'] ?? []) >= 1, 'owner timeout should audit-log timer start');
+    videochat_iam720_assert(count($timeoutAuditByType['call_implicitly_ended'] ?? []) >= 1, 'owner timeout should audit-log implicit call end');
+    $timeoutStartPayload = (array) (($timeoutAuditByType['call_owner_absence_timer_started'][0] ?? [])['payload'] ?? []);
+    videochat_iam720_assert((string) ($timeoutStartPayload['audit_scope'] ?? '') === 'iam_owner_absence', 'owner timeout timer audit scope mismatch');
+    videochat_iam720_assert((string) ($timeoutStartPayload['action'] ?? '') === 'timer_started', 'owner timeout timer audit action mismatch');
+    $implicitPayload = (array) (($timeoutAuditByType['call_implicitly_ended'][0] ?? [])['payload'] ?? []);
+    videochat_iam720_assert((string) ($implicitPayload['audit_scope'] ?? '') === 'iam_owner_absence', 'implicit end audit scope mismatch');
+    videochat_iam720_assert((string) ($implicitPayload['action'] ?? '') === 'implicit_end', 'implicit end audit action mismatch');
+    videochat_iam720_assert((string) ($implicitPayload['ended_reason'] ?? '') === 'owner_absent_timeout', 'implicit end audit reason mismatch');
+    videochat_iam720_assert((bool) ($implicitPayload['transitioned'] ?? false), 'implicit end audit should record transition');
+    $timeoutAuditDump = videochat_iam720_audit_payload_dump($timeoutAuditByType, [
+        'call_owner_absence_timer_started',
+        'call_implicitly_ended',
+    ]);
+    videochat_iam720_assert(!str_contains($timeoutAuditDump, $timeoutRoomId), 'owner timeout audit must not log raw room id');
+    videochat_iam720_assert(str_contains($timeoutAuditDump, videochat_audit_fingerprint($timeoutRoomId)), 'owner timeout audit should keep room fingerprint');
 
     $authAfterTimeout = videochat_authenticate_request(
         $pdo,
