@@ -245,6 +245,11 @@ Current Loop Notes:
   the server lane carries capability ops frames only. The item remains open
   until stale SFU-fallback/regression gate expectations are converted and
   browser proof is attached.
+- GSP01-19 progress: commit `50176df2` removed the duplicate
+  `hostName` declaration in `callAccessSession.ts` that blocked
+  `npm run build`. The build now passes on `kingrt/prod-ready`. A focused
+  `call-access-verified-context-ui-contract.mjs` run still fails on existing
+  personalized identity wording, outside this duplicate-declaration fix.
 - Audio analysis consent: a permission request was posted in the live call chat
   on 2026-05-10. Jendrik and Platform Admin agreed; Alexander has not yet
   explicitly agreed in chat, so no live audio capture or analysis is active.
