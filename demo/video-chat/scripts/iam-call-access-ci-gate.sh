@@ -78,6 +78,7 @@ STATIC_CONTRACTS=(
   "node tests/contract/call-access-edge-error-matrix-contract.mjs"
   "node tests/contract/iam9-19-multiple-pending-confirmations-contract.mjs"
   "node tests/contract/iam9-16-edge-safe-states-contract.mjs"
+  "node tests/contract/iam9-17-email-confirmation-race-contract.mjs"
 )
 
 run_static_gate() {

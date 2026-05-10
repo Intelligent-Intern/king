@@ -165,6 +165,7 @@
         "frontend-vue/tests/contract/call-access-callapp-revocation-contract.mjs",
         "frontend-vue/tests/contract/call-access-route-guard-ui-contract.mjs",
         "frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs",
+        "frontend-vue/tests/contract/iam9-17-email-confirmation-race-contract.mjs",
         "backend-king-php/tests/call-access-anonymous-temp-rights-contract.php",
         "backend-king-php/tests/call-access-terminal-join-contract.sh",
         "backend-king-php/tests/call-guest-list-direct-join-contract.sh",
