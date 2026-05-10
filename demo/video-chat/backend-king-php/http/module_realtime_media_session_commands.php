@@ -40,6 +40,38 @@ function videochat_realtime_handle_media_capabilities_websocket_command(
     $payload = is_array($capabilitiesCommand['payload'] ?? null) ? (array) $capabilitiesCommand['payload'] : [];
     $capabilities = videochat_client_capabilities_normalize($payload, $presenceConnection);
     $connectionId = trim((string) ($presenceConnection['connection_id'] ?? ''));
+    $publicCapabilities = videochat_client_capabilities_public_projection($capabilities);
+    $stored = false;
+    $persistenceError = '';
+    try {
+        $stored = videochat_client_capabilities_upsert($openDatabase(), $presenceConnection, $capabilities);
+        if (!$stored) {
+            $persistenceError = 'capabilities_not_stored';
+        }
+    } catch (Throwable) {
+        $persistenceError = 'capabilities_persistence_failed';
+    }
+
+    if (!$stored) {
+        videochat_presence_send_frame($websocket, [
+            'type' => 'client.capabilities.v1/ack',
+            'ok' => false,
+            'stored' => false,
+            'error' => $persistenceError,
+            'schema_version' => videochat_client_capabilities_schema_version(),
+            'plan_epoch' => videochat_media_session_plan_epoch([
+                'participants' => [[
+                    'participant_session_id' => (string) ($publicCapabilities['participant_session_id'] ?? $connectionId),
+                    'client_capabilities' => $publicCapabilities,
+                ]],
+            ]),
+            'client_capabilities' => $publicCapabilities,
+            'time' => gmdate('c'),
+        ], $sender);
+
+        return videochat_realtime_secondary_handled_result();
+    }
+
     if (!isset($presenceState['client_capabilities']) || !is_array($presenceState['client_capabilities'])) {
         $presenceState['client_capabilities'] = [];
     }
@@ -51,18 +83,18 @@ function videochat_realtime_handle_media_capabilities_websocket_command(
     }
     $presenceConnection['client_capabilities'] = $capabilities;
 
-    try {
-        videochat_client_capabilities_upsert($openDatabase(), $presenceConnection, $capabilities);
-    } catch (Throwable) {
-        // Persistence is best-effort; the current room snapshot still carries
-        // the in-memory capability record for this websocket generation.
-    }
-
     videochat_presence_send_frame($websocket, [
         'type' => 'client.capabilities.v1/ack',
         'ok' => true,
+        'stored' => true,
         'schema_version' => videochat_client_capabilities_schema_version(),
-        'client_capabilities' => videochat_client_capabilities_public_projection($capabilities),
+        'plan_epoch' => videochat_media_session_plan_epoch([
+            'participants' => [[
+                'participant_session_id' => (string) ($publicCapabilities['participant_session_id'] ?? $connectionId),
+                'client_capabilities' => $publicCapabilities,
+            ]],
+        ]),
+        'client_capabilities' => $publicCapabilities,
         'time' => gmdate('c'),
     ], $sender);
     videochat_realtime_send_room_snapshot(

@@ -80,7 +80,7 @@ function videochat_media_capability_plan_frames_by_type(array $frames, string $s
 }
 
 try {
-    require_once __DIR__ . '/../support/auth.php';
+    require_once __DIR__ . '/../support/auth_rbac.php';
     require_once __DIR__ . '/../domain/realtime/realtime_client_capabilities.php';
     require_once __DIR__ . '/../domain/realtime/realtime_media_session_plan.php';
     require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
@@ -124,9 +124,11 @@ try {
     );
     $expectedStates = [
         'waiting_for_capabilities',
-        'sending_720p30',
-        'receive_only',
-        'video_unavailable',
+        'waiting_for_gossip',
+        'streaming_720p30',
+        'throttled_50',
+        'throttled_25',
+        'stuck_not_sending',
         'blocked_capability',
         'left',
     ];
@@ -208,7 +210,9 @@ try {
     ]));
 
     videochat_media_capability_plan_assert(($plan['schema_version'] ?? '') === 'king.video.media_session_plan.v1', 'plan schema mismatch');
-    videochat_media_capability_plan_assert(($plan['participants'][0]['media_state'] ?? '') === 'sending_720p30', '720p30 sender should be planned as sending_720p30');
+    videochat_media_capability_plan_assert(($plan['participants'][0]['media_state'] ?? '') === 'streaming_720p30', '720p30 sender should be planned as streaming_720p30');
+    videochat_media_capability_plan_assert(($plan['participants'][0]['transport'] ?? '') === 'gossip', '720p30 sender must be planned over gossip');
+    videochat_media_capability_plan_assert((int) ($plan['plan_epoch'] ?? 0) >= 2, 'plan must expose a monotonic plan epoch');
     videochat_media_capability_plan_assert_allowed_states($plan, 'media_session_plan.v1');
     videochat_media_capability_plan_assert_no_forbidden_data($plan, 'media_session_plan.v1');
 
@@ -217,8 +221,12 @@ try {
     videochat_media_capability_plan_assert(($mediaStateEvent['state_catalog'] ?? []) === $expectedStates, 'media state event state catalog mismatch');
     videochat_media_capability_plan_assert((bool) ($mediaStateEvent['redacted'] ?? false), 'media state event must be marked redacted');
     videochat_media_capability_plan_assert(
-        (string) (($mediaStateEvent['participant'] ?? [])['media_state'] ?? '') === 'sending_720p30',
+        (string) (($mediaStateEvent['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
         'media state event should expose the computed allowed state'
+    );
+    videochat_media_capability_plan_assert(
+        (string) (($mediaStateEvent['participant'] ?? [])['transport'] ?? '') === 'gossip',
+        'media state event should expose gossip transport for 720p30 senders'
     );
     videochat_media_capability_plan_assert_no_forbidden_data($mediaStateEvent, 'call/media-state.v1');
 
@@ -305,16 +313,20 @@ try {
         'missing capabilities must wait'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-alpha')['media_state'] ?? '') === 'sending_720p30',
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-alpha')['media_state'] ?? '') === 'streaming_720p30',
         '720p30 capabilities must send 720p30'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['media_state'] ?? '') === 'receive_only',
-        'microphone-only capabilities must be receive_only'
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-alpha')['transport'] ?? '') === 'gossip',
+        '720p30 capabilities must use gossip transport'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'video_unavailable',
-        'non-720p camera capability must be video_unavailable'
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['media_state'] ?? '') === 'blocked_capability',
+        'microphone-only capabilities must be blocked_capability'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'waiting_for_gossip',
+        'non-720p camera capability must be waiting_for_gossip'
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-blocked')['media_state'] ?? '') === 'blocked_capability',
@@ -388,8 +400,12 @@ try {
     );
     videochat_media_capability_plan_assert_allowed_states($restoredPlan, 'restored media_session_plan.v1');
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['media_state'] ?? '') === 'sending_720p30',
+        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['media_state'] ?? '') === 'streaming_720p30',
         'snapshot plan must restore persisted capabilities'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($restoredPlan, 'conn-alpha')['transport'] ?? '') === 'gossip',
+        'snapshot plan must restore gossip transport'
     );
     videochat_media_capability_plan_assert_no_forbidden_data($restoredPlan, 'restored media_session_plan.v1');
 
@@ -411,8 +427,12 @@ try {
     videochat_media_capability_plan_assert(isset($snapshotPayload['media_session_plan']), 'room snapshot must carry media_session_plan');
     videochat_media_capability_plan_assert_allowed_states((array) $snapshotPayload['media_session_plan'], 'snapshot media_session_plan.v1');
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['media_state'] ?? '') === 'sending_720p30',
+        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['media_state'] ?? '') === 'streaming_720p30',
         'room snapshot media_session_plan must use restored capabilities'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['transport'] ?? '') === 'gossip',
+        'room snapshot media_session_plan must use gossip transport'
     );
     $signatureWithPlan = videochat_realtime_room_snapshot_signature($snapshotPayload);
     $snapshotWithoutPlan = $snapshotPayload;
@@ -518,6 +538,11 @@ try {
         count(videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'client.capabilities.v1/ack')) === 1,
         'capabilities sender must receive an ack'
     );
+    $successAcks = videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'client.capabilities.v1/ack');
+    videochat_media_capability_plan_assert((bool) ($successAcks[0]['ok'] ?? false), 'successful capabilities ack must be ok');
+    videochat_media_capability_plan_assert((bool) ($successAcks[0]['stored'] ?? false), 'successful capabilities ack must report stored state');
+    videochat_media_capability_plan_assert((int) ($successAcks[0]['plan_epoch'] ?? 0) >= 1, 'successful capabilities ack must report plan epoch');
+    videochat_media_capability_plan_assert_no_forbidden_data($successAcks[0], 'client.capabilities.v1 success ack');
     videochat_media_capability_plan_assert(
         count(videochat_media_capability_plan_frames_by_type($fanoutFrames, 'socket-fanout-sender', 'room/snapshot')) === 1,
         'capabilities sender must receive a refreshed room snapshot'
@@ -530,10 +555,48 @@ try {
     videochat_media_capability_plan_assert(count($otherMediaEvents) === 0, 'other rooms must not receive media state fanout');
     videochat_media_capability_plan_assert(($peerMediaEvents[0]['state_catalog'] ?? []) === $expectedStates, 'fanout event state catalog mismatch');
     videochat_media_capability_plan_assert(
-        (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'sending_720p30',
+        (string) (($peerMediaEvents[0]['participant'] ?? [])['media_state'] ?? '') === 'streaming_720p30',
         'fanout event should expose computed allowed state'
     );
+    videochat_media_capability_plan_assert(
+        (string) (($peerMediaEvents[0]['participant'] ?? [])['transport'] ?? '') === 'gossip',
+        'fanout event should expose gossip transport'
+    );
     videochat_media_capability_plan_assert_no_forbidden_data($peerMediaEvents[0], 'call/media-state.v1 fanout');
+
+    $failedFrames = [];
+    $failedSender = static function (mixed $socket, array $payload) use (&$failedFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($failedFrames[$key]) || !is_array($failedFrames[$key])) {
+            $failedFrames[$key] = [];
+        }
+        $failedFrames[$key][] = $payload;
+        return true;
+    };
+    $failedPresence = videochat_presence_state_init();
+    $failedConnection = $fanoutSenderConnection;
+    unset($failedConnection['client_capabilities']);
+    $failedHandled = videochat_realtime_handle_media_capabilities_websocket_command(
+        $capabilitiesCommand,
+        'socket-failed-sender',
+        $failedPresence,
+        $failedConnection,
+        static function (): PDO {
+            throw new RuntimeException('forced persistence failure');
+        },
+        $failedSender
+    );
+    videochat_media_capability_plan_assert((bool) ($failedHandled['handled'] ?? false), 'failed persistence command should still be handled');
+    $failedAcks = videochat_media_capability_plan_frames_by_type($failedFrames, 'socket-failed-sender', 'client.capabilities.v1/ack');
+    videochat_media_capability_plan_assert(count($failedAcks) === 1, 'failed persistence must receive one ack');
+    videochat_media_capability_plan_assert(!((bool) ($failedAcks[0]['ok'] ?? true)), 'failed persistence ack must not report ok');
+    videochat_media_capability_plan_assert(!((bool) ($failedAcks[0]['stored'] ?? true)), 'failed persistence ack must report stored=false');
+    videochat_media_capability_plan_assert((int) ($failedAcks[0]['plan_epoch'] ?? 0) >= 1, 'failed persistence ack must report plan epoch');
+    videochat_media_capability_plan_assert(
+        count(videochat_media_capability_plan_frames_by_type($failedFrames, 'socket-failed-sender', 'room/snapshot')) === 0,
+        'failed persistence must not publish a success snapshot'
+    );
+    videochat_media_capability_plan_assert_no_forbidden_data($failedAcks[0], 'client.capabilities.v1 failure ack');
 
     $commandsSource = (string) file_get_contents(__DIR__ . '/../http/module_realtime_websocket_commands.php');
     $mediaCommandsSource = (string) file_get_contents(__DIR__ . '/../http/module_realtime_media_session_commands.php');
