@@ -83,6 +83,8 @@ assert.equal(diagnostics.at(-1)?.eventType, 'chat_history_db_sync_loaded');
 assert.equal(diagnostics.at(-1)?.payload?.message_count, 2);
 assert.equal(state.hasOlder, true);
 assert.equal(state.nextCursor, 4);
+assert.equal(await bootstrap.bootstrapChatArchive('contract_duplicate'), false);
+assert.equal(apiCallCount, 1, 'initial chat archive bootstrap must be one-shot per call room');
 assert.equal(await bootstrap.loadOlderChatHistory('contract_older'), true);
 assert.equal(apiCallCount, 2);
 bootstrap.dispose();
@@ -96,8 +98,8 @@ assert.match(chatRuntimeSource, /bucket\.sort\(/, 'chat runtime must keep DB-syn
 
 const socketLifecycleSource = readFileSync(resolve(root, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts'), 'utf8');
 assert.match(socketLifecycleSource, /bootstrapChatArchive = \(\) => false/, 'socket lifecycle must accept a chat archive bootstrap callback');
-assert.match(socketLifecycleSource, /bootstrapChatArchive\('room_snapshot'\)/, 'room snapshots must trigger chat archive bootstrap');
-assert.match(socketLifecycleSource, /bootstrapChatArchive\(isReconnectOpen \? 'websocket_reconnect' : 'websocket_open'\)/, 'websocket open/reconnect must trigger chat archive bootstrap');
+assert.doesNotMatch(socketLifecycleSource, /bootstrapChatArchive\('room_snapshot'\)/, 'room snapshots must not poll chat archive');
+assert.match(socketLifecycleSource, /bootstrapChatArchive\('websocket_open'\)/, 'websocket open must trigger the one-shot chat archive bootstrap');
 
 const workspaceSource = readFileSync(resolve(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
 assert.match(workspaceSource, /createCallWorkspaceChatHistorySync/, 'workspace must wire the chat DB sync helper');

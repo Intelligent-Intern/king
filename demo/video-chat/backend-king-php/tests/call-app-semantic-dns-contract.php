@@ -17,11 +17,33 @@ function videochat_call_app_semantic_dns_assert(bool $condition, string $message
 try {
     $root = videochat_call_app_package_root();
     videochat_call_app_semantic_dns_assert(is_dir($root), 'package root must exist');
-    videochat_call_app_semantic_dns_assert(str_ends_with($root, 'demo/call-app'), 'package root must be demo/call-app');
+    videochat_call_app_semantic_dns_assert(str_ends_with($root, 'demo/call-apps'), 'package root must be demo/call-apps');
+    videochat_call_app_semantic_dns_assert(!str_ends_with($root, 'demo/call-app'), 'package root must not fall back to the retired demo/call-app source path');
     $envRoot = $root . DIRECTORY_SEPARATOR . 'whiteboard' . DIRECTORY_SEPARATOR . '..';
     putenv('VIDEOCHAT_CALL_APP_PACKAGE_ROOT=' . $envRoot);
     videochat_call_app_semantic_dns_assert(realpath(videochat_call_app_package_root()) === realpath($root), 'package root must honor VIDEOCHAT_CALL_APP_PACKAGE_ROOT');
     putenv('VIDEOCHAT_CALL_APP_PACKAGE_ROOT');
+
+    $repoRoot = dirname(__DIR__, 4);
+    $backendDockerfile = (string) file_get_contents($repoRoot . '/demo/video-chat/backend-king-php/Dockerfile');
+    videochat_call_app_semantic_dns_assert(str_contains($backendDockerfile, 'COPY demo/call-apps/ /call-app/'), 'backend image must copy moved demo/call-apps source into /call-app');
+    videochat_call_app_semantic_dns_assert(str_contains($backendDockerfile, 'ENV VIDEOCHAT_CALL_APP_PACKAGE_ROOT=/call-app'), 'backend runtime package root must remain /call-app');
+    $compose = (string) file_get_contents($repoRoot . '/demo/video-chat/docker-compose.v1.yml');
+    videochat_call_app_semantic_dns_assert(str_contains($compose, 'VIDEOCHAT_CALL_APP_PACKAGE_ROOT: "${VIDEOCHAT_CALL_APP_PACKAGE_ROOT:-/call-app}"'), 'compose must keep backend package root default /call-app');
+    $edgeDockerfile = (string) file_get_contents($repoRoot . '/demo/video-chat/edge/Dockerfile');
+    videochat_call_app_semantic_dns_assert(str_contains($edgeDockerfile, 'COPY demo/call-apps/ /app/call-app/'), 'edge image must copy moved demo/call-apps source into /app/call-app');
+    videochat_call_app_semantic_dns_assert(str_contains($edgeDockerfile, 'ENV VIDEOCHAT_EDGE_CALL_APP_ROOT=/app/call-app'), 'edge call-app static root must remain /app/call-app');
+    $deploySmoke = (string) file_get_contents($repoRoot . '/demo/video-chat/scripts/deploy-smoke.sh');
+    $prodDebug = (string) file_get_contents($repoRoot . '/demo/video-chat/scripts/prod-debug.sh');
+    $whiteboardProof = (string) file_get_contents($repoRoot . '/demo/video-chat/scripts/prod-whiteboard-org-install-proof.sh');
+    foreach ([
+        'deploy smoke' => $deploySmoke,
+        'prod debug' => $prodDebug,
+        'whiteboard org proof' => $whiteboardProof,
+    ] as $label => $script) {
+        videochat_call_app_semantic_dns_assert(str_contains($script, '${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html'), $label . ' must probe the canonical /call-app/whiteboard URL');
+        videochat_call_app_semantic_dns_assert(!str_contains($script, '${DEPLOY_CALL_APP_DOMAIN}/public/index.html'), $label . ' must not publish the retired host-root /public URL');
+    }
 
     $packages = videochat_call_app_scan_packages($root);
     videochat_call_app_semantic_dns_assert(count($packages) >= 1, 'at least one call app package must be discovered');
@@ -53,6 +75,8 @@ try {
     videochat_call_app_semantic_dns_assert((string) ($attributes['app_key'] ?? '') === 'whiteboard', 'attribute app_key mismatch');
     videochat_call_app_semantic_dns_assert((string) ($attributes['app_version'] ?? '') === '0.1.0', 'attribute app_version mismatch');
     videochat_call_app_semantic_dns_assert((string) ($attributes['category'] ?? '') === 'whiteboard', 'attribute category mismatch');
+    videochat_call_app_semantic_dns_assert((string) ($attributes['iframe_entrypoint'] ?? '') === 'public/index.html', 'iframe entrypoint must remain package-local');
+    videochat_call_app_semantic_dns_assert((string) ($attributes['iframe_public_path'] ?? '') === '/call-app/whiteboard/public/index.html', 'iframe public path must keep the /call-app/<app-key> runtime URL');
     videochat_call_app_semantic_dns_assert((string) ($attributes['crdt_protocol'] ?? '') === 'king.call_app.crdt.v1', 'attribute CRDT protocol mismatch');
     videochat_call_app_semantic_dns_assert((string) ($attributes['marketplace_order_scope'] ?? '') === 'organization', 'attribute order scope mismatch');
     videochat_call_app_semantic_dns_assert((bool) ($attributes['mother_node_registration_required'] ?? false), 'mother-node registration must be required');
@@ -144,7 +168,9 @@ try {
     videochat_call_app_semantic_dns_assert(isset($runtimeServicesByKey['planning-image']), 'runtime registration must include planning-image service');
     videochat_call_app_semantic_dns_assert((string) ($runtimeServicesByKey['whiteboard']['hostname'] ?? '') === 'whiteboard.kingrt.test', 'runtime whiteboard service hostname mismatch');
     videochat_call_app_semantic_dns_assert((string) (($runtimeServicesByKey['whiteboard']['attributes'] ?? [])['mcp_endpoint'] ?? '') === 'mcp://registry.kingrt.test/call_app.whiteboard.mcp', 'runtime whiteboard service MCP endpoint mismatch');
+    videochat_call_app_semantic_dns_assert((string) (($runtimeServicesByKey['whiteboard']['attributes'] ?? [])['iframe_public_path'] ?? '') === '/call-app/whiteboard/public/index.html', 'runtime whiteboard iframe public path mismatch');
     videochat_call_app_semantic_dns_assert((string) ($runtimeServicesByKey['planning-image']['hostname'] ?? '') === 'planning-image.kingrt.test', 'runtime planning-image service hostname mismatch');
+    videochat_call_app_semantic_dns_assert((string) (($runtimeServicesByKey['planning-image']['attributes'] ?? [])['iframe_public_path'] ?? '') === '/call-app/planning-image/public/index.html', 'runtime planning-image iframe public path mismatch');
     videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['node_id'] ?? '') === 'registry-kingrt-test', 'runtime Mothernode id mismatch');
     videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['hostname'] ?? '') === 'registry.kingrt.test', 'runtime registry host mismatch');
     videochat_call_app_semantic_dns_assert((int) ($runtimeMotherNodes[0]['managed_services_count'] ?? 0) >= 1, 'runtime Mothernode must report managed services');

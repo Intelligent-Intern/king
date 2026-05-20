@@ -95,3 +95,20 @@ export function socketUrlForRoom(roomId, socketOrigin, callId = '') {
 
   return buildWebSocketUrl(socketOrigin, '/ws', query);
 }
+
+export function mediaRelaySocketUrlForRoom(roomId, socketOrigin, callId = '') {
+  const query = appendAssetVersionQuery(new URLSearchParams());
+  query.set('room', normalizeRoomId(roomId));
+  query.set('relay', 'media');
+  const normalizedCallId = normalizeSocketCallId(callId);
+  if (normalizedCallId !== '') {
+    query.set('call_id', normalizedCallId);
+  }
+
+  const token = String(sessionState.sessionToken || '').trim();
+  if (token !== '') {
+    query.set('session', token);
+  }
+
+  return buildWebSocketUrl(socketOrigin, '/ws', query);
+}

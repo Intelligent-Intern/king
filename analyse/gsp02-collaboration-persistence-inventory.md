@@ -117,7 +117,7 @@ Chat gaps:
 
 App source:
 
-- Image Planning lives under `demo/call-app/planning-image/`, which matches the
+- Image Planning lives under `demo/call-apps/planning-image/`, which matches the
   call-app source package boundary.
 - `call-app.manifest.json` advertises a CRDT collaboration app with default
   participant access `allowed_by_default`.

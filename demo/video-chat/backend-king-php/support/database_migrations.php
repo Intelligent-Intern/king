@@ -788,5 +788,20 @@ SQL,
         55 => ['name' => '0055_operator_feedback_queue', 'statements' => videochat_operator_feedback_migration_statements()],
         56 => ['name' => '0056_call_access_link_disabled_at', 'statements' => ['ALTER TABLE call_access_links ADD COLUMN disabled_at TEXT']],
         57 => ['name' => '0057_call_app_launch_token_session_binding', 'statements' => videochat_call_app_launch_token_session_binding_migration_statements()],
+        58 => [
+            'name' => '0058_call_stt_settings',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_stt_settings (
+    call_id TEXT PRIMARY KEY REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    updated_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                'CREATE INDEX IF NOT EXISTS idx_call_stt_settings_enabled ON call_stt_settings(enabled)',
+            ],
+        ],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

@@ -48,10 +48,10 @@
       <section class="canvas-shell">
         <canvas id="board" width="1600" height="900"></canvas>
         <div id="cursorOverlay" class="cursor-overlay" aria-live="polite" aria-label="Remote cursors"></div>
-        <form id="inlineEditor" class="inline-editor">
+        <section id="inlineEditor" class="inline-editor" role="group" aria-label="Inline text editor">
           <textarea id="inlineText" maxlength="500" placeholder="Text"></textarea>
-          <button id="inlineSubmit" type="submit" aria-label="Insert">Send</button>
-        </form>
+          <button id="inlineSubmit" type="button" aria-label="Insert">Send</button>
+        </section>
       </section>
 
       <footer class="statusbar">

@@ -3,8 +3,8 @@
  *
  * For each data frame:
  * 1. Check frame_id = publisher_id + track_id + media_generation + frame_sequence.
- * 2. If frame_id is in seen_window, drop it (duplicate).
- * 3. Add frame_id to seen_window.
+ * 2. If frame_id is in seen_window with equal or better ttl, drop it.
+ * 3. Add frame_id to seen_window with the best remaining ttl seen locally.
  * 4. If useful locally, deliver to local decoder.
  * 5. If ttl > 0, forward to up to fanout neighbors over the data transport.
  * 6. Decrement ttl.
@@ -32,12 +32,9 @@ export type GossipEventType =
   | 'peer_outbound_fanout'
   | 'rtc_datachannel_send'
   | 'in_memory_harness_send'
-  | 'heartbeat'
-  | 'heartbeat_ack'
   | 'carrier_state_change'
   | 'topology_change'
   | 'keyframe_request'
-  | 'reconnect_requested'
   | 'reconnect_allowed'
 
 export interface GossipEvent {
@@ -87,7 +84,9 @@ export interface GossipPeer {
   peer_id: string
   neighbor_set: string[]
   seen_window: Map<string, number>
+  seen_ttl_window: Map<string, number>
   media_generation: number
+  frame_history: Map<string, GossipTrackFrameHistory>
   carrier_state: 'connected' | 'degraded' | 'lost'
   missed_heartbeats: number
   last_heartbeat_at_ms: number
@@ -99,6 +98,19 @@ export interface GossipPeer {
   dropped: number
   duplicates: number
   telemetry: GossipTelemetryCounters
+}
+
+export interface GossipTrackFrameHistory {
+  publisher_id: string
+  track_id: string
+  media_generation: number
+  latest_sequence_seen: number
+  latest_keyframe_sequence: number
+  latest_rendered_sequence: number
+  latest_arrival_ms: number
+  latest_forwarded_ms: number
+  latest_keyframe_frame: GossipFrameMessage | null
+  recent_delta_ring_buffer: GossipFrameMessage[]
 }
 
 export interface GossipDelivery {
@@ -133,6 +145,16 @@ export interface GossipFrameMessage {
   timestamp?: number
   sent_at_ms?: number
   sentAtMs?: number
+  sender_sent_at_ms?: number
+  senderSentAtMs?: number
+  received_at_ms?: number
+  receivedAtMs?: number
+  forwarded_at_ms?: number
+  forwardedAtMs?: number
+  relay_peer_id?: string
+  relayPeerId?: string
+  hop_count?: number
+  hopCount?: number
   [key: string]: unknown
 }
 
@@ -144,9 +166,6 @@ export interface GossipOpsMessage {
 }
 
 const SEEN_WINDOW_SIZE = 512
-const HEARTBEAT_INTERVAL_MS = 1000
-const DEGRADED_AFTER = 3
-const LOST_AFTER = 6
 const KEYFRAME_REQUEST_COOLDOWN_MS = 1000
 const TOPOLOGY_CHANGE_COOLDOWN_MS = 3000
 
@@ -155,7 +174,6 @@ export class GossipController {
   private events: GossipEvent[] = []
   private fanout: number = DEFAULT_FANOUT
   private dataLaneConfig: GossipDataLaneConfig = GOSSIP_DATA_LANE_CONFIG
-  private heartbeatTimers: Map<string, ReturnType<typeof setInterval>> = new Map()
   private keyframeCooldowns: Map<string, number> = new Map()
   private dataListeners: GossipDataListener[] = []
   private dataTransport: GossipDataTransport = {
@@ -196,7 +214,9 @@ export class GossipController {
       peer_id: peerId,
       neighbor_set: [],
       seen_window: new Map<string, number>(),
+      seen_ttl_window: new Map<string, number>(),
       media_generation: 0,
+      frame_history: new Map<string, GossipTrackFrameHistory>(),
       carrier_state: 'connected',
       missed_heartbeats: 0,
       last_heartbeat_at_ms: Date.now(),
@@ -210,24 +230,16 @@ export class GossipController {
       telemetry: this.emptyTelemetryCounters(),
     })
     this.refreshTopology()
-    this.startHeartbeat(peerId)
     this.logEvent(peerId, 'receive', 'ops', { message: 'peer_joined' })
   }
 
   removePeer(peerId: string): void {
-    const timer = this.heartbeatTimers.get(peerId)
-    if (timer) clearInterval(timer)
-    this.heartbeatTimers.delete(peerId)
     this.peers.delete(peerId)
     this.refreshTopology()
     this.logEvent(peerId, 'receive', 'ops', { message: 'peer_left' })
   }
 
   dispose(): void {
-    for (const timer of this.heartbeatTimers.values()) {
-      clearInterval(timer)
-    }
-    this.heartbeatTimers.clear()
     this.peers.clear()
     this.dataListeners = []
     this.keyframeCooldowns.clear()
@@ -239,8 +251,11 @@ export class GossipController {
 
     const frameId = this.frameId(msg)
     const now = Date.now()
+    const arrivalMsg = this.withRelayReceiveMetadata(msg, fromPeerId, now)
 
-    if (peer.seen_window.has(frameId)) {
+    const incomingTtl = Math.max(0, Number(msg.ttl || 0))
+    const alreadyDelivered = peer.seen_window.has(frameId)
+    if (this.hasSeenWithEqualOrBetterTtl(peer, frameId, incomingTtl)) {
       peer.duplicates++
       this.recordTelemetryCounter(receivingPeerId, 'duplicates')
       this.logEvent(receivingPeerId, 'drop_duplicate', 'data', {
@@ -251,42 +266,15 @@ export class GossipController {
         media_generation: msg.media_generation,
         transport_kind: this.dataTransport.kind || 'unknown',
         hop_latency_ms: this.hopLatencyMs(msg, now),
+        ttl: incomingTtl,
+        best_seen_ttl: peer.seen_ttl_window.get(frameId) ?? 0,
       })
       return
     }
 
-    this.addToSeenWindow(peer, frameId, now)
+    this.addToSeenWindow(peer, frameId, now, incomingTtl)
 
-    if (msg.media_generation > 0 && msg.media_generation < peer.media_generation) {
-      peer.dropped++
-      this.recordTelemetryCounter(receivingPeerId, 'dropped')
-      this.recordTelemetryCounter(receivingPeerId, 'stale_generation_drops')
-      this.logEvent(receivingPeerId, 'drop', 'data', {
-        frame_id: frameId,
-        reason: 'stale_generation',
-        transport_kind: this.dataTransport.kind || 'unknown',
-        hop_latency_ms: this.hopLatencyMs(msg, now),
-      })
-      this.logEvent(receivingPeerId, 'stale_generation_drop', 'data', {
-        frame_id: frameId,
-        media_generation: msg.media_generation,
-        current_generation: peer.media_generation,
-        transport_kind: this.dataTransport.kind || 'unknown',
-        hop_latency_ms: this.hopLatencyMs(msg, now),
-      })
-      this.logEvent(receivingPeerId, 'drop_stale', 'data', {
-        frame_id: frameId,
-        media_generation: msg.media_generation,
-        current_generation: peer.media_generation,
-        transport_kind: this.dataTransport.kind || 'unknown',
-        hop_latency_ms: this.hopLatencyMs(msg, now),
-      })
-      return
-    }
-
-    if (msg.media_generation > peer.media_generation) {
-      peer.media_generation = msg.media_generation
-    }
+    const historyResult = this.recordFrameHistory(peer, arrivalMsg, frameId, now)
 
     peer.received++
     this.recordTelemetryCounter(receivingPeerId, 'received')
@@ -298,12 +286,16 @@ export class GossipController {
       media_generation: msg.media_generation,
       ttl: msg.ttl,
       forwarded_from: fromPeerId || undefined,
+      latest_arrival_ms: historyResult.history?.latest_arrival_ms,
       transport_kind: this.dataTransport.kind || 'unknown',
-      hop_latency_ms: this.hopLatencyMs(msg, now),
+      hop_latency_ms: this.hopLatencyMs(arrivalMsg, now),
     })
-    this.emitDataDelivery(receivingPeerId, fromPeerId, frameId, msg)
+    if (!alreadyDelivered) {
+      this.emitDataDelivery(receivingPeerId, fromPeerId, frameId, arrivalMsg)
+    }
 
     if (msg.ttl > 0) {
+      const msg = arrivalMsg
       this.forward(receivingPeerId, msg, frameId, fromPeerId)
     }
   }
@@ -332,6 +324,9 @@ export class GossipController {
       publisher_id: msg.publisher_id || fromPeerId,
       ttl,
       route_id: msg.route_id || `${this.callId}:${fromPeerId}:${Date.now()}:${msg.frame_sequence ?? publisher.sent + 1}`,
+      sender_sent_at_ms: msg.sender_sent_at_ms || msg.senderSentAtMs || msg.sent_at_ms || msg.sentAtMs || Date.now(),
+      received_at_ms: msg.received_at_ms || msg.receivedAtMs || Date.now(),
+      hop_count: Math.max(0, Number(msg.hop_count ?? msg.hopCount ?? 0)),
     }
     const frameId = this.frameId(outbound)
     const now = Date.now()
@@ -340,7 +335,8 @@ export class GossipController {
     publisher.sent++
     this.recordTelemetryCounter(fromPeerId, 'sent')
     this.recordTelemetryCounter(fromPeerId, 'server_fanout_avoided', avoidedServerFanout)
-    this.addToSeenWindow(publisher, frameId, now)
+    this.addToSeenWindow(publisher, frameId, now, ttl)
+    this.recordFrameHistory(publisher, outbound, frameId, now)
     this.logEvent(fromPeerId, 'server_fanout_avoided', 'data', {
       frame_id: frameId,
       transport_kind: this.dataTransport.kind || 'unknown',
@@ -368,20 +364,6 @@ export class GossipController {
 
     if (msg.type === 'topology_hint') {
       this.applyTopologyHint(peerId, msg as TopologyHintMessage)
-    }
-
-    if (msg.type === 'heartbeat' || msg.type === 'heartbeat_ack') {
-      peer.last_heartbeat_at_ms = Date.now()
-      peer.missed_heartbeats = 0
-      if (peer.carrier_state !== 'connected') {
-        const prev = peer.carrier_state
-        peer.carrier_state = 'connected'
-        this.logEvent(peerId, 'carrier_state_change', 'ops', {
-          previous_state: prev,
-          carrier_state: 'connected',
-          reason: 'heartbeat_received',
-        })
-      }
     }
 
     this.logEvent(peerId, 'receive', 'ops', {
@@ -444,26 +426,15 @@ export class GossipController {
   setCarrierState(peerId: string, carrierState: GossipPeer['carrier_state'], reason = 'carrier_state_update'): boolean {
     const peer = this.peers.get(peerId)
     if (!peer) return false
-    const nextState = carrierState === 'lost'
-      ? 'lost'
-      : (carrierState === 'degraded' ? 'degraded' : 'connected')
+    void carrierState
     const previousState = peer.carrier_state
-    peer.carrier_state = nextState
-    if (nextState === 'connected') {
-      peer.missed_heartbeats = 0
-      peer.last_heartbeat_at_ms = Date.now()
-    }
-    if (previousState !== nextState) {
+    peer.carrier_state = 'connected'
+    peer.missed_heartbeats = 0
+    peer.last_heartbeat_at_ms = Date.now()
+    if (previousState !== 'connected') {
       this.logEvent(peerId, 'carrier_state_change', 'ops', {
         previous_state: previousState,
-        carrier_state: nextState,
-        reason,
-      })
-    }
-    if (nextState === 'lost') {
-      this.logEvent(peerId, 'reconnect_requested', 'ops', {
-        reconnect_allowed: true,
-        carrier_state: 'lost',
+        carrier_state: 'connected',
         reason,
       })
     }
@@ -473,75 +444,23 @@ export class GossipController {
   updateCarrierStateFromDataChannel(peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error'): boolean {
     const peer = this.peers.get(peerId)
     if (!peer) return false
+    void state
     const previousState = peer.carrier_state
-    if (eventType === 'open' && state === 'open') {
-      peer.carrier_state = 'connected'
-      peer.missed_heartbeats = 0
-      peer.last_heartbeat_at_ms = Date.now()
-      if (previousState !== 'connected') {
-        this.logEvent(peerId, 'carrier_state_change', 'ops', {
-          previous_state: previousState,
-          carrier_state: 'connected',
-          reason: 'rtc_datachannel_open',
-        })
-      }
-      return true
-    }
-
-    peer.carrier_state = 'lost'
-    if (previousState !== 'lost') {
+    peer.carrier_state = 'connected'
+    peer.missed_heartbeats = 0
+    peer.last_heartbeat_at_ms = Date.now()
+    if (previousState !== 'connected') {
       this.logEvent(peerId, 'carrier_state_change', 'ops', {
         previous_state: previousState,
-        carrier_state: 'lost',
-        reason: 'rtc_datachannel_lost',
+        carrier_state: 'connected',
+        reason: eventType === 'open' ? 'rtc_datachannel_open' : 'rtc_datachannel_health_ignored',
       })
     }
-    this.logEvent(peerId, 'reconnect_requested', 'ops', {
-      reconnect_allowed: true,
-      carrier_state: 'lost',
-      reason: 'rtc_datachannel_lost',
-      datachannel_state: state,
-      datachannel_event_type: eventType,
-    })
     return true
   }
 
   checkCarrierState(peerId: string): void {
-    const peer = this.peers.get(peerId)
-    if (!peer) return
-    const now = Date.now()
-    const elapsed = now - peer.last_heartbeat_at_ms
-    const missed = Math.floor(elapsed / HEARTBEAT_INTERVAL_MS)
-
-    if (missed > LOST_AFTER) {
-      if (peer.carrier_state !== 'lost') {
-        const prev = peer.carrier_state
-        peer.carrier_state = 'lost'
-        peer.missed_heartbeats = missed
-        this.logEvent(peerId, 'carrier_state_change', 'ops', {
-          previous_state: prev,
-          carrier_state: 'lost',
-          reason: 'heartbeat_timeout',
-          missed_heartbeats: missed,
-        })
-        this.logEvent(peerId, 'reconnect_requested', 'ops', {
-          reconnect_allowed: true,
-          carrier_state: 'lost',
-        })
-      }
-    } else if (missed > DEGRADED_AFTER) {
-      if (peer.carrier_state === 'connected') {
-        const prev = peer.carrier_state
-        peer.carrier_state = 'degraded'
-        peer.missed_heartbeats = missed
-        this.logEvent(peerId, 'carrier_state_change', 'ops', {
-          previous_state: prev,
-          carrier_state: 'degraded',
-          reason: 'heartbeat_degraded',
-          missed_heartbeats: missed,
-        })
-      }
-    }
+    void peerId
   }
 
   getPeer(peerId: string): GossipPeer | undefined {
@@ -640,17 +559,21 @@ export class GossipController {
       const neighbor = this.peers.get(neighborId)
       if (!neighbor) continue
 
-      if (neighbor.seen_window.has(frameId)) {
+      if (this.hasSeenWithEqualOrBetterTtl(neighbor, frameId, ttl)) {
         neighbor.duplicates++
         this.logEvent(neighborId, 'drop_duplicate', 'data', {
           frame_id: frameId,
           forwarded_from: fromPeerId,
+          ttl,
+          best_seen_ttl: neighbor.seen_ttl_window.get(frameId) ?? 0,
         })
         continue
       }
 
       const now = Date.now()
-      this.addToSeenWindow(neighbor, frameId, now)
+      this.addToSeenWindow(neighbor, frameId, now, ttl)
+      const forwardedMsg = this.withRelayForwardMetadata(msg, fromPeerId, forwardedAtMs, ttl)
+      const historyResult = this.recordFrameHistory(neighbor, forwardedMsg, frameId, now, forwardedAtMs)
       neighbor.received++
 
       this.logEvent(neighborId, 'receive', 'data', {
@@ -661,6 +584,8 @@ export class GossipController {
         media_generation: msg.media_generation,
         ttl: ttl,
         forwarded_from: fromPeerId,
+        latest_arrival_ms: historyResult.history?.latest_arrival_ms,
+        latest_forwarded_ms: historyResult.history?.latest_forwarded_ms,
       })
 
       this.recordTelemetryCounter(fromPeerId, 'forwarded')
@@ -673,7 +598,7 @@ export class GossipController {
         transport_kind: this.dataTransport.kind || 'unknown',
         hop_latency_ms: this.hopLatencyMs(msg, forwardedAtMs),
       })
-      this.dataTransport.sendData(neighborId, { ...msg, ttl, last_hop_sent_at_ms: forwardedAtMs }, fromPeerId)
+      this.dataTransport.sendData(neighborId, { ...forwardedMsg, ttl, last_hop_sent_at_ms: forwardedAtMs }, fromPeerId)
     }
   }
 
@@ -694,27 +619,126 @@ export class GossipController {
     }
   }
 
-  private addToSeenWindow(peer: GossipPeer, frameId: string, now: number): void {
+  private hasSeenWithEqualOrBetterTtl(peer: GossipPeer, frameId: string, ttl: number): boolean {
+    if (!peer.seen_window.has(frameId)) return false
+    return Math.max(0, Number(peer.seen_ttl_window.get(frameId) ?? 0)) >= Math.max(0, ttl)
+  }
+
+  private addToSeenWindow(peer: GossipPeer, frameId: string, now: number, ttl: number): void {
     peer.seen_window.set(frameId, now)
+    peer.seen_ttl_window.set(frameId, Math.max(Math.max(0, ttl), Number(peer.seen_ttl_window.get(frameId) ?? 0)))
     if (peer.seen_window.size > SEEN_WINDOW_SIZE) {
       const oldest = Array.from(peer.seen_window.entries())
         .sort((a, b) => a[1] - b[1])[0]
-      if (oldest) peer.seen_window.delete(oldest[0])
+      if (oldest) {
+        peer.seen_window.delete(oldest[0])
+        peer.seen_ttl_window.delete(oldest[0])
+      }
     }
   }
 
-  private startHeartbeat(peerId: string): void {
-    const timer = setInterval(() => {
-      const peer = this.peers.get(peerId)
-      if (!peer) return
-      peer.ops_epoch += 1
-      peer.signal_sequence += 1
-      this.logEvent(peerId, 'heartbeat', 'ops', {
-        ops_epoch: peer.ops_epoch,
-        signal_sequence: peer.signal_sequence,
-      })
-    }, HEARTBEAT_INTERVAL_MS)
-    this.heartbeatTimers.set(peerId, timer)
+  private publisherId(msg: GossipFrameMessage): string {
+    return String(msg.publisher_id || msg.publisherId || msg.publisher_user_id || '').trim()
+  }
+
+  private trackId(msg: GossipFrameMessage): string {
+    return String(msg.track_id || msg.trackId || '').trim()
+  }
+
+  private mediaGeneration(msg: GossipFrameMessage): number {
+    return Math.max(0, Math.floor(Number(msg.media_generation ?? msg.mediaGeneration ?? 0) || 0))
+  }
+
+  private frameSequence(msg: GossipFrameMessage): number {
+    return Math.max(0, Math.floor(Number(msg.frame_sequence ?? msg.frameSequence ?? 0) || 0))
+  }
+
+  private frameType(msg: GossipFrameMessage): 'keyframe' | 'delta' {
+    return String(msg.frame_type || msg.frameType || msg.type || '').trim().toLowerCase() === 'keyframe'
+      ? 'keyframe'
+      : 'delta'
+  }
+
+  private recordFrameHistory(
+    peer: GossipPeer,
+    msg: GossipFrameMessage,
+    frameId: string,
+    arrivalMs: number,
+    forwardedMs = 0,
+  ): { accepted: boolean; reason: string; current_generation: number; history: GossipTrackFrameHistory | null } {
+    const publisherId = this.publisherId(msg)
+    const trackId = this.trackId(msg)
+    if (publisherId === '' || trackId === '') {
+      return { accepted: true, reason: '', current_generation: 0, history: null }
+    }
+
+    const key = `${publisherId}::${trackId}`
+    const mediaGeneration = this.mediaGeneration(msg)
+    const frameSequence = this.frameSequence(msg)
+    let history = peer.frame_history.get(key)
+    if (!history) {
+      history = {
+        publisher_id: publisherId,
+        track_id: trackId,
+        media_generation: mediaGeneration,
+        latest_sequence_seen: 0,
+        latest_keyframe_sequence: 0,
+        latest_rendered_sequence: 0,
+        latest_arrival_ms: 0,
+        latest_forwarded_ms: 0,
+        latest_keyframe_frame: null,
+        recent_delta_ring_buffer: [],
+      }
+      peer.frame_history.set(key, history)
+    }
+
+    if (mediaGeneration > history.media_generation) {
+      history.media_generation = mediaGeneration
+      history.latest_sequence_seen = 0
+      history.latest_keyframe_sequence = 0
+      history.latest_rendered_sequence = 0
+      history.latest_keyframe_frame = null
+      history.recent_delta_ring_buffer = []
+    }
+
+    history.latest_sequence_seen = Math.max(history.latest_sequence_seen, frameSequence)
+    history.latest_arrival_ms = Math.max(history.latest_arrival_ms, arrivalMs)
+    if (forwardedMs > 0) {
+      history.latest_forwarded_ms = Math.max(history.latest_forwarded_ms, forwardedMs)
+    }
+
+    const historicalFrame = { ...msg, frame_id: msg.frame_id || msg.frameId || frameId }
+    if (this.frameType(msg) === 'keyframe') {
+      history.latest_keyframe_sequence = Math.max(history.latest_keyframe_sequence, frameSequence)
+      history.latest_keyframe_frame = historicalFrame
+    } else {
+      history.recent_delta_ring_buffer.push(historicalFrame)
+      if (history.recent_delta_ring_buffer.length > 16) {
+        history.recent_delta_ring_buffer = history.recent_delta_ring_buffer.slice(-16)
+      }
+    }
+
+    return { accepted: true, reason: '', current_generation: history.media_generation, history }
+  }
+
+  private withRelayReceiveMetadata(msg: GossipFrameMessage, fromPeerId: string, receivedAtMs: number): GossipFrameMessage {
+    return {
+      ...msg,
+      received_at_ms: receivedAtMs,
+      relay_peer_id: fromPeerId || msg.relay_peer_id || msg.relayPeerId || '',
+      hop_count: Math.max(0, Math.floor(Number(msg.hop_count ?? msg.hopCount ?? 0) || 0)),
+    }
+  }
+
+  private withRelayForwardMetadata(msg: GossipFrameMessage, relayPeerId: string, forwardedAtMs: number, ttl: number): GossipFrameMessage {
+    return {
+      ...msg,
+      ttl,
+      forwarded_at_ms: forwardedAtMs,
+      last_hop_sent_at_ms: forwardedAtMs,
+      relay_peer_id: relayPeerId,
+      hop_count: Math.max(0, Math.floor(Number(msg.hop_count ?? msg.hopCount ?? 0) || 0)) + 1,
+    }
   }
 
   private frameId(msg: GossipFrameMessage): string {

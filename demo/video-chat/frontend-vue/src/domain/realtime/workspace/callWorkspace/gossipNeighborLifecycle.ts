@@ -27,6 +27,27 @@ function signalingStateIsStable(pc) {
   return signalingState === 'stable' || signalingState === '';
 }
 
+function canonicalIntegerPeerId(value) {
+  const peerId = safePeerId(value);
+  if (!/^(0|[1-9]\d*)$/.test(peerId)) return null;
+  const numericPeerId = Number(peerId);
+  return Number.isSafeInteger(numericPeerId) ? numericPeerId : null;
+}
+
+function comparePeerIds(leftPeerId, rightPeerId) {
+  const left = safePeerId(leftPeerId);
+  const right = safePeerId(rightPeerId);
+  if (left === right) return 0;
+
+  const leftNumber = canonicalIntegerPeerId(left);
+  const rightNumber = canonicalIntegerPeerId(right);
+  if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) {
+    return leftNumber < rightNumber ? -1 : 1;
+  }
+
+  return left < right ? -1 : 1;
+}
+
 function shouldDeferOfferSetLocalFailure(error, pc) {
   const message = String(error?.message || error || '').toLowerCase();
   return normalizedSignalingState(pc) !== 'closed'
@@ -85,6 +106,7 @@ export function createGossipNeighborLifecycle({
     currentUserId,
     getDataTransport = () => null,
     getIceServers = () => DEFAULT_NATIVE_ICE_SERVERS,
+    allowAutomaticRenegotiate = () => true,
     onPeerConnectionState = () => false,
     sendSocketFrame = () => false,
   } = callbacks;
@@ -115,6 +137,34 @@ export function createGossipNeighborLifecycle({
 
   function peerAllowed(peerId) {
     return admittedPeerIds.has(peerId) || peers.has(peerId);
+  }
+
+  function shouldInitiateAssignedNeighbor(peerId) {
+    const localId = localPeerId();
+    const remoteId = safePeerId(peerId);
+    return localId !== '' && remoteId !== '' && comparePeerIds(localId, remoteId) < 0;
+  }
+
+  function automaticRenegotiateAllowed(peer, reason = 'queued_renegotiate') {
+    if (allowAutomaticRenegotiate(reason, peer) !== false) return true;
+    peer.needsRenegotiate = false;
+    peer.queuedRenegotiateAttempts = 0;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'gossip_neighbor_renegotiate_parked',
+      code: 'gossip_neighbor_renegotiate_parked',
+      message: 'Gossip-primary one-connect media policy parked automatic dedicated-neighbor renegotiation.',
+      payload: {
+        peer_id: safePeerId(peer?.peerId),
+        reason: String(reason || 'queued_renegotiate'),
+        topology_epoch: topologyEpoch,
+        automatic_repair_allowed: false,
+        next_connect_cycle_requires_new_participant: true,
+      },
+      immediate: true,
+    });
+    return false;
   }
 
   function ensurePeer(peerId, initiator, reason) {
@@ -159,6 +209,7 @@ export function createGossipNeighborLifecycle({
 
     pc.addEventListener('negotiationneeded', () => {
       if (!peer.initiator) return;
+      if (!automaticRenegotiateAllowed(peer, 'negotiationneeded')) return;
       void negotiatePeer(peer, 'negotiationneeded');
     });
 
@@ -220,6 +271,7 @@ export function createGossipNeighborLifecycle({
 
   function scheduleQueuedRenegotiate(peer, reason = 'queued_renegotiate') {
     if (!peer?.pc || peer.pc.signalingState === 'closed') return false;
+    if (!automaticRenegotiateAllowed(peer, reason)) return false;
     if (!signalingStateIsStable(peer.pc)) {
       captureClientDiagnostic({
         category: 'media',
@@ -391,7 +443,7 @@ export function createGossipNeighborLifecycle({
     try {
       const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
       if (signalingState === 'have-local-offer') {
-        const remoteWinsCollision = normalizedPeerId < localPeerId();
+        const remoteWinsCollision = comparePeerIds(normalizedPeerId, localPeerId()) < 0;
         if (!remoteWinsCollision) return;
         try {
           await peer.pc.setLocalDescription({ type: 'rollback' });
@@ -550,7 +602,7 @@ export function createGossipNeighborLifecycle({
     );
     for (const peerId of assigned) {
       admittedPeerIds.add(peerId);
-      ensurePeer(peerId, true, 'server_assigned_neighbor');
+      ensurePeer(peerId, shouldInitiateAssignedNeighbor(peerId), 'server_assigned_neighbor');
     }
     for (const peerId of Array.from(peers.keys())) {
       if (!assigned.has(peerId)) closePeer(peerId, 'retired_by_topology');

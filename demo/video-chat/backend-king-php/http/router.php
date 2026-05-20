@@ -15,6 +15,9 @@ require_once __DIR__ . '/module_workspace_calendars.php';
 require_once __DIR__ . '/module_workspace_administration.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_call_apps.php';
+require_once __DIR__ . '/module_call_stt.php';
+require_once __DIR__ . '/module_call_sputnik.php';
+require_once __DIR__ . '/module_calls_reactivate.php';
 require_once __DIR__ . '/module_calls.php';
 require_once __DIR__ . '/module_appointment_calendar.php';
 require_once __DIR__ . '/module_realtime.php';
@@ -38,6 +41,9 @@ function videochat_dispatch_route_module_order(): array
         'workspace_administration',
         'invites',
         'call_apps',
+        'call_stt',
+        'call_sputnik',
+        'call_reactivate',
         'calls',
         'appointment_calendar',
         'realtime',
@@ -347,6 +353,39 @@ function videochat_dispatch_request(
                 $openDatabase,
                 $decodeJsonBody,
                 $callAppRoomSnapshotBroadcaster
+            );
+        } elseif ($moduleName === 'call_stt') {
+            $response = videochat_handle_call_stt_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'call_sputnik') {
+            $response = videochat_handle_call_sputnik_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'call_reactivate') {
+            $response = videochat_handle_call_reactivate_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
             );
         } elseif ($moduleName === 'calls') {
             $response = videochat_handle_call_routes(

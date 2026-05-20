@@ -131,6 +131,42 @@ try {
                 'stuck_reason' => 'gossip_backpressure_timeout',
             ],
             [
+                'participant_session_id' => 'participant-audio-only',
+                'client_capabilities' => videochat_client_capabilities_public_projection(videochat_client_capabilities_normalize([
+                    'participant_session_id' => 'participant-audio-only',
+                    'media' => [
+                        'camera' => false,
+                        'microphone' => true,
+                    ],
+                    'runtime' => [
+                        'websocket' => false,
+                        'webrtc' => true,
+                        'wlvc_encoder' => false,
+                    ],
+                ])),
+            ],
+            [
+                'participant_session_id' => 'participant-non720-talk',
+                'client_capabilities' => videochat_client_capabilities_public_projection(videochat_client_capabilities_normalize([
+                    'participant_session_id' => 'participant-non720-talk',
+                    'media' => [
+                        'camera' => true,
+                        'camera_720p30' => false,
+                        'microphone' => true,
+                    ],
+                    'runtime' => [
+                        'websocket' => false,
+                        'webrtc' => true,
+                        'wlvc_encoder' => false,
+                    ],
+                    'constraints' => [
+                        'video_width' => 640,
+                        'video_height' => 480,
+                        'video_fps' => 15,
+                    ],
+                ])),
+            ],
+            [
                 'participant_session_id' => 'participant-readiness-timeout',
                 'client_capabilities' => [
                     ...$publicCapabilities,
@@ -158,6 +194,8 @@ try {
         'throttled_50',
         'throttled_25',
         'stuck_not_sending',
+        'audio_only',
+        'video_unavailable',
         'blocked_capability',
         'left',
     ], 'plan must publish gossip state catalog');
@@ -166,8 +204,13 @@ try {
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][1]['transport'] ?? '') === 'gossip', 'throttled_50 must keep gossip transport');
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][2]['transport'] ?? '') === 'gossip', 'throttled_25 must keep gossip transport');
     videochat_media_capability_gossip_assert(($projectedPlan['participants'][3]['stuck_reason'] ?? '') === 'gossip_backpressure_timeout', 'stuck state must expose reason');
-    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['media_state'] ?? '') === 'stuck_not_sending', 'readiness timeout must become stuck_not_sending');
-    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['stuck_reason'] ?? '') === 'gossip_readiness_timeout', 'readiness timeout must expose reason');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['media_state'] ?? '') === 'audio_only', 'plain WebRTC talk audio must bypass Gossip/SFU video send gates');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['transport'] ?? '') === '', 'audio_only must not claim a Gossip/SFU video transport');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][4]['security_policy'] ?? '') === 'transport_only', 'audio_only must not require MediaSecurity protected-frame transforms');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][5]['media_state'] ?? '') === 'audio_only', 'non-720p camera must not block plain native WebRTC talk audio');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][5]['security_policy'] ?? '') === 'transport_only', 'non-720p talk audio must keep transport-only security');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][6]['media_state'] ?? '') === 'stuck_not_sending', 'readiness timeout must become stuck_not_sending');
+    videochat_media_capability_gossip_assert(($projectedPlan['participants'][6]['stuck_reason'] ?? '') === 'gossip_readiness_timeout', 'readiness timeout must expose reason');
 
     $frames = [];
     $sender = static function (mixed $socket, array $payload) use (&$frames): bool {

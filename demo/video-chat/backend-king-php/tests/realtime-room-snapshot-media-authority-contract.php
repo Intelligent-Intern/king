@@ -125,10 +125,37 @@ videochat_room_snapshot_media_authority_assert(($plan['schema_version'] ?? '') =
 videochat_room_snapshot_media_authority_assert((bool) ($plan['authoritative'] ?? false), 'media_session_plan must be authoritative');
 videochat_room_snapshot_media_authority_assert((string) ($plan['authority'] ?? '') === 'room_snapshot', 'media authority source mismatch');
 videochat_room_snapshot_media_authority_assert(!isset($snapshot['media']), 'snapshot must not expose a parallel legacy media object');
+videochat_room_snapshot_media_authority_assert(
+    (array) ($plan['session_state_catalog'] ?? []) === ['pending', 'connecting', 'gossip_720p30', 'gossip_360p30', 'gossip_360p5', 'sfu_720p30', 'sfu_320p30', 'ready', 'failed'],
+    'authoritative plan must publish canonical session-state catalog'
+);
+
+$expectedLadderIds = ['gossip_720p30', 'gossip_360p30', 'gossip_360p5', 'sfu_720p30', 'sfu_320p30'];
+$ladder = (array) ($plan['ladder'] ?? []);
+videochat_room_snapshot_media_authority_assert(array_column($ladder, 'plan_id') === $expectedLadderIds, 'authoritative plan ladder order mismatch');
+videochat_room_snapshot_media_authority_assert(array_column($ladder, 'transport') === ['gossip', 'gossip', 'gossip', 'sfu', 'sfu'], 'authoritative plan ladder transport mismatch');
+videochat_room_snapshot_media_authority_assert(array_column($ladder, 'profile') === ['720p30', '360p30', '360p5', '720p30', '320p30'], 'authoritative plan ladder profile mismatch');
+videochat_room_snapshot_media_authority_assert(array_column($ladder, 'render_window_ms') === [30_000, 30_000, 30_000, 30_000, 30_000], 'authoritative plan ladder render window mismatch');
+videochat_room_snapshot_media_authority_assert((string) ($ladder[3]['selected_by'] ?? '') === 'orchestrator', 'SFU 720p30 must be orchestrator-selected');
+videochat_room_snapshot_media_authority_assert((string) ($ladder[4]['selection_gate'] ?? '') === 'after_sfu_720p30_render_failure', 'SFU 320p30 selection gate mismatch');
+
+$selectedPlan = (array) ($plan['selected_plan'] ?? []);
+videochat_room_snapshot_media_authority_assert((string) ($selectedPlan['plan_id'] ?? '') === 'gossip_720p30', 'selected plan id mismatch');
+videochat_room_snapshot_media_authority_assert((string) ($selectedPlan['transport'] ?? '') === 'gossip', 'selected plan transport mismatch');
+videochat_room_snapshot_media_authority_assert((string) ($selectedPlan['profile'] ?? '') === '720p30', 'selected plan profile mismatch');
+videochat_room_snapshot_media_authority_assert((string) ($selectedPlan['reason'] ?? '') === 'initial_gossip_720p30', 'selected plan reason mismatch');
+videochat_room_snapshot_media_authority_assert((string) ($selectedPlan['session_state'] ?? '') === 'gossip_720p30', 'selected plan session-state mismatch');
+videochat_room_snapshot_media_authority_assert((int) ($selectedPlan['selected_at_ms'] ?? 0) === 1_778_393_600_000, 'selected plan timestamp mismatch');
+videochat_room_snapshot_media_authority_assert((int) ($selectedPlan['updated_at_ms'] ?? 0) === 1_778_393_600_000, 'selected plan updated timestamp mismatch');
+videochat_room_snapshot_media_authority_assert((array) ($selectedPlan['participant_session_ids'] ?? []) === ['conn-owner', 'conn-peer'], 'selected plan participant set mismatch');
 
 $capabilitiesByConnectionId = (array) (($plan['capabilities'] ?? [])['by_connection_id'] ?? []);
 videochat_room_snapshot_media_authority_assert(isset($capabilitiesByConnectionId['conn-owner'], $capabilitiesByConnectionId['conn-peer']), 'authoritative plan must carry room capabilities by connection');
 videochat_room_snapshot_media_authority_assert((bool) (($capabilitiesByConnectionId['conn-owner']['media'] ?? [])['camera_720p30'] ?? false), 'owner 720p30 capability missing');
+$capabilitySummary = (array) ($plan['capability_summary'] ?? []);
+videochat_room_snapshot_media_authority_assert((int) ($capabilitySummary['participant_count'] ?? 0) === 2, 'capability summary participant count mismatch');
+videochat_room_snapshot_media_authority_assert((int) ($capabilitySummary['camera_720p30_count'] ?? 0) === 1, 'capability summary 720p30 count mismatch');
+videochat_room_snapshot_media_authority_assert(isset(($capabilitySummary['by_connection_id'] ?? [])['conn-owner']), 'capability summary by-connection map missing owner');
 
 foreach ((array) ($snapshot['participants'] ?? []) as $participant) {
     videochat_room_snapshot_media_authority_assert(!array_key_exists('client_capabilities', (array) $participant), 'participants must not carry legacy client_capabilities truth');
@@ -143,7 +170,9 @@ foreach ($participantMediaState as $row) {
     }
 }
 videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-owner']['media_state'] ?? '') === 'streaming_720p30', 'owner media state must come from the authoritative plan');
-videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['media_state'] ?? '') === 'blocked_capability', 'peer media state must block non-720p capability from the authoritative plan');
+videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['media_state'] ?? '') === 'audio_only', 'peer non-720p video must not block authoritative native talk audio');
+videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['transport'] ?? '') === '', 'peer native talk audio must not require SFU/Gossip video transport');
+videochat_room_snapshot_media_authority_assert(($stateByConnectionId['conn-peer']['security_policy'] ?? '') === 'transport_only', 'peer native talk audio must not require MediaSecurity protected-frame transforms');
 
 $gossip = is_array($plan['gossip'] ?? null) ? $plan['gossip'] : [];
 videochat_room_snapshot_media_authority_assert((string) (($gossip['topology'] ?? [])['type'] ?? '') === 'topology_hint', 'authoritative plan must carry gossip topology');
@@ -156,6 +185,11 @@ videochat_room_snapshot_media_authority_assert((int) ($counters['sent'] ?? 0) ==
 videochat_room_snapshot_media_authority_assert((int) ($counters['rtc_datachannel_sends'] ?? 0) === 9, 'diagnostics counters must include RTC data-channel sends');
 
 $signatureWithAuthority = videochat_realtime_room_snapshot_signature($snapshot);
+$snapshotAgain = videochat_realtime_room_snapshot_payload($state, $owner, $openDatabase, 'media_authority_contract', 1_778_393_600_000);
+videochat_room_snapshot_media_authority_assert(
+    (array) (($snapshotAgain['media_session_plan'] ?? [])['selected_plan'] ?? []) === $selectedPlan,
+    'selected plan must be idempotent across equivalent room snapshots'
+);
 $snapshotWithoutAuthorityDetails = $snapshot;
 unset($snapshotWithoutAuthorityDetails['media_session_plan']['capabilities']);
 videochat_room_snapshot_media_authority_assert(

@@ -84,10 +84,15 @@ function isCallWorkspacePath(path = '') {
   return String(path || '').startsWith('/workspace/call');
 }
 
+function currentBrowserPath() {
+  if (typeof window === 'undefined') return route.path;
+  return String(window.location?.pathname || route.path || '');
+}
+
 function scheduleBuildVersionReload() {
   if (typeof window === 'undefined') return;
   buildVersionReloadPending = true;
-  if (isCallWorkspacePath(route.path)) {
+  if (isCallWorkspacePath(route.path) || isCallWorkspacePath(currentBrowserPath())) {
     return;
   }
   window.location.reload();
@@ -96,6 +101,7 @@ function scheduleBuildVersionReload() {
 async function checkForBuildVersionMismatch() {
   if (import.meta.env.DEV || buildVersionReloadPending) return;
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (isCallWorkspacePath(route.path) || isCallWorkspacePath(currentBrowserPath())) return;
   if (BUILD_VERSION === '' || document.visibilityState === 'hidden') return;
   if (buildVersionCheckPromise) {
     await buildVersionCheckPromise;
@@ -148,7 +154,12 @@ watchEffect(() => {
 watch(
   () => route.path,
   () => {
-    if (buildVersionReloadPending && !isCallWorkspacePath(route.path) && typeof window !== 'undefined') {
+    if (
+      buildVersionReloadPending
+      && !isCallWorkspacePath(route.path)
+      && !isCallWorkspacePath(currentBrowserPath())
+      && typeof window !== 'undefined'
+    ) {
       window.location.reload();
     }
   },

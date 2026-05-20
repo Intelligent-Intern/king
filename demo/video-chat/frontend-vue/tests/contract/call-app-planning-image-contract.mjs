@@ -19,7 +19,7 @@ function assertIncludes(source, needle, message) {
   assert.ok(source.includes(needle), message);
 }
 
-const appRoot = path.join(repoRoot, 'demo/call-app/planning-image');
+const appRoot = path.join(repoRoot, 'demo/call-apps/planning-image');
 assert.ok(fs.existsSync(appRoot), 'planning-image package must exist');
 
 for (const requiredFile of [
@@ -34,7 +34,7 @@ for (const requiredFile of [
   assert.ok(fs.existsSync(path.join(appRoot, requiredFile)), `planning-image package missing ${requiredFile}`);
 }
 
-const manifest = readJson('demo/call-app/planning-image/call-app.manifest.json');
+const manifest = readJson('demo/call-apps/planning-image/call-app.manifest.json');
 assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest schema version mismatch');
 assert.equal(manifest.app_key, 'planning-image', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'planning-image must advertise runtime readiness');
@@ -48,7 +48,7 @@ assert.ok(manifest.permissions.includes('call_apps.crdt.read'), 'planning-image 
 assert.ok(manifest.permissions.includes('call_apps.crdt.append'), 'planning-image must request CRDT append permission');
 assert.deepEqual(manifest.exports.map((entry) => entry.format), ['png'], 'planning-image must advertise PNG export');
 
-const mcp = readJson('demo/call-app/planning-image/mcp.descriptor.json');
+const mcp = readJson('demo/call-apps/planning-image/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'planning-image', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.planning-image.mcp', 'MCP service name mismatch');
@@ -66,7 +66,7 @@ for (const method of [
   assert.ok(mcp.methods.some((entry) => entry.name === method), `MCP descriptor missing ${method}`);
 }
 
-const crdt = readJson('demo/call-app/planning-image/crdt.schema.json');
+const crdt = readJson('demo/call-apps/planning-image/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.app_key, 'planning-image', 'CRDT app_key mismatch');
 assert.equal(crdt.documents?.[0]?.kind, 'planning_image_document', 'planning-image document kind mismatch');
@@ -83,15 +83,15 @@ for (const operationType of [
 assert.equal(crdt.presence?.persisted, false, 'planning-image presence must not be persisted');
 assert.deepEqual(crdt.exports, ['png'], 'planning-image CRDT exports must match manifest');
 
-const health = readJson('demo/call-app/planning-image/health.descriptor.json');
+const health = readJson('demo/call-apps/planning-image/health.descriptor.json');
 const healthPaths = health.checks.map((check) => check.path);
 for (const healthPath of ['public/index.html', 'public/planning-image.css', 'public/planning-image.js']) {
   assert.ok(healthPaths.includes(healthPath), `health descriptor missing ${healthPath}`);
 }
 
-const html = read('demo/call-app/planning-image/public/index.html');
-const css = read('demo/call-app/planning-image/public/planning-image.css');
-const runtime = read('demo/call-app/planning-image/public/planning-image.js');
+const html = read('demo/call-apps/planning-image/public/index.html');
+const css = read('demo/call-apps/planning-image/public/planning-image.css');
+const runtime = read('demo/call-apps/planning-image/public/planning-image.js');
 const crdtDomain = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php');
 const launchTokens = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_launch_tokens.php');
 const bundle = `${html}\n${css}\n${runtime}`;

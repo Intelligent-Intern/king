@@ -18,6 +18,9 @@
           :active-sidebar-call-id="activeSidebarCallId"
           :can-manage-sidebar-call-apps="canManageSidebarCallApps"
           :call-app-sidebar-state="callAppSidebarState"
+          :workspace-stt-state="workspaceSttState"
+          :show-sputnik-controls="showSputnikControls"
+          :sputnik-swarm-state="sputnikSwarmState"
           :api-request="apiRequest"
           @toggle-sidebar="handleLeftSidebarToggle"
           @set-camera-device="setCallCameraDevice"
@@ -425,6 +428,7 @@ import {
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
 import { playCallSpeakerTestSound } from '../domain/realtime/media/speakerOutputRouting';
+import { createSputnikWindowSpawner } from '../domain/realtime/sputnikWindowSpawner';
 import { useWorkspaceMicLevelMonitor } from './useWorkspaceMicLevelMonitor';
 
 const router = useRouter();
@@ -681,8 +685,18 @@ const callAppSidebarState = reactive({
   sendSocketFrame: null,
   requestRoomSnapshot: null,
 });
+const workspaceSttState = reactive({
+  enabled: false,
+  backendReady: false,
+  canManage: false,
+  pending: false,
+  status: '',
+  diagnostic: '',
+  toggle: null,
+});
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
+const showSputnikControls = computed(() => isCallWorkspace.value && Number(sessionState.userId || 0) === 1);
 const showCallOwnerInviteLink = computed(() => (
   isCallWorkspace.value
   && callOwnerEditState.visible
@@ -696,6 +710,11 @@ const activeSidebarCallId = computed(() => String(
   || ''
 ).trim());
 const canManageSidebarCallApps = computed(() => Boolean(callOwnerEditState.visible || callLayoutSidebarState.canModerate));
+const sputnikSwarmState = createSputnikWindowSpawner({
+  apiRequest,
+  canSpawn: () => showSputnikControls.value,
+  getCallId: () => activeSidebarCallId.value,
+});
 
 function applySidebarLayoutMode(mode) {
   if (typeof callLayoutSidebarState.setMode !== 'function') return;
@@ -1237,6 +1256,7 @@ provide('workspaceSidebarState', {
   setMicLevelMonitorStream: attachMicLevelStream,
   callLayoutControls: callLayoutSidebarState,
   callAppControls: callAppSidebarState,
+  stt: workspaceSttState,
 });
 
 watch(settingsTiles, () => {
@@ -1322,6 +1342,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  sputnikSwarmState.stop();
   stopMicLevelMonitor();
   if (detachCallMediaWatcher) {
     detachCallMediaWatcher();

@@ -34,8 +34,14 @@ function requireNotMatches(source, pattern, label) {
 
 const packageJson = JSON.parse(readUtf8('package.json'));
 const playwrightConfig = readUtf8('playwright.config.js');
+const productionUseStart = playwrightConfig.indexOf('const productionUse = {');
+const productionProjectsStart = playwrightConfig.indexOf('const productionProjects = [');
+const productionUseBlock = productionUseStart >= 0 && productionProjectsStart > productionUseStart
+  ? playwrightConfig.slice(productionUseStart, productionProjectsStart)
+  : '';
 const smokeSpec = readUtf8('tests/e2e/background-production-browser-smoke.spec.js');
 const nativeAudioHarness = readUtf8('tests/e2e/helpers/nativeAudioTransferHarness.js');
+const mediaOrchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
 const mediaPreferences = readUtf8('src/domain/realtime/media/preferences.ts');
 const screenSharePublisher = readUtf8('src/domain/realtime/local/screenSharePublisher.js');
 const runnerScript = readVideoChatUtf8('scripts/bgf-production-browser-smoke.sh');
@@ -98,6 +104,8 @@ for (const [pattern, label] of [
 requireContains(playwrightConfig, 'PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE', 'production Playwright mode flag');
 requireContains(playwrightConfig, 'production-chromium', 'production Chromium project');
 requireContains(playwrightConfig, 'production-firefox', 'production Firefox project');
+requireMatches(playwrightConfig, /name:\s*'production-chromium'[\s\S]*permissions:\s*\['camera', 'microphone'\]/, 'production Chromium owns browser media permissions');
+requireMissing(productionUseBlock, "permissions: ['camera', 'microphone']", 'productionUse must not apply Chromium media permissions to Firefox');
 requireContains(playwrightConfig, 'https://app.kingrt.com', 'deployed app default origin');
 requireContains(playwrightConfig, "protocol: 'https'", 'deployed HTTPS API origin protocol');
 requireContains(playwrightConfig, "protocol: 'wss'", 'deployed websocket origin protocol');
@@ -111,11 +119,19 @@ requireMatches(playwrightConfig, /assertNonLoopbackProductionOrigin\('baseURL', 
 requireContains(smokeSpec, "BACKGROUND_SMOKE_FLAG = 'bgf07-segmentation-unavailable'", 'named BGF-07 smoke flag');
 requireContains(smokeSpec, "query.set('kingrt_background_smoke', BACKGROUND_SMOKE_FLAG)", 'deployed smoke query flag');
 requireContains(smokeSpec, "query.set('kingrt_background_force_segmentation_unavailable', '1')", 'deployed smoke force query');
+requireContains(mediaOrchestration, 'shouldForceSegmentationUnavailableForSmoke', 'BGF forced-unavailable smoke can reach the background pipeline under strict call policy');
+requireContains(mediaOrchestration, 'function backgroundOutgoingDisabledByStrictPolicy()', 'strict background policy bypass is scoped through one helper');
+requireContains(mediaOrchestration, '&& !shouldForceSegmentationUnavailableForSmoke()', 'BGF forced-unavailable smoke is the only strict background bypass');
 requireContains(smokeSpec, 'createInvitedCallViaApi', 'real deployed call creation');
 requireContains(smokeSpec, 'createPersonalAccessJoinPath', 'real deployed participant join path');
 requireContains(smokeSpec, 'admitFirstLobbyUser', 'real lobby admission');
 requireContains(smokeSpec, 'measureNativeAudioBridgeEnergy', 'audio proof');
 requireContains(smokeSpec, 'sfuRemoteVideoSnapshot', 'remote video proof');
+requireContains(smokeSpec, 'nativeMediaSignalCount', 'generic realtime media signal proof');
+requireContains(smokeSpec, 'remoteVideoPixelSnapshot', 'remote video pixel artifact capture');
+requireContains(smokeSpec, 'waitForRealtimeMediaSignals', 'production smoke must not require a separate SFU socket when the media path is realtime WS/Gossip');
+requireMissing(smokeSpec, 'waitForSfuFlow', 'production background smoke must not pin proof to a separate SFU socket');
+requireMissing(smokeSpec, 'sfuSocketStats', 'production background smoke must not pin proof to SFU binary counters');
 requireContains(smokeSpec, 'getDisplayMedia', 'screen-share proof');
 requireContains(screenSharePublisher, "eventType: 'local_screen_share_participant_started'", 'actual screen-share participant started diagnostic');
 requireContains(screenSharePublisher, "eventType: 'local_screen_share_participant_stopped'", 'actual screen-share participant stopped diagnostic');
@@ -130,6 +146,11 @@ requireContains(smokeSpec, 'local_background_replacement_modal_choice', 'backgro
 requireContains(smokeSpec, "'Use standard avatar',", 'standard avatar choice assertion');
 requireContains(smokeSpec, "'Upload avatar',", 'uploaded avatar choice assertion');
 requireContains(smokeSpec, "'Send unfiltered video'", 'unfiltered video choice assertion');
+requireContains(smokeSpec, 'async function handleBackgroundUnavailableDialog', 'background unavailable modal helper');
+requireContains(smokeSpec, "waitFor({ state: 'visible', timeout })", 'background unavailable helper waits for actual modal visibility');
+requireContains(smokeSpec, 'bgf-production-background-unavailable-pre-admission.png', 'early background modal proof before lobby admission');
+requireContains(smokeSpec, 'bgf-production-background-unavailable-before-admit.png', 'background modal proof immediately before lobby admission');
+requireMatches(smokeSpec, /openOwnerCallWithBackgroundSmoke[\s\S]*handleBackgroundUnavailableDialog[\s\S]*queueUserAdmission[\s\S]*handleBackgroundUnavailableDialog[\s\S]*admitFirstLobbyUser/, 'background modal must be cleared before lobby admission when it appears early');
 requireContains(smokeSpec, 'socketFailureCount(afterFocus)', 'focus stability socket assertion');
 requireContains(smokeSpec, 'reconnectDiagnostics(afterFocus)', 'focus stability reconnect diagnostics assertion');
 requireContains(smokeSpec, 'testInfo.outputPath', 'browser proof artifacts');
@@ -174,5 +195,14 @@ requireContains(smokeSpec, `outgoing_video_quality_profile_version: ${mediaPrefs
 requireContains(nativeAudioHarness, `outgoing_video_quality_profile_version: ${mediaPrefsVersion},`, 'native audio harness media prefs version matches runtime');
 requireMissing(nativeAudioHarness, 'outgoing_video_quality_profile_version: 3', 'stale native audio harness prefs version');
 requireMissing(nativeAudioHarness, ".includes('/sfu')", 'substring SFU URL matching');
+requireContains(nativeAudioHarness, "options.browserName", 'browser-name override support for production Playwright projects');
+requireContains(nativeAudioHarness, "!browserName.includes('firefox')", 'Firefox context skips unsupported camera/microphone permissions');
+requireContains(nativeAudioHarness, "contextOptions.permissions = ['camera', 'microphone'];", 'Chromium context keeps explicit camera/microphone permissions');
+requireContains(nativeAudioHarness, "Unknown permission", 'browser context retries without unsupported media permissions');
+requireContains(nativeAudioHarness, '.right-roster-panel.active .roster-section-lobby', 'lobby admission uses current right roster panel');
+requireContains(nativeAudioHarness, '.workspace-lobby-toast', 'lobby admission can open collapsed right roster toast');
+requireContains(nativeAudioHarness, "type: 'lobby/allow_all'", 'lobby admission direct allow-all fallback');
+requireMissing(nativeAudioHarness, ".tab-lobby .tab-notice-badge", 'removed split lobby tab selector');
+requireMissing(nativeAudioHarness, "button.tab-lobby", 'removed split lobby tab button selector');
 
 console.log('[bgf-production-browser-smoke-contract] PASS');

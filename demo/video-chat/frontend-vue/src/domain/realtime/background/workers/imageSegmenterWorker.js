@@ -160,6 +160,37 @@ function categoryMaskBitmap(categoryMask) {
   }
 }
 
+function categoryMaskValues(categoryMask) {
+  const width = Math.max(1, Math.round(Number(categoryMask?.width) || 0));
+  const height = Math.max(1, Math.round(Number(categoryMask?.height) || 0));
+  if (!categoryMask || width <= 1 || height <= 1) return null;
+
+  const pixelCount = width * height;
+  let rawValues = null;
+  try {
+    if (typeof categoryMask.getAsUint8Array === 'function') {
+      rawValues = categoryMask.getAsUint8Array();
+    } else if (typeof categoryMask.getAsFloat32Array === 'function') {
+      rawValues = categoryMask.getAsFloat32Array();
+    }
+  } catch {
+    rawValues = null;
+  }
+
+  if (!rawValues || rawValues.length < pixelCount) return null;
+
+  const values = new Float32Array(pixelCount);
+  for (let index = 0; index < pixelCount; index += 1) {
+    values[index] = Number(rawValues[index]) > 0 ? 1 : 0;
+  }
+
+  return {
+    values,
+    width,
+    height,
+  };
+}
+
 // vision_wasm_internal.js is a classic UMD script that sets self.ModuleFactory.
 // In a type:module worker, the Tasks-Vision browser module skips this side
 // effect. We must manually fetch+eval it in global scope before
@@ -255,11 +286,13 @@ self.onmessage = async (event) => {
         const inferenceTime = performance.now() - startMs;
 
         let maskBitmap = null;
+        let maskValues = null;
         let width = 0;
         let height = 0;
 
         const categoryResult = categoryMaskBitmap(result.categoryMask);
-        if (!categoryResult) {
+        const categoryValueResult = categoryResult ? null : categoryMaskValues(result.categoryMask);
+        if (!categoryResult && !categoryValueResult) {
           result.close?.();
           self.postMessage({
             type: 'SEGMENT_ERROR',
@@ -269,15 +302,27 @@ self.onmessage = async (event) => {
           return;
         }
 
-        maskBitmap = categoryResult.bitmap;
-        width = categoryResult.width;
-        height = categoryResult.height;
+        if (categoryResult) {
+          maskBitmap = categoryResult.bitmap;
+          width = categoryResult.width;
+          height = categoryResult.height;
+        } else {
+          maskValues = categoryValueResult.values;
+          width = categoryValueResult.width;
+          height = categoryValueResult.height;
+        }
         result.close?.();
 
-        self.postMessage(
-          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, width, height, inferenceTime, sessionId: requestSessionId },
-          [maskBitmap],
-        );
+        const message = { type: 'SEGMENT_RESULT', mode: 'VIDEO', width, height, inferenceTime, sessionId: requestSessionId };
+        const transfer = [];
+        if (maskBitmap) {
+          message.maskBitmap = maskBitmap;
+          transfer.push(maskBitmap);
+        } else if (maskValues) {
+          message.maskValues = maskValues;
+          transfer.push(maskValues.buffer);
+        }
+        self.postMessage(message, transfer);
       });
     } catch (e) {
       try { bitmap?.close(); } catch { /* ignore */ }

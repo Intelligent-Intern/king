@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
 const frontendRoot = fileURLToPath(new URL('./', import.meta.url));
-const callAppRoot = fileURLToPath(new URL('../../call-app/', import.meta.url));
+const callAppRoot = fileURLToPath(new URL('../../call-apps/', import.meta.url));
 
 const parseAllowedHosts = (value) => {
   if (!value) {

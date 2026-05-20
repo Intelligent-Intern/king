@@ -403,8 +403,8 @@ export function reportClientDiagnostic({
     call_id: normalizeString(callId || context.call_id || context.callId || '', '', 120),
     room_id: normalizeString(roomId || context.room_id || context.roomId || '', '', 120),
     payload: normalizePayloadObject({
-      ...context,
       ...payload,
+      ...context,
     }),
     repeat_count: 1,
     client_time: new Date().toISOString(),

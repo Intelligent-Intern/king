@@ -520,6 +520,20 @@
     editorPoint = null;
   }
 
+  function commitInlineEditor() {
+    const text = inlineText.value.trim();
+    if (text && editorPoint) {
+      appendOperation(editorKind === 'sticky' ? 'sticky_note.add' : 'text.add', {
+        id: operationId(editorKind),
+        text,
+        x: editorPoint.x,
+        y: editorPoint.y,
+        color: activeColor,
+      });
+    }
+    closeInlineEditor();
+  }
+
   function pointerDown(event) {
     const point = normalizePoint(event);
     if (activeTool === 'delete') {
@@ -724,19 +738,15 @@
     });
   });
 
-  inlineEditor.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const text = inlineText.value.trim();
-    if (text && editorPoint) {
-      appendOperation(editorKind === 'sticky' ? 'sticky_note.add' : 'text.add', {
-        id: operationId(editorKind),
-        text,
-        x: editorPoint.x,
-        y: editorPoint.y,
-        color: activeColor,
-      });
+  document.getElementById('inlineSubmit').addEventListener('click', commitInlineEditor);
+  inlineText.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeInlineEditor();
+    } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      commitInlineEditor();
     }
-    closeInlineEditor();
   });
 
   canvas.addEventListener('pointerdown', pointerDown);

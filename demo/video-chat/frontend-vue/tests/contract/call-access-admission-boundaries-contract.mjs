@@ -30,6 +30,7 @@ function byKey(rows, label) {
 const seedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const seedMatrixSpec = readText('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');
 const seedMatrixHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js');
+const seedMatrixPermissions = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedPermissions.js');
 const ownerModeration = readText('demo/video-chat/backend-king-php/tests/call-owner-moderation-contract.php');
 const lobbySecurity = readText('demo/video-chat/backend-king-php/tests/realtime-lobby-security-contract.php');
 const orgAdmin = readText('demo/video-chat/backend-king-php/tests/org-admin-call-rights-contract.php');
@@ -93,9 +94,9 @@ assert.equal(
 );
 
 assert.match(
-  seedMatrixHelper,
+  seedMatrixPermissions,
   /function permissionsFor\(user,\s*membershipRole\)[\s\S]*const isTenantAdmin = normalizedRole === 'owner' \|\| normalizedRole === 'admin'[\s\S]*manage_lobby:\s*elevated[\s\S]*admit_participants:\s*elevated[\s\S]*reject_participants:\s*elevated[\s\S]*kick_participants:\s*elevated/,
-  'frontend seed helper must derive admission controls only from platform or tenant admin elevation',
+  'frontend seed permissions helper must derive admission controls only from platform or tenant admin elevation',
 );
 assert.match(
   seedMatrixHelper,
@@ -105,8 +106,8 @@ assert.match(
 
 assert.match(
   lobbySecurityModule,
-  /videochat_realtime_lobby_command_requires_moderation[\s\S]*\['lobby\/allow', 'lobby\/remove', 'lobby\/allow_all'\]/,
-  'backend must keep allow/remove/allow_all behind moderation authorization',
+  /videochat_realtime_lobby_command_requires_moderation[\s\S]*\['lobby\/allow', 'lobby\/remove', 'lobby\/reject', 'lobby\/kick', 'lobby\/allow_all'\]/,
+  'backend must keep allow/remove/reject/kick/allow_all behind moderation authorization',
 );
 assert.match(
   lobbySecurityModule,

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +50,13 @@ const staleOrganizationRoleContract = readText('demo/video-chat/backend-king-php
 const ownerTransferTempModeratorContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-owner-transfer-temp-moderator-extract-contract.mjs');
 const realtimeScopeContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-realtime-scope-contract.mjs');
 
-const iamGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+assert.match(
+  String(packageJson.scripts?.['test:contract:iam-call-access'] || ''),
+  /iam-call-access-contract-suite\.mjs/,
+  'package IAM gate must route through the maintained Call Access contract suite helper',
+);
+
+const iamGate = iamCallAccessContractSuiteText;
 for (const contractPath of [
   'call-access-direct-join-rights-contract.mjs',
   'call-access-kicked-rejoin-denial-contract.mjs',

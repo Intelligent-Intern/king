@@ -29,8 +29,8 @@ assert(
   'media carrier mode must be driven by VITE_VIDEOCHAT_MEDIA_CARRIER',
 )
 assert(
-  /return 'sfu_first'/.test(mediaCarrier),
-  'media carrier mode must default to conservative sfu_first',
+  /return 'gossip_primary'/.test(mediaCarrier),
+  'media carrier mode must default to gossip_primary without SFU media gates',
 )
 assert(
   /normalized === 'gossip_primary'/.test(mediaCarrier)
@@ -40,11 +40,11 @@ assert(
   'normalizer must recognize gossip_primary and sfu_mirror explicitly',
 )
 assert(
-  /gossipMayPublishWithoutSfu:\s*gossipPrimary/.test(mediaCarrier)
-    && /sfuRequiredBeforeGossip:\s*!gossipPrimary/.test(mediaCarrier)
-    && /sfuSendIsOptional:\s*sfuMirror/.test(mediaCarrier)
-    && /sfuFallbackAllowed:\s*!gossipPrimary/.test(mediaCarrier),
-  'runtime config must encode gossip-primary SFU independence without fallback or optional mirroring',
+  /gossipMayPublishWithoutSfu:\s*true/.test(mediaCarrier)
+    && /sfuRequiredBeforeGossip:\s*false/.test(mediaCarrier)
+    && /sfuSendIsOptional:\s*sfuFirst \|\| sfuMirror/.test(mediaCarrier)
+    && /sfuFallbackAllowed:\s*false/.test(mediaCarrier),
+  'runtime config must remove SFU media gates before Gossip publication',
 )
 assert(
   /media_carrier_gossip_primary/.test(mediaCarrier)

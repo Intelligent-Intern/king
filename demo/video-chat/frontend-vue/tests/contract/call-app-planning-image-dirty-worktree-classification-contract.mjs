@@ -19,8 +19,8 @@ function assertIncludes(source, needle, message) {
   assert.ok(source.includes(needle), message)
 }
 
-const legacyRoot = path.join(repoRoot, 'demo/call-app/image-planning')
-const canonicalRoot = path.join(repoRoot, 'demo/call-app/planning-image')
+const legacyRoot = path.join(repoRoot, 'demo/call-apps/image-planning')
+const canonicalRoot = path.join(repoRoot, 'demo/call-apps/planning-image')
 
 assert.ok(!fs.existsSync(legacyRoot), 'legacy image-planning package must not be copied into integration')
 assert.ok(fs.existsSync(canonicalRoot), 'canonical planning-image package must remain integrated')
@@ -44,12 +44,12 @@ assertIncludes(
   'classification must state that unique non-media value has been preserved',
 )
 
-const readme = read('demo/call-app/README.md')
+const readme = read('demo/call-apps/README.md')
 assertIncludes(readme, 'public/<app-key>.css', 'README must preserve generic package stylesheet naming')
 assertIncludes(readme, 'public/<app-key>.js', 'README must preserve generic package runtime naming')
 assertIncludes(readme, '`planning-image`', 'README must list the canonical planning-image package')
 
-const manifest = readJson('demo/call-app/planning-image/call-app.manifest.json')
+const manifest = readJson('demo/call-apps/planning-image/call-app.manifest.json')
 assert.equal(manifest.app_key, 'planning-image', 'canonical planning-image manifest key mismatch')
 assert.equal(manifest.status, 'runtime_ready', 'canonical planning-image package must stay runtime-ready')
 assert.equal(
@@ -62,7 +62,7 @@ assert.ok(
   'canonical planning-image iframe sandbox must stay opaque',
 )
 
-const crdt = readJson('demo/call-app/planning-image/crdt.schema.json')
+const crdt = readJson('demo/call-apps/planning-image/crdt.schema.json')
 assert.equal(crdt.documents?.[0]?.kind, 'planning_image_document', 'canonical planning-image CRDT kind mismatch')
 assert.ok(
   crdt.documents?.[0]?.operation_types?.includes('planning_image.viewport'),
@@ -73,7 +73,7 @@ assert.ok(
   'legacy viewport.update operation must not be reintroduced',
 )
 
-const runtime = read('demo/call-app/planning-image/public/planning-image.js')
+const runtime = read('demo/call-apps/planning-image/public/planning-image.js')
 for (const [needle, message] of [
   ['FileReader', 'runtime must preserve iframe-local file upload support'],
   ["canvas.addEventListener('wheel'", 'runtime must preserve wheel zoom support'],
@@ -87,7 +87,7 @@ for (const [needle, message] of [
   assertIncludes(runtime, needle, message)
 }
 
-const bundle = `${read('demo/call-app/planning-image/public/index.html')}\n${runtime}`
+const bundle = `${read('demo/call-apps/planning-image/public/index.html')}\n${runtime}`
 assert.ok(!bundle.includes('sessionToken'), 'planning-image bundle must not reference parent session tokens')
 assert.ok(!bundle.includes('Authorization'), 'planning-image bundle must not reference authorization headers')
 

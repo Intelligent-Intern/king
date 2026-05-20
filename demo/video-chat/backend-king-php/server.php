@@ -53,6 +53,7 @@ require_once __DIR__ . '/domain/users/avatar_upload.php';
 require_once __DIR__ . '/domain/calls/call_directory.php';
 require_once __DIR__ . '/domain/calls/call_management.php';
 require_once __DIR__ . '/domain/calls/call_access.php';
+require_once __DIR__ . '/domain/calls/call_stt.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
 require_once __DIR__ . '/domain/realtime/chat_attachments.php';
@@ -108,6 +109,10 @@ if (!is_array($databaseRuntime)) {
     $log('database bootstrap failed: no runtime snapshot returned.');
     exit(1);
 }
+
+$openDatabase = static function () use ($dbPath): PDO {
+    return videochat_open_sqlite_pdo($dbPath);
+};
 
 if (!videochat_chat_object_store_init($chatObjectStoreRoot, $chatObjectStoreMaxBytes)) {
     $log('chat object-store init failed at ' . $chatObjectStoreRoot);
@@ -202,10 +207,6 @@ $decodeJsonBody = static function (array $request): array {
     }
 
     return [$decoded, null];
-};
-
-$openDatabase = static function () use ($dbPath): PDO {
-    return videochat_open_sqlite_pdo($dbPath);
 };
 
 $issueSessionId = static function (): string {

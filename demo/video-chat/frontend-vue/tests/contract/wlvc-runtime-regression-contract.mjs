@@ -138,7 +138,7 @@ try {
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'rescue: Object.freeze({', 'WLVC backpressure has a low-bitrate rescue profile');
   assert.ok(!workspaceConfig.includes('export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS'), 'WLVC quality profiles must not be exported as user-facing select options');
-  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'realtime';", 'production calls start on the stable realtime profile before automatic pressure upshift/downshift');
+  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'rescue';", 'production calls start on the 360p rescue profile to keep gossip websocket frames small');
   requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
   requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 18;', 'HD baseline keeps an explicit camera FPS cap for stable SFU publishing');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p width');
@@ -164,7 +164,11 @@ try {
   const videoConnectionStatus = readFromFrontend('src/domain/realtime/sfu/videoConnectionStatus.ts');
   requireContains(runtimeHealth, "return mediaRuntimePath.value === 'wlvc_wasm';", 'WLVC runtime path helper');
   requireContains(runtimeHealth, "return mediaRuntimePath.value === 'webrtc_native';", 'native runtime path helper');
-  requireContains(runtimeHealth, 'if (!mediaSecuritySessionClass.supportsNativeTransforms()) {', 'native audio bridge requires native transforms');
+  requireContains(runtimeHealth, "return isWlvcRuntimePath() && Boolean(mediaRuntimeCapabilities.value.stageB);", 'WLVC/Gossip keeps plain native audio bridge active without SFU or MediaSecurity transform gates');
+  const nativeAudioBridgeDecision = runtimeHealth.match(/function shouldUseNativeAudioBridge\(\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  assert.notEqual(nativeAudioBridgeDecision, '', 'native audio bridge decision helper must be present');
+  assert.equal(nativeAudioBridgeDecision.includes('supportsNativeTransforms'), false, 'native audio bridge must not require MediaSecurity native transforms in the WLVC/Gossip path');
+  assert.equal(nativeAudioBridgeDecision.includes('sfuRuntimeEnabled'), false, 'native audio bridge must not require the SFU runtime in the WLVC/Gossip path');
   requireContains(runtimeHealth, "return sfuRuntimeEnabled && mediaRuntimePath.value === 'pending';", 'native signaling block protects SFU startup');
   requireContains(runtimeHealth, "'[KingRT] 📵 No video signal from SFU publisher'", 'remote stall diagnostic remains wired');
   requireContains(runtimeHealth, "'[KingRT] SFU remote video frozen'", 'remote freeze diagnostic remains wired');

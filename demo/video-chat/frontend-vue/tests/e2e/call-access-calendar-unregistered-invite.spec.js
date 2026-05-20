@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 import {
-  installCallAccessMediaDeviceShim,
   sessionStorageKey,
 } from './helpers/callAccessSeedMatrix.js';
+import { installCallAccessMediaDeviceShim } from './helpers/callAccessSeedRuntime.js';
 
 const accessId = '33333333-3333-4333-8333-333333333333';
 const joinPath = `/join/${accessId}`;

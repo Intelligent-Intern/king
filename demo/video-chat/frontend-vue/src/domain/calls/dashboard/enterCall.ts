@@ -23,7 +23,6 @@ import { playCallSpeakerTestSound } from '../../realtime/media/speakerOutputRout
 import { BackgroundFilterController } from '../../realtime/background/controller';
 
 const ENTER_ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
-const ENTER_ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
 export function normalizeRoomId(value) {
   const candidate = String(value || '').trim().toLowerCase();
@@ -65,8 +64,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
   let enterAdmissionManuallyClosed = false;
   let enterAdmissionReconnectTimer = 0;
   let enterAdmissionReconnectAttempt = 0;
-  let enterAdmissionReconnectAfterForeground = false;
-  let enterAdmissionLastForegroundReconnectAt = 0;
+  let enterAdmissionForegroundSnapshotPending = false;
   let enterCallPreviewStartToken = 0;
 
   function resetEnterCallState() {
@@ -164,25 +162,22 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     }, delay);
   }
 
-  function markEnterAdmissionReconnectAfterForeground() {
+  function markEnterAdmissionForegroundSnapshot() {
     if (!enterCallState.waitingForAdmission || enterAdmissionAccepted || enterAdmissionManuallyClosed) return;
-    enterAdmissionReconnectAfterForeground = true;
+    enterAdmissionForegroundSnapshotPending = true;
   }
 
-  function reconnectEnterAdmissionAfterForeground() {
+  function refreshEnterAdmissionAfterForeground() {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     if (!enterCallState.waitingForAdmission || enterAdmissionAccepted || enterAdmissionManuallyClosed) return;
-    if (!enterAdmissionReconnectAfterForeground) return;
+    if (!enterAdmissionForegroundSnapshotPending) return;
 
-    const now = Date.now();
-    if ((now - enterAdmissionLastForegroundReconnectAt) < ENTER_ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS) return;
-
-    enterAdmissionReconnectAfterForeground = false;
-    enterAdmissionLastForegroundReconnectAt = now;
-    enterAdmissionReconnectAttempt = 0;
-    clearEnterAdmissionReconnectTimer();
-    enterCallState.admissionMessage = t('public.join.reconnecting_lobby');
-    connectEnterAdmissionSocket();
+    enterAdmissionForegroundSnapshotPending = false;
+    if (!enterAdmissionSocketIsOpen()) return;
+    sendEnterAdmissionFrame({
+      type: 'lobby/queue/request',
+      room_id: normalizeRoomId(enterCallState.roomId || 'lobby'),
+    });
   }
 
   async function enterAdmittedCall() {
@@ -333,7 +328,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
 
       opened = true;
       enterAdmissionReconnectAttempt = 0;
-      enterAdmissionReconnectAfterForeground = false;
+      enterAdmissionForegroundSnapshotPending = false;
       setBackendWebSocketOrigin(socketOrigin);
     });
 
@@ -391,7 +386,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     enterAdmissionAccepted = false;
     enterAdmissionManuallyClosed = false;
     enterAdmissionReconnectAttempt = 0;
-    enterAdmissionReconnectAfterForeground = false;
+    enterAdmissionForegroundSnapshotPending = false;
     enterAdmissionSocketGeneration += 1;
     connectEnterAdmissionSocket();
     return true;
@@ -660,8 +655,8 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
   function mountEnterCallPreview() {
     detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
     detachForegroundReconnect = attachForegroundReconnectHandlers({
-      onBackground: markEnterAdmissionReconnectAfterForeground,
-      onForeground: reconnectEnterAdmissionAfterForeground,
+      onBackground: markEnterAdmissionForegroundSnapshot,
+      onForeground: refreshEnterAdmissionAfterForeground,
     });
   }
 

@@ -45,7 +45,7 @@ function videochat_realtime_normal_media_fanout_fields(): array
 
 function videochat_realtime_normal_media_fanout_allowed_relay_type(string $type, bool $mediaRelaySocket = false): bool
 {
-    return $mediaRelaySocket && $type === 'gossip/server-frame';
+    return $type === 'gossip/server-frame';
 }
 
 function videochat_realtime_payload_contains_normal_media_field(mixed $payload): bool

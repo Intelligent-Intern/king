@@ -172,6 +172,11 @@ function createLegacyDecoder(moduleRef: WLVCModule, config: Required<WasmCodecCo
   )
 }
 
+function frameTypeFromWlvcPayload(data: ArrayBuffer): FrameData['type'] {
+  const bytes = new Uint8Array(data)
+  return bytes.byteLength > 5 && bytes[5] === 1 ? 'delta' : 'keyframe'
+}
+
 export class WasmWaveletVideoEncoder {
   public readonly sfuCodecId = 'wlvc_wasm'
   private encoder: WasmEncoder | null = null
@@ -272,7 +277,7 @@ export class WasmWaveletVideoEncoder {
     const data = encoded.slice().buffer
 
     return {
-      type: 'keyframe',  // WASM encoder handles key/delta internally
+      type: frameTypeFromWlvcPayload(data),
       timestamp,
       width: this.config.width,
       height: this.config.height,

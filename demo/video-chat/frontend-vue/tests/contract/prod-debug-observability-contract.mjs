@@ -41,7 +41,11 @@ assert.doesNotMatch(script, /^\s*(?:source|\.)\s+["']?\$\{LOCAL_ENV_FILE\}["']?/
 assert.doesNotMatch(script, /^\s*set\s+-a\b/m, 'prod-debug must not auto-export by sourcing .env.local');
 assert.doesNotMatch(script, /\beval\b/, 'prod-debug must not evaluate .env.local contents');
 assert.match(script, /parse_local_env_value\(\)[\s\S]*while IFS= read -r line[\s\S]*allowed_env_names/, 'prod-debug must parse .env.local inertly through an allowlist');
-assert.match(script, /VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_SSH_KEY[\s\S]*VIDEOCHAT_PROD_DEBUG_DRY_RUN VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE/, 'prod-debug .env.local allowlist must stay scoped to deploy/debug diagnostics names');
+assert.match(
+  script,
+  /VIDEOCHAT_DEPLOY_DOMAIN DEPLOY_DOMAIN[\s\S]*VIDEOCHAT_DEPLOY_SSH_KEY[\s\S]*VIDEOCHAT_PROD_DEBUG_DRY_RUN VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE[\s\S]*VIDEOCHAT_SFU_ENABLED VIDEOCHAT_EDGE_SFU_ENABLED[\s\S]*VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT VITE_VIDEOCHAT_GOSSIP_DATA_LANE VITE_VIDEOCHAT_MEDIA_CARRIER/,
+  'prod-debug .env.local allowlist must stay scoped to deploy/debug diagnostics names and non-secret runtime routing flags',
+);
 assert.doesNotMatch(script, /VIDEOCHAT_DEPLOY_ADMIN_PASSWORD|VIDEOCHAT_DEPLOY_TURN_SECRET|VIDEOCHAT_DEPLOY_HCLOUD_TOKEN/, 'prod-debug .env.local parser must not import deploy secrets or provider tokens');
 assert.match(script, /redact_stream\(\)/, 'prod-debug must redact output');
 assert.match(script, /TOKEN\|SECRET\|PASSWORD\|PASS\|KEY\|CREDENTIAL\|COOKIE\|SESSION/, 'prod-debug redaction must cover token/password-like values');
@@ -71,6 +75,7 @@ for (const endpoint of [
 for (const label of [
   'lobby websocket',
   'sfu websocket',
+  'sfu websocket disabled',
   'marketplace apps',
   'call-app host',
   'Call-App CSP Header Proof',
@@ -103,6 +108,14 @@ assert.match(
   /Content-Security-Policy[\s\S]*Allow-CSP-From[\s\S]*X-Frame-Options[\s\S]*nested \*\.\$\{DEPLOY_APP_DOMAIN\} service origins/,
   'prod-debug must prove Whiteboard Call App CSP, Embedded-CSP, frame-option absence, and nested-origin absence',
 );
+assert.match(script, /sfu_runtime_metadata\(\)/, 'prod-debug must print SFU routing runtime metadata');
+assert.match(script, /sfu_route_enabled\(\)/, 'prod-debug must classify SFU routing from runtime flags');
+assert.match(script, /sfu_disabled_websocket_probe\(\)/, 'prod-debug must have an explicit disabled-SFU websocket 404 probe');
+assert.match(
+  script,
+  /VIDEOCHAT_EDGE_SFU_ENABLED=\$\{VIDEOCHAT_EDGE_SFU_ENABLED:-0\}[\s\S]*VIDEOCHAT_SFU_ENABLED=\$\{VIDEOCHAT_SFU_ENABLED:-0\}[\s\S]*VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=\$\{VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT:-false\}/,
+  'prod-debug SFU metadata must include edge/backend/frontend transport flags',
+);
 
 const parserFunctions = [
   extractBashFunction(script, 'trim_env_value'),
@@ -120,6 +133,11 @@ fs.writeFileSync(parserEnvPath, [
   'export VIDEOCHAT_DEPLOY_APP_DOMAIN="app.local.test"',
   "DEPLOY_API_DOMAIN='api.local.test'",
   'VIDEOCHAT_PROD_DEBUG_DRY_RUN=1',
+  'VIDEOCHAT_EDGE_SFU_ENABLED=0',
+  'VIDEOCHAT_SFU_ENABLED=0',
+  'VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=false',
+  'VITE_VIDEOCHAT_GOSSIP_DATA_LANE=active',
+  'VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary',
   `VIDEOCHAT_DEPLOY_SSH_KEY="$(touch ${parserMarkerPath})"`,
   'VIDEOCHAT_DEPLOY_ADMIN_PASSWORD=should-not-load',
 ].join('\n'));
@@ -130,6 +148,11 @@ printf 'domain=%s\n' "\${VIDEOCHAT_DEPLOY_DOMAIN-unset}"
 printf 'app=%s\n' "\${VIDEOCHAT_DEPLOY_APP_DOMAIN-unset}"
 printf 'api=%s\n' "\${DEPLOY_API_DOMAIN-unset}"
 printf 'dry_run=%s\n' "\${VIDEOCHAT_PROD_DEBUG_DRY_RUN-unset}"
+printf 'edge_sfu=%s\n' "\${VIDEOCHAT_EDGE_SFU_ENABLED-unset}"
+printf 'sfu=%s\n' "\${VIDEOCHAT_SFU_ENABLED-unset}"
+printf 'sfu_transport=%s\n' "\${VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT-unset}"
+printf 'gossip_lane=%s\n' "\${VITE_VIDEOCHAT_GOSSIP_DATA_LANE-unset}"
+printf 'media_carrier=%s\n' "\${VITE_VIDEOCHAT_MEDIA_CARRIER-unset}"
 printf 'ssh_key=%s\n' "\${VIDEOCHAT_DEPLOY_SSH_KEY-unset}"
 printf 'admin=%s\n' "\${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD-unset}"
 `);
@@ -137,6 +160,11 @@ assert.match(parserOut, /domain=local\.test/, 'prod-debug parser must load simpl
 assert.match(parserOut, /app=app\.local\.test/, 'prod-debug parser must load double-quoted values');
 assert.match(parserOut, /api=api\.local\.test/, 'prod-debug parser must load single-quoted values');
 assert.match(parserOut, /dry_run=1/, 'prod-debug parser must load whitelisted debug flags');
+assert.match(parserOut, /edge_sfu=0/, 'prod-debug parser must load edge SFU routing metadata');
+assert.match(parserOut, /sfu=0/, 'prod-debug parser must load backend SFU routing metadata');
+assert.match(parserOut, /sfu_transport=false/, 'prod-debug parser must load frontend SFU transport metadata');
+assert.match(parserOut, /gossip_lane=active/, 'prod-debug parser must load Gossip lane metadata');
+assert.match(parserOut, /media_carrier=gossip_primary/, 'prod-debug parser must load media carrier metadata');
 assert.match(parserOut, /\$\(touch /, 'prod-debug parser must keep command substitutions inert as literal text');
 assert.match(parserOut, /admin=unset/, 'prod-debug parser must ignore non-allowlisted deploy secrets');
 assert.equal(fs.existsSync(parserMarkerPath), false, 'prod-debug parser must not execute .env.local command substitutions');
@@ -246,9 +274,20 @@ for (const smokeLabel of [
   'registry-host',
   'lobby websocket host',
   'sfu websocket host',
+  'sfu websocket host disabled',
+  'sfu websocket api fallback disabled',
 ]) {
   assert.ok(deploySmoke.includes(smokeLabel), `deploy-smoke must include ${smokeLabel}`);
 }
+
+assert.match(deploySmoke, /log_sfu_runtime_metadata\(\)/, 'deploy-smoke must log SFU routing runtime metadata before SFU probes');
+assert.match(deploySmoke, /sfu_route_enabled\(\)/, 'deploy-smoke must classify SFU route enabledness from runtime flags');
+assert.match(deploySmoke, /websocket_disabled_smoke\(\)/, 'deploy-smoke must treat disabled SFU websocket 404 as expected');
+assert.match(
+  deploySmoke,
+  /VIDEOCHAT_EDGE_SFU_ENABLED=\$\{VIDEOCHAT_EDGE_SFU_ENABLED:-0\}[\s\S]*VIDEOCHAT_SFU_ENABLED=\$\{VIDEOCHAT_SFU_ENABLED:-0\}[\s\S]*VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=\$\{VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT:-false\}/,
+  'deploy-smoke SFU metadata must include edge/backend/frontend transport flags',
+);
 
 assert.match(
   deploySmoke,

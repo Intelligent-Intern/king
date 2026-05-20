@@ -67,6 +67,10 @@ try {
   requireContains(worker, 'ImageSegmenter.createFromOptions', 'MediaPipe worker boundary');
   requireContains(worker, "delegate: delegate === 'GPU' ? 'GPU' : 'CPU'", 'MediaPipe delegate boundary');
   requireContains(worker, "const glCtx = renderCanvas.getContext('webgl2');", 'MediaPipe category-mask WebGL boundary');
+  requireContains(worker, 'function categoryMaskValues(categoryMask)', 'category-mask values fallback boundary');
+  requireContains(worker, 'categoryMaskValues(result.categoryMask)', 'category-mask values fallback source');
+  requireContains(worker, 'message.maskValues = maskValues', 'category-mask values compositor payload');
+  requireContains(worker, 'transfer.push(maskValues.buffer)', 'category-mask values transfer');
   requireContains(worker, "error: 'production_category_mask_unavailable'", 'category-mask unavailable error');
   requireMissing(worker, 'confidenceMaskValues', 'confidence-mask weaker fallback');
   requireMissing(worker, 'outputConfidenceMasks', 'confidence-mask output');

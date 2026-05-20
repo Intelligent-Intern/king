@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(frontendRoot, '..', '..', '..');
@@ -99,10 +101,10 @@ assert.ok(
   'IAM SQLite aggregate must include the safe-screen privacy backend contract',
 );
 
-const iamScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamScript = iamCallAccessContractSuiteText;
 assert.ok(
   iamScript.includes('node tests/contract/call-access-safe-screen-final-contract.mjs'),
-  'IAM package contract script must run the safe-screen final contract',
+  'IAM package contract helper must run the safe-screen final contract',
 );
 assert.ok(
   ciWire.includes('frontend-vue/tests/contract/call-access-safe-screen-final-contract.mjs'),

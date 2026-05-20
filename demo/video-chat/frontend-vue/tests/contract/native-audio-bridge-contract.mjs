@@ -209,7 +209,8 @@ try {
   requireContains(audioBridgeFailureReporter, 'failure_count: failureCount', 'native audio bridge diagnostics retain repeated failure counts');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
   requireContains(sfuPublisherControl, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
-  requireContains(sfuPublisherControl, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_backpressure_socket_restart_blocked'", 'stuck SFU websocket buffers are diagnosed instead of reconnecting the socket');
+  requireContains(sfuPublisherControl, "restartReason = restartServerIngressLag", 'only server ingress latency can still request the bounded SFU restart path');
   requireContains(sfuPublisherControl, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
   requireContains(signaling, '!nativePeerHasLocalLiveAudioSender(peer)', 'native bridge validates local audio sender before answering');
   requireContains(peerLifecycle, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');

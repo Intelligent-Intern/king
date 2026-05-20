@@ -54,6 +54,15 @@ function videochat_client_capabilities_int(mixed $value): int
     return is_numeric($value) ? max(0, min(8192, (int) $value)) : 0;
 }
 
+function videochat_client_capabilities_float(mixed $value, float $max = 10000.0): float
+{
+    if (!is_numeric($value)) {
+        return 0.0;
+    }
+
+    return max(0.0, min($max, round((float) $value, 3)));
+}
+
 function videochat_client_capabilities_timestamp(mixed $value, string $fallback = ''): string
 {
     $candidate = trim((string) $value);
@@ -99,6 +108,10 @@ function videochat_client_capabilities_normalize(array $payload, array $connecti
     $media = is_array($payload['media'] ?? null) ? (array) $payload['media'] : [];
     $runtime = is_array($payload['runtime'] ?? null) ? (array) $payload['runtime'] : [];
     $constraints = is_array($payload['constraints'] ?? null) ? (array) $payload['constraints'] : [];
+    $codec = is_array($payload['codec'] ?? null) ? (array) $payload['codec'] : [];
+    $client = is_array($payload['client'] ?? null) ? (array) $payload['client'] : [];
+    $network = is_array($payload['network'] ?? null) ? (array) $payload['network'] : [];
+    $backpressure = is_array($network['backpressure'] ?? null) ? (array) $network['backpressure'] : [];
 
     return [
         'schema_version' => videochat_client_capabilities_schema_version(),
@@ -119,10 +132,30 @@ function videochat_client_capabilities_normalize(array $payload, array $connecti
             'wlvc_encoder' => videochat_client_capabilities_bool($runtime['wlvc_encoder'] ?? $runtime['wlvcEncoder'] ?? false),
             'wlvc_decoder' => videochat_client_capabilities_bool($runtime['wlvc_decoder'] ?? $runtime['wlvcDecoder'] ?? false),
         ],
+        'codec' => [
+            'preferred_path' => videochat_client_capabilities_string(
+                $codec['preferred_path'] ?? $codec['preferredPath'] ?? $runtime['codec_path'] ?? $runtime['codecPath'] ?? 'wlvc_wasm'
+            ),
+            'webcodecs' => videochat_client_capabilities_bool($codec['webcodecs'] ?? $codec['webCodecs'] ?? $runtime['webcodecs'] ?? $runtime['webCodecs'] ?? false),
+            'wasm' => videochat_client_capabilities_bool($codec['wasm'] ?? $codec['webassembly'] ?? $runtime['webassembly'] ?? $runtime['webAssembly'] ?? false),
+        ],
         'constraints' => [
             'video_width' => videochat_client_capabilities_int($constraints['video_width'] ?? $constraints['videoWidth'] ?? 0),
             'video_height' => videochat_client_capabilities_int($constraints['video_height'] ?? $constraints['videoHeight'] ?? 0),
             'video_fps' => videochat_client_capabilities_int($constraints['video_fps'] ?? $constraints['videoFps'] ?? 0),
+            'mobile' => videochat_client_capabilities_bool($constraints['mobile'] ?? $client['mobile'] ?? false),
+            'browser_family' => videochat_client_capabilities_string($constraints['browser_family'] ?? $constraints['browserFamily'] ?? $client['browser_family'] ?? $client['browserFamily'] ?? 'unknown'),
+        ],
+        'network' => [
+            'effective_type' => videochat_client_capabilities_string($network['effective_type'] ?? $network['effectiveType'] ?? 'unknown'),
+            'downlink_mbps' => videochat_client_capabilities_float($network['downlink_mbps'] ?? $network['downlinkMbps'] ?? 0, 1000.0),
+            'rtt_ms' => videochat_client_capabilities_int($network['rtt_ms'] ?? $network['rttMs'] ?? 0),
+            'save_data' => videochat_client_capabilities_bool($network['save_data'] ?? $network['saveData'] ?? false),
+            'backpressure' => [
+                'ratio' => videochat_client_capabilities_float($backpressure['ratio'] ?? 0, 1.0),
+                'queued_bytes' => videochat_client_capabilities_int($backpressure['queued_bytes'] ?? $backpressure['queuedBytes'] ?? 0),
+                'dropped_video_frames' => videochat_client_capabilities_int($backpressure['dropped_video_frames'] ?? $backpressure['droppedVideoFrames'] ?? 0),
+            ],
         ],
         'received_at' => gmdate('c'),
     ];
@@ -143,7 +176,9 @@ function videochat_client_capabilities_public_projection(array $capabilities): a
         'participant_session_id' => (string) ($normalized['participant_session_id'] ?? ''),
         'media' => (array) ($normalized['media'] ?? []),
         'runtime' => (array) ($normalized['runtime'] ?? []),
+        'codec' => (array) ($normalized['codec'] ?? []),
         'constraints' => (array) ($normalized['constraints'] ?? []),
+        'network' => (array) ($normalized['network'] ?? []),
         'received_at' => videochat_client_capabilities_timestamp(
             $capabilities['received_at'] ?? '',
             (string) ($normalized['received_at'] ?? '')

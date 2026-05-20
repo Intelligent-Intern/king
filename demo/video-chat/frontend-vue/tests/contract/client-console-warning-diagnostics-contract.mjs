@@ -19,6 +19,7 @@ function requireNotContains(source, needle, label) {
 }
 
 const diagnostics = read('src/support/clientDiagnostics.ts');
+const callAppDiagnostics = read('src/domain/realtime/callApps/callAppDiagnostics.js');
 const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
@@ -39,6 +40,12 @@ requireContains(diagnostics, 'console_stack: consoleWarningStack()', 'console wa
 requireContains(diagnostics, 'clientConsoleWarningPassthroughEnabled()', 'debug-only console passthrough guard');
 requireContains(diagnostics, 'originalConsoleWarn(...args);', 'passthrough keeps explicit debug path');
 requireContains(diagnostics, 'scheduleDiagnosticsFlush(100);', 'immediate diagnostics flush quickly');
+requireContains(callAppDiagnostics, "window.dispatchEvent(new CustomEvent('king:call-app-diagnostic'", 'Call App diagnostics use the internal browser event path');
+requireNotContains(callAppDiagnostics, 'console.debug(', 'direct Call App debug logs; admin diagnostics must use the internal event path');
+requireNotContains(callAppDiagnostics, 'console.log(', 'direct Call App normal logs; normal sessions must keep the console clean');
+requireNotContains(callAppDiagnostics, 'console.info(', 'direct Call App info logs; normal sessions must keep the console clean');
+requireNotContains(callAppDiagnostics, 'console.warn(', 'direct Call App warnings; Call App diagnostics must use the internal event path');
+requireNotContains(callAppDiagnostics, 'console.error(', 'direct Call App errors; Call App diagnostics must use the internal event path');
 requireNotContains(
   publisherBackpressureController,
   'console.warn(',
@@ -68,7 +75,7 @@ requireContains(nativeAudioBridgeFailureReporter, 'eventType: normalizedCode', '
 requireContains(runtimeSwitching, "eventType: 'sfu_encode_quality_downgraded'", 'quality downgrade warnings stay in backend diagnostics');
 requireContains(sfuLifecycle, "eventType: 'sfu_connect_retry_scheduled'", 'SFU reconnect warnings stay in backend diagnostics');
 requireContains(sfuLifecycle, "eventType: 'sfu_connect_exhausted'", 'SFU retry exhaustion stays in backend diagnostics');
-requireContains(socketLifecycle, "eventType: 'media_security_handshake_started_after_ws_open'", 'websocket handshake status stays in backend diagnostics');
+requireNotContains(socketLifecycle, 'media_security_handshake_started_after_ws_open', 'gossip-primary websocket lifecycle must not report media-security handshake status');
 requireContains(videoConnectionStatus, "eventType: 'sfu_remote_video_stable'", 'SFU stable-video status stays in backend diagnostics');
 requireContains(nativeAudioBridgeRecovery, "eventType: 'native_audio_track_recovery_exhausted'", 'native audio recovery exhaustion stays in backend diagnostics');
 

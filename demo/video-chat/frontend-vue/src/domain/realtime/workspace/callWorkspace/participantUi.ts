@@ -14,6 +14,23 @@ import {
   normalizeBackgroundFallbackMode,
 } from '../../background/avatarFallbackSignal';
 
+function isTransportAckNotice(message) {
+  const text = String(message || '').trim();
+  return /^Sent\s+.+\s+to\s+\d+\s+peer\(s\)\.?$/i.test(text)
+    || /\bcall-app\/presence\b/i.test(text);
+}
+
+function isReconnectRetryNotice(message) {
+  return /\b(reconnect(?:ing|ed|ion)?|retry(?:ing)?|network_retry|probing_session|socket_unreachable|websocket_connect_retry_scheduled)\b/i
+    .test(String(message || '').trim());
+}
+
+function isRealtimeConnectionNotice(message) {
+  const text = String(message || '').trim();
+  return /\b(realtime\s+(?:websocket|socket)|websocket|socket\s+is\s+offline|control[-_ ]lane|secure[_ ]websocket[_ ]transport|required|websocket_one_shot|websocket_control_lane)\b/i
+    .test(text);
+}
+
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
     activeReactions,
@@ -36,10 +53,13 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     chatUnreadByRoom,
     compactMiniStripPlacement,
     connectedParticipantUsers,
+    connectionReason = ref(''),
+    connectionState = ref(''),
     controlState,
     currentUserId,
     fullscreenVideoUserId,
     hangupCall,
+    handleExternalControlState = null,
     isAloneInCall,
     isCompactLayoutViewport,
     isCompactMiniStripAbove,
@@ -303,7 +323,7 @@ function participantMediaStatus(userId) {
   const state = String(peer.mediaConnectionState || '').trim().toLowerCase();
   const message = String(peer.mediaConnectionMessage || '').trim();
   if (state === 'recovering') {
-    return { show: true, state: 'recovering', label: message || 'Reconnecting video' };
+    return { show: true, state: 'recovering', label: message || 'Waiting for video' };
   }
 
   const frameCount = Number(peer.frameCount || 0);
@@ -311,14 +331,14 @@ function participantMediaStatus(userId) {
     const createdAtMs = Number(peer.createdAtMs || 0);
     const ageMs = createdAtMs > 0 ? Math.max(0, nowMs - createdAtMs) : 0;
     if (ageMs >= REMOTE_VIDEO_STALL_THRESHOLD_MS) {
-      return { show: true, state: 'recovering', label: 'Reconnecting video' };
+      return { show: true, state: 'recovering', label: 'Waiting for video' };
     }
     return { show: true, state: 'connecting', label: message || 'Connecting media' };
   }
 
   const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
   if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= Math.max(REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 3, REMOTE_VIDEO_STALL_THRESHOLD_MS * 2)) {
-    return { show: true, state: 'recovering', label: 'Reconnecting video' };
+    return { show: true, state: 'recovering', label: 'Waiting for video' };
   }
 
   return { show: false, state: 'live', label: '' };
@@ -826,8 +846,30 @@ function describePeerControlState(userId) {
   return badges.join(' · ');
 }
 
+const workspaceConnectionBanner = computed(() => {
+  void connectionState.value;
+  void connectionReason.value;
+  return null;
+});
+
+const visibleWorkspaceNotice = computed(() => {
+  const normalizedMessage = String(workspaceNotice.value || '').trim();
+  if (
+    isTransportAckNotice(normalizedMessage)
+    || isReconnectRetryNotice(normalizedMessage)
+    || isRealtimeConnectionNotice(normalizedMessage)
+  ) return '';
+  return normalizedMessage;
+});
+
 function setNotice(message, kind = 'ok') {
-  workspaceNotice.value = String(message || '').trim();
+  const normalizedMessage = String(message || '').trim();
+  if (
+    isTransportAckNotice(normalizedMessage)
+    || isReconnectRetryNotice(normalizedMessage)
+    || isRealtimeConnectionNotice(normalizedMessage)
+  ) return;
+  workspaceNotice.value = normalizedMessage;
   if (kind === 'error') {
     workspaceError.value = workspaceNotice.value;
     workspaceNotice.value = '';
@@ -1213,6 +1255,10 @@ function applyRemoteControlState(payload, sender) {
   markParticipantActivity(senderUserId, 'control');
 
   const kind = String(payload?.kind || '').trim().toLowerCase();
+  if (typeof handleExternalControlState === 'function' && handleExternalControlState(payload, sender, kind)) {
+    return true;
+  }
+
   if (kind === 'workspace-control-state') {
     const state = payload && typeof payload.state === 'object' ? payload.state : {};
     const nextScreenEnabled = Boolean(state.screenEnabled);
@@ -2001,5 +2047,7 @@ function openLeftSidebarOverlay(event) {
     usersTotal,
     usersVisibleRows,
     usersVirtualWindow,
+    workspaceConnectionBanner,
+    visibleWorkspaceNotice,
   };
 }

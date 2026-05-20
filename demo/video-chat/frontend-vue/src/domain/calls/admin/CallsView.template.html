@@ -76,11 +76,14 @@
         :is-invitable="isInvitable"
         :is-cancellable="isCancellable"
         :is-deletable="isDeletable"
+        :is-reactivatable="isReactivatable"
+        :is-reactivate-pending="isReactivatePending"
         admin-mode
         @edit-call="(call) => openCompose('edit', call)"
         @open-chat-archive="openChatArchive"
         @enter-call="openEnterCallModal"
         @cancel-call="openCancel"
+        @reactivate-call="reactivateCall"
         @delete-call="openDelete"
       />
 

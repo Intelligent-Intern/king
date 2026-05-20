@@ -15,6 +15,14 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `[call-room-leave-cleanup-contract] missing ${label}`);
 }
 
+function section(source, start, end, label) {
+  const startIndex = source.indexOf(start);
+  assert.notEqual(startIndex, -1, `[call-room-leave-cleanup-contract] missing ${label} start`);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+  assert.notEqual(endIndex, -1, `[call-room-leave-cleanup-contract] missing ${label} end`);
+  return source.slice(startIndex, endIndex);
+}
+
 const socketLifecycle = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const orchestration = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/orchestration.ts');
 const mediaStack = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
@@ -33,6 +41,26 @@ requireContains(realtimeRoomSnapshot, 'videochat_realtime_room_snapshot_payload(
 requireContains(realtimeWebsocket, '$leavingRoomId = videochat_presence_normalize_room_id', 'leave path remembers previous room');
 requireContains(realtimeWebsocket, "videochat_realtime_broadcast_room_snapshot(\n                        $presenceState,\n                        $leavingRoomId,\n                        $openDatabase,\n                        'participant_left',", 'leave path broadcasts post-cleanup snapshot');
 requireContains(realtimeWebsocket, "videochat_realtime_broadcast_room_snapshot(\n                $presenceState,\n                $disconnectedRoomId,\n                $openDatabase,\n                'participant_disconnected',", 'disconnect path broadcasts post-cleanup snapshot');
+requireContains(realtimeWebsocket, 'Passive websocket cancellation is transport loss, not an explicit room leave.', 'passive websocket disconnect preserves durable call membership');
+requireContains(realtimeWebsocket, 'videochat_realtime_remove_call_presence($openDatabase, $leavingConnection);', 'explicit leave still removes durable call presence');
+requireContains(realtimeWebsocket, 'videochat_realtime_mark_call_participant_left($openDatabase, $leavingConnection, $presenceState);', 'explicit leave still persists left_at');
+
+const detachBlock = section(
+  realtimeWebsocket,
+  '$detachWebsocket = static function () use (',
+  '        if ($session !== null && $streamId > 0',
+  'passive websocket detach block',
+);
+assert.doesNotMatch(
+  detachBlock,
+  /videochat_realtime_remove_call_presence\(\$openDatabase,\s*\$disconnectedConnection\)/,
+  '[call-room-leave-cleanup-contract] passive disconnect must not remove durable call presence',
+);
+assert.doesNotMatch(
+  detachBlock,
+  /videochat_realtime_mark_call_participant_left\(\$openDatabase,\s*\$disconnectedConnection/,
+  '[call-room-leave-cleanup-contract] passive disconnect must not mark the participant left',
+);
 
 requireContains(orchestration, 'controlState.cameraEnabled = false;', 'hangup disables local camera state');
 requireContains(orchestration, 'controlState.micEnabled = false;', 'hangup disables local microphone state');

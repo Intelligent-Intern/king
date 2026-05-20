@@ -79,8 +79,8 @@ const sfuMirrorDecision = deriveGossipRolloutGateState(aggregate(), {
   mode: 'active',
   mediaCarrierMode: 'sfu_mirror',
 })
-assert(sfuMirrorDecision.active_allowed === false, 'sfu_mirror must still block active media on SFU fallback pressure')
-assert(sfuMirrorDecision.blocking_buckets.includes('keyframe_storm'), 'sfu_mirror must keep SFU keyframe storms as blocking buckets')
+assert(sfuMirrorDecision.active_allowed === true, 'sfu_mirror must not block active media on SFU fallback pressure')
+assert(!sfuMirrorDecision.blocking_buckets.includes('keyframe_storm'), 'sfu_mirror must keep SFU keyframe storms diagnostic-only')
 
 const gossipPrimaryDecision = deriveGossipRolloutGateState(aggregate(), {
   mode: 'active',
@@ -114,7 +114,7 @@ assert(
   'gossip_primary must stay on the WLVC publisher path until browser encoder gossip publication is wired',
 )
 assert(
-  /gossip_primary_publish_failed_no_sfu_fallback/.test(publisherFrameDispatch)
+  /gossip_primary_publish_failed/.test(publisherFrameDispatch)
     && !/sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure/.test(publisherFrameDispatch),
   'gossip_primary must keep publication independent by parking SFU fallback instead of sending through it',
 )

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -183,11 +185,11 @@ for (const [helper, proof] of [
   assert.match(functionBody(auditDomain, helper), proof, `${helper} must keep fingerprint-only/redacted payload shape`);
 }
 
-const iamGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamGate = iamCallAccessContractSuiteText;
 assert.match(
   iamGate,
   /node tests\/contract\/iam-call-access-audit-events-contract\.mjs/,
-  'IAM package gate must run the audit-events static proof',
+  'IAM package helper must run the audit-events static proof',
 );
 assert.match(
   sqliteAggregate,

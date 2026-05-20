@@ -103,7 +103,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       level: 'warning',
       eventType: 'strict_720p30_gossip_native_fallback_blocked',
       code: 'strict_720p30_gossip_native_fallback_blocked',
-      message: 'Strict Gossip v1 requires the fixed 1280x720@30 WLVC publisher path; native WebRTC fallback is blocked.',
+      message: 'Gossip v1 keeps the browser WLVC publisher path active; native WebRTC fallback is blocked.',
       payload: {
         media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
         media_runtime_path: refs.mediaRuntimePath.value,
@@ -225,7 +225,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   }
 
   function currentSfuVideoProfile() {
-    if (isStrict720p30Policy(strictStabilityPolicy)) {
+    if (isStrict720p30Policy(strictStabilityPolicy) && strictStabilityPolicy?.fixedVideoProfile) {
       return strict720p30VideoProfile(strictStabilityPolicy);
     }
     return resolveSfuVideoQualityProfile(refs.callMediaPrefs.outgoingVideoQualityProfile);

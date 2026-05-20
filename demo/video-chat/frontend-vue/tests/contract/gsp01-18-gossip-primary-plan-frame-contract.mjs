@@ -261,18 +261,18 @@ async function assertGossipPrimaryDoesNotUseSfuFallback() {
       ok: result.ok,
       gossipPublished: result.gossipPublished,
       sfuSent: result.sfuSent,
-      sfuFallbackSuppressed: result.sfuFallbackSuppressed,
+      alternatePathSuppressed: result.alternatePathSuppressed,
     },
     {
       ok: false,
       gossipPublished: false,
       sfuSent: false,
-      sfuFallbackSuppressed: true,
+      alternatePathSuppressed: true,
     },
     'gossip_primary publish failure must fail closed instead of falling back to SFU',
   );
   assert.ok(
-    diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback'),
+    diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed'),
     'suppressed SFU fallback must be visible in diagnostics',
   );
 }

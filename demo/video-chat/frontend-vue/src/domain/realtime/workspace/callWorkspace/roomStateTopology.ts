@@ -2,6 +2,7 @@ export function applyGossipTopologyFromRoomStatePayload(payload, localPeerId, ap
   if (!payload || typeof payload !== 'object' || typeof applyGossipTopologyHint !== 'function') {
     return false;
   }
+  applyGossipTopologyHint(payload);
   if (applyGossipTopologyHint(payload?.gossip_topology)) {
     return true;
   }

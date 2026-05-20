@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/tenant_context.php';
+require_once __DIR__ . '/call_permanent_lifecycle.php';
 
 function videochat_fetch_call_for_update(PDO $pdo, string $callId, ?int $tenantId = null): ?array
 {
@@ -10,6 +11,8 @@ function videochat_fetch_call_for_update(PDO $pdo, string $callId, ?int $tenantI
     if ($trimmedCallId === '') {
         return null;
     }
+    videochat_permanent_call_ensure_active($pdo, $trimmedCallId, 'call_fetch_guard');
+
     $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
     $tenantSelect = $hasTenantColumn ? 'calls.tenant_id,' : 'NULL AS tenant_id,';
     $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND calls.tenant_id = :tenant_id' : '';

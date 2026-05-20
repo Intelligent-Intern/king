@@ -19,6 +19,63 @@ function videochat_sqlite_retry_delay_us(int $attempt, int $baseDelayUs = 100_00
     return $delay + random_int(0, (int) max(10_000, floor($delay / 3)));
 }
 
+function videochat_sqlite_pdo_main_path(PDO $pdo): string
+{
+    try {
+        $statement = $pdo->query('PRAGMA database_list');
+        foreach ($statement ?: [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            if ((string) ($row['name'] ?? '') !== 'main') {
+                continue;
+            }
+            $path = trim((string) ($row['file'] ?? ''));
+            if ($path !== '') {
+                return $path;
+            }
+        }
+    } catch (Throwable) {
+        return '';
+    }
+
+    return '';
+}
+
+function videochat_sqlite_ingest(PDO $pdo, string $name, callable $writer): mixed
+{
+    $ingestDepth = (int) ($GLOBALS['videochat_sqlite_ingest_depth'] ?? 0);
+
+    if ($ingestDepth > 0) {
+        return $writer();
+    }
+
+    $GLOBALS['videochat_sqlite_ingest_depth'] = $ingestDepth + 1;
+    try {
+        if (!function_exists('king_db_ingest')) {
+            return $writer();
+        }
+
+        $databasePath = videochat_sqlite_pdo_main_path($pdo);
+        $lockPath = $databasePath !== ''
+            ? $databasePath . '.king-ingestor.lock'
+            : sys_get_temp_dir() . '/videochat-sqlite.king-ingestor.lock';
+
+        return king_db_ingest('videochat.sqlite.' . trim($name), $writer, [
+            'lock_path' => $lockPath,
+            'timeout_ms' => VIDEOCHAT_SQLITE_BUSY_TIMEOUT_MS,
+            'poll_us' => 5000,
+        ]);
+    } finally {
+        $GLOBALS['videochat_sqlite_ingest_depth'] = max(0, (int) ($GLOBALS['videochat_sqlite_ingest_depth'] ?? 1) - 1);
+    }
+}
+
+function videochat_sqlite_ingest_active(): bool
+{
+    return (int) ($GLOBALS['videochat_sqlite_ingest_depth'] ?? 0) > 0;
+}
+
 function videochat_open_sqlite_pdo(string $databasePath): PDO
 {
     $trimmedPath = trim($databasePath);

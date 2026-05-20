@@ -14,6 +14,10 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `[client-diagnostics-contract] missing ${label}`);
 }
 
+function requireNotContains(source, needle, label) {
+  assert.ok(!source.includes(needle), `[client-diagnostics-contract] unexpected ${label}`);
+}
+
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const workspaceClientDiagnostics = read('src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts');
 const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
@@ -42,6 +46,9 @@ requireContains(diagnostics, 'diagnosticsSentFingerprints.add(diagnosticsFingerp
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_runtime_error'", 'global runtime error diagnostics hook');
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_unhandled_rejection'", 'global promise rejection diagnostics hook');
 requireContains(diagnostics, 'source_file: normalizeString(event?.filename', 'minified bundle source position capture');
+requireContains(diagnostics, 'function redactClientDiagnosticWindowPayload(value, depth = 0)', 'diagnostics redacts window-event payloads');
+requireContains(diagnostics, '/token|authorization|password|secret|credential|cookie|session/i.test(normalizedKey)', 'diagnostics redacts sensitive payload keys');
+requireContains(diagnostics, "payload: redactClientDiagnosticWindowPayload(entry.payload)", 'diagnostics dispatches only redacted window-event payloads');
 requireContains(workspace, 'configureCallWorkspaceClientDiagnosticsContext({', 'workspace delegates diagnostics context');
 requireContains(workspaceClientDiagnostics, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
 requireContains(workspaceClientDiagnostics, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
@@ -51,15 +58,20 @@ requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote 
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
 requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'expected signaling failures enter recovery path');
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId)', 'target_not_in_room prunes unreachable peer locally');
-requireContains(socketLifecycle, 'const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);', 'media-security publish failures enter the same unreachable-peer recovery path');
-requireContains(socketLifecycle, "&& normalizedError === 'target_not_in_room'", 'media-security target_not_in_room must evict stale participants before the next key sync');
+requireContains(socketLifecycle, 'const failedStaleTargetPruningSignal = STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);', 'stale-target pruning stays on explicit signaling families');
+requireContains(socketLifecycle, "&& normalizedError === 'target_not_in_room'", 'target_not_in_room still evicts stale participants for active signaling families');
 requireContains(socketLifecycle, '&& failedStaleTargetPruningSignal;', 'target_not_in_room pruning is limited to stale-target-safe signaling families');
-requireContains(socketLifecycle, "requestWlvcFullFrameKeyframe('media_security_target_not_in_room_pruned'", 'media-security stale-target pruning forces a fresh video keyframe');
-requireContains(socketLifecycle, "const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;", 'media-security target_not_in_room forces rekey when local pruning changed the participant set');
-requireContains(socketLifecycle, 'void sendMediaSecuritySync(shouldForceMediaSecurityRekey);', 'media-security publish failures retry through the normal sync path');
+requireNotContains(socketLifecycle, 'failedMediaSecuritySignal', 'G360 gossip-primary socket lifecycle requiring MediaSecurity recovery classification');
+requireNotContains(socketLifecycle, 'requestWlvcFullFrameKeyframe(\'media_security_target_not_in_room_pruned\'', 'G360 gossip-primary socket lifecycle forcing MediaSecurity keyframes');
+requireNotContains(socketLifecycle, 'shouldForceMediaSecurityRekey', 'G360 gossip-primary socket lifecycle forcing MediaSecurity rekeys');
+requireNotContains(socketLifecycle, 'sendMediaSecuritySync(shouldForceMediaSecurityRekey)', 'G360 gossip-primary socket lifecycle retrying MediaSecurity sync from signaling failures');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_stale_target_pruned'", 'expected stale-target pruning has a dedicated diagnostics hook');
 requireContains(socketLifecycle, "const rawSignalType = String(payload?.signal_type || '').trim().toLowerCase();", 'call ack preserves raw signaling type for suppression');
-requireContains(socketLifecycle, 'refs.shouldSuppressCallAckNotice(rawSignalType || signalType)', 'call ack suppression must inspect the raw signaling type');
+requireContains(socketLifecycle, "scheduleNativeOfferRetryForUserId(payload?.target_user_id, 'brokered_offer_unanswered')", 'brokered unanswered offer ack still schedules native offer retry');
+assert.ok(
+  !/if \(type === 'call\/ack'\)[\s\S]*setNotice\(`Sent/.test(socketLifecycle),
+  '[client-diagnostics-contract] call ack transport receipts must not render green workspace banners',
+);
 requireContains(participantUi, 'MEDIA_SECURITY_SIGNAL_TYPES.includes(`call/${normalized}`)', 'normalized media-security ack notices are suppressed');
 requireContains(socketLifecycle, "if (code === 'signaling_publish_failed' && !expectedStaleTargetPublishFailure)", 'broker failure diagnostics stay separate from expected stale-target pruning');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');

@@ -38,6 +38,21 @@ function videochat_realtime_handle_media_capabilities_websocket_command(
     }
 
     $payload = is_array($capabilitiesCommand['payload'] ?? null) ? (array) $capabilitiesCommand['payload'] : [];
+    $payloadCallId = function_exists('videochat_realtime_normalize_call_id')
+        ? videochat_realtime_normalize_call_id((string) ($payload['call_id'] ?? ($payload['callId'] ?? '')), '')
+        : strtolower(trim((string) ($payload['call_id'] ?? ($payload['callId'] ?? ''))));
+    if ($payloadCallId !== '') {
+        $presenceConnection['active_call_id'] = $payloadCallId;
+        if (trim((string) ($presenceConnection['requested_call_id'] ?? '')) === '') {
+            $presenceConnection['requested_call_id'] = $payloadCallId;
+        }
+    }
+    $payloadRoomId = function_exists('videochat_presence_normalize_room_id')
+        ? videochat_presence_normalize_room_id((string) ($payload['room_id'] ?? ($payload['roomId'] ?? '')), '')
+        : strtolower(trim((string) ($payload['room_id'] ?? ($payload['roomId'] ?? ''))));
+    if ($payloadRoomId !== '') {
+        $presenceConnection['room_id'] = $payloadRoomId;
+    }
     $capabilities = videochat_client_capabilities_normalize($payload, $presenceConnection);
     $connectionId = trim((string) ($presenceConnection['connection_id'] ?? ''));
     $publicCapabilities = videochat_client_capabilities_public_projection($capabilities);

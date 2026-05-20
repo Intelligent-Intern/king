@@ -129,12 +129,44 @@ try {
         'throttled_50',
         'throttled_25',
         'stuck_not_sending',
+        'audio_only',
+        'video_unavailable',
         'blocked_capability',
         'left',
     ];
     videochat_media_capability_plan_assert(
         videochat_media_session_plan_allowed_states() === $expectedStates,
         'media session plan state catalog mismatch'
+    );
+    $expectedSessionStates = [
+        'pending',
+        'connecting',
+        'gossip_720p30',
+        'gossip_360p30',
+        'gossip_360p5',
+        'sfu_720p30',
+        'sfu_320p30',
+        'ready',
+        'failed',
+    ];
+    videochat_media_capability_plan_assert(
+        videochat_media_session_plan_session_states() === $expectedSessionStates,
+        'media session plan session-state catalog mismatch'
+    );
+    $expectedLadderIds = ['gossip_720p30', 'gossip_360p30', 'gossip_360p5', 'sfu_720p30', 'sfu_320p30'];
+    $backendLadder = videochat_media_session_plan_ladder();
+    videochat_media_capability_plan_assert(
+        array_column($backendLadder, 'plan_id') === $expectedLadderIds,
+        'media session plan ladder order mismatch'
+    );
+    videochat_media_capability_plan_assert(
+        array_column($backendLadder, 'render_window_ms') === [30_000, 30_000, 30_000, 30_000, 30_000],
+        'media session plan ladder render windows mismatch'
+    );
+    videochat_media_capability_plan_assert(
+        ($backendLadder[3]['selected_by'] ?? '') === 'orchestrator'
+            && ($backendLadder[4]['selected_by'] ?? '') === 'orchestrator',
+        'SFU ladder entries must be orchestrator-selected'
     );
 
     $capabilities = videochat_client_capabilities_normalize([
@@ -173,6 +205,9 @@ try {
 
     videochat_media_capability_plan_assert(($publicCapabilities['media']['camera_720p30'] ?? false) === true, '720p30 capability should survive projection');
     videochat_media_capability_plan_assert(($publicCapabilities['runtime']['wlvc_encoder'] ?? false) === true, 'runtime encoder capability should survive projection');
+    videochat_media_capability_plan_assert(($publicCapabilities['codec']['preferred_path'] ?? '') === 'wlvc_wasm', 'codec path should survive projection');
+    videochat_media_capability_plan_assert(array_key_exists('network', $publicCapabilities), 'network/backpressure capability summary should survive projection');
+    videochat_media_capability_plan_assert(($publicCapabilities['constraints']['browser_family'] ?? '') === 'unknown', 'browser constraint should be normalized');
     videochat_media_capability_plan_assert_no_forbidden_data($publicCapabilities, 'client.capabilities.v1');
 
     $connection = videochat_presence_connection_descriptor(
@@ -218,6 +253,8 @@ try {
     ]));
 
     videochat_media_capability_plan_assert(($plan['schema_version'] ?? '') === 'king.video.media_session_plan.v1', 'plan schema mismatch');
+    videochat_media_capability_plan_assert(($plan['session_state_catalog'] ?? []) === $expectedSessionStates, 'plan must publish session-state catalog');
+    videochat_media_capability_plan_assert(($plan['session_state'] ?? '') === 'gossip_720p30', 'ready 720p30 sender should expose selected session state');
     videochat_media_capability_plan_assert(($plan['participants'][0]['media_state'] ?? '') === 'streaming_720p30', '720p30 sender should be planned as streaming_720p30');
     videochat_media_capability_plan_assert(($plan['participants'][0]['transport'] ?? '') === 'gossip', '720p30 sender must be planned over gossip');
     videochat_media_capability_plan_assert((int) ($plan['plan_epoch'] ?? 0) >= 2, 'plan must expose a monotonic plan epoch');
@@ -227,6 +264,7 @@ try {
     $mediaStateEvent = videochat_call_media_state_event($connection, $capabilities, 'client_capabilities');
     videochat_media_capability_plan_assert((string) ($mediaStateEvent['type'] ?? '') === 'call/media-state.v1', 'media state event type mismatch');
     videochat_media_capability_plan_assert(($mediaStateEvent['state_catalog'] ?? []) === $expectedStates, 'media state event state catalog mismatch');
+    videochat_media_capability_plan_assert(($mediaStateEvent['session_state_catalog'] ?? []) === $expectedSessionStates, 'media state event session-state catalog mismatch');
     videochat_media_capability_plan_assert((bool) ($mediaStateEvent['redacted'] ?? false), 'media state event must be marked redacted');
     videochat_media_capability_plan_assert(
         (string) (($mediaStateEvent['participant'] ?? [])['media_state'] ?? '') === 'waiting_for_gossip',
@@ -245,9 +283,28 @@ try {
             'microphone' => true,
         ],
         'runtime' => [
-            'websocket' => false,
-            'webrtc' => false,
+            'websocket' => true,
+            'webrtc' => true,
             'webassembly' => false,
+        ],
+    ]));
+    $non720TalkCapabilities = videochat_client_capabilities_public_projection(videochat_client_capabilities_normalize([
+        'participant_session_id' => 'call-session-non720-talk',
+        'media' => [
+            'camera' => true,
+            'camera_720p30' => false,
+            'microphone' => true,
+        ],
+        'runtime' => [
+            'websocket' => false,
+            'webrtc' => true,
+            'webassembly' => false,
+            'wlvc_encoder' => false,
+        ],
+        'constraints' => [
+            'video_width' => 640,
+            'video_height' => 480,
+            'video_fps' => 15,
         ],
     ]));
     $videoUnavailableCapabilities = videochat_client_capabilities_public_projection(videochat_client_capabilities_normalize([
@@ -275,8 +332,9 @@ try {
     $blockedCapabilities = videochat_client_capabilities_public_projection(videochat_client_capabilities_normalize([
         'participant_session_id' => 'call-session-blocked',
         'media' => [
-            'camera' => true,
-            'camera_720p30' => true,
+            'camera' => false,
+            'camera_720p30' => false,
+            'microphone' => false,
         ],
         'runtime' => [
             'websocket' => false,
@@ -310,6 +368,10 @@ try {
                 'client_capabilities' => $receiveOnlyCapabilities,
             ],
             [
+                'participant_session_id' => 'call-session-non720-talk',
+                'client_capabilities' => $non720TalkCapabilities,
+            ],
+            [
                 'participant_session_id' => 'call-session-video-unavailable',
                 'client_capabilities' => $videoUnavailableCapabilities,
             ],
@@ -338,22 +400,234 @@ try {
         '720p30 capabilities must use gossip transport'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['media_state'] ?? '') === 'blocked_capability',
-        'microphone-only capabilities must be blocked_capability'
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['media_state'] ?? '') === 'audio_only',
+        'microphone-only WebRTC capabilities must keep native talk audio available'
     );
     videochat_media_capability_plan_assert(
-        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'blocked_capability',
-        'non-720p camera capability must be blocked_capability'
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['transport'] ?? '') === '',
+        'audio_only talk must not require Gossip/SFU video transport'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-receive')['security_policy'] ?? '') === 'transport_only',
+        'audio_only talk must not require MediaSecurity protected-frame transforms'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-non720-talk')['media_state'] ?? '') === 'audio_only',
+        'non-720p camera must not block plain native WebRTC talk audio'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-non720-talk')['security_policy'] ?? '') === 'transport_only',
+        'non-720p talk audio must keep transport-only security policy'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['media_state'] ?? '') === 'video_unavailable',
+        'non-720p camera capability must be marked video_unavailable instead of blocking talk audio'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($statePlan, 'call-session-video-unavailable')['security_policy'] ?? '') === 'transport_only',
+        'video_unavailable state must not become a MediaSecurity block'
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-blocked')['media_state'] ?? '') === 'blocked_capability',
-        'unsupported media transport must be blocked'
+        'missing usable audio/video capability must be blocked'
     );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant($statePlan, 'call-session-left')['media_state'] ?? '') === 'left',
         'left participants must stay left'
     );
+    videochat_media_capability_plan_assert(
+        array_column((array) ($statePlan['ladder'] ?? []), 'plan_id') === $expectedLadderIds,
+        'built plan must publish the authoritative media ladder'
+    );
+    $defaultSelectedPlan = (array) ($statePlan['selected_plan'] ?? []);
+    videochat_media_capability_plan_assert(
+        ($defaultSelectedPlan['plan_id'] ?? '') === 'gossip_720p30'
+            && ($defaultSelectedPlan['transport'] ?? '') === 'gossip'
+            && ($defaultSelectedPlan['profile'] ?? '') === '720p30',
+        'built plan must default to selected Gossip 720p30'
+    );
+    videochat_media_capability_plan_assert(
+        ($statePlan['session_state'] ?? '') === 'pending',
+        'mixed participant readiness must keep the plan session pending'
+    );
+    videochat_media_capability_plan_assert(
+        ($defaultSelectedPlan['reason'] ?? '') === 'initial_gossip_720p30'
+            && (int) ($defaultSelectedPlan['selected_at_ms'] ?? 0) > 0
+            && (int) ($defaultSelectedPlan['updated_at_ms'] ?? 0) > 0,
+        'selected plan must carry reason and timestamps'
+    );
+    $orchestratedPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_600_000,
+        'selected_plan' => [
+            'plan_id' => 'sfu_320p30',
+            'reason' => 'sfu_720_render_failed',
+            'selected_at_ms' => 1_778_393_570_000,
+            'updated_at_ms' => 1_778_393_590_000,
+        ],
+        'participants' => [[
+            'participant_session_id' => 'call-session-alpha',
+            'client_capabilities' => $publicCapabilities,
+            'gossip_readiness' => ['topology_ready' => false, 'peer_ready' => false],
+        ]],
+    ]));
+    $orchestratedSelected = (array) ($orchestratedPlan['selected_plan'] ?? []);
+    videochat_media_capability_plan_assert(
+        ($orchestratedSelected['plan_id'] ?? '') === 'sfu_320p30'
+            && ($orchestratedSelected['selected_by'] ?? '') === 'orchestrator'
+            && ($orchestratedSelected['selection_gate'] ?? '') === 'after_sfu_720p30_render_failure',
+        'stored selected SFU 320p30 must stay orchestrator-gated'
+    );
+    videochat_media_capability_plan_assert(
+        ($orchestratedSelected['session_state'] ?? '') === 'sfu_320p30'
+            && ($orchestratedPlan['session_state'] ?? '') === 'sfu_320p30',
+        'stored selected SFU 320p30 must publish canonical session state'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($orchestratedPlan, 'call-session-alpha')['transport'] ?? '') === 'sfu'
+            && (videochat_media_capability_plan_participant($orchestratedPlan, 'call-session-alpha')['profile'] ?? '') === '320p30',
+        'selected plan transport/profile must flow into sending participant plan'
+    );
+    videochat_media_capability_plan_assert(
+        (int) ($orchestratedSelected['selected_at_ms'] ?? 0) === 1_778_393_570_000
+            && (int) ($orchestratedSelected['updated_at_ms'] ?? 0) === 1_778_393_590_000
+            && ($orchestratedSelected['reason'] ?? '') === 'sfu_720_render_failed',
+        'stored selected plan reason and timestamps must be idempotent'
+    );
+
+    $transitionParticipants = [
+        [
+            'participant_session_id' => 'call-session-alpha',
+            'client_capabilities' => $publicCapabilities,
+            'gossip_readiness' => [
+                'topology_ready' => true,
+                'peer_ready' => true,
+                'peer_count' => 2,
+                'assigned_neighbor_count' => 1,
+                'topology_epoch' => 1_778_393_600_000,
+            ],
+        ],
+        [
+            'participant_session_id' => 'call-session-beta',
+            'client_capabilities' => $publicCapabilities,
+            'gossip_readiness' => [
+                'topology_ready' => true,
+                'peer_ready' => true,
+                'peer_count' => 2,
+                'assigned_neighbor_count' => 1,
+                'topology_epoch' => 1_778_393_600_000,
+            ],
+        ],
+    ];
+    $gossip720TimeoutPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_600_000,
+        'selected_plan' => [
+            'plan_id' => 'gossip_720p30',
+            'selected_at_ms' => 1_778_393_569_999,
+        ],
+        'participants' => $transitionParticipants,
+        'receiver_render_evidence' => [
+            'last_rendered_at_ms' => 0,
+        ],
+    ]));
+    $gossip720TimeoutSelected = (array) ($gossip720TimeoutPlan['selected_plan'] ?? []);
+    videochat_media_capability_plan_assert(
+        ($gossip720TimeoutSelected['plan_id'] ?? '') === 'gossip_360p30'
+            && ($gossip720TimeoutSelected['reason'] ?? '') === 'after_gossip_720_render_failure'
+            && ($gossip720TimeoutSelected['transition']['previous_plan_id'] ?? '') === 'gossip_720p30'
+            && ($gossip720TimeoutSelected['transition']['next_plan_id'] ?? '') === 'gossip_360p30',
+        'Gossip 720p30 must downgrade to Gossip 360p30 after one render window without receiver render evidence'
+    );
+    videochat_media_capability_plan_assert(
+        (int) ($gossip720TimeoutSelected['transition']['no_receiver_render_for_ms'] ?? 0) >= 30_000
+            && (int) ($gossip720TimeoutSelected['transition']['render_window_ms'] ?? 0) === 30_000
+            && (string) ($gossip720TimeoutSelected['transition']['idempotency_key'] ?? '') !== '',
+        'Gossip 720p30 transition must carry idempotent render-window evidence'
+    );
+    videochat_media_capability_plan_assert(
+        (videochat_media_capability_plan_participant($gossip720TimeoutPlan, 'call-session-alpha')['profile'] ?? '') === '360p30'
+            && (videochat_media_capability_plan_participant($gossip720TimeoutPlan, 'call-session-alpha')['transport'] ?? '') === 'gossip',
+        'downgraded Gossip 360p30 plan must flow into participant transport/profile'
+    );
+    $recentRenderPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_600_000,
+        'selected_plan' => [
+            'plan_id' => 'gossip_720p30',
+            'selected_at_ms' => 1_778_393_560_000,
+        ],
+        'participants' => $transitionParticipants,
+        'receiver_render_evidence' => [
+            'last_rendered_at_ms' => 1_778_393_590_001,
+            'sample_count' => 4,
+        ],
+    ]));
+    videochat_media_capability_plan_assert(
+        (($recentRenderPlan['selected_plan'] ?? [])['plan_id'] ?? '') === 'gossip_720p30',
+        'recent receiver render evidence must keep Gossip 720p30 selected'
+    );
+    $gossip360p30TimeoutPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_640_000,
+        'selected_plan' => [
+            'plan_id' => 'gossip_360p30',
+            'selected_at_ms' => 1_778_393_609_000,
+        ],
+        'participants' => $transitionParticipants,
+    ]));
+    videochat_media_capability_plan_assert(
+        (($gossip360p30TimeoutPlan['selected_plan'] ?? [])['plan_id'] ?? '') === 'gossip_360p5',
+        'Gossip 360p30 must downgrade to Gossip 360p5 after its render window without evidence'
+    );
+    $gossip360p5TimeoutPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_680_000,
+        'selected_plan' => [
+            'plan_id' => 'gossip_360p5',
+            'selected_at_ms' => 1_778_393_649_000,
+        ],
+        'participants' => $transitionParticipants,
+    ]));
+    videochat_media_capability_plan_assert(
+        (($gossip360p5TimeoutPlan['selected_plan'] ?? [])['plan_id'] ?? '') === 'sfu_720p30'
+            && (($gossip360p5TimeoutPlan['selected_plan'] ?? [])['selected_by'] ?? '') === 'orchestrator',
+        'Gossip 360p5 must hand off to orchestrator-selected SFU 720p30 after its render window'
+    );
+    $sfu720TimeoutPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_720_000,
+        'selected_plan' => [
+            'plan_id' => 'sfu_720p30',
+            'selected_at_ms' => 1_778_393_689_000,
+        ],
+        'participants' => $transitionParticipants,
+    ]));
+    videochat_media_capability_plan_assert(
+        (($sfu720TimeoutPlan['selected_plan'] ?? [])['plan_id'] ?? '') === 'sfu_320p30'
+            && (($sfu720TimeoutPlan['selected_plan'] ?? [])['selection_gate'] ?? '') === 'after_sfu_720p30_render_failure',
+        'SFU 720p30 must downgrade to SFU 320p30 after its render window without evidence'
+    );
+    $idempotentNextPlan = videochat_media_session_plan_public_projection(videochat_media_session_plan_build([
+        'call_id' => 'call-alpha',
+        'room_id' => 'room-alpha',
+        'now_ms' => 1_778_393_601_000,
+        'selected_plan' => $gossip720TimeoutSelected,
+        'participants' => $transitionParticipants,
+    ]));
+    videochat_media_capability_plan_assert(
+        (($idempotentNextPlan['selected_plan'] ?? [])['plan_id'] ?? '') === 'gossip_360p30',
+        'transition result must be idempotent and must not skip multiple ladder steps'
+    );
     videochat_media_capability_plan_assert_no_forbidden_data($statePlan, 'integrated state plan');
+    videochat_media_capability_plan_assert_no_forbidden_data($orchestratedPlan, 'orchestrated selected plan');
+    videochat_media_capability_plan_assert_no_forbidden_data($gossip720TimeoutPlan, 'orchestrated Gossip 360p30 transition plan');
 
     $staleCapabilities = $publicCapabilities;
     $staleCapabilities['received_at'] = '2026-05-10T00:00:00Z';
@@ -476,6 +750,10 @@ try {
     );
     videochat_media_capability_plan_assert(isset($snapshotPayload['media_session_plan']), 'room snapshot must carry media_session_plan');
     videochat_media_capability_plan_assert_allowed_states((array) $snapshotPayload['media_session_plan'], 'snapshot media_session_plan.v1');
+    videochat_media_capability_plan_assert(
+        (($snapshotPayload['media_session_plan'] ?? [])['session_state_catalog'] ?? []) === $expectedSessionStates,
+        'room snapshot media_session_plan must carry canonical session states'
+    );
     videochat_media_capability_plan_assert(
         (videochat_media_capability_plan_participant((array) $snapshotPayload['media_session_plan'], 'conn-alpha')['media_state'] ?? '') === 'waiting_for_gossip',
         'room snapshot media_session_plan must use restored capabilities while waiting for peers'

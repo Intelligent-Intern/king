@@ -233,7 +233,7 @@
     },
     {
       "key": "deleted_registered_user",
-      "id": 6109,
+      "id": 6112,
       "email": "iam-deleted-user@example.test",
       "display_name": "Deleted Registered User",
       "role": "user",
@@ -323,12 +323,12 @@
       ]
     },
     {
-      "key": "alpha_deleted",
-      "id": "20000000-0000-4000-8000-000000000105",
-      "room_id": "iam-alpha-deleted-room",
+      "key": "alpha_cancelled",
+      "id": "20000000-0000-4000-8000-000000000108",
+      "room_id": "iam-alpha-cancelled-room",
       "tenant_key": "alpha",
       "organization_key": "alpha_org",
-      "title": "IAM Alpha Deleted Access Matrix Call",
+      "title": "IAM Alpha Cancelled Access Matrix Call",
       "status": "cancelled",
       "starts_at": "2026-05-08T08:00:00.000Z",
       "ends_at": "2026-05-08T09:00:00.000Z",
@@ -380,7 +380,7 @@
     },
     {
       "key": "beta_cross_org_private",
-      "id": "20000000-0000-4000-8000-000000000104",
+      "id": "20000000-0000-4000-8000-000000000109",
       "room_id": "iam-beta-cross-org-room",
       "tenant_key": "beta",
       "organization_key": "beta_org",
@@ -392,23 +392,8 @@
       "guest_list_user_keys": []
     },
     {
-      "key": "alpha_ended",
-      "id": "20000000-0000-4000-8000-000000000105",
-      "room_id": "iam-alpha-ended-room",
-      "tenant_key": "alpha",
-      "organization_key": "alpha_org",
-      "title": "IAM Alpha Ended Call",
-      "status": "ended",
-      "starts_at": "2026-05-07T10:00:00.000Z",
-      "ends_at": "2026-05-07T11:00:00.000Z",
-      "owner_user_key": "alpha_call_owner",
-      "guest_list_user_keys": [
-        "registered_guest"
-      ]
-    },
-    {
       "key": "alpha_disabled",
-      "id": "20000000-0000-4000-8000-000000000106",
+      "id": "20000000-0000-4000-8000-000000000110",
       "room_id": "iam-alpha-disabled-room",
       "tenant_key": "alpha",
       "organization_key": "alpha_org",
@@ -423,7 +408,7 @@
     },
     {
       "key": "alpha_deleted",
-      "id": "20000000-0000-4000-8000-000000000107",
+      "id": "20000000-0000-4000-8000-000000000111",
       "room_id": "iam-alpha-deleted-room",
       "tenant_key": "alpha",
       "organization_key": "alpha_org",
@@ -503,12 +488,18 @@
       "link_key": "alpha_open",
       "principal_user_key": "alpha_normal_user",
       "expected": {
+        "temporary": false,
+        "uses_authenticated_account": true,
         "session_kind": "registered_account",
         "tenant_role": "member",
         "tenant_admin": false,
         "platform_admin": false,
         "requires_admission": true,
-        "must_keep_authenticated_account": true
+        "system_admin": false,
+        "must_keep_authenticated_account": true,
+        "must_not_create_temporary_identity": true,
+        "must_not_modify_guest_list": true,
+        "must_not_create_personalized_binding": true
       }
     },
     {
@@ -618,6 +609,8 @@
       "principal_user_key": "alpha_org_admin",
       "call_key": "beta_active",
       "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
         "direct_join_allowed": false,
         "expected_resolve_status": 200,
         "expected_resolve_state": "forbidden",
@@ -648,6 +641,7 @@
         "guest_list_entry": false,
         "owner": false,
         "guest_list_required": true,
+        "can_manage_lobby": false,
         "cross_org": true
       }
     },
@@ -716,6 +710,8 @@
         }
       },
       "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
         "direct_join_allowed": false,
         "expected_resolve_status": 200,
         "expected_resolve_state": "forbidden",
@@ -727,6 +723,7 @@
         "guest_list_entry": false,
         "owner": false,
         "guest_list_required": true,
+        "can_manage_lobby": false,
         "active_org_switch": true
       }
     },
@@ -736,6 +733,8 @@
       "principal_user_key": "alpha_call_owner",
       "call_key": "beta_active",
       "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
         "direct_join_allowed": false,
         "expected_resolve_status": 200,
         "expected_resolve_state": "forbidden",
@@ -747,6 +746,7 @@
         "guest_list_entry": false,
         "owner": false,
         "guest_list_required": true,
+        "can_manage_lobby": false,
         "cross_org": true
       }
     },
@@ -756,6 +756,8 @@
       "principal_user_key": "registered_guest",
       "call_key": "beta_active",
       "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
         "direct_join_allowed": false,
         "expected_resolve_status": 200,
         "expected_resolve_state": "forbidden",
@@ -767,6 +769,7 @@
         "guest_list_entry": false,
         "owner": false,
         "guest_list_required": true,
+        "can_manage_lobby": false,
         "cross_org": true
       }
     },
@@ -813,6 +816,9 @@
       "principal_user_key": "alpha_tenant_member_without_organization",
       "call_key": "alpha_active",
       "expected": {
+        "state": "forbidden",
+        "decision_source": "none",
+        "decision_reason": "not_on_guest_list",
         "direct_join_allowed": false,
         "expected_resolve_status": 200,
         "expected_resolve_state": "forbidden",
@@ -823,7 +829,8 @@
         "tenant_admin": false,
         "guest_list_entry": false,
         "owner": false,
-        "guest_list_required": true
+        "guest_list_required": true,
+        "can_manage_lobby": false
       }
     },
     {
@@ -1057,53 +1064,6 @@
       }
     },
     {
-      "key": "direct_join_org_admin_foreign_organization_denied",
-      "journey_key": "e2e_journey_013_org_admin_foreign_org_denied",
-      "sprint_groups": ["1", "3", "19"],
-      "principal_user_key": "alpha_org_admin",
-      "call_key": "beta_active",
-      "expected": {
-        "state": "forbidden",
-        "decision_source": "none",
-        "guest_list_required": true,
-        "can_manage_lobby": false,
-        "tenant_admin": false,
-        "platform_admin": false
-      }
-    },
-    {
-      "key": "direct_join_active_org_switch_does_not_grant_foreign_call",
-      "sprint_groups": ["21"],
-      "principal_user_key": "alpha_admin_beta_member",
-      "call_key": "beta_active",
-      "client_session_overrides": {
-        "tenant": {
-          "id": 5102,
-          "tenant_id": 5102,
-          "uuid": "tenant-beta-e2e",
-          "public_id": "tenant-beta-e2e",
-          "slug": "iam-beta",
-          "label": "IAM Beta Organization",
-          "role": "admin",
-          "permissions": {
-            "tenant_admin": true,
-            "manage_lobby": true,
-            "admit_participants": true,
-            "reject_participants": true,
-            "kick_participants": true
-          }
-        }
-      },
-      "expected": {
-        "state": "forbidden",
-        "decision_source": "none",
-        "guest_list_required": true,
-        "can_manage_lobby": false,
-        "tenant_admin": false,
-        "platform_admin": false
-      }
-    },
-    {
       "key": "direct_join_normal_owner_without_guest_list",
       "sprint_groups": ["3", "20"],
       "principal_user_key": "alpha_call_owner",
@@ -1113,20 +1073,6 @@
         "decision_source": "owner",
         "guest_list_required": false,
         "can_manage_lobby": true,
-        "tenant_admin": false,
-        "platform_admin": false
-      }
-    },
-    {
-      "key": "direct_join_owner_rights_not_cross_org",
-      "sprint_groups": ["21"],
-      "principal_user_key": "alpha_call_owner",
-      "call_key": "beta_active",
-      "expected": {
-        "state": "forbidden",
-        "decision_source": "none",
-        "guest_list_required": true,
-        "can_manage_lobby": false,
         "tenant_admin": false,
         "platform_admin": false
       }
@@ -1164,22 +1110,6 @@
       "key": "direct_join_normal_user_not_on_guest_list_denied",
       "sprint_groups": ["3", "17", "20"],
       "principal_user_key": "alpha_normal_user",
-      "call_key": "alpha_active",
-      "expected": {
-        "state": "forbidden",
-        "decision_source": "none",
-        "decision_reason": "not_on_guest_list",
-        "guest_list_required": true,
-        "can_manage_lobby": false,
-        "tenant_admin": false,
-        "platform_admin": false
-      }
-    },
-    {
-      "key": "direct_join_user_without_organization_denied",
-      "journey_key": "e2e_org_011_user_without_organization_no_org_rights",
-      "sprint_groups": ["1", "3", "20"],
-      "principal_user_key": "alpha_tenant_member_without_organization",
       "call_key": "alpha_active",
       "expected": {
         "state": "forbidden",
@@ -1230,20 +1160,6 @@
         "state": "auth_failed",
         "decision_source": "none",
         "decision_reason": "user_inactive",
-        "guest_list_required": true,
-        "can_manage_lobby": false,
-        "tenant_admin": false,
-        "platform_admin": false
-      }
-    },
-    {
-      "key": "direct_join_guest_list_not_cross_org",
-      "sprint_groups": ["17", "21"],
-      "principal_user_key": "registered_guest",
-      "call_key": "beta_active",
-      "expected": {
-        "state": "forbidden",
-        "decision_source": "none",
         "guest_list_required": true,
         "can_manage_lobby": false,
         "tenant_admin": false,
@@ -1365,24 +1281,6 @@
         "system_admin": false,
         "tenant_admin": false,
         "platform_admin": false
-      }
-    },
-    {
-      "key": "anonymous_open_logged_in_uses_own_account_waits_for_host",
-      "journey_key": "e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights",
-      "sprint_groups": ["9", "11"],
-      "link_key": "alpha_open",
-      "principal_user_key": "alpha_normal_user",
-      "expected": {
-        "temporary": false,
-        "uses_authenticated_account": true,
-        "requires_admission": true,
-        "system_admin": false,
-        "tenant_admin": false,
-        "platform_admin": false,
-        "must_not_create_temporary_identity": true,
-        "must_not_modify_guest_list": true,
-        "must_not_create_personalized_binding": true
       }
     },
     {

@@ -103,8 +103,14 @@ try {
     [$databasePath, $pdo] = videochat_iam_rejoin_contract_bootstrap_database('videochat-call-access-king-container');
     $ids = videochat_iam_rejoin_contract_fixture_ids($pdo, $label);
     $tenantId = (int) $ids['tenant_id'];
-    $ownerUserId = (int) $ids['admin_user_id'];
     $organizationId = (int) $ids['organization_id'];
+    $ownerUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'king-container-owner@example.test',
+        'King Container Regular Owner',
+        $tenantId,
+        $organizationId
+    );
     $registeredUserId = videochat_iam_rejoin_contract_seed_user(
         $pdo,
         'king-registered@example.test',

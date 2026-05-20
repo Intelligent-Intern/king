@@ -20,7 +20,7 @@ function assertIncludes(source, value, message) {
   assert(source.includes(value), message)
 }
 
-const sprint = `${readRepo('SPRINT.md')}\n${readRepo('BACKLOG.md')}`
+const planningDocs = `${readRepo('SPRINT.md')}\n${readRepo('BACKLOG.md')}`
 const semanticDnsHeader = readRepo('extension/include/semantic_dns/semantic_dns.h')
 const mcpHeader = readRepo('extension/include/mcp/mcp.h')
 const marketplaceDomain = readRepo('demo/video-chat/backend-king-php/domain/marketplace/call_app_marketplace.php')
@@ -31,79 +31,17 @@ const permissionGrants = readRepo('demo/video-chat/backend-king-php/domain/tenan
 const marketplaceDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules/marketplace/descriptor.js')
 const callsDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules/calls/descriptor.js')
 const packageJson = readRepo('demo/video-chat/frontend-vue/package.json')
+const packageLayoutReadme = readRepo('demo/call-apps/README.md')
 
-assertIncludes(sprint, 'Prior sprint: Whiteboard Call App Hardening And Production Integration', 'planning sources must preserve the migrated Whiteboard Call App sprint')
-assertIncludes(sprint, '- [x] WCA-01 Sprint/backlog hygiene and package contract', 'WCA-01 must be closed only after sprint/backlog cleanup and contract proof exist')
-assertIncludes(sprint, '- [x] WCA-02 Whiteboard runtime tool completeness first pass', 'WCA-02 must be closed after the first Whiteboard runtime hardening pass')
-assertIncludes(sprint, 'demo/call-app/<app-key>/', 'Call Apps must live under demo/call-app/<app-key>/')
-assertIncludes(sprint, 'demo/call-app/whiteboard/', 'whiteboard must be the first concrete Call App package path')
-assertIncludes(sprint, 'CallWorkspaceView.vue` must not', 'Call App implementation must not grow CallWorkspaceView.vue')
-
-for (const capability of [
-  'call_apps.discover',
-  'call_apps.marketplace.order',
-  'call_apps.marketplace.install',
-  'call_apps.marketplace.disable',
-  'call_apps.call.attach',
-  'call_apps.call.remove',
-  'call_apps.call.view',
-  'call_apps.permissions.manage',
-  'call_apps.permissions.use',
-  'call_apps.permissions.revoke',
-  'call_apps.launch',
-  'call_apps.launch.validate',
-  'call_apps.crdt.read',
-  'call_apps.crdt.append',
-  'call_apps.crdt.replay',
-  'call_apps.presence.publish',
-  'call_apps.export.request',
-  'call_apps.export.download',
-]) {
-  assertIncludes(sprint, `  - \`${capability}\``, `missing planned Call App capability ${capability}`)
-}
-
-for (const route of [
-  'GET /api/admin/marketplace/apps',
-  'POST /api/admin/marketplace/apps',
-  'GET /api/admin/marketplace/apps/{app_id}',
-  'PATCH /api/admin/marketplace/apps/{app_id}',
-  'DELETE /api/admin/marketplace/apps/{app_id}',
-  'GET /api/marketplace/call-apps',
-  'GET /api/marketplace/call-apps/{app_key}',
-  'POST /api/marketplace/call-apps/{app_key}/orders',
-  'POST /api/marketplace/call-apps/{app_key}/installations',
-  'PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}',
-  'GET /api/calls/{call_id}/call-apps/available',
-  'GET /api/calls/{call_id}/call-app-sessions',
-  'POST /api/calls/{call_id}/call-app-sessions',
-  'PATCH /api/call-app-sessions/{session_id}',
-  'DELETE /api/call-app-sessions/{session_id}',
-  'GET /api/call-app-sessions/{session_id}/participant-grants',
-  'PATCH /api/call-app-sessions/{session_id}/participant-grants',
-  'POST /api/call-app-sessions/{session_id}/launch-token',
-  'POST /api/call-app-sessions/{session_id}/launch-token/validate',
-  'GET /api/call-app-sessions/{session_id}/crdt/bootstrap',
-  'GET /api/call-app-sessions/{session_id}/crdt/ops',
-  'POST /api/call-app-sessions/{session_id}/crdt/ops',
-  'POST /api/call-app-sessions/{session_id}/crdt/snapshots',
-  'POST /api/call-app-sessions/{session_id}/exports',
-  'GET /api/call-app-exports/{job_id}',
-  'GET /api/call-app-exports/{job_id}/download',
-]) {
-  assertIncludes(sprint, `  - \`${route}\``, `missing planned Call App route boundary ${route}`)
-}
-
-for (const mcpMethod of [
-  'call_app.describe',
-  'call_app.capabilities',
-  'call_app.crdt_schema',
-  'call_app.launch_contract',
-  'call_app.health',
-  'call_app.export_formats',
-  'call_app.marketplace_listing',
-]) {
-  assertIncludes(sprint, `  - \`${mcpMethod}\``, `missing planned MCP metadata method ${mcpMethod}`)
-}
+assertIncludes(planningDocs, 'Root planning Markdown remains limited to `README.md`, `BACKLOG.md`,', 'planning sources must keep root markdown constrained')
+assertIncludes(planningDocs, 'Keep Call App package roots canonical at `demo/call-apps/<app-key>/`.', 'planning sources must preserve the canonical Call App package root')
+assertIncludes(planningDocs, 'Keep `demo/video-chat/frontend-vue/src/domain/realtime/callApps` as', 'planning sources must preserve the Call Apps host/source boundary')
+assertIncludes(planningDocs, 'Treat `demo/video-chat/frontend-vue/dist/call-app` as build output only.', 'planning sources must preserve the Call Apps build-output boundary')
+assertIncludes(planningDocs, 'Do not grow `CallWorkspaceView.vue`', 'planning sources must preserve the CallWorkspace extraction boundary')
+assertIncludes(packageLayoutReadme, 'canonical repository source root is plural `demo/call-apps/`', 'package layout docs must keep demo/call-apps as the canonical source root')
+assertIncludes(packageLayoutReadme, '`demo/call-app/` is not a Call App source root', 'package layout docs must reject demo/call-app as a parallel package root')
+assertIncludes(packageLayoutReadme, 'Runtime/public Call App URLs remain `/call-app/<app-key>/...`', 'package layout docs must keep runtime /call-app URLs separate from the source root decision')
+assert(!fs.existsSync(path.join(repoRoot, 'demo/call-app')), 'demo/call-app must not exist while demo/call-apps is canonical')
 
 assertIncludes(semanticDnsHeader, 'KING_SERVICE_TYPE_MCP_AGENT', 'Semantic DNS must already expose MCP agent service type')
 assertIncludes(semanticDnsHeader, 'KING_SERVICE_TYPE_MOTHER_NODE', 'Semantic DNS must already expose mother-node service type')

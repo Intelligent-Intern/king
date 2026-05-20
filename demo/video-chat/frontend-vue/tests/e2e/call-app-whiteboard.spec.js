@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const whiteboardPublicRoot = path.resolve(__dirname, '../../../../call-app/whiteboard/public');
+const whiteboardPublicRoot = path.resolve(__dirname, '../../../../call-apps/whiteboard/public');
 const bridgeProtocol = 'king.call_app.iframe.v1';
 
 async function readWhiteboardAssets() {

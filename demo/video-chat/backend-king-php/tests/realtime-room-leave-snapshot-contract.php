@@ -116,6 +116,31 @@ SQL
     $initialSnapshot = videochat_realtime_room_snapshot_payload($presenceState, $ownerConnection, $openDatabase, 'assert_initial');
     videochat_realtime_room_leave_snapshot_assert((int) ($initialSnapshot['participant_count'] ?? 0) === 2, 'initial snapshot should include both active participants');
 
+    $passiveState = $presenceState;
+    $passiveFrames = [];
+    $passiveSender = static function (mixed $socket, array $payload) use (&$passiveFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($passiveFrames[$key]) || !is_array($passiveFrames[$key])) {
+            $passiveFrames[$key] = [];
+        }
+        $passiveFrames[$key][] = $payload;
+        return true;
+    };
+    videochat_presence_remove_connection($passiveState, 'conn-leaver', $passiveSender);
+    $passiveSnapshot = videochat_realtime_room_snapshot_payload($passiveState, $ownerConnection, $openDatabase, 'participant_disconnected', 1_777_000_000_200);
+    videochat_realtime_room_leave_snapshot_assert((int) ($passiveSnapshot['participant_count'] ?? 0) === 2, 'passive transport disconnect must keep DB-backed participant in room snapshot');
+    $passiveUserIds = array_map(
+        static fn (array $row): int => (int) (($row['user'] ?? [])['id'] ?? 0),
+        is_array($passiveSnapshot['participants'] ?? null) ? $passiveSnapshot['participants'] : []
+    );
+    videochat_realtime_room_leave_snapshot_assert(in_array(102, $passiveUserIds, true), 'passive transport disconnect must keep participant 102 visible in roster');
+    $passiveLeftAt = $pdo->query("SELECT left_at FROM call_participants WHERE call_id = 'call-leave-cleanup' AND user_id = 102")->fetchColumn();
+    videochat_realtime_room_leave_snapshot_assert($passiveLeftAt === false || $passiveLeftAt === null || trim((string) $passiveLeftAt) === '', 'passive transport disconnect must not mark participant left');
+    videochat_realtime_room_leave_snapshot_assert(
+        videochat_realtime_presence_db_has_room_membership($pdo, 'room-leave-cleanup', 'call-leave-cleanup', 102),
+        'passive transport disconnect must keep durable DB room membership'
+    );
+
     $frames = [];
     videochat_presence_remove_connection($presenceState, 'conn-leaver', $sender);
     videochat_realtime_remove_call_presence($openDatabase, $leavingConnection);

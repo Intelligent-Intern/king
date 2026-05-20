@@ -147,10 +147,13 @@ export function resolveAuthorizedRedirect(target, role, routerInstance = router)
 }
 
 router.beforeEach(async (to) => {
-  if (sessionState.sessionToken) {
-    await ensureSessionRecovery();
-  } else if (!sessionState.recovered) {
-    await ensureSessionRecovery();
+  const isLoginRoute = to.path === '/login';
+  if (!isLoginRoute) {
+    if (sessionState.sessionToken) {
+      await ensureSessionRecovery();
+    } else if (!sessionState.recovered) {
+      await ensureSessionRecovery();
+    }
   }
 
   const loggedIn = isAuthenticated();

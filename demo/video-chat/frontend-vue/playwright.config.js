@@ -107,7 +107,6 @@ const localUse = {
 const productionUse = {
   baseURL: productionOrigins?.baseURL || 'https://app.kingrt.com',
   headless: true,
-  permissions: ['camera', 'microphone'],
   screenshot: 'only-on-failure',
   trace: 'retain-on-failure',
   video: process.env.PLAYWRIGHT_PRODUCTION_BROWSER_VIDEO === '1' ? 'on' : 'retain-on-failure',
@@ -118,6 +117,7 @@ const productionProjects = [
     name: 'production-chromium',
     use: {
       browserName: 'chromium',
+      permissions: ['camera', 'microphone'],
       launchOptions: {
         args: [
           '--autoplay-policy=no-user-gesture-required',

@@ -26,6 +26,8 @@ const root = path.resolve(__dirname, '../..');
 try {
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const participantConnectWindow = read('src/domain/realtime/workspace/callWorkspace/participantConnectWindow.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
   const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
@@ -68,6 +70,15 @@ try {
   requireContains(runtimeHealth, 'function remoteVideoSocketRestartBackoffMs', 'hard SFU socket restart uses per-peer exponential backoff');
   requireContains(runtimeHealth, 'function canRequestSfuSocketRestartForPeer', 'remote video restart checks the peer backoff gate');
   requireContains(runtimeHealth, 'function requestSfuSocketRestartForPeer', 'remote video hard restart records peer restart state');
+  requireContains(runtimeHealth, 'canRestartSfuForConnectWindow(reason', 'remote video hard restart is gated by the participant connect window');
+  requireContains(runtimeHealth, 'connectWindowDecision?.allowed === false', 'remote video hard restart is blocked outside the participant connect window');
+  requireContains(runtimeHealth, "participantConnectWindow.sync('remote_video_stall_check'", 'remote health observes participant connect-window state without focus triggers');
+  requireContains(mediaStack, 'canRestartSfuForConnectWindow: runtimeHealth.canRestartSfuForConnectWindow', 'publisher send-path reconnects share the participant connect-window gate');
+  requireContains(publisherBackpressureController, 'canRestartSfuForConnectWindow(reason, payload, nowMs)', 'publisher backpressure reconnect is participant-window gated');
+  requireContains(participantConnectWindow, 'CALL_PARTICIPANT_CONNECT_WINDOW_MS = 5 * 60 * 1000', 'participant connect window is five minutes');
+  requireContains(participantConnectWindow, 'call_participant_connect_window_started', 'new participant starts a connect window diagnostic');
+  requireContains(participantConnectWindow, 'call_participant_connect_window_reconnect_blocked', 'reconnect outside a participant window is diagnosed');
+  requireContains(participantConnectWindow, 'video_sending_after_connect_window: true', 'expired windows preserve video sending instead of reconnect looping');
   requireContains(runtimeHealth, 'peer.nextSfuSocketRestartAllowedAtMs = nowMs + restartBackoffMs;', 'remote video restart stores next allowed time');
   requireContains(runtimeHealth, 'function requestSfuSubscriberLayerPreference', 'remote video recovery can lower one subscriber to thumbnail before socket restart');
   requireContains(runtimeHealth, "requested_action: layer === 'thumbnail' ? 'prefer_thumbnail_video_layer' : 'prefer_primary_video_layer'", 'remote video recovery uses SFU subscriber layer preference instead of global publisher downshift first');

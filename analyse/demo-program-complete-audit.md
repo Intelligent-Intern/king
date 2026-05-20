@@ -24,7 +24,7 @@ as dead-code candidates unless they are referenced from first-party source:
 | `test` | 748 | Test/contract ownership target. |
 | `script` | 35 | Ops/script ownership target. |
 | `contract` | 24 | Contract ownership target. |
-| `call-app` | 43 | Call app packages under `demo/call-app`. |
+| `call-app` | 43 | Call app packages under `demo/call-apps`. |
 
 ## Inventory Results
 
@@ -129,18 +129,18 @@ It is a repo-local runtime proof used by extension PHPTs and video-chat
 hardening checks. `demo/video-chat/scripts/check-security-hardening-policy.sh`
 depends on `demo/userland/flow-php/src/McpHost.php`.
 
-### `demo/call-app`
+### `demo/call-apps`
 
 Recommendation: keep as canonical call-app package root.
 
 The source packages are correctly located under:
 
-- `demo/call-app/call-diagnostics`
-- `demo/call-app/planning-image`
-- `demo/call-app/presentation`
-- `demo/call-app/spreadsheet`
-- `demo/call-app/text-document`
-- `demo/call-app/whiteboard`
+- `demo/call-apps/call-diagnostics`
+- `demo/call-apps/planning-image`
+- `demo/call-apps/presentation`
+- `demo/call-apps/spreadsheet`
+- `demo/call-apps/text-document`
+- `demo/call-apps/whiteboard`
 
 The frontend code under `demo/video-chat/frontend-vue/src/domain/realtime/callApps`
 is host integration, not package source. The backend code under

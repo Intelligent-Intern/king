@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/call_permanent_lifecycle.php';
 
 function videochat_call_access_email_target_is_external_invitee(PDO $pdo, array $accessLink, string $participantEmail): bool
 {
@@ -73,6 +74,10 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
             'target_user' => null,
             'target_hint' => ['participant_email' => null],
         ];
+    }
+    if (videochat_is_permanent_call((string) ($accessLink['call_id'] ?? ''))) {
+        videochat_permanent_call_ensure_active($pdo, (string) ($accessLink['call_id'] ?? ''), 'call_access_public_guard');
+        $accessLink['expires_at'] = videochat_permanent_call_guard_ends_at();
     }
 
     $expiresAt = is_string($accessLink['expires_at'] ?? null) ? (string) $accessLink['expires_at'] : '';

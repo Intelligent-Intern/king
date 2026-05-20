@@ -63,12 +63,12 @@ assert(
 )
 assert(
   /function isGossipMediaFrameMessage\(msg\)[\s\S]*type === GOSSIP_MEDIA_FRAME_TYPE \|\| type === 'sfu\/frame'/.test(gossipMediaFrameEnvelope)
-    && /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*msg\.payload[\s\S]*base64UrlToArrayBuffer\(dataBase64\)[\s\S]*transportPath:\s*runtimePath/.test(workspaceGossipSurface)
+    && /function sfuFrameFromGossipMessage\(msg,\s*delivery\)[\s\S]*const dataBinary = normalizeGossipFrameArrayBuffer\(msg\.dataBinary \|\| msg\.data_binary \|\| msg\.data\);[\s\S]*data:\s*dataBinary[\s\S]*transportPath:\s*runtimePath/.test(workspaceGossipSurface)
     && gossipMediaFrameEnvelope.includes('msg.frame_kind')
     && gossipMediaFrameEnvelope.includes('msg.sequence')
     && gossipMediaFrameEnvelope.includes('msg.timestamp_unix_ms')
     && gossipMediaFrameEnvelope.includes('msg.runtime_path'),
-  'gossip.media.frame.v1 messages must be adapted into SFU frame objects with explicit gossip transport provenance while legacy inbound sfu/frame remains decodable',
+  'gossip.media.frame.v1 messages must be adapted from binary payloads into SFU frame objects with explicit gossip transport provenance',
 )
 assert(
   /function routeGossipMediaFrameToRenderer\(frame,\s*directGossipPrimary\)[\s\S]*handleSFUEncodedFrame\(directGossipPrimary[\s\S]*transportPath:\s*'gossip_primary_direct'[\s\S]*protected:\s*null[\s\S]*protectedFrame:\s*null[\s\S]*protectionMode:\s*'transport_only'/.test(gossipDataLane),
@@ -90,7 +90,7 @@ assert(
   'active live routing must emit a diagnostic when a gossip frame enters the remote frame path',
 )
 const gossipFirstPublishIndex = publisherFrameDispatch.indexOf('if (gossipFirst) {')
-const gossipPrimaryEarlyReturnIndex = publisherFrameDispatch.indexOf('sfuFallbackSuppressed: true', gossipFirstPublishIndex)
+const gossipPrimaryEarlyReturnIndex = publisherFrameDispatch.indexOf('alternatePathSuppressed: true', gossipFirstPublishIndex)
 const sfuClientLookupIndex = publisherFrameDispatch.indexOf('const sendClient = safeFunction(currentOpenSfuClient, () => null)();')
 const sfuSendIndex = publisherFrameDispatch.indexOf('sendClient.sendEncodedFrame(frame)')
 assert(
@@ -101,16 +101,21 @@ assert(
   'gossip_primary dispatch must return after Gossip publication and must not fall back or mirror into the SFU send path',
 )
 assert(
-  /gossip_primary_publish_failed_no_sfu_fallback/.test(publisherFrameDispatch)
+  /gossip_primary_publish_failed/.test(publisherFrameDispatch)
     && !/sfu_fallback_after_gossip_primary_publish_failure/.test(publisherFrameDispatch)
     && !/sfu_fallback_unavailable_after_gossip_publish_failure/.test(publisherFrameDispatch),
   'gossip_primary publish failure must diagnose suppressed fallback instead of sending an SFU frame',
 )
 assert(
   /dispose\(\):\s*void/.test(controller)
-    && /this\.heartbeatTimers\.clear\(\)/.test(controller)
     && /this\.dataListeners = \[\]/.test(controller),
-  'GossipController must expose dispose() to clear live heartbeat timers and listeners',
+  'GossipController must expose dispose() to clear live listeners',
+)
+assert(
+  /checkCarrierState\(peerId: string\): void \{[\s\S]*void peerId[\s\S]*\}/.test(controller)
+    && /reason: eventType === 'open' \? 'rtc_datachannel_open' : 'rtc_datachannel_health_ignored'/.test(controller)
+    && !/heartbeatTimers|startHeartbeat|heartbeat_timeout|reconnect_requested|rtc_datachannel_lost/.test(controller),
+  'GossipController must not run client-side heartbeat health or reconnect decisions',
 )
 assert(
   /function teardownGossipDataLane\(\)[\s\S]*unsubscribeLiveGossipDelivery[\s\S]*liveGossipController\?\.dispose\?\.\(\)[\s\S]*gossipDataChannelTransport\?\.close\(\)/.test(workspaceGossipSurface),

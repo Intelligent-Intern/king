@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call_lifecycle.php';
+require_once __DIR__ . '/call_access_invalidation.php';
+require_once __DIR__ . '/call_permanent_lifecycle.php';
 
 function videochat_validate_cancel_call_payload(array $payload): array
 {
@@ -68,6 +70,15 @@ function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string
             'ok' => false,
             'reason' => 'forbidden',
             'errors' => [],
+            'call' => null,
+        ];
+    }
+    if (videochat_is_permanent_call((string) ($existingCall['id'] ?? $callId))) {
+        videochat_permanent_call_ensure_active($pdo, (string) ($existingCall['id'] ?? $callId), 'cancel_guard');
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['call' => 'permanent_call_protected'],
             'call' => null,
         ];
     }
@@ -286,6 +297,15 @@ function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string
             'call' => null,
         ];
     }
+    if (videochat_is_permanent_call((string) ($existingCall['id'] ?? $callId))) {
+        videochat_permanent_call_ensure_active($pdo, (string) ($existingCall['id'] ?? $callId), 'delete_guard');
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['call' => 'permanent_call_protected'],
+            'call' => null,
+        ];
+    }
 
     $callTenantId = is_numeric($existingCall['tenant_id'] ?? null) ? (int) $existingCall['tenant_id'] : null;
     $lifecycleTenantId = is_int($callTenantId) && $callTenantId > 0 ? $callTenantId : $tenantId;
@@ -367,6 +387,15 @@ function videochat_end_call(PDO $pdo, string $callId, int $authUserId, string $a
             'ok' => false,
             'reason' => 'forbidden',
             'errors' => [],
+            'call' => null,
+        ];
+    }
+    if (videochat_is_permanent_call((string) ($existingCall['id'] ?? $callId))) {
+        videochat_permanent_call_ensure_active($pdo, (string) ($existingCall['id'] ?? $callId), 'end_guard');
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['call' => 'permanent_call_protected'],
             'call' => null,
         ];
     }
@@ -471,6 +500,18 @@ function videochat_leave_call(PDO $pdo, string $callId, int $authUserId, string 
     $currentStatus = strtolower(trim((string) ($existingCall['status'] ?? '')));
     $isOwner = $authUserId > 0 && $authUserId === (int) ($existingCall['owner_user_id'] ?? 0);
     if ($isOwner) {
+        if (videochat_is_permanent_call((string) ($existingCall['id'] ?? $callId))) {
+            videochat_permanent_call_ensure_active($pdo, (string) ($existingCall['id'] ?? $callId), 'owner_leave_guard');
+            return [
+                'ok' => true,
+                'reason' => 'owner_left_permanent_call_active',
+                'errors' => [],
+                'state' => 'active',
+                'call' => videochat_build_call_payload($pdo, $existingCall, $authUserId),
+                'lifecycle' => null,
+            ];
+        }
+
         if ($currentStatus === 'ended') {
             return [
                 'ok' => true,
@@ -596,16 +637,38 @@ function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole,
 
     $pdo->beginTransaction();
     try {
+        $permanentParams = [];
+        $permanentPlaceholders = videochat_permanent_call_sql_placeholders($permanentParams);
+        $permanentWhere = $permanentPlaceholders === [] ? '' : ' AND id NOT IN (' . implode(', ', $permanentPlaceholders) . ')';
+        $existingPermanentCallIds = [];
+        if ($permanentPlaceholders !== []) {
+            $existingPermanentQuery = $pdo->prepare('SELECT id FROM calls WHERE id IN (' . implode(', ', $permanentPlaceholders) . ')');
+            $existingPermanentQuery->execute($permanentParams);
+            while (($row = $existingPermanentQuery->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if (is_array($row)) {
+                    $existingPermanentCallId = videochat_permanent_call_normalize_id($row['id'] ?? '');
+                    if ($existingPermanentCallId !== '') {
+                        $existingPermanentCallIds[] = $existingPermanentCallId;
+                    }
+                }
+            }
+        }
         $hasTenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
         if ($hasTenantColumn) {
-            $countQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE tenant_id = :tenant_id');
-            $countQuery->execute([':tenant_id' => $tenantId]);
+            $countQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE (tenant_id = :tenant_id OR tenant_id IS NULL)' . $permanentWhere);
+            $countQuery->execute(array_merge([':tenant_id' => $tenantId], $permanentParams));
             $count = (int) $countQuery->fetchColumn();
-            $delete = $pdo->prepare('DELETE FROM calls WHERE tenant_id = :tenant_id');
-            $delete->execute([':tenant_id' => $tenantId]);
+            $delete = $pdo->prepare('DELETE FROM calls WHERE (tenant_id = :tenant_id OR tenant_id IS NULL)' . $permanentWhere);
+            $delete->execute(array_merge([':tenant_id' => $tenantId], $permanentParams));
         } else {
-            $count = (int) $pdo->query('SELECT COUNT(*) FROM calls')->fetchColumn();
-            $pdo->exec('DELETE FROM calls');
+            $countQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE 1 = 1' . $permanentWhere);
+            $countQuery->execute($permanentParams);
+            $count = (int) $countQuery->fetchColumn();
+            $delete = $pdo->prepare('DELETE FROM calls WHERE 1 = 1' . $permanentWhere);
+            $delete->execute($permanentParams);
+        }
+        foreach ($existingPermanentCallIds as $permanentCallId) {
+            videochat_permanent_call_ensure_active($pdo, $permanentCallId, 'delete_all_guard');
         }
         $pdo->commit();
     } catch (Throwable) {

@@ -66,6 +66,30 @@ load_local_env() {
   set +a
 }
 
+env_flag_truthy() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  value="${value,,}"
+  case "${value}" in
+    1|true|yes|on|enabled) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+sfu_route_enabled() {
+  local edge_flag="${VIDEOCHAT_EDGE_SFU_ENABLED:-}"
+  if [[ -n "${edge_flag}" ]]; then
+    env_flag_truthy "${edge_flag}"
+    return
+  fi
+  env_flag_truthy "${VIDEOCHAT_SFU_ENABLED:-0}"
+}
+
+log_sfu_runtime_metadata() {
+  log "sfu runtime metadata: VIDEOCHAT_EDGE_SFU_ENABLED=${VIDEOCHAT_EDGE_SFU_ENABLED:-0}; VIDEOCHAT_SFU_ENABLED=${VIDEOCHAT_SFU_ENABLED:-0}; VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=${VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT:-false}; VITE_VIDEOCHAT_GOSSIP_DATA_LANE=${VITE_VIDEOCHAT_GOSSIP_DATA_LANE:-active}; VITE_VIDEOCHAT_MEDIA_CARRIER=${VITE_VIDEOCHAT_MEDIA_CARRIER:-gossip_primary}"
+}
+
 expect_http_code() {
   local label="$1" expected="$2"
   shift 2
@@ -282,6 +306,41 @@ websocket_upgrade_smoke() {
 
   rm -f "${headers}" "${body}"
   log "${label}: routed websocket handshake HTTP ${code}"
+}
+
+websocket_disabled_smoke() {
+  local label="$1" url="$2" headers body code
+  headers="$(mktemp)"
+  body="$(mktemp)"
+  code="$(
+    curl -sS --http1.1 --max-time "${TIMEOUT}" \
+      -D "${headers}" \
+      -o "${body}" \
+      -w '%{http_code}' \
+      -H 'Connection: Upgrade' \
+      -H 'Upgrade: websocket' \
+      -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+      -H 'Sec-WebSocket-Version: 13' \
+      "${url}" || true
+  )"
+
+  if [[ "${code}" == "000" ]]; then
+    local header_code
+    header_code="$(awk '/^HTTP\// {code=$2} END {print code}' "${headers}" | tr -d '\r')"
+    [[ -n "${header_code}" ]] && code="${header_code}"
+  fi
+
+  if [[ "${code}" != "404" ]]; then
+    printf '[videochat-deploy-smoke] %s headers:\n' "${label}" >&2
+    cat "${headers}" >&2 || true
+    printf '[videochat-deploy-smoke] %s body:\n' "${label}" >&2
+    cat "${body}" >&2 || true
+    rm -f "${headers}" "${body}"
+    fail "${label}: expected disabled SFU websocket route HTTP 404, got ${code:-none}"
+  fi
+
+  rm -f "${headers}" "${body}"
+  log "${label}: disabled SFU websocket route HTTP ${code}"
 }
 
 verify_remote_certbot_hook() {
@@ -762,10 +821,9 @@ expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
 expect_http_code background-modal-icon 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/icons/solid.png"
 expect_http_code background-avatar-placeholder 200 "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/avatar-placeholder.svg"
-expect_http_code call-app-whiteboard-host 200 "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
 expect_http_code call-app-whiteboard-path 200 "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
 expect_http_code registry-host 200 "https://${DEPLOY_REGISTRY_DOMAIN}/"
-for call_app_url in "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"; do
+for call_app_url in "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"; do
   expect_response_header_contains call-app-frame-ancestor "${call_app_url}" Content-Security-Policy "frame-ancestors https://${DEPLOY_APP_DOMAIN}"
   expect_response_header_contains call-app-script-csp "${call_app_url}" Content-Security-Policy "script-src 'self'"
   expect_response_header_contains call-app-connect-csp "${call_app_url}" Content-Security-Policy "connect-src 'self'"
@@ -786,8 +844,14 @@ expect_http_code api-version 200 "https://${DEPLOY_API_DOMAIN}/api/version"
 
 websocket_upgrade_smoke "lobby websocket host" "https://${DEPLOY_WS_DOMAIN}/ws?room=lobby"
 websocket_upgrade_smoke "lobby websocket api fallback" "https://${DEPLOY_API_DOMAIN}/ws?room=lobby"
-websocket_upgrade_smoke "sfu websocket host" "https://${DEPLOY_SFU_DOMAIN}/sfu?room_id=smoke"
-websocket_upgrade_smoke "sfu websocket api fallback" "https://${DEPLOY_API_DOMAIN}/sfu?room_id=smoke"
+log_sfu_runtime_metadata
+if sfu_route_enabled; then
+  websocket_upgrade_smoke "sfu websocket host" "https://${DEPLOY_SFU_DOMAIN}/sfu?room_id=smoke"
+  websocket_upgrade_smoke "sfu websocket api fallback" "https://${DEPLOY_API_DOMAIN}/sfu?room_id=smoke"
+else
+  websocket_disabled_smoke "sfu websocket host disabled" "https://${DEPLOY_SFU_DOMAIN}/sfu?room_id=smoke"
+  websocket_disabled_smoke "sfu websocket api fallback disabled" "https://${DEPLOY_API_DOMAIN}/sfu?room_id=smoke"
+fi
 
 verify_remote_certbot_hook
 verify_admin_operations

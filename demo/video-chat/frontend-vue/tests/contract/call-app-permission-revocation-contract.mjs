@@ -35,8 +35,8 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
@@ -255,8 +255,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /revoked participants cannot submit CRDT ops/,
-  'SPRINT.md must keep revocation hardening in the active Whiteboard acceptance criteria',
+  /Reconcile Call App entitlement revocation and launch-token reconnect proof[\s\S]*with the current package boundaries/,
+  'planning sources must keep revocation follow-up work under the current package boundaries',
 );
 
 console.log('[call-app-permission-revocation-contract] PASS');

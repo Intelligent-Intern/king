@@ -86,7 +86,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     if (existing && existing.readyState !== 'closed') return existing
 
     const channel = pc.createDataChannel(this.label, {
-      ordered: false,
+      ordered: true,
       maxRetransmits: 0,
     })
     this.attachChannel(peerId, channel)
@@ -132,6 +132,9 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
         previous.channel.close()
       } catch {}
     }
+    try {
+      channel.binaryType = 'arraybuffer'
+    } catch {}
 
     const entry = {
       channel,
@@ -145,28 +148,64 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     this.pendingQueues.delete(peerId)
 
     channel.addEventListener('open', () => {
+      if (!this.isCurrentChannel(peerId, channel)) return
       this.onStateChange?.(peerId, channel.readyState, 'open')
       this.flush(peerId)
     })
     channel.addEventListener('close', () => {
+      if (!this.isCurrentChannel(peerId, channel)) return
       this.onStateChange?.(peerId, channel.readyState, 'close')
     })
     channel.addEventListener('error', () => {
+      if (!this.isCurrentChannel(peerId, channel)) return
       this.onStateChange?.(peerId, channel.readyState, 'error')
     })
     channel.addEventListener('message', (event) => {
-      if (!(event.data instanceof ArrayBuffer)) return
-      try {
-        this.onDataMessage(this.codec.decode(event.data), peerId)
-      } catch {}
+      if (!this.isCurrentChannel(peerId, channel)) return
+      void this.handleIncomingMessage(peerId, event.data)
     })
     channel.addEventListener('bufferedamountlow', () => {
+      if (!this.isCurrentChannel(peerId, channel)) return
       this.flush(peerId)
     })
 
     if (channel.readyState === 'open') {
       this.flush(peerId)
     }
+  }
+
+  private async handleIncomingMessage(peerId: string, data: unknown): Promise<void> {
+    const channel = this.channels.get(peerId)?.channel
+    if (!channel || !this.isCurrentChannel(peerId, channel)) return
+
+    let bytes: ArrayBuffer
+    if (data instanceof ArrayBuffer) {
+      bytes = data
+    } else if (typeof Blob !== 'undefined' && data instanceof Blob) {
+      try {
+        bytes = await data.arrayBuffer()
+      } catch {
+        if (this.isCurrentChannel(peerId, channel)) {
+          this.emitTelemetry('dropped', 1, peerId, 'gossip_datachannel_blob_arraybuffer_failed')
+        }
+        return
+      }
+      if (!this.isCurrentChannel(peerId, channel)) return
+    } else {
+      this.emitTelemetry('dropped', 1, peerId, 'gossip_datachannel_unsupported_payload')
+      return
+    }
+
+    if (!this.isCurrentChannel(peerId, channel)) return
+    try {
+      this.onDataMessage(this.codec.decode(bytes), peerId)
+    } catch {
+      this.emitTelemetry('dropped', 1, peerId, 'gossip_datachannel_decode_failed')
+    }
+  }
+
+  private isCurrentChannel(peerId: string, channel: RTCDataChannel): boolean {
+    return this.channels.get(peerId)?.channel === channel
   }
 
   private enqueue(peerId: string, serialized: ArrayBuffer, reason = 'gossip_datachannel_queue'): void {

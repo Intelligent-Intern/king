@@ -66,6 +66,14 @@
               @click="$emit('cancel-call', call)"
             />
             <AppIconButton
+              v-if="adminMode && isReactivatable(call)"
+              icon="/assets/orgas/kingrt/icons/forward.png"
+              :title="t('calls.actions.reactivate')"
+              :aria-label="t('calls.actions.reactivate_call', { call: callLabel(call) })"
+              :disabled="isReactivatePending(call)"
+              @click="$emit('reactivate-call', call)"
+            />
+            <AppIconButton
               v-if="adminMode"
               icon="/assets/orgas/kingrt/icons/remove_user.png"
               :title="t('calls.actions.delete')"
@@ -118,6 +126,14 @@ defineProps({
     type: Function,
     default: () => false,
   },
+  isReactivatable: {
+    type: Function,
+    default: () => false,
+  },
+  isReactivatePending: {
+    type: Function,
+    default: () => false,
+  },
 });
 
 defineEmits([
@@ -125,6 +141,7 @@ defineEmits([
   'open-chat-archive',
   'enter-call',
   'cancel-call',
+  'reactivate-call',
   'delete-call',
 ]);
 

@@ -842,6 +842,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       critical,
       codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID,
       suppressSfuSendFailures: quietStrictPublisherDrops,
+      plannedTransport: videoProfile.authoritativeTransport,
     });
     if (!dispatchResult.ok) return false;
     if (critical && encodedFrameType === 'keyframe') {

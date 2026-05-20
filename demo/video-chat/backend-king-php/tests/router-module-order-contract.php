@@ -37,6 +37,7 @@ try {
         'workspace_administration',
         'invites',
         'call_apps',
+        'call_stt',
         'calls',
         'appointment_calendar',
         'realtime',

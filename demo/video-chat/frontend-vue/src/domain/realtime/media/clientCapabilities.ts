@@ -25,6 +25,12 @@ function positiveInt(value: unknown): number {
   return Math.min(8192, Math.floor(numeric));
 }
 
+function boundedFloat(value: unknown, max = 10000): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return Math.min(max, Math.round(numeric * 1000) / 1000);
+}
+
 function safeIdentifier(value: unknown, fallback = 'unknown'): string {
   const normalized = String(value ?? '')
     .trim()
@@ -40,10 +46,42 @@ function normalizeGpu(value: unknown): string {
   return GPU_VALUES.has(normalized) ? normalized : 'unknown';
 }
 
+function browserFamilyFromUserAgent(userAgent = ''): string {
+  const ua = String(userAgent || '').toLowerCase();
+  if (ua.includes('edg/')) return 'edge';
+  if (ua.includes('firefox/')) return 'firefox';
+  if (ua.includes('chrome/') || ua.includes('chromium/')) return 'chromium';
+  if (ua.includes('safari/')) return 'safari';
+  return 'unknown';
+}
+
+function mobileFromUserAgent(userAgent = ''): boolean {
+  return /android|iphone|ipad|ipod|mobile/i.test(String(userAgent || ''));
+}
+
+function networkSnapshot(navigatorRef: any = {}) {
+  const connection = navigatorRef?.connection || navigatorRef?.mozConnection || navigatorRef?.webkitConnection || {};
+  return {
+    effective_type: safeIdentifier(connection.effectiveType || 'unknown'),
+    downlink_mbps: boundedFloat(connection.downlink || 0, 1000),
+    rtt_ms: positiveInt(connection.rtt || 0),
+    save_data: booleanValue(connection.saveData || false),
+    backpressure: {
+      ratio: 0,
+      queued_bytes: 0,
+      dropped_video_frames: 0,
+    },
+  };
+}
+
 export function redactClientCapabilitiesV1(input: Record<string, any> = {}) {
   const media = input.media && typeof input.media === 'object' ? input.media : {};
   const runtime = input.runtime && typeof input.runtime === 'object' ? input.runtime : {};
+  const codec = input.codec && typeof input.codec === 'object' ? input.codec : {};
   const constraints = input.constraints && typeof input.constraints === 'object' ? input.constraints : {};
+  const client = input.client && typeof input.client === 'object' ? input.client : {};
+  const network = input.network && typeof input.network === 'object' ? input.network : {};
+  const backpressure = network.backpressure && typeof network.backpressure === 'object' ? network.backpressure : {};
 
   return {
     schema_version: CLIENT_CAPABILITIES_SCHEMA_VERSION,
@@ -63,10 +101,28 @@ export function redactClientCapabilitiesV1(input: Record<string, any> = {}) {
       wlvc_encoder: booleanValue(runtime.wlvc_encoder ?? runtime.wlvcEncoder),
       wlvc_decoder: booleanValue(runtime.wlvc_decoder ?? runtime.wlvcDecoder),
     },
+    codec: {
+      preferred_path: safeIdentifier(codec.preferred_path ?? codec.preferredPath ?? runtime.codec_path ?? runtime.codecPath ?? 'wlvc_wasm'),
+      webcodecs: booleanValue(codec.webcodecs ?? codec.webCodecs ?? runtime.webcodecs ?? runtime.webCodecs),
+      wasm: booleanValue(codec.wasm ?? codec.webassembly ?? runtime.webassembly ?? runtime.webAssembly),
+    },
     constraints: {
       video_width: positiveInt(constraints.video_width ?? constraints.videoWidth),
       video_height: positiveInt(constraints.video_height ?? constraints.videoHeight),
       video_fps: positiveInt(constraints.video_fps ?? constraints.videoFps),
+      mobile: booleanValue(constraints.mobile ?? client.mobile),
+      browser_family: safeIdentifier(constraints.browser_family ?? constraints.browserFamily ?? client.browser_family ?? client.browserFamily),
+    },
+    network: {
+      effective_type: safeIdentifier(network.effective_type ?? network.effectiveType),
+      downlink_mbps: boundedFloat(network.downlink_mbps ?? network.downlinkMbps, 1000),
+      rtt_ms: positiveInt(network.rtt_ms ?? network.rttMs),
+      save_data: booleanValue(network.save_data ?? network.saveData),
+      backpressure: {
+        ratio: boundedFloat(backpressure.ratio, 1),
+        queued_bytes: positiveInt(backpressure.queued_bytes ?? backpressure.queuedBytes),
+        dropped_video_frames: positiveInt(backpressure.dropped_video_frames ?? backpressure.droppedVideoFrames),
+      },
     },
   };
 }
@@ -78,6 +134,8 @@ export async function buildClientCapabilitiesV1({
   globalScope,
   documentRef,
 }: Record<string, any> = {}) {
+  const scope = globalScope && typeof globalScope === 'object' ? globalScope : globalThis;
+  const navigatorRef = (scope as any)?.navigator ?? (typeof navigator !== 'undefined' ? navigator : {});
   const runtime = runtimeCapabilities && typeof runtimeCapabilities === 'object'
     ? runtimeCapabilities
     : await detectMediaRuntimeCapabilities();
@@ -96,15 +154,25 @@ export async function buildClientCapabilitiesV1({
       screen_share: Boolean(runtime?.stageB),
     },
     runtime: {
-      websocket: typeof WebSocket === 'function',
+      websocket: typeof (scope as any)?.WebSocket === 'function',
       webrtc: Boolean(runtime?.stageB || runtime?.webRtcNative),
       webassembly: Boolean(runtime?.wlvcWasm?.webAssembly),
-      webcodecs: typeof VideoEncoder === 'function' && typeof VideoDecoder === 'function',
+      webcodecs: typeof (scope as any)?.VideoEncoder === 'function' && typeof (scope as any)?.VideoDecoder === 'function',
       gpu: 'available_or_unknown',
       wlvc_encoder: Boolean(runtime?.wlvcWasm?.encoder),
       wlvc_decoder: Boolean(runtime?.wlvcWasm?.decoder),
     },
+    codec: {
+      preferred_path: runtime?.preferredPath || 'unsupported',
+      webcodecs: typeof (scope as any)?.VideoEncoder === 'function' && typeof (scope as any)?.VideoDecoder === 'function',
+      wasm: Boolean(runtime?.wlvcWasm?.webAssembly),
+    },
     constraints,
+    client: {
+      mobile: mobileFromUserAgent(navigatorRef?.userAgent || ''),
+      browser_family: browserFamilyFromUserAgent(navigatorRef?.userAgent || ''),
+    },
+    network: networkSnapshot(navigatorRef),
   });
 
   if (!strict720p30CapabilitySupported(capabilities)) {

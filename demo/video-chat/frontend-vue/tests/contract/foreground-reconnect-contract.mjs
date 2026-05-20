@@ -49,15 +49,29 @@ try {
 
   const joinView = read(root, 'src/domain/calls/access/JoinView.vue');
   assert.match(joinView, /attachForegroundReconnectHandlers/, 'call access join view must use foreground reconnect helper');
-  assert.match(joinView, /function reconnectAdmissionAfterForeground\(\)/, 'call access join view must define foreground reconnect');
-  assert.match(joinView, /admissionReconnectAfterForeground = true;/, 'call access join view must mark reconnect pending');
-  assert.match(joinView, /connectAdmissionSocket\(accessId\)/, 'call access join view must reconnect the admission socket');
+  assert.match(joinView, /function refreshAdmissionAfterForeground\(\)/, 'call access join view must define foreground admission refresh');
+  assert.match(joinView, /admissionForegroundSnapshotPending = true;/, 'call access join view must mark snapshot refresh pending');
+  const joinForegroundBlock = section(
+    joinView,
+    'function refreshAdmissionAfterForeground() {',
+    '\nasync function enterAdmittedCall(accessId) {',
+    'call access foreground admission refresh',
+  );
+  assert.match(joinForegroundBlock, /type: 'lobby\/queue\/request'/, 'call access foreground refresh must request a lobby snapshot');
+  assert.doesNotMatch(joinForegroundBlock, /connectAdmissionSocket|scheduleAdmissionReconnect|retireAdmissionSocket|clearAdmissionReconnectTimer/, 'call access foreground refresh must not reconnect the admission socket');
 
   const dashboard = read(root, 'src/domain/calls/dashboard/enterCall.ts');
   assert.match(dashboard, /attachForegroundReconnectHandlers/, 'user dashboard must use foreground reconnect helper');
-  assert.match(dashboard, /function reconnectEnterAdmissionAfterForeground\(\)/, 'user dashboard must define modal foreground reconnect');
-  assert.match(dashboard, /enterAdmissionReconnectAfterForeground = true;/, 'user dashboard must mark reconnect pending');
-  assert.match(dashboard, /connectEnterAdmissionSocket\(\)/, 'user dashboard must reconnect the enter-call admission socket');
+  assert.match(dashboard, /function refreshEnterAdmissionAfterForeground\(\)/, 'user dashboard must define modal foreground admission refresh');
+  assert.match(dashboard, /enterAdmissionForegroundSnapshotPending = true;/, 'user dashboard must mark snapshot refresh pending');
+  const dashboardForegroundBlock = section(
+    dashboard,
+    'function refreshEnterAdmissionAfterForeground() {',
+    '\n\n  async function enterAdmittedCall() {',
+    'dashboard foreground admission refresh',
+  );
+  assert.match(dashboardForegroundBlock, /type: 'lobby\/queue\/request'/, 'dashboard foreground refresh must request a lobby snapshot');
+  assert.doesNotMatch(dashboardForegroundBlock, /connectEnterAdmissionSocket|scheduleEnterAdmissionReconnect|retireEnterAdmissionSocket|clearEnterAdmissionReconnectTimer/, 'dashboard foreground refresh must not reconnect the admission socket');
 
   const workspace = read(root, 'src/domain/realtime/CallWorkspaceView.vue');
   const workspaceTemplate = read(root, 'src/domain/realtime/CallWorkspaceView.template.html');
@@ -66,18 +80,24 @@ try {
   const participantUi = read(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   assert.match(workspace, /attachForegroundReconnectHandlers/, 'workspace must use foreground reconnect helper');
   assert.match(workspace, /createWorkspaceForegroundRecoveryController/, 'workspace must delegate foreground recovery policy to the focused helper');
-  assert.match(workspace, /function reconnectWorkspaceAfterForeground\(\)/, 'workspace must define foreground reconnect');
-  assert.match(workspace, /setArmed: \(value\) => \{ workspaceReconnectAfterForeground = value; \}/, 'workspace must mark reconnect pending through the recovery helper');
+  assert.match(workspace, /function syncWorkspaceLifecycleForeground\(context\)/, 'workspace must define lifecycle foreground state sync');
+  assert.match(workspace, /setArmed: \(value\) => \{ workspaceForegroundRecoveryArmed = value; \}/, 'workspace must mark lifecycle state through the recovery helper');
   assert.match(foregroundRecovery, /export function shouldArmWorkspaceForegroundRecovery\(context = null, documentRef = null\)/, 'workspace foreground recovery must expose a call-workspace visibility guard');
   assert.match(foregroundRecovery, /reason === 'pagehide'[\s\S]*reason === 'document_hidden'/, 'workspace foreground recovery guard must preserve true pagehide/document-hidden recovery');
-  assert.match(foregroundRecovery, /if \(shouldAcquireLocalMedia\?\.\(\) === true && hasLiveLocalMedia\?\.\(\) !== true\) \{[\s\S]*void publishLocalTracks\?\.\(\);/, 'workspace foreground recovery must reacquire local media when preview/tracks are gone');
-  assert.match(foregroundRecovery, /const socketOpen = isSocketOpen\?\.\(\) === true;[\s\S]*const socketHealthy = socketOpen && String\(callGetter\(getConnectionState, ''\)\) === 'online';[\s\S]*const roomSyncHealthy = hasRealtimeRoomSync\?\.\(\) === true;/, 'workspace foreground recovery must classify open sockets separately from snapshot sync before reconnecting');
-  assert.match(foregroundRecovery, /if \(socketHealthy && roomSyncHealthy && sfuHealthy\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*action: 'snapshot_only'/, 'healthy foreground recovery must request a snapshot instead of recycling sockets');
-  assert.match(foregroundRecovery, /if \(socketOpen\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*\} else \{[\s\S]*resetReconnectAttempt\?\.\(\);[\s\S]*void connectSocket\?\.\(\);/, 'foreground recovery must request snapshot backfill for open sockets and reconnect only closed sockets');
-  assert.match(foregroundRecovery, /if \(sfuExpected && !sfuHealthy\) \{[\s\S]*recycleSfu\?\.\(\);[\s\S]*initSfu\?\.\(\);/, 'unhealthy SFU foreground recovery must recycle stale SFU state');
-  assert.match(workspaceLifecycle, /onBackground: \(context\) => \{\s*if \(shouldArmWorkspaceForegroundRecovery\(context, typeof document !== 'undefined' \? document : null\)\) \{\s*markWorkspaceReconnectAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.pauseVideoForBackground\(context\);[\s\S]*\}/, 'workspace background callback must guard reconnect arming against visible focus churn');
-  assert.match(workspaceLifecycle, /onForeground: \(context\) => \{\s*reconnectWorkspaceAfterForeground\(\);[\s\S]*sfuBackgroundTabPolicy\.resumeVideoAfterForeground\(context\);/, 'workspace foreground callback keeps real hidden/pagehide recovery');
-  assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
+  assert.doesNotMatch(foregroundRecovery, /\b(connectSocket|resetReconnectAttempt|initSfu|recycleSfu|publishLocalTracks)\b/, 'workspace lifecycle recovery must not connect websocket/media sessions');
+  assert.match(foregroundRecovery, /if \(socketOpen\) \{[\s\S]*requestRoomSnapshot\?\.\(\);[\s\S]*\}/, 'foreground lifecycle may request snapshot state over an already-open socket');
+  assert.match(foregroundRecovery, /action = socketHealthy && roomSyncHealthy[\s\S]*'snapshot_only'[\s\S]*'snapshot_backfill'[\s\S]*'connect_suppressed'/, 'foreground lifecycle must suppress closed-socket connect');
+  assert.match(foregroundRecovery, /eventType[\s\S]*call_workspace_lifecycle_foreground_state_sync/, 'foreground lifecycle must emit diagnostics for state sync');
+  const workspaceForegroundHandlersBlock = section(
+    workspaceLifecycle,
+    'setDetachForegroundReconnect(attachForegroundReconnectHandlers({',
+    '    }));',
+    'workspace foreground lifecycle handlers',
+  );
+  assert.match(workspaceForegroundHandlersBlock, /onBackground: \(context\) => \{\s*if \(shouldArmWorkspaceForegroundRecovery\(context, typeof document !== 'undefined' \? document : null\)\) \{\s*markWorkspaceLifecycleBackground\(context\);[\s\S]*\}/, 'workspace background callback must only mark lifecycle state');
+  assert.match(workspaceForegroundHandlersBlock, /onForeground: \(context\) => \{\s*syncWorkspaceLifecycleForeground\(context\);[\s\S]*\}/, 'workspace foreground callback must only sync state and diagnostics');
+  assert.doesNotMatch(workspaceForegroundHandlersBlock, /sfuBackgroundTabPolicy|pauseVideoForBackground|resumeVideoAfterForeground|connectSocket\(\)|initSFU\(\)|publishLocalTracks\(\)/, 'workspace focus/visibility handlers must not connect, reload, or publish media');
+  assert.match(workspaceLifecycle, /await publishLocalTracks\(\);\s*\n\s*if \(shouldStartSfuFromLifecycle\('workspace_mount'\)\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before any policy-allowed SFU connect');
   assert.match(workspaceTemplate, /class="call-control-btn"[\s\S]*@click="toggleCamera"/, 'call controls must remain ordinary visible click targets covered by focus churn proof');
   assert.match(workspaceTemplate, /class="workspace-video-fullscreen-overlay"[\s\S]*@click\.stop="closeVideoFullscreen"/, 'fullscreen media overlay clicks must stay local to fullscreen handling');
   assert.match(workspaceTemplate, /id="workspace-fullscreen-video-slot"[\s\S]*class="workspace-fullscreen-video-slot"[\s\S]*@click\.stop/, 'fullscreen media slot clicks must not bubble into reconnect-sensitive workspace handlers');
@@ -101,17 +121,17 @@ try {
   assert.match(
     socketLifecycle,
     /const transientAuthBackendError = code === 'websocket_auth_temporarily_unavailable'[\s\S]*\|\| closeReason === 'auth_backend_error';/,
-    'workspace realtime must classify auth_backend_error as a transient reconnect condition',
+    'workspace realtime must classify auth_backend_error as a transient connect failure condition',
   );
   assert.match(
     socketLifecycle,
-    /if \(closeReason === 'auth_backend_error' \|\| event\?\.code === 1011\) \{[\s\S]*refs\.connectionState\.value = 'retrying';[\s\S]*scheduleReconnect\(\);/,
-    'workspace realtime close handler must retry internal auth backend closes instead of blocking the call',
+    /function failConnectCycleOnce\([\s\S]*eventType: 'realtime_websocket_one_shot_failed'[\s\S]*next_connect_cycle_requires_new_participant: true/,
+    'workspace realtime connect failures must end the one-shot cycle until a new participant joins',
   );
   assert.doesNotMatch(
     socketLifecycle,
-    /closeReason === 'auth_backend_error' \|\| closeReason === 'role_not_allowed'/,
-    'workspace realtime must not group auth_backend_error with policy blocks',
+    /function scheduleReconnect|scheduleReconnect\(/,
+    'workspace realtime must not schedule automatic websocket reconnects from focus or close handlers',
   );
 
   const realtimeWebsocketReconnect = fs.readFileSync(path.join(repoRoot, 'demo/video-chat/backend-king-php/http/module_realtime_websocket_reconnect.php'), 'utf8');
@@ -253,7 +273,6 @@ try {
   let sfuConnected = true;
   let sfuOpen = true;
   const recovery = foregroundRecoveryModule.createWorkspaceForegroundRecoveryController({
-    connectSocket: () => recoveryEvents.push('connect'),
     getArmed: () => recoveryArmed,
     getConnectionState: () => 'online',
     getDocument: () => ({ visibilityState: 'visible' }),
@@ -261,21 +280,12 @@ try {
     getManualSocketClose: () => false,
     getRouteBusy: () => false,
     getSessionToken: () => 'session-token',
-    hasLiveLocalMedia: () => true,
     hasRealtimeRoomSync: () => roomSynced,
-    initSfu: () => recoveryEvents.push('init-sfu'),
-    isSfuClientOpen: () => sfuOpen,
-    isSfuConnected: () => sfuConnected,
     isSocketOpen: () => socketOpen,
     minIntervalMs: 0,
-    publishLocalTracks: () => recoveryEvents.push('publish-media'),
-    recycleSfu: () => recoveryEvents.push('recycle-sfu'),
     requestRoomSnapshot: () => recoveryEvents.push('snapshot'),
-    resetReconnectAttempt: () => recoveryEvents.push('reset-reconnect'),
     setArmed: (value) => { recoveryArmed = value; },
     setLastAt: (value) => { lastRecoveryAt = value; },
-    shouldAcquireLocalMedia: () => false,
-    shouldConnectSfu: () => true,
   });
 
   const visibleInteractionContexts = [
@@ -313,16 +323,16 @@ try {
   recoveryEvents.length = 0;
   socketOpen = false;
   roomSynced = false;
-  assert.equal(recovery.recover().action, 'socket_reconnect', 'closed socket foreground recovery should reconnect');
-  assert.deepEqual(recoveryEvents, ['reset-reconnect', 'connect'], 'closed socket recovery must not recycle healthy SFU');
+  assert.equal(recovery.recover().action, 'connect_suppressed', 'closed socket foreground recovery must suppress reconnect');
+  assert.deepEqual(recoveryEvents, [], 'closed socket recovery must not reconnect websocket/media sessions');
 
   recoveryArmed = true;
   recoveryEvents.length = 0;
   socketOpen = true;
   roomSynced = true;
   sfuConnected = false;
-  assert.equal(recovery.recover().action, 'sfu_recover', 'healthy socket with unhealthy SFU should recover SFU only');
-  assert.deepEqual(recoveryEvents, ['snapshot', 'recycle-sfu', 'init-sfu'], 'SFU-only recovery must keep the realtime socket open');
+  assert.equal(recovery.recover().action, 'snapshot_only', 'healthy socket with unhealthy SFU must stay state-only on foreground');
+  assert.deepEqual(recoveryEvents, ['snapshot'], 'foreground lifecycle must not recycle SFU');
 
   process.stdout.write('[foreground-reconnect-contract] PASS\n');
 } catch (error) {

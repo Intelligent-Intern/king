@@ -57,6 +57,12 @@ assert.match(
 
 assert.match(
   rosterSource,
+  /right-roster-users-title[\s\S]*calls\.workspace\.present_users/s,
+  'present users section must use call-workspace copy instead of the generic users module title',
+);
+
+assert.match(
+  rosterSource,
   /v-if="showLobbySearch"[\s\S]*calls\.workspace\.search_lobby[\s\S]*v-if="showUsersSearch"[\s\S]*calls\.workspace\.search_users/s,
   'search controls must be section-specific and conditionally rendered',
 );
@@ -100,11 +106,12 @@ assert.match(
 assert.match(messagesSource, /calls\.workspace\.action_option_call_app_read/, 'read permission action label must be localized');
 assert.match(messagesSource, /calls\.workspace\.action_option_call_app_write/, 'write permission action label must be localized');
 assert.match(messagesSource, /calls\.workspace\.action_option_call_app_delete/, 'delete permission action label must be localized');
+assert.match(messagesSource, /calls\.workspace\.present_users/, 'present users section label must be localized');
 
 assert.match(
   sprintSource,
-  /GJL-03[\s\S]*Right sidebar keeps the user-tab lobby badge[\s\S]*collapsed sidebar[\s\S]*main lobby notification/s,
-  'SPRINT.md must track the current guest-join lobby badge and notification requirement',
+  /VST-28[\s\S]*Lobby and Present Users[\s\S]*VST-29[\s\S]*search[\s\S]*VST-30[\s\S]*action icons[\s\S]*VST-31[\s\S]*gear view[\s\S]*VST-32[\s\S]*mobile proof/s,
+  'SPRINT.md must track the current right-roster lobby/users responsive requirement',
 );
 
 console.log('[right-roster-lobby-users-contract] PASS');

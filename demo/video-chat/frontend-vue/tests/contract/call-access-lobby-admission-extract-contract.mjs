@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,13 +26,15 @@ function requireMatch(source, pattern, message) {
 }
 
 const evidence = read('documentation/iam-sprint-05-lobby-admission-extraction.md');
-const packageJson = JSON.parse(read('demo/video-chat/frontend-vue/package.json'));
+const iamContractGate = iamCallAccessContractSuiteText;
 const concurrencyStatic = read('demo/video-chat/frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs');
 const concurrencyBackend = read('demo/video-chat/backend-king-php/tests/realtime-lobby-concurrency-contract.php');
 const admissionBoundaries = read('demo/video-chat/frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs');
 const lobbySecurity = read('demo/video-chat/backend-king-php/tests/realtime-lobby-security-contract.php');
 const lobbyContract = read('demo/video-chat/backend-king-php/tests/realtime-lobby-contract.php');
 const lobbyDbSync = read('demo/video-chat/backend-king-php/tests/realtime-lobby-db-sync-contract.php');
+const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
+const lobbyAudit = read('demo/video-chat/backend-king-php/domain/audit/audit_lobby_events.php');
 const auditCompatibility = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs');
 const auditRedaction = read('demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 
@@ -61,28 +64,23 @@ for (const section of [
 
 assert.equal(
   exists('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php'),
-  false,
-  'current base should not accidentally claim the unported timeout persistence module exists',
+  true,
+  'current base must carry the focused lobby persistence module',
 );
 assert.equal(
   exists('demo/video-chat/backend-king-php/domain/audit/audit_lobby_events.php'),
-  false,
-  'current base should not accidentally claim the unported lobby audit domain exists',
+  true,
+  'current base must carry the focused lobby audit domain',
 );
-requireIncludes(
-  evidence,
-  'The three timeout branches carry identical core timeout files.',
-  'timeout extraction must record duplicate timeout branch proof shape',
+requireMatch(
+  lobbyPersistence,
+  /videochat_realtime_lobby_command_sender[\s\S]*\['lobby\/allow', 'lobby\/allow_all'\][\s\S]*videochat_realtime_record_lobby_admission_audit[\s\S]*videochat_realtime_record_lobby_rejection_audit/s,
+  'lobby persistence module must defer admission broadcast and record admission/rejection audits',
 );
-requireIncludes(
-  evidence,
-  'Current base does not contain',
-  'evidence must explicitly call out missing timeout/audit backend files',
-);
-requireIncludes(
-  evidence,
-  'not ported here',
-  'evidence must state why backend-only timeout/audit value was not ported in this scope',
+requireMatch(
+  lobbyAudit,
+  /call_lobby_entry_created[\s\S]*call_lobby_admission_granted[\s\S]*call_lobby_rejection_recorded[\s\S]*call_lobby_moderation_denied/s,
+  'lobby audit domain must persist entry, admission, rejection, and denied-moderation events',
 );
 
 requireMatch(
@@ -96,7 +94,7 @@ requireMatch(
   'frontend static concurrency proof must bind the backend lobby concurrency contract',
 );
 requireIncludes(
-  packageJson.scripts?.['test:contract:iam-call-access'] || '',
+  iamContractGate,
   'node tests/contract/call-access-lobby-concurrency-contract.mjs',
   'current IAM contract script must run the active lobby concurrency proof',
 );
@@ -138,14 +136,14 @@ requireMatch(
   'current audit redaction proof must keep sensitive identifiers out of audit payloads',
 );
 requireMatch(
-  evidence,
-  /Current base\s+does contain stable call-access audit compatibility and redaction contracts/,
-  'evidence must distinguish current audit coverage from missing lobby-specific audit rows',
+  lobbyAudit,
+  /raw_room_identifier_logged' => false[\s\S]*raw_credential_identifier_logged' => false[\s\S]*raw_guest_identity_logged' => false/s,
+  'lobby audit payloads must keep room, credential, and guest identifiers redacted',
 );
 requireIncludes(
-  evidence,
-  'not lobby-specific admission/rejection event rows',
-  'evidence must preserve the lobby audit gap as a backend follow-up',
+  lobbyPersistence,
+  'videochat_realtime_record_lobby_entry_audit',
+  'lobby persistence must audit queued lobby entry creation',
 );
 
 process.stdout.write('[call-access-lobby-admission-extract-contract] PASS\n');

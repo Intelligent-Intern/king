@@ -25,12 +25,12 @@ const packageJson = read('demo/video-chat/frontend-vue/package.json')
 
 assert.match(
   mediaCarrier,
-  /sfuSendIsOptional:\s*sfuMirror[\s\S]*sfuFallbackAllowed:\s*!gossipPrimary/,
+  /sfuSendIsOptional:\s*sfuFirst \|\| sfuMirror[\s\S]*sfuFallbackAllowed:\s*false/,
   'gossip_primary carrier config must disable optional SFU sends and SFU fallback',
 )
 
 const gossipFirstPublishIndex = dispatch.indexOf('if (gossipFirst) {')
-const earlyReturnIndex = dispatch.indexOf('sfuFallbackSuppressed: true', gossipFirstPublishIndex)
+const earlyReturnIndex = dispatch.indexOf('alternatePathSuppressed: true', gossipFirstPublishIndex)
 const sfuLookupIndex = dispatch.indexOf('const sendClient = safeFunction(currentOpenSfuClient, () => null)();')
 assert.ok(
   gossipFirstPublishIndex >= 0
@@ -40,7 +40,7 @@ assert.ok(
 )
 assert.match(
   dispatch,
-  /gossip_primary_publish_failed_no_sfu_fallback/,
+  /gossip_primary_publish_failed/,
   'gossip_primary publish failure must expose no-SFU-fallback diagnostics',
 )
 assert.equal(

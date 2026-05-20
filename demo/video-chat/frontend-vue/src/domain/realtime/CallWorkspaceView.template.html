@@ -2,11 +2,20 @@
     <section v-if="workspaceError" class="workspace-call-banner error">
       {{ workspaceError }}
     </section>
+    <section
+      v-if="workspaceConnectionBanner"
+      class="workspace-call-banner"
+      :class="workspaceConnectionBanner.kind"
+      role="status"
+      aria-live="polite"
+    >
+      {{ workspaceConnectionBanner.message }}
+    </section>
     <section v-if="nativeAudioSecurityBannerMessage" class="workspace-call-banner warning">
       {{ nativeAudioSecurityBannerMessage }}
     </section>
-    <section v-if="workspaceNotice" class="workspace-call-banner ok">
-      {{ workspaceNotice }}
+    <section v-if="visibleWorkspaceNotice" class="workspace-call-banner ok">
+      {{ visibleWorkspaceNotice }}
     </section>
     <OwnerAbsenceCountdownBanner :owner-absence="ownerAbsenceState" />
     <section v-if="aloneIdlePrompt.visible" class="workspace-idle-toast" role="alert">

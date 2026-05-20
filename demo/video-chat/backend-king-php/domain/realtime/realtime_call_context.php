@@ -205,6 +205,44 @@ function videochat_realtime_mark_call_participant_invite_state(
     );
 }
 
+function videochat_realtime_mark_call_participant_pending_for_queue(
+    callable $openDatabase,
+    array $connection
+): bool {
+    $callId = videochat_realtime_connection_call_id($connection);
+    $userId = (int) ($connection['user_id'] ?? 0);
+    if ($callId === '' || $userId <= 0) {
+        return false;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $statement = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'pending',
+    joined_at = NULL,
+    left_at = NULL
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+  AND invite_state = 'invited'
+SQL
+        );
+        $statement->execute([
+            ':call_id' => $callId,
+            ':user_id' => $userId,
+        ]);
+        if ($statement->rowCount() > 0) {
+            return true;
+        }
+
+        return videochat_realtime_insert_open_access_pending_participant($pdo, $connection, $callId, $userId);
+    } catch (Throwable) {
+        return false;
+    }
+}
+
 function videochat_realtime_mark_call_participant_removed_from_active_call(
     callable $openDatabase,
     string $callId,
@@ -223,13 +261,13 @@ function videochat_realtime_mark_call_participant_removed_from_active_call(
 UPDATE call_participants
 SET invite_state = 'invited',
     left_at = CASE
-        WHEN joined_at IS NOT NULL AND left_at IS NULL THEN :left_at
+        WHEN joined_at IS NOT NULL AND joined_at <> '' AND (left_at IS NULL OR left_at = '') THEN :left_at
         ELSE left_at
     END
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
-  AND invite_state = 'invited'
+  AND invite_state IN ('pending', 'allowed', 'accepted', 'invited')
 SQL
         );
         $statement->execute([
@@ -242,7 +280,7 @@ SQL
             return true;
         }
 
-        return videochat_realtime_insert_open_access_pending_participant($pdo, $connection, $callId, $userId);
+        return false;
     } catch (Throwable) {
         return false;
     }

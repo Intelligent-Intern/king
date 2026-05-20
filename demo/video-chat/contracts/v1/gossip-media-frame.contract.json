@@ -71,6 +71,18 @@
     "gap_handling": "receiver_may_request_missing_frame_or_keyframe",
     "duplicate_sequence": "drop_duplicate"
   },
+  "publication_gate": {
+    "ops_lane_authority": {
+      "server_head_authoritative": true,
+      "client_health_checks": false,
+      "client_topology_repair_requests": false,
+      "client_recovery_requests": false,
+      "before_sequence_allocation": false,
+      "publish_decision": "send_when_existing_call_socket_or_assigned_datachannel_accepts_frame",
+      "allowed_egress": ["open_websocket", "open_rtc_datachannel"],
+      "forbidden_client_behaviors": ["health_gate", "topology_repair_request", "missing_frame_recovery_request", "sfu_fallback", "media_security_fallback", "reconnect_loop"]
+    }
+  },
   "redaction": {
     "forbidden_fields": [
       "sdp",

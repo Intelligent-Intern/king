@@ -9,17 +9,27 @@ import {
   userCredentials,
 } from './helpers/nativeAudioTransferHarness.js';
 import {
-  createCallAccessMatrixPage,
   getSeedAccessLink,
   getSeedCall,
   getSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import { createCallAccessMatrixPage } from './helpers/callAccessSeedRuntime.js';
 
 const sessionStorageKey = 'ii_videocall_v1_session';
 
 function accessIdFromJoinPath(joinPath) {
   const match = String(joinPath || '').match(/\/join\/([a-f0-9-]{36})(?:[/?#].*)?$/i);
   return match ? match[1].toLowerCase() : '';
+}
+
+function parseJsonPostData(request) {
+  const raw = request.postData();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
 }
 
 async function createPublicJoinPage(browser, baseURL) {
@@ -632,6 +642,325 @@ test('external guest join link requires display name, creates temporary guest, a
 });
 
 test('login switch after verified call-access link fails without rebinding or leaking foreign data', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const accessId = '11111111-1111-4111-8111-111111111111';
+  const safeTitle = 'Verified Context Safe Call';
+  const foreignTitle = 'Foreign Linked Call Title';
+  const foreignEmail = 'foreign-linked-user@example.invalid';
+  const rejectedCallAccessToken = 'sess_rejected_call_access_should_not_bind';
+  const verifiedSession = {
+    sessionId: 'sess_verified_original_user',
+    sessionToken: 'sess_verified_original_user',
+    userId: 2,
+    email: 'verified-original@example.invalid',
+    expiresAt: '2026-09-01T10:00:00Z',
+  };
+  const switchedSession = {
+    sessionId: 'sess_switched_current_user',
+    sessionToken: 'sess_switched_current_user',
+    userId: 3,
+    email: 'switched-current@example.invalid',
+    expiresAt: '2026-09-01T10:00:00Z',
+  };
+  let sessionPostCount = 0;
+  let sessionRequestAuthorization = '';
+  let sessionBody = null;
+
+  const { context, page } = await createPublicJoinPage(browser, baseURL);
+  try {
+    await context.addInitScript(({ key, session }) => {
+      localStorage.setItem(key, JSON.stringify({
+        sessionId: session.sessionId,
+        sessionToken: session.sessionToken,
+        expiresAt: session.expiresAt,
+      }));
+    }, { key: sessionStorageKey, session: switchedSession });
+
+    await page.route('**/api/auth/session-state', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: { state: 'authenticated' },
+          session: {
+            id: switchedSession.sessionId,
+            token: switchedSession.sessionToken,
+            expires_at: switchedSession.expiresAt,
+          },
+          user: {
+            id: switchedSession.userId,
+            email: switchedSession.email,
+            display_name: 'Switched Current User',
+            role: 'user',
+            status: 'active',
+          },
+          tenant: {
+            id: 1,
+            uuid: 'tenant-1',
+            label: 'Intelligent Intern',
+            role: 'member',
+            permissions: { tenant_admin: false },
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            state: 'resolved',
+            access_link: { id: accessId },
+            link_kind: 'personal',
+            call: {
+              id: 'verified-context-safe-call',
+              room_id: 'lobby',
+              title: safeTitle,
+            },
+            target_user: {
+              id: verifiedSession.userId,
+              email: verifiedSession.email,
+              display_name: 'Verified Original User',
+            },
+            join_path: `/join/${accessId}`,
+          },
+        }),
+      });
+    });
+
+    await page.route(`**/api/call-access/${accessId}/session`, async (route) => {
+      sessionPostCount += 1;
+      sessionRequestAuthorization = route.request().headers().authorization || '';
+      sessionBody = parseJsonPostData(route.request());
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'error',
+          error: {
+            code: 'call_access_conflict',
+            message: 'This verified context no longer matches the current session.',
+          },
+          result: {
+            call: {
+              id: 'foreign-linked-call-id',
+              title: foreignTitle,
+            },
+            target_user: {
+              email: foreignEmail,
+            },
+            session: {
+              id: rejectedCallAccessToken,
+              token: rejectedCallAccessToken,
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/join/${accessId}`);
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await expect(joinDialog).toContainText(safeTitle);
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    const sessionPayload = await sessionResponse.json();
+    await expect(joinDialog).toContainText(/cannot be used|conflict|current session/i);
+
+    expect(sessionResponse.status()).toBe(409);
+    expect(sessionPayload?.error?.code).toBe('call_access_conflict');
+    expect(sessionPostCount).toBe(1);
+    expect(sessionRequestAuthorization).toBe(`Bearer ${switchedSession.sessionToken}`);
+    expect(sessionBody).toEqual({
+      verified_user_id: 2,
+      verified_session_id: verifiedSession.sessionId,
+    });
+    const storedSession = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), sessionStorageKey);
+    expect(storedSession.sessionId).toBe(switchedSession.sessionId);
+    expect(storedSession.sessionToken).toBe(switchedSession.sessionToken);
+    expect(storedSession.sessionToken).not.toBe(rejectedCallAccessToken);
+    await expect(joinDialog).not.toContainText(foreignTitle);
+    await expect(joinDialog).not.toContainText(foreignEmail);
+    await expect(joinDialog).not.toContainText(rejectedCallAccessToken);
+  } catch (error) {
+    throw error;
+  } finally {
+    await context.close();
+  }
+});
+
+test('same personalized link in parallel contexts keeps account sessions isolated', async ({ browser }) => {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const accessId = '99999999-9999-4999-8999-999999999999';
+  const callId = 'parallel-context-safe-call';
+  const safeTitle = 'Parallel Context Safe Call';
+  const foreignNeedlesForB = [
+    'Foreign Linked Call Title',
+    'account-a-private@example.invalid',
+    'sess_account_a_call_access',
+    'sess_account_b_rejected_call_access',
+  ];
+  const accountA = {
+    userId: 2,
+    sessionId: 'sess_account_a_current',
+    sessionToken: 'sess_account_a_current',
+    issuedCallAccessToken: 'sess_account_a_call_access',
+    email: 'account-a@example.invalid',
+  };
+  const accountB = {
+    userId: 3,
+    sessionId: 'sess_account_b_current',
+    sessionToken: 'sess_account_b_current',
+    rejectedCallAccessToken: 'sess_account_b_rejected_call_access',
+    email: 'account-b@example.invalid',
+  };
+  const requests = {
+    a: { joinGetCount: 0, sessionPostCount: 0, sessionBody: null },
+    b: { joinGetCount: 0, sessionPostCount: 0, sessionBody: null },
+  };
+  const accountAPage = await createPublicJoinPage(browser, baseURL);
+  const accountBPage = await createPublicJoinPage(browser, baseURL);
+
+  async function installRoutes(entry, account, bucket, accepted) {
+    await entry.context.addInitScript(({ key, session }) => {
+      localStorage.setItem(key, JSON.stringify({
+        sessionId: session.sessionId,
+        sessionToken: session.sessionToken,
+      }));
+    }, { key: sessionStorageKey, session: account });
+
+    await entry.page.route(`**/api/call-access/${accessId}/join`, async (route) => {
+      bucket.joinGetCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            state: 'resolved',
+            access_link: { id: accessId },
+            link_kind: 'personal',
+            call: { id: callId, room_id: 'lobby', title: safeTitle },
+            target_user: { id: account.userId, email: account.email },
+            join_path: `/join/${accessId}`,
+          },
+        }),
+      });
+    });
+
+    await entry.page.route(`**/api/call-access/${accessId}/session`, async (route) => {
+      bucket.sessionPostCount += 1;
+      bucket.sessionBody = parseJsonPostData(route.request());
+      if (!accepted) {
+        await route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            status: 'error',
+            error: {
+              code: 'call_access_conflict',
+              message: 'This link is already bound to another active session.',
+            },
+            result: {
+              call: { title: 'Foreign Linked Call Title' },
+              user: { email: 'account-a-private@example.invalid' },
+              session: { id: account.rejectedCallAccessToken, token: account.rejectedCallAccessToken },
+            },
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          result: {
+            session: {
+              id: account.issuedCallAccessToken,
+              token: account.issuedCallAccessToken,
+            },
+            user: { id: account.userId, email: account.email, role: 'user' },
+            call: { id: callId, room_id: 'lobby', title: safeTitle },
+          },
+        }),
+      });
+    });
+  }
+
+  try {
+    await installRoutes(accountAPage, accountA, requests.a, true);
+    await installRoutes(accountBPage, accountB, requests.b, false);
+
+    await Promise.all([
+      accountAPage.page.goto(`/join/${accessId}`),
+      accountBPage.page.goto(`/join/${accessId}`),
+    ]);
+
+    const dialogA = accountAPage.page.getByRole('dialog', { name: 'Join video call' });
+    const dialogB = accountBPage.page.getByRole('dialog', { name: 'Join video call' });
+    await expect(dialogA).toBeVisible({ timeout: 20_000 });
+    await expect(dialogB).toBeVisible({ timeout: 20_000 });
+
+    const responseAPromise = accountAPage.page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    const responseBPromise = accountBPage.page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await Promise.all([
+      dialogA.getByRole('button', { name: /^Join call$/ }).click(),
+      dialogB.getByRole('button', { name: /^Join call$/ }).click(),
+    ]);
+    const [responseA, responseB] = await Promise.all([responseAPromise, responseBPromise]);
+
+    expect(responseA.status()).toBe(200);
+    expect(responseB.status()).toBe(409);
+    expect(requests.a.sessionBody).toEqual({
+      verified_user_id: accountA.userId,
+      verified_session_id: accountA.sessionId,
+    });
+    expect(requests.b.sessionBody).toEqual({
+      verified_user_id: accountB.userId,
+      verified_session_id: accountB.sessionId,
+    });
+    expect(requests.a.joinGetCount).toBe(1);
+    expect(requests.b.joinGetCount).toBe(1);
+    expect(requests.a.sessionPostCount).toBe(1);
+    expect(requests.b.sessionPostCount).toBe(1);
+
+    const storedA = await accountAPage.page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), sessionStorageKey);
+    const storedB = await accountBPage.page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), sessionStorageKey);
+    expect(storedA.sessionId).toBe(accountA.issuedCallAccessToken);
+    expect(storedA.sessionToken).toBe(accountA.issuedCallAccessToken);
+    expect(storedB.sessionId).toBe(accountB.sessionId);
+    expect(storedB.sessionToken).not.toBe(accountA.issuedCallAccessToken);
+    expect(storedB.sessionToken).not.toBe(accountB.rejectedCallAccessToken);
+
+    await expect(dialogB).not.toContainText('Foreign Linked Call Title');
+    for (const value of foreignNeedlesForB) {
+      await expect(dialogB).not.toContainText(value);
+    }
+  } finally {
+    await Promise.allSettled([
+      accountAPage.context.close(),
+      accountBPage.context.close(),
+    ]);
+  }
+});
+
+test('terminal call-access denials do not start sessions or leak private data', async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const cases = [
     {

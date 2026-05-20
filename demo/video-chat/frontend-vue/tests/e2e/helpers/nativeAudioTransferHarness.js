@@ -1,6 +1,13 @@
 import { expect } from '@playwright/test';
 
-export const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || 'http://127.0.0.1:18080';
+function defaultBackendOrigin() {
+  if (/^(?:1|true|yes|on)$/i.test(String(process.env.PLAYWRIGHT_PRODUCTION_BROWSER_SMOKE || process.env.VIDEOCHAT_PRODUCTION_BROWSER_SMOKE || ''))) {
+    return 'https://api.kingrt.com';
+  }
+  return 'http://127.0.0.1:18080';
+}
+
+export const backendOrigin = process.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || process.env.VIDEOCHAT_BACKEND_ORIGIN || defaultBackendOrigin();
 const sessionStorageKey = 'ii_videocall_v1_session';
 
 export const adminCredentials = Object.freeze({
@@ -55,7 +62,7 @@ async function fetchStoredSession(email, password) {
   throw lastError;
 }
 
-async function installSocketInstrumentation(context) {
+export async function installSocketInstrumentation(context) {
   await context.addInitScript(() => {
     const NativeWebSocket = window.WebSocket;
     if (!NativeWebSocket || NativeWebSocket.__kingNativeAudioInstrumented) return;
@@ -134,12 +141,26 @@ async function installSocketInstrumentation(context) {
 
 export async function installMediaDeviceShim(context, {
   audioFrequency = 440,
+  audioPulse = false,
+  audioPulseIntervalMs = 2500,
   videoWidth = 320,
   videoHeight = 240,
   videoFrameRate = 12,
   highMotionVideo = false,
+  deterministicVideoPattern = false,
+  videoPatternLabel = 'KINGRT LIVE PROOF',
 } = {}) {
-  await context.addInitScript(({ frequency, width, height, frameRate, highMotion }) => {
+  await context.addInitScript(({
+    frequency,
+    pulseAudio,
+    pulseIntervalMs,
+    width,
+    height,
+    frameRate,
+    highMotion,
+    deterministicPattern,
+    patternLabel,
+  }) => {
     const resources = [];
     window.__kingNativeAudioMediaResources = resources;
 
@@ -169,9 +190,43 @@ export async function installMediaDeviceShim(context, {
       canvas.height = settings.height;
       const ctx = canvas.getContext('2d');
       let frame = 0;
+      const drawDeterministicPattern = () => {
+        const palette = ['#ff0054', '#00f5d4', '#ffe66d', '#1f2937', '#7c3aed'];
+        const bandCount = Math.max(4, Math.min(9, Math.floor(canvas.width / Math.max(80, canvas.height / 4))));
+        const bandWidth = Math.ceil(canvas.width / bandCount);
+        for (let index = 0; index < bandCount; index += 1) {
+          ctx.fillStyle = palette[(index + frame) % palette.length];
+          ctx.fillRect(index * bandWidth, 0, bandWidth + 1, canvas.height);
+        }
+
+        const marker = Math.max(18, Math.round(Math.min(canvas.width, canvas.height) * 0.12));
+        const pulse = (frame % 30) / 29;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, marker, marker);
+        ctx.fillRect(canvas.width - marker, canvas.height - marker, marker, marker);
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(canvas.width - marker, 0, marker, marker);
+        ctx.fillRect(0, canvas.height - marker, marker, marker);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(
+          Math.round((canvas.width - marker) * pulse),
+          Math.round(canvas.height * 0.42),
+          marker,
+          Math.max(8, Math.round(marker * 0.28)),
+        );
+        ctx.fillStyle = 'rgba(17, 24, 39, 0.84)';
+        ctx.fillRect(0, Math.round(canvas.height * 0.62), canvas.width, Math.max(42, Math.round(canvas.height * 0.18)));
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = `${Math.max(18, Math.round(canvas.height / 11))}px sans-serif`;
+        ctx.fillText(patternLabel, Math.max(16, Math.round(canvas.width / 24)), Math.round(canvas.height * 0.72));
+        ctx.font = `${Math.max(14, Math.round(canvas.height / 18))}px sans-serif`;
+        ctx.fillText(`frame ${frame} ${settings.width}x${settings.height}@${settings.frameRate}`, Math.max(16, Math.round(canvas.width / 24)), Math.round(canvas.height * 0.82));
+      };
       const draw = () => {
         if (!ctx) return;
-        if (highMotion) {
+        if (deterministicPattern) {
+          drawDeterministicPattern();
+        } else if (highMotion) {
           const cell = Math.max(12, Math.floor(Math.min(canvas.width, canvas.height) / 9));
           const offset = (frame * 17) % cell;
           for (let y = -cell; y < canvas.height + cell; y += cell) {
@@ -202,7 +257,14 @@ export async function installMediaDeviceShim(context, {
       draw();
       const intervalId = window.setInterval(draw, Math.max(16, Math.round(1000 / Math.max(1, settings.frameRate))));
       const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(settings.frameRate) : null;
-      resources.push({ canvas, intervalId, stream });
+      resources.push({
+        canvas,
+        deterministicPattern,
+        intervalId,
+        patternLabel,
+        settings,
+        stream,
+      });
       return stream?.getVideoTracks?.()[0] || null;
     };
 
@@ -215,12 +277,24 @@ export async function installMediaDeviceShim(context, {
         const gain = audioContext.createGain();
         const destination = audioContext.createMediaStreamDestination();
         oscillator.frequency.value = frequency;
-        gain.gain.value = 0.08;
+        gain.gain.value = pulseAudio ? 0.0001 : 0.08;
         oscillator.connect(gain);
         gain.connect(destination);
         oscillator.start();
         audioContext.resume?.().catch(() => {});
-        resources.push({ audioContext, oscillator, gain, destination });
+        let pulseTimer = 0;
+        if (pulseAudio) {
+          const playPulse = () => {
+            const now = audioContext.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(0.0001, now);
+            gain.gain.exponentialRampToValueAtTime(0.12, now + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+          };
+          playPulse();
+          pulseTimer = window.setInterval(playPulse, Math.max(500, Number(pulseIntervalMs || 0)));
+        }
+        resources.push({ audioContext, oscillator, gain, destination, pulseTimer });
         return destination.stream.getAudioTracks()[0] || null;
       } catch {
         return null;
@@ -252,29 +326,38 @@ export async function installMediaDeviceShim(context, {
     });
   }, {
     frequency: audioFrequency,
+    pulseAudio: Boolean(audioPulse),
+    pulseIntervalMs: Math.max(500, Number(audioPulseIntervalMs || 2500)),
     width: videoWidth,
     height: videoHeight,
     frameRate: videoFrameRate,
     highMotion: Boolean(highMotionVideo),
+    deterministicPattern: Boolean(deterministicVideoPattern),
+    patternLabel: String(videoPatternLabel || 'KINGRT LIVE PROOF').slice(0, 64),
   });
 }
 
 export async function installOutgoingVideoQualityPreference(context, profile = 'quality') {
   await context.addInitScript(({ key, qualityProfile }) => {
-    const previousRaw = localStorage.getItem(key);
-    let previous;
     try {
-      previous = previousRaw ? JSON.parse(previousRaw) : {};
+      if (window.top !== window) return;
+      const previousRaw = localStorage.getItem(key);
+      let previous;
+      try {
+        previous = previousRaw ? JSON.parse(previousRaw) : {};
+      } catch {
+        previous = {};
+      }
+      localStorage.setItem(key, JSON.stringify({
+        ...previous,
+        video_id: 'king-video',
+        audio_id: 'king-audio',
+        outgoing_video_quality_profile: qualityProfile,
+        outgoing_video_quality_profile_version: 6,
+      }));
     } catch {
-      previous = {};
+      // Sandboxed iframes can have opaque origins; media preferences only belong to the top-level app.
     }
-    localStorage.setItem(key, JSON.stringify({
-      ...previous,
-      video_id: 'king-video',
-      audio_id: 'king-audio',
-      outgoing_video_quality_profile: qualityProfile,
-      outgoing_video_quality_profile_version: 5,
-    }));
   }, {
     key: 'ii.videocall.preview_prefs.v1',
     qualityProfile: String(profile || 'quality').trim().toLowerCase() || 'quality',
@@ -283,14 +366,42 @@ export async function installOutgoingVideoQualityPreference(context, profile = '
 
 export async function createAuthenticatedPage(browser, baseURL, credentials, options = {}) {
   const storedSession = await fetchStoredSession(credentials.email, credentials.password);
-  const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
+  let browserTypeName = '';
+  try {
+    browserTypeName = typeof browser?.browserType === 'function' ? String(browser.browserType().name?.() || '') : '';
+  } catch {
+    browserTypeName = '';
+  }
+  const browserName = [
+    options.browserName,
+    options.projectName,
+    browserTypeName,
+  ].map((candidate) => String(candidate || '').trim().toLowerCase()).find(Boolean) || '';
+  const contextOptions = { baseURL };
+  if (!browserName.includes('firefox')) {
+    contextOptions.permissions = ['camera', 'microphone'];
+  }
+  let context = null;
+  try {
+    context = await browser.newContext(contextOptions);
+  } catch (error) {
+    if (!/Unknown permission/i.test(String(error?.message || error))) {
+      throw error;
+    }
+    context = await browser.newContext({ baseURL });
+  }
   await installMediaDeviceShim(context, options);
   if (options.outgoingVideoQualityProfile) {
     await installOutgoingVideoQualityPreference(context, options.outgoingVideoQualityProfile);
   }
   await installSocketInstrumentation(context);
   await context.addInitScript(({ key, value }) => {
-    localStorage.setItem(key, value);
+    if (window.top !== window) return;
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Sandboxed iframes can have opaque origins; the stored session is only needed in the top-level app.
+    }
   }, { key: sessionStorageKey, value: JSON.stringify(storedSession) });
   return { context, page: await context.newPage(), storedSession };
 }
@@ -356,15 +467,55 @@ export async function queueUserAdmission(page, joinPath) {
   await expect(joinCallModal).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 15_000 });
 }
 
-export async function admitFirstLobbyUser(page) {
-  const lobbyBadge = page.locator('.tab-lobby .tab-notice-badge');
-  await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
-  await page.locator('button.tab-lobby').click();
-  const lobbyPanel = page.locator('.panel-lobby.active');
-  await expect(lobbyPanel).toBeVisible({ timeout: 10_000 });
-  const allowUserButton = lobbyPanel.locator('button[title="Allow user"]').first();
-  await expect(allowUserButton).toBeVisible({ timeout: 20_000 });
-  await allowUserButton.click();
+export async function admitFirstLobbyUser(page, targetUserId = 0) {
+  const sendDirectLobbyFrame = async (frame) => page.evaluate((payload) => {
+    if (!payload || typeof payload !== 'object') return false;
+    const sockets = Array.isArray(window.__kingNativeAudioSockets) ? window.__kingNativeAudioSockets : [];
+    const socket = sockets.find((candidate) => {
+      const url = String(candidate?.url || candidate?.__kingNativeAudioUrl || '');
+      return url.includes('/ws') && candidate?.readyState === WebSocket.OPEN;
+    });
+    if (!socket) return false;
+    socket.send(JSON.stringify(payload));
+    return true;
+  }, frame);
+
+  const sendDirectAllow = async () => {
+    const normalizedUserId = Number(targetUserId);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+    return sendDirectLobbyFrame({ type: 'lobby/allow', target_user_id: normalizedUserId });
+  };
+
+  const sendDirectAllowAll = async () => sendDirectLobbyFrame({ type: 'lobby/allow_all' });
+
+  try {
+    const lobbyBadge = page.locator('.tabs-right .tab-notice-badge, .tab-notice-badge').first();
+    await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
+
+    const lobbyToast = page.locator('.workspace-lobby-toast').first();
+    if (await lobbyToast.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await lobbyToast.click();
+    }
+    const showRightSidebar = page.locator('.workspace-show-right-btn, .show-right-sidebar-overlay').first();
+    if (await showRightSidebar.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await showRightSidebar.click();
+    }
+    const usersTab = page.locator('button[role="tab"][aria-label="Users"], button[role="tab"][title="Users"], .tabs-right button[role="tab"]:has(.tab-notice-badge)').first();
+    if (await usersTab.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await usersTab.click();
+    }
+
+    const lobbyPanel = page.locator('.right-roster-panel.active .roster-section-lobby, .roster-section-lobby, .panel-lobby.active').first();
+    await expect(lobbyPanel).toBeVisible({ timeout: 10_000 });
+    const allowUserButton = lobbyPanel.locator('button[title="Allow user"], button[aria-label="Allow user"], .roster-action-btn:has(img[src*="add_to_call"])').first();
+    await expect(allowUserButton).toBeVisible({ timeout: 20_000 });
+    await allowUserButton.click();
+    return;
+  } catch (error) {
+    if (await sendDirectAllow()) return;
+    if (await sendDirectAllowAll()) return;
+    throw error;
+  }
 }
 
 export async function nativeMediaSignalCount(page) {
@@ -417,6 +568,171 @@ export async function sfuRemoteVideoSnapshot(page) {
       rendered: canvas.width > 0 && canvas.height > 0 && canvas.isConnected,
     }));
   });
+}
+
+export async function remoteVideoPixelSnapshot(page) {
+  return page.evaluate(() => {
+    const selectors = [
+      '#decoded-video-container canvas.remote-video',
+      '#decoded-video-container canvas',
+      'canvas.remote-video',
+      '[data-role="remote-video"] canvas',
+      '[data-testid="remote-video"] canvas',
+      '.workspace-main-video canvas',
+      '.workspace-mini-video-slot canvas',
+      '.call-app-workspace-mini-video-slot canvas',
+      'video.remote-video',
+      '[data-role="remote-video"] video',
+      '[data-testid="remote-video"] video',
+      '.workspace-main-video video',
+      '.workspace-mini-video-slot video',
+      '.call-app-workspace-mini-video-slot video',
+    ];
+    const palette = [
+      [255, 0, 84],
+      [0, 245, 212],
+      [255, 230, 109],
+      [31, 41, 55],
+      [124, 58, 237],
+      [34, 197, 94],
+    ];
+    const sampleCanvas = document.createElement('canvas');
+    const sampleWidth = 64;
+    const sampleHeight = 36;
+    sampleCanvas.width = sampleWidth;
+    sampleCanvas.height = sampleHeight;
+    const sampleContext = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+    const uniqueElements = [];
+    const seen = new Set();
+    for (const selector of selectors) {
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        if (seen.has(element)) continue;
+        seen.add(element);
+        uniqueElements.push({ element, selector });
+      }
+    }
+
+    const colorDistance = (sample, expected) => Math.sqrt(
+      ((sample[0] || 0) - expected[0]) ** 2
+      + ((sample[1] || 0) - expected[1]) ** 2
+      + ((sample[2] || 0) - expected[2]) ** 2,
+    );
+
+    const scorePixels = (data) => {
+      const paletteHits = new Set();
+      let total = 0;
+      let vivid = 0;
+      let bright = 0;
+      let dark = 0;
+      let green = 0;
+      for (let offset = 0; offset < data.length; offset += 4) {
+        const red = data[offset] || 0;
+        const greenChannel = data[offset + 1] || 0;
+        const blue = data[offset + 2] || 0;
+        const max = Math.max(red, greenChannel, blue);
+        const min = Math.min(red, greenChannel, blue);
+        total += 1;
+        if (max - min > 70 && max > 120) vivid += 1;
+        if (red > 225 && greenChannel > 225 && blue > 225) bright += 1;
+        if (red < 45 && greenChannel < 55 && blue < 70) dark += 1;
+        if (greenChannel > 150 && red < 90 && blue < 150) green += 1;
+        palette.forEach((expected, index) => {
+          if (colorDistance([red, greenChannel, blue], expected) < 72) paletteHits.add(index);
+        });
+      }
+      const vividRatio = total > 0 ? vivid / total : 0;
+      const brightRatio = total > 0 ? bright / total : 0;
+      const darkRatio = total > 0 ? dark / total : 0;
+      const greenRatio = total > 0 ? green / total : 0;
+      const patternScore = paletteHits.size
+        + (vividRatio > 0.2 ? 1 : 0)
+        + (brightRatio > 0.005 ? 1 : 0)
+        + (darkRatio > 0.005 ? 1 : 0)
+        + (greenRatio > 0.005 ? 1 : 0);
+      return {
+        brightRatio,
+        darkRatio,
+        greenRatio,
+        paletteHits: Array.from(paletteHits).sort((left, right) => left - right),
+        patternScore,
+        vividRatio,
+      };
+    };
+
+    return uniqueElements.map(({ element, selector }) => {
+      const rect = element.getBoundingClientRect();
+      const visible = element.isConnected
+        && rect.width > 0
+        && rect.height > 0
+        && window.getComputedStyle(element).visibility !== 'hidden'
+        && window.getComputedStyle(element).display !== 'none';
+      const isCanvas = element instanceof HTMLCanvasElement;
+      const isVideo = element instanceof HTMLVideoElement;
+      const sourceWidth = isCanvas ? Number(element.width || 0) : Number(element.videoWidth || 0);
+      const sourceHeight = isCanvas ? Number(element.height || 0) : Number(element.videoHeight || 0);
+      if (!visible || !sampleContext || sourceWidth <= 0 || sourceHeight <= 0) {
+        return {
+          className: String(element.className || ''),
+          dataset: { ...element.dataset },
+          height: sourceHeight,
+          id: String(element.id || ''),
+          patternScore: 0,
+          reason: visible ? 'missing_source_pixels' : 'not_visible',
+          selector,
+          tagName: element.tagName.toLowerCase(),
+          visibleHeight: rect.height,
+          visibleWidth: rect.width,
+          width: sourceWidth,
+        };
+      }
+      try {
+        sampleContext.clearRect(0, 0, sampleWidth, sampleHeight);
+        sampleContext.drawImage(element, 0, 0, sampleWidth, sampleHeight);
+        const image = sampleContext.getImageData(0, 0, sampleWidth, sampleHeight);
+        return {
+          ...scorePixels(image.data),
+          className: String(element.className || ''),
+          dataset: { ...element.dataset },
+          height: sourceHeight,
+          id: String(element.id || ''),
+          reason: 'ok',
+          selector,
+          tagName: element.tagName.toLowerCase(),
+          visibleHeight: rect.height,
+          visibleWidth: rect.width,
+          width: sourceWidth,
+        };
+      } catch (error) {
+        return {
+          className: String(element.className || ''),
+          dataset: { ...element.dataset },
+          height: sourceHeight,
+          id: String(element.id || ''),
+          patternScore: 0,
+          reason: error instanceof Error ? error.message : 'pixel_sample_failed',
+          selector,
+          tagName: element.tagName.toLowerCase(),
+          visibleHeight: rect.height,
+          visibleWidth: rect.width,
+          width: sourceWidth,
+        };
+      }
+    });
+  });
+}
+
+export async function waitForDeterministicRemoteVideo(page, {
+  minPatternScore = 4,
+  timeout = 90_000,
+} = {}) {
+  await expect.poll(async () => {
+    const snapshot = await remoteVideoPixelSnapshot(page);
+    return snapshot.reduce((max, entry) => Math.max(max, Number(entry.patternScore || 0)), 0);
+  }, {
+    timeout,
+  }).toBeGreaterThanOrEqual(minPatternScore);
+  return remoteVideoPixelSnapshot(page);
 }
 
 export async function sfuSocketStats(page) {

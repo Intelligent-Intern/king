@@ -109,6 +109,8 @@ load_local_env() {
     VIDEOCHAT_DEPLOY_PATH DEPLOY_PATH
     VIDEOCHAT_DEPLOY_SSH_KEY
     VIDEOCHAT_PROD_DEBUG_DRY_RUN VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE
+    VIDEOCHAT_SFU_ENABLED VIDEOCHAT_EDGE_SFU_ENABLED
+    VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT VITE_VIDEOCHAT_GOSSIP_DATA_LANE VITE_VIDEOCHAT_MEDIA_CARRIER
   )
   local line name raw_value value group
   declare -A allowed_env_names=()
@@ -153,6 +155,30 @@ normalize_domains() {
   DEPLOY_USER="${VIDEOCHAT_DEPLOY_USER:-${DEPLOY_USER:-root}}"
   DEPLOY_SSH_PORT="${VIDEOCHAT_DEPLOY_SSH_PORT:-${DEPLOY_SSH_PORT:-22}}"
   DEPLOY_PATH="${VIDEOCHAT_DEPLOY_PATH:-${DEPLOY_PATH:-/opt/king-videochat}}"
+}
+
+env_flag_truthy() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  value="${value,,}"
+  case "${value}" in
+    1|true|yes|on|enabled) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+sfu_route_enabled() {
+  local edge_flag="${VIDEOCHAT_EDGE_SFU_ENABLED:-}"
+  if [[ -n "${edge_flag}" ]]; then
+    env_flag_truthy "${edge_flag}"
+    return
+  fi
+  env_flag_truthy "${VIDEOCHAT_SFU_ENABLED:-0}"
+}
+
+sfu_runtime_metadata() {
+  log "sfu runtime metadata: VIDEOCHAT_EDGE_SFU_ENABLED=${VIDEOCHAT_EDGE_SFU_ENABLED:-0}; VIDEOCHAT_SFU_ENABLED=${VIDEOCHAT_SFU_ENABLED:-0}; VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT=${VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT:-false}; VITE_VIDEOCHAT_GOSSIP_DATA_LANE=${VITE_VIDEOCHAT_GOSSIP_DATA_LANE:-active}; VITE_VIDEOCHAT_MEDIA_CARRIER=${VITE_VIDEOCHAT_MEDIA_CARRIER:-gossip_primary}"
 }
 
 section() {
@@ -282,7 +308,6 @@ call_app_frame_header_probe() {
 
 call_app_csp_header_proof() {
   section "Call-App CSP Header Proof"
-  call_app_frame_header_probe "call-app whiteboard host CSP" "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html"
   call_app_frame_header_probe "call-app whiteboard path CSP" "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html"
 }
 
@@ -308,6 +333,36 @@ websocket_probe() {
   )"
   upgrade="$(awk 'tolower($1) == "upgrade:" {print $2; exit}' "${headers}" | tr -d '\r')"
   printf '%-28s %s upgrade=%s %s\n' "${label}" "${code:-000}" "${upgrade:-none}" "${url}" | redact_stream
+  rm -f "${headers}" "${body}"
+}
+
+sfu_disabled_websocket_probe() {
+  local label="$1" url="$2" headers body code curl_url
+  if [[ "${VIDEOCHAT_PROD_DEBUG_DRY_RUN:-0}" == "1" ]]; then
+    printf '%-28s DRY-RUN disabled websocket %s expected=404\n' "${label}" "${url}" | redact_stream
+    return 0
+  fi
+  curl_url="${url/wss:\/\//https://}"
+  headers="$(mktemp)"
+  body="$(mktemp)"
+  code="$(
+    curl -sS --http1.1 --max-time "${TIMEOUT}" \
+      -D "${headers}" \
+      -o "${body}" \
+      -w '%{http_code}' \
+      -H 'Connection: Upgrade' \
+      -H 'Upgrade: websocket' \
+      -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+      -H 'Sec-WebSocket-Version: 13' \
+      "${curl_url}" || true
+  )"
+  printf '%-28s %s expected=404 disabled_by=edge:%s backend:%s frontend_transport:%s %s\n' \
+    "${label}" "${code:-000}" \
+    "${VIDEOCHAT_EDGE_SFU_ENABLED:-0}" "${VIDEOCHAT_SFU_ENABLED:-0}" \
+    "${VITE_VIDEOCHAT_ENABLE_SFU_TRANSPORT:-false}" "${url}" | redact_stream
+  if [[ "${code}" != "404" ]]; then
+    log "${label}: expected disabled SFU route HTTP 404, got ${code:-none}"
+  fi
   rm -f "${headers}" "${body}"
 }
 
@@ -452,7 +507,12 @@ main() {
   http_probe "call-app host" "https://${DEPLOY_CALL_APP_DOMAIN}/" HEAD
   http_probe "registry host" "https://${DEPLOY_REGISTRY_DOMAIN}/" HEAD
   websocket_probe "lobby websocket" "wss://${DEPLOY_WS_DOMAIN}/ws"
-  websocket_probe "sfu websocket" "wss://${DEPLOY_SFU_DOMAIN}/sfu"
+  sfu_runtime_metadata
+  if sfu_route_enabled; then
+    websocket_probe "sfu websocket" "wss://${DEPLOY_SFU_DOMAIN}/sfu"
+  else
+    sfu_disabled_websocket_probe "sfu websocket disabled" "wss://${DEPLOY_SFU_DOMAIN}/sfu"
+  fi
 
   call_app_csp_header_proof
 

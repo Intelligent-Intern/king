@@ -205,6 +205,84 @@
   gap: 8px;
 }
 
+.call-left-stt-block {
+  gap: 8px;
+}
+
+.call-left-stt-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.call-left-stt-state {
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid #133262;
+  border-radius: 6px;
+  background: var(--bg-video);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center start;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.call-left-stt-state.active {
+  border-color: #177f22;
+  color: var(--text-primary);
+}
+
+.call-left-stt-toggle {
+  min-width: 82px;
+  height: 32px;
+  border: 1px solid #3f79d6;
+  border-radius: 6px;
+  background: var(--bg-tab-active);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.call-left-stt-toggle:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.call-left-stt-copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.call-left-sputnik-block {
+  gap: 8px;
+}
+
+.call-left-sputnik-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.call-left-sputnik-row .btn {
+  min-width: 0;
+  height: 34px;
+  padding-inline: 8px;
+  font-size: 12px;
+}
+
+.call-left-sputnik-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .shell.call-workspace-mode .sidebar-content.left.left-call-content .call-left-settings {
   padding: 0 0 56px;
   gap: 1px;

@@ -48,19 +48,20 @@ async function main() {
   requireContains(policySource, 'video_width: 1280', 'strict capture width');
   requireContains(policySource, 'video_height: 720', 'strict capture height');
   requireContains(policySource, 'video_fps: 30', 'strict capture fps');
-  requireContains(policySource, 'captureWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict capture width profile binding');
-  requireContains(policySource, 'captureHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict capture height profile binding');
-  requireContains(policySource, 'captureFrameRate: STRICT_720P30_CONSTRAINTS.video_fps', 'strict capture fps profile binding');
-  requireContains(policySource, 'frameWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict frame width profile binding');
-  requireContains(policySource, 'frameHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict frame height profile binding');
+  requireContains(policySource, 'captureWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict 720p capture width profile remains available');
+  requireContains(policySource, 'captureHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict 720p capture height profile remains available');
+  requireContains(policySource, 'captureFrameRate: STRICT_720P30_CONSTRAINTS.video_fps', 'strict 720p capture fps profile remains available');
+  requireContains(policySource, 'frameWidth: STRICT_720P30_CONSTRAINTS.video_width', 'strict 720p frame width profile remains available');
+  requireContains(policySource, 'frameHeight: STRICT_720P30_CONSTRAINTS.video_height', 'strict 720p frame height profile remains available');
+  requireContains(policySource, 'fixedVideoProfile: null', 'strict production policy no longer forces 720p as the default profile');
   requireContains(policySource, 'disableAutoQuality: true', 'strict auto quality gate');
   requireContains(policySource, 'disableGossipMediaRepair: true', 'strict gossip repair gate');
   requireContains(policySource, 'disableGossipPublish: false', 'strict allows the browser gossip publish path');
   requireContains(policySource, 'disableBackgroundTabPolicy: true', 'strict background tab gate');
   requireContains(policySource, 'disableNativeRuntimeFallback: true', 'strict native runtime fallback gate');
   requireContains(policySource, 'disableRegressionImprovementProbes: true', 'strict regression improvement probe gate');
-  requireContains(policySource, 'requireStrict720p30Capability: true', 'strict capability gate');
-  requireContains(policySource, 'strictCaptureOnly: true', 'strict capture fallback gate');
+  requireContains(policySource, 'requireStrict720p30Capability: false', 'strict policy keeps 720p capability available without making it the default gate');
+  requireContains(policySource, 'strictCaptureOnly: false', 'strict policy allows the planned 720p -> 360p fallback capture path');
   requireContains(policySource, 'strictFixedOutputFrame: true', 'strict fixed frame output gate');
   requireContains(policySource, 'disableSelectiveTileTransport: true', 'strict disables selective transport experiments');
   requireContains(policySource, 'quietPublisherFrameDrops: true', 'strict quietly drops unsupported publisher frames');
@@ -70,7 +71,8 @@ async function main() {
   requireContains(callWorkspace, 'policy: CALL_STABILITY_POLICY', 'workspace passes strict policy into gossip lane');
   requireContains(callWorkspace, 'strictStabilityPolicy: CALL_STABILITY_POLICY', 'workspace passes strict policy into runtime helpers');
 
-  requireContains(runtimeSwitching, 'return strict720p30VideoProfile(strictStabilityPolicy);', 'runtime switching returns fixed strict video profile');
+  requireContains(runtimeSwitching, 'strictStabilityPolicy?.fixedVideoProfile', 'runtime switching only uses a fixed strict profile when one is configured');
+  requireContains(runtimeSwitching, 'return resolveSfuVideoQualityProfile(refs.callMediaPrefs.outgoingVideoQualityProfile);', 'runtime switching falls back to the selected/default profile under production strict mode');
   requireContains(runtimeSwitching, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary', 'runtime switching keys strict active path off gossip-primary mode');
   requireContains(runtimeSwitching, "eventType: 'strict_720p30_gossip_native_fallback_blocked'", 'runtime switching blocks native fallback on active gossip path');
   requireContains(runtimeSwitching, "strictPolicyEnabled(strictStabilityPolicy, 'disableQualityRecoveryProbes')", 'runtime switching disables quality recovery probes');
@@ -84,11 +86,11 @@ async function main() {
   requireContains(publisherBackpressure, "strictPolicyEnabled(strictStabilityPolicy, 'disableForcedKeyframeRecovery')", 'publisher backpressure disables forced keyframe recovery');
   requireContains(publisherBackpressure, "strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')", 'publisher backpressure disables stall reconnect');
 
-  requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'local media disables outgoing background filters');
-  requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'strictCaptureOnly')", 'local media enforces strict capture-only fallback');
+  requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'local media keeps the outgoing-background policy gate available');
+  requireContains(mediaOrchestration, "strictPolicyEnabled(constants.strictStabilityPolicy, 'strictCaptureOnly')", 'local media can still enforce capture-only when policy explicitly enables it');
   requireContains(mediaOrchestration, "eventType: 'strict_720p30_video_capture_unavailable'", 'strict capture fallback diagnostic exists');
   requireContains(mediaOrchestration, 'width: { exact: videoProfile.captureWidth }', 'strict getUserMedia requests exact capture width');
-  requireContains(mediaOrchestration, "resetBackgroundRuntimeMetrics('strict_720p30_unfiltered')", 'strict mode returns raw camera instead of background compositor');
+  requireContains(mediaOrchestration, "resetBackgroundRuntimeMetrics('strict_720p30_unfiltered')", 'strict mode still has an explicit raw-camera branch when the background gate is enabled');
   requireContains(captureProfileConstraints, "profileId(videoProfile) === 'strict_720p30'", 'capture track constraints use exact mode for strict 720p30');
   requireContains(captureProfileConstraints, 'if (options?.exact === true) return { exact: target };', 'strict capture enforcement does not cap down to lower device settings');
   requireContains(publisherPipeline, "strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')", 'publisher uses raw track when outgoing background is disabled');
@@ -97,7 +99,8 @@ async function main() {
   requireContains(publisherPipeline, "suppressSfuSendFailures: quietStrictPublisherDrops", 'publisher quietly drops strict SFU send failures');
   requireContains(publisherFrameDispatch, 'suppressGossipPrimary = false', 'frame dispatch accepts strict gossip suppression');
   requireContains(publisherFrameDispatch, 'suppressSfuSendFailures = false', 'frame dispatch accepts strict SFU send failure suppression');
-  requireContains(publisherFrameDispatch, 'VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true', 'frame dispatch can enter the explicit browser gossip-primary path unless strict suppresses it');
+  requireContains(publisherFrameDispatch, '(planRequiresGossipTransport || VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary)', 'frame dispatch can enter the explicit browser gossip-primary path');
+  requireContains(publisherFrameDispatch, '&& suppressGossipPrimary !== true', 'frame dispatch keeps strict gossip suppression separate from gossip-primary selection');
   requireContains(browserVideoEncoderConfig, "String(videoProfile?.id || '').trim().toLowerCase() === 'strict_720p30'", 'browser encoder sizing detects strict profile');
   requireContains(browserVideoEncoderConfig, "{ mode: 'cover', targetAspectRatio: maxWidth / maxHeight }", 'browser encoder uses fixed 16:9 strict output sizing');
   requireContains(publisherFrameTrace, 'raw_source_frame_width: frameSize.sourceWidth', 'transport metrics preserve raw source width separately under strict fixed output');
@@ -159,7 +162,7 @@ async function main() {
     assert.equal(strictPolicyEnabled(strictPolicy, 'disableAutoQuality'), true, 'strict policy disables auto quality');
     assert.equal(strictPolicyEnabled(strictPolicy, 'disableNativeRuntimeFallback'), true, 'strict policy disables native runtime fallback');
     assert.equal(strictPolicyEnabled(strictPolicy, 'disableRegressionImprovementProbes'), true, 'strict policy disables regression improvement probes');
-    assert.equal(strictPolicyEnabled(strictPolicy, 'requireStrict720p30Capability'), true, 'strict policy requires exact 720p30 capability');
+    assert.equal(strictPolicyEnabled(strictPolicy, 'requireStrict720p30Capability'), false, 'strict policy keeps exact 720p30 capability optional for the default 360p path');
     assert.deepEqual(strict720p30Constraints(), {
       video_width: 1280,
       video_height: 720,
@@ -182,12 +185,12 @@ async function main() {
     }), false, 'strict capability rejects lower profiles');
 
     const profile = strict720p30VideoProfile(strictPolicy);
-    assert.equal(profile.captureWidth, 1280, 'strict capture width must be 1280');
-    assert.equal(profile.captureHeight, 720, 'strict capture height must be 720');
-    assert.equal(profile.captureFrameRate, 30, 'strict capture fps must be 30');
-    assert.equal(profile.frameWidth, 1280, 'strict frame width must be 1280');
-    assert.equal(profile.frameHeight, 720, 'strict frame height must be 720');
-    assert.equal(profile.readbackFrameRate, 30, 'strict readback fps must be 30');
+    assert.equal(profile.captureWidth, 1280, 'strict 720p helper keeps 1280 capture width available');
+    assert.equal(profile.captureHeight, 720, 'strict 720p helper keeps 720 capture height available');
+    assert.equal(profile.captureFrameRate, 30, 'strict 720p helper keeps 30fps available');
+    assert.equal(profile.frameWidth, 1280, 'strict 720p helper keeps 1280 frame width available');
+    assert.equal(profile.frameHeight, 720, 'strict 720p helper keeps 720 frame height available');
+    assert.equal(profile.readbackFrameRate, 30, 'strict 720p helper keeps 30fps readback available');
     const portraitFrameSize = resolveBrowserEncoderFrameSize(profile, { displayWidth: 720, displayHeight: 1280 });
     assert.equal(portraitFrameSize.frameWidth, 1280, 'strict portrait browser frames must encode as fixed 1280 width');
     assert.equal(portraitFrameSize.frameHeight, 720, 'strict portrait browser frames must encode as fixed 720 height');
@@ -197,7 +200,7 @@ async function main() {
     const refs = {
       activeCallId: { value: 'call-1' },
       activeRoomId: { value: 'room-1' },
-      callMediaPrefs: { outgoingVideoQualityProfile: 'realtime' },
+      callMediaPrefs: { outgoingVideoQualityProfile: 'rescue' },
       currentUserId: { value: 1 },
       localStreamRef: { value: null },
       mediaRuntimeCapabilities: { value: { stageA: true, stageB: false, preferredPath: 'wlvc_wasm', reasons: [] } },
@@ -240,7 +243,7 @@ async function main() {
         resetWlvcEncodeCounters: () => {},
       },
     });
-    assert.equal(helpers.currentSfuVideoProfile().id, 'strict_720p30', 'runtime helper must expose fixed strict profile');
+    assert.equal(helpers.currentSfuVideoProfile().id, 'rescue', 'runtime helper must use the 360p rescue profile by default when no fixed strict profile is configured');
     assert.equal(helpers.ensureSfuVideoQualityRecoveryProbeSeries(), false, 'strict mode must not schedule quality recovery probes');
     assert.equal(helpers.probeSfuVideoQualityAfterStableReadback(), false, 'strict mode must not upshift after readback success');
     assert.equal(helpers.downgradeSfuVideoQualityAfterEncodePressure(), false, 'strict mode must not downshift after pressure');

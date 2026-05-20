@@ -350,6 +350,7 @@ export function createCallWorkspaceMediaStack(options) {
     getSfuSendFailureDetails: () => refs.sfuClientRef.value?.getLastSendFailure?.() || null,
     getRemotePeerCount: () => refs.remotePeersRef.value.size,
     getShouldConnectSfu: () => refs.shouldConnectSfu.value,
+    canRestartSfuForConnectWindow: runtimeHealth.canRestartSfuForConnectWindow,
     onRestartSfu: callbacks.onRestartSfu,
     resetWlvcEncoderAfterDroppedEncodedFrame: runtimeHealth.resetWlvcEncoderAfterDroppedEncodedFrame,
     sfuAutoQualityDowngradeBackpressureWindowMs: constants.sfuAutoQualityDowngradeBackpressureWindowMs,
@@ -530,6 +531,8 @@ export function createCallWorkspaceMediaStack(options) {
       SFUClient: refs.SFUClient,
       activeRoomId: refs.activeRoomId,
       activeSocketCallId: refs.activeSocketCallId,
+      connectionState: refs.connectionState,
+      isSocketOnline: refs.isSocketOnline,
       mediaRuntimeCapabilities: refs.mediaRuntimeCapabilities,
       mediaRuntimePath: refs.mediaRuntimePath,
       sessionState: refs.sessionState,
@@ -544,6 +547,7 @@ export function createCallWorkspaceMediaStack(options) {
     callbacks: {
       clearTransientActivityPublishErrorNotice: callbacks.clearTransientActivityPublishErrorNotice,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
+      canPublishLocalMediaToSfu: canPublishLocalMediaForActivePlan,
       currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
       evaluateBackgroundFilterGates: callbacks.evaluateBackgroundFilterGates,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
@@ -566,6 +570,7 @@ export function createCallWorkspaceMediaStack(options) {
         bindLocalTrackLifecycle: localPublisherPipeline.bindLocalTrackLifecycle,
         clearLocalPreviewElement: localPublisherPipeline.clearLocalPreviewElement,
         scheduleLocalTrackRecovery: localPublisherPipeline.scheduleLocalTrackRecovery,
+        renderCallVideoLayout: () => renderCallVideoLayout(),
         startEncodingPipeline: localPublisherPipeline.startEncodingPipeline,
         startScreenShareParticipant: screenSharePublisher.start,
         stopLocalEncodingPipeline: localPublisherPipeline.stopLocalEncodingPipeline,
@@ -615,9 +620,15 @@ export function createCallWorkspaceMediaStack(options) {
   });
 
   async function publishLocalTracksForMediaPlan(...args) {
-    return requestLocalMediaPublicationForActivePlan('local_media_publish_request', {}, () => (
+    const published = await requestLocalMediaPublicationForActivePlan('local_media_publish_request', {}, () => (
       localMediaOrchestration.publishLocalTracks(...args)
     ));
+    if (published) return true;
+    await localMediaOrchestration.publishLocalTracks({
+      captureOnly: true,
+      reason: 'media_session_plan_pending',
+    });
+    return false;
   }
 
   function publishLocalTracksToSfuIfReadyForMediaPlan(...args) {

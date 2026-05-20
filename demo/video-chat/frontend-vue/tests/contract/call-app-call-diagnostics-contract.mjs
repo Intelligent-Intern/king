@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
-const appRoot = path.join(repoRoot, 'demo/call-app/call-diagnostics');
+const appRoot = path.join(repoRoot, 'demo/call-apps/call-diagnostics');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -38,7 +38,7 @@ for (const requiredFile of [
   assert.ok(fs.existsSync(path.join(appRoot, requiredFile)), `call-diagnostics package missing ${requiredFile}`);
 }
 
-const manifest = readJson('demo/call-app/call-diagnostics/call-app.manifest.json');
+const manifest = readJson('demo/call-apps/call-diagnostics/call-app.manifest.json');
 assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest schema version mismatch');
 assert.equal(manifest.app_key, 'call-diagnostics', 'manifest app key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'call-diagnostics must advertise runtime readiness');
@@ -66,7 +66,7 @@ for (const permission of [
 }
 assert.deepEqual(manifest.exports.map((entry) => entry.format), ['json'], 'call-diagnostics must advertise JSON export');
 
-const mcp = readJson('demo/call-app/call-diagnostics/mcp.descriptor.json');
+const mcp = readJson('demo/call-apps/call-diagnostics/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'call-diagnostics', 'MCP app key mismatch');
 assert.equal(mcp.service_name, 'call_app.call-diagnostics.mcp', 'MCP service name mismatch');
@@ -88,7 +88,7 @@ for (const method of [
   assert.ok(mcp.methods.some((entry) => entry.name === method), `MCP descriptor missing ${method}`);
 }
 
-const crdt = readJson('demo/call-app/call-diagnostics/crdt.schema.json');
+const crdt = readJson('demo/call-apps/call-diagnostics/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.app_key, 'call-diagnostics', 'CRDT app key mismatch');
 assert.equal(crdt.protocol, 'king.call_app.crdt.v1', 'CRDT protocol mismatch');
@@ -103,7 +103,7 @@ for (const operationType of [
 assert.equal(crdt.presence?.persisted, false, 'call-diagnostics presence must not be persisted');
 assert.deepEqual(crdt.exports, ['json'], 'CRDT exports must match manifest');
 
-const health = readJson('demo/call-app/call-diagnostics/health.descriptor.json');
+const health = readJson('demo/call-apps/call-diagnostics/health.descriptor.json');
 const healthPaths = health.checks.map((check) => check.path);
 for (const healthPath of [
   'call-app.manifest.json',
@@ -116,9 +116,9 @@ for (const healthPath of [
   assert.ok(healthPaths.includes(healthPath), `health descriptor missing ${healthPath}`);
 }
 
-const html = read('demo/call-app/call-diagnostics/public/index.html');
-const css = read('demo/call-app/call-diagnostics/public/call-diagnostics.css');
-const runtime = read('demo/call-app/call-diagnostics/public/call-diagnostics.js');
+const html = read('demo/call-apps/call-diagnostics/public/index.html');
+const css = read('demo/call-apps/call-diagnostics/public/call-diagnostics.css');
+const runtime = read('demo/call-apps/call-diagnostics/public/call-diagnostics.js');
 const bundle = `${html}\n${css}\n${runtime}`;
 
 assert.ok(lineCount(html) < 140, 'call-diagnostics entrypoint must stay thin');
@@ -212,7 +212,7 @@ includes(workspaceDiagnostics, 'event_type: eventType', 'call workspace live tap
 
 const packageJson = read('demo/video-chat/frontend-vue/package.json');
 includes(packageJson, 'call-app-call-diagnostics-contract.mjs', 'package scripts must include call-diagnostics contract');
-const readme = read('demo/call-app/README.md');
+const readme = read('demo/call-apps/README.md');
 includes(readme, 'call-diagnostics', 'README must list the call-diagnostics package');
 
 const backendDiagnostics = read('demo/video-chat/backend-king-php/domain/call_apps/call_app_diagnostics.php');
@@ -228,13 +228,14 @@ const availability = read('demo/video-chat/backend-king-php/domain/call_apps/cal
 includes(availability, 'include_internal', 'availability query must support admin-only internal app visibility');
 includes(availability, "catalog.app_key <> :internal_app_key", 'availability query must hide diagnostics from normal users');
 const sprint = read('SPRINT.md');
-includes(sprint, 'Sprint: Gossip Video Call v1 Streaming 01', 'SPRINT must remain focused on the active Gossip sprint');
-includes(sprint, 'GSP01-17 Diagnostics surface', 'SPRINT must keep the diagnostics surface release gate visible');
-includes(sprint, 'GSP01-18 Test gate', 'SPRINT must keep the gossip video proof test gate visible');
+includes(sprint, 'Do not weaken King v1 contracts to make a check pass.', 'SPRINT must preserve the King v1 contract bar');
+includes(sprint, 'Do not grow `CallWorkspaceView.vue`', 'SPRINT must preserve the CallWorkspace extraction boundary');
+includes(sprint, 'VST-22 Remove normal-session console spam from Call-App diagnostics while', 'SPRINT must track the active Call App diagnostics console-spam cleanup');
+includes(sprint, 'preserving admin diagnostics.', 'SPRINT must preserve the admin diagnostics path');
 const backlog = read('BACKLOG.md');
-includes(backlog, 'Video Call Stabilization and Internal Diagnostics are paused as active', 'BACKLOG must record paused diagnostics stabilization work');
-includes(backlog, 'Call App diagnostics/telemetry improvements remain available as future', 'BACKLOG must retain diagnostics telemetry follow-up work');
-includes(backlog, 'Call Diagnostics', 'BACKLOG must retain Call Diagnostics package history');
-includes(backlog, 'package work are represented by local commits on the active integration', 'BACKLOG must retain Call Diagnostics package integration history');
+includes(backlog, 'Keep Call App package roots canonical at `demo/call-apps/<app-key>/`.', 'BACKLOG must retain the canonical Call App package root contract');
+includes(backlog, 'Treat `demo/video-chat/frontend-vue/dist/call-app` as build output only.', 'BACKLOG must retain the Call App build-output boundary');
+includes(backlog, 'Reconcile Call App entitlement revocation and launch-token reconnect proof', 'BACKLOG must retain future Call App entitlement proof work');
+includes(backlog, 'Preserve Whiteboard, Planning Image, Presentation and Spreadsheet follow-up', 'BACKLOG must retain future Call App package follow-up work');
 
 console.log('[call-app-call-diagnostics-contract] PASS');

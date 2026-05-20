@@ -23,6 +23,19 @@ function videochat_call_access_route_session_id(array $authContext): string
     return '';
 }
 
+function videochat_call_access_resolved_target_user_id(array $resolveResult): int
+{
+    $targetUser = is_array($resolveResult['target_user'] ?? null) ? $resolveResult['target_user'] : [];
+    if (is_numeric($targetUser['id'] ?? null) && (int) $targetUser['id'] > 0) {
+        return (int) $targetUser['id'];
+    }
+
+    $accessLink = is_array($resolveResult['access_link'] ?? null) ? $resolveResult['access_link'] : [];
+    return is_numeric($accessLink['participant_user_id'] ?? null) && (int) $accessLink['participant_user_id'] > 0
+        ? (int) $accessLink['participant_user_id']
+        : 0;
+}
+
 function videochat_call_route_access_session_binding(PDO $pdo, array $apiAuthContext): ?array
 {
     $sessionId = videochat_call_access_route_session_id($apiAuthContext);

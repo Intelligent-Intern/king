@@ -157,7 +157,7 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     && staleTargetPruneRate <= thresholds.maxStaleTargetPruneRate
     && encoderLifecycleCloseRate <= thresholds.maxEncoderLifecycleCloseRate
     && sendBackpressureAbortRate <= thresholds.maxSendBackpressureAbortRate;
-  const gossipMediaHealthy = gossipTopologyHealthy && mediaSecurityRecoveryReady;
+  const gossipMediaHealthy = gossipTopologyHealthy;
   const gossipTopologyBuckets = [];
   if (!rtcReady) gossipTopologyBuckets.push('rtc_topology_unready');
   if (!telemetryReady) gossipTopologyBuckets.push('gossip_telemetry_noisy');
@@ -170,21 +170,17 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
   if (staleTargetPruneRate > thresholds.maxStaleTargetPruneRate) sfuFallbackBuckets.push('stale_target_prune_storm');
   if (encoderLifecycleCloseRate > thresholds.maxEncoderLifecycleCloseRate) sfuFallbackBuckets.push('encoder_lifecycle_close_storm');
   if (sendBackpressureAbortRate > thresholds.maxSendBackpressureAbortRate) sfuFallbackBuckets.push('send_backpressure_abort_storm');
-  const sfuBaselineRequiredForActive = !gossipPrimary;
+  const sfuBaselineRequiredForActive = false;
   const blockingBuckets = [
     ...gossipTopologyBuckets,
-    ...mediaSecurityBuckets,
-    ...(sfuBaselineRequiredForActive ? sfuFallbackBuckets : []),
   ];
   const activeAllowed = requestedMode === 'active'
-    && gossipTopologyHealthy
-    && mediaSecurityRecoveryReady
-    && (!sfuBaselineRequiredForActive || sfuBaselineHealthy);
+    && gossipTopologyHealthy;
   const decision = requestedMode === 'shadow'
     ? 'shadow_observe'
     : (activeAllowed
       ? (gossipPrimary ? 'gossip_primary_active_allowed' : 'active_allowed_diagnostic')
-      : (gossipPrimary ? 'gossip_topology_blocked' : 'sfu_first_explicit'));
+      : 'gossip_topology_blocked');
 
   return {
     kind: 'gossip_rollout_gate_state',
@@ -193,7 +189,7 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     decision,
     active_allowed: activeAllowed,
     observational_only: requestedMode !== 'active' || !activeAllowed,
-    sfu_first: !gossipPrimary && !activeAllowed,
+    sfu_first: false,
     sfu_baseline_required_for_active: sfuBaselineRequiredForActive,
     rtc_ready: rtcReady,
     telemetry_ready: telemetryReady,
@@ -230,12 +226,12 @@ function inertGateState(reason) {
   return {
     kind: 'gossip_rollout_gate_state',
     data_lane_mode: 'off',
-    media_carrier_mode: 'sfu_first',
-    decision: 'sfu_first_explicit',
+    media_carrier_mode: 'gossip_primary',
+    decision: 'gossip_topology_blocked',
     active_allowed: false,
     observational_only: true,
-    sfu_first: true,
-    sfu_baseline_required_for_active: true,
+    sfu_first: false,
+    sfu_baseline_required_for_active: false,
     rtc_ready: false,
     telemetry_ready: false,
     gossip_topology_healthy: false,
@@ -352,7 +348,8 @@ function normalizeMediaCarrierMode(value) {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === 'gossip_primary' || mode === 'gossip-primary' || mode === 'gossip') return 'gossip_primary';
   if (mode === 'sfu_mirror' || mode === 'sfu-mirror' || mode === 'mirror') return 'sfu_mirror';
-  return 'sfu_first';
+  if (mode === 'sfu_first' || mode === 'sfu-first') return 'sfu_first';
+  return 'gossip_primary';
 }
 
 function boundedRate(numerator, denominator) {

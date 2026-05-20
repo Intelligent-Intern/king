@@ -37,8 +37,8 @@ const [
   read('demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceTable.vue'),
   read('demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
 
@@ -98,7 +98,7 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /remove should return 200[\s\S]*remove must retire (?:remaining )?active launch tokens for the collaborative journey[\s\S]*include_removed should expose removed history/,
+  /remove should return 200[\s\S]*remove must retire (?:remaining launch tokens|(?:remaining )?active launch tokens) for the collaborative journey[\s\S]*include_removed should expose removed history/,
   'backend journey must remove the Call App session and retain explicit history',
 );
 
@@ -140,8 +140,13 @@ assert.match(
 
 assert.match(
   whiteboardBundleSource,
-  /appendOperation\('stroke\.add'[\s\S]*appendOperation\(editorKind === 'sticky' \? 'sticky_note\.add' : 'text\.add'/,
-  'whiteboard runtime must emit real sticky-note and stroke operations for collaboration',
+  /appendOperation\('stroke\.add'/,
+  'whiteboard runtime must emit real stroke operations for collaboration',
+);
+assert.match(
+  whiteboardBundleSource,
+  /appendOperation\(editorKind === 'sticky' \? 'sticky_note\.add' : 'text\.add'/,
+  'whiteboard runtime must emit real sticky-note and text operations for collaboration',
 );
 
 assert.doesNotMatch(
@@ -152,8 +157,8 @@ assert.doesNotMatch(
 
 assert.match(
   sprintSource,
-  /Whiteboard can be discovered from the package metadata and Marketplace\/Call\s+App catalog path/,
-  'SPRINT.md must keep the Marketplace-to-call Whiteboard journey in active acceptance criteria',
+  /Keep Call App package roots canonical at `demo\/call-apps\/<app-key>\/`\./,
+  'planning sources must keep the Marketplace-to-call journey under the canonical Call App package root',
 );
 
 console.log('[call-app-marketplace-to-call-journey-contract] PASS');

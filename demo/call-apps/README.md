@@ -5,10 +5,18 @@ King video call. Each package is discoverable through Semantic DNS, describes
 itself through MCP metadata, launches in a sandboxed iframe, and synchronizes
 shared state through a King CRDT envelope.
 
+Repository source root decision:
+
+- The canonical repository source root is plural `demo/call-apps/`.
+- `demo/call-app/` is not a Call App source root and must not be introduced as
+  a parallel package tree.
+- Runtime/public Call App URLs remain `/call-app/<app-key>/...`; that URL
+  contract is separate from the repository source root name.
+
 Package layout:
 
 ```text
-demo/call-app/<app-key>/
+demo/call-apps/<app-key>/
   call-app.manifest.json
   mcp.descriptor.json
   crdt.schema.json
@@ -20,9 +28,11 @@ demo/call-app/<app-key>/
 
 Package boundary:
 
-- `demo/call-app/<app-key>/` is the source package boundary for each Call App.
+- `demo/call-apps/<app-key>/` is the source package boundary for each Call App.
   App sources, package manifests, MCP descriptors, CRDT schemas, health
   descriptors, and iframe assets belong here.
+- `demo/call-app/` is intentionally not used. Keeping the plural source root
+  matches the package family while preserving the existing runtime URL contract.
 - `demo/video-chat/frontend-vue/src/domain/realtime/callApps` is the video-call
   host integration. It owns the host shell, iframe bridge, launch context,
   permission handoff, and parent/app protocol handling; it is not the app source
@@ -68,6 +78,7 @@ Runtime invariants:
   session token.
 - Parent/app messages use the `king.call_app.iframe.v1` bridge protocol with
   strict origin checks implemented by the host integration.
+- Public iframe and static asset requests use `/call-app/<app-key>/...`.
 - Marketplace orders and installations are scoped to an organization.
 - App CRDT operations use app-specific semantics inside a King-owned envelope.
 - The app package may own document semantics, but King owns admission,

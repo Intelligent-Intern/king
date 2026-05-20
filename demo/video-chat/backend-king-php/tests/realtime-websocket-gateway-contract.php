@@ -5,6 +5,13 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
+if (!function_exists('king_server_upgrade_to_websocket')) {
+    function king_server_upgrade_to_websocket(mixed $session, int $streamId): mixed
+    {
+        return false;
+    }
+}
+
 function videochat_realtime_websocket_gateway_assert(bool $condition, string $message): void
 {
     if ($condition) {
@@ -29,6 +36,17 @@ function videochat_realtime_websocket_gateway_decode(array $response): array
 }
 
 try {
+    $realtimeWebsocketSource = (string) file_get_contents(__DIR__ . '/../http/module_realtime_websocket.php');
+    $gossipMediaRelaySource = (string) file_get_contents(__DIR__ . '/../http/module_realtime_gossip_media_relay.php');
+    videochat_realtime_websocket_gateway_assert(
+        str_contains($realtimeWebsocketSource, '@king_client_websocket_receive($websocket, 250)'),
+        'realtime websocket receive loop must suppress disconnect-time Broken pipe notices'
+    );
+    videochat_realtime_websocket_gateway_assert(
+        str_contains($gossipMediaRelaySource, '@king_client_websocket_receive($websocket, 250)'),
+        'gossip media relay receive loop must suppress disconnect-time Broken pipe notices'
+    );
+
     $wsPath = '/ws';
     $validKey = base64_encode(random_bytes(16));
     videochat_realtime_websocket_gateway_assert(is_string($validKey) && $validKey !== '', 'valid websocket key must be generated');
@@ -229,6 +247,14 @@ try {
         (string) (((($invalidMethodRoutePayload['error'] ?? [])['details'] ?? [])['reason'] ?? '')) === 'invalid_method',
         'invalid method route reason mismatch'
     );
+    videochat_realtime_websocket_gateway_assert(
+        (bool) (((($invalidMethodRoutePayload['error'] ?? [])['details'] ?? [])['auto_reconnect'] ?? true)) === false,
+        'invalid method route must disable auto reconnect'
+    );
+    videochat_realtime_websocket_gateway_assert(
+        (int) (((($invalidMethodRoutePayload['error'] ?? [])['details'] ?? [])['connect_cycle_max_ms'] ?? 0)) === 300_000,
+        'invalid method route must expose 5-minute connect cycle limit'
+    );
     videochat_realtime_websocket_gateway_assert($authCallCount === 0, 'auth callback must not run for handshake method failure');
 
     $missingUpgradeRouteResponse = videochat_handle_realtime_routes(
@@ -266,6 +292,92 @@ try {
         'missing-upgrade route reason mismatch'
     );
     videochat_realtime_websocket_gateway_assert($authCallCount === 0, 'auth callback must not run for missing upgrade header');
+
+    $upgradeFailureAuth = static fn (): array => [
+        'ok' => true,
+        'reason' => 'ok',
+        'user' => [
+            'id' => 2,
+            'role' => 'admin',
+            'display_name' => 'Upgrade Tester',
+        ],
+    ];
+    $upgradeFailureRouteResponse = videochat_handle_realtime_routes(
+        '/ws',
+        [
+            ...$validRequest,
+            'uri' => '/ws',
+        ],
+        '/ws',
+        $activeWebsocketsBySession,
+        $presenceState,
+        $lobbyState,
+        $typingState,
+        $reactionState,
+        $upgradeFailureAuth,
+        $authFailureResponse,
+        $rbacFailureResponse,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    $upgradeFailurePayload = videochat_realtime_websocket_gateway_decode($upgradeFailureRouteResponse ?? []);
+    $upgradeFailureDetails = is_array(($upgradeFailurePayload['error'] ?? [])['details'] ?? null)
+        ? (array) (($upgradeFailurePayload['error'] ?? [])['details'] ?? [])
+        : [];
+    videochat_realtime_websocket_gateway_assert((int) (($upgradeFailureRouteResponse ?? [])['status'] ?? 0) === 503, 'failed websocket upgrade must return clear backend status');
+    videochat_realtime_websocket_gateway_assert((string) (($upgradeFailurePayload['error'] ?? [])['code'] ?? '') === 'websocket_upgrade_failed', 'failed websocket upgrade code mismatch');
+    videochat_realtime_websocket_gateway_assert((string) ($upgradeFailureDetails['phase'] ?? '') === 'upgrade', 'failed websocket upgrade phase mismatch');
+    videochat_realtime_websocket_gateway_assert((bool) ($upgradeFailureDetails['auto_reconnect'] ?? true) === false, 'failed websocket upgrade must disable auto reconnect');
+    videochat_realtime_websocket_gateway_assert((string) ($upgradeFailureDetails['connect_cycle_restart_policy'] ?? '') === 'new_participant_only', 'failed websocket upgrade restart policy mismatch');
+
+    $quorumState = videochat_presence_state_init();
+    $ownerConnection = videochat_presence_connection_descriptor(
+        ['id' => 10, 'role' => 'user', 'display_name' => 'Quorum Owner'],
+        'sess-quorum-owner',
+        'conn-quorum-owner',
+        'socket-quorum-owner',
+        'room-quorum'
+    );
+    $ownerConnection['active_call_id'] = 'call-quorum';
+    $ownerConnection['requested_call_id'] = 'call-quorum';
+    $ownerJoin = videochat_presence_join_room($quorumState, $ownerConnection, 'room-quorum');
+    $ownerConnection = (array) ($ownerJoin['connection'] ?? $ownerConnection);
+    $beforePeerJoin = videochat_realtime_websocket_room_user_ids($quorumState, 'room-quorum');
+    $peerConnection = videochat_presence_connection_descriptor(
+        ['id' => 11, 'role' => 'user', 'display_name' => 'Quorum Peer'],
+        'sess-quorum-peer',
+        'conn-quorum-peer',
+        'socket-quorum-peer',
+        'room-quorum'
+    );
+    $peerConnection['active_call_id'] = 'call-quorum';
+    $peerConnection['requested_call_id'] = 'call-quorum';
+    $peerJoin = videochat_presence_join_room($quorumState, $peerConnection, 'room-quorum');
+    $peerConnection = (array) ($peerJoin['connection'] ?? $peerConnection);
+    $connectQuorum = videochat_realtime_websocket_connect_quorum($quorumState, $peerConnection, $beforePeerJoin);
+    videochat_realtime_websocket_gateway_assert((string) ($connectQuorum['schema_version'] ?? '') === 'king.video.connect_quorum.v1', 'connect quorum schema mismatch');
+    videochat_realtime_websocket_gateway_assert((int) ($connectQuorum['participant_count'] ?? 0) === 2, 'connect quorum participant count mismatch');
+    videochat_realtime_websocket_gateway_assert((bool) ($connectQuorum['quorum_met'] ?? false), 'connect quorum must be met for two participants');
+    videochat_realtime_websocket_gateway_assert((bool) ($connectQuorum['new_participant'] ?? false), 'second user must be marked as the new participant');
+    videochat_realtime_websocket_gateway_assert((bool) (($connectQuorum['connect_cycle'] ?? [])['allowed'] ?? false), 'new participant may trigger the connect cycle');
+    videochat_realtime_websocket_gateway_assert((bool) (($connectQuorum['connect_cycle'] ?? [])['auto_reconnect'] ?? true) === false, 'connect cycle must not enable auto reconnect');
+    videochat_realtime_websocket_gateway_assert((int) (($connectQuorum['connect_cycle'] ?? [])['max_ms'] ?? 0) === 300_000, 'connect cycle must allow up to 5 minutes');
+    videochat_realtime_websocket_gateway_assert((string) (($connectQuorum['connect_cycle'] ?? [])['trigger'] ?? '') === 'new_participant', 'connect cycle trigger mismatch');
+    $quorumOpsState = is_array($connectQuorum['gossip_ops_state'] ?? null) ? (array) $connectQuorum['gossip_ops_state'] : [];
+    videochat_realtime_websocket_gateway_assert((string) ($quorumOpsState['kind'] ?? '') === 'gossip_server_head_ops_state', 'connect quorum must publish server-head Gossip ops state');
+    videochat_realtime_websocket_gateway_assert((bool) ($quorumOpsState['server_head_authoritative'] ?? false), 'connect quorum Gossip ops state must be server-head authoritative');
+    videochat_realtime_websocket_gateway_assert((bool) ($quorumOpsState['client_topology_repair'] ?? true) === false, 'connect quorum must not require client topology repair');
+    videochat_realtime_websocket_gateway_assert((bool) ($quorumOpsState['client_recovery_request'] ?? true) === false, 'connect quorum must not require client recovery requests');
+    $existingParticipantQuorum = videochat_realtime_websocket_connect_quorum($quorumState, $peerConnection, [11 => true]);
+    videochat_realtime_websocket_gateway_assert(!(bool) (($existingParticipantQuorum['connect_cycle'] ?? [])['allowed'] ?? true), 'existing participant must not start a new connect cycle');
+
+    $welcomeFrame = videochat_realtime_websocket_welcome_frame($upgradeFailureAuth(), $peerConnection, 'conn-quorum-peer', $connectQuorum);
+    videochat_realtime_websocket_gateway_assert(is_array($welcomeFrame['connect_quorum'] ?? null), 'welcome frame must include connect quorum');
+    videochat_realtime_websocket_gateway_assert((string) ((($welcomeFrame['connect_quorum'] ?? [])['connect_cycle'] ?? [])['restart_policy'] ?? '') === 'new_participant_only', 'welcome connect quorum policy mismatch');
+    $welcomeOpsState = is_array($welcomeFrame['gossip_ops_state'] ?? null) ? (array) $welcomeFrame['gossip_ops_state'] : [];
+    videochat_realtime_websocket_gateway_assert((string) ($welcomeOpsState['authority'] ?? '') === 'server_head', 'welcome frame must publish server-head Gossip ops authority');
+    videochat_realtime_websocket_gateway_assert((bool) ($welcomeOpsState['client_repair_request_required'] ?? true) === false, 'welcome frame must not require client repair requests');
 
     $moduleSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
     videochat_realtime_websocket_gateway_assert(

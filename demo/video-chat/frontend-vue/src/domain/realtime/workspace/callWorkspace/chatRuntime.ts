@@ -26,7 +26,6 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     chatInputRef,
     chatSending,
     chatUtf8ByteLength,
-    connectSocket,
     connectionState,
     currentUserId,
     ensureRoomBuckets,
@@ -39,7 +38,6 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     nextTick,
     normalizeRole,
     normalizeRoomId,
-    reconnectAttempt,
     requestHeaders,
     sanitizeChatAttachmentName,
     sendSocketFrame,
@@ -479,11 +477,7 @@ async function sendChatMessage() {
   if ((text === '' && !hasAttachments) || chatSending.value) return;
   const isOperatorFeedback = Boolean(operatorFeedbackState.selected);
   if (!hasOpenRealtimeSocket()) {
-    if (connectionState.value === 'retrying') {
-      reconnectAttempt.value = 0;
-      void connectSocket();
-    }
-    setNotice(t('calls.workspace.chat_reconnecting'), 'error');
+    setNotice('Realtime socket is offline. Message was not sent.', 'error');
     return;
   }
   markParticipantActivity(currentUserId.value, 'chat');

@@ -312,6 +312,9 @@ export async function loginWithPassword(email, password) {
         accept: 'application/json',
         'content-type': 'application/json',
       },
+      serialize: false,
+      networkRetryCount: 1,
+      timeoutMs: 15_000,
       body: JSON.stringify({
         email: normalizeString(email).toLowerCase(),
         password: String(password || ''),
@@ -415,6 +418,9 @@ export async function ensureSessionRecovery(force = false) {
       const { response } = await fetchBackend('/api/auth/session-state', {
         method: 'GET',
         headers: sessionHeaders(),
+        serialize: false,
+        networkRetryCount: 1,
+        timeoutMs: 6_000,
       });
       const payload = await readJsonResponse(response);
       if (!response.ok || !payload || payload.status !== 'ok') {

@@ -21,10 +21,12 @@ function read(relativePath) {
 
 try {
   const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
+  const receiverRenderEvidence = read('src/domain/realtime/sfu/receiverRenderEvidence.ts');
   const adaptiveLayers = read('src/domain/realtime/sfu/adaptiveQualityLayers.ts');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 
   requireContains(receiverFeedback, 'RECEIVER_RENDER_LAG_PRESSURE_MS = 900', 'receiver render lag threshold');
@@ -42,10 +44,17 @@ try {
   requireContains(receiverFeedback, 'requested_video_layer: receiverFeedbackRequestedVideoLayer(frame)', 'sequence-gap recovery asks for the frame layer keyframe');
   requireContains(receiverFeedback, 'subscriber_send_latency_ms', 'receiver feedback includes subscriber pressure evidence');
   requireContains(receiverFeedback, 'buildSfuLayerPreferencePayload', 'receiver feedback can request automatic primary/thumbnail layers');
+  requireContains(receiverRenderEvidence, 'reportReceiverRenderEvidence', 'receiver render evidence helper');
+  requireContains(receiverRenderEvidence, "eventType: 'sfu_receiver_render_evidence'", 'receiver render evidence diagnostic event');
+  requireContains(receiverRenderEvidence, "eventType: 'sfu_receiver_missing_frame_evidence'", 'receiver missing-frame evidence diagnostic event');
+  requireContains(receiverRenderEvidence, 'local_reconnect_trigger: false', 'receiver evidence explicitly rejects local reconnect trigger semantics');
+  requireContains(receiverRenderEvidence, 'recentReceiverMissingFrameEvidence', 'runtime health can query recent missing-frame evidence');
   requireContains(frameDecode, 'createSfuReceiverFeedback', 'frame decoder uses receiver feedback helper');
   requireContains(frameDecode, 'receiverFeedback.maybeSendReceiverRenderLagFeedback', 'render path sends receiver lag pressure');
   requireContains(frameDecode, 'receiverFeedback.maybeSendReceiverSequenceGapFeedback', 'continuity path sends sequence-gap pressure');
   requireContains(frameDecode, 'receiverFeedback.maybeSendReceiverLayerPreference', 'render path sends adaptive layer preference');
+  requireContains(frameDecode, 'reportReceiverRenderEvidence({', 'render path reports receiver render evidence');
+  requireContains(frameDecode, 'reportReceiverMissingFrameEvidence({', 'sequence-gap path reports missing-frame evidence');
   requireContains(mediaStack, 'sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {', 'media stack wires receiver feedback to signaling');
   requireContains(mediaStack, "type: 'call/media-quality-pressure'", 'receiver feedback uses existing quality-pressure signaling');
   requireContains(mediaStack, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'receiver feedback preserves explicit requested actions');
@@ -57,6 +66,10 @@ try {
   );
   requireContains(recoveryReasons, "'sfu_receiver_sequence_gap'", 'sequence gaps are full-keyframe recovery reasons');
   requireContains(recoveryReasons, "'sfu_remote_video_never_started'", 'never-started video is a full-keyframe recovery reason');
+  requireContains(runtimeHealth, 'missingFrameEvidenceSuppressesReconnect', 'runtime health separates missing-frame evidence from local reconnect eligibility');
+  requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = !missingFrameEvidenceSuppressesReconnect', 'missing frames must not trigger frozen-video local reconnect');
+  requireContains(runtimeHealth, 'const shouldRestartNeverStartedVideo = !missingFrameEvidenceSuppressesReconnect', 'missing frames must not trigger never-started local reconnect');
+  requireContains(runtimeHealth, 'local_reconnect_suppressed_by_missing_frame_evidence', 'runtime diagnostics preserve reconnect suppression evidence');
   requireContains(socketLifecycle, 'shouldRequestSfuFullKeyframeForReason(sourceReason)', 'socket fallback pressure also promotes recovery reasons to full keyframes');
   requireContains(socketLifecycle, 'const keyframeOnlyRequest = fullKeyframeRequested', 'pure keyframe recovery is separated from quality/profile changes');
   requireContains(socketLifecycle, '} else if (keyframeOnlyRequest) {', 'pure keyframe recovery does not downshift video quality');

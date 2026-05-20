@@ -18,7 +18,7 @@ const backendDiagnostics = read('demo/video-chat/backend-king-php/domain/realtim
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 
 const gossipFirstPublishIndex = dispatch.indexOf('if (gossipFirst) {')
-const earlyReturnIndex = dispatch.indexOf('sfuFallbackSuppressed: true', gossipFirstPublishIndex)
+const earlyReturnIndex = dispatch.indexOf('alternatePathSuppressed: true', gossipFirstPublishIndex)
 const sfuLookupIndex = dispatch.indexOf('const sendClient = safeFunction(currentOpenSfuClient, () => null)();')
 const sfuSendIndex = dispatch.indexOf('sendClient.sendEncodedFrame(frame)')
 
@@ -32,7 +32,7 @@ assert.ok(
 
 assert.match(
   dispatch,
-  /gossip_primary_publish_failed_no_sfu_fallback[\s\S]*planned Gossip media does not fall back to SFU[\s\S]*fallback_reason:\s*'gossip_primary_no_sfu_fallback'[\s\S]*immediate:\s*true/s,
+  /gossip_primary_publish_failed[\s\S]*no alternate media path was attempted[\s\S]*fallback_reason:\s*'gossip_primary_no_alternate_path'[\s\S]*immediate:\s*true/s,
   'Gossip-primary publish failure must diagnose the parked SFU fallback without sending through SFU',
 )
 
@@ -50,7 +50,7 @@ assert.match(
 
 assert.match(
   gossipLane,
-  /level:\s*backendVisibleBacktrace \? 'warning' : 'info'[\s\S]*eventType:\s*'gossip_data_lane_shadow_would_publish'[\s\S]*assigned_neighbor_count:\s*assignedGossipNeighborIds\.size[\s\S]*has_rollout_gate_ack:\s*Boolean\(lastGossipRolloutGateState\)[\s\S]*immediate:\s*backendVisibleBacktrace/s,
+  /level:\s*backendVisibleBacktrace \? 'warning' : 'info'[\s\S]*eventType:\s*'gossip_data_lane_shadow_would_publish'[\s\S]*assigned_neighbor_count:\s*assignedGossipNeighborIds\.size[\s\S]*has_rollout_gate_ack:\s*Boolean\(lastGossipOpsLaneState\)[\s\S]*immediate:\s*backendVisibleBacktrace/s,
   'blocked Gossip publication diagnostics must include topology/gate state and flush immediately in Gossip-primary mode',
 )
 

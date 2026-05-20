@@ -230,6 +230,7 @@ const gossipMediaFrameEnvelope = read('src/domain/realtime/workspace/callWorkspa
 assert.match(screenSharePublisher, /publishTracks\?\.\(\[\{[\s\S]*label: SCREEN_SHARE_TRACK_LABEL/, 'screen publisher announces a screen-share video track');
 assert.match(screenSharePublisher, /publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE/, 'screen publisher tags outbound frames with media source');
 assert.match(screenSharePublisher, /publishScreenShareEncodedFrameToGossip/, 'screen publisher sends gossip frames through the screen-share participant identity mapper');
+assert.match(screenSharePublisher, /playMediaElementBestEffort/, 'screen-share preview playback must be bounded so the screen button cannot hang');
 assert.match(screenShareGossipFrameSource, /screen_share:\$\{normalizedOwnerUserId\}/, 'screen-share gossip publisher id is scoped separately from camera media');
 assert.match(screenShareGossipFrameSource, /publisherMediaSource: SCREEN_SHARE_MEDIA_SOURCE/, 'screen-share gossip frame mapper carries media source at the frame root');
 assert.match(gossipMediaFrameEnvelope, /publisher_media_source: publisherMediaSource/, 'gossip media envelope carries screen-share media source');
@@ -332,12 +333,22 @@ const screenSharePublisherStart = screenSharePublisher.indexOf('async function s
 const registerLocalPreview = screenSharePublisher.indexOf('callbacks.registerLocalScreenSharePeer?.(', screenSharePublisherStart);
 const waitForSfuConnected = screenSharePublisher.indexOf('await waitForScreenSfuConnected();', screenSharePublisherStart);
 const startDiagnostic = screenSharePublisher.indexOf('local_screen_share_participant_started', screenSharePublisherStart);
+const startEncodingPipeline = screenSharePublisher.indexOf('pipeline.startEncodingPipeline(videoTrack)', screenSharePublisherStart);
 assert.ok(
   screenSharePublisherStart >= 0
     && registerLocalPreview > screenSharePublisherStart
     && registerLocalPreview < waitForSfuConnected
     && registerLocalPreview < startDiagnostic,
   'local screen-share preview is registered before the SFU loopback can create a decoder',
+);
+assert.ok(
+  startDiagnostic > 0 && startEncodingPipeline > startDiagnostic,
+  'screen-share start returns active UI state before the encoder pipeline can block on playback or WASM setup',
+);
+assert.doesNotMatch(
+  screenSharePublisher,
+  /await pipeline\.startEncodingPipeline\(videoTrack\)/,
+  'screen-share start must not wait for the encoder pipeline before toggling control state',
 );
 assert.match(screenSharePublisher, /ensureLocalScreenSharePreviewVideo/, 'screen-share publisher creates a local preview node before publishing frames');
 assert.match(screenSharePublisher, /callbacks\.unregisterLocalScreenSharePeer\?\.\(\{ reason \}\);/, 'local screen-share preview unregisters during stop cleanup');

@@ -32,7 +32,11 @@ const browserSpec = read('frontend-vue/tests/e2e/call-access-owner-absence-brows
 
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_TIMER_MS = 15 * 60 * 1000;', '15-minute owner absence timer');
 requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS = 5 * 60 * 1000;', '5-minute owner absence countdown');
+requireContains(ownerAbsence, 'const VIDEOCHAT_OWNER_ABSENCE_IMMUNE_OWNER_USER_ID = 1;', 'primary admin owner absence immunity');
+requireContains(ownerAbsence, "'39c5b3ea-855b-40fd-b030-c8af1d512605'", 'permanent production call owner absence immunity');
 requireContains(ownerAbsence, "require_once __DIR__ . '/../calls/call_lifecycle.php';", 'owner absence terminal lifecycle import');
+requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_owner_is_immune(int $ownerUserId): bool', 'owner absence immunity predicate');
+requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_call_is_immune(string $callId): bool', 'permanent call immunity predicate');
 requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_snapshot(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence snapshot clock');
 requireContains(ownerAbsence, 'function videochat_realtime_apply_owner_absence_timeout(PDO $pdo, string $callId, string $roomId, ?int $nowMs = null): array', 'CI-safe owner absence transition clock');
 requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_stale_owner_left_at_ms(', 'stale owner presence clock');
@@ -41,10 +45,13 @@ requireContains(ownerAbsence, 'videochat_realtime_owner_absence_mark_stale_owner
 requireContains(ownerAbsence, 'function videochat_realtime_owner_absence_persist_stale_owner_departure(', 'network-loss stale owner departure persistence');
 requireContains(ownerAbsence, "'status' => 'owner_present'", 'owner return cancellation status');
 requireContains(ownerAbsence, "'status' => 'no_participants'", 'no-participant non-ending state');
+requireContains(ownerAbsence, 'videochat_realtime_owner_absence_disabled_payload($immuneStatus)', 'immune owner or permanent calls bypass owner absence timer');
+requireContains(ownerAbsence, "'owner_absence_immune' => true", 'owner absence immune payload marker');
+requireContains(ownerAbsence, "'owner_absence_immune_reason' => $immuneStatus", 'owner absence immune reason marker');
 requireContains(ownerAbsence, '$endsAtMs = $absentSinceMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS;', '15-minute total owner absence deadline');
 requireContains(ownerAbsence, '$countdownStartsAtMs = max($absentSinceMs, $endsAtMs - VIDEOCHAT_OWNER_ABSENCE_COUNTDOWN_MS);', 'countdown is inside final five minutes');
 requireContains(ownerAbsence, "$status = $countdownStarted ? 'countdown' : 'monitoring';", 'monitoring-to-countdown state split');
-requireContains(ownerAbsence, '$absentSinceMs = $lastSeenMs + videochat_realtime_presence_db_ttl_ms();', 'network-loss absence starts at stale heartbeat cutoff');
+requireContains(ownerAbsence, '$leftAtMs = $lastSeenMs + videochat_realtime_presence_db_ttl_ms();', 'network-loss absence starts at stale heartbeat cutoff');
 requireContains(ownerAbsence, "$status = 'ended';", 'implicit ended state');
 requireContains(ownerAbsence, "SET status = 'ended',", 'persisted implicit call ending');
 requireContains(ownerAbsence, 'videochat_apply_call_terminal_lifecycle(', 'implicit end uses terminal call lifecycle cleanup');
@@ -68,6 +75,8 @@ requireContains(kingParticipantsHelper, 'videochat_realtime_presence_db_upsert($
 requireContains(kingParticipantsHelper, 'videochat_realtime_remove_call_presence(static fn (): PDO => $pdo, $effectiveConnection);', 'participant leave removes realtime presence');
 
 requireContains(ownerTimeoutContract, 'videochat_iam_king_participant_client(', 'owner-timeout contract uses simulated clients');
+requireContains(ownerTimeoutContract, 'primary_admin_owner_absence_immune', 'primary admin owner absence immune proof');
+requireContains(ownerTimeoutContract, 'primary admin-owned call must stay active past owner absence deadline', 'primary admin-owned call does not auto-end proof');
 requireContains(ownerTimeoutContract, "'owner_tab_close'", 'owner tab close proof');
 requireContains(ownerTimeoutContract, "'owner_browser_crash'", 'owner browser crash proof');
 requireContains(ownerTimeoutContract, "'owner_network_loss_countdown_a'", 'owner network disconnect synchronized proof');

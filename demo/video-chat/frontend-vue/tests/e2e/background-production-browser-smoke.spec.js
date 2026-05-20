@@ -11,9 +11,10 @@ import {
   escapeRegExp,
   measureNativeAudioBridgeEnergy,
   nativeAudioBridgeSnapshot,
+  nativeMediaSignalCount,
   queueUserAdmission,
+  remoteVideoPixelSnapshot,
   sfuRemoteVideoSnapshot,
-  sfuSocketStats,
 } from './helpers/nativeAudioTransferHarness.js';
 
 const REQUIRED_FLAG = 'VIDEOCHAT_PRODUCTION_BROWSER_SMOKE';
@@ -280,7 +281,7 @@ async function installProductionSmokeHooks(context, { forceBackgroundUnavailable
       background_replacement_image_url: '/assets/orgas/kingrt/social/invitation-preview.png',
       video_id: previousPrefs.video_id || 'king-video',
       outgoing_video_quality_profile: 'balanced',
-      outgoing_video_quality_profile_version: 5,
+      outgoing_video_quality_profile_version: 6,
     }));
 
     if (forceBackground) {
@@ -596,6 +597,7 @@ async function captureRoleProof(role, page) {
       getUserMedia: 0,
     },
     role,
+    remoteVideoPixels: [],
     snapshot: null,
     socketSummaries: [],
   };
@@ -613,6 +615,7 @@ async function captureRoleProof(role, page) {
     proof.snapshot = snapshot;
     proof.diagnosticsEventTypes = diagnosticEventTypes(snapshot);
     proof.mediaHookCounts = mediaHookCounts(snapshot);
+    proof.remoteVideoPixels = await remoteVideoPixelSnapshot(page);
     proof.socketSummaries = socketSummaries(snapshot);
   } catch (error) {
     proof.error = serializeError(error);
@@ -740,6 +743,20 @@ async function unavailableChoices(page) {
   });
 }
 
+async function handleBackgroundUnavailableDialog(page, testInfo, fileName, timeout = 1_000) {
+  const backgroundDialog = page.getByRole('dialog', { name: 'Background replacement unavailable' });
+  if (!(await backgroundDialog.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false))) return false;
+  await expect(unavailableChoices(page)).resolves.toEqual([
+    'Use standard avatar',
+    'Upload avatar',
+    'Send unfiltered video',
+  ]);
+  await safeSmokeScreenshot(page, testInfo, fileName);
+  await backgroundDialog.getByRole('button', { name: 'Send unfiltered video' }).click();
+  await expect(backgroundDialog).toBeHidden({ timeout: 15_000 });
+  return true;
+}
+
 async function waitForRemoteVideo(page) {
   await expect.poll(async () => {
     const canvases = await sfuRemoteVideoSnapshot(page);
@@ -749,13 +766,12 @@ async function waitForRemoteVideo(page) {
   }).toBeGreaterThan(0);
 }
 
-async function waitForSfuFlow(page) {
+async function waitForRealtimeMediaSignals(page) {
   await expect.poll(async () => {
-    const stats = await sfuSocketStats(page);
-    return Math.min(stats.binaryInCount, stats.binaryOutCount);
+    return nativeMediaSignalCount(page);
   }, {
     timeout: 60_000,
-  }).toBeGreaterThan(5);
+  }).toBeGreaterThan(3);
 }
 
 test('deployed browser call proves BGF fallback, media, screenshare, and focus stability', async ({ browser }, testInfo) => {
@@ -776,6 +792,7 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
   try {
     admin = await createAuthenticatedPage(browser, baseURL, adminCredentials, {
       audioFrequency: 440,
+      browserName: testInfo.project.name,
       outgoingVideoQualityProfile: 'balanced',
       videoFrameRate: 12,
       videoHeight: 360,
@@ -783,6 +800,7 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     });
     user = await createAuthenticatedPage(browser, baseURL, userCredentials, {
       audioFrequency: 660,
+      browserName: testInfo.project.name,
       outgoingVideoQualityProfile: 'balanced',
       videoFrameRate: 12,
       videoHeight: 360,
@@ -805,7 +823,19 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     });
 
     await openOwnerCallWithBackgroundSmoke(admin.page, callId);
+    let backgroundUnavailableHandled = await handleBackgroundUnavailableDialog(
+      admin.page,
+      testInfo,
+      'bgf-production-background-unavailable-pre-admission.png',
+      15_000,
+    );
     await queueUserAdmission(user.page, userJoinPath);
+    backgroundUnavailableHandled = await handleBackgroundUnavailableDialog(
+      admin.page,
+      testInfo,
+      'bgf-production-background-unavailable-before-admit.png',
+      5_000,
+    ) || backgroundUnavailableHandled;
     await admitFirstLobbyUser(admin.page);
     await user.page.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callId)}(?:[/?#].*)?$`), { timeout: 30_000 });
     await expect(user.page.locator('.workspace-main-video')).toBeVisible({ timeout: 30_000 });
@@ -813,8 +843,8 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     await Promise.all([
       waitForRemoteVideo(admin.page),
       waitForRemoteVideo(user.page),
-      waitForSfuFlow(admin.page),
-      waitForSfuFlow(user.page),
+      waitForRealtimeMediaSignals(admin.page),
+      waitForRealtimeMediaSignals(user.page),
     ]);
     await Promise.all([
       expect.poll(() => nativeAudioBridgeSnapshot(admin.page), { timeout: 60_000 }).toMatchObject({ hasLiveTrack: true }),
@@ -826,16 +856,15 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     ]);
     await safeSmokeScreenshot(admin.page, testInfo, 'bgf-production-call-active.png');
 
-    const backgroundDialog = admin.page.getByRole('dialog', { name: 'Background replacement unavailable' });
-    await expect(backgroundDialog).toBeVisible({ timeout: 30_000 });
-    await expect(unavailableChoices(admin.page)).resolves.toEqual([
-      'Use standard avatar',
-      'Upload avatar',
-      'Send unfiltered video',
-    ]);
-    await safeSmokeScreenshot(admin.page, testInfo, 'bgf-production-background-unavailable.png');
-    await backgroundDialog.getByRole('button', { name: 'Send unfiltered video' }).click();
-    await expect(backgroundDialog).toBeHidden({ timeout: 15_000 });
+    if (!backgroundUnavailableHandled) {
+      backgroundUnavailableHandled = await handleBackgroundUnavailableDialog(
+        admin.page,
+        testInfo,
+        'bgf-production-background-unavailable.png',
+        30_000,
+      );
+    }
+    expect(backgroundUnavailableHandled).toBe(true);
     await expectDiagnostics(admin.page, REQUIRED_BACKGROUND_EVENTS);
 
     await admin.page.getByRole('button', { name: 'Share screen' }).click();
@@ -887,15 +916,20 @@ test('deployed browser call proves BGF fallback, media, screenshare, and focus s
     testError = error;
     throw error;
   } finally {
-    const artifactError = await writeSmokeProofArtifacts({
-      admin,
-      baseURL,
-      browser,
-      callId,
-      testError,
-      testInfo,
-      user,
-    }).catch((error) => error);
+    let artifactError = null;
+    try {
+      await writeSmokeProofArtifacts({
+        admin,
+        baseURL,
+        browser,
+        callId,
+        testError,
+        testInfo,
+        user,
+      });
+    } catch (error) {
+      artifactError = error;
+    }
     if (artifactError) {
       console.warn('[background-production-browser-smoke] failed to write JSON proof artifacts', serializeError(artifactError));
     }

@@ -26,19 +26,19 @@ export const WLVC_ENCODE_WARMUP_MS = 2500;
 export const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
 export const LOCAL_CAMERA_CAPTURE_WIDTH = 1280;
 export const LOCAL_CAMERA_CAPTURE_HEIGHT = 720;
-export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 18;
+export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;
 export const SFU_WLVC_FRAME_WIDTH = 1280;
 export const SFU_WLVC_FRAME_HEIGHT = 720;
 export const SFU_WLVC_FRAME_QUALITY = 40;
-export const SFU_WLVC_KEYFRAME_INTERVAL = 16;
-export const SFU_WLVC_ENCODE_INTERVAL_MS = 125;
+export const SFU_WLVC_KEYFRAME_INTERVAL = 30;
+export const SFU_WLVC_ENCODE_INTERVAL_MS = 33;
 export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
 export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 512 * 1024;
 export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 6 * 1024 * 1024;
 export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 350;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2500;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
-export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'realtime';
+export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'rescue';
 export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   rescue: Object.freeze({
     maxEncodedBytesPerFrame: 1024 * 1024,
@@ -106,14 +106,14 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     label: 'Low',
     captureWidth: 640,
     captureHeight: 360,
-    captureFrameRate: 7,
+    captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,
     frameWidth: 640,
     frameHeight: 360,
     frameQuality: 32,
-    keyFrameInterval: 24,
-    encodeIntervalMs: 250,
-    readbackFrameRate: readbackFrameRateForInterval(250),
-    readbackIntervalMs: 250,
+    keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+    encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+    readbackFrameRate: readbackFrameRateForInterval(SFU_WLVC_ENCODE_INTERVAL_MS),
+    readbackIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.rescue,
   }),
   realtime: Object.freeze({
@@ -121,14 +121,14 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     label: 'Fast',
     captureWidth: 854,
     captureHeight: 480,
-    captureFrameRate: 10,
+    captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,
     frameWidth: 854,
     frameHeight: 480,
     frameQuality: 35,
-    keyFrameInterval: 20,
-    encodeIntervalMs: 200,
-    readbackFrameRate: readbackFrameRateForInterval(200),
-    readbackIntervalMs: 200,
+    keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+    encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+    readbackFrameRate: readbackFrameRateForInterval(SFU_WLVC_ENCODE_INTERVAL_MS),
+    readbackIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.realtime,
   }),
   balanced: Object.freeze({
@@ -136,14 +136,14 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     label: 'Balanced',
     captureWidth: 960,
     captureHeight: 540,
-    captureFrameRate: 12,
+    captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,
     frameWidth: 960,
     frameHeight: 540,
     frameQuality: 38,
-    keyFrameInterval: 18,
-    encodeIntervalMs: 166,
-    readbackFrameRate: readbackFrameRateForInterval(166),
-    readbackIntervalMs: 166,
+    keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+    encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+    readbackFrameRate: readbackFrameRateForInterval(SFU_WLVC_ENCODE_INTERVAL_MS),
+    readbackIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.balanced,
   }),
   quality: Object.freeze({

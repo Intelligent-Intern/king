@@ -3,6 +3,23 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/audit/audit_lobby_events.php';
+require_once __DIR__ . '/module_realtime_active_call_kick.php';
+
+function videochat_realtime_lobby_user_visible_after_queue_sync(array $lobbyState, string $roomId, int $userId): bool
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '' || $userId <= 0) {
+        return false;
+    }
+
+    $roomState = is_array($lobbyState['rooms'][$normalizedRoomId] ?? null)
+        ? $lobbyState['rooms'][$normalizedRoomId]
+        : [];
+    $queuedByUser = is_array($roomState['queued_by_user'] ?? null) ? $roomState['queued_by_user'] : [];
+    $admittedByUser = is_array($roomState['admitted_by_user'] ?? null) ? $roomState['admitted_by_user'] : [];
+
+    return isset($queuedByUser[$userId]) || isset($admittedByUser[$userId]);
+}
 
 function videochat_realtime_lobby_command_sender(array $lobbyCommand): ?callable
 {
@@ -110,7 +127,7 @@ function videochat_realtime_apply_successful_lobby_command(
     array &$presenceState,
     array $presenceConnection,
     callable $openDatabase
-): void {
+): array {
     $lobbyAction = (string) ($lobbyResult['action'] ?? '');
     $requestedAction = (string) ($lobbyResult['requested_action'] ?? $lobbyAction);
     $lobbyStateName = (string) ($lobbyResult['state'] ?? '');
@@ -137,6 +154,16 @@ function videochat_realtime_apply_successful_lobby_command(
             null,
             videochat_realtime_connection_tenant_id($presenceConnection)
         );
+        if (
+            !$entryPersisted
+            && !videochat_realtime_lobby_user_visible_after_queue_sync(
+                $lobbyState,
+                $lobbyResultRoomId,
+                (int) ($lobbyResult['target_user_id'] ?? ($presenceConnection['user_id'] ?? 0))
+            )
+        ) {
+            return ['ok' => false, 'error' => 'lobby_queue_persist_failed'];
+        }
         videochat_lobby_broadcast_room_snapshot(
             $lobbyState,
             $presenceState,
@@ -186,7 +213,7 @@ function videochat_realtime_apply_successful_lobby_command(
     }
 
     if (in_array($lobbyAction, ['lobby/allow', 'lobby/allow_all'], true)) {
-        videochat_realtime_apply_lobby_admission_result(
+        return videochat_realtime_apply_lobby_admission_result(
             $lobbyResult,
             $lobbyState,
             $presenceState,
@@ -195,6 +222,8 @@ function videochat_realtime_apply_successful_lobby_command(
             $requestedAction
         );
     }
+
+    return ['ok' => true, 'error' => ''];
 }
 
 /**
@@ -251,13 +280,13 @@ function videochat_realtime_apply_lobby_admission_result(
     array $presenceConnection,
     callable $openDatabase,
     string $requestedAction = ''
-): void {
+): array {
     $admittedRoomId = videochat_presence_normalize_room_id(
         (string) ($lobbyResult['room_id'] ?? ($presenceConnection['room_id'] ?? 'lobby')),
         ''
     );
     if ($admittedRoomId === '') {
-        return;
+        return ['ok' => true, 'error' => ''];
     }
 
     $admittedUserIds = is_array($lobbyResult['affected_user_ids'] ?? null)
@@ -288,7 +317,7 @@ function videochat_realtime_apply_lobby_admission_result(
         if ($targetUserId > 0) {
             videochat_realtime_send_lobby_snapshot_to_users($presenceState, $lobbyState, $admittedRoomId, [$targetUserId], 'already_admitted', null);
         }
-        return;
+        return ['ok' => true, 'error' => ''];
     }
 
     $persistedUserIds = [];
@@ -344,6 +373,7 @@ function videochat_realtime_apply_lobby_admission_result(
     }
     if (!$syncOk && $unpersistedUserIds !== []) {
         videochat_realtime_repair_unpersisted_lobby_admissions($lobbyState, $admittedRoomId, $unpersistedUserIds);
+        return ['ok' => false, 'error' => 'lobby_admission_persist_failed'];
     }
     foreach ($auditPersistedUserIds as $auditPersistedUserId) {
         videochat_realtime_record_lobby_admission_audit(
@@ -374,4 +404,6 @@ function videochat_realtime_apply_lobby_admission_result(
     if ($unpersistedUserIds !== []) {
         videochat_realtime_send_lobby_snapshot_to_users($presenceState, $lobbyState, $admittedRoomId, $unpersistedUserIds, 'admission_pending', null);
     }
+
+    return ['ok' => true, 'error' => ''];
 }

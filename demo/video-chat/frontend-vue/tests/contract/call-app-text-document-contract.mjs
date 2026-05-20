@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
-const appRoot = path.join(repoRoot, 'demo/call-app/text-document');
+const appRoot = path.join(repoRoot, 'demo/call-apps/text-document');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -38,7 +38,7 @@ for (const requiredFile of [
   assert.ok(fs.existsSync(path.join(appRoot, requiredFile)), `text-document package missing ${requiredFile}`);
 }
 
-const manifest = readJson('demo/call-app/text-document/call-app.manifest.json');
+const manifest = readJson('demo/call-apps/text-document/call-app.manifest.json');
 assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest schema version mismatch');
 assert.equal(manifest.app_key, 'text-document', 'manifest app key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'text-document must advertise runtime readiness');
@@ -62,7 +62,7 @@ for (const permission of [
 }
 assert.deepEqual(manifest.exports.map((entry) => entry.format), ['odt', 'pdf'], 'text-document must advertise ODT and PDF exports');
 
-const mcp = readJson('demo/call-app/text-document/mcp.descriptor.json');
+const mcp = readJson('demo/call-apps/text-document/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP descriptor schema mismatch');
 assert.equal(mcp.app_key, 'text-document', 'MCP app key mismatch');
 assert.equal(mcp.service_name, 'call_app.text-document.mcp', 'MCP service name mismatch');
@@ -80,7 +80,7 @@ for (const method of [
   assert.ok(mcp.methods.some((entry) => entry.name === method), `MCP descriptor missing ${method}`);
 }
 
-const crdt = readJson('demo/call-app/text-document/crdt.schema.json');
+const crdt = readJson('demo/call-apps/text-document/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.app_key, 'text-document', 'CRDT app key mismatch');
 assert.equal(crdt.protocol, 'king.call_app.crdt.v1', 'CRDT protocol mismatch');
@@ -99,7 +99,7 @@ for (const operationType of [
 assert.equal(crdt.presence?.persisted, false, 'text-document presence must not be persisted');
 assert.deepEqual(crdt.exports, ['odt', 'pdf'], 'CRDT exports must match manifest');
 
-const health = readJson('demo/call-app/text-document/health.descriptor.json');
+const health = readJson('demo/call-apps/text-document/health.descriptor.json');
 const healthPaths = health.checks.map((check) => check.path);
 for (const healthPath of [
   'call-app.manifest.json',
@@ -112,9 +112,9 @@ for (const healthPath of [
   assert.ok(healthPaths.includes(healthPath), `health descriptor missing ${healthPath}`);
 }
 
-const html = read('demo/call-app/text-document/public/index.html');
-const css = read('demo/call-app/text-document/public/text-document.css');
-const runtime = read('demo/call-app/text-document/public/text-document.js');
+const html = read('demo/call-apps/text-document/public/index.html');
+const css = read('demo/call-apps/text-document/public/text-document.css');
+const runtime = read('demo/call-apps/text-document/public/text-document.js');
 const bundle = `${html}\n${css}\n${runtime}`;
 
 assert.ok(lineCount(html) < 120, 'text-document entrypoint must stay thin');

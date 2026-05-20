@@ -189,6 +189,59 @@
 
       <CallBackgroundControls />
 
+      <section class="call-left-settings-block call-left-stt-block" aria-label="Speech transcription">
+        <div class="call-left-settings-title">Speech transcription</div>
+        <div class="call-left-stt-row">
+          <span class="call-left-stt-state" :class="{ active: workspaceSttState.enabled }">
+            {{ workspaceSttState.enabled ? 'On' : 'Off' }}
+          </span>
+          <button
+            class="call-left-stt-toggle"
+            type="button"
+            :disabled="!workspaceSttState.backendReady || !workspaceSttState.canManage || workspaceSttState.pending"
+            :aria-pressed="workspaceSttState.enabled"
+            @click="toggleWorkspaceStt"
+          >
+            {{ workspaceSttState.pending ? 'Saving...' : (workspaceSttState.enabled ? 'Disable' : 'Enable') }}
+          </button>
+        </div>
+        <p class="call-left-stt-copy">
+          {{ workspaceSttState.status || 'Participants upload local microphone chunks while this is enabled.' }}
+        </p>
+        <p v-if="workspaceSttState.diagnostic" class="call-left-settings-error">
+          {{ workspaceSttState.diagnostic }}
+        </p>
+      </section>
+
+      <section
+        v-if="showSputnikControls"
+        class="call-left-settings-block call-left-sputnik-block"
+        aria-label="Sputnik swarm"
+      >
+        <div class="call-left-settings-title">Sputnik swarm</div>
+        <div class="call-left-sputnik-row">
+          <button
+            class="btn btn-cyan full"
+            type="button"
+            :disabled="sputnikSwarmState.pending || sputnikSwarmState.running"
+            @click="sputnikSwarmState.spawn"
+          >
+            10 Sputniks rein
+          </button>
+          <button
+            class="btn full"
+            type="button"
+            :disabled="sputnikSwarmState.pending || !sputnikSwarmState.running"
+            @click="sputnikSwarmState.stop"
+          >
+            Sputniks raus
+          </button>
+        </div>
+        <p class="call-left-sputnik-status">
+          {{ sputnikSwarmState.status || 'Nur User 1 kann serverseitige Test-Teilnehmer starten.' }}
+        </p>
+      </section>
+
       <section
         v-if="showCallOwnerInviteLink"
         class="call-left-settings-block call-left-invite-link-block"
@@ -350,6 +403,24 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  workspaceSttState: {
+    type: Object,
+    default: () => ({}),
+  },
+  showSputnikControls: {
+    type: Boolean,
+    default: false,
+  },
+  sputnikSwarmState: {
+    type: Object,
+    default: () => ({
+      pending: false,
+      running: false,
+      status: '',
+      spawn: () => {},
+      stop: () => {},
+    }),
+  },
   apiRequest: {
     type: Function,
     required: true,
@@ -391,6 +462,10 @@ const callAppSidebarRequestRoomSnapshot = computed(() => (
     ? props.callAppSidebarState.requestRoomSnapshot
     : () => {}
 ));
+function toggleWorkspaceStt() {
+  if (typeof props.workspaceSttState?.toggle !== 'function') return;
+  props.workspaceSttState.toggle(!props.workspaceSttState.enabled);
+}
 
 const {
   activePanel,

@@ -356,6 +356,12 @@ function videochat_signaling_broker_event_key(array $event): string
 
 function videochat_signaling_broker_insert_event(PDO $pdo, string $roomId, int $targetUserId, array $event): bool
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        return videochat_sqlite_ingest($pdo, 'realtime_signaling.broker_insert', static function () use ($pdo, $roomId, $targetUserId, $event): bool {
+            return videochat_signaling_broker_insert_event($pdo, $roomId, $targetUserId, $event);
+        });
+    }
+
     $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '' || $targetUserId <= 0) {
         return false;
@@ -467,6 +473,13 @@ SQL
 
 function videochat_signaling_broker_cleanup(PDO $pdo): void
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        videochat_sqlite_ingest($pdo, 'realtime_signaling.broker_cleanup', static function () use ($pdo): void {
+            videochat_signaling_broker_cleanup($pdo);
+        });
+        return;
+    }
+
     $statement = $pdo->prepare('DELETE FROM realtime_signaling_events WHERE created_at_ms < :cutoff_ms');
     $statement->execute([':cutoff_ms' => videochat_signaling_broker_now_ms() - 60_000]);
 }

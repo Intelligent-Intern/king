@@ -25,8 +25,24 @@ $gossipmeshFrameSender = static function (mixed $socket, array $payload): bool {
 };
 
 if (!function_exists('king_websocket_send')) {
-    function king_websocket_send(mixed $socket, string $payload): bool
+    function king_websocket_send(mixed $socket, string $payload, bool $binary = false): bool
     {
+        if (
+            ($binary || (function_exists('videochat_sfu_binary_frame_has_magic') && videochat_sfu_binary_frame_has_magic($payload)))
+            && function_exists('videochat_sfu_decode_binary_client_frame')
+        ) {
+            $decodedBinary = videochat_sfu_decode_binary_client_frame($payload, 'room-alpha');
+            $GLOBALS['gossipmesh_sent_frames'][] = [
+                'socket' => $socket,
+                'payload' => [
+                    'type' => 'call/gossip-server-frame',
+                    'payload' => is_array($decodedBinary['payload'] ?? null) ? $decodedBinary['payload'] : [],
+                ],
+            ];
+
+            return (bool) ($decodedBinary['ok'] ?? false);
+        }
+
         $decoded = json_decode($payload, true);
         $GLOBALS['gossipmesh_sent_frames'][] = [
             'socket' => $socket,
@@ -34,6 +50,13 @@ if (!function_exists('king_websocket_send')) {
         ];
 
         return true;
+    }
+}
+
+if (!function_exists('videochat_sfu_log_runtime_event')) {
+    function videochat_sfu_log_runtime_event(string $eventType, array $payload = [], int $sampleMs = 0): void
+    {
+        unset($eventType, $payload, $sampleMs);
     }
 }
 
@@ -45,6 +68,28 @@ function videochat_gossipmesh_test_assert(bool $condition, string $message): voi
 
     fwrite(STDERR, "[realtime-gossipmesh-runtime-contract] FAIL: {$message}\n");
     exit(1);
+}
+
+function videochat_gossipmesh_test_binary_media_frame(array $overrides = []): string
+{
+    $frame = [
+        'type' => 'sfu/frame',
+        'publisher_id' => '10',
+        'publisher_user_id' => '10',
+        'track_id' => 'camera-main',
+        'timestamp' => 123456,
+        'frame_type' => 'keyframe',
+        'protection_mode' => 'transport_only',
+        'protocol_version' => 2,
+        'frame_sequence' => 1,
+        'sender_sent_at_ms' => 123450,
+        'frame_id' => 'frame-contract-1',
+        'data_binary' => "\x01\x02\x03",
+        ...$overrides,
+    ];
+    $encoded = videochat_sfu_encode_binary_frame_envelope($frame);
+    videochat_gossipmesh_test_assert(is_string($encoded) && $encoded !== '', 'test binary media frame must encode');
+    return $encoded;
 }
 
 $members = [
@@ -803,45 +848,18 @@ $repairResult = videochat_realtime_handle_gossipmesh_topology_repair_command(
     $gossipmeshFrameSender
 );
 videochat_gossipmesh_test_assert((bool) ($repairResult['handled'] ?? false), 'websocket topology repair command should be handled');
-videochat_gossipmesh_test_assert(array_key_exists($healthObjectKey, $GLOBALS['gossipmesh_topology_health_store']), 'websocket topology repair must persist link health observation');
-$storedHealthJson = (string) ($GLOBALS['gossipmesh_topology_health_store'][$healthObjectKey]['json'] ?? '');
-$storedHealthPayload = json_decode($storedHealthJson, true);
-videochat_gossipmesh_test_assert(is_array($storedHealthPayload), 'persisted topology health observation must be JSON');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['content_type'] ?? '') === '', 'persisted topology health payload must not inline object metadata');
-videochat_gossipmesh_test_assert((string) (($GLOBALS['gossipmesh_topology_health_store'][$healthObjectKey] ?? [])['content_type'] ?? '') === 'application/json', 'topology health object_store content type mismatch');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['contract'] ?? '') === VIDEOCHAT_GOSSIPMESH_CONTRACT, 'persisted topology health contract mismatch');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['room_id'] ?? '') === 'room-alpha', 'persisted topology health room id mismatch');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['call_id'] ?? '') === 'call-alpha', 'persisted topology health call id mismatch');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['peer_id'] ?? '') === '10', 'persisted topology health peer id mismatch');
-videochat_gossipmesh_test_assert((string) ($storedHealthPayload['lost_peer_id'] ?? '') === '20', 'persisted topology health lost peer id mismatch');
-videochat_gossipmesh_test_assert((int) ($storedHealthPayload['failure_cooldown_ms'] ?? 0) === VIDEOCHAT_GOSSIPMESH_TOPOLOGY_HEALTH_COOLDOWN_MS, 'persisted topology health cooldown mismatch');
-videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'socket') === false, 'persisted topology health must not include socket fields');
-videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'sdp') === false, 'persisted topology health must not include SDP fields');
-videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'ice') === false, 'persisted topology health must not include ICE fields');
-videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'protected_frame') === false, 'persisted topology health must not include protected media frames');
-videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 3, 'websocket topology repair should emit peer-scoped room reassignment frames, got ' . count($GLOBALS['gossipmesh_sent_frames']));
-$repairPayloadsBySocket = [];
-foreach ($GLOBALS['gossipmesh_sent_frames'] as $sentFrame) {
-    $repairPayloadsBySocket[(string) ($sentFrame['socket'] ?? '')] = (array) ($sentFrame['payload'] ?? []);
-}
-$repairPayload = (array) ($repairPayloadsBySocket[$socketOwner] ?? []);
-$peerRepairPayload = (array) ($repairPayloadsBySocket[$socketPeer] ?? []);
-$moderatorRepairPayload = (array) ($repairPayloadsBySocket[$socketModerator] ?? []);
-videochat_gossipmesh_test_assert((string) ($repairPayload['type'] ?? '') === 'topology_hint', 'websocket repair payload type mismatch');
-videochat_gossipmesh_test_assert((string) ($repairPayload['peer_id'] ?? '') === '10', 'websocket repair must target authenticated peer');
-videochat_gossipmesh_test_assert((string) ($peerRepairPayload['peer_id'] ?? '') === '20', 'websocket repair must send the retired edge peer its scoped assignment');
-videochat_gossipmesh_test_assert((string) ($moderatorRepairPayload['peer_id'] ?? '') === '50', 'websocket repair must send replacement peers their scoped assignment');
-videochat_gossipmesh_test_assert((string) ($repairPayload['lane'] ?? '') === 'ops', 'websocket repair payload lane mismatch');
-videochat_gossipmesh_test_assert((string) ($repairPayload['topology_feature'] ?? '') === 'topology_repair', 'websocket repair topology feature mismatch');
-videochat_gossipmesh_test_assert(count((array) ($repairPayload['neighbors'] ?? [])) <= VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS, 'websocket repair neighbors must be bounded');
-videochat_gossipmesh_test_assert(!in_array('20', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) ($repairPayload['neighbors'] ?? [])), true), 'websocket replacement topology must avoid the fresh failed pair');
-videochat_gossipmesh_test_assert(!in_array('50', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) ($repairPayload['neighbors'] ?? [])), true), 'websocket replacement topology must avoid recent object_store readback failed pair');
-videochat_gossipmesh_test_assert((bool) (($repairPayload['repair'] ?? [])['authoritative'] ?? false) === true, 'websocket repair metadata must be authoritative');
-videochat_gossipmesh_test_assert(in_array('20', (array) (($repairPayload['repair'] ?? [])['retired_peer_ids'] ?? []), true), 'requesting peer must retire the failed neighbor edge');
-videochat_gossipmesh_test_assert(in_array('10', (array) (($peerRepairPayload['repair'] ?? [])['retired_peer_ids'] ?? []), true), 'lost neighbor peer must retire the reverse failed edge');
-videochat_gossipmesh_test_assert((array) (($moderatorRepairPayload['repair'] ?? [])['retired_peer_ids'] ?? []) === [], 'uninvolved replacement peer must not retire unrelated edges');
-videochat_gossipmesh_test_assert(strpos(json_encode($repairPayload, JSON_UNESCAPED_SLASHES) ?: '', 'sdp') === false, 'websocket repair must not distribute signaling payloads');
-videochat_gossipmesh_test_assert(strpos(json_encode($repairPayload, JSON_UNESCAPED_SLASHES) ?: '', 'protected_frame') === false, 'websocket repair must not distribute media frames');
+videochat_gossipmesh_test_assert(!array_key_exists($healthObjectKey, $GLOBALS['gossipmesh_topology_health_store']), 'client topology repair must not persist link health observation');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1, 'client topology repair should receive only server-head ops state');
+$repairOpsState = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($repairOpsState['type'] ?? '') === 'gossip/telemetry/ack', 'client topology repair ops state type mismatch');
+videochat_gossipmesh_test_assert((string) ($repairOpsState['lane'] ?? '') === 'ops', 'client topology repair ops state lane mismatch');
+videochat_gossipmesh_test_assert((string) ($repairOpsState['kind'] ?? '') === 'gossip_server_head_ops_state', 'client topology repair must receive server-head ops state');
+videochat_gossipmesh_test_assert((bool) ($repairOpsState['server_head_authoritative'] ?? false) === true, 'client topology repair ops state must be authoritative');
+videochat_gossipmesh_test_assert((bool) ($repairOpsState['client_topology_repair'] ?? true) === false, 'client topology repair must not be a required control path');
+videochat_gossipmesh_test_assert((bool) ($repairOpsState['client_recovery_request'] ?? true) === false, 'client recovery request must not be a required control path');
+videochat_gossipmesh_test_assert((bool) ($repairOpsState['client_repair_request_required'] ?? true) === false, 'client repair request requirement must be disabled');
+videochat_gossipmesh_test_assert((string) ($repairOpsState['reason'] ?? '') === 'client_topology_repair_not_required', 'client topology repair ops state reason mismatch');
+videochat_gossipmesh_test_assert(!array_key_exists('repair', $repairOpsState), 'server-head ops state must not carry client-authored repair metadata');
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $telemetryResult = videochat_realtime_handle_gossipmesh_telemetry_snapshot_command(
@@ -856,6 +874,11 @@ videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1
 $telemetryAck = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
 videochat_gossipmesh_test_assert((string) ($telemetryAck['type'] ?? '') === 'gossip/telemetry/ack', 'websocket telemetry ack type mismatch');
 videochat_gossipmesh_test_assert((string) ($telemetryAck['lane'] ?? '') === 'ops', 'websocket telemetry ack lane mismatch');
+videochat_gossipmesh_test_assert((string) ($telemetryAck['kind'] ?? '') === 'gossip_server_head_ops_state', 'websocket telemetry ack must publish server-head ops state');
+videochat_gossipmesh_test_assert((bool) ($telemetryAck['server_head_authoritative'] ?? false) === true, 'websocket telemetry ack ops state must be server-head authoritative');
+videochat_gossipmesh_test_assert((bool) ($telemetryAck['client_health_gate'] ?? true) === false, 'websocket telemetry ack must not delegate health gates to clients');
+videochat_gossipmesh_test_assert((bool) ($telemetryAck['client_topology_repair'] ?? true) === false, 'websocket telemetry ack must not require client topology repair');
+videochat_gossipmesh_test_assert((bool) ($telemetryAck['client_recovery_request'] ?? true) === false, 'websocket telemetry ack must not require client recovery requests');
 videochat_gossipmesh_test_assert((string) (($telemetryAck['rollout_gate'] ?? [])['decision'] ?? '') === 'sfu_first_explicit', 'websocket telemetry ack must keep conservative rollout gate decision until thresholds pass');
 videochat_gossipmesh_test_assert(array_key_exists('rtc_ready', (array) ($telemetryAck['rollout_gate'] ?? [])), 'websocket telemetry ack must expose RTC readiness');
 videochat_gossipmesh_test_assert((int) (($presenceState['gossipmesh_telemetry']['room-alpha']['totals'] ?? [])['sent'] ?? -1) === 7, 'websocket telemetry aggregate total mismatch');
@@ -918,22 +941,17 @@ $recoveryResult = videochat_realtime_handle_gossipmesh_recovery_request_command(
     $gossipmeshFrameSender
 );
 videochat_gossipmesh_test_assert((bool) ($recoveryResult['handled'] ?? false), 'websocket gossip recovery command should be handled');
-videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 3, 'websocket gossip recovery should emit recovery ops, keyframe request, and ack');
-$recoveryPayloadsByType = [];
-foreach ($GLOBALS['gossipmesh_sent_frames'] as $sentFrame) {
-    $payload = (array) ($sentFrame['payload'] ?? []);
-    $recoveryPayloadsByType[(string) ($payload['type'] ?? '')] = $payload;
-}
-$recoveryOps = (array) ($recoveryPayloadsByType['call/gossip-recovery'] ?? []);
-$recoveryKeyframe = (array) ($recoveryPayloadsByType['call/media-quality-pressure'] ?? []);
-$recoveryAck = (array) ($recoveryPayloadsByType['gossip/recovery/ack'] ?? []);
-videochat_gossipmesh_test_assert((string) ($recoveryOps['lane'] ?? '') === 'ops', 'gossip recovery routed frame must stay on ops lane');
-videochat_gossipmesh_test_assert((int) ($recoveryOps['target_user_id'] ?? 0) === 20, 'gossip recovery ops frame must target publisher user');
-videochat_gossipmesh_test_assert((string) (($recoveryOps['payload'] ?? [])['kind'] ?? '') === 'gossip_recovery_request', 'gossip recovery ops payload kind mismatch');
-videochat_gossipmesh_test_assert((string) (($recoveryKeyframe['payload'] ?? [])['requested_action'] ?? '') === 'force_full_keyframe', 'gossip recovery must also request a publisher keyframe');
-videochat_gossipmesh_test_assert((string) ($recoveryAck['request_id'] ?? '') === 'ggr-contract-1', 'gossip recovery ack request id mismatch');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1, 'client gossip recovery should receive only server-head ops state');
+$recoveryOpsState = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($recoveryOpsState['type'] ?? '') === 'gossip/telemetry/ack', 'client recovery ops state type mismatch');
+videochat_gossipmesh_test_assert((string) ($recoveryOpsState['kind'] ?? '') === 'gossip_server_head_ops_state', 'client recovery must receive server-head ops state');
+videochat_gossipmesh_test_assert((string) ($recoveryOpsState['reason'] ?? '') === 'client_recovery_request_not_required', 'client recovery ops state reason mismatch');
+videochat_gossipmesh_test_assert((bool) ($recoveryOpsState['server_head_authoritative'] ?? false) === true, 'client recovery ops state must be server-head authoritative');
+videochat_gossipmesh_test_assert((bool) ($recoveryOpsState['client_recovery_request'] ?? true) === false, 'client recovery requests must not be required');
+videochat_gossipmesh_test_assert((bool) ($recoveryOpsState['client_topology_repair'] ?? true) === false, 'client topology repair must not be required by recovery');
+videochat_gossipmesh_test_assert(!in_array((string) ($recoveryOpsState['type'] ?? ''), ['call/gossip-recovery', 'call/media-quality-pressure', 'gossip/recovery/ack'], true), 'client recovery must not route publisher recovery frames');
 foreach (['protected_frame', 'data_base64', 'sdp', 'ice_candidate', 'raw_media_key'] as $unsafeRecoveryToken) {
-    videochat_gossipmesh_test_assert(strpos(json_encode($GLOBALS['gossipmesh_sent_frames'], JSON_UNESCAPED_SLASHES) ?: '', $unsafeRecoveryToken) === false, 'websocket recovery must not distribute unsafe token: ' . $unsafeRecoveryToken);
+    videochat_gossipmesh_test_assert(strpos(json_encode($GLOBALS['gossipmesh_sent_frames'], JSON_UNESCAPED_SLASHES) ?: '', $unsafeRecoveryToken) === false, 'websocket recovery ops state must not distribute unsafe token: ' . $unsafeRecoveryToken);
 }
 
 $normalMediaGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
@@ -964,17 +982,15 @@ $relayGuardClassification = videochat_realtime_classify_normal_media_fanout_fram
     'lane' => 'media',
     'payload' => [
         'track_id' => 'camera',
-        'data_base64' => 'AQID',
     ],
 ], JSON_UNESCAPED_SLASHES));
-videochat_gossipmesh_test_assert((bool) ($relayGuardClassification['blocked'] ?? false), 'normal realtime websocket must reject gossip server relay media');
-videochat_gossipmesh_test_assert((string) ($relayGuardClassification['reason'] ?? '') === 'media_relay_socket_required', 'normal websocket relay guard reason mismatch');
+videochat_gossipmesh_test_assert(!(bool) ($relayGuardClassification['blocked'] ?? true), 'normal realtime websocket must allow call-scoped gossip server relay media');
+videochat_gossipmesh_test_assert((string) ($relayGuardClassification['reason'] ?? '') === 'room_bound_gossip_server_relay', 'normal websocket relay guard reason mismatch');
 $relaySocketGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
     'type' => 'gossip/server-frame',
     'lane' => 'media',
     'payload' => [
         'track_id' => 'camera',
-        'data_base64' => 'AQID',
     ],
 ], JSON_UNESCAPED_SLASHES), true);
 videochat_gossipmesh_test_assert(!(bool) ($relaySocketGuardClassification['blocked'] ?? true), 'dedicated media relay websocket must allow room-bound gossip server relay');
@@ -997,15 +1013,8 @@ $presenceState['connections']['conn-30'] = $otherCallConnection;
 $presenceState['rooms']['room-alpha']['conn-30'] = 'socket-other-call';
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
-$relayCommand = videochat_gossip_media_relay_decode_client_frame(json_encode([
-    'type' => 'gossip/server-frame',
-    'room_id' => 'room-alpha',
-    'call_id' => 'call-alpha',
-    'payload' => [
-        'track_id' => 'camera-main',
-        'data_base64' => 'AQID',
-    ],
-], JSON_UNESCAPED_SLASHES) ?: '');
+$relayBinaryFrame = videochat_gossipmesh_test_binary_media_frame();
+$relayCommand = videochat_gossip_media_relay_decode_client_frame($relayBinaryFrame, $ownerConnection);
 $relayResult = videochat_realtime_handle_gossip_media_relay_command(
     $relayCommand,
     $socketOwner,
@@ -1016,10 +1025,53 @@ $relayResult = videochat_realtime_handle_gossip_media_relay_command(
 videochat_gossipmesh_test_assert((bool) ($relayResult['handled'] ?? false), 'room-bound gossip server relay command should be handled');
 $relaySockets = array_map(static fn (array $sentFrame): string => (string) ($sentFrame['socket'] ?? ''), $GLOBALS['gossipmesh_sent_frames']);
 sort($relaySockets);
-videochat_gossipmesh_test_assert($relaySockets === [$socketModerator, $socketPeerRelay], 'room-bound gossip server relay must prefer dedicated relay sockets and deliver only to same-call peers');
+videochat_gossipmesh_test_assert(
+    $relaySockets === [$socketModerator, $socketPeerRelay],
+    'room-bound gossip server relay must prefer dedicated relay sockets and deliver only to same-call peers'
+);
 $relayFrame = (array) (($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? [])['payload'] ?? []);
 videochat_gossipmesh_test_assert((string) ($relayFrame['protection_mode'] ?? '') === 'transport_only', 'room-bound gossip server relay must force transport-only delivery');
 videochat_gossipmesh_test_assert(!array_key_exists('protected_frame', $relayFrame), 'room-bound gossip server relay must strip protected frame fields');
+
+if (in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+    $brokerDatabase = new PDO('sqlite::memory:');
+    $brokerDatabase->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $brokerDatabase->exec('CREATE TABLE call_participants(call_id TEXT NOT NULL, user_id INTEGER NOT NULL, source TEXT NOT NULL, display_name TEXT, call_role TEXT)');
+    $brokerDatabase->exec('CREATE TABLE users(id INTEGER PRIMARY KEY, display_name TEXT, role_id INTEGER)');
+    $brokerDatabase->exec('CREATE TABLE roles(id INTEGER PRIMARY KEY, slug TEXT)');
+    videochat_signaling_broker_bootstrap($brokerDatabase);
+    videochat_gossip_media_relay_broker_bootstrap($brokerDatabase);
+    videochat_realtime_presence_db_upsert($brokerDatabase, $ownerConnection);
+    videochat_realtime_presence_db_upsert($brokerDatabase, [
+        ...$peerConnection,
+        'connection_id' => 'conn-20-remote-worker',
+        'socket' => 'socket-peer-remote-worker',
+    ]);
+    $openBrokerDatabase = static fn (): PDO => $brokerDatabase;
+    $brokerPresenceState = videochat_presence_state_init();
+    $brokerPresenceState['connections']['conn-10'] = $ownerConnection;
+    $brokerPresenceState['rooms']['room-alpha']['conn-10'] = $socketOwner;
+    $GLOBALS['gossipmesh_sent_frames'] = [];
+    $brokerRelayResult = videochat_realtime_handle_gossip_media_relay_command(
+        $relayCommand,
+        $socketOwner,
+        $brokerPresenceState,
+        $ownerConnection,
+        $brokerDatabase,
+        $openBrokerDatabase,
+        $gossipmeshFrameSender
+    );
+    videochat_gossipmesh_test_assert((bool) ($brokerRelayResult['handled'] ?? false), 'cross-worker gossip server relay command should be handled');
+    $brokeredPeerEvents = videochat_gossip_media_relay_broker_fetch_events_since($brokerDatabase, 'room-alpha', 'call-alpha', 20, 0);
+    videochat_gossipmesh_test_assert(count($brokeredPeerEvents) === 1, 'cross-worker gossip server relay must broker binary media to DB-present peers missing from local presence');
+    $brokeredOwnerEvents = videochat_gossip_media_relay_broker_fetch_events_since($brokerDatabase, 'room-alpha', 'call-alpha', 10, 0);
+    videochat_gossipmesh_test_assert($brokeredOwnerEvents === [], 'cross-worker gossip server relay must not broker back to the publisher');
+    $brokeredPayload = json_decode((string) ($brokeredPeerEvents[0]['metadata_json'] ?? ''), true);
+    videochat_gossipmesh_test_assert(is_array($brokeredPayload) && (string) ($brokeredPayload['type'] ?? '') === 'sfu/frame', 'cross-worker gossip server relay binary metadata type mismatch');
+    videochat_gossipmesh_test_assert((string) ($brokeredPayload['protection_mode'] ?? '') === 'transport_only', 'cross-worker gossip server relay must keep transport-only payloads');
+    videochat_gossipmesh_test_assert((string) ($brokeredPeerEvents[0]['payload_binary'] ?? '') === "\x01\x02\x03", 'cross-worker gossip server relay must store raw binary media bytes');
+    videochat_gossipmesh_test_assert(strpos((string) ($brokeredPeerEvents[0]['metadata_json'] ?? ''), 'data_binary') === false, 'cross-worker gossip server relay metadata must not store raw media bytes');
+}
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $normalMediaGuardResult = videochat_realtime_guard_no_normal_media_fanout(
@@ -1052,9 +1104,9 @@ videochat_realtime_handle_gossipmesh_topology_repair_command(
     $openEmptyDatabase,
     $gossipmeshFrameSender
 );
-$forgedError = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
-videochat_gossipmesh_test_assert((string) ($forgedError['type'] ?? '') === 'system/error', 'forged peer repair must emit an error');
-videochat_gossipmesh_test_assert((string) (($forgedError['details'] ?? [])['error'] ?? '') === 'unauthenticated_peer', 'forged peer repair error mismatch');
+$forgedOpsState = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($forgedOpsState['type'] ?? '') === 'gossip/telemetry/ack', 'forged peer repair must not trigger client-owned repair');
+videochat_gossipmesh_test_assert((bool) ($forgedOpsState['client_topology_repair'] ?? true) === false, 'forged peer repair must receive server-head topology authority');
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $contextMismatchCommand = [
@@ -1069,8 +1121,9 @@ videochat_realtime_handle_gossipmesh_topology_repair_command(
     $openEmptyDatabase,
     $gossipmeshFrameSender
 );
-$contextError = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
-videochat_gossipmesh_test_assert((string) (($contextError['details'] ?? [])['error'] ?? '') === 'context_mismatch', 'context mismatch repair error mismatch');
+$contextOpsState = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($contextOpsState['type'] ?? '') === 'gossip/telemetry/ack', 'context mismatch repair must not trigger client-owned repair');
+videochat_gossipmesh_test_assert((bool) ($contextOpsState['server_head_authoritative'] ?? false) === true, 'context mismatch repair must keep server-head authority');
 
 try {
     videochat_gossipmesh_plan_topology('', 'room-alpha', $members);

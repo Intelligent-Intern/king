@@ -9,6 +9,7 @@ import {
   getSeedScenario,
   getSeedTenant,
   getSeedUser,
+  iamCallAccessSeedMatrix,
   installStoredSeedSession,
   seedCallKeys,
   seedUserKeys,
@@ -42,6 +43,82 @@ const directJoinPermissionCases = [
   'direct_join_alpha_owner_alpha_disabled_denied',
   'direct_join_alpha_owner_alpha_deleted_hidden',
 ];
+
+const directJoinWorkspaceScenarios = iamCallAccessSeedMatrix.scenarios.filter((scenario) => (
+  String(scenario?.key || '').startsWith('direct_join_')
+  && typeof scenario?.call_key === 'string'
+  && scenario.call_key !== ''
+  && typeof scenario?.principal_user_key === 'string'
+  && scenario.principal_user_key !== ''
+  && typeof scenario?.expected?.state === 'string'
+  && typeof scenario?.expected?.decision_source === 'string'
+));
+
+const allowedDirectJoinScenarios = directJoinWorkspaceScenarios
+  .filter((scenario) => scenario.expected.state === 'resolved')
+  .map((scenario) => scenario.key);
+
+const deniedDirectJoinScenarios = directJoinWorkspaceScenarios
+  .filter((scenario) => scenario.expected.state === 'forbidden')
+  .map((scenario) => scenario.key);
+
+const authDeniedDirectJoinScenarios = directJoinWorkspaceScenarios
+  .filter((scenario) => scenario.expected.state === 'auth_failed')
+  .map((scenario) => scenario.key);
+
+function escapeRegExp(input) {
+  return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function scenarioTestName(scenarioKey, label) {
+  return `${label} [${scenarioKey}]`;
+}
+
+function expectTextDoesNotContain(value, needles, label) {
+  const text = String(value || '').toLowerCase();
+  for (const needle of needles) {
+    const normalized = String(needle || '').trim().toLowerCase();
+    if (normalized === '') continue;
+    expect(text, `${label} must not expose ${needle}`).not.toContain(normalized);
+  }
+}
+
+function expectNoSafeScreenLeakage(value, needles, label) {
+  expectTextDoesNotContain(value, needles, label);
+}
+
+function directJoinNetworkNeedles(call) {
+  return [
+    call?.id,
+    call?.room_id,
+    call?.title,
+    call?.starts_at,
+    call?.ends_at,
+  ].filter((value) => String(value || '').trim() !== '');
+}
+
+function directJoinContentNeedles(call) {
+  return [
+    call?.title,
+    call?.room_id,
+  ].filter((value) => String(value || '').trim() !== '');
+}
+
+function expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, label) {
+  const accessLink = sessionPayload?.result?.access_link || {};
+  expect(accessLink.link_kind, `${label} access link kind`).toBe('open');
+  expect(accessLink.participant_user_id ?? null, `${label} participant user binding`).toBeNull();
+  expect(accessLink.participant_email ?? null, `${label} participant email binding`).toBeNull();
+}
+
+function expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, expectedUser, label) {
+  const guestUserKeys = new Set(Array.isArray(call?.guest_list_user_keys) ? call.guest_list_user_keys : []);
+  if (guestUserKeys.has(expectedUser?.key)) return;
+
+  const participants = sessionPayload?.result?.call?.participants?.internal || [];
+  const participantIds = participants.map((participant) => Number(participant?.user_id || 0));
+  expect(participantIds, `${label} must not add non-guest-list user to call guest list`).not.toContain(Number(expectedUser?.id || 0));
+}
 
 async function createDirectJoinProbePage(browser, baseURL, { principalUserKey, callKey }) {
   const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {

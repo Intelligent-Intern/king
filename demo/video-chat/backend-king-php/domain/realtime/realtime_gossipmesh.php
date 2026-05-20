@@ -1158,16 +1158,49 @@ function videochat_gossipmesh_plan_topology(string $callId, string $roomId, arra
     );
     $topology = [];
     if ($memberCount > 1) {
-        $perMemberNeighbors = min($neighborLimit, $memberCount - 1);
-        foreach ($normalizedMembers as $index => $member) {
-            $neighbors = [];
-            for ($offset = 1; $offset < $memberCount && count($neighbors) < $perMemberNeighbors; $offset++) {
-                $neighborId = $normalizedMembers[($index + $offset) % $memberCount]['id'];
-                if (!videochat_gossipmesh_should_avoid_pair($member['id'], $neighborId, $avoidPairs)) {
-                    $neighbors[] = $neighborId;
+        $targetNeighbors = min($neighborLimit, $memberCount - 1);
+        if (
+            $memberCount % 2 === 1
+            && $targetNeighbors % 2 === 1
+            && $targetNeighbors < $memberCount - 1
+            && $targetNeighbors < VIDEOCHAT_GOSSIPMESH_MAX_NEIGHBORS
+        ) {
+            $targetNeighbors++;
+        }
+        foreach ($normalizedMembers as $member) {
+            $topology[$member['id']] = [];
+        }
+        $addSymmetricEdge = static function (string $leftId, string $rightId) use (&$topology, $targetNeighbors, $avoidPairs): void {
+            if (
+                $leftId === $rightId
+                || count($topology[$leftId]) >= $targetNeighbors
+                || count($topology[$rightId]) >= $targetNeighbors
+                || in_array($rightId, $topology[$leftId], true)
+                || videochat_gossipmesh_should_avoid_pair($leftId, $rightId, $avoidPairs)
+            ) {
+                return;
+            }
+            $topology[$leftId][] = $rightId;
+            $topology[$rightId][] = $leftId;
+        };
+
+        for ($offset = 1; $offset <= intdiv($targetNeighbors, 2); $offset++) {
+            foreach ($normalizedMembers as $index => $member) {
+                $addSymmetricEdge($member['id'], $normalizedMembers[($index + $offset) % $memberCount]['id']);
+            }
+        }
+        if ($targetNeighbors % 2 === 1 && $memberCount % 2 === 0) {
+            $oppositeOffset = intdiv($memberCount, 2);
+            foreach ($normalizedMembers as $index => $member) {
+                $addSymmetricEdge($member['id'], $normalizedMembers[($index + $oppositeOffset) % $memberCount]['id']);
+            }
+        }
+        for ($offset = 1; $offset < $memberCount; $offset++) {
+            foreach ($normalizedMembers as $index => $member) {
+                if (count($topology[$member['id']]) < $targetNeighbors) {
+                    $addSymmetricEdge($member['id'], $normalizedMembers[($index + $offset) % $memberCount]['id']);
                 }
             }
-            $topology[$member['id']] = $neighbors;
         }
     } else {
         foreach ($normalizedMembers as $member) {
@@ -1233,6 +1266,22 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string 
         }
     }
 
+    $admittedPeers = [];
+    foreach (is_array($topologyPlan['members'] ?? null) ? $topologyPlan['members'] : [] as $member) {
+        if (!is_array($member)) {
+            continue;
+        }
+        $memberId = videochat_gossipmesh_safe_id($member['id'] ?? ($member['peer_id'] ?? ''));
+        if ($memberId === '' || $memberId === $safePeerId) {
+            continue;
+        }
+        $admittedPeers[] = [
+            'peer_id' => $memberId,
+            'transport' => 'rtc_datachannel',
+            'data_transports' => ['rtc_datachannel'],
+        ];
+    }
+
     return [
         'lane' => 'ops',
         'type' => VIDEOCHAT_GOSSIPMESH_TOPOLOGY_HINT_TYPE,
@@ -1242,6 +1291,7 @@ function videochat_gossipmesh_topology_hint_payload(array $topologyPlan, string 
         'call_id' => (string) ($topologyPlan['call_id'] ?? ''),
         'peer_id' => $safePeerId,
         'topology_epoch' => $epochMs ?? (int) floor(microtime(true) * 1000),
+        'admitted_peers' => $admittedPeers,
         'neighbors' => $neighbors,
         'reconnect_reason' => trim($reason) === '' ? 'topology_repair' : trim($reason),
     ];

@@ -108,7 +108,11 @@ function videochat_realtime_websocket_backfill_retry_response(array $roomResolut
     );
 }
 
-function videochat_realtime_websocket_disconnect_stale_asset_client(mixed $websocket, string $clientAssetVersion): bool
+function videochat_realtime_websocket_disconnect_stale_asset_client(
+    mixed $websocket,
+    string $clientAssetVersion,
+    bool $closeStaleSocket = true
+): bool
 {
     return videochat_realtime_disconnect_stale_asset_client(
         $websocket,
@@ -116,7 +120,8 @@ function videochat_realtime_websocket_disconnect_stale_asset_client(mixed $webso
         static function (array $frame) use ($websocket): void {
             videochat_presence_send_frame($websocket, $frame);
         },
-        'ws'
+        'ws',
+        $closeStaleSocket
     );
 }
 

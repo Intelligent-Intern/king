@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
@@ -34,7 +36,7 @@ const callAccessContract = read('demo/video-chat/backend-king-php/domain/calls/c
 const callManagementQuery = read('demo/video-chat/backend-king-php/domain/calls/call_management_query.php');
 const tenantContext = read('demo/video-chat/backend-king-php/support/tenant_context.php');
 
-const iamContractScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamContractScript = iamCallAccessContractSuiteText;
 requireIncludes(
   iamContractScript,
   'node tests/contract/call-access-edge-error-matrix-contract.mjs',

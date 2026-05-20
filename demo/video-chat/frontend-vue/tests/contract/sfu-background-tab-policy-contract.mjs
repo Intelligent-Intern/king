@@ -43,10 +43,9 @@ async function main() {
   requireContains(foregroundReconnect, "handleBackground({ type: 'document_hidden' })", 'visibility hidden is explicit');
   requireContains(foregroundReconnect, "handleForeground({ type: 'document_visible' })", 'visibility foreground is explicit');
   requireContains(foregroundReconnect, "window.addEventListener('blur', handleBackground)", 'blur remains tracked for reconnect without necessarily pausing video');
-  requireContains(lifecycle, "import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';", 'lifecycle imports SFU background policy');
-  requireContains(lifecycle, 'connectedParticipantUsers,', 'lifecycle binds connected participants before background policy reads them');
-  requireContains(lifecycle, 'sfuBackgroundTabPolicy.pauseVideoForBackground(context)', 'background event applies SFU video pause policy');
-  requireContains(lifecycle, 'void sfuBackgroundTabPolicy.resumeVideoAfterForeground(context)', 'foreground event resumes SFU video publishing');
+  assert.doesNotMatch(lifecycle, /createSfuBackgroundTabPolicy|sfuBackgroundTabPolicy\.pauseVideoForBackground|sfuBackgroundTabPolicy\.resumeVideoAfterForeground/, 'workspace lifecycle must not let visibility/focus start video publish or SFU reconnect work');
+  requireContains(lifecycle, 'markWorkspaceLifecycleBackground(context)', 'background event records lifecycle state only');
+  requireContains(lifecycle, 'syncWorkspaceLifecycleForeground(context)', 'foreground event syncs state/diagnostics only');
   requireContains(policy, 'preserve_remote_publisher_with_keyframe_marker', 'background policy documents remote publisher obligation preservation');
   requireContains(policy, 'pause_local_preview_video_keep_audio_status', 'background policy distinguishes local preview throttling');
   requireContains(policy, 'getRemotePeerCount = () => 0', 'background policy accepts remote peer count from production runtime');

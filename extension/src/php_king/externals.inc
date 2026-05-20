@@ -20,6 +20,7 @@ void king_object_store_shutdown_system(void);
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);
 PHP_FUNCTION(king_get_last_error);
+PHP_FUNCTION(king_db_ingest);
 PHP_FUNCTION(king_client_websocket_get_last_error);
 PHP_FUNCTION(king_mcp_get_error);
 PHP_FUNCTION(king_telemetry_get_metrics);

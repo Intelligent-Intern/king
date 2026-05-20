@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '..', '..');
 const repoRoot = path.resolve(frontendRoot, '..', '..', '..');
@@ -26,14 +28,14 @@ const accessLinks = read('demo/video-chat/backend-king-php/domain/calls/call_acc
 const accessPublic = read('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
 const accessRoutes = read('demo/video-chat/backend-king-php/http/module_calls_access.php');
 
-const iamScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamScript = iamCallAccessContractSuiteText;
 assert.ok(
   iamScript.includes('node tests/contract/call-access-anonymous-disabled-link-contract.mjs'),
-  'IAM call-access package gate must run the disabled anonymous link Node contract',
+  'IAM call-access package helper must run the disabled anonymous link Node contract',
 );
 assert.ok(
   iamScript.includes('../backend-king-php/tests/call-access-anonymous-disabled-link-contract.sh'),
-  'IAM call-access package gate must run the disabled anonymous link backend proof',
+  'IAM call-access package helper must run the disabled anonymous link backend proof',
 );
 assert.match(
   ciGate,

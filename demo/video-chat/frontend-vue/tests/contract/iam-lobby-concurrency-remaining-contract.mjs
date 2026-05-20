@@ -27,8 +27,8 @@ function requireMatch(source, pattern, message) {
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
-const sprint = read('SPRINT.md');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+const sqliteProof = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const backendContract = read('demo/video-chat/backend-king-php/tests/realtime-lobby-concurrency-contract.php');
 const backendContractShell = read('demo/video-chat/backend-king-php/tests/realtime-lobby-concurrency-contract.sh');
 const lobbySpec = read('demo/video-chat/frontend-vue/tests/e2e/lobby-concurrency-ui.spec.js');
@@ -49,24 +49,7 @@ for (const e2eCase of [
   'e2e_lobby_012_lobby_state_updates_correctly',
 ]) {
   requireIncludes(lobbySpec, e2eCase, `Playwright lobby concurrency spec must name ${e2eCase}`);
-  requireIncludes(sprint, `- [x] \`${e2eCase}\``, `SPRINT.md must close ${e2eCase} only with this proof`);
 }
-
-requireIncludes(
-  sprint,
-  '- [x] Lobby status updates correctly',
-  'SPRINT.md must close the narrative lobby status item after browser snapshot proof',
-);
-requireIncludes(
-  sprint,
-  '- [x] Participant is removed from lobby after admission',
-  'SPRINT.md must close the admission-removal item after browser stale snapshot proof',
-);
-requireIncludes(
-  sprint,
-  '`iam-lobby-concurrency-remaining-contract.mjs` binds `e2e_lobby_010`,',
-  'SPRINT.md proof narrative must name the static proof binding the target lobby IDs',
-);
 
 requireIncludes(
   lobbyScript,
@@ -89,13 +72,13 @@ requireIncludes(
 );
 requireIncludes(
   ciGate,
-  '"tests/contract/iam-lobby-concurrency-remaining-contract.mjs"',
+  '"node tests/contract/iam-lobby-concurrency-remaining-contract.mjs"',
   'IAM call-access CI gate must execute this lobby concurrency proof binding',
 );
 requireIncludes(
-  ciGate,
-  '"tests/realtime-lobby-concurrency-contract.sh"',
-  'IAM call-access CI gate must include the backend lobby concurrency contract',
+  sqliteProof,
+  '"realtime-lobby-concurrency-contract.sh"',
+  'IAM SQLite runtime proof must include the backend lobby concurrency contract',
 );
 requireIncludes(
   backendContractShell,

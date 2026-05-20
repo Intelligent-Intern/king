@@ -158,8 +158,8 @@ assert(
     && gossipPrimaryConfig.sfuFallbackAllowed === false,
   'gossip_primary must make Gossip independent from SFU send readiness without optional SFU mirror/fallback',
 )
-assert(sfuFirstConfig.sfuRequiredBeforeGossip === true && sfuFirstConfig.sfuSendIsOptional === false, 'sfu_first must remain conservative and SFU-required')
-assert(sfuMirrorConfig.sfuRequiredBeforeGossip === true && sfuMirrorConfig.sfuSendIsOptional === true, 'sfu_mirror must require SFU before encode while treating the mirror send as optional')
+assert(sfuFirstConfig.sfuRequiredBeforeGossip === false && sfuFirstConfig.sfuSendIsOptional === true, 'sfu_first must no longer gate Gossip publication on SFU readiness')
+assert(sfuMirrorConfig.sfuRequiredBeforeGossip === false && sfuMirrorConfig.sfuSendIsOptional === true, 'sfu_mirror must no longer gate Gossip publication on SFU readiness')
 
 const gossipPrimaryDispatch = await loadPublisherDispatch('gossip_primary')
 let harness = publisherHarness()
@@ -177,7 +177,7 @@ harness = publisherHarness({
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary reports Gossip failure without SFU fallback')
-assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback'), 'gossip_primary must diagnose parked SFU fallback after Gossip publication failure')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed'), 'gossip_primary must diagnose Gossip publication failure without naming SFU fallback')
 
 harness = publisherHarness({
   currentOpenSfuClient: () => ({
@@ -188,7 +188,7 @@ harness = publisherHarness({
 })
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === true && result.gossipPublished === true && result.sfuSent === false, 'gossip_primary must not mirror a successfully published Gossip frame into SFU when the SFU socket is open')
-assert(result.sfuFallbackSuppressed === true, 'gossip_primary must report that SFU fallback/mirroring was suppressed')
+assert(result.alternatePathSuppressed === true, 'gossip_primary must report that alternate media paths were suppressed')
 assert(harness.order.join(',') === 'gossip', 'gossip_primary with an open SFU socket must still publish Gossip only')
 
 harness = publisherHarness({
@@ -218,14 +218,14 @@ harness = publisherHarness({
 result = await gossipPrimaryDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === false && result.gossipPublished === false && result.sfuSent === false, 'gossip_primary must not use SFU fallback after Gossip publication fails')
 assert(harness.order.join(',') === 'gossip', 'gossip_primary failure path must remain Gossip-only even with an open SFU socket')
-assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed_no_sfu_fallback' && event?.immediate === true), 'gossip_primary parked SFU fallback must emit an immediate diagnostic')
+assert(harness.diagnostics.some((event) => event?.eventType === 'gossip_primary_publish_failed' && event?.immediate === true), 'gossip_primary publish failure must emit an immediate diagnostic')
 
 const sfuFirstDispatch = await loadPublisherDispatch('sfu_first')
 harness = publisherHarness()
 result = await sfuFirstDispatch.dispatchPublisherFrame(harness.args)
-assert(result.ok === false && result.gossipPublished === false && result.sfuSendOptional === false, 'sfu_first must not publish Gossip when the required SFU send path is unavailable')
-assert(harness.order.join(',') === 'required_sfu_unavailable', 'sfu_first must route unavailable SFU through the required failure handler')
-assert(sfuFirstDispatch.publisherRequiresSfuBeforeEncode() === true, 'sfu_first must require SFU before encode')
+assert(result.ok === true && result.gossipPublished === true && result.sfuSendOptional === true, 'sfu_first must publish Gossip when the SFU send path is unavailable')
+assert(harness.order.join(',') === 'gossip', 'sfu_first must route unavailable SFU around Gossip publication')
+assert(sfuFirstDispatch.publisherRequiresSfuBeforeEncode() === false, 'sfu_first must not require SFU before encode')
 
 const sfuMirrorDispatch = await loadPublisherDispatch('sfu_mirror')
 harness = publisherHarness({
@@ -239,7 +239,7 @@ harness = publisherHarness({
 result = await sfuMirrorDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === true && result.sfuSent === true && result.gossipPublished === true, 'sfu_mirror must publish Gossip after successful SFU send')
 assert(harness.order.join(',') === 'sfu,gossip', 'sfu_mirror must keep SFU first and mirror to Gossip after send')
-assert(sfuMirrorDispatch.publisherRequiresSfuBeforeEncode() === true, 'sfu_mirror must require SFU before encode')
+assert(sfuMirrorDispatch.publisherRequiresSfuBeforeEncode() === false, 'sfu_mirror must not require SFU before encode')
 
 harness = publisherHarness({
   currentOpenSfuClient: () => ({
@@ -253,7 +253,7 @@ harness = publisherHarness({
 result = await sfuMirrorDispatch.dispatchPublisherFrame(harness.args)
 assert(result.ok === true && result.sfuSent === false && result.gossipPublished === true, 'sfu_mirror must keep Gossip mirror publication when SFU send fails after encode')
 assert(harness.order.join(',') === 'sfu,gossip,optional_sfu_failure:contract_sfu_failure', 'sfu_mirror SFU failure must still mirror to Gossip and notify backpressure after the failed SFU attempt')
-assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_optional_send_failed_after_gossip_publish'), 'sfu_mirror SFU failure must be diagnostic after Gossip mirror publication')
+assert(harness.diagnostics.some((event) => event?.eventType === 'sfu_send_failed_gossip_continues'), 'sfu_mirror SFU failure must be diagnostic after Gossip mirror publication')
 
 const unhealthySfu = readyAggregate({
   sfu_baseline_health: {
@@ -307,13 +307,13 @@ const sfuFirstGate = rolloutGate.deriveGossipRolloutGateState(unhealthySfu, {
   mode: 'active',
   mediaCarrierMode: 'sfu_first',
 })
-assert(sfuFirstGate.active_allowed === false && sfuFirstGate.blocking_buckets.includes('keyframe_storm'), 'sfu_first must still block on unhealthy SFU baseline')
+assert(sfuFirstGate.active_allowed === true && sfuFirstGate.sfu_baseline_required_for_active === false, 'sfu_first must not block on unhealthy SFU baseline')
 
 const sfuMirrorGate = rolloutGate.deriveGossipRolloutGateState(unhealthySfu, {
   mode: 'active',
   mediaCarrierMode: 'sfu_mirror',
 })
-assert(sfuMirrorGate.active_allowed === false && sfuMirrorGate.sfu_baseline_required_for_active === true, 'sfu_mirror must keep SFU-baseline gating for active mode')
+assert(sfuMirrorGate.active_allowed === true && sfuMirrorGate.sfu_baseline_required_for_active === false, 'sfu_mirror must not block on unhealthy SFU baseline')
 
 const appliedTopology = []
 assert(

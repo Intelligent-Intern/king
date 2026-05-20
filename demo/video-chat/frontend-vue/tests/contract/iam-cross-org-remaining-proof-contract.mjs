@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const videoChatRoot = path.resolve(frontendRoot, '..');
@@ -17,7 +19,7 @@ function readJson(relativePath) {
 }
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
-const iamCallAccessPackageScript = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamCallAccessPackageScript = iamCallAccessContractSuiteText;
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
 const seedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
 const seedMatrixSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js');

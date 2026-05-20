@@ -27,20 +27,20 @@ const [
 
 assert.match(
   workspaceStateSource,
-  /function normalizeConfiguredCallAppOrigin[\s\S]*https:\/\/\$\{trimmed\}[\s\S]*return parsed\.toString\(\)\.replace\(\/\\\/\+\$\/,\s*''\)/,
-  'Call App iframe origin must accept the configured whiteboard host even when it is supplied as a bare host',
+  /export function callAppWorkspaceIframeUrl\(session\)[\s\S]*const path = `\/call-app\/\$\{encodeURIComponent\(appKey\)\}\/\$\{entrypoint\}`;[\s\S]*return path;/,
+  'Call App iframe URL must use the same-origin edge route to avoid opaque-origin self-navigation warnings',
 );
 
 assert.match(
   workspaceStateSource,
-  /VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*normalizeConfiguredCallAppOrigin[\s\S]*\['app', 'apps'\]\.includes\(parts\[0\]\)[\s\S]*parts\[0\] = hostAppKey/s,
-  'Call App iframe URL must derive app subdomains only from generic app hosts',
+  /function normalizeConfiguredCallAppOrigin[\s\S]*https:\/\/\$\{trimmed\}[\s\S]*return parsed\.toString\(\)\.replace\(\/\\\/\+\$\/,\s*''\)/,
+  'Call App deployment origin normalization must remain available for edge/deploy probes even when iframes use same-origin paths',
 );
 
 assert.doesNotMatch(
   workspaceStateSource,
-  /\['app', 'apps', 'whiteboard'\]/,
-  'Call App iframe URL must not require new DNS by deriving app-specific hosts from the concrete whiteboard host',
+  /return origin !== '' \? `\$\{origin\}\$\{path\}` : path/,
+  'Call App iframe URL must not embed the dedicated Call App host in active workspace iframes',
 );
 
 assert.doesNotMatch(

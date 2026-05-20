@@ -110,13 +110,9 @@ export function createNativePeerFactory({
       const bypassProtectedAudio = trackKind === 'audio' && shouldBypassNativeAudioProtectionForPeer(normalizedTargetUserId);
 
       const bindTrackAndPlayback = () => {
-        if (shouldUseNativeAudioBridge() && trackKind === 'video') {
-          return;
-        }
         const incoming = event?.streams?.[0];
         if (incoming instanceof MediaStream) {
           for (const track of incoming.getTracks()) {
-            if (shouldUseNativeAudioBridge() && String(track?.kind || '').trim().toLowerCase() === 'video') continue;
             if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
               remoteStream.addTrack(track);
               if (String(track?.kind || '').trim().toLowerCase() === 'video') {
@@ -125,7 +121,6 @@ export function createNativePeerFactory({
             }
           }
         } else if (event?.track) {
-          if (shouldUseNativeAudioBridge() && trackKind === 'video') return;
           if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
             remoteStream.addTrack(event.track);
             if (trackKind === 'video') {

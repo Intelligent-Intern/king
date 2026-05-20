@@ -13,7 +13,7 @@ is not a clean v1 streaming system.
 | --- | --- | --- |
 | Every demo file inventoried | Done | `demo-program-file-inventory.tsv` covers 5,419 files. |
 | Generated/vendor files separated | Done | `node_modules`, `dist`, `test-results`, `.local`, public WASM/vendor assets classified separately. |
-| Call apps in canonical source folder | Done | `demo/call-app/*` packages exist and package-layout contract passed. |
+| Call apps in canonical source folder | Done | `demo/call-apps/*` packages exist and package-layout contract passed. |
 | One authoritative room snapshot | Missing | Legacy snapshot and rich snapshot both exist. |
 | Capabilities are backend-visible | Partial | Capability frame exists, persistence is best-effort. |
 | Orchestrator owns media state | Missing | Plan is derived on snapshot read, not a durable state machine. |

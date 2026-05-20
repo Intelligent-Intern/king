@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
-const appRoot = path.join(repoRoot, 'demo/call-app/spreadsheet');
+const appRoot = path.join(repoRoot, 'demo/call-apps/spreadsheet');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -38,7 +38,7 @@ for (const requiredFile of [
   assert.ok(fs.existsSync(path.join(appRoot, requiredFile)), `spreadsheet package missing ${requiredFile}`);
 }
 
-const manifest = readJson('demo/call-app/spreadsheet/call-app.manifest.json');
+const manifest = readJson('demo/call-apps/spreadsheet/call-app.manifest.json');
 assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest schema version mismatch');
 assert.equal(manifest.app_key, 'spreadsheet', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'spreadsheet must advertise runtime readiness');
@@ -65,7 +65,7 @@ assert.deepEqual(
 );
 assert.ok(!JSON.stringify(manifest).includes('kingrt.com'), 'spreadsheet package must not add a dedicated app domain');
 
-const mcp = readJson('demo/call-app/spreadsheet/mcp.descriptor.json');
+const mcp = readJson('demo/call-apps/spreadsheet/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'spreadsheet', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.spreadsheet.mcp', 'MCP service name mismatch');
@@ -84,7 +84,7 @@ for (const method of [
 }
 assert.deepEqual(mcp.export_formats.map((entry) => entry.format), ['spreadsheetml', 'csv'], 'MCP export formats mismatch');
 
-const crdt = readJson('demo/call-app/spreadsheet/crdt.schema.json');
+const crdt = readJson('demo/call-apps/spreadsheet/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.protocol, 'king.call_app.crdt.v1', 'CRDT protocol mismatch');
 assert.equal(crdt.documents?.[0]?.kind, 'spreadsheet_workbook', 'spreadsheet document kind mismatch');
@@ -121,7 +121,7 @@ assert.equal(crdt.presence?.persisted, false, 'spreadsheet presence must not be 
 assertArrayIncludes(crdt.presence?.types, 'selection.update', 'spreadsheet must advertise selection presence');
 assert.deepEqual(crdt.exports, ['spreadsheetml', 'csv'], 'CRDT exports must match manifest');
 
-const health = readJson('demo/call-app/spreadsheet/health.descriptor.json');
+const health = readJson('demo/call-apps/spreadsheet/health.descriptor.json');
 const healthPaths = health.checks.map((check) => check.path);
 for (const healthPath of [
   'call-app.manifest.json',
@@ -134,9 +134,9 @@ for (const healthPath of [
   assertArrayIncludes(healthPaths, healthPath, `health descriptor missing ${healthPath}`);
 }
 
-const html = read('demo/call-app/spreadsheet/public/index.html');
-const css = read('demo/call-app/spreadsheet/public/spreadsheet.css');
-const runtime = read('demo/call-app/spreadsheet/public/spreadsheet.js');
+const html = read('demo/call-apps/spreadsheet/public/index.html');
+const css = read('demo/call-apps/spreadsheet/public/spreadsheet.css');
+const runtime = read('demo/call-apps/spreadsheet/public/spreadsheet.js');
 const bundle = `${html}\n${css}\n${runtime}`;
 
 assertIncludes(html, 'meta name="king-call-app-key" content="spreadsheet"', 'HTML must declare spreadsheet app key');
@@ -171,9 +171,9 @@ assert.doesNotMatch(bundle, /sessionToken|Authorization|localStorage|primary_ses
 assert.doesNotMatch(bundle, /certbot|\.kingrt\.com/, 'spreadsheet package must remain path-hosted without DNS or certbot assumptions');
 
 for (const relativePath of [
-  'demo/call-app/spreadsheet/public/spreadsheet.js',
-  'demo/call-app/spreadsheet/public/spreadsheet.css',
-  'demo/call-app/spreadsheet/public/index.html',
+  'demo/call-apps/spreadsheet/public/spreadsheet.js',
+  'demo/call-apps/spreadsheet/public/spreadsheet.css',
+  'demo/call-apps/spreadsheet/public/index.html',
 ]) {
   assert.ok(read(relativePath).split('\n').length <= 800, `${relativePath} must stay below the 800-line source target`);
 }

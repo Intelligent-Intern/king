@@ -33,8 +33,8 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts'),
   read('demo/video-chat/backend-king-php/domain/realtime/realtime_signaling.php'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
 ]);
@@ -165,8 +165,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /synchronized through King CRDT envelopes/,
-  'SPRINT.md must keep the King CRDT envelope contract in the active Whiteboard sprint',
+  /Do not weaken King v1 contracts to make a check pass\./,
+  'planning sources must preserve the King v1 contract bar for CRDT envelope proof',
 );
 
 console.log('[call-app-crdt-sync-contract] PASS');
