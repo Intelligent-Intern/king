@@ -4,6 +4,8 @@ import path from 'node:path'
 const root = path.resolve(new URL('../..', import.meta.url).pathname)
 const repoRoot = path.resolve(root, '../../..')
 const dataLane = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
+const recoveryOps = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/gossipRecoveryOps.ts'), 'utf8')
+const recoverySurface = `${dataLane}\n${recoveryOps}`
 const recoveryState = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/gossipRecoveryState.ts'), 'utf8')
 const runtimeConfig = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts'), 'utf8')
 const controller = fs.readFileSync(path.join(root, 'src/lib/gossipmesh/gossipController.ts'), 'utf8')
@@ -23,25 +25,25 @@ function assert(condition, message) {
 assert(
   /createGossipRecoveryState/.test(dataLane)
     && /rememberPublishedFrame\(msg\)/.test(dataLane)
-    && /recoveryRequestForReceivedFrame\(frame\)/.test(dataLane),
+    && /recoveryRequestForReceivedFrame\?\.\(frame\)/.test(recoverySurface),
   'workspace data lane must cache publisher frames and derive receiver-side recovery requests',
 )
 assert(
-  /type:\s*'gossip\/recovery\/request'/.test(dataLane)
-    && /lane:\s*'ops'/.test(dataLane)
-    && /missing_from_sequence/.test(dataLane)
-    && /prefer_keyframe/.test(dataLane),
+  /type:\s*'gossip\/recovery\/request'/.test(recoverySurface)
+    && /lane:\s*'ops'/.test(recoverySurface)
+    && /missing_from_sequence/.test(recoverySurface)
+    && /prefer_keyframe/.test(recoverySurface),
   'workspace data lane must send sanitized recovery requests over the server ops lane',
 )
 assert(
   /call\/gossip-recovery/.test(runtimeConfig)
-    && /handleGossipRecoveryOpsMessage/.test(dataLane)
-    && /cachedFramesForRequest/.test(dataLane)
-    && /publishGossipRecoveryFrame/.test(dataLane),
+    && /gossipRecoveryOps\.handleOpsMessage/.test(dataLane)
+    && /cachedFramesForRequest/.test(recoverySurface)
+    && /function publishFrame/.test(recoverySurface),
   'clients must handle server-routed recovery ops and serve cached frames over bounded Gossip links',
 )
 assert(
-  /requestKeyframe/.test(dataLane)
+  /requestKeyframe/.test(recoverySurface)
     && /keyframe_requests/.test(controller)
     && /missing_frame_requests/.test(controller)
     && /retransmits_served/.test(controller),

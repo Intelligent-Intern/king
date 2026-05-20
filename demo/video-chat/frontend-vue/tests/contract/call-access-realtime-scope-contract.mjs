@@ -54,6 +54,8 @@ const realtimeReconnectBrowserContract = readText('demo/video-chat/frontend-vue/
 const backendReconnectContract = readText('demo/video-chat/backend-king-php/tests/realtime-reconnect-backfill-contract.php');
 const backendCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const backendWebsocket = readText('demo/video-chat/backend-king-php/http/module_realtime_websocket.php');
+const backendWebsocketConnect = readText('demo/video-chat/backend-king-php/http/module_realtime_websocket_connect.php');
+const backendWebsocketSurface = `${backendWebsocket}\n${backendWebsocketConnect}`;
 
 const alphaCall = getSeedCall('alpha_active');
 const betaCall = getSeedCall('beta_active');
@@ -112,13 +114,13 @@ assert.match(
 );
 assert.match(
   socketLifecycle,
-  /const sessionProbe = await probeWorkspaceSession\(\);[\s\S]*if \(!sessionProbe\.ok\) \{[\s\S]*if \(sessionProbe\.state === 'retrying'\)[\s\S]*refs\.connectionState\.value = sessionProbe\.state;[\s\S]*return;/,
-  'workspace reconnect must revalidate the current IAM session before opening the websocket',
+  /const sessionProbe = await probeWorkspaceSession\(\);[\s\S]*if \(!sessionProbe\.ok\) \{[\s\S]*code: 'websocket_session_probe_failed'[\s\S]*return;/,
+  'workspace one-shot connect cycle must revalidate the current IAM session before opening the websocket',
 );
 assert.match(
   socketLifecycle,
-  /previousSocket\.close\(1000, 'reconnect'\);/,
-  'socket replacement during reconnect must be explicit and must not look like a user leave',
+  /previousSocket\.close\(1000, 'one_shot_cycle_replaced'\);/,
+  'socket replacement during a participant-authorized connect cycle must be explicit and must not look like a user leave',
 );
 assert.match(
   socketLifecycle,
@@ -137,8 +139,8 @@ assert.match(
 );
 assert.match(
   socketLifecycle,
-  /const transientReconnectBackfillError = code === 'websocket_reconnect_backfill_unavailable'[\s\S]*RETRYABLE_RECONNECT_BACKFILL_REASONS\.includes\(closeReason\);[\s\S]*scheduleReconnect\(\);/,
-  'retryable reconnect/backfill errors must schedule reconnect instead of logging out',
+  /const transientBackfillError = code === 'websocket_reconnect_backfill_unavailable'[\s\S]*TRANSIENT_BACKFILL_REASONS\.includes\(closeReason\);[\s\S]*failConnectCycleOnce\(\{/,
+  'transient reconnect/backfill errors must end the one-shot cycle visibly instead of scheduling reconnect or logging out',
 );
 assert.doesNotMatch(
   socketLifecycle,
@@ -162,8 +164,8 @@ assert.match(
 );
 assert.match(
   realtimeReconnectBrowserContract,
-  /requested_room_id: refs\.desiredRoomId\.value[\s\S]*active_call_id: refs\.activeSocketCallId\.value/,
-  'existing browser reconnect contract must require diagnostics to carry room and call scope',
+  /requested_room_id: refs\.desiredRoomId\.value[\s\S]*active_call_id: refs\.activeSocketCallId\.value[\s\S]*next_connect_cycle_requires_new_participant/,
+  'browser websocket lifecycle contract must require diagnostics to carry room/call scope and the participant-gated one-shot rule',
 );
 assert.match(
   backendCallContext,
@@ -181,9 +183,14 @@ assert.match(
   'websocket route must resolve requested room/call scope before upgrade and return retryable backfill failures',
 );
 assert.match(
-  backendWebsocket,
+  backendWebsocketSurface,
   /'type' => 'system\/welcome'[\s\S]*'active_room_id' => \(string\) \(\$presenceConnection\['room_id'\][\s\S]*'call_context' => \[[\s\S]*'requested_call_id'[\s\S]*'call_id'[\s\S]*'admission' => \[[\s\S]*'pending_room_id'/,
   'backend welcome frame must expose active room, call context, and admission room scope',
+);
+assert.match(
+  backendWebsocketSurface,
+  /'connect_quorum' => \$connectQuorum[\s\S]*'auto_reconnect' => false[\s\S]*'restart_policy' => 'new_participant_only'/,
+  'backend welcome frame must expose connect quorum without enabling auto reconnect',
 );
 assert.match(
   backendReconnectContract,

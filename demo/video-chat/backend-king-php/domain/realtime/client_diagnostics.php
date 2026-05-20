@@ -239,6 +239,12 @@ function videochat_log_client_diagnostics_entries(array $entries): void
  */
 function videochat_store_client_diagnostics(PDO $pdo, array $entries): array
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        return videochat_sqlite_ingest($pdo, 'client_diagnostics.store', static function () use ($pdo, $entries): array {
+            return videochat_store_client_diagnostics($pdo, $entries);
+        });
+    }
+
     $statement = $pdo->prepare(
         <<<'SQL'
 INSERT INTO client_diagnostics (

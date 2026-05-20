@@ -17,9 +17,9 @@ async function read(relativePath) {
 const [bridgeSource, relaySource, whiteboardHtml, whiteboardCss, whiteboardRuntime, e2eSource] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppPresenceRelay.js'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.css'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.css'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/frontend-vue/tests/e2e/call-app-whiteboard.spec.js'),
 ]);
 const whiteboardSource = `${whiteboardHtml}\n${whiteboardCss}\n${whiteboardRuntime}`;

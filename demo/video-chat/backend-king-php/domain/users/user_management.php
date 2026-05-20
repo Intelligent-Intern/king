@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../calls/call_permanent_lifecycle.php';
+
 require_once __DIR__ . '/user_management_contract.php';
 
 function videochat_admin_create_user(PDO $pdo, array $payload, ?int $tenantId = null): array
@@ -404,12 +406,17 @@ function videochat_admin_delete_user(PDO $pdo, int $userId, ?int $tenantId = nul
         $callTenantPredicate = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
             ? ' AND tenant_id = :tenant_id'
             : '';
-        $deleteCalls = $pdo->prepare('DELETE FROM calls WHERE owner_user_id = :owner_user_id' . $callTenantPredicate);
+        $permanentCallParams = [];
+        $permanentCallPlaceholders = videochat_permanent_call_sql_placeholders($permanentCallParams);
+        $permanentCallPredicate = $permanentCallPlaceholders === []
+            ? ''
+            : ' AND id NOT IN (' . implode(', ', $permanentCallPlaceholders) . ')';
+        $deleteCalls = $pdo->prepare('DELETE FROM calls WHERE owner_user_id = :owner_user_id' . $callTenantPredicate . $permanentCallPredicate);
         $callParams = [':owner_user_id' => $userId];
         if ($callTenantPredicate !== '') {
             $callParams[':tenant_id'] = $tenantId;
         }
-        $deleteCalls->execute($callParams);
+        $deleteCalls->execute(array_merge($callParams, $permanentCallParams));
         $deletedCalls = $deleteCalls->rowCount();
 
         $inviteTenantPredicate = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'invite_codes', 'tenant_id')

@@ -42,9 +42,13 @@ assert(
     && gossipMediaRelay.includes('videochat_gossip_media_relay_socket_requested(')
     && gossipMediaRelay.includes("['media_relay_connections']")
     && gossipMediaRelay.includes('videochat_gossip_media_relay_broadcast_call_event(')
+    && gossipMediaRelay.includes('videochat_gossip_media_relay_broker_cross_worker_event(')
+    && /videochat_realtime_serve_gossip_media_relay_websocket[\s\S]*videochat_gossip_media_relay_broker_bootstrap\(\$signalingBrokerDatabase\)[\s\S]*videochat_realtime_handle_gossip_media_relay_command\([\s\S]*\$signalingBrokerDatabase,[\s\S]*\$openDatabase/.test(gossipMediaRelay)
+    && gossipMediaRelay.includes('videochat_signaling_broker_insert_event(')
+    && gossipMediaRelay.includes("$participantUser['id']")
     && gossipMediaRelay.includes("$targetCallId !== '' && $targetCallId !== $normalizedCallId")
     && gossipMediaRelay.includes("'protection_mode'] = 'transport_only'"),
-  'the only normal websocket media exception must be the transport-only Gossip server relay with dedicated relay sockets',
+  'the only normal websocket media exception must be the transport-only Gossip server relay with dedicated relay sockets and brokered cross-worker delivery',
 )
 assert(
   /videochat_presence_send_frame\(\s*\$websocket/.test(mediaFanoutGuard)
@@ -60,10 +64,10 @@ assert(
   'SFU fallback/relay/recording paths must stay explicit and separate from normal Realtime websocket dispatch',
 )
 assert(
-  recoveryHandler.includes('VIDEOCHAT_GOSSIPMESH_CALL_RECOVERY_TYPE')
-    && recoveryHandler.includes('call/media-quality-pressure')
+  recoveryHandler.includes('VIDEOCHAT_GOSSIPMESH_RECOVERY_REQUEST_TYPE')
+    && recoveryHandler.includes('client_recovery_request_not_required')
     && !/protected_frame|data_base64|encoded_frame/.test(recoveryHandler),
-  'Gossip recovery server path must remain control-plane only and must not carry media frames',
+  'Gossip recovery server path must remain control-plane only and must not carry media frames or force media repair',
 )
 assert(
   runtimeContract.includes('normal realtime websocket must classify sfu/frame as forbidden media fanout')
@@ -72,10 +76,11 @@ assert(
   'backend runtime contract must prove the no-normal-media-fanout guard behavior',
 )
 assert(
-  /SFU fallback[\s\S]*out of the active stream path/.test(sprint)
-    && /Do not restore background regression tests or old regression harnesses as\s+release gates/.test(sprint)
-    && /GSP01-18 Test gate/.test(sprint),
-  'SPRINT must keep the active Gossip v1 release path free of SFU fallback and old regression harness gates',
+  /Sprint: Video Call Stability Orchestrator \+ Live Proof/.test(sprint)
+    && /Current implementation lane: port Alex build-mesh station by station/.test(sprint)
+    && /Candidate 4: SFU `720p30`, selected only by the orchestrator after Gossip\s+render failure/.test(sprint)
+    && /No visible green transport-ack notices/.test(sprint),
+  'SPRINT must track the current Gossip-primary active-path and orchestrator-only SFU fallback constraint',
 )
 assert(
   packageJson.includes('gossip-server-no-media-fanout-contract.mjs'),

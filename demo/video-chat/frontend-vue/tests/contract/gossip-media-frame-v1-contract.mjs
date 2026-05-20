@@ -75,6 +75,20 @@ try {
   assert.equal(contract.continuity?.first_frame_per_track, 'keyframe')
   assert.equal(contract.continuity?.delta_without_prior_keyframe, 'reject_and_request_keyframe')
   assert.equal(contract.continuity?.duplicate_sequence, 'drop_duplicate')
+  assert.equal(contract.publication_gate?.ops_lane_authority?.server_head_authoritative, true)
+  assert.equal(contract.publication_gate?.ops_lane_authority?.client_health_checks, false)
+  assert.equal(contract.publication_gate?.ops_lane_authority?.client_topology_repair_requests, false)
+  assert.equal(contract.publication_gate?.ops_lane_authority?.client_recovery_requests, false)
+  assert.equal(contract.publication_gate?.ops_lane_authority?.before_sequence_allocation, false)
+  assert.equal(
+    contract.publication_gate?.ops_lane_authority?.publish_decision,
+    'send_when_existing_call_socket_or_assigned_datachannel_accepts_frame',
+  )
+  assert.deepEqual(contract.publication_gate?.ops_lane_authority?.allowed_egress, ['open_websocket', 'open_rtc_datachannel'])
+  assert.deepEqual(
+    contract.publication_gate?.ops_lane_authority?.forbidden_client_behaviors,
+    ['health_gate', 'topology_repair_request', 'missing_frame_recovery_request', 'sfu_fallback', 'media_security_fallback', 'reconnect_loop'],
+  )
 
   const forbiddenFields = new Set(contract.redaction?.forbidden_fields || [])
   for (const field of ['sdp', 'ice_candidate', 'token', 'secret', 'private_key', 'raw_media_key']) {

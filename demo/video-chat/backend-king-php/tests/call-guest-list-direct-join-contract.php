@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth_rbac.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
+require_once __DIR__ . '/../http/module_calls_access.php';
 
 function videochat_call_guest_list_direct_join_assert(bool $condition, string $message): void
 {
@@ -50,6 +51,28 @@ SQL
         ':created_at' => gmdate('c'),
         ':updated_at' => gmdate('c'),
     ]);
+}
+
+function videochat_call_guest_list_direct_join_create_user(
+    PDO $pdo,
+    PDOStatement $insertUser,
+    int $roleId,
+    string $email,
+    string $displayName
+): int {
+    $passwordHash = password_hash('call-guest-list-direct-join-contract', PASSWORD_DEFAULT);
+    videochat_call_guest_list_direct_join_assert(is_string($passwordHash) && $passwordHash !== '', 'password hash should be available');
+    $insertUser->execute([
+        ':email' => strtolower($email),
+        ':display_name' => $displayName,
+        ':password_hash' => $passwordHash,
+        ':role_id' => $roleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+
+    $userId = (int) $pdo->lastInsertId();
+    videochat_call_guest_list_direct_join_assert($userId > 0, "{$displayName} should be created");
+    return $userId;
 }
 
 try {
@@ -204,6 +227,123 @@ SQL
     videochat_call_guest_list_direct_join_assert(!(bool) ($tenantDeniedDecision['ok'] ?? true), 'guest list must not cross tenant call lookup');
     videochat_call_guest_list_direct_join_assert((string) ($tenantDeniedDecision['reason'] ?? '') === 'not_found', 'cross-tenant guest-list denial reason mismatch');
     videochat_call_guest_list_direct_join_assert(($tenantDeniedDecision['guest_list_entry'] ?? null) === null, 'cross-tenant denial must not expose guest-list entry');
+
+    $temporaryInviteEmail = 'temporary-direct-join@example.test';
+    $temporaryCall = videochat_create_call($pdo, $adminUserId, [
+        'title' => 'Temporary Guest List Direct Join',
+        'access_mode' => 'invite_only',
+        'starts_at' => gmdate('c', time() - 300),
+        'ends_at' => gmdate('c', time() + 3600),
+        'internal_participant_user_ids' => [],
+        'external_participants' => [
+            ['email' => $temporaryInviteEmail, 'display_name' => 'Temporary Direct Join Guest'],
+        ],
+    ], $tenantAId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryCall['ok'] ?? false), 'temporary direct-join call should be created');
+    $temporaryCallId = (string) (($temporaryCall['call'] ?? [])['id'] ?? '');
+    videochat_call_guest_list_direct_join_assert($temporaryCallId !== '', 'temporary direct-join call id should be present');
+    $temporaryAccess = videochat_create_call_access_link_for_user($pdo, $temporaryCallId, $adminUserId, 'admin', [
+        'link_kind' => 'personal',
+        'participant_email' => $temporaryInviteEmail,
+    ], $tenantAId);
+    videochat_call_guest_list_direct_join_assert((bool) ($temporaryAccess['ok'] ?? false), 'temporary personalized direct-join link should be created');
+    $temporaryAccessLink = is_array($temporaryAccess['access_link'] ?? null) ? $temporaryAccess['access_link'] : [];
+    $temporaryAccessId = (string) ($temporaryAccessLink['id'] ?? '');
+    videochat_call_guest_list_direct_join_assert($temporaryAccessId !== '', 'temporary personalized direct-join access id should be present');
+
+    $issuedForgedSessions = [];
+    $forgedRouteResponse = videochat_handle_call_access_routes(
+        '/api/call-access/' . $temporaryAccessId . '/session',
+        'POST',
+        [
+            'body' => json_encode([
+                'guest_name' => 'Temporary Direct Join Guest',
+                'participant_user_id' => $notOnGuestListUserId,
+                'call_id' => $unrelatedCallId,
+                'room_id' => 'forged-direct-join-room',
+            ], JSON_UNESCAPED_SLASHES),
+            'headers' => [
+                'content-type' => 'application/json',
+            ],
+        ],
+        [],
+        static fn (int $status, array $payload): array => ['status' => $status, 'payload' => $payload],
+        static fn (int $status, string $code, string $message, array $details = []): array => [
+            'status' => $status,
+            'payload' => [
+                'status' => 'error',
+                'error' => [
+                    'code' => $code,
+                    'message' => $message,
+                    'details' => $details,
+                ],
+            ],
+        ],
+        static function (array $request): array {
+            $decoded = json_decode((string) ($request['body'] ?? ''), true);
+            return [is_array($decoded) ? $decoded : null, json_last_error_msg()];
+        },
+        static fn (): PDO => $pdo,
+        static function () use (&$issuedForgedSessions): string {
+            $issuedForgedSessions[] = 'sess_direct_join_temp_manipulated_body';
+            return 'sess_direct_join_temp_manipulated_body';
+        }
+    );
+    videochat_call_guest_list_direct_join_assert((int) ($forgedRouteResponse['status'] ?? 0) === 422, 'body fields must not change the temporary link identity');
+    $forgedFields = (array) (((($forgedRouteResponse['payload'] ?? [])['error'] ?? [])['details'] ?? [])['fields'] ?? []);
+    videochat_call_guest_list_direct_join_assert((string) ($forgedFields['participant_user_id'] ?? '') === 'server_authoritative', 'participant_user_id body field should be server authoritative');
+    videochat_call_guest_list_direct_join_assert((string) ($forgedFields['call_id'] ?? '') === 'server_authoritative', 'call_id body field should be server authoritative');
+    videochat_call_guest_list_direct_join_assert((string) ($forgedFields['room_id'] ?? '') === 'server_authoritative', 'room_id body field should be server authoritative');
+    videochat_call_guest_list_direct_join_assert($issuedForgedSessions === [], 'forged body must be rejected before issuing a session id');
+    videochat_call_guest_list_direct_join_assert(videochat_fetch_call_access_session_binding($pdo, 'sess_direct_join_temp_manipulated_body') === null, 'forged body must not create a call-access session binding');
+
+    $temporarySession = videochat_issue_session_for_call_access(
+        $pdo,
+        $temporaryAccessId,
+        static fn (): string => 'sess_direct_join_temp_guest',
+        ['client_ip' => '127.0.0.1', 'user_agent' => 'call-guest-list-direct-join-contract'],
+        ['guest_name' => 'Temporary Direct Join Guest']
+    );
+    videochat_call_guest_list_direct_join_assert((bool) ($temporarySession['ok'] ?? false), 'temporary personalized direct-join session should issue with server-bound link identity');
+    $temporaryUser = is_array($temporarySession['user'] ?? null) ? $temporarySession['user'] : [];
+    $temporaryUserId = (int) ($temporaryUser['id'] ?? 0);
+    videochat_call_guest_list_direct_join_assert($temporaryUserId > 0, 'temporary personalized direct-join session should return a user');
+    videochat_call_guest_list_direct_join_assert($temporaryUserId !== $notOnGuestListUserId && $temporaryUserId !== $guestListUserId, 'temporary link must not assume another participant identity');
+    $temporaryBinding = videochat_fetch_call_access_session_binding($pdo, 'sess_direct_join_temp_guest');
+    videochat_call_guest_list_direct_join_assert(is_array($temporaryBinding), 'temporary personalized session binding should persist');
+    videochat_call_guest_list_direct_join_assert((int) ($temporaryBinding['user_id'] ?? 0) === $temporaryUserId, 'temporary personalized binding user mismatch');
+    videochat_call_guest_list_direct_join_assert((string) ($temporaryBinding['access_id'] ?? '') === $temporaryAccessId, 'temporary personalized binding access mismatch');
+    $mutatedTemporaryAccessId = substr($temporaryAccessId, 0, -1) . (substr($temporaryAccessId, -1) === '0' ? '1' : '0');
+    $mutatedTemporaryResolve = videochat_resolve_call_access_public($pdo, $mutatedTemporaryAccessId);
+    videochat_call_guest_list_direct_join_assert(!(bool) ($mutatedTemporaryResolve['ok'] ?? true), 'mutated temporary personalized link should be rejected');
+    videochat_call_guest_list_direct_join_assert((string) ($mutatedTemporaryResolve['reason'] ?? '') === 'not_found', 'mutated temporary personalized link denial reason mismatch');
+    $pdo->prepare(
+        <<<'SQL'
+UPDATE call_participants
+SET left_at = :left_at
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+    )->execute([
+        ':left_at' => gmdate('c'),
+        ':call_id' => $temporaryCallId,
+        ':user_id' => $temporaryUserId,
+    ]);
+    $temporaryBindingAfterLeaving = videochat_fetch_call_access_session_binding($pdo, 'sess_direct_join_temp_guest');
+    videochat_call_guest_list_direct_join_assert(is_array($temporaryBindingAfterLeaving), 'temporary guest-list session should remain bound after leaving');
+    videochat_call_guest_list_direct_join_assert((int) ($temporaryBindingAfterLeaving['user_id'] ?? 0) === $temporaryUserId, 'temporary guest-list session should remain bound to the same user after leaving');
+    $reopenedTemporaryAuth = videochat_authenticate_request(
+        $pdo,
+        [
+            'method' => 'GET',
+            'uri' => '/join/' . $temporaryAccessId,
+            'headers' => ['Authorization' => 'Bearer sess_direct_join_temp_guest'],
+        ],
+        'rest'
+    );
+    videochat_call_guest_list_direct_join_assert((bool) ($reopenedTemporaryAuth['ok'] ?? false), 'reopened temporary link should recognize the same temporary account');
+    videochat_call_guest_list_direct_join_assert((int) (($reopenedTemporaryAuth['user'] ?? [])['id'] ?? 0) === $temporaryUserId, 'reopened temporary link should authenticate as the same temporary account');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-guest-list-direct-join-contract] PASS\n");

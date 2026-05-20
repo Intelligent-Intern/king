@@ -23,11 +23,11 @@ const [
   packageJsonSource,
   sprintSource,
 ] = await Promise.all([
-  readJson('demo/call-app/whiteboard/call-app.manifest.json'),
-  readJson('demo/call-app/whiteboard/crdt.schema.json'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.css'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  readJson('demo/call-apps/whiteboard/call-app.manifest.json'),
+  readJson('demo/call-apps/whiteboard/crdt.schema.json'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.css'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/frontend-vue/tests/e2e/call-app-whiteboard.spec.js'),
   read('demo/video-chat/frontend-vue/package.json'),
   Promise.all([read('SPRINT.md'), read('BACKLOG.md')]).then(([sprint, backlog]) => `${sprint}\n${backlog}`),
@@ -46,6 +46,18 @@ assert.match(
   iframeSource,
   /<canvas id="board" width="1600" height="900"><\/canvas>/,
   'whiteboard runtime must render a fixed-format canvas workspace',
+);
+
+assert.doesNotMatch(
+  iframeSource,
+  /<form[\s\S]*id="inlineEditor"/,
+  'whiteboard inline editor must not be a form because sandboxed iframe form submits can navigate the app entrypoint',
+);
+
+assert.match(
+  iframeSource,
+  /<section id="inlineEditor" class="inline-editor" role="group"[\s\S]*<button id="inlineSubmit" type="button"/,
+  'whiteboard inline editor must commit through explicit JavaScript controls without browser form navigation',
 );
 
 assert.match(
@@ -174,6 +186,12 @@ assert.match(
 
 assert.match(
   whiteboardSource,
+  /function commitInlineEditor\(\)[\s\S]*document\.getElementById\('inlineSubmit'\)\.addEventListener\('click', commitInlineEditor\)/,
+  'whiteboard text and sticky-note inserts must use an explicit click handler instead of form submit navigation',
+);
+
+assert.match(
+  whiteboardSource,
   /function applyEnvelope[\s\S]*state\.applied\.has\(envelope\.operation_id\)[\s\S]*payload_type === 'stroke\.add'[\s\S]*payload_type === 'sticky_note\.update'/,
   'whiteboard runtime must idempotently apply CRDT envelopes for drawing and object state',
 );
@@ -222,8 +240,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /- \[x\] WCA-02 Whiteboard runtime tool completeness first pass/,
-  'SPRINT.md must keep the active Whiteboard runtime ticket closed after implementation proof',
+  /Preserve Whiteboard, Planning Image, Presentation and Spreadsheet follow-up[\s\S]*defects as concrete future tickets/,
+  'planning sources must keep Whiteboard follow-up work as concrete future tickets',
 );
 
 console.log('[call-app-whiteboard-runtime-contract] PASS');

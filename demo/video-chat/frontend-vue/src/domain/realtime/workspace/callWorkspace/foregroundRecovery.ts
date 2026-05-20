@@ -21,7 +21,7 @@ export function shouldArmWorkspaceForegroundRecovery(context = null, documentRef
 }
 
 export function createWorkspaceForegroundRecoveryController({
-  connectSocket,
+  captureClientDiagnostic,
   getArmed,
   getConnectionState,
   getDocument,
@@ -29,22 +29,37 @@ export function createWorkspaceForegroundRecoveryController({
   getManualSocketClose,
   getRouteBusy,
   getSessionToken,
-  hasLiveLocalMedia,
   hasRealtimeRoomSync,
-  initSfu,
-  isSfuClientOpen,
-  isSfuConnected,
   isSocketOpen,
   minIntervalMs = 1000,
-  publishLocalTracks,
-  recycleSfu,
   requestRoomSnapshot,
-  resetReconnectAttempt,
   setArmed,
   setLastAt,
-  shouldAcquireLocalMedia,
-  shouldConnectSfu,
 } = {}) {
+  const captureDiagnostic = typeof captureClientDiagnostic === 'function'
+    ? captureClientDiagnostic
+    : () => {};
+
+  function emitLifecycleDiagnostic(eventType, level, message, context = {}, payload = {}, immediate = false) {
+    captureDiagnostic({
+      category: 'realtime',
+      level,
+      eventType,
+      code: eventType,
+      message,
+      payload: {
+        reason: String(context?.reason || context?.type || ''),
+        hidden: context?.hidden === true,
+        visibility_state: String(context?.visibility_state || callGetter(getDocument, null)?.visibilityState || ''),
+        connection_state: String(callGetter(getConnectionState, '')),
+        socket_open: isSocketOpen?.() === true,
+        room_sync_healthy: hasRealtimeRoomSync?.() === true,
+        ...payload,
+      },
+      immediate,
+    });
+  }
+
   const canRecover = () => {
     if (!isForegroundVisible(getDocument)) return false;
     if (callGetter(getArmed, false) !== true) return false;
@@ -54,15 +69,31 @@ export function createWorkspaceForegroundRecoveryController({
     return String(callGetter(getSessionToken, '') || '').trim() !== '';
   };
 
-  const mark = () => {
+  const mark = (context = {}) => {
     if (callGetter(getManualSocketClose, false) === true) return false;
     if (isBlockedConnectionState(String(callGetter(getConnectionState, '')))) return false;
     setArmed?.(true);
+    emitLifecycleDiagnostic(
+      'call_workspace_lifecycle_background_observed',
+      'info',
+      'Call workspace observed a browser background lifecycle state without opening a new socket.',
+      context,
+      { new_socket_allowed: false },
+    );
     return true;
   };
 
-  const recover = () => {
-    if (!canRecover()) return { recovered: false, reason: 'not_ready' };
+  const recover = (context = {}) => {
+    if (!canRecover()) {
+      emitLifecycleDiagnostic(
+        'call_workspace_lifecycle_foreground_ignored',
+        'info',
+        'Call workspace ignored foreground lifecycle state because opening a socket is not a lifecycle action.',
+        context,
+        { new_socket_allowed: false },
+      );
+      return { recovered: false, reason: 'not_ready' };
+    }
     const now = Date.now();
     if ((now - Number(callGetter(getLastAt, 0) || 0)) < minIntervalMs) {
       return { recovered: false, reason: 'cooldown' };
@@ -71,36 +102,29 @@ export function createWorkspaceForegroundRecoveryController({
     setArmed?.(false);
     setLastAt?.(now);
 
-    if (shouldAcquireLocalMedia?.() === true && hasLiveLocalMedia?.() !== true) {
-      void publishLocalTracks?.();
-    }
-
     const socketOpen = isSocketOpen?.() === true;
     const socketHealthy = socketOpen && String(callGetter(getConnectionState, '')) === 'online';
     const roomSyncHealthy = hasRealtimeRoomSync?.() === true;
-    const sfuExpected = shouldConnectSfu?.() === true;
-    const sfuHealthy = !sfuExpected || (isSfuConnected?.() === true && isSfuClientOpen?.() === true);
-
-    if (socketHealthy && roomSyncHealthy && sfuHealthy) {
-      requestRoomSnapshot?.();
-      return { recovered: true, action: 'snapshot_only' };
-    }
 
     if (socketOpen) {
       requestRoomSnapshot?.();
-    } else {
-      resetReconnectAttempt?.();
-      void connectSocket?.();
     }
 
-    if (sfuExpected && !sfuHealthy) {
-      recycleSfu?.();
-      initSfu?.();
-    }
-
-    if (!socketOpen) return { recovered: true, action: 'socket_reconnect' };
-    if (!roomSyncHealthy) return { recovered: true, action: sfuHealthy ? 'snapshot_backfill' : 'snapshot_backfill_sfu_recover' };
-    return { recovered: true, action: 'sfu_recover' };
+    const action = socketHealthy && roomSyncHealthy
+      ? 'snapshot_only'
+      : (socketOpen ? 'snapshot_backfill' : 'connect_suppressed');
+    emitLifecycleDiagnostic(
+      'call_workspace_lifecycle_foreground_state_sync',
+      socketOpen ? 'info' : 'warning',
+      'Call workspace foreground lifecycle handling stayed within state and diagnostics.',
+      context,
+      {
+        action,
+        new_socket_allowed: false,
+      },
+      !socketOpen,
+    );
+    return { recovered: socketOpen, action };
   };
 
   return { mark, recover };

@@ -168,12 +168,12 @@ async function main() {
         },
       },
       {
-        rescue: { captureFrameRate: 7, encodeIntervalMs: 250, frameQuality: 32 },
-        realtime: { captureFrameRate: 10, encodeIntervalMs: 200, frameQuality: 35 },
-        balanced: { captureFrameRate: 12, encodeIntervalMs: 166, frameQuality: 38 },
-        quality: { captureFrameRate: 18, encodeIntervalMs: 125, frameQuality: 40 },
+        rescue: { captureFrameRate: 30, encodeIntervalMs: 33, frameQuality: 32 },
+        realtime: { captureFrameRate: 30, encodeIntervalMs: 33, frameQuality: 35 },
+        balanced: { captureFrameRate: 30, encodeIntervalMs: 33, frameQuality: 38 },
+        quality: { captureFrameRate: 30, encodeIntervalMs: 33, frameQuality: 40 },
       },
-      'SFU profiles must keep visible two-person grid quality while avoiding Chrome/SFU burst pressure',
+      'SFU profiles must keep one 30 fps encode clock while quality tiers adjust resolution and byte budgets',
     );
 
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);
@@ -215,9 +215,10 @@ async function main() {
       profiles.realtime.frameWidth < profiles.balanced.frameWidth,
       'realtime profile must be a real downscale below balanced after pressure',
     );
-    assert.ok(
-      profiles.rescue.encodeIntervalMs > profiles.realtime.encodeIntervalMs,
-      'rescue profile must slow encoding below realtime to drain sender pressure',
+    assert.equal(
+      profiles.rescue.encodeIntervalMs,
+      profiles.realtime.encodeIntervalMs,
+      'rescue and realtime profiles must share the same 30 fps cadence; pressure handling must use drops/backpressure, not hidden fps experiments',
     );
 
     process.stdout.write('[sfu-motion-backpressure-contract] PASS\n');

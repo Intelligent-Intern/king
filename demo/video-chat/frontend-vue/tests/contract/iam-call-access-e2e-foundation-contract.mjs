@@ -25,6 +25,16 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function assertUniqueField(rows, field, label) {
+  const seen = new Set();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const value = String(row?.[field] ?? '').trim();
+    assert.notEqual(value, '', `${label} must have ${field}`);
+    assert.equal(seen.has(value), false, `${label} ${field} must be unique: ${value}`);
+    seen.add(value);
+  }
+}
+
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const callAccessSeedMatrix = readJson('demo/video-chat/contracts/v1/iam-call-access-seeding.matrix.json');
@@ -42,11 +52,20 @@ const seedRuntimeHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpe
 const liveFixtureHelper = readText('demo/video-chat/frontend-vue/tests/e2e/helpers/iamCallAccessLiveFixtures.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-removal-contract.php');
 const coreOrgSessionBackendContract = readText('demo/video-chat/backend-king-php/tests/iam-core-org-session-journey-contract.php');
+const anonymousLoggedInRightsBackendContract = readText('demo/video-chat/backend-king-php/tests/call-access-anonymous-logged-in-rights-contract.php');
+const activePermissionContract = readText('demo/video-chat/backend-king-php/tests/call-access-active-permission-change-contract.php');
+const invitedOrgRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-invited-user-org-removal-contract.php');
+const membershipStaleInviteRightsContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-stale-invite-rights-contract.php');
+const activeRemovalContract = readText('demo/video-chat/backend-king-php/tests/call-access-membership-active-removal-contract.php');
+const guestListDirectJoinContract = readText('demo/video-chat/backend-king-php/tests/call-guest-list-direct-join-contract.php');
 const sqliteProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 const smoke = readText('demo/video-chat/scripts/smoke.sh');
 const auth = readText('demo/video-chat/backend-king-php/support/auth.php');
 const authCache = readText('demo/video-chat/backend-king-php/support/auth_session_cache.php');
 const tenantContext = readText('demo/video-chat/backend-king-php/support/tenant_context.php');
+const realtimeCallContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
+const realtimeCallRoleContext = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_role_context.php');
+const realtimeCallRoles = readText('demo/video-chat/backend-king-php/domain/realtime/realtime_call_roles.php');
 const callAccessPublic = readText('demo/video-chat/backend-king-php/domain/calls/call_access_public.php');
 const callAccessSession = readText('demo/video-chat/frontend-vue/src/domain/calls/access/callAccessSession.ts');
 
@@ -216,7 +235,7 @@ const callAccessPaths = new Set(matrix.commands?.['frontend:e2e:call-access']?.p
 const requiredSpecs = new Set(matrix.release_gate?.required_ui_parity_specs || []);
 const removedInvitedMember = callAccessSeedMatrix.users.find((user) => user?.key === 'removed_invited_member');
 assertUniqueField(callAccessSeedMatrix.tenants, 'id', 'tenant seed row');
-assertUniqueField(callAccessSeedMatrix.organizations, 'id', 'organization seed row');
+assertUniqueField(callAccessSeedMatrix.organizations, 'public_id', 'organization seed row');
 assertUniqueField(callAccessSeedMatrix.users, 'id', 'user seed row');
 assertUniqueField(callAccessSeedMatrix.calls, 'id', 'call seed row');
 assertUniqueField(callAccessSeedMatrix.access_links, 'id', 'access-link seed row');
@@ -324,6 +343,9 @@ assert.deepEqual(
 assert.deepEqual(
   seedScenarios.find((scenario) => scenario?.key === 'direct_join_user_without_organization_denied')?.expected,
   {
+    state: 'forbidden',
+    decision_source: 'none',
+    decision_reason: 'not_on_guest_list',
     direct_join_allowed: false,
     expected_resolve_status: 200,
     expected_resolve_state: 'forbidden',
@@ -335,6 +357,7 @@ assert.deepEqual(
     guest_list_entry: false,
     owner: false,
     guest_list_required: true,
+    can_manage_lobby: false,
   },
   'seed matrix must pin tenant-without-organization direct join denial to existing forbidden envelopes',
 );
@@ -454,14 +477,14 @@ assert.match(
   'backend contract must prove call-scoped fallback does not restore tenant admin rights',
 );
 assert.match(
-  ciGate,
+  sqliteProof,
   /call-access-active-permission-change-contract\.sh/,
-  'IAM Call Access CI gate must include active permission-change backend proof',
+  'IAM SQLite runtime proof must include active permission-change backend proof',
 );
 assert.match(
-  ciGate,
+  sqliteProof,
   /call-access-anonymous-logged-in-rights-contract\.sh/,
-  'IAM Call Access CI gate must include the logged-in anonymous-link backend proof when SQLite is available',
+  'IAM SQLite runtime proof must include the logged-in anonymous-link backend proof',
 );
 assert.match(
   anonymousLoggedInRightsBackendContract,
@@ -495,11 +518,11 @@ assert.match(
 );
 assert.match(
   realtimeCallContext,
-  /require_once __DIR__ \. '\/realtime_call_roles\.php';/,
+  /require_once __DIR__ \. '\/realtime_call_role_context\.php';/,
   'realtime call context must use the focused current-role resolver',
 );
 assert.match(
-  realtimeCallRoles,
+  realtimeCallRoleContext + realtimeCallRoles,
   /videochat_user_has_system_admin_call_rights[\s\S]*videochat_user_is_organization_admin_for_call/s,
   'realtime role resolver must derive system and organization admin rights from current backend state',
 );
@@ -574,14 +597,14 @@ assert.match(
   'active membership-removal contract must prove removed org users remain in calls only through explicit call-scoped permission',
 );
 assert.match(
-  ciGate,
+  sqliteProof,
   /call-access-invited-user-org-removal-contract\.sh/,
-  'IAM Call Access CI gate must run the invited-user organization-removal backend contract when SQLite is available',
+  'IAM SQLite runtime proof must run the invited-user organization-removal backend contract',
 );
 assert.match(
-  ciGate,
+  sqliteProof,
   /call-access-membership-stale-invite-rights-contract\.sh/,
-  'IAM Call Access CI gate must run the stale-invite membership-rights backend contract when SQLite is available',
+  'IAM SQLite runtime proof must run the stale-invite membership-rights backend contract',
 );
 assert.match(
   smoke,
@@ -654,9 +677,9 @@ assert.match(
   'backend guest-list direct-join contract must prove mutated-link rejection and same temporary-account recognition after leaving',
 );
 assert.match(
-  ciGate,
+  sqliteProof,
   /call-guest-list-direct-join-contract\.sh/,
-  'IAM CI SQLite gate must include the guest-list direct-join backend proof',
+  'IAM SQLite runtime proof must include the guest-list direct-join backend proof',
 );
 
 process.stdout.write('[iam-call-access-e2e-foundation-contract] PASS\n');

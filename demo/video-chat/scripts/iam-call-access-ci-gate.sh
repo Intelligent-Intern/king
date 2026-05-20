@@ -80,6 +80,9 @@ STATIC_CONTRACTS=(
   "node tests/contract/iam9-19-multiple-pending-confirmations-contract.mjs"
   "node tests/contract/iam9-16-edge-safe-states-contract.mjs"
   "node tests/contract/iam9-17-email-confirmation-race-contract.mjs"
+  "node tests/contract/iam-lobby-concurrency-remaining-contract.mjs"
+  "node tests/contract/iam-lobby-state-cleanup-proof-contract.mjs"
+  "node tests/contract/iam-lobby-timeout-consistency-contract.mjs"
   "node tests/contract/iam-active-call-kick-contract.mjs"
 )
 

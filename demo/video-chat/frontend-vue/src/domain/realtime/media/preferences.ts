@@ -11,7 +11,7 @@ import {
 } from './speakerOutputRouting';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
-const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
+const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 6;
 const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
 const MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS = 250;
 export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';

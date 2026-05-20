@@ -603,5 +603,6 @@ PHP_FUNCTION(king_get_last_error);
 PHP_FUNCTION(king_get_stats);
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);
+PHP_FUNCTION(king_db_ingest);
 
 #endif /* PHP_KING_H */

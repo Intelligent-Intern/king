@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSpecs,
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +32,7 @@ const ciWorkflow = readText('.github/workflows/ci.yml');
 
 const scripts = packageJson.scripts || {};
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
+const iamContractGate = iamCallAccessContractSuiteText;
 const iamLocalRunDocsScript = String(scripts['test:contract:iam-local-run-docs'] || '');
 const iamCiGateScript = String(scripts['test:ci:iam-call-access'] || '');
 const iamStaticGateScript = String(scripts['test:ci:iam-call-access:static'] || '');
@@ -34,6 +40,7 @@ const iamSqliteGateScript = String(scripts['test:ci:iam-call-access:sqlite'] || 
 const iamDockerGateScript = String(scripts['test:ci:iam-call-access:docker'] || '');
 const iamFullGateScript = String(scripts['test:ci:iam-call-access:full'] || '');
 const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
+const callAccessE2eGate = callAccessE2eSuiteText;
 const lobbyConcurrencyScript = String(scripts['test:e2e:lobby-concurrency'] || '');
 const bannedGatePattern = /test:contract:(background|media)|background-|media-reconnect|media-security|sfu-|gossip-/;
 const bannedCommandPattern = /npm run test:contract:(background|media|sfu|gossip)|node tests\/contract\/(?:background-|media-security|sfu-|gossip-)|\.\.\/backend-king-php\/tests\/realtime-gossip/i;
@@ -95,6 +102,9 @@ const requiredIamContractPaths = [
   'frontend-vue/tests/contract/call-access-terminal-states-contract.mjs',
   'frontend-vue/tests/contract/call-access-admission-boundaries-contract.mjs',
   'frontend-vue/tests/contract/call-access-lobby-concurrency-contract.mjs',
+  'frontend-vue/tests/contract/iam-lobby-concurrency-remaining-contract.mjs',
+  'frontend-vue/tests/contract/iam-lobby-state-cleanup-proof-contract.mjs',
+  'frontend-vue/tests/contract/iam-lobby-timeout-consistency-contract.mjs',
   'frontend-vue/tests/contract/call-access-duplicate-abuse-contract.mjs',
   'frontend-vue/tests/contract/call-access-account-isolation-contract.mjs',
   'frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs',
@@ -109,6 +119,8 @@ const requiredIamContractPaths = [
   'backend-king-php/tests/call-guest-list-direct-join-contract.sh',
   'backend-king-php/tests/call-access-cross-org-contract.sh',
   'backend-king-php/tests/realtime-lobby-concurrency-contract.sh',
+  'backend-king-php/tests/realtime-lobby-state-cleanup-contract.sh',
+  'backend-king-php/tests/realtime-lobby-timeout-consistency-contract.sh',
   'backend-king-php/tests/call-access-membership-removal-contract.sh',
   'backend-king-php/tests/call-access-stale-organization-role-contract.sh',
   'backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh',
@@ -157,8 +169,13 @@ const requiredIamSupportingPaths = [
 ];
 
 assert.notEqual(iamContractScript, '', 'package.json must expose test:contract:iam-call-access');
-assert.doesNotMatch(
+assert.match(
   iamContractScript,
+  /^node tests\/contract\/iam-call-access-contract-suite\.mjs$/,
+  'package.json must expose the IAM call-access contract suite helper as the canonical gate',
+);
+assert.doesNotMatch(
+  iamContractGate,
   bannedGatePattern,
   'IAM call-access contract gate must not invoke media, background, SFU, or gossip gates',
 );
@@ -197,7 +214,7 @@ for (const contractPath of requiredIamContractPaths) {
     ? contractPath.slice('frontend-vue/'.length)
     : `../${contractPath}`;
   assertIncludes(
-    iamContractScript,
+    iamContractGate,
     scriptPath,
     `test:contract:iam-call-access must execute ${contractPath}`,
   );
@@ -205,14 +222,25 @@ for (const contractPath of requiredIamContractPaths) {
 
 assert.match(
   callAccessE2eScript,
-  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js tests\/e2e\/call-access-calendar-unregistered-invite\.spec\.js tests\/e2e\/call-access-admin-join-boundaries\.spec\.js --workers=1$/,
-  'focused call-access E2E script must stay limited to join, deterministic seed-matrix, calendar unregistered invite, and admin join boundary specs with IAM artifact retention enabled',
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 node tests\/e2e\/call-access-e2e-suite\.mjs$/,
+  'focused call-access E2E script must route through the suite helper with IAM artifact retention enabled',
 );
 assert.doesNotMatch(
-  callAccessE2eScript,
+  callAccessE2eGate,
   /background|media|sfu|gossip/,
   'focused call-access E2E script must not pull media/background specs',
 );
+for (const specPath of [
+  'tests/e2e/call-access-join.spec.js',
+  'tests/e2e/call-access-calendar-unregistered-invite.spec.js',
+  'tests/e2e/call-access-authorized-rejoin.spec.js',
+  'tests/e2e/iam-lobby-admission-main.spec.js',
+  'tests/e2e/call-access-temp-guest-list-direct-join.spec.js',
+  'tests/e2e/iam-lobby-state-cleanup.spec.js',
+  'tests/e2e/call-access-rejoin-kick-membership.spec.js',
+]) {
+  assert.ok(callAccessE2eSpecs.includes(specPath), `Call Access E2E suite must include ${specPath}`);
+}
 assert.match(
   lobbyConcurrencyScript,
   /^playwright test tests\/e2e\/lobby-concurrency-ui\.spec\.js$/,
@@ -292,13 +320,8 @@ assert.match(
 const callAccessCommand = matrix.commands?.['frontend:e2e:call-access'] || {};
 assert.deepEqual(
   callAccessCommand.paths,
-  [
-    'frontend-vue/tests/e2e/call-access-join.spec.js',
-    'frontend-vue/tests/e2e/call-access-seed-matrix.spec.js',
-    'frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js',
-    'frontend-vue/tests/e2e/call-access-admin-join-boundaries.spec.js',
-  ],
-  'Call Access E2E metadata must stay limited to stable Sprint 02 call-access specs',
+  callAccessE2eSpecs.map((specPath) => `frontend-vue/${specPath}`),
+  'Call Access E2E metadata must list the suite helper specs',
 );
 const lobbyCommand = matrix.commands?.['frontend:e2e:lobby-concurrency'] || {};
 assert.deepEqual(

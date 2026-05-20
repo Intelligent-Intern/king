@@ -48,6 +48,8 @@ const callAccessSession = read('demo/video-chat/backend-king-php/domain/calls/ca
 const realtimeCallContext = read('demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php');
 const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
 const websocketLobby = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_lobby.php');
+const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
+const activeCallKick = read('demo/video-chat/backend-king-php/http/module_realtime_active_call_kick.php');
 const lobbySync = read('demo/video-chat/backend-king-php/domain/realtime/realtime_lobby_sync.php');
 const authSupport = read('demo/video-chat/backend-king-php/support/auth.php');
 const joinView = read('demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue');
@@ -92,9 +94,14 @@ assert.match(
   'session issuance must inherit copied-link revocation before minting a new call-scoped session',
 );
 assert.match(
-  websocketLobby,
+  activeCallKick,
   /\$nextInviteState = match \(\$requestedAction\) \{[\s\S]*'lobby\/kick' => 'invited'[\s\S]*default => 'cancelled'[\s\S]*videochat_realtime_mark_call_participant_invite_state_by_user_id\([\s\S]*\$nextInviteState[\s\S]*\['pending', 'allowed', 'accepted'\]/,
-  'host kick must clear the current admission to invited while host remove remains revoked',
+  'host kick must clear the current admission to invited while host remove remains revoked in the extracted active-call kick handler',
+);
+assert.match(
+  `${websocketLobby}\n${lobbyPersistence}`,
+  /require_once __DIR__ \. '\/module_realtime_active_call_kick\.php';[\s\S]*videochat_realtime_apply_lobby_remove_result\(/,
+  'websocket lobby handling must delegate kick/remove persistence through the active-call kick helper',
 );
 assert.match(
   realtimeCallContext,

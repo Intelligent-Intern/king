@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  callAccessE2eSuiteText,
+  iamCallAccessContractSuiteText,
+} from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,6 +32,8 @@ const dockerWrapper = readText('demo/video-chat/backend-king-php/tests/iam-backe
 
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
 const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
+const iamContractGate = iamCallAccessContractSuiteText;
+const callAccessE2eGate = callAccessE2eSuiteText;
 const bannedGatePattern = /test:contract:(background|media)|background-|media-reconnect|media-security|sfu-|gossip-/i;
 const bannedCommandPattern = /npm run test:contract:(background|media|sfu|gossip)|node tests\/contract\/(?:background-|media-security|sfu-|gossip-)|\.\.\/backend-king-php\/tests\/realtime-gossip/i;
 
@@ -38,11 +44,16 @@ assert.match(
 );
 assert.match(
   iamContractScript,
+  /^node tests\/contract\/iam-call-access-contract-suite\.mjs$/,
+  'canonical IAM contract gate must route through the suite helper',
+);
+assert.match(
+  iamContractGate,
   /node tests\/contract\/iam-local-run-docs-contract\.mjs/,
-  'canonical IAM contract gate must execute the local run documentation contract',
+  'canonical IAM contract suite must execute the local run documentation contract',
 );
 assert.doesNotMatch(
-  iamContractScript,
+  iamContractGate,
   bannedGatePattern,
   'canonical IAM contract gate must not invoke parked Background/Gossip/SFU/Media gates',
 );
@@ -74,11 +85,11 @@ assert.match(
 
 assert.match(
   callAccessE2eScript,
-  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js tests\/e2e\/call-access-calendar-unregistered-invite\.spec\.js tests\/e2e\/call-access-admin-join-boundaries\.spec\.js --workers=1$/,
-  'focused Call Access E2E script must stay limited to stable serial IAM specs',
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 node tests\/e2e\/call-access-e2e-suite\.mjs$/,
+  'focused Call Access E2E script must route through the suite helper',
 );
 assert.doesNotMatch(
-  callAccessE2eScript,
+  callAccessE2eGate,
   /background|media|sfu|gossip/i,
   'focused Call Access E2E script must not pull parked media/background specs',
 );

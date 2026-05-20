@@ -60,7 +60,7 @@ function trackCapabilities(videoTrack) {
 export function buildSfuVideoProfileTrackConstraints(videoProfile = {}, videoTrack = null) {
   const capabilities = trackCapabilities(videoTrack);
   const constraints = {};
-  const exact = profileId(videoProfile) === 'strict_720p30';
+  const exact = profileId(videoProfile) === 'strict_720p30' || videoProfile.captureExact === true;
   const width = resolveCappedConstraint(videoProfile.captureWidth, capabilities.width, { exact });
   const height = resolveCappedConstraint(videoProfile.captureHeight, capabilities.height, { exact });
   const frameRate = resolveCappedConstraint(videoProfile.captureFrameRate, capabilities.frameRate, { exact });

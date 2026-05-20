@@ -56,9 +56,6 @@ export function emitCallAppDiagnostic(eventType, fields = {}) {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
     window.dispatchEvent(new CustomEvent('king:call-app-diagnostic', { detail: diagnostic }));
   }
-  if (typeof console !== 'undefined' && typeof console.debug === 'function') {
-    console.debug('[CallAppDiagnostics]', diagnostic);
-  }
   return diagnostic;
 }
 

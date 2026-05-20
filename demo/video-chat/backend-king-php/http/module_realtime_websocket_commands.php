@@ -7,6 +7,7 @@ require_once __DIR__ . '/module_realtime_media_fanout_guard.php';
 require_once __DIR__ . '/module_realtime_gossip_media_relay.php';
 require_once __DIR__ . '/module_realtime_media_session_commands.php';
 require_once __DIR__ . '/module_realtime_chat_commands.php';
+require_once __DIR__ . '/module_realtime_websocket_connect.php';
 require_once __DIR__ . '/module_realtime_websocket_admin_sync.php';
 require_once __DIR__ . '/module_realtime_websocket_lobby.php';
 
@@ -53,6 +54,21 @@ function videochat_realtime_handle_secondary_websocket_command(
         return $mediaFanoutGuardResult;
     }
 
+    if (function_exists('videochat_sfu_binary_frame_has_magic') && videochat_sfu_binary_frame_has_magic($frame)) {
+        $binaryGossipMediaRelayCommand = videochat_gossip_media_relay_decode_client_frame($frame, $presenceConnection);
+        $binaryGossipMediaRelayResult = videochat_realtime_handle_gossip_media_relay_command(
+            $binaryGossipMediaRelayCommand,
+            $websocket,
+            $presenceState,
+            $presenceConnection,
+            $signalingBrokerDatabase,
+            $openDatabase
+        );
+        if ($binaryGossipMediaRelayResult !== null) {
+            return $binaryGossipMediaRelayResult;
+        }
+    }
+
     $capabilitiesCommand = videochat_realtime_decode_client_capabilities_frame($frame);
     $capabilitiesResult = videochat_realtime_handle_media_capabilities_websocket_command(
         $capabilitiesCommand,
@@ -65,12 +81,14 @@ function videochat_realtime_handle_secondary_websocket_command(
         return $capabilitiesResult;
     }
 
-    $gossipMediaRelayCommand = videochat_gossip_media_relay_decode_client_frame($frame);
+    $gossipMediaRelayCommand = videochat_gossip_media_relay_decode_client_frame($frame, $presenceConnection);
     $gossipMediaRelayResult = videochat_realtime_handle_gossip_media_relay_command(
         $gossipMediaRelayCommand,
         $websocket,
         $presenceState,
-        $presenceConnection
+        $presenceConnection,
+        $signalingBrokerDatabase,
+        $openDatabase
     );
     if ($gossipMediaRelayResult !== null) {
         return $gossipMediaRelayResult;
@@ -379,106 +397,13 @@ function videochat_realtime_handle_gossipmesh_topology_repair_command(
         return videochat_realtime_secondary_handled_result();
     }
 
-    $roomId = videochat_presence_normalize_room_id((string) ($repairCommand['room_id'] ?? ''), '');
-    $connectionRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), '');
-    $callId = videochat_realtime_normalize_call_id((string) ($repairCommand['call_id'] ?? ''), '');
-    $connectionCallId = videochat_realtime_connection_call_id($presenceConnection);
-    $userId = (int) ($presenceConnection['user_id'] ?? 0);
-    $peerId = videochat_gossipmesh_safe_id($repairCommand['peer_id'] ?? '');
-    if (
-        $roomId === ''
-        || $callId === ''
-        || $connectionRoomId === ''
-        || $connectionCallId === ''
-        || $roomId !== $connectionRoomId
-        || $callId !== $connectionCallId
-    ) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'context_mismatch', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
-
-    if ($userId <= 0 || $peerId !== (string) $userId) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'unauthenticated_peer', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
-
-    $sessionId = trim((string) ($presenceConnection['session_id'] ?? ''));
-    $isLocalMember = videochat_realtime_presence_has_room_membership($presenceState, $roomId, $userId, $sessionId);
-    $isDbMember = $isLocalMember ? true : videochat_realtime_db_room_has_joined_user($openDatabase, $presenceConnection, $roomId, $userId);
-    if (!$isDbMember) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'sender_not_in_room', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
-
-    $participants = videochat_realtime_merge_room_participants(
-        videochat_presence_room_participants($presenceState, $roomId),
-        videochat_realtime_db_room_participants($openDatabase, $presenceConnection)
+    videochat_presence_send_frame(
+        $websocket,
+        videochat_realtime_websocket_gossip_ops_state_frame($presenceState, $presenceConnection, [
+            'reason' => 'client_topology_repair_not_required',
+        ]),
+        $sender
     );
-    $healthRecord = videochat_gossipmesh_record_topology_health_observation($repairCommand);
-    $healthObservations = videochat_gossipmesh_load_recent_topology_health_observations($roomId, $callId);
-    $healthObservations[] = (array) ($healthRecord['observation'] ?? []);
-    $avoidPairs = videochat_gossipmesh_recent_failed_pair_map($healthObservations);
-    try {
-        $repairPayloadsByPeer = videochat_gossipmesh_room_state_payloads_by_peer(
-            $callId,
-            $roomId,
-            $participants,
-            'topology_repair',
-            null,
-            [
-                'seed' => $callId . ':' . $roomId . ':' . (string) ($repairCommand['lost_peer_id'] ?? ''),
-                'avoid_pairs' => $avoidPairs,
-                'topology_feature' => 'topology_repair',
-                'repair' => [
-                    'requested_by_peer_id' => $peerId,
-                    'lost_peer_id' => (string) ($repairCommand['lost_peer_id'] ?? ''),
-                    'reason' => (string) ($repairCommand['reason'] ?? 'topology_repair'),
-                    'retired_edges' => [
-                        [
-                            'peer_id' => $peerId,
-                            'neighbor_peer_id' => (string) ($repairCommand['lost_peer_id'] ?? ''),
-                        ],
-                    ],
-                ],
-            ]
-        );
-    } catch (Throwable) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'topology_unavailable', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
-
-    if ($repairPayloadsByPeer === []) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'topology_unavailable', $sender);
-        return videochat_realtime_secondary_handled_result();
-    }
-
-    $tenantId = is_numeric($presenceConnection['tenant_id'] ?? null) ? (int) $presenceConnection['tenant_id'] : null;
-    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($roomId, $tenantId)] ?? [];
-    $sentCount = 0;
-    if (is_array($roomConnections)) {
-        foreach ($roomConnections as $connectionId => $_socket) {
-            if (!is_string($connectionId) || $connectionId === '') {
-                continue;
-            }
-            $targetConnection = $presenceState['connections'][$connectionId] ?? null;
-            if (!is_array($targetConnection)) {
-                continue;
-            }
-            $targetPeerId = videochat_gossipmesh_safe_id((string) ((int) ($targetConnection['user_id'] ?? 0)));
-            if ($targetPeerId === '' || !is_array($repairPayloadsByPeer[$targetPeerId] ?? null)) {
-                continue;
-            }
-            if (videochat_presence_send_frame($targetConnection['socket'] ?? null, $repairPayloadsByPeer[$targetPeerId], $sender)) {
-                $sentCount++;
-            }
-        }
-    }
-
-    if ($sentCount <= 0 && is_array($repairPayloadsByPeer[$peerId] ?? null)) {
-        videochat_presence_send_frame($websocket, $repairPayloadsByPeer[$peerId], $sender);
-    } elseif ($sentCount <= 0) {
-        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'topology_unavailable', $sender);
-    }
 
     return videochat_realtime_secondary_handled_result();
 }
@@ -577,21 +502,15 @@ function videochat_realtime_handle_gossipmesh_telemetry_snapshot_command(
         'peer_id' => $peerId,
     ]);
 
-    videochat_presence_send_frame(
-        $websocket,
-        [
-            'type' => 'gossip/telemetry/ack',
-            'lane' => 'ops',
-            'room_id' => $roomId,
-            'call_id' => $callId,
-            'peer_id' => $peerId,
-            'peer_count' => (int) ($aggregate['peer_count'] ?? 0),
-            'transports' => is_array($aggregate['transports'] ?? null) ? $aggregate['transports'] : [],
-            'rollout_gate' => is_array($aggregate['rollout_gate'] ?? null) ? $aggregate['rollout_gate'] : [],
-            'time' => gmdate('c'),
-        ],
-        $sender
-    );
+    videochat_presence_send_frame($websocket, videochat_realtime_websocket_gossip_ops_state_frame($presenceState, $presenceConnection, [
+        'room_id' => $roomId,
+        'call_id' => $callId,
+        'peer_id' => $peerId,
+        'peer_count' => (int) ($aggregate['peer_count'] ?? 0),
+        'transports' => is_array($aggregate['transports'] ?? null) ? (array) $aggregate['transports'] : [],
+        'rollout_gate' => is_array($aggregate['rollout_gate'] ?? null) ? (array) $aggregate['rollout_gate'] : [],
+        'reason' => 'telemetry_snapshot',
+    ]), $sender);
 
     return videochat_realtime_secondary_handled_result();
 }

@@ -15,7 +15,7 @@ Stand: 2026-05-10
 3. Call Apps
    - `module_call_apps.php` stellt Availability, Sessions, Launch-Token, CRDT Bootstrap/Ops/Snapshots, Grants und Session-Remove bereit.
    - `useCallAppIframeBridge.js` uebergibt Launch-Kontext, Capabilities und Permissions sicher an App-Iframes.
-   - Package-Quellen, Manifest, MCP/Health-Descriptor, CRDT-Schema und App-Assets gehoeren in `demo/call-app/<app-key>/`.
+   - Package-Quellen, Manifest, MCP/Health-Descriptor, CRDT-Schema und App-Assets gehoeren in `demo/call-apps/<app-key>/`.
    - `demo/video-chat/frontend-vue/src/domain/realtime/callApps` ist Host/Bridge/Shell, nicht App-Quelle.
    - `demo/video-chat/backend-king-php/domain/call_apps` ist Runtime/Session/CRDT/Marketplace, nicht App-Quelle.
    - `demo/video-chat/frontend-vue/dist/call-app` ist Build-Artefakt und keine Quelle.

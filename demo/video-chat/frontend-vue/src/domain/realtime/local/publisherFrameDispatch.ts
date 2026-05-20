@@ -1,8 +1,9 @@
 import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
 import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
+import { normalizeAuthoritativePublisherTransport } from './authoritativePublisherMediaProfile';
 
 export function publisherRequiresSfuBeforeEncode() {
-  return VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuRequiredBeforeGossip;
+  return false;
 }
 
 function safeFunction(value, fallback = () => false) {
@@ -73,14 +74,14 @@ function diagnoseGossipPrimaryPublishFailure({
   safeFunction(captureClientDiagnostic, () => undefined)({
     category: 'media',
     level: 'warning',
-    eventType: 'gossip_primary_publish_failed_no_sfu_fallback',
-    code: 'gossip_primary_publish_failed_no_sfu_fallback',
-    message: 'Gossip primary publication failed; planned Gossip media does not fall back to SFU.',
+    eventType: 'gossip_primary_publish_failed',
+    code: 'gossip_primary_publish_failed',
+    message: 'Gossip primary publication failed; no alternate media path was attempted.',
     payload: diagnosticsPayload({
       trackId,
       mediaRuntimePath,
       extra: {
-        fallback_reason: 'gossip_primary_no_sfu_fallback',
+        fallback_reason: 'gossip_primary_no_alternate_path',
         gossip_primary_expected: true,
       },
     }),
@@ -111,9 +112,15 @@ export async function dispatchPublisherFrame({
   onOptionalSfuFailure,
   suppressGossipPrimary = false,
   suppressSfuSendFailures = false,
+  plannedTransport = '',
 }) {
-  const gossipFirst = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && suppressGossipPrimary !== true;
-  const sfuOptional = VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional && suppressGossipPrimary !== true;
+  const normalizedPlannedTransport = normalizeAuthoritativePublisherTransport(plannedTransport);
+  const planRequiresGossipTransport = normalizedPlannedTransport === 'gossip' && suppressGossipPrimary !== true;
+  const planRequiresSfuTransport = normalizedPlannedTransport === 'sfu';
+  const gossipFirst = !planRequiresSfuTransport
+    && (planRequiresGossipTransport || VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary)
+    && suppressGossipPrimary !== true;
+  const sfuOptional = !planRequiresSfuTransport && VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional && suppressGossipPrimary !== true;
   let gossipPublished = false;
 
   if (gossipFirst) {
@@ -139,7 +146,7 @@ export async function dispatchPublisherFrame({
       gossipPublished,
       sfuSent: false,
       sfuSendOptional: false,
-      sfuFallbackSuppressed: true,
+      alternatePathSuppressed: true,
       postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
     };
   }
@@ -163,6 +170,31 @@ export async function dispatchPublisherFrame({
         sfuSent: false,
         sfuSendOptional: true,
         sfuMirrorSkipped: true,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+      };
+    }
+    if (!gossipPublished && !planRequiresSfuTransport) {
+      gossipPublished = publishGossipFrame({
+        frame,
+        trackId,
+        mediaRuntimePath,
+        publishLocalEncodedFrameToGossip,
+        captureClientDiagnosticError,
+      });
+    }
+    if (gossipPublished) {
+      diagnoseOptionalSfuSkip({
+        captureClientDiagnostic,
+        eventType: 'sfu_send_unavailable_gossip_continues',
+        message: 'SFU send path is unavailable; Gossip publication continues without waiting for SFU.',
+        trackId,
+        mediaRuntimePath,
+      });
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: true,
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
       };
     }
@@ -205,6 +237,34 @@ export async function dispatchPublisherFrame({
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
       };
     }
+    if (!gossipFirst && !planRequiresSfuTransport) {
+      gossipPublished = publishGossipFrame({
+        frame,
+        trackId,
+        mediaRuntimePath,
+        publishLocalEncodedFrameToGossip,
+        captureClientDiagnosticError,
+      });
+    }
+    if (gossipPublished) {
+      diagnoseOptionalSfuSkip({
+        captureClientDiagnostic,
+        eventType: 'sfu_send_failed_gossip_continues',
+        message: 'SFU send failed; Gossip publication continues without waiting for SFU recovery.',
+        trackId,
+        mediaRuntimePath,
+        failureDetails,
+      });
+      safeFunction(onOptionalSfuFailure, () => undefined)(failureDetails);
+      return {
+        ok: true,
+        gossipPublished,
+        sfuSent: false,
+        sfuSendOptional: true,
+        postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
+        sfuSendFailureDetails: failureDetails,
+      };
+    }
     if (!sfuOptional) {
       return {
         ok: Boolean(safeFunction(onRequiredSfuFailure)(failureDetails)),
@@ -214,15 +274,6 @@ export async function dispatchPublisherFrame({
         postSendBufferedAmount: safeFunction(getSfuClientBufferedAmount, () => 0)(),
         sfuSendFailureDetails: failureDetails,
       };
-    }
-    if (!gossipFirst) {
-      gossipPublished = publishGossipFrame({
-        frame,
-        trackId,
-        mediaRuntimePath,
-        publishLocalEncodedFrameToGossip,
-        captureClientDiagnosticError,
-      });
     }
     diagnoseOptionalSfuSkip({
       captureClientDiagnostic,
@@ -243,7 +294,7 @@ export async function dispatchPublisherFrame({
     };
   }
 
-  if (!gossipFirst) {
+  if (!gossipFirst && !planRequiresSfuTransport) {
     gossipPublished = publishGossipFrame({
       frame,
       trackId,
@@ -277,6 +328,7 @@ export async function dispatchWlvcPublisherFrame({
   paceForcedKeyframeRecovery,
   suppressGossipPrimary = false,
   suppressSfuSendFailures = false,
+  plannedTransport = '',
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -289,6 +341,7 @@ export async function dispatchWlvcPublisherFrame({
     captureClientDiagnosticError,
     suppressGossipPrimary,
     suppressSfuSendFailures,
+    plannedTransport,
     onRequiredSfuUnavailable: () => {
       reportSfuClientUnavailableAfterEncode({
         getSfuClientBufferedAmount,
@@ -336,6 +389,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
   codecId,
   suppressGossipPrimary = false,
   suppressSfuSendFailures = false,
+  plannedTransport = '',
 }) {
   return dispatchPublisherFrame({
     frame,
@@ -348,6 +402,7 @@ export async function dispatchProtectedBrowserPublisherFrame({
     captureClientDiagnosticError,
     suppressGossipPrimary,
     suppressSfuSendFailures,
+    plannedTransport,
     onRequiredSfuUnavailable: () => {
       if (!critical) {
         reportNonCriticalDrop('sfu_client_unavailable_after_browser_thumbnail_encode', {

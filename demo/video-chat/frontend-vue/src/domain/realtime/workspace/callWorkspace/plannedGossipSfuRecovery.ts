@@ -29,6 +29,16 @@ export function plannedGossipSfuRecoveryPayload(reason: unknown, payload: Record
   };
 }
 
+export function plannedGossipOneConnectMediaRecoveryPayload(reason: unknown, payload: Record<string, any> = {}) {
+  return {
+    ...plannedGossipSfuRecoveryPayload(reason, payload),
+    one_connect_media_policy: 'gossip_primary_new_participant_only',
+    automatic_media_restart_allowed: false,
+    automatic_repair_allowed: false,
+    next_connect_cycle_requires_new_participant: true,
+  };
+}
+
 export function diagnosePlannedGossipSfuRecoveryParked({
   captureClientDiagnostic,
   reason = 'planned_gossip_sfu_recovery_parked',
@@ -47,6 +57,30 @@ export function diagnosePlannedGossipSfuRecoveryParked({
       code: eventType,
       message,
       payload: plannedGossipSfuRecoveryPayload(reason, payload),
+      immediate,
+    });
+  }
+  return true;
+}
+
+export function diagnosePlannedGossipOneConnectMediaRecoveryParked({
+  captureClientDiagnostic,
+  reason = 'planned_gossip_one_connect_media_recovery_parked',
+  payload = {},
+  eventType = 'planned_gossip_one_connect_media_recovery_parked',
+  message = 'Gossip-primary one-connect media policy parked automatic reconnect or repair; the next connect cycle requires a new participant.',
+  level = 'warning',
+  immediate = true,
+}: Record<string, any> = {}) {
+  if (!plannedGossipTransportActive(payload)) return false;
+  if (typeof captureClientDiagnostic === 'function') {
+    captureClientDiagnostic({
+      category: 'media',
+      level,
+      eventType,
+      code: eventType,
+      message,
+      payload: plannedGossipOneConnectMediaRecoveryPayload(reason, payload),
       immediate,
     });
   }

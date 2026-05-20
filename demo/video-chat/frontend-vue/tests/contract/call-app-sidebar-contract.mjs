@@ -276,8 +276,8 @@ assert.doesNotMatch(
 
 assert.match(
   sprintSource,
-  /Prior sprint: Whiteboard Call App Hardening And Production Integration/,
-  'planning sources must keep the migrated Whiteboard Call App sprint anchor',
+  /Do not grow `CallWorkspaceView\.vue`; extract focused helpers\/modules/,
+  'planning sources must keep the CallWorkspace extraction boundary',
 );
 
 console.log('[call-app-sidebar-contract] PASS');

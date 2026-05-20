@@ -55,6 +55,9 @@ try {
 
   requireContains(sourceReadback, 'createPublisherVideoFrameSourceReader', 'source readback imports VideoFrame source reader');
   requireContains(sourceReadback, 'ensureVideoFrameReader(', 'source readback recreates the VideoFrame reader after transient stalls');
+  requireContains(sourceReadback, 'preferDomCanvasReadback = false', 'source readback can explicitly disable VideoFrame allocation for Gossip-primary');
+  requireContains(sourceReadback, 'const videoFrameSourceDisabled = preferDomCanvasReadback === true;', 'source readback normalizes the VideoFrame allocation kill switch');
+  requireContains(sourceReadback, 'return !videoFrameSourceDisabled', 'disabled VideoFrame source must not construct a MediaStreamTrackProcessor reader');
   requireContains(sourceReadback, 'VIDEO_FRAME_READER_RETRY_COOLDOWN_MS', 'source readback keeps transient reader failures on the primary path');
   requireContains(sourceReadback, '!(videoFrameCopyToDisabled && captureCapabilities.supportsVideoFrameCopyTo)', 'source readback falls back to video element if copyTo becomes unusable');
   requireContains(sourceReadback, 'VideoFrame source reader failed; retrying processor path before DOM canvas fallback', 'source readback does not permanently demote to DOM canvas after one reader timeout');

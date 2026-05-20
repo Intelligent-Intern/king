@@ -106,8 +106,7 @@ export function callAppWorkspaceIframeUrl(session) {
     .join('/');
   if (appKey === '' || entrypoint === '') return 'about:blank';
   const path = `/call-app/${encodeURIComponent(appKey)}/${entrypoint}`;
-  const origin = callAppOriginForAppKey(appKey);
-  return origin !== '' ? `${origin}${path}` : path;
+  return path;
 }
 
 export function createCallAppWorkspaceState({

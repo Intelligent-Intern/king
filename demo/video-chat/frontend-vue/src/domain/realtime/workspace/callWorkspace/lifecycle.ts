@@ -1,5 +1,5 @@
-import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
 import { shouldArmWorkspaceForegroundRecovery } from './foregroundRecovery.ts';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function registerCallWorkspaceLifecycleHelpers({
@@ -36,13 +36,11 @@ export function registerCallWorkspaceLifecycleHelpers({
     ensureSfuVideoQualityRecoveryProbeSeries,
     initSFU,
     loadDynamicIceServers,
-    markWorkspaceReconnectAfterForeground,
+    markWorkspaceLifecycleBackground,
     publishLocalActivitySample,
     publishLocalTracks,
     reconfigureLocalBackgroundFilterOnly,
     reconfigureLocalTracksFromSelectedDevices,
-    reconnectWorkspaceAfterForeground,
-    requestWlvcFullFrameKeyframe,
     refreshCallMediaDevices,
     resolveRouteCallRef,
     setActiveTab,
@@ -52,6 +50,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     stopLocalTyping,
     stopSfuTrackAnnounceTimer,
     switchMediaRuntimePath,
+    syncWorkspaceLifecycleForeground,
     syncLobbyListViewport,
     syncUsersListViewport,
     teardownLocalPublisher,
@@ -64,7 +63,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     callMediaPrefs,
     canModerate,
     chatListRef,
-    connectedParticipantUsers,
     connectionReason,
     connectionState,
     desiredRoomId,
@@ -80,7 +78,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     nativeAudioBridgeBlockDiagnosticsSent,
     nativeAudioSecurityBannerMessage,
     nativeAudioSecurityTelemetrySnapshot,
-    remotePeersRef,
     rightSidebarCollapsed,
     routeCallRef,
     serverRoomId,
@@ -117,25 +114,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     mediaSecuritySessionClass,
     strictStabilityPolicy,
   } = constants;
-  const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
-    callbacks: {
-      captureClientDiagnostic,
-      getConnectedParticipantCount: () => connectedParticipantUsers?.value?.length || 0,
-      getRemotePeerCount: () => remotePeersRef?.value?.size || 0,
-      publishLocalTracks,
-      requestWlvcFullFrameKeyframe,
-      stopLocalEncodingPipeline,
-    },
-    refs: {
-      callMediaPrefs,
-      localStreamRef,
-      localTracksPublishedToSfuRef,
-      mediaRuntimePath,
-      sfuClientRef,
-    },
-    policy: strictStabilityPolicy,
-  });
-
   function isNativeAudioSecurityWaitingMessage(message) {
     return /waiting for the media-security handshake/i.test(String(message || ''));
   }
@@ -151,6 +129,33 @@ export function registerCallWorkspaceLifecycleHelpers({
       toProfile: String(nextValue || ''),
       reason: 'automatic_profile_switch',
     });
+  }
+
+  function shouldStartSfuFromLifecycle(reason = 'sfu_lifecycle_connect') {
+    if (String(sessionState.sessionToken || '').trim() === '' || !Number.isInteger(sessionState.userId) || sessionState.userId <= 0) {
+      return false;
+    }
+    if (!shouldConnectSfu.value) return false;
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return true;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'gossip_primary_sfu_lifecycle_connect_parked',
+      code: 'gossip_primary_sfu_lifecycle_connect_parked',
+      message: 'Gossip-primary one-connect media policy parked an automatic SFU lifecycle connect.',
+      payload: {
+        reason: String(reason || 'sfu_lifecycle_connect'),
+        media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
+        automatic_media_restart_allowed: false,
+        next_connect_cycle_requires_new_participant: true,
+        connection_state: String(connectionState.value || ''),
+        has_realtime_room_sync: Boolean(refs.hasRealtimeRoomSync?.value),
+        active_call_id: String(refs.activeSocketCallId?.value || ''),
+        desired_room_id: String(desiredRoomId.value || ''),
+      },
+      immediate: false,
+    });
+    return false;
   }
 
   watch(
@@ -322,7 +327,7 @@ export function registerCallWorkspaceLifecycleHelpers({
         return;
       }
 
-      if (String(sessionState.sessionToken || '').trim() !== '' && Number.isInteger(sessionState.userId) && sessionState.userId > 0) {
+      if (shouldStartSfuFromLifecycle('should_connect_sfu_watch')) {
         initSFU();
       }
     }
@@ -356,13 +361,11 @@ export function registerCallWorkspaceLifecycleHelpers({
     setDetachForegroundReconnect(attachForegroundReconnectHandlers({
       onBackground: (context) => {
         if (shouldArmWorkspaceForegroundRecovery(context, typeof document !== 'undefined' ? document : null)) {
-          markWorkspaceReconnectAfterForeground();
-          sfuBackgroundTabPolicy.pauseVideoForBackground(context);
+          markWorkspaceLifecycleBackground(context);
         }
       },
       onForeground: (context) => {
-        reconnectWorkspaceAfterForeground();
-        void sfuBackgroundTabPolicy.resumeVideoAfterForeground(context);
+        syncWorkspaceLifecycleForeground(context);
       },
     }));
 
@@ -379,7 +382,9 @@ export function registerCallWorkspaceLifecycleHelpers({
 
     try {
       mediaRuntimeCapabilities.value = await detectMediaRuntimeCapabilities();
-      const shouldUseSfuRuntime = sfuRuntimeEnabled || !mediaRuntimeCapabilities.value.stageB;
+      const shouldUseSfuRuntime = sfuRuntimeEnabled
+        || VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
+        || !mediaRuntimeCapabilities.value.stageB;
       if (mediaRuntimeCapabilities.value.stageA && shouldUseSfuRuntime) {
         await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a');
       } else if (mediaRuntimeCapabilities.value.stageB) {
@@ -407,7 +412,7 @@ export function registerCallWorkspaceLifecycleHelpers({
 
     await publishLocalTracks();
 
-    if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
+    if (shouldStartSfuFromLifecycle('workspace_mount')) {
       initSFU();
     }
 
@@ -452,12 +457,6 @@ export function registerCallWorkspaceLifecycleHelpers({
         connectionState.value = 'expired';
         connectionReason.value = 'missing_session';
         closeSocket();
-        return;
-      }
-
-      if (!isSocketOnline.value) {
-        refs.reconnectAttempt.value = 0;
-        void connectSocket();
       }
     }
   );

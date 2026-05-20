@@ -75,10 +75,17 @@ export function createCallWorkspaceChatHistorySync({
   const olderLimit = positiveInt(options.olderLimit ?? options.limit, 50, 1, 100);
   const minIntervalMs = positiveInt(options.minIntervalMs, 1500, 0, 60_000);
   const lastLoadedAtByKey = new Map();
+  const loadedInitialKeys = new Set();
   let disposed = false;
   let inFlightKey = '';
 
-  async function loadHistoryPage({ reason = 'unspecified', cursor = null, limit = initialLimit, loadingKey = 'loading' } = {}) {
+  async function loadHistoryPage({
+    reason = 'unspecified',
+    cursor = null,
+    limit = initialLimit,
+    loadingKey = 'loading',
+    initialBootstrap = false,
+  } = {}) {
     if (disposed || typeof apiRequest !== 'function' || typeof appendChatMessage !== 'function') {
       return false;
     }
@@ -90,6 +97,9 @@ export function createCallWorkspaceChatHistorySync({
     }
 
     const key = `${callId}:${roomId}`;
+    if (initialBootstrap && loadedInitialKeys.has(key)) {
+      return false;
+    }
     const pageCursor = positiveInt(cursor, 0, 0, Number.MAX_SAFE_INTEGER);
     const pageKey = `${key}:${pageCursor}`;
     if (inFlightKey === pageKey) {
@@ -125,6 +135,9 @@ export function createCallWorkspaceChatHistorySync({
       state.nextCursor = state.hasOlder ? (Number(pagination.next_cursor || 0) || null) : null;
       state.lastLoadedCount = messages.length;
       state.lastReason = String(reason || 'unspecified');
+      if (initialBootstrap && pageCursor === 0) {
+        loadedInitialKeys.add(key);
+      }
       captureClientDiagnostic({
         category: 'realtime',
         level: 'info',
@@ -174,6 +187,7 @@ export function createCallWorkspaceChatHistorySync({
       cursor: null,
       limit: initialLimit,
       loadingKey: 'loading',
+      initialBootstrap: true,
     });
   }
 
@@ -191,6 +205,7 @@ export function createCallWorkspaceChatHistorySync({
     disposed = true;
     inFlightKey = '';
     lastLoadedAtByKey.clear();
+    loadedInitialKeys.clear();
   }
 
   return {

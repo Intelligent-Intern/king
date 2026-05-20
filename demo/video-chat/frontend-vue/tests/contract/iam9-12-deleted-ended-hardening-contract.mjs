@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -49,14 +51,14 @@ assert.match(
   'IAM9-12 backend proof must be wired into the SQLite IAM runtime gate',
 );
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /iam9-12-deleted-ended-hardening-contract\.mjs/,
-  'IAM9-12 Node proof must be wired into the canonical IAM package gate',
+  'IAM9-12 Node proof must be wired into the canonical IAM package helper',
 );
 assert.match(
-  packageJson.scripts['test:contract:iam-call-access'],
+  iamCallAccessContractSuiteText,
   /call-access-deleted-ended-hardening-contract\.sh/,
-  'IAM9-12 backend proof must be reachable from the canonical IAM package gate',
+  'IAM9-12 backend proof must be reachable from the canonical IAM package helper',
 );
 assert.match(
   ciGate,

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_permanent_lifecycle.php';
+
 require_once __DIR__ . '/call_guest_list_audit.php';
 require_once __DIR__ . '/call_lifecycle.php';
 
@@ -461,6 +463,14 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
     $updatedAt = gmdate('c');
     $nextStartsAt = gmdate('c', $nextStartsUnix);
     $nextEndsAt = gmdate('c', $nextEndsUnix);
+    if (videochat_is_permanent_call((string) ($existingCall['id'] ?? $callId))) {
+        $guardEndsAt = videochat_permanent_call_guard_ends_at();
+        $guardEndsUnix = strtotime($guardEndsAt);
+        if (is_int($guardEndsUnix) && $nextEndsUnix < $guardEndsUnix) {
+            $nextEndsUnix = $guardEndsUnix;
+            $nextEndsAt = $guardEndsAt;
+        }
+    }
     $nextScheduleTimezone = (bool) ($data['has_schedule_timezone'] ?? false)
         ? (string) ($data['schedule_timezone'] ?? 'UTC')
         : videochat_normalize_call_schedule_timezone($existingCall['schedule_timezone'] ?? 'UTC');

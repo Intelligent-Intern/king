@@ -61,10 +61,6 @@ export function getSeedUser(key) {
   return clone(requiredRow(userIndex, key, 'user'));
 }
 
-export function getSeedOrganization(key) {
-  return clone(requiredRow(organizationIndex, key, 'organization'));
-}
-
 export function getSeedCall(key) {
   return clone(requiredRow(callIndex, key, 'call'));
 }
@@ -111,31 +107,6 @@ function organizationForCall(call) {
 function membershipForTenant(user, tenantKey) {
   return (Array.isArray(user?.memberships) ? user.memberships : [])
     .find((membership) => String(membership?.tenant_key || '') === tenantKey) || null;
-}
-
-function isPlatformAdminUser(user) {
-  return user?.system_admin === true || String(user?.role || '').trim().toLowerCase() === 'admin';
-}
-
-function permissionsFor(user, membershipRole) {
-  const normalizedRole = String(membershipRole || 'member').trim().toLowerCase();
-  const isTenantAdmin = normalizedRole === 'owner' || normalizedRole === 'admin';
-  const isPlatformAdmin = isPlatformAdminUser(user);
-  const elevated = isTenantAdmin || isPlatformAdmin;
-  return {
-    platform_admin: isPlatformAdmin,
-    tenant_admin: elevated,
-    manage_users: elevated,
-    manage_organizations: elevated,
-    manage_groups: elevated,
-    manage_permission_grants: elevated,
-    edit_themes: elevated,
-    export_import: elevated,
-    manage_lobby: elevated,
-    admit_participants: elevated,
-    reject_participants: elevated,
-    kick_participants: elevated,
-  };
 }
 
 export function tenantSnapshotForSeedUser(userKey, callKey) {
@@ -790,8 +761,8 @@ export async function installCallAccessSeedRoutes(context, options = {}) {
 
     const resolveMatch = url.pathname.match(/^\/api\/calls\/resolve\/([^/]+)$/);
     if (resolveMatch && request.method() === 'GET') {
-      const record = sessionRecordForRequest(request);
-      if (!record) {
+      const authRecord = sessionRecordForRequest(request);
+      if (!authRecord) {
         await fulfillJson(route, 401, {
           status: 'error',
           error: { code: 'auth_failed', message: 'A valid session token is required.' },
@@ -857,8 +828,8 @@ export async function installCallAccessSeedRoutes(context, options = {}) {
 
     const callMatch = url.pathname.match(/^\/api\/calls\/([^/]+)$/);
     if (callMatch && request.method() === 'GET') {
-      const record = sessionRecordForRequest(request);
-      if (!record) {
+      const authRecord = sessionRecordForRequest(request);
+      if (!authRecord) {
         await fulfillJson(route, 401, {
           status: 'error',
           error: { code: 'auth_failed', message: 'A valid session token is required.' },

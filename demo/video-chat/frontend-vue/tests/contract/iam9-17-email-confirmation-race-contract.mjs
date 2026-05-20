@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -119,7 +121,7 @@ assert.match(
   'extraction contract must retain the historical branch and commit provenance',
 );
 
-const iamPackageGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamPackageGate = iamCallAccessContractSuiteText;
 assert.ok(
   iamPackageGate.includes('node tests/contract/iam9-17-email-confirmation-race-contract.mjs'),
   'IAM package gate must run the IAM9-17 race proof',

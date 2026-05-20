@@ -37,6 +37,7 @@ function readFrontend(relativePath) {
 const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.ts');
 const signaling = readFrontend('src/domain/realtime/native/signaling.ts');
 const mediaOrchestration = readFrontend('src/domain/realtime/local/mediaOrchestration.ts');
+const peerFactory = readFrontend('src/domain/realtime/native/peerFactory.ts');
 
 try {
   const ensureLocalMediaBody = functionBody(bridgeRuntime, 'ensureLocalMediaForNativeNegotiation');
@@ -64,6 +65,16 @@ try {
     mediaOrchestration,
     /if \(peer\.initiator && !peer\.negotiating\) \{\s*void sendNativeOffer\(peer\);/m,
     'native initiator must renegotiate after local track changes'
+  );
+  assert.equal(
+    peerFactory.includes("shouldUseNativeAudioBridge() && trackKind === 'video'"),
+    false,
+    'native audio bridge must not drop remote video tracks',
+  );
+  assert.equal(
+    peerFactory.includes("shouldUseNativeAudioBridge() && String(track?.kind || '').trim().toLowerCase() === 'video'"),
+    false,
+    'native audio bridge must not skip incoming remote video stream tracks',
   );
 
   process.stdout.write('[native-webrtc-negotiation-contract] PASS\n');

@@ -27,6 +27,7 @@ const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matri
 const lobbyStateCleanupSpec = readText('demo/video-chat/frontend-vue/tests/e2e/iam-lobby-state-cleanup.spec.js');
 const backendContract = readText('demo/video-chat/backend-king-php/tests/realtime-lobby-state-cleanup-contract.php');
 const ciGate = readText('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
+const sqliteProof = readText('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
 
 const scripts = packageJson.scripts || {};
 const callAccessScript = callAccessE2eSuiteText;
@@ -70,9 +71,9 @@ assert.ok(
   'IAM Call Access contract suite must list this focused lobby cleanup proof contract',
 );
 assert.match(
-  contractScript,
-  /\.\.\/backend-king-php\/tests\/realtime-lobby-state-cleanup-contract\.sh/,
-  'IAM Call Access contract gate must include the backend lobby state cleanup proof',
+  sqliteProof,
+  /"realtime-lobby-state-cleanup-contract\.sh"/,
+  'IAM SQLite runtime proof must include the backend lobby state cleanup proof',
 );
 assert.ok(
   iamCallAccessContractCommands.includes('../backend-king-php/tests/realtime-lobby-state-cleanup-contract.sh'),
@@ -97,23 +98,8 @@ assert.match(
 );
 assert.match(
   ciGate,
-  /FULL_STATIC_CONTRACTS=\([\s\S]*tests\/contract\/iam-lobby-state-cleanup-proof-contract\.mjs/s,
-  'IAM CI full static gate must include this focused lobby cleanup proof contract',
-);
-assert.match(
-  ciGate,
-  /HOST_BACKEND_CONTRACTS=\([\s\S]*tests\/realtime-lobby-state-cleanup-contract\.sh/s,
-  'IAM CI gate must include the host-safe lobby state cleanup backend proof',
-);
-assert.match(
-  ciGate,
-  /available\)[\s\S]*run_static_gate 0[\s\S]*run_host_backend_gate[\s\S]*run_sqlite_gate 0/s,
-  'available IAM CI gate must run the host backend lobby cleanup proof',
-);
-assert.match(
-  ciGate,
-  /full\)[\s\S]*run_static_gate 1[\s\S]*run_host_backend_gate[\s\S]*run_sqlite_gate 1/s,
-  'full IAM CI gate must run the host backend lobby cleanup proof before SQLite-only proofs',
+  /--sqlite[\s\S]*iam-call-access-sqlite-runtime-proof\.sh/,
+  'IAM CI SQLite mode must run the backend runtime proof wrapper that carries lobby cleanup',
 );
 
 assert.match(

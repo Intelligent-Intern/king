@@ -184,22 +184,29 @@ try {
         'room_id' => 'room-lobby-timeout',
     ], JSON_UNESCAPED_SLASHES));
     videochat_realtime_lobby_timeout_assert((bool) ($allowCommand['ok'] ?? false), 'allow command should decode');
-    videochat_realtime_lobby_timeout_assert(videochat_realtime_lobby_command_sender($allowCommand) !== null, 'runtime admission sender must defer pre-persistence broadcast');
+    $deferredLobbyFrames = [];
+    $deferredLobbySender = static function (mixed $socket, array $payload) use (&$deferredLobbyFrames): bool {
+        $deferredLobbyFrames[] = ['socket' => $socket, 'payload' => $payload];
+        return true;
+    };
 
     $allowResult = videochat_lobby_apply_command(
         $lobbyState,
         $presenceState,
         $moderator,
         $allowCommand,
-        videochat_realtime_lobby_command_sender($allowCommand),
+        $deferredLobbySender,
         1_780_700_001_000
     );
     videochat_realtime_lobby_timeout_assert((bool) ($allowResult['ok'] ?? false), 'lobby admission should apply locally before persistence');
+    videochat_realtime_lobby_timeout_assert($deferredLobbyFrames !== [], 'runtime admission sender must defer pre-persistence broadcast');
     $prePersistenceSnapshot = videochat_realtime_lobby_timeout_snapshot($lobbyState);
     videochat_realtime_lobby_timeout_assert((int) ($prePersistenceSnapshot['queue_count'] ?? -1) === 0, 'pre-persistence local queue should be empty');
     videochat_realtime_lobby_timeout_assert((int) ($prePersistenceSnapshot['admitted_count'] ?? -1) === 1, 'pre-persistence local admitted handoff should exist');
 
-    videochat_realtime_apply_successful_lobby_command($allowResult, $lobbyState, $presenceState, $moderator, $timeoutOpenDatabase);
+    $applyResult = videochat_realtime_apply_successful_lobby_command($allowResult, $lobbyState, $presenceState, $moderator, $timeoutOpenDatabase);
+    videochat_realtime_lobby_timeout_assert(!(bool) ($applyResult['ok'] ?? true), 'timeout during lobby admission should surface persistence failure');
+    videochat_realtime_lobby_timeout_assert((string) ($applyResult['error'] ?? '') === 'lobby_admission_persist_failed', 'timeout admission failure reason mismatch');
     $timeoutSnapshot = videochat_realtime_lobby_timeout_snapshot($lobbyState);
     videochat_realtime_lobby_timeout_assert(videochat_realtime_lobby_timeout_waiting_state($pdo) === 'pending', 'Timeout during lobby admission leads to consistent state: database remains pending');
     videochat_realtime_lobby_timeout_assert((int) ($timeoutSnapshot['queue_count'] ?? -1) === 1, 'timeout should restore local queued participant');

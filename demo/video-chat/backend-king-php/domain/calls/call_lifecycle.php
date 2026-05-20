@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../../support/tenant_migrations.php';
 require_once __DIR__ . '/call_guest_lifecycle.php';
+require_once __DIR__ . '/call_permanent_lifecycle.php';
 
 function videochat_call_lifecycle_table_available(PDO $pdo, string $table): bool
 {
@@ -228,6 +229,24 @@ function videochat_call_lifecycle_apply(
             'lobby_cleared_count' => 0,
             'presence_cleared_count' => 0,
             'guest_cleanup' => ['ok' => false, 'reason' => 'validation_failed'],
+            'audit_event' => null,
+        ];
+    }
+
+    $normalizedTransition = strtolower(trim($transition));
+    if (videochat_is_permanent_call($callId)) {
+        videochat_permanent_call_ensure_active($pdo, $callId, 'call_lifecycle_guard');
+        return [
+            'ok' => true,
+            'reason' => 'permanent_call_protected',
+            'transition' => in_array($normalizedTransition, ['rescheduled', 'deleted', 'ended'], true)
+                ? $normalizedTransition
+                : $transition,
+            'invalidated_link_count' => 0,
+            'revoked_access_session_count' => 0,
+            'lobby_cleared_count' => 0,
+            'presence_cleared_count' => 0,
+            'guest_cleanup' => ['ok' => true, 'reason' => 'permanent_call_protected'],
             'audit_event' => null,
         ];
     }

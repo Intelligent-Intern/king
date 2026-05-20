@@ -35,6 +35,10 @@ import {
 import { clearSfuKeyframeRecoveryCoordinator } from './keyframeRecoveryCoordinator.ts';
 import { mediaSecurityPublisherUserIdForFrame } from './screenShareFrameIdentity';
 import { maybeReportFirstRemoteFrameVisible } from './joinVisibilitySlo';
+import {
+  reportReceiverMissingFrameEvidence,
+  reportReceiverRenderEvidence,
+} from './receiverRenderEvidence';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -73,6 +77,33 @@ export function createSfuFrameDecodeHelpers({
     const normalized = Number(value);
     if (!Number.isFinite(normalized)) return fallback;
     return Math.floor(normalized);
+  }
+
+  function objectField(source, camelCaseName, snakeCaseName = camelCaseName) {
+    return source && typeof source === 'object'
+      ? (source?.[camelCaseName] || source?.[snakeCaseName] || '')
+      : '';
+  }
+
+  function isGossipDeliveredFrame(frame) {
+    const metadata = frame?.metadata && typeof frame.metadata === 'object' ? frame.metadata : null;
+    const codecRuntime = frame?.codecRuntime && typeof frame.codecRuntime === 'object'
+      ? frame.codecRuntime
+      : (frame?.codec_runtime && typeof frame.codec_runtime === 'object' ? frame.codec_runtime : null);
+    const transportPath = String(
+      frame?.transportPath
+      || frame?.transport_path
+      || frame?.gossipRuntimePath
+      || frame?.gossip_runtime_path
+      || objectField(metadata, 'transportPath', 'transport_path')
+      || objectField(metadata, 'runtimePath', 'runtime_path')
+      || objectField(codecRuntime, 'runtimePath', 'runtime_path')
+      || ''
+    ).trim().toLowerCase();
+    return transportPath === 'gossip_direct'
+      || transportPath === 'gossip_rtc_datachannel'
+      || transportPath === 'gossip_primary_direct'
+      || transportPath === 'gossip_server_fanout';
   }
 
   const receiverFeedback = createSfuReceiverFeedback({
@@ -414,6 +445,15 @@ export function createSfuFrameDecodeHelpers({
     const receiverRenderLatencyMs = senderSentAtMs > 0
       ? Math.max(0, renderedAtMs - senderSentAtMs)
       : 0;
+    reportReceiverRenderEvidence({
+      peer,
+      frame,
+      renderedAtMs,
+      renderDecision,
+      receiverRenderLatencyMs,
+      mediaRuntimePath: mediaRuntimePathRef.value,
+      captureClientDiagnostic,
+    });
     if (
       receiverRenderLatencyMs > 0
       && (renderedAtMs - Number(peer.lastSfuRenderTelemetryAtMs || 0)) >= 2000
@@ -699,6 +739,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame) {
     if (!peer || typeof peer !== 'object') return false;
+    if (isGossipDeliveredFrame(frame)) return false;
     ensureRemoteSfuTrackCacheState(peer);
 
     const trackKey = sfuFrameTrackStateKey(frame);
@@ -749,6 +790,7 @@ export function createSfuFrameDecodeHelpers({
 
   function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame) {
     if (!peer || typeof peer !== 'object') return false;
+    if (isGossipDeliveredFrame(frame)) return false;
     const trackKey = remoteJitterTrackKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
     if (!peer.lastSfuFrameSequenceByTrack || typeof peer.lastSfuFrameSequenceByTrack !== 'object') {
@@ -784,6 +826,16 @@ export function createSfuFrameDecodeHelpers({
       if (lastSequence > 0 && frameSequence > (lastSequence + 1)) {
         const missingFrameCount = frameSequence - lastSequence - 1;
         if (frameType !== 'keyframe') {
+          reportReceiverMissingFrameEvidence({
+            peer,
+            publisherId,
+            frame,
+            missingFrameCount,
+            lastSequence,
+            dropReason: 'sequence_gap_delta',
+            mediaRuntimePath: mediaRuntimePathRef.value,
+            captureClientDiagnostic,
+          });
           resetRemoteSfuDecoderAfterSequenceGap(peer, frame, 'sequence_gap_delta');
           logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_delta', {
             last_frame_sequence: lastSequence,
@@ -799,6 +851,16 @@ export function createSfuFrameDecodeHelpers({
           }
           return true;
         }
+        reportReceiverMissingFrameEvidence({
+          peer,
+          publisherId,
+          frame,
+          missingFrameCount,
+          lastSequence,
+          dropReason: 'sequence_gap_keyframe',
+          mediaRuntimePath: mediaRuntimePathRef.value,
+          captureClientDiagnostic,
+        });
         logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_keyframe', {
           last_frame_sequence: lastSequence,
           missing_frame_count: missingFrameCount,
@@ -831,14 +893,23 @@ export function createSfuFrameDecodeHelpers({
 
   async function decodeSfuFrameForPeer(publisherId, peer, frame, options = {}) {
     if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) return;
+    const gossipDeliveredFrame = isGossipDeliveredFrame(frame);
+    const frameReceivedAtMs = Date.now();
     peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
-    peer.lastReceivedFrameAtMs = Date.now();
+    peer.lastReceivedFrameAtMs = frameReceivedAtMs;
+    if (gossipDeliveredFrame) {
+      peer.gossipLatestArrivalAtMs = Math.max(
+        Number(peer.gossipLatestArrivalAtMs || 0),
+        Number(frame?.receivedAtMs || frame?.received_at_ms || 0),
+        frameReceivedAtMs,
+      );
+    }
     const publisherUserId = Number(frame?.publisherUserId || 0);
     const activityUserId = Number(peer?.userId || publisherUserId || 0);
     if (Number.isInteger(activityUserId) && activityUserId > 0) {
       markRemoteFrameActivity(activityUserId);
     }
-    if (!options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
+    if (!gossipDeliveredFrame && !options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
       return;
     }
     if (shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame)) {
@@ -1017,7 +1088,9 @@ export function createSfuFrameDecodeHelpers({
             trackId: frame?.trackId,
           });
         }
-        drainRemoteJitterBuffer(publisherId, peer, frame);
+        if (!gossipDeliveredFrame) {
+          drainRemoteJitterBuffer(publisherId, peer, frame);
+        }
       } else {
         peer.needsKeyframe = true;
         captureClientDiagnostic({
@@ -1056,7 +1129,9 @@ export function createSfuFrameDecodeHelpers({
             if (frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
               peer.needsKeyframe = false;
             }
-            drainRemoteJitterBuffer(publisherId, peer, frame);
+            if (!gossipDeliveredFrame) {
+              drainRemoteJitterBuffer(publisherId, peer, frame);
+            }
             return;
           }
         } catch {

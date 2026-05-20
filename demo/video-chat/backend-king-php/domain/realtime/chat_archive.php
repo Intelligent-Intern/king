@@ -4,6 +4,151 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/chat_attachment_storage.php';
 
+function videochat_chat_archive_sql_identifier(string $identifier): string
+{
+    return '"' . str_replace('"', '""', $identifier) . '"';
+}
+
+/**
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_chat_archive_table_columns(PDO $pdo, string $tableName): array
+{
+    $safeTableName = preg_replace('/[^A-Za-z0-9_]/', '', $tableName);
+    if (!is_string($safeTableName) || $safeTableName === '') {
+        return [];
+    }
+
+    $columns = [];
+    $statement = $pdo->query('PRAGMA table_info(' . videochat_chat_archive_sql_identifier($safeTableName) . ')');
+    foreach ($statement ?: [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $name = strtolower(trim((string) ($row['name'] ?? '')));
+        if ($name !== '') {
+            $columns[$name] = $row;
+        }
+    }
+
+    return $columns;
+}
+
+function videochat_chat_archive_messages_schema_current(PDO $pdo): bool
+{
+    $columns = videochat_chat_archive_table_columns($pdo, 'call_chat_messages');
+    foreach ([
+        'seq',
+        'message_id',
+        'call_id',
+        'room_id',
+        'sender_user_id',
+        'sender_display_name',
+        'sender_role',
+        'text',
+        'message_json',
+        'transcript_object_key',
+        'server_unix_ms',
+        'server_time',
+        'snapshot_version',
+        'created_at',
+    ] as $requiredColumn) {
+        if (!isset($columns[$requiredColumn])) {
+            return false;
+        }
+    }
+
+    return strtolower((string) ($columns['seq']['pk'] ?? '0')) !== '0';
+}
+
+function videochat_chat_archive_rebuild_messages_table(PDO $pdo): void
+{
+    if (videochat_chat_archive_messages_schema_current($pdo)) {
+        return;
+    }
+
+    $columns = videochat_chat_archive_table_columns($pdo, 'call_chat_messages');
+    if ($columns === []) {
+        return;
+    }
+
+    $legacyTable = 'call_chat_messages_legacy_' . gmdate('YmdHis') . '_' . bin2hex(random_bytes(3));
+    $legacySql = videochat_chat_archive_sql_identifier($legacyTable);
+    $foreignKeysEnabled = (int) ($pdo->query('PRAGMA foreign_keys')->fetchColumn() ?: 0) === 1;
+
+    $columnExpression = static function (string $column, string $fallback) use ($columns): string {
+        if (!isset($columns[$column])) {
+            return $fallback;
+        }
+
+        return 'COALESCE(' . videochat_chat_archive_sql_identifier($column) . ', ' . $fallback . ')';
+    };
+
+    $copyColumns = [
+        'message_id',
+        'call_id',
+        'room_id',
+        'sender_user_id',
+        'sender_display_name',
+        'sender_role',
+        'text',
+        'message_json',
+        'transcript_object_key',
+        'server_unix_ms',
+        'server_time',
+        'snapshot_version',
+        'created_at',
+    ];
+    $copyExpressions = [
+        $columnExpression('message_id', "'legacy_' || rowid"),
+        $columnExpression('call_id', "''"),
+        $columnExpression('room_id', "'lobby'"),
+        $columnExpression('sender_user_id', '0'),
+        $columnExpression('sender_display_name', "''"),
+        $columnExpression('sender_role', "'user'"),
+        $columnExpression('text', "''"),
+        $columnExpression('message_json', "'{}'"),
+        $columnExpression('transcript_object_key', "'legacy_archive_' || rowid"),
+        $columnExpression('server_unix_ms', "CAST(strftime('%s', 'now') AS INTEGER) * 1000"),
+        $columnExpression('server_time', "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"),
+        $columnExpression('snapshot_version', '1'),
+        $columnExpression('created_at', "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"),
+    ];
+
+    $pdo->exec('PRAGMA foreign_keys = OFF');
+    try {
+        $pdo->exec('ALTER TABLE call_chat_messages RENAME TO ' . $legacySql);
+        $pdo->exec(
+            <<<'SQL'
+CREATE TABLE call_chat_messages (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT NOT NULL UNIQUE,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    sender_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    sender_display_name TEXT NOT NULL,
+    sender_role TEXT NOT NULL DEFAULT 'user',
+    text TEXT NOT NULL,
+    message_json TEXT NOT NULL,
+    transcript_object_key TEXT NOT NULL UNIQUE,
+    server_unix_ms INTEGER NOT NULL,
+    server_time TEXT NOT NULL,
+    snapshot_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL
+        );
+        $pdo->exec(sprintf(
+            'INSERT OR IGNORE INTO call_chat_messages (%s) SELECT %s FROM %s ORDER BY rowid ASC',
+            implode(', ', $copyColumns),
+            implode(', ', $copyExpressions),
+            $legacySql
+        ));
+    } finally {
+        $pdo->exec('PRAGMA foreign_keys = ' . ($foreignKeysEnabled ? 'ON' : 'OFF'));
+    }
+}
+
 function videochat_chat_archive_bootstrap(PDO $pdo): void
 {
     $pdo->exec(
@@ -37,6 +182,7 @@ CREATE TABLE IF NOT EXISTS call_chat_acl (
 )
 SQL
     );
+    videochat_chat_archive_rebuild_messages_table($pdo);
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_chat_messages_call_seq ON call_chat_messages(call_id, seq)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_chat_messages_room_time ON call_chat_messages(room_id, server_unix_ms)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_chat_messages_sender ON call_chat_messages(sender_user_id, seq)');
@@ -352,6 +498,13 @@ SQL
 
 function videochat_chat_archive_sync_acl(PDO $pdo, string $callId): void
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        videochat_sqlite_ingest($pdo, 'chat_archive.sync_acl', static function () use ($pdo, $callId): void {
+            videochat_chat_archive_sync_acl($pdo, $callId);
+        });
+        return;
+    }
+
     videochat_chat_archive_bootstrap($pdo);
     $normalizedCallId = videochat_chat_archive_normalize_call_id($callId);
     if ($normalizedCallId === '') {
@@ -412,6 +565,12 @@ SQL
  */
 function videochat_chat_archive_append_message(PDO $pdo, string $callId, string $roomId, array $event): array
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        return videochat_sqlite_ingest($pdo, 'chat_archive.append_message', static function () use ($pdo, $callId, $roomId, $event): array {
+            return videochat_chat_archive_append_message($pdo, $callId, $roomId, $event);
+        });
+    }
+
     videochat_chat_archive_bootstrap($pdo);
     if (function_exists('videochat_chat_attachments_bootstrap')) {
         videochat_chat_attachments_bootstrap($pdo);
@@ -683,7 +842,6 @@ function videochat_chat_archive_fetch(PDO $pdo, string $callId, int $userId, str
     if (function_exists('videochat_chat_attachments_bootstrap')) {
         videochat_chat_attachments_bootstrap($pdo);
     }
-    videochat_chat_archive_sync_acl($pdo, $callId);
 
     $access = videochat_chat_archive_access_context($pdo, $callId, $userId, $role);
     if (!(bool) ($access['ok'] ?? false) || !is_array($access['context'] ?? null)) {

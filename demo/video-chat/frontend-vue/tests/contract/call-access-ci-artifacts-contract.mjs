@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CALL_ACCESS_E2E_SPECS, callAccessE2eCommandText } from '../e2e/call-access-e2e-suite.mjs';
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,25 +55,30 @@ const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const playwrightConfig = readText('demo/video-chat/frontend-vue/playwright.config.js');
 const scripts = packageJson.scripts || {};
 const callAccessE2eScript = String(scripts['test:e2e:call-access'] || '');
+const callAccessE2eGate = callAccessE2eCommandText();
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
-const focusedIamE2eSources = [
-  'demo/video-chat/frontend-vue/tests/e2e/call-access-join.spec.js',
-  'demo/video-chat/frontend-vue/tests/e2e/call-access-seed-matrix.spec.js',
-  'demo/video-chat/frontend-vue/tests/e2e/call-access-calendar-unregistered-invite.spec.js',
-  'demo/video-chat/frontend-vue/tests/e2e/call-access-admin-join-boundaries.spec.js',
+const iamContractGate = iamCallAccessContractSuiteText;
+const focusedIamE2eSources = CALL_ACCESS_E2E_SPECS.map((specPath) => `demo/video-chat/frontend-vue/${specPath}`);
+focusedIamE2eSources.push(
+  'demo/video-chat/frontend-vue/tests/e2e/call-access-e2e-suite.mjs',
   'demo/video-chat/frontend-vue/tests/e2e/helpers/callAccessSeedMatrix.js',
-];
+);
 const auditRedactionContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-audit-redaction-contract.mjs');
 const auditCompatibilityContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-audit-event-compatibility-contract.mjs');
 const strongMismatchAuditRedactionContract = readText('demo/video-chat/frontend-vue/tests/contract/call-access-strong-mismatch-audit-redaction-contract.mjs');
 
 assert.match(
   callAccessE2eScript,
-  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 playwright test tests\/e2e\/call-access-join\.spec\.js tests\/e2e\/call-access-seed-matrix\.spec\.js tests\/e2e\/call-access-calendar-unregistered-invite\.spec\.js tests\/e2e\/call-access-admin-join-boundaries\.spec\.js --workers=1$/,
-  'IAM Call Access E2E command must be stable, focused, serial, and opt into deterministic artifacts',
+  /^PLAYWRIGHT_IAM_CALL_ACCESS_ARTIFACTS=1 node tests\/e2e\/call-access-e2e-suite\.mjs$/,
+  'IAM Call Access E2E command must route through the stable suite helper and opt into deterministic artifacts',
 );
 assert.match(
   iamContractScript,
+  /^node tests\/contract\/iam-call-access-contract-suite\.mjs$/,
+  'IAM contract package script must route through the suite helper',
+);
+assert.match(
+  iamContractGate,
   /node tests\/contract\/call-access-ci-artifacts-contract\.mjs/,
   'IAM contract gate must run the CI artifact contract before browser proof drift can merge',
 );
@@ -81,7 +88,7 @@ for (const redactionContract of [
   'call-access-strong-mismatch-audit-redaction-contract.mjs',
 ]) {
   assert.match(
-    iamContractScript,
+    iamContractGate,
     new RegExp(`node tests/contract/${redactionContract.replace(/\./g, '\\.')}`),
     `IAM contract gate must keep ${redactionContract} wired for artifact/log redaction coverage`,
   );
@@ -128,7 +135,7 @@ assertNoArtifactSecretMetadata('playwright-report/iam-call-access', 'IAM HTML re
 assertNoArtifactSecretMetadata(callAccessE2eScript, 'IAM E2E command');
 
 assert.doesNotMatch(
-  callAccessE2eScript,
+  `${callAccessE2eScript}\n${callAccessE2eGate}`,
   /background|media-security|media-reconnect|sfu|gossip|btgf/i,
   'IAM artifact proof command must not pull Background/Gossip/SFU/MediaSecurity/BTGF tests',
 );

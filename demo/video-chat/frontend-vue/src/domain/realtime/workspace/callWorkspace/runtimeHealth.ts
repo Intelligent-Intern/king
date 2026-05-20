@@ -2,6 +2,7 @@ import {
   logSfuVideoRecoveryStatus,
   shouldExposeSfuVideoRecoveryAttempt,
 } from '../../sfu/videoConnectionStatus';
+import { recentReceiverMissingFrameEvidence } from '../../sfu/receiverRenderEvidence';
 import {
   SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
   normalizeSfuRecoveryReason,
@@ -19,6 +20,7 @@ import {
   diagnosePlannedGossipSfuRecoveryParked,
   plannedGossipTransportActive,
 } from './plannedGossipSfuRecovery.ts';
+import { createParticipantConnectWindow } from './participantConnectWindow.ts';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
@@ -35,7 +37,6 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     sendSocketFrame,
   } = callbacks;
   const {
-    mediaSecuritySessionClass,
     defaultNativeAudioBridgeFailureMessage,
     remoteVideoFreezeThresholdMs,
     remoteVideoStallCheckIntervalMs,
@@ -62,6 +63,14 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     setRemoteVideoStallTimer,
   } = state;
   const remoteSfuQualityPressureLastByKey = new Map();
+  const participantConnectWindow = createParticipantConnectWindow({
+    callbacks: { captureClientDiagnostic },
+    refs: {
+      connectedParticipantUsers,
+      currentUserId,
+      remotePeersRef,
+    },
+  });
 
   function strictRemoteVideoRecoveryDisabled() {
     return strictPolicyEnabled(strictStabilityPolicy, 'disableRemoteVideoStallRecovery');
@@ -122,12 +131,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function shouldUseNativeAudioBridge() {
-    if (!mediaSecuritySessionClass.supportsNativeTransforms()) {
-      return false;
-    }
-    return sfuRuntimeEnabled
-      && isWlvcRuntimePath()
-      && Boolean(mediaRuntimeCapabilities.value.stageB);
+    return isWlvcRuntimePath() && Boolean(mediaRuntimeCapabilities.value.stageB);
   }
 
   function nativeAudioBridgeFailureMessage() {
@@ -282,6 +286,11 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       immediate: true,
     })) return false;
     if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
+    const connectWindowDecision = canRestartSfuForConnectWindow(reason, {
+      ...payload,
+      publisher_user_id: Number(peer.userId || 0),
+    }, nowMs);
+    if (connectWindowDecision?.allowed === false) return false;
     if (!canRequestSfuSocketRestartForPeer(peer, nowMs)) return false;
 
     const restartAttempt = Math.max(1, Number(peer.sfuSocketRestartCount || 0) + 1);
@@ -297,7 +306,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     peer.lastSfuSocketRestartAtMs = nowMs;
     peer.nextSfuSocketRestartAllowedAtMs = nowMs + restartBackoffMs;
     peer.stalledLoggedAtMs = nowMs;
-    setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+    setRemoteVideoStatus(peer, 'recovering', 'Waiting for video', nowMs);
     return true;
   }
 
@@ -483,6 +492,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
     const nowMs = Date.now();
+    participantConnectWindow.sync('remote_video_stall_check', nowMs);
     for (const [publisherId, peer] of remotePeersRef.value.entries()) {
       if (!peer || typeof peer !== 'object' || !peer.decoder) continue;
       const trackCount = Array.isArray(peer.tracks) ? peer.tracks.length : 0;
@@ -531,13 +541,15 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
         const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
-        const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();
+        const missingFrameEvidenceSuppressesReconnect = recentReceiverMissingFrameEvidence(peer, nowMs, remoteVideoReconnectThresholdMs());
+        const shouldRestartFrozenVideo = !missingFrameEvidenceSuppressesReconnect
+          && receiveGapMs >= remoteVideoReconnectThresholdMs();
         const socketRestartBackoffRemainingMs = sfuSocketRestartBackoffRemainingMs(peer, nowMs);
         const canRestartFrozenVideo = shouldRestartFrozenVideo
           && canRequestSfuSocketRestartForPeer(peer, nowMs);
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
-        setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+        setRemoteVideoStatus(peer, 'recovering', 'Waiting for video', nowMs);
         const freezeQualityDowngradeReason = receivingFreshFrames
           ? 'sfu_remote_video_decoder_waiting_keyframe'
           : 'sfu_remote_video_frozen';
@@ -629,6 +641,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
               remote_quality_pressure_sent: remoteQualityPressureSent,
               compatibility_fallback_sent: compatibilityFallbackSent,
+              local_reconnect_suppressed_by_missing_frame_evidence: missingFrameEvidenceSuppressesReconnect,
+              last_receiver_missing_frame_evidence_at_ms: Number(peer.lastReceiverMissingFrameEvidenceAtMs || 0),
+              last_receiver_missing_frame_count: Number(peer.lastReceiverMissingFrameCount || 0),
               remote_peer_count: remotePeersRef.value.size,
               sfu_connected: sfuConnected.value,
               connection_state: connectionState.value,
@@ -681,6 +696,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             compatibility_fallback_sent: compatibilityFallbackSent,
             socket_restart_attempted: socketRestarted,
             socket_restart_deferred: shouldRestartFrozenVideo && !socketRestarted,
+            local_reconnect_suppressed_by_missing_frame_evidence: missingFrameEvidenceSuppressesReconnect,
+            last_receiver_missing_frame_evidence_at_ms: Number(peer.lastReceiverMissingFrameEvidenceAtMs || 0),
+            last_receiver_missing_frame_count: Number(peer.lastReceiverMissingFrameCount || 0),
             socket_restart_backoff_remaining_ms: socketRestartBackoffRemainingMs,
             sfu_socket_restart_count: Number(peer.sfuSocketRestartCount || 0),
             next_sfu_socket_restart_allowed_at_ms: Number(peer.nextSfuSocketRestartAllowedAtMs || 0),
@@ -703,8 +721,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
       peer.stallRecoveryCount = Number(peer.stallRecoveryCount || 0) + 1;
-      setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
-      const shouldRestartNeverStartedVideo = stalledAgeMs >= remoteVideoStallThresholdMs * 2;
+      setRemoteVideoStatus(peer, 'recovering', 'Waiting for video', nowMs);
+      const missingFrameEvidenceSuppressesReconnect = recentReceiverMissingFrameEvidence(peer, nowMs, remoteVideoReconnectThresholdMs());
+      const shouldRestartNeverStartedVideo = !missingFrameEvidenceSuppressesReconnect
+        && stalledAgeMs >= remoteVideoStallThresholdMs * 2;
       const socketRestartBackoffRemainingMs = sfuSocketRestartBackoffRemainingMs(peer, nowMs);
       const canRestartNeverStartedVideo = shouldRestartNeverStartedVideo
         && canRequestSfuSocketRestartForPeer(peer, nowMs);
@@ -767,6 +787,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           remote_quality_pressure_sent: remoteQualityPressureSent,
           recovery_layer_preference_sent: recoveryLayerPreferenceSent,
           compatibility_fallback_sent: compatibilityFallbackSent,
+          local_reconnect_suppressed_by_missing_frame_evidence: missingFrameEvidenceSuppressesReconnect,
+          last_receiver_missing_frame_evidence_at_ms: Number(peer.lastReceiverMissingFrameEvidenceAtMs || 0),
+          last_receiver_missing_frame_count: Number(peer.lastReceiverMissingFrameCount || 0),
           remote_peer_count: remotePeersRef.value.size,
           connected_participant_count: connectedParticipantUsers.value.length,
           sfu_connected: sfuConnected.value,
@@ -805,6 +828,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             stall_recovery_count: Number(peer.stallRecoveryCount || 0),
             socket_restart_attempted: socketRestarted,
             socket_restart_deferred: shouldRestartNeverStartedVideo && !socketRestarted,
+            local_reconnect_suppressed_by_missing_frame_evidence: missingFrameEvidenceSuppressesReconnect,
+            last_receiver_missing_frame_evidence_at_ms: Number(peer.lastReceiverMissingFrameEvidenceAtMs || 0),
+            last_receiver_missing_frame_count: Number(peer.lastReceiverMissingFrameCount || 0),
             socket_restart_backoff_remaining_ms: socketRestartBackoffRemainingMs,
             sfu_socket_restart_count: Number(peer.sfuSocketRestartCount || 0),
             next_sfu_socket_restart_allowed_at_ms: Number(peer.nextSfuSocketRestartAllowedAtMs || 0),
@@ -839,7 +865,21 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     setRemoteVideoStallTimer(null);
   }
 
+  function canRestartSfuForConnectWindow(reason = 'sfu_reconnect', payload = {}, nowMs = Date.now()) {
+    return participantConnectWindow.canRequestReconnect({
+      reason,
+      nowMs,
+      payload: {
+        media_runtime_path: mediaRuntimePath.value,
+        remote_peer_count: remotePeersRef.value.size,
+        connected_participant_count: connectedParticipantUsers.value.length,
+        ...payload,
+      },
+    });
+  }
+
   return {
+    canRestartSfuForConnectWindow,
     checkRemoteVideoStalls,
     clearRemoteVideoStallTimer,
     isNativeWebRtcRuntimePath,

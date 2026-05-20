@@ -209,7 +209,12 @@ try {
       video_width: 1280,
       video_height: 720,
       video_fps: 30,
+      mobile: false,
+      browser_family: 'unknown',
     });
+    assert.equal(strictBuiltCapabilities.codec.preferred_path, 'unsupported');
+    assert.equal(strictBuiltCapabilities.codec.wasm, true);
+    assert.equal(strictBuiltCapabilities.network.backpressure.ratio, 0);
 
     const domFallbackOnlyCapabilities = await capabilitiesModule.buildClientCapabilitiesV1({
       participantSessionId: 'fallback-only-session',
@@ -235,6 +240,8 @@ try {
       video_width: 1280,
       video_height: 720,
       video_fps: 30,
+      mobile: false,
+      browser_family: 'unknown',
     });
   } finally {
     if (previousWebSocket === undefined) {
@@ -265,8 +272,21 @@ try {
     'throttled_50',
     'throttled_25',
     'stuck_not_sending',
+    'audio_only',
+    'video_unavailable',
     'blocked_capability',
     'left',
+  ]);
+  assert.deepEqual(planModule.MEDIA_SESSION_PLAN_STATE_VALUES, [
+    'pending',
+    'connecting',
+    'gossip_720p30',
+    'gossip_360p30',
+    'gossip_360p5',
+    'sfu_720p30',
+    'sfu_320p30',
+    'ready',
+    'failed',
   ]);
 
   const plan = planModule.normalizeMediaSessionPlanV1({
@@ -280,7 +300,7 @@ try {
         media_state: 'streaming_720p30',
         profile: '720p30',
         transport: 'gossip',
-        security_policy: 'required',
+        security_policy: 'transport_only',
         token: 'secret-token',
         sdp: 'v=0',
         ice_candidates: ['candidate:private'],
@@ -298,7 +318,7 @@ try {
       media_state: 'streaming_720p30',
       profile: '720p30',
       transport: 'gossip',
-      security_policy: 'required',
+      security_policy: 'transport_only',
       stuck_reason: '',
     },
   ]);
@@ -316,7 +336,7 @@ try {
           mediaState: 'STREAMING_720P30',
           profile: '720p30',
           transport: 'gossip',
-          securityPolicy: 'required',
+          securityPolicy: 'transport_only',
           token: 'secret-token',
           sdp: 'v=0',
           ice_candidates: ['candidate:private'],
@@ -336,7 +356,7 @@ try {
           media_state: 'waiting_for_gossip',
           profile: '',
           transport: '',
-          security_policy: 'required',
+          security_policy: 'transport_only',
         },
       ],
       token: 'secret-token',
@@ -351,7 +371,7 @@ try {
       media_state: 'streaming_720p30',
       profile: '720p30',
       transport: 'gossip',
-      security_policy: 'required',
+      security_policy: 'transport_only',
       stuck_reason: '',
     },
     {
@@ -367,7 +387,7 @@ try {
       media_state: 'waiting_for_gossip',
       profile: '',
       transport: '',
-      security_policy: 'required',
+      security_policy: 'transport_only',
       stuck_reason: '',
     },
   ]);
@@ -383,7 +403,7 @@ try {
         {
           participantSessionId: 'call-session-delta',
           mediaState: 'left',
-          securityPolicy: 'required',
+          securityPolicy: 'transport_only',
         },
       ],
     },
@@ -401,8 +421,66 @@ try {
   assert.equal(diagnostic.state_counts.streaming_720p30, 1);
   assert.equal(diagnostic.state_counts.blocked_capability, 1);
   assert.equal(diagnostic.state_counts.waiting_for_gossip, 1);
+  assert.equal(diagnostic.state_counts.audio_only, 0);
+  assert.equal(diagnostic.state_counts.video_unavailable, 0);
   assert.equal(diagnostic.state_counts.waiting_for_capabilities, 0);
   assertNoForbiddenData(diagnostic, 'media_session_plan.v1 diagnostic');
+
+  const nativeTalkAudioPlan = planModule.normalizeMediaSessionPlanV1({
+    schema_version: 'king.video.media_session_plan.v1',
+    call_id: 'call-audio',
+    room_id: 'room-audio',
+    plan_epoch: 9,
+    participants: [
+      {
+        participant_session_id: 'call-session-audio-only',
+        media_state: 'audio_only',
+        profile: '',
+        transport: '',
+        security_policy: 'transport_only',
+      },
+      {
+        participant_session_id: 'call-session-video-unavailable',
+        media_state: 'video_unavailable',
+        profile: '',
+        transport: '',
+        security_policy: 'transport_only',
+      },
+      {
+        participant_session_id: 'call-session-blocked',
+        media_state: 'blocked_capability',
+        profile: '',
+        transport: '',
+        security_policy: 'blocked',
+      },
+    ],
+  });
+  assert.equal(nativeTalkAudioPlan.participants[0].media_state, 'audio_only');
+  assert.equal(nativeTalkAudioPlan.participants[0].transport, '');
+  assert.equal(nativeTalkAudioPlan.participants[0].security_policy, 'transport_only');
+  assert.equal(nativeTalkAudioPlan.participants[1].media_state, 'video_unavailable');
+  assert.equal(nativeTalkAudioPlan.participants[1].security_policy, 'transport_only');
+  assert.equal(planModule.mediaSessionPlanHasGossipTransport(nativeTalkAudioPlan, {
+    participantSessionId: 'call-session-audio-only',
+  }), false);
+  assert.equal(planModule.mediaSessionPlanAllowsLocalPublication(nativeTalkAudioPlan, {
+    callId: 'call-audio',
+    roomId: 'room-audio',
+    participantSessionId: 'call-session-audio-only',
+    minPlanEpoch: 9,
+  }), true, 'plain native WebRTC talk audio must not wait for a 720p Gossip video sender');
+  assert.equal(planModule.mediaSessionPlanAllowsLocalPublication(nativeTalkAudioPlan, {
+    callId: 'call-audio',
+    roomId: 'room-audio',
+    participantSessionId: 'call-session-video-unavailable',
+    minPlanEpoch: 9,
+  }), false, 'video_unavailable has no native talk-audio candidate and must not start local publication');
+  assert.equal(planModule.mediaSessionPlanAllowsLocalPublication(nativeTalkAudioPlan, {
+    callId: 'call-audio',
+    roomId: 'room-audio',
+    participantSessionId: 'call-session-blocked',
+    minPlanEpoch: 9,
+  }), false, 'blocked_capability must remain fail-closed');
 
   const sentFrames = [];
   const diagnostics = [];
@@ -518,7 +596,7 @@ try {
     call_id: 'call-alpha',
     room_id: 'room-alpha',
     participant_session_id: 'call-session-alpha',
-  }), false);
+  }), true);
   assert.equal(bridge.handleClientCapabilitiesAck({
     type: 'client.capabilities.v1/ack',
     ok: true,

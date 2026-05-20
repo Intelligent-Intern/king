@@ -26,9 +26,9 @@ function requireMatch(source, pattern, message) {
 }
 
 const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
-const sprint = read('SPRINT.md');
 const ciGate = read('demo/video-chat/scripts/iam-call-access-ci-gate.sh');
-const websocketCommands = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php');
+const sqliteProof = read('demo/video-chat/backend-king-php/tests/iam-call-access-sqlite-runtime-proof.sh');
+const websocketLobby = read('demo/video-chat/backend-king-php/http/module_realtime_websocket_lobby.php');
 const lobbyPersistence = read('demo/video-chat/backend-king-php/http/module_realtime_lobby_persistence.php');
 const backendContract = read('demo/video-chat/backend-king-php/tests/realtime-lobby-timeout-consistency-contract.php');
 const backendShell = read('demo/video-chat/backend-king-php/tests/realtime-lobby-timeout-consistency-contract.sh');
@@ -51,13 +51,13 @@ requireIncludes(
 );
 requireIncludes(
   ciGate,
-  '"tests/contract/iam-lobby-timeout-consistency-contract.mjs"',
+  '"node tests/contract/iam-lobby-timeout-consistency-contract.mjs"',
   'IAM CI static gate must include the lobby timeout static proof',
 );
 requireIncludes(
-  ciGate,
-  '"tests/realtime-lobby-timeout-consistency-contract.sh"',
-  'IAM CI SQLite gate must include the lobby timeout backend proof',
+  sqliteProof,
+  '"realtime-lobby-timeout-consistency-contract.sh"',
+  'IAM SQLite runtime proof must include the lobby timeout backend proof',
 );
 requireIncludes(
   backendShell,
@@ -65,22 +65,10 @@ requireIncludes(
   'backend shell must execute the lobby timeout PHP contract',
 );
 
-for (const sprintLine of [
-  '- [x] Participant is removed from lobby after aborting join attempt',
-  '- [x] Timeout during lobby admission leads to consistent state',
-]) {
-  requireIncludes(sprint, sprintLine, `SPRINT.md must close ${sprintLine} only with this proof`);
-}
 requireMatch(
-  sprint,
-  /`realtime-lobby-timeout-consistency-contract` proves timeout during lobby\s+admission leaves the database pending[\s\S]*aborting the waiting connection clears\s+the lobby and resets the participant to invited/s,
-  'SPRINT.md proof narrative must name the focused lobby timeout contract and both closed leaves',
-);
-
-requireMatch(
-  websocketCommands,
-  /videochat_lobby_apply_command\([\s\S]*videochat_realtime_lobby_command_sender\(\$lobbyCommand\)/s,
-  'runtime websocket path must route lobby commands through the persistence-aware sender',
+  websocketLobby,
+  /\$deferredLobbySender[\s\S]*videochat_lobby_apply_command\([\s\S]*\$deferredLobbySender[\s\S]*videochat_realtime_apply_successful_lobby_command/s,
+  'runtime websocket path must defer lobby snapshots until persistence succeeds',
 );
 requireMatch(
   lobbyPersistence,
@@ -120,7 +108,7 @@ for (const proofText of [
 }
 requireMatch(
   backendContract,
-  /videochat_realtime_lobby_command_sender\(\$allowCommand\) !== null[\s\S]*videochat_lobby_apply_command\([\s\S]*videochat_realtime_lobby_command_sender\(\$allowCommand\)[\s\S]*videochat_realtime_apply_successful_lobby_command\([\s\S]*\$timeoutOpenDatabase/s,
+  /\$deferredLobbySender = static function[\s\S]*videochat_lobby_apply_command\([\s\S]*\$deferredLobbySender[\s\S]*videochat_realtime_apply_successful_lobby_command\([\s\S]*\$timeoutOpenDatabase[\s\S]*lobby_admission_persist_failed/s,
   'backend proof must drive a deferred lobby admission through a simulated timeout',
 );
 requireMatch(

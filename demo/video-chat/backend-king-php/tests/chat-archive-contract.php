@@ -57,6 +57,61 @@ function videochat_chat_archive_contract_decode_json_body(array $request): array
 }
 
 try {
+    $databaseCoreSource = file_get_contents(__DIR__ . '/../support/database_core.php') ?: '';
+    videochat_chat_archive_contract_assert(
+        str_contains($databaseCoreSource, 'function videochat_sqlite_ingest(')
+            && str_contains($databaseCoreSource, 'king_db_ingest('),
+        'sqlite write paths must be able to use the King-owned db ingestion primitive'
+    );
+
+    $chatArchiveSource = file_get_contents(__DIR__ . '/../domain/realtime/chat_archive.php') ?: '';
+    $fetchStart = strpos($chatArchiveSource, 'function videochat_chat_archive_fetch(');
+    $fetchEnd = $fetchStart === false ? false : strpos($chatArchiveSource, "\nfunction ", $fetchStart + 1);
+    $fetchSource = $fetchStart === false
+        ? ''
+        : substr($chatArchiveSource, $fetchStart, $fetchEnd === false ? null : $fetchEnd - $fetchStart);
+    videochat_chat_archive_contract_assert(
+        str_contains($chatArchiveSource, "videochat_sqlite_ingest(\$pdo, 'chat_archive.append_message'")
+            && !str_contains($fetchSource, 'videochat_chat_archive_sync_acl('),
+        'chat archive writes must use sqlite ingestion and fetch must stay read-only'
+    );
+
+    $moduleCallsSource = file_get_contents(__DIR__ . '/../http/module_calls.php') ?: '';
+    videochat_chat_archive_contract_assert(
+        str_contains($moduleCallsSource, 'videochat_sqlite_is_transient_lock')
+            && str_contains($moduleCallsSource, 'chat archive load failed'),
+        'chat archive route must retry/log transient sqlite lock failures instead of raw 500s'
+    );
+
+    $legacyDatabasePath = sys_get_temp_dir() . '/videochat-chat-archive-legacy-' . bin2hex(random_bytes(6)) . '.sqlite';
+    $legacyPdo = videochat_open_sqlite_pdo($legacyDatabasePath);
+    $legacyPdo->exec(
+        <<<'SQL'
+CREATE TABLE call_chat_messages (
+    message_id TEXT NOT NULL UNIQUE,
+    call_id TEXT NOT NULL,
+    room_id TEXT NOT NULL,
+    sender_user_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    message_json TEXT NOT NULL,
+    transcript_object_key TEXT NOT NULL UNIQUE,
+    server_unix_ms INTEGER NOT NULL,
+    server_time TEXT NOT NULL
+)
+SQL
+    );
+    $legacyPdo->exec(
+        <<<'SQL'
+INSERT INTO call_chat_messages(message_id, call_id, room_id, sender_user_id, text, message_json, transcript_object_key, server_unix_ms, server_time)
+VALUES('legacy-chat-1', 'legacy-call', 'legacy-room', 1, 'legacy text', '{"id":"legacy-chat-1"}', 'legacy-object-1', 1, '2026-01-01T00:00:00Z')
+SQL
+    );
+    videochat_chat_archive_bootstrap($legacyPdo);
+    $legacyColumns = videochat_chat_archive_table_columns($legacyPdo, 'call_chat_messages');
+    videochat_chat_archive_contract_assert(isset($legacyColumns['seq']) && (int) ($legacyColumns['seq']['pk'] ?? 0) > 0, 'legacy chat archive table must be rebuilt with seq primary key');
+    videochat_chat_archive_contract_assert((int) $legacyPdo->query('SELECT COUNT(*) FROM call_chat_messages')->fetchColumn() === 1, 'legacy chat archive rebuild should preserve rows');
+    @unlink($legacyDatabasePath);
+
     $databasePath = sys_get_temp_dir() . '/videochat-chat-archive-' . bin2hex(random_bytes(6)) . '.sqlite';
     videochat_bootstrap_sqlite($databasePath);
     $pdo = videochat_open_sqlite_pdo($databasePath);

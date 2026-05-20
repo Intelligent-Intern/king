@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../../../..');
@@ -39,6 +41,7 @@ const packageJson = readJson('demo/video-chat/frontend-vue/package.json');
 const matrix = readJson('demo/video-chat/contracts/v1/ui-parity-acceptance.matrix.json');
 const scripts = packageJson.scripts || {};
 const iamContractScript = String(scripts['test:contract:iam-call-access'] || '');
+const iamContractGate = iamCallAccessContractSuiteText;
 const iamCommandPaths = new Set(
   Array.isArray(matrix.commands?.['frontend:contract:iam-call-access']?.paths)
     ? matrix.commands['frontend:contract:iam-call-access'].paths
@@ -47,8 +50,13 @@ const iamCommandPaths = new Set(
 
 assert.match(
   iamContractScript,
+  /node tests\/contract\/iam-call-access-contract-suite\.mjs/,
+  'IAM Call Access contract package script must execute the helper suite',
+);
+assert.match(
+  iamContractGate,
   /node tests\/contract\/iam-ci-artifacts-contract\.mjs/,
-  'IAM Call Access contract package script must include the CI artifact proof',
+  'IAM Call Access contract helper must include the CI artifact proof',
 );
 assert.ok(
   iamCommandPaths.has('frontend-vue/tests/contract/iam-ci-artifacts-contract.mjs'),

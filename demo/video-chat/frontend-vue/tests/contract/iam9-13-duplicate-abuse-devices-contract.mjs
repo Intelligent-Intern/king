@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
@@ -133,7 +135,7 @@ requireMatch(
   'HTTP route must map duplicate/session conflicts to safe 409 call_access_conflict responses',
 );
 
-const iamPackageGate = String(packageJson.scripts?.['test:contract:iam-call-access'] || '');
+const iamPackageGate = iamCallAccessContractSuiteText;
 const iam913Script = String(packageJson.scripts?.['test:contract:iam9-13-duplicate-abuse-devices'] || '');
 requireIncludes(
   iamPackageGate,

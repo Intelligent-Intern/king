@@ -355,7 +355,19 @@ try {
     [$databasePath, $pdo] = videochat_iam_rejoin_contract_bootstrap_database('videochat-call-access-owner-timeout');
     $ids = videochat_iam_rejoin_contract_fixture_ids($pdo, $label);
     $tenantId = $ids['tenant_id'];
-    $ownerUserId = $ids['admin_user_id'];
+    $primaryAdminUserId = $ids['admin_user_id'];
+    videochat_iam_rejoin_contract_assert(
+        $primaryAdminUserId === VIDEOCHAT_OWNER_ABSENCE_IMMUNE_OWNER_USER_ID,
+        'seeded platform admin must be the owner-absence immune user',
+        $label
+    );
+    $ownerUserId = videochat_iam_rejoin_contract_seed_user(
+        $pdo,
+        'iam-owner-timeout-owner@example.test',
+        'IAM Owner Timeout Regular Owner',
+        $tenantId,
+        $ids['organization_id']
+    );
     $participantUserId = videochat_iam_rejoin_contract_seed_user(
         $pdo,
         'iam-owner-timeout-participant@example.test',
@@ -370,6 +382,43 @@ try {
         $tenantId,
         $ids['organization_id']
     );
+
+    $adminImmuneCall = videochat_iam_owner_timeout_prepare_call(
+        $pdo,
+        $primaryAdminUserId,
+        [$participantUserId],
+        $tenantId,
+        'IAM Owner Absence Primary Admin Immune Proof',
+        $label
+    );
+    $adminImmunePresence = videochat_presence_state_init();
+    $adminImmuneStartMs = 1_778_050_000_000;
+    [$adminImmuneOwner, $adminImmuneParticipants] = videochat_iam_owner_timeout_connect_room(
+        $pdo,
+        $adminImmunePresence,
+        $adminImmuneCall['room_id'],
+        $adminImmuneCall['call_id'],
+        $primaryAdminUserId,
+        [$participantUserId],
+        $tenantId,
+        $adminImmuneStartMs,
+        'primary-admin-immune'
+    );
+    $adminImmuneOwnerLeftMs = $adminImmuneStartMs + 60_000;
+    videochat_iam_king_participant_leave($pdo, $adminImmunePresence, $adminImmuneOwner, $adminImmuneOwnerLeftMs);
+    $adminImmuneDeadlineMs = $adminImmuneOwnerLeftMs + VIDEOCHAT_OWNER_ABSENCE_TIMER_MS + 1000;
+    videochat_iam_king_participant_touch($pdo, $adminImmuneParticipants[0], $adminImmuneDeadlineMs);
+    $adminImmuneAbsence = videochat_iam_owner_timeout_owner_absence_from_snapshot(
+        $pdo,
+        $adminImmunePresence,
+        $adminImmuneParticipants[0],
+        $adminImmuneDeadlineMs,
+        'primary_admin_owner_absence_immune'
+    );
+    videochat_iam_rejoin_contract_assert((bool) ($adminImmuneAbsence['enabled'] ?? true) === false, 'primary admin owner absence must be disabled', $label);
+    videochat_iam_rejoin_contract_assert((string) ($adminImmuneAbsence['status'] ?? '') === 'admin_owner_immune', 'primary admin owner absence status mismatch', $label);
+    videochat_iam_rejoin_contract_assert((bool) ($adminImmuneAbsence['owner_absence_immune'] ?? false) === true, 'primary admin owner absence immune marker missing', $label);
+    videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_call_status($pdo, $adminImmuneCall['call_id']) === 'active', 'primary admin-owned call must stay active past owner absence deadline', $label);
 
     $tabCloseCall = videochat_iam_owner_timeout_prepare_call($pdo, $ownerUserId, [$participantUserId], $tenantId, 'IAM Owner Tab Close Proof', $label);
     $tabClosePresence = videochat_presence_state_init();
@@ -659,7 +708,7 @@ SQL
     videochat_iam_rejoin_contract_assert(!videochat_iam_owner_timeout_session_exists($pdo, 'sess_owner_timeout_late_personal'), 'owner-timeout denied late session must not be stored', $label);
     $directJoinAfterEnd = videochat_decide_call_access_for_user($pdo, $callId, $participantUserId, 'user', $tenantId);
     videochat_iam_rejoin_contract_assert(!(bool) ($directJoinAfterEnd['allowed'] ?? true), 'owner-timeout ended state should block fresh direct joins', $label);
-    videochat_iam_rejoin_contract_assert((string) ($directJoinAfterEnd['reason'] ?? '') === 'call_not_joinable_from_status', 'owner-timeout fresh join denial reason mismatch', $label);
+    videochat_iam_rejoin_contract_assert((string) ($directJoinAfterEnd['reason'] ?? '') === 'conflict', 'owner-timeout fresh join denial reason mismatch', $label);
     videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_session_revoked($pdo, $personalSessionId), 'owner-timeout end should revoke personalized session', $label);
     videochat_iam_owner_timeout_assert_auth_denied($pdo, $personalSessionId, $callId, $label);
     videochat_iam_rejoin_contract_assert(videochat_iam_owner_timeout_user_status($pdo, $pendingGuestId) === 'disabled', 'owner-timeout end should disable pending temporary guest', $label);

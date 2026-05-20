@@ -1,5 +1,6 @@
 import { closeProtectedBrowserVideoDecoders } from './remoteBrowserEncodedVideo';
 import { shouldRequestSfuCompatibilityCodecFallback } from './recoveryReasons';
+import { diagnosePlannedGossipSfuRecoveryParked } from '../workspace/callWorkspace/plannedGossipSfuRecovery.ts';
 import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
 
 export function createSfuLifecycleHelpers({
@@ -45,11 +46,55 @@ export function createSfuLifecycleHelpers({
     strictStabilityPolicy,
   } = constants;
 
+  function plannedGossipPayload(payload = {}) {
+    return {
+      media_runtime_path: refs.mediaRuntimePath.value,
+      connection_state: refs.connectionState.value,
+      remote_peer_count: refs.remotePeersRef.value.size,
+      ...payload,
+    };
+  }
+
+  function parkPlannedGossipSfuRetry(eventType, reason, payload = {}, message = 'Planned Gossip media parked an automatic SFU retry.') {
+    return diagnosePlannedGossipSfuRecoveryParked({
+      captureClientDiagnostic,
+      reason,
+      payload: plannedGossipPayload(payload),
+      eventType,
+      message,
+      level: 'warning',
+      immediate: true,
+    });
+  }
+
+  function sfuConnectRetryDisabled(reason, payload = {}) {
+    return parkPlannedGossipSfuRetry(
+      'planned_gossip_sfu_connect_retry_parked',
+      reason,
+      payload,
+      'Gossip-primary one-connect media policy parked an automatic SFU connect retry.',
+    ) || strictPolicyEnabled(strictStabilityPolicy, 'disableSfuConnectRetry');
+  }
+
+  function sfuLocalTrackPublishRetryDisabled(reason, payload = {}) {
+    return parkPlannedGossipSfuRetry(
+      'planned_gossip_sfu_local_track_publish_retry_parked',
+      reason,
+      payload,
+      'Gossip-primary one-connect media policy parked an automatic SFU local-track publish retry.',
+    ) || strictPolicyEnabled(strictStabilityPolicy, 'disableSfuLocalTrackPublishRetry');
+  }
+
   function scheduleLocalTrackPublish(attempt = 0) {
     if (!refs.sfuClientRef.value || !refs.sfuConnected.value) return;
     void publishLocalTracks();
     if (refs.localStreamRef.value instanceof MediaStream && state.localTracksPublishedToSfu) return;
     if (attempt >= sfuPublishMaxRetries) return;
+    if (sfuLocalTrackPublishRetryDisabled('sfu_local_track_publish_retry', {
+      retry_count: attempt + 1,
+      retry_max: sfuPublishMaxRetries,
+      retry_delay_ms: sfuPublishRetryDelayMs,
+    })) return;
     setTimeout(() => {
       scheduleLocalTrackPublish(attempt + 1);
     }, sfuPublishRetryDelayMs);
@@ -147,6 +192,15 @@ export function createSfuLifecycleHelpers({
           return;
         }
         if (!hadActiveConnection) {
+          if (sfuConnectRetryDisabled('sfu_connect_retry_before_active', {
+            retry_count: state.sfuConnectRetryCount + 1,
+            retry_max: sfuConnectMaxRetries,
+            retry_delay_ms: sfuConnectRetryDelayMs,
+            had_active_connection: false,
+          })) {
+            state.sfuConnectRetryCount = 0;
+            return;
+          }
           if (state.sfuConnectRetryCount < sfuConnectMaxRetries) {
             state.sfuConnectRetryCount += 1;
         captureClientDiagnostic({
@@ -183,6 +237,18 @@ export function createSfuLifecycleHelpers({
         });
           state.sfuConnectRetryCount = 0;
           void maybeFallbackToNativeRuntime('sfu_connect_failed');
+          return;
+        }
+        if (parkPlannedGossipSfuRetry(
+          'planned_gossip_sfu_disconnect_reconnect_parked',
+          'sfu_disconnected_after_connect',
+          {
+            had_active_connection: true,
+            retry_delay_ms: 2000,
+          },
+          'Gossip-primary one-connect media policy parked an automatic SFU reconnect after disconnect.',
+        )) {
+          state.sfuConnectRetryCount = 0;
           return;
         }
         if (disableSfuSocketRecoveryReconnect) {

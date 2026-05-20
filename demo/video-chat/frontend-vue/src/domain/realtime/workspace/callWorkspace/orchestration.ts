@@ -11,7 +11,6 @@ export function createCallWorkspaceOrchestrationHelpers({
   const {
     clearAloneIdleWatchTimer,
     closeSocket,
-    connectSocket,
     ensureAloneIdleWatchTimer,
     hideAloneIdlePrompt,
     refreshUsersDirectoryPresentation,
@@ -60,7 +59,6 @@ export function createCallWorkspaceOrchestrationHelpers({
     miniVideoParticipants,
     primaryVideoUserId,
     reactionTrayOpen,
-    reconnectAttempt,
     route,
     router,
     sessionState,
@@ -303,12 +301,6 @@ export function createCallWorkspaceOrchestrationHelpers({
         connectionState.value = 'expired';
         connectionReason.value = 'missing_session';
         closeSocket();
-        return;
-      }
-
-      if (!isSocketOnline.value) {
-        reconnectAttempt.value = 0;
-        void connectSocket();
       }
     }
   );

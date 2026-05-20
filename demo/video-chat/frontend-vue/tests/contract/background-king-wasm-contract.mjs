@@ -49,6 +49,10 @@ try {
   requireContains(worker, 'sanitizeFilesetPaths(await FilesetResolver.forVisionTasks(resolvedWasm))', 'Vite-safe fileset paths');
   requireContains(worker, 'modelAssetBuffer: new Uint8Array(modelBuffer)', 'local model buffer load');
   requireContains(worker, 'outputCategoryMask: true', 'category mask output');
+  requireContains(worker, 'function categoryMaskValues(categoryMask)', 'category mask values fallback');
+  requireContains(worker, 'categoryMaskValues(result.categoryMask)', 'category mask values extraction');
+  requireContains(worker, 'message.maskValues = maskValues', 'category mask values postMessage payload');
+  requireContains(worker, 'transfer.push(maskValues.buffer)', 'category mask values transferable');
   requireContains(worker, "error: 'production_category_mask_unavailable'", 'category mask unavailable error');
   requireMissing(worker, 'outputConfidenceMasks', 'confidence mask fallback output');
   requireMissing(worker, 'confidenceMaskValues', 'confidence mask fallback implementation');

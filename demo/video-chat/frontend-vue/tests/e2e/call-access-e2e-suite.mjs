@@ -10,6 +10,8 @@ export const CALL_ACCESS_E2E_SPECS = Object.freeze([
   'tests/e2e/call-access-strong-mismatch-host-verification.spec.js',
   'tests/e2e/call-access-privacy-foreign-data.spec.js',
   'tests/e2e/call-access-seed-matrix.spec.js',
+  'tests/e2e/call-access-calendar-unregistered-invite.spec.js',
+  'tests/e2e/call-access-admin-join-boundaries.spec.js',
   'tests/e2e/call-access-authorized-rejoin.spec.js',
   'tests/e2e/iam-lobby-admission-main.spec.js',
   'tests/e2e/call-access-temp-guest-list-direct-join.spec.js',

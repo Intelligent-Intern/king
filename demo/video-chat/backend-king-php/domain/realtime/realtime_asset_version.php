@@ -38,6 +38,21 @@ function videochat_realtime_client_asset_version_from_query(array $queryParams):
     return videochat_realtime_normalize_client_asset_version($queryParams['asset_version'] ?? '');
 }
 
+function videochat_realtime_query_truthy(mixed $value): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value)) {
+        return $value === 1;
+    }
+    if (is_string($value)) {
+        return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    return false;
+}
+
 function videochat_realtime_asset_version_mismatch(string $clientAssetVersion): bool
 {
     $serverAssetVersion = videochat_realtime_current_asset_version();
@@ -55,7 +70,9 @@ function videochat_realtime_asset_invalidation_frame(
     return [
         'type' => 'assets/invalidate',
         'reason' => 'asset_version_mismatch',
-        'force_reload' => true,
+        'force_reload' => false,
+        'reload' => false,
+        'hint_only' => true,
         'transport' => trim($transport) === '' ? 'ws' : trim($transport),
         'asset_version' => videochat_realtime_current_asset_version(),
         'client' => [
@@ -70,7 +87,8 @@ function videochat_realtime_disconnect_stale_asset_client(
     mixed $websocket,
     string $clientAssetVersion,
     callable $sendFrame,
-    string $transport = 'ws'
+    string $transport = 'ws',
+    bool $closeStaleSocket = true
 ): bool {
     if (!videochat_realtime_asset_version_mismatch($clientAssetVersion)) {
         return false;
@@ -80,6 +98,10 @@ function videochat_realtime_disconnect_stale_asset_client(
         $sendFrame(videochat_realtime_asset_invalidation_frame($clientAssetVersion, $transport));
     } catch (Throwable) {
         // Best-effort invalidation; closing the websocket still forces a reconnect.
+    }
+
+    if (!$closeStaleSocket) {
+        return false;
     }
 
     try {

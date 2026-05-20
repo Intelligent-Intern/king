@@ -2,13 +2,16 @@ import {
   shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
+import { isScreenShareUserId } from '../../screenShareIdentity.js';
 import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRelay.js';
 import { createCallWorkspaceMediaCapabilityBridge } from './mediaCapabilityPlanBridge.ts';
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
-const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
-const RETRYABLE_RECONNECT_BACKFILL_REASONS = Object.freeze([
+const CONNECT_CYCLE_TIMEOUT_MS = 5 * 60 * 1000;
+const CONTROL_LANE_SECOND_CONNECT_DELAY_MS = 5 * 1000;
+const CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS = 1;
+const TRANSIENT_BACKFILL_REASONS = Object.freeze([
   'access_session_binding_unavailable',
   'realtime_backfill_unavailable',
   'websocket_reconnect_backfill_unavailable',
@@ -20,6 +23,50 @@ const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/media-quality-pressure',
   'call/offer',
 ]);
+const INTERNAL_STATUS_SIGNAL_TYPES = Object.freeze([
+  CALL_APP_PRESENCE_SIGNAL_TYPE,
+  'call-app/grants-updated',
+  'call/gossip-recovery',
+  'call/gossip-topology',
+  'call/media-quality-pressure',
+  'call/moderation-state',
+  'gossip/recovery/request',
+]);
+const CALL_WORKSPACE_FORCE_RELOAD_EVENT = 'kingrt:call-workspace-force-reload';
+const EXPECTED_BROWSER_PAGE_EXIT_SOCKET_CLOSE_GRACE_MS = 15 * 1000;
+
+let browserPageExitObservedAtMs = 0;
+let browserPageExitCloseGuardBound = false;
+
+function isInternalStatusSignalType(type) {
+  return INTERNAL_STATUS_SIGNAL_TYPES.includes(String(type || '').trim().toLowerCase());
+}
+
+function markBrowserPageExitObserved(event = null) {
+  if (event?.persisted === true) return;
+  browserPageExitObservedAtMs = Date.now();
+}
+
+function clearBrowserPageExitObserved() {
+  browserPageExitObservedAtMs = 0;
+}
+
+function bindBrowserPageExitCloseGuard() {
+  if (browserPageExitCloseGuardBound || typeof window === 'undefined') return;
+  browserPageExitCloseGuardBound = true;
+  window.addEventListener(CALL_WORKSPACE_FORCE_RELOAD_EVENT, markBrowserPageExitObserved, { capture: true });
+  window.addEventListener('beforeunload', markBrowserPageExitObserved, { capture: true });
+  window.addEventListener('pagehide', markBrowserPageExitObserved, { capture: true });
+  window.addEventListener('pageshow', clearBrowserPageExitObserved, { capture: true });
+}
+
+function isExpectedBrowserPageExitSocketClose(event, nowMs = Date.now()) {
+  const closeCode = Number(event?.code || 0);
+  const closeReason = String(event?.reason || '').trim();
+  if (closeCode !== 1006 || closeReason !== '') return false;
+  if (browserPageExitObservedAtMs <= 0) return false;
+  return (nowMs - browserPageExitObservedAtMs) <= EXPECTED_BROWSER_PAGE_EXIT_SOCKET_CLOSE_GRACE_MS;
+}
 
 export function createCallWorkspaceSocketHelpers({
   callbacks,
@@ -51,11 +98,12 @@ export function createCallWorkspaceSocketHelpers({
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
-    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleCallAppPresenceSignal = () => false,
+    handleGossipBinaryServerFrame = () => false,
     handleGossipNeighborSignal = () => false,
+    handleGossipServerFrame = () => false,
     handleNativeSignalingEvent,
     hideLobbyJoinToast,
     mediaDebugLog,
@@ -75,6 +123,7 @@ export function createCallWorkspaceSocketHelpers({
     setAdmissionGate,
     setBackendWebSocketOrigin,
     setNotice,
+    stopLocalEncodingPipeline = () => {},
     syncControlStateToPeers,
     syncModerationStateToPeers,
     tryDirectJoinWithModeratorBypass,
@@ -82,7 +131,6 @@ export function createCallWorkspaceSocketHelpers({
 
   const {
     callStateSignalTypes,
-    reconnectDelayMs,
     strictStabilityPolicy,
   } = constants;
   const fallbackSfuTransportState = {
@@ -98,8 +146,114 @@ export function createCallWorkspaceSocketHelpers({
     callbacks: {
       captureClientDiagnostic,
     },
-    refs,
+    refs: {
+      ...refs,
+      canStartRealtimeMediaSending,
+    },
   });
+
+  function normalizeParticipantUserId(row) {
+    const normalizedUserId = Number(row?.userId || row?.user_id || row?.user?.id || 0);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 0;
+    if (isScreenShareUserId(normalizedUserId)) return 0;
+    return normalizedUserId;
+  }
+
+  function participantRows(refOrRows) {
+    const rows = refOrRows && typeof refOrRows === 'object' && 'value' in refOrRows
+      ? refOrRows.value
+      : refOrRows;
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function uniqueParticipantIds(rows) {
+    return Array.from(new Set(
+      participantRows(rows)
+        .map((row) => normalizeParticipantUserId(row))
+        .filter((userId) => Number.isInteger(userId) && userId > 0)
+    )).sort((left, right) => left - right);
+  }
+
+  function currentUserParticipantId() {
+    const userId = Number(refs.sessionState?.userId || 0);
+    return Number.isInteger(userId) && userId > 0 ? userId : 0;
+  }
+
+  function expectedCallParticipantIds() {
+    const expectedIds = uniqueParticipantIds(refs.participantUsers);
+    if (expectedIds.length > 0) return expectedIds;
+    const currentUserId = currentUserParticipantId();
+    return currentUserId > 0 ? [currentUserId] : [];
+  }
+
+  function connectedCallParticipantIds() {
+    return uniqueParticipantIds(refs.connectedParticipantUsers);
+  }
+
+  function participantIdsKey(ids) {
+    return ids.join(',');
+  }
+
+  function allExpectedCallParticipantsConnected() {
+    if (refs.hasRealtimeRoomSync?.value !== true) return false;
+    const expectedIds = expectedCallParticipantIds();
+    if (expectedIds.length < 1) return false;
+    const connectedIds = new Set(connectedCallParticipantIds());
+    return expectedIds.every((userId) => connectedIds.has(userId));
+  }
+
+  function canStartRealtimeMediaSending() {
+    if (String(refs.connectionState?.value || '').trim().toLowerCase() !== 'online') return false;
+    return allExpectedCallParticipantsConnected();
+  }
+
+  function controlLaneHasParticipantsForConnect() {
+    if (refs.hasRealtimeRoomSync?.value !== true && state.connectCycleAuthoritativeRosterSeen !== true) return false;
+    return expectedCallParticipantIds().length > 0;
+  }
+
+  function clearControlLaneReadinessTimer() {
+    if (state.controlLaneReadinessTimer !== null && state.controlLaneReadinessTimer !== undefined) {
+      clearTimeout(state.controlLaneReadinessTimer);
+      state.controlLaneReadinessTimer = null;
+    }
+  }
+
+  function observeExpectedParticipantRoster(reason = 'room_snapshot') {
+    const expectedIds = expectedCallParticipantIds();
+    const expectedKey = participantIdsKey(expectedIds);
+    if (expectedKey === '') return false;
+    const previousKnownIds = new Set(Array.isArray(state.connectCycleKnownParticipantIds)
+      ? state.connectCycleKnownParticipantIds
+      : []);
+    const addedParticipantIds = expectedIds.filter((userId) => !previousKnownIds.has(userId));
+    const authoritativeRosterSeen = state.connectCycleAuthoritativeRosterSeen === true;
+    state.connectCycleKnownParticipantIds = expectedIds;
+    state.connectCycleAuthoritativeRosterSeen = true;
+    if (!authoritativeRosterSeen || state.connectCycleStarted !== true || addedParticipantIds.length < 1) {
+      return false;
+    }
+
+    state.connectCycleParticipantGrowthPending = true;
+    state.connectCycleParticipantGrowthKey = expectedKey;
+    captureClientDiagnostic({
+      category: 'realtime',
+      level: 'info',
+      eventType: 'websocket_one_shot_participant_join_observed',
+      code: 'websocket_one_shot_participant_join_observed',
+      message: 'A new call participant was observed; one additional websocket connect cycle is permitted.',
+      payload: {
+        reason,
+        added_participant_ids: addedParticipantIds,
+        expected_participant_ids: expectedIds,
+        connected_participant_ids: connectedCallParticipantIds(),
+        requested_room_id: refs.desiredRoomId.value,
+        active_call_id: refs.activeSocketCallId.value,
+      },
+      immediate: true,
+    });
+    return true;
+  }
 
   function sfuTransportStateForSocketLifecycle() {
     if (refs.sfuTransportState && typeof refs.sfuTransportState === 'object') {
@@ -315,11 +469,26 @@ export function createCallWorkspaceSocketHelpers({
       return;
     }
 
+    if (isInternalStatusSignalType(type)) {
+      return;
+    }
+
     const senderName = String(sender.display_name || `User ${senderUserId || 'unknown'}`).trim();
     setNotice(`Received ${type.replace('call/', '')} from ${senderName}.`);
   }
 
   function handleSocketMessage(event) {
+    if (event?.data instanceof ArrayBuffer) {
+      handleGossipBinaryServerFrame(event.data);
+      return;
+    }
+    if (typeof Blob !== 'undefined' && event?.data instanceof Blob) {
+      void event.data.arrayBuffer().then((buffer) => {
+        handleGossipBinaryServerFrame(buffer);
+      }).catch(() => {});
+      return;
+    }
+
     let payload;
     try {
       payload = JSON.parse(String(event.data || ''));
@@ -375,11 +544,12 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'room/snapshot') {
       applyRoomSnapshot(payload);
+      observeExpectedParticipantRoster('room_snapshot');
+      scheduleControlLaneSecondConnectReadinessCheck('room_snapshot');
       mediaCapabilityPlanBridge.handleRoomSnapshotMediaSessionPlan(payload);
       void mediaCapabilityPlanBridge.sendClientCapabilities('room_snapshot', payload)
         .then(() => mediaCapabilityPlanBridge.applyLocalMediaStateForLastPlan('room_snapshot', payload));
       applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
-      void bootstrapChatArchive('room_snapshot');
       return;
     }
 
@@ -441,15 +611,16 @@ export function createCallWorkspaceSocketHelpers({
       if (signalType === 'offer' && Number(payload?.sent_count ?? 0) === 0) {
         scheduleNativeOfferRetryForUserId(payload?.target_user_id, 'brokered_offer_unanswered');
       }
-      if (!refs.shouldSuppressCallAckNotice(rawSignalType || signalType)) {
-        setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
-      }
       return;
     }
 
     if (type === 'call/gossip-topology') {
       applyGossipTopologyHint(payload);
       return;
+    }
+
+    if (type === 'call/gossip-server-frame') {
+      if (handleGossipServerFrame(payload)) return;
     }
 
     if (type === 'chat/ack') {
@@ -509,35 +680,21 @@ export function createCallWorkspaceSocketHelpers({
       }
       const transientAuthBackendError = code === 'websocket_auth_temporarily_unavailable'
         || closeReason === 'auth_backend_error';
-      const transientReconnectBackfillError = code === 'websocket_reconnect_backfill_unavailable'
-        || RETRYABLE_RECONNECT_BACKFILL_REASONS.includes(closeReason);
-      const retryableRealtimeReconnectError = transientAuthBackendError || transientReconnectBackfillError;
-      if (retryableRealtimeReconnectError) {
-        const retryReason = transientAuthBackendError
+      const transientBackfillError = code === 'websocket_reconnect_backfill_unavailable'
+        || TRANSIENT_BACKFILL_REASONS.includes(closeReason);
+      const transientRealtimeConnectError = transientAuthBackendError || transientBackfillError;
+      if (transientRealtimeConnectError) {
+        const failureReason = transientAuthBackendError
           ? 'auth_backend_error'
-          : (closeReason || code || 'websocket_reconnect_retryable_error');
-        state.manualSocketClose = false;
-        refs.workspaceError.value = '';
-        refs.workspaceNotice.value = '';
-        refs.connectionReason.value = retryReason;
-        refs.connectionState.value = 'retrying';
-        captureClientDiagnostic({
-          category: 'realtime',
-          level: 'warning',
-          eventType: 'realtime_websocket_retryable_error',
-          code: code || retryReason,
+          : (closeReason || code || 'websocket_reconnect_backfill_unavailable');
+        failConnectCycleOnce({
+          reason: failureReason,
+          code: code || failureReason,
           message,
           payload: {
-            retryable: true,
-            retry_reason: retryReason,
-            requested_room_id: refs.desiredRoomId.value,
-            active_call_id: refs.activeSocketCallId.value,
             details: payload?.details || {},
           },
-          immediate: true,
         });
-        closeSocketLocal();
-        scheduleReconnect();
         return;
       }
       if (code === 'websocket_session_invalidated' || closeReason === 'session_invalidated') {
@@ -649,6 +806,243 @@ export function createCallWorkspaceSocketHelpers({
     }
   }
 
+  function normalizeConnectFailureReason(reason, fallback = 'network_error') {
+    const normalized = String(reason || '').trim().toLowerCase();
+    return normalized !== '' ? normalized : fallback;
+  }
+
+  function failConnectCycleOnce({
+    reason = 'socket_closed',
+    code = '',
+    message = '',
+    payload = {},
+    closeActiveSocket = true,
+  } = {}) {
+    const failureReason = normalizeConnectFailureReason(reason, 'socket_closed');
+    const failureMessage = String(message || '').trim()
+      || 'websocket_one_shot_connect_failed';
+    clearReconnectTimer();
+    refs.connectionState.value = 'offline';
+    refs.connectionReason.value = failureReason;
+    state.manualSocketClose = true;
+    try {
+      stopLocalEncodingPipeline();
+    } catch {
+      // Terminal socket failures must not keep the publisher loop alive.
+    }
+    captureClientDiagnostic({
+      category: 'realtime',
+      level: 'warning',
+      eventType: 'realtime_websocket_one_shot_failed',
+      code: String(code || failureReason || 'realtime_websocket_one_shot_failed'),
+      message: failureMessage,
+      payload: {
+        automatic_second_connect: false,
+        retryable: false,
+        second_connect_scheduled: false,
+        next_connect_cycle_requires_new_participant: true,
+        failure_reason: failureReason,
+        local_encoding_stopped_after_socket_failure: true,
+        requested_room_id: refs.desiredRoomId.value,
+        active_call_id: refs.activeSocketCallId.value,
+        expected_participant_ids: expectedCallParticipantIds(),
+        connected_participant_ids: connectedCallParticipantIds(),
+        ...payload,
+      },
+      immediate: true,
+    });
+    if (closeActiveSocket) {
+      closeSocketLocal({ closeReason: failureReason });
+    }
+  }
+
+  function connectCycleAdmission() {
+    const expectedIds = expectedCallParticipantIds();
+    const expectedKey = participantIdsKey(expectedIds);
+    if (state.connectCycleStarted !== true) {
+      return { allowed: true, reason: 'initial_connect_cycle', expectedIds, expectedKey };
+    }
+    if (state.connectCycleSecondConnectPending === true) {
+      return { allowed: true, reason: 'control_lane_second_connect', expectedIds, expectedKey };
+    }
+    if (state.connectCycleParticipantGrowthPending === true) {
+      return { allowed: true, reason: 'participant_joined', expectedIds, expectedKey };
+    }
+    return { allowed: false, reason: 'one_shot_cycle_already_used', expectedIds, expectedKey };
+  }
+
+  function scheduleControlLaneSecondConnect({
+    reason = 'socket_closed',
+    code = 'websocket_closed_second_connect_scheduled',
+    message = '',
+    payload = {},
+    delayMs = CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+  } = {}) {
+    if (state.manualSocketClose) return false;
+    if (!controlLaneHasParticipantsForConnect()) return false;
+    if ((Number(state.connectCycleSecondConnectAttempts || 0)) >= CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS) return false;
+    if (state.connectCycleSecondConnectPending === true || state.reconnectTimer !== null) return false;
+
+    const retryReason = normalizeConnectFailureReason(reason, 'socket_closed');
+    const retryDelayMs = Math.max(0, Number(delayMs) || 0);
+    clearControlLaneReadinessTimer();
+    state.connectCycleSecondConnectAttempts = Number(state.connectCycleSecondConnectAttempts || 0) + 1;
+    state.connectCycleSecondConnectPending = true;
+    refs.connectionState.value = 'retrying';
+    refs.connectionReason.value = 'control_lane_second_connect_wait';
+    try {
+      stopLocalEncodingPipeline();
+    } catch {
+      // Encoding restarts only after the second websocket path reaches readiness.
+    }
+    captureClientDiagnostic({
+      category: 'realtime',
+      level: 'warning',
+      eventType: 'realtime_websocket_control_lane_second_connect_scheduled',
+      code,
+      message: String(message || '').trim()
+        || 'websocket_control_lane_second_connect_scheduled',
+      payload: {
+        automatic_second_connect: true,
+        retryable: true,
+        second_connect_scheduled: true,
+        second_connect_delay_ms: retryDelayMs,
+        second_connect_attempt: state.connectCycleSecondConnectAttempts,
+        second_connect_max_attempts: CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS,
+        failure_reason: retryReason,
+        local_encoding_stopped_before_second_connect: true,
+        requested_room_id: refs.desiredRoomId.value,
+        active_call_id: refs.activeSocketCallId.value,
+        expected_participant_ids: expectedCallParticipantIds(),
+        connected_participant_ids: connectedCallParticipantIds(),
+        ...payload,
+      },
+      immediate: true,
+    });
+
+    state.reconnectTimer = setTimeout(() => {
+      state.reconnectTimer = null;
+      if (state.manualSocketClose) return;
+      void connectSocket();
+    }, retryDelayMs);
+    return true;
+  }
+
+  function scheduleControlLaneSecondConnectReadinessCheck(reason = 'room_snapshot') {
+    if (state.manualSocketClose) return false;
+    if (state.controlLaneReadinessTimer !== null && state.controlLaneReadinessTimer !== undefined) return false;
+    if (state.connectCycleSecondConnectPending === true) return false;
+    if ((Number(state.connectCycleSecondConnectAttempts || 0)) >= CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS) return false;
+    if (!controlLaneHasParticipantsForConnect() || allExpectedCallParticipantsConnected()) return false;
+    const generation = state.connectGeneration;
+    state.controlLaneReadinessTimer = setTimeout(() => {
+      state.controlLaneReadinessTimer = null;
+      if (generation !== state.connectGeneration || state.manualSocketClose) return;
+      if (allExpectedCallParticipantsConnected()) return;
+      const activeSocket = refs.socketRef.value;
+      if (activeSocket instanceof WebSocket && activeSocket.readyState === WebSocket.OPEN) {
+        refs.connectionState.value = 'online';
+        refs.connectionReason.value = 'ready';
+        requestRoomSnapshot();
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'info',
+          eventType: 'websocket_control_lane_open_socket_kept_after_unready_roster',
+          code: 'websocket_control_lane_open_socket_kept_after_unready_roster',
+          message: 'websocket_control_lane_open_socket_kept_after_unready_roster',
+          payload: {
+            automatic_second_connect: false,
+            retryable: false,
+            second_connect_scheduled: false,
+            readiness_check_reason: String(reason || 'room_snapshot'),
+            readiness_check_delay_ms: CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+            expected_participant_ids: expectedCallParticipantIds(),
+            connected_participant_ids: connectedCallParticipantIds(),
+          },
+          immediate: false,
+        });
+        return;
+      }
+      const secondConnectScheduled = scheduleControlLaneSecondConnect({
+        reason: 'control_lane_participants_not_connected_after_5s',
+        code: 'websocket_control_lane_second_connect_after_unready_roster',
+        message: 'Control lane still has participants that are not connected after 5 seconds; one second connect will be attempted.',
+        delayMs: 0,
+        payload: {
+          readiness_check_reason: String(reason || 'room_snapshot'),
+          readiness_check_delay_ms: CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+        },
+      });
+      if (!secondConnectScheduled) return;
+    }, CONTROL_LANE_SECOND_CONNECT_DELAY_MS);
+    return true;
+  }
+
+  function isAbnormalControlLaneClose(event, closeReason = '') {
+    const closeCode = Number(event?.code || 0);
+    const normalizedReason = String(closeReason || '').trim().toLowerCase();
+    if (normalizedReason === 'client_leave' || normalizedReason === 'client_close') return false;
+    if (normalizedReason === 'session_invalidated' || normalizedReason === 'stale_asset_version') return false;
+    return closeCode === 1006 || closeCode === 1011 || normalizedReason === 'socket_error';
+  }
+
+  function shouldScheduleCloseSecondConnect({ opened = false, event = null, closeReason = '' } = {}) {
+    if (opened !== true) {
+      return !allExpectedCallParticipantsConnected();
+    }
+    return isAbnormalControlLaneClose(event, closeReason);
+  }
+
+  function suppressConnectCycle(reason = 'one_shot_cycle_already_used') {
+    const normalizedReason = normalizeConnectFailureReason(reason, 'one_shot_cycle_already_used');
+    captureClientDiagnostic({
+      category: 'realtime',
+      level: 'info',
+      eventType: 'websocket_one_shot_connect_suppressed',
+      code: 'websocket_one_shot_connect_suppressed',
+      message: 'A websocket connect request was suppressed because this call already used its one-shot connect cycle.',
+      payload: {
+        automatic_second_connect: false,
+        second_connect_scheduled: false,
+        suppression_reason: normalizedReason,
+        next_connect_cycle_requires_new_participant: true,
+        expected_participant_ids: expectedCallParticipantIds(),
+        connected_participant_ids: connectedCallParticipantIds(),
+        requested_room_id: refs.desiredRoomId.value,
+        active_call_id: refs.activeSocketCallId.value,
+      },
+      immediate: false,
+    });
+  }
+
+  function observeExpectedBrowserPageExitSocketClose(event, closeReason = '', opened = false) {
+    captureClientDiagnostic({
+      category: 'realtime',
+      level: 'warning',
+      eventType: 'realtime_websocket_expected_browser_page_exit_close',
+      code: 'websocket_expected_browser_page_exit_close',
+      message: 'websocket_expected_browser_page_exit_close',
+      payload: {
+        automatic_second_connect: false,
+        retryable: false,
+        second_connect_scheduled: false,
+        expected_browser_page_exit_close: true,
+        next_connect_cycle_requires_new_participant: true,
+        close_code: Number(event?.code || 0),
+        close_reason: closeReason,
+        opened,
+        browser_page_exit_observed_at_ms: browserPageExitObservedAtMs,
+        requested_room_id: refs.desiredRoomId.value,
+        active_call_id: refs.activeSocketCallId.value,
+        expected_participant_ids: expectedCallParticipantIds(),
+        connected_participant_ids: connectedCallParticipantIds(),
+      },
+      immediate: true,
+    });
+  }
+
   function startPingLoop() {
     clearPingTimer();
     state.pingTimer = setInterval(() => {
@@ -659,7 +1053,9 @@ export function createCallWorkspaceSocketHelpers({
 
   function closeSocket(options = {}) {
     const leaveRoom = options?.leaveRoom === true;
+    const requestedCloseReason = String(options?.closeReason || '').trim();
     clearReconnectTimer();
+    clearControlLaneReadinessTimer();
     clearPingTimer();
     state.connectInFlight = false;
     refs.hasRealtimeRoomSync.value = false;
@@ -675,7 +1071,7 @@ export function createCallWorkspaceSocketHelpers({
       }
     }
     try {
-      socket.close(1000, leaveRoom ? 'client_leave' : 'client_close');
+      socket.close(1000, requestedCloseReason || (leaveRoom ? 'client_leave' : 'client_close'));
     } catch {
       // ignore
     }
@@ -745,23 +1141,37 @@ export function createCallWorkspaceSocketHelpers({
     }
   }
 
-  function scheduleReconnect() {
-    clearReconnectTimer();
-    if (state.manualSocketClose || refs.connectionState.value === 'blocked' || refs.connectionState.value === 'expired') {
+  async function connectSocket() {
+    bindBrowserPageExitCloseGuard();
+    if (state.connectInFlight && !state.manualSocketClose) return;
+    const admission = connectCycleAdmission();
+    if (!admission.allowed) {
+      suppressConnectCycle(admission.reason);
       return;
     }
-    refs.reconnectAttempt.value += 1;
-    refs.connectionState.value = 'retrying';
-    refs.connectionReason.value = 'network_retry';
-
-    const delay = reconnectDelayMs[Math.min(refs.reconnectAttempt.value - 1, reconnectDelayMs.length - 1)];
-    state.reconnectTimer = setTimeout(() => {
-      void connectSocket();
-    }, delay);
-  }
-
-  async function connectSocket() {
-    if (state.connectInFlight && !state.manualSocketClose) return;
+    const existingSocket = refs.socketRef.value;
+    if (existingSocket instanceof WebSocket) {
+      if (existingSocket.readyState === WebSocket.OPEN && !state.manualSocketClose) {
+        refs.connectionState.value = 'online';
+        refs.connectionReason.value = 'ready';
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'info',
+          eventType: 'websocket_one_shot_existing_socket_kept',
+          code: 'websocket_one_shot_existing_socket_kept',
+          message: 'The existing websocket is already open; no new connect cycle was started.',
+          payload: {
+            automatic_second_connect: false,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+          },
+        });
+        return;
+      }
+      if (existingSocket.readyState === WebSocket.CONNECTING && !state.manualSocketClose) {
+        return;
+      }
+    }
     const generation = ++state.connectGeneration;
     state.connectInFlight = true;
     const finishConnectInFlight = () => {
@@ -776,11 +1186,24 @@ export function createCallWorkspaceSocketHelpers({
       refs.connectionState.value = 'expired';
       return;
     }
+    state.connectCycleStarted = true;
+    const isSecondConnect = admission.reason === 'control_lane_second_connect';
+    state.connectCycleParticipantGrowthPending = false;
+    state.connectCycleParticipantGrowthKey = '';
+    state.connectCycleSecondConnectPending = false;
+    if (!isSecondConnect) {
+      state.connectCycleSecondConnectAttempts = 0;
+    }
+    state.connectCycleStartedAtMs = Date.now();
+    state.connectCycleStartedReason = admission.reason;
+    state.connectCycleStartedParticipantKey = admission.expectedKey;
+    state.connectCycleKnownParticipantIds = admission.expectedIds;
+    state.connectCycleAuthoritativeRosterSeen = refs.hasRealtimeRoomSync?.value === true;
 
     const previousSocket = refs.socketRef.value;
     if (previousSocket instanceof WebSocket) {
       try {
-        previousSocket.close(1000, 'reconnect');
+        previousSocket.close(1000, 'one_shot_cycle_replaced');
       } catch {
         // ignore
       }
@@ -790,6 +1213,7 @@ export function createCallWorkspaceSocketHelpers({
     }
 
     clearReconnectTimer();
+    clearControlLaneReadinessTimer();
     clearPingTimer();
     state.manualSocketClose = false;
     refs.hasRealtimeRoomSync.value = false;
@@ -798,7 +1222,7 @@ export function createCallWorkspaceSocketHelpers({
     refs.lobbyNotificationState.hasSnapshot = false;
     hideLobbyJoinToast();
     refs.connectionState.value = 'retrying';
-    refs.connectionReason.value = refs.reconnectAttempt.value > 0 ? 'network_retry' : 'probing_session';
+    refs.connectionReason.value = 'probing_session';
 
     const sessionProbe = await probeWorkspaceSession();
     if (generation !== state.connectGeneration || state.manualSocketClose) {
@@ -807,22 +1231,27 @@ export function createCallWorkspaceSocketHelpers({
     }
     if (!sessionProbe.ok) {
       refs.connectionReason.value = sessionProbe.reason;
-      if (sessionProbe.state === 'retrying') {
-        refs.workspaceNotice.value = '';
-        refs.workspaceError.value = '';
-      } else {
+      if (sessionProbe.state !== 'retrying') {
         refs.connectionState.value = sessionProbe.state;
         setNotice(sessionProbe.message, 'error');
         finishConnectInFlight();
         return;
       }
+      failConnectCycleOnce({
+        reason: sessionProbe.reason || 'session_probe_failed',
+        code: 'websocket_session_probe_failed',
+        message: sessionProbe.message,
+        closeActiveSocket: false,
+      });
+      finishConnectInFlight();
+      return;
     }
 
     const orderedSocketOrigins = refs.resolveBackendWebSocketOriginCandidates();
     if (orderedSocketOrigins.length === 0) {
       refs.connectionState.value = 'blocked';
       refs.connectionReason.value = 'secure_transport_required';
-      setNotice('Secure WebSocket transport is required. Configure HTTPS/WSS backend origins.', 'error');
+      setNotice('secure_websocket_transport_required', 'error');
       finishConnectInFlight();
       return;
     }
@@ -830,25 +1259,16 @@ export function createCallWorkspaceSocketHelpers({
     const connectWithOriginAt = (originIndex) => {
       if (generation !== state.connectGeneration || state.manualSocketClose) return;
       if (originIndex >= orderedSocketOrigins.length) {
-        refs.connectionState.value = 'retrying';
-        refs.connectionReason.value = 'socket_unreachable';
-        captureClientDiagnostic({
-          category: 'realtime',
-          level: 'warning',
-          eventType: 'realtime_websocket_retryable_error',
-          code: 'websocket_connect_retry_scheduled',
-          message: 'Realtime websocket connection could not be established; retrying without expiring the session.',
+        failConnectCycleOnce({
+          reason: 'socket_unreachable',
+          code: 'websocket_connect_one_shot_failed',
+          message: 'websocket_one_shot_connect_unreachable',
           payload: {
-            retryable: true,
-            retry_reason: refs.connectionReason.value,
-            requested_room_id: refs.desiredRoomId.value,
-            active_call_id: refs.activeSocketCallId.value,
             origin_count: orderedSocketOrigins.length,
           },
-          immediate: true,
+          closeActiveSocket: false,
         });
         finishConnectInFlight();
-        scheduleReconnect();
         return;
       }
 
@@ -859,6 +1279,7 @@ export function createCallWorkspaceSocketHelpers({
         return;
       }
       const socket = new WebSocket(socketUrl);
+      socket.binaryType = 'arraybuffer';
       if (generation !== state.connectGeneration || state.manualSocketClose) {
         try {
           socket.close(1000, 'stale_connect');
@@ -871,77 +1292,11 @@ export function createCallWorkspaceSocketHelpers({
 
       refs.socketRef.value = socket;
       let opened = false;
-      let failedOver = false;
-      let failoverAfterClose = false;
       let negotiationTimer = null;
       const clearNegotiationTimer = () => {
         if (negotiationTimer === null) return;
         clearTimeout(negotiationTimer);
         negotiationTimer = null;
-      };
-      const connectNextOrigin = () => {
-        connectWithOriginAt(originIndex + 1);
-      };
-
-      const captureRetryableReconnectClose = (retryReason, closeEvent = null) => {
-        captureClientDiagnostic({
-          category: 'realtime',
-          level: 'warning',
-          eventType: 'realtime_websocket_retryable_error',
-          code: retryReason || 'websocket_retryable_close',
-          message: 'Realtime websocket closed with a retryable reconnect condition.',
-          payload: {
-            retryable: true,
-            retry_reason: retryReason || 'websocket_retryable_close',
-            close_code: Number(closeEvent?.code || 0),
-            close_reason: String(closeEvent?.reason || '').trim(),
-            requested_room_id: refs.desiredRoomId.value,
-            active_call_id: refs.activeSocketCallId.value,
-          },
-          immediate: true,
-        });
-      };
-
-      const failOverToNextOrigin = (closeReason = 'failover') => {
-        if (failedOver) return;
-        failedOver = true;
-        clearNegotiationTimer();
-        if (refs.socketRef.value === socket) {
-          refs.socketRef.value = null;
-        }
-        try {
-          socket.close(1000, closeReason);
-        } catch {
-          // ignore
-        }
-        if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.CLOSING) {
-          failoverAfterClose = true;
-          return;
-        }
-        connectNextOrigin();
-      };
-
-      const failOverAfterAssetVersionProbe = () => {
-        const assetVersionProbe = typeof handleAssetVersionConnectionFailure === 'function'
-          ? handleAssetVersionConnectionFailure()
-          : false;
-        if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
-          assetVersionProbe.then((handled) => {
-            if (handled) {
-              finishConnectInFlight();
-              return;
-            }
-            failOverToNextOrigin();
-          }).catch(() => {
-            failOverToNextOrigin();
-          });
-          return;
-        }
-        if (assetVersionProbe) {
-          finishConnectInFlight();
-          return;
-        }
-        failOverToNextOrigin();
       };
 
       socket.addEventListener('open', () => {
@@ -955,11 +1310,10 @@ export function createCallWorkspaceSocketHelpers({
           return;
         }
 
-        const isReconnectOpen = refs.reconnectAttempt.value > 0 || refs.hasRealtimeRoomSync.value === true;
+        const participantJoinConnect = admission.reason === 'participant_joined';
         opened = true;
         clearNegotiationTimer();
         finishConnectInFlight();
-        refs.reconnectAttempt.value = 0;
         refs.connectionState.value = 'online';
         refs.connectionReason.value = 'ready';
         setBackendWebSocketOrigin(socketOrigin);
@@ -970,15 +1324,15 @@ export function createCallWorkspaceSocketHelpers({
           level: 'info',
           eventType: 'realtime_websocket_open',
           code: 'realtime_websocket_open',
-          message: 'Realtime websocket opened and requested authoritative room snapshot backfill.',
+          message: 'websocket_open_room_snapshot_requested',
           payload: {
-            reconnect: isReconnectOpen,
+            participant_join_connect: participantJoinConnect,
             requested_room_id: refs.desiredRoomId.value,
             active_call_id: refs.activeSocketCallId.value,
           },
         });
         requestRoomSnapshot();
-        void bootstrapChatArchive(isReconnectOpen ? 'websocket_reconnect' : 'websocket_open');
+        void bootstrapChatArchive('websocket_open');
         if (refs.usersSourceMode.value === 'directory' && refs.activeTab.value === 'users') {
           void refreshUsersDirectory();
         }
@@ -991,12 +1345,16 @@ export function createCallWorkspaceSocketHelpers({
       socket.addEventListener('error', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (!opened) {
-          // The browser will emit close after a failed handshake. Origin failover
-          // is intentionally deferred until then to keep connection attempts single-flight.
+          // The browser will emit close after a failed handshake; the close path
+          // records the one-shot failure without opening another websocket.
           return;
         }
-        refs.connectionState.value = 'retrying';
-        refs.connectionReason.value = 'socket_error';
+        failConnectCycleOnce({
+          reason: 'socket_error',
+          code: 'websocket_error',
+          message: 'websocket_one_shot_socket_error',
+          closeActiveSocket: false,
+        });
       });
 
       socket.addEventListener('close', (event) => {
@@ -1017,12 +1375,13 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        if (failoverAfterClose) {
-          connectNextOrigin();
-          return;
-        }
 
         const closeReason = String(event?.reason || '').trim().toLowerCase();
+        if (isExpectedBrowserPageExitSocketClose(event)) {
+          observeExpectedBrowserPageExitSocketClose(event, closeReason, opened);
+          finishConnectInFlight();
+          return;
+        }
         if (closeReason === 'session_invalidated') {
           refs.connectionState.value = 'expired';
           refs.connectionReason.value = closeReason;
@@ -1030,21 +1389,8 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        const retryableBackfillClose = RETRYABLE_RECONNECT_BACKFILL_REASONS.includes(closeReason);
-        if (retryableBackfillClose) {
-          refs.connectionState.value = 'retrying';
-          refs.connectionReason.value = closeReason;
-          captureRetryableReconnectClose(closeReason, event);
+        if (closeReason === 'control_lane_second_connect' && state.connectCycleSecondConnectPending === true) {
           finishConnectInFlight();
-          scheduleReconnect();
-          return;
-        }
-        if (closeReason === 'auth_backend_error' || event?.code === 1011) {
-          refs.connectionState.value = 'retrying';
-          refs.connectionReason.value = closeReason || 'socket_internal_error';
-          captureRetryableReconnectClose(closeReason || 'socket_internal_error', event);
-          finishConnectInFlight();
-          scheduleReconnect();
           return;
         }
         if (event?.code === 1008 && closeReason !== '') {
@@ -1054,34 +1400,64 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        if (!opened) {
-          failOverAfterAssetVersionProbe();
+        const canScheduleCloseSecondConnect = shouldScheduleCloseSecondConnect({
+          opened,
+          event,
+          closeReason,
+        });
+        if (canScheduleCloseSecondConnect && scheduleControlLaneSecondConnect({
+          reason: closeReason || (event?.code === 1011 ? 'socket_internal_error' : 'socket_closed'),
+          code: opened
+            ? 'websocket_closed_control_lane_second_connect_scheduled'
+            : 'websocket_open_control_lane_second_connect_scheduled',
+          message: opened
+            ? 'websocket_control_lane_second_connect_scheduled'
+            : 'websocket_open_control_lane_second_connect_scheduled',
+          payload: {
+            close_code: Number(event?.code || 0),
+            close_reason: closeReason,
+            opened,
+          },
+        })) {
+          finishConnectInFlight();
           return;
         }
-
-        refs.connectionState.value = 'retrying';
-        refs.connectionReason.value = closeReason || 'socket_closed';
-        scheduleReconnect();
+        failConnectCycleOnce({
+          reason: closeReason || (event?.code === 1011 ? 'socket_internal_error' : 'socket_closed'),
+          code: 'websocket_closed_one_shot',
+          message: opened
+            ? 'websocket_one_shot_closed'
+            : 'websocket_one_shot_open_failed',
+          payload: {
+            close_code: Number(event?.code || 0),
+            close_reason: closeReason,
+            opened,
+          },
+          closeActiveSocket: false,
+        });
+        finishConnectInFlight();
       });
 
       negotiationTimer = setTimeout(() => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
-        if (opened || failedOver) return;
-        refs.connectionState.value = 'retrying';
-        refs.connectionReason.value = 'socket_negotiation_timeout';
-        captureClientDiagnostic({
-          category: 'realtime',
-          level: 'warning',
-          eventType: 'websocket_negotiation_timeout',
+        if (opened) return;
+        failConnectCycleOnce({
+          reason: 'socket_negotiation_timeout',
           code: 'websocket_negotiation_timeout',
-          message: 'Realtime websocket negotiation timed out before the browser opened the socket.',
+          message: 'websocket_one_shot_negotiation_timeout',
           payload: {
             origin: socketOrigin,
-            negotiation_timeout_ms: WEBSOCKET_NEGOTIATION_TIMEOUT_MS,
+            negotiation_timeout_ms: CONNECT_CYCLE_TIMEOUT_MS,
           },
+          closeActiveSocket: false,
         });
-        failOverToNextOrigin('negotiation_timeout');
-      }, WEBSOCKET_NEGOTIATION_TIMEOUT_MS);
+        try {
+          socket.close(1000, 'socket_negotiation_timeout');
+        } catch {
+          // ignore
+        }
+        finishConnectInFlight();
+      }, CONNECT_CYCLE_TIMEOUT_MS);
     };
 
     connectWithOriginAt(0);
@@ -1096,7 +1472,6 @@ export function createCallWorkspaceSocketHelpers({
     handleSocketMessage,
     probeWorkspaceSession,
     removeParticipantLocallyAfterHangup,
-    scheduleReconnect,
     startPingLoop,
   };
 }

@@ -17,6 +17,7 @@ const blurControls = read('demo/video-chat/frontend-vue/src/domain/realtime/back
 const uploadModal = read('demo/video-chat/frontend-vue/src/modules/administration/components/BackgroundImageUploadModal.vue');
 const appConfigBackgrounds = read('demo/video-chat/frontend-vue/src/modules/administration/components/AppConfigurationBackgroundImagesTab.vue');
 const shell = read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue');
+const callLeftSidebar = read('demo/video-chat/frontend-vue/src/layouts/CallWorkspaceLeftSidebar.vue');
 const adminCalls = read('demo/video-chat/frontend-vue/src/domain/calls/admin/CallsView.template.html');
 const adminCallsScript = read('demo/video-chat/frontend-vue/src/domain/calls/admin/CallsView.vue');
 const userCalls = read('demo/video-chat/frontend-vue/src/domain/calls/dashboard/UserDashboardView.template.html');
@@ -110,13 +111,14 @@ assert.match(
   'background image administration must crop uploads before sending them',
 );
 for (const [label, source] of [
-  ['call sidebar', shell],
+  ['call sidebar', callLeftSidebar],
   ['admin enter lobby', adminCalls],
   ['user enter lobby', userCalls],
   ['public join lobby', joinView],
 ]) {
   assert.match(source, /<CallBackgroundControls/, `${label} must expose shared background controls`);
 }
+assert.match(shell, /<CallWorkspaceLeftSidebar/, 'workspace shell must delegate call sidebar rendering to the extracted call sidebar component');
 assert.doesNotMatch(adminCalls, /BackgroundPipelineDebugPanel|Preview pipeline/, 'admin lobby must not render the preview pipeline mask');
 assert.doesNotMatch(adminCallsScript, /BackgroundPipelineDebugPanel|activeBackgroundPreset/, 'admin lobby script must not wire the preview pipeline mask');
 assert.match(joinView, /call-access-join-guest-name[\s\S]*calls-enter-preview-frame/, 'public guest join name entry must sit above the camera preview');

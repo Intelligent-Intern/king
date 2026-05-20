@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
-const appRoot = path.join(repoRoot, 'demo/call-app/presentation');
+const appRoot = path.join(repoRoot, 'demo/call-apps/presentation');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -38,7 +38,7 @@ for (const requiredFile of [
   assert.ok(fs.existsSync(path.join(appRoot, requiredFile)), `presentation package missing ${requiredFile}`);
 }
 
-const manifest = readJson('demo/call-app/presentation/call-app.manifest.json');
+const manifest = readJson('demo/call-apps/presentation/call-app.manifest.json');
 assert.equal(manifest.schema_version, 'king.call_app.manifest.v1', 'manifest schema version mismatch');
 assert.equal(manifest.app_key, 'presentation', 'manifest app_key mismatch');
 assert.equal(manifest.status, 'runtime_ready', 'presentation package must advertise runtime readiness');
@@ -72,7 +72,7 @@ assert.equal(
   'PPTX MIME type mismatch',
 );
 
-const mcp = readJson('demo/call-app/presentation/mcp.descriptor.json');
+const mcp = readJson('demo/call-apps/presentation/mcp.descriptor.json');
 assert.equal(mcp.schema_version, 'king.call_app.mcp_descriptor.v1', 'MCP schema mismatch');
 assert.equal(mcp.app_key, 'presentation', 'MCP app_key mismatch');
 assert.equal(mcp.service_name, 'call_app.presentation.mcp', 'MCP service name mismatch');
@@ -90,7 +90,7 @@ for (const method of [
   assert.ok(mcp.methods.some((entry) => entry.name === method), `MCP descriptor missing ${method}`);
 }
 
-const crdt = readJson('demo/call-app/presentation/crdt.schema.json');
+const crdt = readJson('demo/call-apps/presentation/crdt.schema.json');
 assert.equal(crdt.schema_version, 'king.call_app.crdt_schema.v1', 'CRDT schema mismatch');
 assert.equal(crdt.app_key, 'presentation', 'CRDT app_key mismatch');
 assert.equal(crdt.documents?.[0]?.kind, 'presentation_document', 'presentation document kind mismatch');
@@ -112,15 +112,15 @@ for (const operationType of [
 assert.equal(crdt.presence?.persisted, false, 'presentation presence must not be persisted');
 assert.deepEqual(crdt.exports, ['pptx'], 'presentation CRDT exports must match manifest');
 
-const health = readJson('demo/call-app/presentation/health.descriptor.json');
+const health = readJson('demo/call-apps/presentation/health.descriptor.json');
 const healthPaths = health.checks.map((check) => check.path);
 for (const healthPath of ['public/index.html', 'public/presentation.css', 'public/presentation.js']) {
   assert.ok(healthPaths.includes(healthPath), `health descriptor missing ${healthPath}`);
 }
 
-const html = read('demo/call-app/presentation/public/index.html');
-const css = read('demo/call-app/presentation/public/presentation.css');
-const runtime = read('demo/call-app/presentation/public/presentation.js');
+const html = read('demo/call-apps/presentation/public/index.html');
+const css = read('demo/call-apps/presentation/public/presentation.css');
+const runtime = read('demo/call-apps/presentation/public/presentation.js');
 const bundle = `${html}\n${css}\n${runtime}`;
 
 assertIncludes(html, 'meta name="king-call-app-key" content="presentation"', 'HTML must declare presentation app key');
@@ -159,9 +159,9 @@ assertNotIncludes(bundle, 'localStorage', 'presentation bundle must not persist 
 assertNotIncludes(bundle, 'presentation.kingrt.com', 'presentation app must not assume a dedicated presentation domain');
 
 for (const relativePath of [
-  'demo/call-app/presentation/public/index.html',
-  'demo/call-app/presentation/public/presentation.css',
-  'demo/call-app/presentation/public/presentation.js',
+  'demo/call-apps/presentation/public/index.html',
+  'demo/call-apps/presentation/public/presentation.css',
+  'demo/call-apps/presentation/public/presentation.js',
   'demo/video-chat/frontend-vue/tests/contract/call-app-presentation-contract.mjs',
 ]) {
   const lineCount = read(relativePath).split('\n').length;

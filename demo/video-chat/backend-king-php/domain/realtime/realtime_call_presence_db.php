@@ -90,6 +90,12 @@ function videochat_realtime_presence_db_prune(PDO $pdo, ?int $nowMs = null): voi
 
 function videochat_realtime_presence_db_upsert(PDO $pdo, array $connection, ?int $nowMs = null): bool
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        return videochat_sqlite_ingest($pdo, 'realtime_presence.upsert', static function () use ($pdo, $connection, $nowMs): bool {
+            return videochat_realtime_presence_db_upsert($pdo, $connection, $nowMs);
+        });
+    }
+
     $target = videochat_realtime_call_presence_target($connection);
     $callId = (string) ($target['call_id'] ?? '');
     $roomId = (string) ($target['room_id'] ?? '');
@@ -172,11 +178,18 @@ function videochat_realtime_remove_call_presence(callable $openDatabase, array $
 
     try {
         $pdo = $openDatabase();
-        videochat_realtime_presence_db_bootstrap($pdo);
-        $statement = $pdo->prepare('DELETE FROM realtime_presence_connections WHERE connection_id = :connection_id');
-        $statement->execute([':connection_id' => $connectionId]);
-        if (function_exists('videochat_client_capabilities_remove_connection')) {
-            videochat_client_capabilities_remove_connection($pdo, $connectionId);
+        $remove = static function () use ($pdo, $connectionId): void {
+            videochat_realtime_presence_db_bootstrap($pdo);
+            $statement = $pdo->prepare('DELETE FROM realtime_presence_connections WHERE connection_id = :connection_id');
+            $statement->execute([':connection_id' => $connectionId]);
+            if (function_exists('videochat_client_capabilities_remove_connection')) {
+                videochat_client_capabilities_remove_connection($pdo, $connectionId);
+            }
+        };
+        if (function_exists('videochat_sqlite_ingest')) {
+            videochat_sqlite_ingest($pdo, 'realtime_presence.remove', $remove);
+        } else {
+            $remove();
         }
     } catch (Throwable) {
         return;
@@ -197,22 +210,28 @@ function videochat_realtime_remove_call_presence_for_room_user(
 
     try {
         $pdo = $openDatabase();
-        videochat_realtime_presence_db_bootstrap($pdo);
-        $statement = $pdo->prepare(
-            <<<'SQL'
+        $remove = static function () use ($pdo, $normalizedCallId, $normalizedRoomId, $userId): int {
+            videochat_realtime_presence_db_bootstrap($pdo);
+            $statement = $pdo->prepare(
+                <<<'SQL'
 DELETE FROM realtime_presence_connections
 WHERE call_id = :call_id
   AND room_id = :room_id
   AND user_id = :user_id
 SQL
-        );
-        $statement->execute([
-            ':call_id' => $normalizedCallId,
-            ':room_id' => $normalizedRoomId,
-            ':user_id' => $userId,
-        ]);
+            );
+            $statement->execute([
+                ':call_id' => $normalizedCallId,
+                ':room_id' => $normalizedRoomId,
+                ':user_id' => $userId,
+            ]);
 
-        return $statement->rowCount();
+            return $statement->rowCount();
+        };
+
+        return function_exists('videochat_sqlite_ingest')
+            ? (int) videochat_sqlite_ingest($pdo, 'realtime_presence.remove_room_user', $remove)
+            : $remove();
     } catch (Throwable) {
         return 0;
     }

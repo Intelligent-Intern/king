@@ -48,6 +48,12 @@ function videochat_reaction_broker_event_key(array $event): string
 
 function videochat_reaction_broker_insert_event(PDO $pdo, string $roomId, array $event): bool
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        return videochat_sqlite_ingest($pdo, 'realtime_reaction.broker_insert', static function () use ($pdo, $roomId, $event): bool {
+            return videochat_reaction_broker_insert_event($pdo, $roomId, $event);
+        });
+    }
+
     $eventJson = json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($eventJson) || $eventJson === '') {
         return false;
@@ -120,6 +126,13 @@ SQL
 
 function videochat_reaction_broker_cleanup(PDO $pdo): void
 {
+    if (function_exists('videochat_sqlite_ingest_active') && !videochat_sqlite_ingest_active()) {
+        videochat_sqlite_ingest($pdo, 'realtime_reaction.broker_cleanup', static function () use ($pdo): void {
+            videochat_reaction_broker_cleanup($pdo);
+        });
+        return;
+    }
+
     $statement = $pdo->prepare('DELETE FROM realtime_reaction_events WHERE created_at_ms < :cutoff_ms');
     $statement->execute([':cutoff_ms' => videochat_reaction_broker_now_ms() - 60_000]);
 }

@@ -14,7 +14,7 @@ function videochat_call_app_package_root(?string $root = null): string
         return rtrim(trim($envRoot), DIRECTORY_SEPARATOR);
     }
 
-    $repoRoot = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'call-app';
+    $repoRoot = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'call-apps';
     if (is_dir($repoRoot)) {
         return $repoRoot;
     }
@@ -73,6 +73,31 @@ function videochat_call_app_string_list(mixed $value): array
     }
 
     return $output;
+}
+
+function videochat_call_app_public_path(string $appKey, string $packageEntrypoint): string
+{
+    $normalizedAppKey = strtolower(trim($appKey));
+    $normalizedAppKey = preg_replace('/[^a-z0-9._-]+/', '-', $normalizedAppKey) ?: '';
+    $normalizedAppKey = trim($normalizedAppKey, '.-_');
+    if ($normalizedAppKey === '') {
+        $normalizedAppKey = 'whiteboard';
+    }
+
+    $entrypoint = str_replace('\\', '/', trim($packageEntrypoint));
+    $parts = [];
+    foreach (explode('/', $entrypoint) as $part) {
+        $part = trim($part);
+        if ($part === '' || $part === '.' || $part === '..') {
+            continue;
+        }
+        $parts[] = rawurlencode($part);
+    }
+    if ($parts === []) {
+        $parts = ['public', 'index.html'];
+    }
+
+    return '/call-app/' . rawurlencode($normalizedAppKey) . '/' . implode('/', $parts);
 }
 
 /**
@@ -259,6 +284,7 @@ function videochat_call_app_semantic_dns_service_payload(array $package, array $
     $serviceName = trim((string) ($manifest['semantic_dns']['service_name'] ?? ('call_app.' . $appKey)));
     $mcpServiceName = trim((string) ($mcpDescriptor['service_name'] ?? ($serviceName . '.mcp')));
     $iframeEntrypoint = trim((string) ($manifest['iframe']['entrypoint'] ?? ($manifest['entrypoints']['iframe'] ?? 'public/index.html')));
+    $iframePublicPath = videochat_call_app_public_path($appKey, $iframeEntrypoint);
     $mcpEndpoint = trim((string) ($options['mcp_endpoint'] ?? ('mcp://' . $mcpServiceName)));
     $status = (string) ($package['health_status'] ?? 'unknown');
 
@@ -279,6 +305,7 @@ function videochat_call_app_semantic_dns_service_payload(array $package, array $
             'mcp_endpoint' => $mcpEndpoint,
             'mcp_service_name' => $mcpServiceName,
             'iframe_entrypoint' => $iframeEntrypoint,
+            'iframe_public_path' => $iframePublicPath,
             'crdt_protocol' => (string) ($crdtSchema['protocol'] ?? ''),
             'marketplace_order_scope' => (string) ($manifest['marketplace']['order_scope'] ?? ''),
             'marketplace_metadata_hash' => (string) ($package['metadata_hash'] ?? ''),

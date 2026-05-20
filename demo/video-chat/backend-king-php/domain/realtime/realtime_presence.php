@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../support/error_envelope.php';
 require_once __DIR__ . '/../../support/tenant_context.php';
 require_once __DIR__ . '/realtime_client_capabilities.php';
 require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
+require_once __DIR__ . '/realtime_media_session_plan.php';
 
 function videochat_presence_state_init(): array
 {
@@ -313,6 +314,120 @@ function videochat_presence_room_gossip_topology_by_peer(array $state, string $r
     return videochat_gossipmesh_room_state_payloads_by_peer($callId, $normalizedRoomId, $participants, $reason);
 }
 
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_presence_room_snapshot_capabilities_by_connection_id(array $state, array $participants): array
+{
+    $connectionCapabilities = is_array($state['client_capabilities'] ?? null) ? (array) $state['client_capabilities'] : [];
+    $capabilitiesByConnectionId = [];
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        $connectionId = trim((string) ($participant['connection_id'] ?? ''));
+        if ($connectionId === '') {
+            continue;
+        }
+        $capabilities = [];
+        if (is_array($connectionCapabilities[$connectionId] ?? null)) {
+            $capabilities = (array) $connectionCapabilities[$connectionId];
+        } elseif (is_array($participant['client_capabilities'] ?? null)) {
+            $capabilities = (array) $participant['client_capabilities'];
+        }
+        if ($capabilities !== []) {
+            $capabilitiesByConnectionId[$connectionId] = videochat_client_capabilities_public_projection($capabilities);
+        }
+    }
+
+    ksort($capabilitiesByConnectionId);
+    return $capabilitiesByConnectionId;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_presence_room_snapshot_capability_summary(array $capabilitiesByConnectionId): array
+{
+    $summary = [
+        'participant_count' => 0,
+        'camera_720p30_count' => 0,
+        'microphone_count' => 0,
+        'wlvc_encoder_count' => 0,
+        'mobile_count' => 0,
+        'by_connection_id' => [],
+        'redacted' => true,
+    ];
+    foreach ($capabilitiesByConnectionId as $connectionId => $capabilities) {
+        if (!is_array($capabilities)) {
+            continue;
+        }
+        $connectionId = trim((string) $connectionId);
+        $media = is_array($capabilities['media'] ?? null) ? (array) $capabilities['media'] : [];
+        $runtime = is_array($capabilities['runtime'] ?? null) ? (array) $capabilities['runtime'] : [];
+        $codec = is_array($capabilities['codec'] ?? null) ? (array) $capabilities['codec'] : [];
+        $constraints = is_array($capabilities['constraints'] ?? null) ? (array) $capabilities['constraints'] : [];
+        if ($connectionId === '') {
+            continue;
+        }
+        $summary['participant_count']++;
+        $summary['camera_720p30_count'] += (bool) ($media['camera_720p30'] ?? false) ? 1 : 0;
+        $summary['microphone_count'] += (bool) ($media['microphone'] ?? false) ? 1 : 0;
+        $summary['wlvc_encoder_count'] += (bool) ($runtime['wlvc_encoder'] ?? false) ? 1 : 0;
+        $summary['mobile_count'] += (bool) ($constraints['mobile'] ?? false) ? 1 : 0;
+        $summary['by_connection_id'][$connectionId] = [
+            'camera_720p30' => (bool) ($media['camera_720p30'] ?? false),
+            'microphone' => (bool) ($media['microphone'] ?? false),
+            'codec_path' => (string) ($codec['preferred_path'] ?? 'unknown'),
+            'gpu' => (string) ($runtime['gpu'] ?? 'unknown'),
+            'mobile' => (bool) ($constraints['mobile'] ?? false),
+            'browser_family' => (string) ($constraints['browser_family'] ?? 'unknown'),
+        ];
+    }
+    ksort($summary['by_connection_id']);
+
+    return $summary;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $participants
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_presence_room_snapshot_participant_media_state(array $participants, array $mediaSessionPlan): array
+{
+    $planBySessionId = [];
+    foreach ((array) ($mediaSessionPlan['participants'] ?? []) as $participant) {
+        if (is_array($participant) && trim((string) ($participant['participant_session_id'] ?? '')) !== '') {
+            $planBySessionId[(string) ($participant['participant_session_id'] ?? '')] = $participant;
+        }
+    }
+
+    $rows = [];
+    foreach ($participants as $participant) {
+        if (!is_array($participant)) {
+            continue;
+        }
+        $connectionId = trim((string) ($participant['connection_id'] ?? ''));
+        if ($connectionId === '') {
+            continue;
+        }
+        $planned = is_array($planBySessionId[$connectionId] ?? null) ? (array) $planBySessionId[$connectionId] : [];
+        $rows[] = [
+            'connection_id' => $connectionId,
+            'participant_session_id' => (string) ($planned['participant_session_id'] ?? $connectionId),
+            'user_id' => (int) (($participant['user'] ?? [])['id'] ?? 0),
+            'media_state' => (string) ($planned['media_state'] ?? 'waiting_for_capabilities'),
+            'profile' => (string) ($planned['profile'] ?? ''),
+            'transport' => (string) ($planned['transport'] ?? ''),
+            'security_policy' => (string) ($planned['security_policy'] ?? 'transport_only'),
+            'stuck_reason' => (string) ($planned['stuck_reason'] ?? ''),
+        ];
+    }
+
+    return $rows;
+}
+
 function videochat_presence_send_room_snapshot(
     array $state,
     array $connection,
@@ -322,6 +437,33 @@ function videochat_presence_send_room_snapshot(
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
     $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
     $participants = videochat_presence_room_participants($state, $roomId, $tenantId);
+    $mediaSessionPlan = videochat_media_session_plan_for_snapshot($state, $connection, $participants);
+    $capabilitiesByConnectionId = videochat_presence_room_snapshot_capabilities_by_connection_id($state, $participants);
+    $gossipTopology = [];
+    $callId = strtolower(trim((string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? ''))));
+    if ($callId !== '' && $roomId !== '') {
+        $gossipTopology = videochat_gossipmesh_room_state_payload(
+            $callId,
+            $roomId,
+            $participants,
+            (string) ((int) ($connection['user_id'] ?? 0)),
+            trim($reason) === '' ? 'snapshot' : trim($reason)
+        );
+    }
+    $mediaSessionPlan = [
+        ...$mediaSessionPlan,
+        'authoritative' => true,
+        'authority' => 'presence_snapshot',
+        'capabilities' => [
+            'schema_version' => videochat_client_capabilities_schema_version(),
+            'by_connection_id' => $capabilitiesByConnectionId,
+        ],
+        'capability_summary' => videochat_presence_room_snapshot_capability_summary($capabilitiesByConnectionId),
+        'participant_media_state' => videochat_presence_room_snapshot_participant_media_state($participants, $mediaSessionPlan),
+        'gossip' => [
+            'topology' => $gossipTopology,
+        ],
+    ];
 
     return videochat_presence_send_frame(
         $connection['socket'] ?? null,
@@ -330,6 +472,7 @@ function videochat_presence_send_room_snapshot(
             'room_id' => $roomId,
             'participants' => $participants,
             'participant_count' => count($participants),
+            'media_session_plan' => $mediaSessionPlan,
             'viewer' => [
                 'user_id' => (int) ($connection['user_id'] ?? 0),
                 'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),

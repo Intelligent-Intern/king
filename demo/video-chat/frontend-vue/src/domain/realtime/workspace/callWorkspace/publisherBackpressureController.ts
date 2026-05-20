@@ -297,6 +297,7 @@ function hasAutomaticRecoveryProfile(profileId) {
 
 export function createPublisherBackpressureController({
   callMediaPrefs,
+  canRestartSfuForConnectWindow,
   captureClientDiagnostic,
   downgradeSfuVideoQualityAfterEncodePressure,
   getCarrierState,
@@ -1243,6 +1244,10 @@ export function createPublisherBackpressureController({
     })) return false;
     if (strictPolicyEnabled(strictStabilityPolicy, 'disableSfuSocketRecoveryReconnect')) return false;
     const nowMs = Date.now();
+    const connectWindowDecision = typeof canRestartSfuForConnectWindow === 'function'
+      ? canRestartSfuForConnectWindow(reason, payload, nowMs)
+      : { allowed: true };
+    if (connectWindowDecision?.allowed === false) return false;
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {
       return false;
     }

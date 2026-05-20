@@ -34,7 +34,7 @@ const [
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
   read('demo/video-chat/backend-king-php/support/database_migrations.php'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
 ]);
 
 requireMatch(

@@ -42,9 +42,9 @@ assert(
   'non-gossip-primary modes must keep Gossip publication after the SFU send attempt',
 )
 assert(
-  /if \(!sfuOptional\)[\s\S]*onRequiredSfuUnavailable/.test(helper)
-    && /if \(!sfuOptional\)[\s\S]*onRequiredSfuFailure/.test(helper),
-  'sfu_first must keep required SFU unavailable/failure handlers',
+  /sfu_send_unavailable_gossip_continues/.test(helper)
+    && /sfu_send_failed_gossip_continues/.test(helper),
+  'non-primary modes must continue Gossip publication when SFU is unavailable or fails',
 )
 assert(
   /sfu_optional_send_unavailable_after_gossip_publish/.test(helper)
@@ -56,7 +56,7 @@ assert(
   'optional SFU mirror failure must return success based on Gossip publication',
 )
 assert(
-  /gossip_primary_publish_failed_no_sfu_fallback/.test(helper)
+  /gossip_primary_publish_failed/.test(helper)
     && !/sfu_fallback_after_gossip_primary_publish_failure|sfu_fallback_unavailable_after_gossip_publish_failure/.test(helper),
   'gossip_primary must diagnose parked SFU fallback without retaining the fallback send path',
 )
@@ -68,12 +68,12 @@ assert(
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline)
     && /dispatchWlvcPublisherFrame\(\{[\s\S]*handleWlvcFrameSendFailure,[\s\S]*publishLocalEncodedFrameToGossip/.test(publisherPipeline),
-  'WLVC publisher pipeline must stop requiring SFU before encode except in sfu_first and dispatch through the carrier helper with SFU failure handling wired',
+  'WLVC publisher pipeline keeps the guard call but the guard is now false, then dispatches through the carrier helper with SFU failure handling wired',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(browserEncoder)
     && /dispatchProtectedBrowserPublisherFrame\(\{[\s\S]*publishLocalEncodedFrameToGossip/.test(browserEncoder),
-  'protected browser publisher must use the same carrier decoupling as the WLVC pipeline',
+  'protected browser publisher must use the same non-blocking carrier decoupling as the WLVC pipeline',
 )
 assert(
   /sfu_optional_send_pressure_after_gossip_publish/.test(`${publisherPipeline}\n${helper}`),

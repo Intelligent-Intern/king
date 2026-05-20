@@ -138,7 +138,7 @@
 
       <section class="roster-section roster-section-users" aria-labelledby="right-roster-users-title">
         <header class="roster-section-header">
-          <strong id="right-roster-users-title">{{ t('users.title') }}</strong>
+          <strong id="right-roster-users-title">{{ t('calls.workspace.present_users') }}</strong>
         </header>
         <div v-if="showUsersSearch" class="toolbar roster-search-toolbar">
           <input
@@ -496,3 +496,279 @@ watch([usersListEl, lobbyListEl], () => {
   nextTick(syncListElements);
 });
 </script>
+
+<style scoped>
+.right-roster-panel.active {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.roster-toolbar {
+  min-height: 44px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  background: var(--color-surface-navy);
+}
+
+.roster-options-toggle.icon-mini-btn,
+.roster-action-btn.icon-mini-btn,
+:deep(.call-app-grant-btn) {
+  width: 38px;
+  height: 38px;
+}
+
+.roster-options-toggle.icon-mini-btn img,
+.roster-action-btn.icon-mini-btn img,
+:deep(.call-app-grant-btn img) {
+  width: 19px;
+  height: 19px;
+}
+
+.roster-action-options {
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--color-surface-navy);
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
+.roster-action-option {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.roster-action-option.disabled {
+  opacity: 0.5;
+}
+
+.roster-action-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.right-roster-sections {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(132px, 0.85fr) auto minmax(180px, 1.15fr);
+  background: var(--color-surface-navy);
+}
+
+.right-roster-sections.without-lobby {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.roster-section {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.roster-section-header {
+  min-height: 42px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.roster-section-divider {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  height: 2px;
+  background: color-mix(in srgb, var(--brand-cyan) 52%, var(--color-border));
+}
+
+.roster-search-toolbar {
+  padding-top: 0;
+}
+
+.roster-list {
+  min-height: 0;
+}
+
+.roster-row-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  max-width: 142px;
+}
+
+.roster-kick-btn {
+  margin-left: 8px;
+  box-shadow: -1px 0 0 color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+}
+
+.lobby-user-row {
+  min-height: 68px;
+}
+
+.search {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
+  padding: 0 10px;
+}
+
+.search::placeholder {
+  color: var(--color-cyan-primary);
+}
+
+.workspace-tab-hint {
+  margin: 0;
+  padding: 8px 10px 0;
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+
+.workspace-tab-hint.error {
+  color: var(--color-error);
+}
+
+.user-list,
+.lobby-list {
+  min-height: 0;
+  overflow: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-row {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  min-height: 72px;
+  box-sizing: border-box;
+  background: var(--color-border);
+}
+
+.user-list-spacer {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.user-row.self {
+  background: var(--color-border);
+}
+
+.user-row.pinned {
+  background: var(--color-cyan-primary);
+}
+
+.user-row.pending {
+  outline: 1px solid color-mix(in srgb, var(--color-text-primary) 15%, transparent);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger) {
+  background: var(--brand-bg);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.user-row .actions-inline .icon-mini-btn:not(.danger):disabled {
+  background: var(--color-surface-navy);
+  opacity: 0.55;
+}
+
+.user-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-border);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.user-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  grid-template-rows: auto auto 18px;
+}
+
+.user-name {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-cyan-primary);
+}
+
+.user-feedback {
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+
+.user-status-line {
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.user-activity-pill {
+  flex: 0 0 auto;
+  width: fit-content;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-cyan) 24%, var(--color-surface-navy));
+  color: var(--color-text-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.user-list-empty {
+  list-style: none;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--color-cyan-primary);
+  background: var(--color-surface-navy);
+}
+
+.workspace-tab-footer {
+  background: var(--color-surface-navy);
+  padding: 8px;
+}
+</style>

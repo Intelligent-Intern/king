@@ -267,9 +267,9 @@ main() {
   printf '%s' "${session_response}" | assert_call_app_session
   log "Call Apps tab attach: Whiteboard session active with allowed default policy"
 
-  curl -sS --max-time "${TIMEOUT}" -o /dev/null -f "https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html" \
+  curl -sS --max-time "${TIMEOUT}" -o /dev/null -f "https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html" \
     || fail "whiteboard.kingrt.com iframe entry is not reachable"
-  log "Whiteboard iframe host: https://${DEPLOY_CALL_APP_DOMAIN}/public/index.html reachable"
+  log "Whiteboard iframe host: https://${DEPLOY_CALL_APP_DOMAIN}/call-app/whiteboard/public/index.html reachable"
   log "PASS"
 }
 

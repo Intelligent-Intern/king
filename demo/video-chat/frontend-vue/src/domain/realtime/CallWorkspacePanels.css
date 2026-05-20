@@ -203,7 +203,10 @@
 }
 
 .roster-section-divider {
-  height: 1px;
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  height: 2px;
   background: color-mix(in srgb, var(--brand-cyan) 52%, var(--color-border));
 }
 

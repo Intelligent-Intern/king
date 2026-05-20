@@ -73,7 +73,7 @@ assert(
   'controller must expose an injectable data transport for RTCDataChannel wiring',
 )
 assert(
-  /this\.dataTransport\.sendData\(neighborId,\s*\{\s*\.\.\.msg,\s*ttl,\s*last_hop_sent_at_ms:\s*forwardedAtMs\s*\},\s*fromPeerId\)/.test(forward),
+  /const forwardedMsg = this\.withRelayForwardMetadata\(msg,\s*fromPeerId,\s*forwardedAtMs,\s*ttl\)[\s\S]*this\.dataTransport\.sendData\(neighborId,\s*\{\s*\.\.\.forwardedMsg,\s*ttl,\s*last_hop_sent_at_ms:\s*forwardedAtMs\s*\},\s*fromPeerId\)/.test(forward),
   'forward() must send only to selected neighbors through the data transport',
 )
 assert(
@@ -97,8 +97,40 @@ assert(
   'RTC transport must support both initiator-created and remotely-created data channels',
 )
 assert(
-  /ordered:\s*false/.test(rtcTransport) && /maxRetransmits:\s*0/.test(rtcTransport),
-  'data-lane RTC channel should be unreliable/unordered for late-droppable media frames',
+  /ordered:\s*true/.test(rtcTransport)
+    && /maxRetransmits:\s*0/.test(rtcTransport)
+    && !/ordered:\s*false/.test(rtcTransport),
+  'data-lane RTC channel must be ordered for video-gossip while preserving bounded late-drop behavior',
+)
+assert(
+  /channel\.binaryType = 'arraybuffer'/.test(rtcTransport)
+    && /private async handleIncomingMessage\(peerId: string, data: unknown\): Promise<void>/.test(rtcTransport)
+    && /data instanceof ArrayBuffer/.test(rtcTransport)
+    && /typeof Blob !== 'undefined' && data instanceof Blob/.test(rtcTransport)
+    && /await data\.arrayBuffer\(\)/.test(rtcTransport),
+  'data-lane RTC receive path must request ArrayBuffer delivery and decode ArrayBuffer plus Blob payloads',
+)
+assert(
+  /private isCurrentChannel\(peerId: string, channel: RTCDataChannel\): boolean[\s\S]*this\.channels\.get\(peerId\)\?\.channel === channel/.test(rtcTransport)
+    && /channel\.addEventListener\('open', \(\) => \{[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*this\.flush\(peerId\)/.test(rtcTransport)
+    && /channel\.addEventListener\('close', \(\) => \{[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*'close'/.test(rtcTransport)
+    && /channel\.addEventListener\('error', \(\) => \{[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*'error'/.test(rtcTransport)
+    && /channel\.addEventListener\('message', \(event\) => \{[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*void this\.handleIncomingMessage\(peerId, event\.data\)/.test(rtcTransport)
+    && /channel\.addEventListener\('bufferedamountlow', \(\) => \{[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*this\.flush\(peerId\)/.test(rtcTransport),
+  'data-lane RTC event handlers must ignore stale channel events after replacement or close',
+)
+assert(
+  /await data\.arrayBuffer\(\)[\s\S]*if \(!this\.isCurrentChannel\(peerId, channel\)\) return[\s\S]*this\.onDataMessage\(this\.codec\.decode\(bytes\), peerId\)/.test(rtcTransport)
+    && /gossip_datachannel_blob_arraybuffer_failed/.test(rtcTransport)
+    && /gossip_datachannel_unsupported_payload/.test(rtcTransport)
+    && /gossip_datachannel_decode_failed/.test(rtcTransport),
+  'async Blob receive must re-check channel freshness and surface receive failures as telemetry',
+)
+assert(
+  /channel\.bufferedAmountLowThreshold/.test(rtcTransport)
+    && /this\.shouldQueueForBufferedAmount\(entry, serialized\)/.test(rtcTransport)
+    && /gossip_datachannel_buffered_amount_pressure/.test(rtcTransport),
+  'ordered data-channel patch must retain queue and bufferedAmount backpressure protections',
 )
 
 console.log('[gossip-controller-decentralized-routing-contract] PASS')

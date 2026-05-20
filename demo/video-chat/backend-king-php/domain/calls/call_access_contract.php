@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_permanent_lifecycle.php';
+
 require_once __DIR__ . '/../../support/tenant_context.php';
 
 function videochat_generate_call_access_uuid(): string
@@ -232,6 +234,13 @@ SQL
         'created_at' => (string) ($row['created_at'] ?? ''),
         'host_verified_at' => is_string($row['host_verified_at'] ?? null) ? (string) $row['host_verified_at'] : null,
     ];
+    if (videochat_is_permanent_call((string) ($binding['call_id'] ?? ''))) {
+        videochat_permanent_call_ensure_active($pdo, (string) ($binding['call_id'] ?? ''), 'call_access_session_guard');
+        $row['resolved_call_status'] = 'active';
+        if (!is_string($row['link_expires_at'] ?? null) || strtotime((string) $row['link_expires_at']) < strtotime(videochat_permanent_call_guard_ends_at())) {
+            $row['link_expires_at'] = videochat_permanent_call_guard_ends_at();
+        }
+    }
 
     $fail = static function (string $reason) use ($binding): array {
         return [
@@ -515,6 +524,29 @@ function videochat_is_call_joinable_status(string $status): bool
 {
     $normalized = strtolower(trim($status));
     return in_array($normalized, ['scheduled', 'active'], true);
+}
+
+function videochat_call_time_window_state(array $call, ?int $now = null): string
+{
+    $effectiveNow = is_int($now) && $now > 0 ? $now : time();
+    $startsAt = trim((string) ($call['starts_at'] ?? ''));
+    $endsAt = trim((string) ($call['ends_at'] ?? ''));
+
+    if ($startsAt !== '') {
+        $startsAtUnix = strtotime($startsAt);
+        if (is_int($startsAtUnix) && $startsAtUnix > $effectiveNow) {
+            return 'not_started';
+        }
+    }
+
+    if ($endsAt !== '') {
+        $endsAtUnix = strtotime($endsAt);
+        if (!is_int($endsAtUnix) || $endsAtUnix <= $effectiveNow) {
+            return 'expired';
+        }
+    }
+
+    return 'ok';
 }
 
 /**

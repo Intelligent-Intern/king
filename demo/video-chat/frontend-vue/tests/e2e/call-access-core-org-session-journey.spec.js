@@ -2,8 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import {
   accessIdFromJoinPath,
-  createCallAccessMatrixPage,
-  createDirectJoinMatrixPage,
   directJoinDecisionForSeedUser,
   getSeedAccessLink,
   getSeedCall,
@@ -15,6 +13,10 @@ import {
   storedSessionForSeedUser,
   tenantSnapshotForSeedUser,
 } from './helpers/callAccessSeedMatrix.js';
+import {
+  createCallAccessMatrixPage,
+  createDirectJoinMatrixPage,
+} from './helpers/callAccessSeedRuntime.js';
 
 async function readStoredSession(page) {
   return page.evaluate((key) => {

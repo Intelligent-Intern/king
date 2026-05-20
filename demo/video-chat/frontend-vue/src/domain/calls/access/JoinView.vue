@@ -239,9 +239,16 @@ import { loginWithCallAccess, requestCallAccessAccountUpdateConfirmation } from 
 import { createJoinAccessPreviewController } from './joinPreview';
 import JoinStrongMismatchPanel from './JoinStrongMismatchPanel.vue';
 import { callAccessJoinHeaders, createJoinStrongMismatchFlow, isStrongPersonalizedMismatchPayload } from './joinStrongMismatchFlow';
+import {
+  installSputnikMediaDeviceShim,
+  resolveSputnikRouteConfig,
+  sputnikWorkspaceQuery,
+} from '../../realtime/sputnikMediaShim';
 
 const route = useRoute();
 const router = useRouter();
+const sputnikConfig = resolveSputnikRouteConfig(route);
+installSputnikMediaDeviceShim(sputnikConfig);
 const previewVideoRef = ref(null);
 
 let detachDeviceWatcher = null;
@@ -252,11 +259,9 @@ let admissionAccepted = false;
 let admissionManuallyClosed = false;
 let admissionReconnectTimer = 0;
 let admissionReconnectAttempt = 0;
-let admissionReconnectAfterForeground = false;
-let admissionLastForegroundReconnectAt = 0;
+let admissionForegroundSnapshotPending = false;
 
 const ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
-const ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
 const state = reactive({
   loadingContext: true,
@@ -420,30 +425,22 @@ function scheduleAdmissionReconnect(accessId) {
   }, delay);
 }
 
-function markAdmissionReconnectAfterForeground() {
+function markAdmissionForegroundSnapshot() {
   if (!state.waitingForAdmission || admissionAccepted || admissionManuallyClosed) return;
-  admissionReconnectAfterForeground = true;
+  admissionForegroundSnapshotPending = true;
 }
 
-function reconnectAdmissionAfterForeground() {
+function refreshAdmissionAfterForeground() {
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   if (!state.waitingForAdmission || admissionAccepted || admissionManuallyClosed) return;
-  if (!admissionReconnectAfterForeground) return;
+  if (!admissionForegroundSnapshotPending) return;
 
-  const accessId = normalizeAccessId(route.params.accessId);
-  if (accessId === '') return;
-
-  const now = Date.now();
-  if ((now - admissionLastForegroundReconnectAt) < ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS) {
-    return;
-  }
-
-  admissionReconnectAfterForeground = false;
-  admissionLastForegroundReconnectAt = now;
-  admissionReconnectAttempt = 0;
-  clearAdmissionReconnectTimer();
-  state.admissionMessage = t('public.join.reconnecting_lobby');
-  connectAdmissionSocket(accessId);
+  admissionForegroundSnapshotPending = false;
+  if (!admissionSocketIsOpen()) return;
+  sendAdmissionFrame({
+    type: 'lobby/queue/request',
+    room_id: normalizeRoomId(state.roomId || 'lobby'),
+  });
 }
 
 async function enterAdmittedCall(accessId) {
@@ -466,7 +463,7 @@ async function enterAdmittedCall(accessId) {
   const target = router.resolve({
     name: 'call-workspace',
     params: { callRef },
-    query: { entry: 'invite' },
+    query: { entry: 'invite', ...sputnikWorkspaceQuery(sputnikConfig) },
   });
   if (typeof window !== 'undefined') {
     window.location.replace(target.href);
@@ -596,7 +593,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
 
     opened = true;
     admissionReconnectAttempt = 0;
-    admissionReconnectAfterForeground = false;
+    admissionForegroundSnapshotPending = false;
     setBackendWebSocketOrigin(socketOrigin);
   });
 
@@ -648,7 +645,7 @@ function startAdmissionWait(accessId) {
   admissionAccepted = false;
   admissionManuallyClosed = false;
   admissionReconnectAttempt = 0;
-  admissionReconnectAfterForeground = false;
+  admissionForegroundSnapshotPending = false;
   admissionSocketGeneration += 1;
   state.joining = false;
   state.waitingForAdmission = true;
@@ -715,6 +712,9 @@ async function loadJoinContext() {
     const linkKind = String(payload?.result?.link_kind || '').trim().toLowerCase();
     state.linkKind = linkKind === 'open' ? 'open' : 'personal';
     state.requiresGuestName = Boolean(payload?.result?.requires_guest_name) || state.linkKind === 'open';
+    if (sputnikConfig.enabled) {
+      state.guestName = sputnikConfig.name;
+    }
     state.verifiedAccessContext = callAccessVerifiedContextFromSession(sessionState);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
@@ -823,14 +823,17 @@ watch(
 
 onMounted(async () => {
   detachForegroundReconnect = attachForegroundReconnectHandlers({
-    onBackground: markAdmissionReconnectAfterForeground,
-    onForeground: reconnectAdmissionAfterForeground,
+    onBackground: markAdmissionForegroundSnapshot,
+    onForeground: refreshAdmissionAfterForeground,
   });
   detachDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await loadJoinContext();
   if (state.contextError || state.strongMismatchRequired) return;
   await refreshCallMediaDevices({ requestPermissions: true });
   await startPreview();
+  if (sputnikConfig.enabled && sputnikConfig.autoJoin) {
+    void startSessionAndJoin();
+  }
 });
 
 onBeforeUnmount(() => {

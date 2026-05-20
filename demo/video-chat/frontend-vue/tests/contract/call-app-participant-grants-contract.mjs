@@ -296,8 +296,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /Prior sprint: Whiteboard Call App Hardening And Production Integration/,
-  'planning sources must keep Call App grant hardening under the migrated Whiteboard sprint',
+  /Reconcile Call App entitlement revocation and launch-token reconnect proof[\s\S]*with the current package boundaries/,
+  'planning sources must keep Call App grant follow-up work under the current package boundaries',
 );
 
 console.log('[call-app-participant-grants-contract] PASS');

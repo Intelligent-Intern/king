@@ -27,7 +27,11 @@ DEFAULT_CONTRACTS=(
   "call-access-invalidation-contract.sh"
   "call-access-anonymous-disabled-link-contract.sh"
   "call-access-anonymous-lobby-contract.sh"
+  "call-access-anonymous-logged-in-rights-contract.sh"
   "call-access-membership-removal-contract.sh"
+  "call-access-membership-stale-invite-rights-contract.sh"
+  "call-access-invited-user-org-removal-contract.sh"
+  "call-access-active-permission-change-contract.sh"
   "call-access-org-removal-active-privilege-downgrade-contract.sh"
   "call-access-owner-absence-realtime-sync-contract.sh"
   "iam-core-org-session-journey-contract.sh"
@@ -48,6 +52,8 @@ DEFAULT_CONTRACTS=(
   "call-temporary-moderator-contract.sh"
   "realtime-lobby-security-contract.sh"
   "realtime-lobby-concurrency-contract.sh"
+  "realtime-lobby-state-cleanup-contract.sh"
+  "realtime-lobby-timeout-consistency-contract.sh"
   "call-owner-transfer-lifecycle-contract.sh"
 )
 

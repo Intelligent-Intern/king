@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(frontendRoot, '../../..')
-const callAppRoot = path.join(repoRoot, 'demo/call-app')
+const callAppRoot = path.join(repoRoot, 'demo/call-apps')
+const singularCallAppRoot = path.join(repoRoot, 'demo/call-app')
 const whiteboardRoot = path.join(callAppRoot, 'whiteboard')
 const planningImageRoot = path.join(callAppRoot, 'planning-image')
 const textDocumentRoot = path.join(callAppRoot, 'text-document')
@@ -34,12 +35,15 @@ function assertArrayIncludes(array, value, message) {
 }
 
 function trackedFiles(relativePath) {
-  const output = execFileSync('git', ['ls-files', relativePath], {
+  const output = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', relativePath], {
     cwd: repoRoot,
     encoding: 'utf8',
   })
 
-  return output.split('\n').filter(Boolean)
+  return output
+    .split('\n')
+    .filter(Boolean)
+    .filter((file) => fs.existsSync(path.join(repoRoot, file)))
 }
 
 function assertNoFiles(relativePaths, message) {
@@ -53,13 +57,14 @@ function rootMarkdownFiles() {
     .sort()
 }
 
-assert(fs.existsSync(callAppRoot), 'demo/call-app root must exist')
-assert(fs.existsSync(whiteboardRoot), 'demo/call-app/whiteboard package must exist')
-assert(fs.existsSync(planningImageRoot), 'demo/call-app/planning-image package must exist')
-assert(fs.existsSync(textDocumentRoot), 'demo/call-app/text-document package must exist')
-assert(fs.existsSync(presentationRoot), 'demo/call-app/presentation package must exist')
-assert(fs.existsSync(spreadsheetRoot), 'demo/call-app/spreadsheet package must exist')
-assert(fs.existsSync(callDiagnosticsRoot), 'demo/call-app/call-diagnostics package must exist')
+assert(fs.existsSync(callAppRoot), 'demo/call-apps root must exist')
+assert(fs.existsSync(whiteboardRoot), 'demo/call-apps/whiteboard package must exist')
+assert(fs.existsSync(planningImageRoot), 'demo/call-apps/planning-image package must exist')
+assert(fs.existsSync(textDocumentRoot), 'demo/call-apps/text-document package must exist')
+assert(fs.existsSync(presentationRoot), 'demo/call-apps/presentation package must exist')
+assert(fs.existsSync(spreadsheetRoot), 'demo/call-apps/spreadsheet package must exist')
+assert(fs.existsSync(callDiagnosticsRoot), 'demo/call-apps/call-diagnostics package must exist')
+assert(!fs.existsSync(singularCallAppRoot), 'demo/call-app must not exist; canonical source root is plural demo/call-apps')
 
 const appKeys = [
   'whiteboard',
@@ -80,15 +85,21 @@ const appPackageRuntimeFiles = appKeys.flatMap((appKey) => [
   `public/${appKey}.css`,
   `public/${appKey}.js`,
 ])
-const allowedCallAppPackageRoots = appKeys.map((appKey) => `demo/call-app/${appKey}/`)
-const trackedCallAppFiles = trackedFiles('demo/call-app')
+const allowedCallAppPackageRoots = appKeys.map((appKey) => `demo/call-apps/${appKey}/`)
+const trackedCallAppFiles = trackedFiles('demo/call-apps')
 const misplacedCallAppFiles = trackedCallAppFiles.filter((file) => (
-  file !== 'demo/call-app/README.md'
+  file !== 'demo/call-apps/README.md'
   && !allowedCallAppPackageRoots.some((allowedRoot) => file.startsWith(allowedRoot))
 ))
 assertNoFiles(
   misplacedCallAppFiles,
-  'tracked Call App package files must live under demo/call-app/<app-key>/',
+  'tracked Call App package files must live under demo/call-apps/<app-key>/',
+)
+const trackedSingularCallAppFiles = trackedFiles('demo/call-app')
+  .filter((file) => fs.existsSync(path.join(repoRoot, file)))
+assertNoFiles(
+  trackedSingularCallAppFiles,
+  'tracked Call App package files must not use demo/call-app; canonical source root is demo/call-apps',
 )
 
 const trackedDistCallAppFiles = trackedFiles('demo/video-chat/frontend-vue/dist/call-app')
@@ -97,7 +108,7 @@ assertNoFiles(
   'frontend dist/call-app must not contain tracked Call App package mirrors',
 )
 
-const allowedRootMarkdownFiles = new Set(['README.md', 'BACKLOG.md', 'SPRINT.md'])
+const allowedRootMarkdownFiles = new Set(['README.md', 'BACKLOG.md', 'EPIC.md', 'SPRINT.md'])
 const extraRootMarkdownFiles = rootMarkdownFiles().filter((file) => !allowedRootMarkdownFiles.has(file))
 assertNoFiles(
   extraRootMarkdownFiles,
@@ -111,7 +122,7 @@ const packageDirectoryNames = fs.readdirSync(callAppRoot, { withFileTypes: true 
 const expectedPackageDirectoryNames = [...appKeys].sort()
 assert(
   JSON.stringify(packageDirectoryNames) === JSON.stringify(expectedPackageDirectoryNames),
-  `demo/call-app package directories must match app keys: ${packageDirectoryNames.join(', ')}`,
+  `demo/call-apps package directories must match app keys: ${packageDirectoryNames.join(', ')}`,
 )
 
 for (const appKey of appKeys) {
@@ -126,7 +137,7 @@ for (const appKey of appKeys) {
     assert(fs.existsSync(path.join(packageRoot, requiredFile)), `${appKey} package must include ${requiredFile}`)
   }
 
-  const packageManifest = readJson(`demo/call-app/${appKey}/call-app.manifest.json`)
+  const packageManifest = readJson(`demo/call-apps/${appKey}/call-app.manifest.json`)
   assert(packageManifest.schema_version === 'king.call_app.manifest.v1', `${appKey} manifest schema version mismatch`)
   assert(packageManifest.app_key === appKey, `${appKey} manifest app_key must match its package directory`)
   assert(packageManifest.status === 'runtime_ready', `${appKey} package must advertise runtime_ready status`)
@@ -144,15 +155,15 @@ for (const appKey of appKeys) {
   assertArrayIncludes(packageManifest.iframe?.sandbox, 'allow-scripts', `${appKey} iframe sandbox must allow scripts for the app runtime`)
   assert(!packageManifest.iframe?.sandbox?.includes('allow-same-origin'), `${appKey} iframe sandbox must not allow same-origin by default`)
 
-  const packageMcpDescriptor = readJson(`demo/call-app/${appKey}/mcp.descriptor.json`)
+  const packageMcpDescriptor = readJson(`demo/call-apps/${appKey}/mcp.descriptor.json`)
   assert(packageMcpDescriptor.schema_version === 'king.call_app.mcp_descriptor.v1', `${appKey} MCP descriptor schema mismatch`)
   assert(packageMcpDescriptor.service_name === `call_app.${appKey}.mcp`, `${appKey} MCP service name mismatch`)
 
-  const packageCrdtSchema = readJson(`demo/call-app/${appKey}/crdt.schema.json`)
+  const packageCrdtSchema = readJson(`demo/call-apps/${appKey}/crdt.schema.json`)
   assert(packageCrdtSchema.schema_version === 'king.call_app.crdt_schema.v1', `${appKey} CRDT schema version mismatch`)
   assert(packageCrdtSchema.protocol === 'king.call_app.crdt.v1', `${appKey} CRDT protocol mismatch`)
 
-  const packageHealth = readJson(`demo/call-app/${appKey}/health.descriptor.json`)
+  const packageHealth = readJson(`demo/call-apps/${appKey}/health.descriptor.json`)
   assert(packageHealth.schema_version === 'king.call_app.health_descriptor.v1', `${appKey} health descriptor schema mismatch`)
   const packageHealthPaths = packageHealth.checks.map((check) => check.path)
   const healthCheckedFiles = packageFiles.filter((file) => file !== 'health.descriptor.json')
@@ -160,8 +171,8 @@ for (const appKey of appKeys) {
     assertArrayIncludes(packageHealthPaths, healthPath, `${appKey} health descriptor missing check for ${healthPath}`)
   }
 
-  const packageIframe = read(`demo/call-app/${appKey}/public/index.html`)
-  const packageRuntime = read(`demo/call-app/${appKey}/public/${appKey}.js`)
+  const packageIframe = read(`demo/call-apps/${appKey}/public/index.html`)
+  const packageRuntime = read(`demo/call-apps/${appKey}/public/${appKey}.js`)
   const packageBundle = `${packageIframe}\n${packageRuntime}`
   assert(packageIframe.includes('king.call_app.iframe.v1'), `${appKey} iframe entrypoint must declare bridge protocol`)
   assert(packageIframe.includes(`${appKey}.css`), `${appKey} iframe entrypoint must load its package stylesheet`)
@@ -210,8 +221,11 @@ assert(
   'backend Call App paths must remain explicitly allowed outside the app package source scan',
 )
 
-const readme = read('demo/call-app/README.md')
-assert(readme.includes('demo/call-app/<app-key>/'), 'README must document the package root convention')
+const readme = read('demo/call-apps/README.md')
+assert(readme.includes('canonical repository source root is plural `demo/call-apps/`'), 'README must document the plural package source root decision')
+assert(readme.includes('`demo/call-app/` is not a Call App source root'), 'README must reject demo/call-app as a parallel source root')
+assert(readme.includes('Runtime/public Call App URLs remain `/call-app/<app-key>/...`'), 'README must preserve the runtime /call-app URL contract separately from the source root')
+assert(readme.includes('demo/call-apps/<app-key>/'), 'README must document the package root convention')
 assert(readme.includes('repository-root special-purpose Markdown'), 'README must document the root Markdown boundary')
 for (const requiredFile of [
   'call-app.manifest.json',
@@ -296,7 +310,7 @@ for (const requiredFile of [
 }
 assert(readme.includes('call-diagnostics'), 'README must list the call-diagnostics package')
 
-const manifest = readJson('demo/call-app/whiteboard/call-app.manifest.json')
+const manifest = readJson('demo/call-apps/whiteboard/call-app.manifest.json')
 assert(manifest.schema_version === 'king.call_app.manifest.v1', 'manifest schema version mismatch')
 assert(manifest.app_key === 'whiteboard', 'manifest app_key mismatch')
 assert(manifest.version === '0.1.0', 'manifest version mismatch')
@@ -331,7 +345,7 @@ for (const permission of [
 assertArrayIncludes(manifest.exports?.map((entry) => entry.format), 'png', 'whiteboard must advertise PNG export')
 assertArrayIncludes(manifest.exports?.map((entry) => entry.format), 'pdf', 'whiteboard must advertise PDF export')
 
-const mcpDescriptor = readJson('demo/call-app/whiteboard/mcp.descriptor.json')
+const mcpDescriptor = readJson('demo/call-apps/whiteboard/mcp.descriptor.json')
 assert(mcpDescriptor.schema_version === 'king.call_app.mcp_descriptor.v1', 'MCP descriptor schema mismatch')
 assert(mcpDescriptor.service_name === 'call_app.whiteboard.mcp', 'MCP service name mismatch')
 const mcpMethodNames = mcpDescriptor.methods.map((method) => method.name)
@@ -348,7 +362,7 @@ for (const method of [
 }
 assert(mcpDescriptor.launch_contract?.primary_session_token_allowed === false, 'MCP launch contract must reject primary session tokens')
 
-const crdtSchema = readJson('demo/call-app/whiteboard/crdt.schema.json')
+const crdtSchema = readJson('demo/call-apps/whiteboard/crdt.schema.json')
 assert(crdtSchema.schema_version === 'king.call_app.crdt_schema.v1', 'CRDT schema version mismatch')
 assert(crdtSchema.protocol === 'king.call_app.crdt.v1', 'CRDT protocol mismatch')
 assert(crdtSchema.documents?.[0]?.kind === 'whiteboard_document', 'CRDT schema must define whiteboard_document')
@@ -389,7 +403,7 @@ for (const field of [
 assert(crdtSchema.envelope?.idempotency?.duplicate_policy === 'ignore_after_first_admission', 'CRDT duplicate policy mismatch')
 assert(crdtSchema.presence?.persisted === false, 'presence must not be persisted as document ops')
 
-const health = readJson('demo/call-app/whiteboard/health.descriptor.json')
+const health = readJson('demo/call-apps/whiteboard/health.descriptor.json')
 assert(health.schema_version === 'king.call_app.health_descriptor.v1', 'health descriptor schema mismatch')
 const healthPaths = health.checks.map((check) => check.path)
 for (const healthPath of [
@@ -403,8 +417,8 @@ for (const healthPath of [
   assertArrayIncludes(healthPaths, healthPath, `health descriptor missing check for ${healthPath}`)
 }
 
-const iframe = read('demo/call-app/whiteboard/public/index.html')
-const iframeRuntime = read('demo/call-app/whiteboard/public/whiteboard.js')
+const iframe = read('demo/call-apps/whiteboard/public/index.html')
+const iframeRuntime = read('demo/call-apps/whiteboard/public/whiteboard.js')
 const iframeBundle = `${iframe}\n${iframeRuntime}`
 assert(iframe.includes('king.call_app.iframe.v1'), 'iframe entrypoint must declare bridge protocol')
 assert(iframe.includes('whiteboard.css'), 'iframe entrypoint must load the extracted stylesheet')
@@ -415,8 +429,11 @@ assert(iframeRuntime.includes('primary_session_token_received: false'), 'iframe 
 assert(!iframeBundle.includes('sessionToken'), 'iframe bundle must not reference parent session tokens')
 assert(!iframeBundle.includes('Authorization'), 'iframe bundle must not reference authorization headers')
 
-const sprint = `${read('SPRINT.md')}\n${read('BACKLOG.md')}`
-assert(sprint.includes('- [x] WCA-01 Sprint/backlog hygiene and package contract'), 'SPRINT.md must track the active Whiteboard package sprint ticket')
+const planningDocs = `${read('SPRINT.md')}\n${read('BACKLOG.md')}`
+assert(planningDocs.includes('Root planning Markdown remains limited to `README.md`, `BACKLOG.md`,'), 'planning docs must keep root markdown constrained')
+assert(planningDocs.includes('Keep Call App package roots canonical at `demo/call-apps/<app-key>/`.'), 'planning docs must retain the canonical Call App package root contract')
+assert(planningDocs.includes('Keep `demo/video-chat/frontend-vue/src/domain/realtime/callApps` as'), 'planning docs must retain the host/source boundary')
+assert(planningDocs.includes('Treat `demo/video-chat/frontend-vue/dist/call-app` as build output only.'), 'planning docs must retain the build-output boundary')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 assert(packageJson.includes('call-app-package-layout-contract.mjs'), 'package scripts must include package layout contract')
 assert(packageJson.includes('test:contract:call-apps:sqlite'), 'package scripts must expose the SQLite-backed Call App backend proof')

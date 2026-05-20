@@ -39,8 +39,8 @@ const [
 
 assert.match(
   sprint,
-  /WCA-09 Production deployment, subdomain, and Mothernode registration[\s\S]*Call App iframe host[\s\S]*Mothernode host/,
-  'SPRINT.md must track the production Call App deployment ticket',
+  /Deploy only after focused verification and grouped diagnostics; no push\./,
+  'planning sources must keep production Call App deployment behind focused verification, grouped diagnostics and no push',
 );
 
 for (const functionName of [
@@ -93,13 +93,13 @@ assert.match(
 
 assert.match(workspaceState, /VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*CALL_APP_IFRAME_ORIGIN/s);
 assert.ok(
-  workspaceState.includes('function callAppOriginForAppKey'),
-  'Call App iframe URL must honor the dedicated deployment origin',
+  workspaceState.includes('export function callAppWorkspaceIframeUrl'),
+  'Call App workspace must own deterministic iframe URL construction',
 );
 assert.match(
   workspaceState,
-  /parts\[0\] = hostAppKey[\s\S]*return origin !== '' \? `\$\{origin\}\$\{path\}` : path/s,
-  'Call App iframe URL must resolve whiteboard.kingrt.com and future {app_key}.kingrt.com origins',
+  /const path = `\/call-app\/\$\{encodeURIComponent\(appKey\)\}\/\$\{entrypoint\}`;[\s\S]*return path;/s,
+  'Call App iframe URL must use same-origin edge paths while dedicated app domains remain direct asset hosts',
 );
 
 assert.match(
@@ -110,13 +110,13 @@ assert.match(
 
 assert.match(
   backendDockerfile,
-  /COPY demo\/call-app\/ \/call-app\/[\s\S]*VIDEOCHAT_CALL_APP_PACKAGE_ROOT=\/call-app/s,
+  /COPY demo\/call-apps\/ \/call-app\/[\s\S]*VIDEOCHAT_CALL_APP_PACKAGE_ROOT=\/call-app/s,
   'backend image must carry Call App packages at the package-root used by Semantic-DNS registration',
 );
 
 assert.match(
   edgeDockerfile,
-  /COPY demo\/call-app\/ \/app\/call-app\//,
+  /COPY demo\/call-apps\/ \/app\/call-app\//,
   'edge image must carry Call App iframe assets',
 );
 
@@ -152,8 +152,8 @@ assert.match(
 
 assert.match(
   deploySmoke,
-  /expect_http_code call-app-whiteboard-host 200 "https:\/\/\$\{DEPLOY_CALL_APP_DOMAIN\}\/public\/index\.html"[\s\S]*expect_http_code call-app-whiteboard-path 200 "https:\/\/\$\{DEPLOY_CALL_APP_DOMAIN\}\/call-app\/whiteboard\/public\/index\.html"/s,
-  'deploy smoke must verify the semantic whiteboard.kingrt.com host and packaged Call App path',
+  /expect_http_code call-app-whiteboard-path 200 "https:\/\/\$\{DEPLOY_CALL_APP_DOMAIN\}\/call-app\/whiteboard\/public\/index\.html"/,
+  'deploy smoke must verify the semantic whiteboard.kingrt.com packaged Call App path',
 );
 
 assert.match(

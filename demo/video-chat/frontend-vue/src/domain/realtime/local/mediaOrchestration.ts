@@ -10,9 +10,12 @@ import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings 
 import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
 import { createBackgroundFallbackAudioOnlyStream } from '../background/avatarFallbackSignal';
 import { handleBackgroundReplacementUnavailable } from '../background/unavailablePrompt';
-import { shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
+import { shouldForceSegmentationUnavailableForSmoke, shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
 import { buildDisplayMediaOptions, hasGetDisplayMedia, normalizeDisplayMediaError } from './screenShareCapture';
 import { strictPolicyEnabled } from '../workspace/callWorkspace/strictStabilityPolicy.ts';
+import { attachLocalPreviewTrack } from './localPreviewElement';
+import { createLocalCaptureWatchdog } from './localCaptureWatchdog';
+import { resolveAuthoritativePublisherMediaProfile } from './authoritativePublisherMediaProfile';
 
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
@@ -30,6 +33,7 @@ export function createLocalMediaOrchestrationHelpers({
     captureClientDiagnostic,
     currentSfuVideoProfile,
     isWlvcRuntimePath,
+    canPublishLocalMediaToSfu = () => true,
     normalizeRoomId,
     onLocalScreenShareStateChanged = () => {},
     refreshCallMediaDevices,
@@ -42,6 +46,7 @@ export function createLocalMediaOrchestrationHelpers({
     sendNativeOffer,
   } = callbacks;
   const captureDiagnostic = typeof captureClientDiagnostic === 'function' ? captureClientDiagnostic : () => {};
+  const currentPublisherMediaProfile = () => resolveAuthoritativePublisherMediaProfile(currentSfuVideoProfile());
 
   const localPublisherCallbacks = callbacks.localPublisher && typeof callbacks.localPublisher === 'object'
     ? callbacks.localPublisher
@@ -92,6 +97,9 @@ export function createLocalMediaOrchestrationHelpers({
   const unpublishSfuTracks = typeof localPublisherCallbacks.unpublishSfuTracks === 'function'
     ? localPublisherCallbacks.unpublishSfuTracks
     : () => {};
+  const renderCallVideoLayout = typeof localPublisherCallbacks.renderCallVideoLayout === 'function'
+    ? localPublisherCallbacks.renderCallVideoLayout
+    : () => {};
   let lastBackgroundFallbackControlStateKey = '';
   let localMediaPermissionRetryAfterMs = 0;
   let screenShareStream = null;
@@ -118,11 +126,11 @@ export function createLocalMediaOrchestrationHelpers({
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
     const wantsVideo = controlState.cameraEnabled !== false;
     const wantsAudio = controlState.micEnabled !== false;
-    const videoProfile = currentSfuVideoProfile();
+    const videoProfile = currentPublisherMediaProfile();
     const strictCaptureOnly = strictCaptureOnlyEnabled();
 
     function profileVideoConstraints(extra = {}) {
-      if (strictCaptureOnly) {
+      if (strictCaptureOnly || videoProfile.captureExact === true) {
         return {
           width: { exact: videoProfile.captureWidth },
           height: { exact: videoProfile.captureHeight },
@@ -153,7 +161,7 @@ export function createLocalMediaOrchestrationHelpers({
   function buildLooseLocalMediaConstraints() {
     const wantsVideo = controlState.cameraEnabled !== false;
     const wantsAudio = controlState.micEnabled !== false;
-    const videoProfile = currentSfuVideoProfile();
+    const videoProfile = currentPublisherMediaProfile();
     return {
       video: wantsVideo
         ? buildFallbackCallCameraVideoConstraints({
@@ -170,7 +178,7 @@ export function createLocalMediaOrchestrationHelpers({
     reportSfuLocalCaptureSettings({
       stream,
       reason,
-      videoProfile: currentSfuVideoProfile(),
+      videoProfile: currentPublisherMediaProfile(),
       captureDiagnostic,
     });
   }
@@ -179,6 +187,28 @@ export function createLocalMediaOrchestrationHelpers({
     if (hasScreenShareParticipantPublisher) return false;
     return screenShareStream instanceof MediaStream && activeScreenShareTrackId !== '';
   }
+
+  function canPublishLocalMedia(reason = 'local_media_publish') {
+    return canPublishLocalMediaToSfu({ reason }) === true;
+  }
+
+  async function attachLocalCameraPreview(videoTrack) {
+    await attachLocalPreviewTrack({
+      localVideoElementRef: refs.localVideoElement,
+      renderCallVideoLayout,
+      videoTrack,
+    });
+    applyCallOutputPreferences();
+  }
+
+  const localCaptureWatchdog = createLocalCaptureWatchdog({
+    captureDiagnostic,
+    controlState,
+    isLocalScreenShareActive,
+    reconfigureLocalTracks: () => reconfigureLocalTracksFromSelectedDevices(),
+    refs,
+    state,
+  });
 
   function notifyLocalScreenShareStateChanged(active, reason = '') {
     try {
@@ -472,7 +502,7 @@ export function createLocalMediaOrchestrationHelpers({
     const result = await applySfuVideoProfileConstraintsToStream({
       stream,
       reason,
-      videoProfile: currentSfuVideoProfile(),
+      videoProfile: currentPublisherMediaProfile(),
       captureDiagnostic,
       captureClientDiagnosticError,
       mediaRuntimePath: refs.mediaRuntimePathRef.value,
@@ -481,7 +511,6 @@ export function createLocalMediaOrchestrationHelpers({
       const error = result?.error instanceof Error
         ? result.error
         : new Error(String(result?.reason || 'strict_720p30_capture_constraints_failed'));
-      error.name = error.name || 'OverconstrainedError';
       throw error;
     }
     return result;
@@ -642,6 +671,7 @@ export function createLocalMediaOrchestrationHelpers({
 
   function publishLocalTracksToSfuIfReady(options = {}) {
     const force = options?.force === true;
+    if (!canPublishLocalMedia('sfu_publish_request')) return false;
     if (!refs.sfuClientRef.value) return false;
     if (state.localTracksPublishedToSfu && !force) return true;
     if (!callbacks.isSfuClientOpen()) return false;
@@ -661,6 +691,7 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   function stopActivityMonitor() {
+    localCaptureWatchdog.stop();
     if (state.activityMonitorTimer !== null) {
       clearInterval(state.activityMonitorTimer);
       state.activityMonitorTimer = null;
@@ -682,6 +713,7 @@ export function createLocalMediaOrchestrationHelpers({
   function startActivityMonitor(stream) {
     stopActivityMonitor();
     if (!(stream instanceof MediaStream) || typeof window === 'undefined') return;
+    localCaptureWatchdog.start(stream, 'local_activity_monitor');
 
     const audioTrack = stream.getAudioTracks?.()[0] || null;
     const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -827,14 +859,19 @@ export function createLocalMediaOrchestrationHelpers({
     callMediaPrefs.backgroundFilterReason = reason;
   }
 
+  function backgroundOutgoingDisabledByStrictPolicy() {
+    return strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')
+      && !shouldForceSegmentationUnavailableForSmoke();
+  }
+
   function isBackgroundFilterEnabledForOutgoing() {
-    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) return false;
+    if (backgroundOutgoingDisabledByStrictPolicy()) return false;
     const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
     return (mode === 'blur' || mode === 'replace') && Boolean(callMediaPrefs.backgroundApplyOutgoing);
   }
 
   function resolveBackgroundFilterOptions(runtimeToken) {
-    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) {
+    if (backgroundOutgoingDisabledByStrictPolicy()) {
       return { mode: 'off' };
     }
     const toFiniteNumber = (value, fallback) => {
@@ -981,7 +1018,7 @@ export function createLocalMediaOrchestrationHelpers({
       return createBackgroundFallbackAudioOnlyStream(rawStream);
     }
 
-    if (strictPolicyEnabled(constants.strictStabilityPolicy, 'disableBackgroundOutgoing')) {
+    if (backgroundOutgoingDisabledByStrictPolicy()) {
       backgroundFilterController.dispose();
       resetBackgroundRuntimeMetrics('strict_720p30_unfiltered');
       callMediaPrefs.backgroundFilterBackend = 'none';
@@ -1080,12 +1117,19 @@ export function createLocalMediaOrchestrationHelpers({
     state.localTrackReconfigureQueuedMode = null;
   }
 
-  async function publishLocalTracks() {
+  async function publishLocalTracks(options = {}) {
+    const captureOnly = options?.captureOnly === true;
+    const canPublishNow = !captureOnly && canPublishLocalMedia('local_media_publish');
     if (localMediaPermissionRetryAfterMs > Date.now()) {
       if (!(refs.localStreamRef.value instanceof MediaStream)) enterReceiveOnlyLocalMediaMode('permission_denied_cooldown');
       return true;
     }
     if (refs.localStreamRef.value instanceof MediaStream) {
+      if (!canPublishNow) {
+        const videoTrack = refs.localStreamRef.value.getVideoTracks?.()[0] || null;
+        if (videoTrack) await attachLocalCameraPreview(videoTrack);
+        return true;
+      }
       publishLocalTracksToSfuIfReady();
       if (isWlvcRuntimePath()) {
         const videoTrack = refs.localStreamRef.value.getVideoTracks?.()[0] || null;
@@ -1121,10 +1165,10 @@ export function createLocalMediaOrchestrationHelpers({
       state.localTracksPublishedToSfu = false;
       state.localTrackRecoveryAttempts = 0;
       bindLocalTrackLifecycle(stream);
-      publishLocalTracksToSfuIfReady();
+      if (canPublishNow) publishLocalTracksToSfuIfReady();
       applyCallInputPreferences();
       applyCallOutputPreferences();
-      if (shouldMaintainNativePeerConnections()) {
+      if (canPublishNow && shouldMaintainNativePeerConnections()) {
         syncNativePeerConnectionsWithRoster();
         for (const peer of refs.nativePeerConnectionsRef.value.values()) {
           if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
@@ -1137,14 +1181,16 @@ export function createLocalMediaOrchestrationHelpers({
       }
 
       const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
+      if (videoTrack && canPublishNow) {
         await startEncodingPipeline(videoTrack);
         if (discardStaleLocalMediaCapture(captureGeneration, [stream, rawStream])) {
           stopLocalEncodingPipeline();
           clearLocalPreviewElement();
           return false;
         }
-      } else {
+      } else if (videoTrack) {
+        await attachLocalCameraPreview(videoTrack);
+      } else if (!videoTrack) {
         stopLocalEncodingPipeline();
         clearLocalPreviewElement();
       }
@@ -1206,9 +1252,10 @@ export function createLocalMediaOrchestrationHelpers({
       if (streamChanged) {
         state.localTracksPublishedToSfu = false;
         unpublishSfuTracks(previousTracks);
-        publishLocalTracksToSfuIfReady();
+        const canPublishNow = canPublishLocalMedia('local_background_filter_reconfigure');
+        if (canPublishNow) publishLocalTracksToSfuIfReady();
 
-        if (shouldMaintainNativePeerConnections()) {
+        if (canPublishNow && shouldMaintainNativePeerConnections()) {
           syncNativePeerConnectionsWithRoster();
           for (const peer of refs.nativePeerConnectionsRef.value.values()) {
             if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
@@ -1220,13 +1267,15 @@ export function createLocalMediaOrchestrationHelpers({
         }
 
         const videoTrack = nextStream.getVideoTracks()[0] || null;
-        if (videoTrack) {
+        if (videoTrack && canPublishNow) {
           await startEncodingPipeline(videoTrack);
           if (discardStaleLocalMediaCapture(captureGeneration, [nextStream])) {
             stopLocalEncodingPipeline();
             clearLocalPreviewElement();
             return false;
           }
+        } else if (videoTrack) {
+          await attachLocalCameraPreview(videoTrack);
         } else {
           stopLocalEncodingPipeline();
           clearLocalPreviewElement();
@@ -1300,11 +1349,12 @@ export function createLocalMediaOrchestrationHelpers({
       state.localTracksPublishedToSfu = false;
 
       unpublishSfuTracks(previousTracks);
-      publishLocalTracksToSfuIfReady();
+      const canPublishNow = canPublishLocalMedia('local_media_reconfigure');
+      if (canPublishNow) publishLocalTracksToSfuIfReady();
       applyCallInputPreferences();
       applyCallOutputPreferences();
 
-      if (shouldMaintainNativePeerConnections()) {
+      if (canPublishNow && shouldMaintainNativePeerConnections()) {
         syncNativePeerConnectionsWithRoster();
         for (const peer of refs.nativePeerConnectionsRef.value.values()) {
           if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
@@ -1316,13 +1366,15 @@ export function createLocalMediaOrchestrationHelpers({
       }
 
       const videoTrack = nextOutputStream.getVideoTracks()[0] || null;
-      if (videoTrack) {
+      if (videoTrack && canPublishNow) {
         await startEncodingPipeline(videoTrack);
         if (discardStaleLocalMediaCapture(captureGeneration, [nextOutputStream, nextRawStream])) {
           stopLocalEncodingPipeline();
           clearLocalPreviewElement();
           return false;
         }
+      } else if (videoTrack) {
+        await attachLocalCameraPreview(videoTrack);
       } else {
         stopLocalEncodingPipeline();
         clearLocalPreviewElement();

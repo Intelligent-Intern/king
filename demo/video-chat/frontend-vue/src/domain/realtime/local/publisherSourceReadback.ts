@@ -184,13 +184,15 @@ export function createPublisherSourceReadbackController({
   globalScope = typeof globalThis !== 'undefined' ? globalThis : {},
   captureCapabilities = detectPublisherCapturePipelineCapabilities({ globalScope, documentRef }),
   mediaDebugLog = () => {},
+  preferDomCanvasReadback = false,
 } = {}) {
   if (!documentRef || typeof documentRef.createElement !== 'function') {
     throw new Error('publisher_source_readback_document_missing');
   }
 
+  const videoFrameSourceDisabled = preferDomCanvasReadback === true;
   const initialFramingTarget = resolvePublisherTransportFramingTarget();
-  const initialFrameSize = captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.DOM_CANVAS_FALLBACK
+  const initialFrameSize = videoFrameSourceDisabled || captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.DOM_CANVAS_FALLBACK
     ? resolveDomCanvasCompatibilityFrameSize(video, videoProfile, videoTrack, initialFramingTarget)
     : resolvePublisherFrameSize(video, videoProfile, videoTrack, initialFramingTarget);
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
@@ -215,7 +217,8 @@ export function createPublisherSourceReadbackController({
   }
 
   function shouldTryVideoFrameReader(nowMs = Date.now()) {
-    return canUsePublisherVideoFrameSource(captureCapabilities)
+    return !videoFrameSourceDisabled
+      && canUsePublisherVideoFrameSource(captureCapabilities)
       && !(videoFrameCopyToDisabled && captureCapabilities.supportsVideoFrameCopyTo)
       && nowMs >= videoFrameReaderRetryAfterMs;
   }
@@ -247,7 +250,9 @@ export function createPublisherSourceReadbackController({
     return videoFrameReader;
   }
 
-  ensureVideoFrameReader('publisher_source_readback_init');
+  if (!videoFrameSourceDisabled) {
+    ensureVideoFrameReader('publisher_source_readback_init');
+  }
 
   function markVideoFrameReaderFailure(result) {
     closeVideoFrameReader(String(result?.reason || 'publisher_video_frame_source_failed'));

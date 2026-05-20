@@ -282,7 +282,7 @@ function videochat_realtime_room_snapshot_participant_media_state(array $partici
             'media_state' => (string) ($planned['media_state'] ?? 'waiting_for_capabilities'),
             'profile' => (string) ($planned['profile'] ?? ''),
             'transport' => (string) ($planned['transport'] ?? ''),
-            'security_policy' => (string) ($planned['security_policy'] ?? 'required'),
+            'security_policy' => (string) ($planned['security_policy'] ?? 'transport_only'),
             'stuck_reason' => (string) ($planned['stuck_reason'] ?? ''),
         ];
     }
@@ -346,6 +346,132 @@ function videochat_realtime_room_snapshot_diagnostics(array $presenceState, stri
 }
 
 /**
+ * @return array<string, mixed>
+ */
+function videochat_realtime_room_snapshot_receiver_render_evidence(PDO $pdo, string $callId, string $roomId): array
+{
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedCallId === '' || $normalizedRoomId === '') {
+        return [];
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT payload_json, client_time, created_at
+FROM client_diagnostics
+WHERE call_id = :call_id
+  AND room_id = :room_id
+  AND event_type = 'sfu_receiver_render_evidence'
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+SQL
+    );
+    $statement->execute([
+        ':call_id' => $normalizedCallId,
+        ':room_id' => $normalizedRoomId,
+    ]);
+    $row = $statement->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) {
+        return [];
+    }
+
+    $payload = json_decode((string) ($row['payload_json'] ?? '{}'), true);
+    $payload = is_array($payload) ? $payload : [];
+    $lastRenderedAtMs = videochat_media_session_plan_timestamp_ms($payload['rendered_at_ms'] ?? null);
+    if ($lastRenderedAtMs <= 0) {
+        $lastRenderedAtMs = videochat_media_session_plan_timestamp_ms($row['client_time'] ?? null);
+    }
+    if ($lastRenderedAtMs <= 0) {
+        $lastRenderedAtMs = videochat_media_session_plan_timestamp_ms($row['created_at'] ?? null);
+    }
+
+    return [
+        'last_rendered_at_ms' => $lastRenderedAtMs,
+        'sample_count' => 1,
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_realtime_room_snapshot_capability_summary(array $capabilitiesByConnectionId): array
+{
+    $summary = [
+        'participant_count' => 0,
+        'camera_720p30_count' => 0,
+        'microphone_count' => 0,
+        'wlvc_encoder_count' => 0,
+        'webcodecs_count' => 0,
+        'wasm_count' => 0,
+        'mobile_count' => 0,
+        'gpu' => [],
+        'browser_families' => [],
+        'max_backpressure_ratio' => 0.0,
+        'queued_bytes_total' => 0,
+        'dropped_video_frames_total' => 0,
+        'by_connection_id' => [],
+        'redacted' => true,
+    ];
+
+    foreach ($capabilitiesByConnectionId as $connectionId => $capabilities) {
+        if (!is_array($capabilities)) {
+            continue;
+        }
+        $connectionId = trim((string) $connectionId);
+        if ($connectionId === '') {
+            continue;
+        }
+        $media = is_array($capabilities['media'] ?? null) ? (array) $capabilities['media'] : [];
+        $runtime = is_array($capabilities['runtime'] ?? null) ? (array) $capabilities['runtime'] : [];
+        $codec = is_array($capabilities['codec'] ?? null) ? (array) $capabilities['codec'] : [];
+        $constraints = is_array($capabilities['constraints'] ?? null) ? (array) $capabilities['constraints'] : [];
+        $network = is_array($capabilities['network'] ?? null) ? (array) $capabilities['network'] : [];
+        $backpressure = is_array($network['backpressure'] ?? null) ? (array) $network['backpressure'] : [];
+        $gpu = trim((string) ($runtime['gpu'] ?? 'unknown'));
+        $browserFamily = trim((string) ($constraints['browser_family'] ?? 'unknown'));
+        $backpressureRatio = max(0.0, min(1.0, (float) ($backpressure['ratio'] ?? 0)));
+        $queuedBytes = max(0, (int) ($backpressure['queued_bytes'] ?? 0));
+        $droppedVideoFrames = max(0, (int) ($backpressure['dropped_video_frames'] ?? 0));
+
+        $summary['participant_count']++;
+        $summary['camera_720p30_count'] += (bool) ($media['camera_720p30'] ?? false) ? 1 : 0;
+        $summary['microphone_count'] += (bool) ($media['microphone'] ?? false) ? 1 : 0;
+        $summary['wlvc_encoder_count'] += (bool) ($runtime['wlvc_encoder'] ?? false) ? 1 : 0;
+        $summary['webcodecs_count'] += (bool) ($codec['webcodecs'] ?? ($runtime['webcodecs'] ?? false)) ? 1 : 0;
+        $summary['wasm_count'] += (bool) ($codec['wasm'] ?? ($runtime['webassembly'] ?? false)) ? 1 : 0;
+        $summary['mobile_count'] += (bool) ($constraints['mobile'] ?? false) ? 1 : 0;
+        $summary['gpu'][$gpu === '' ? 'unknown' : $gpu] = (int) ($summary['gpu'][$gpu === '' ? 'unknown' : $gpu] ?? 0) + 1;
+        $summary['browser_families'][$browserFamily === '' ? 'unknown' : $browserFamily] = (int) ($summary['browser_families'][$browserFamily === '' ? 'unknown' : $browserFamily] ?? 0) + 1;
+        $summary['max_backpressure_ratio'] = max((float) $summary['max_backpressure_ratio'], $backpressureRatio);
+        $summary['queued_bytes_total'] += $queuedBytes;
+        $summary['dropped_video_frames_total'] += $droppedVideoFrames;
+        $summary['by_connection_id'][$connectionId] = [
+            'camera_720p30' => (bool) ($media['camera_720p30'] ?? false),
+            'microphone' => (bool) ($media['microphone'] ?? false),
+            'codec_path' => (string) ($codec['preferred_path'] ?? 'unknown'),
+            'webcodecs' => (bool) ($codec['webcodecs'] ?? ($runtime['webcodecs'] ?? false)),
+            'wasm' => (bool) ($codec['wasm'] ?? ($runtime['webassembly'] ?? false)),
+            'gpu' => $gpu === '' ? 'unknown' : $gpu,
+            'mobile' => (bool) ($constraints['mobile'] ?? false),
+            'browser_family' => $browserFamily === '' ? 'unknown' : $browserFamily,
+            'video_width' => (int) ($constraints['video_width'] ?? 0),
+            'video_height' => (int) ($constraints['video_height'] ?? 0),
+            'video_fps' => (int) ($constraints['video_fps'] ?? 0),
+            'backpressure_ratio' => $backpressureRatio,
+            'queued_bytes' => $queuedBytes,
+            'dropped_video_frames' => $droppedVideoFrames,
+        ];
+    }
+
+    ksort($summary['gpu']);
+    ksort($summary['browser_families']);
+    ksort($summary['by_connection_id']);
+
+    return $summary;
+}
+
+/**
  * @param array<int, array<string, mixed>> $participants
  * @return array<string, mixed>
  */
@@ -365,6 +491,7 @@ function videochat_realtime_room_snapshot_authoritative_media_session_plan(
             'schema_version' => videochat_client_capabilities_schema_version(),
             'by_connection_id' => $capabilitiesByConnectionId,
         ],
+        'capability_summary' => videochat_realtime_room_snapshot_capability_summary($capabilitiesByConnectionId),
         'participant_media_state' => videochat_realtime_room_snapshot_participant_media_state(
             $participants,
             $mediaSessionPlan
@@ -378,7 +505,7 @@ function videochat_realtime_room_snapshot_authoritative_media_session_plan(
 }
 
 function videochat_realtime_room_snapshot_payload(
-    array $presenceState,
+    array &$presenceState,
     array $connection,
     callable $openDatabase,
     string $reason,
@@ -397,6 +524,14 @@ function videochat_realtime_room_snapshot_payload(
             $persistedClientCapabilities = videochat_client_capabilities_fetch_room($openDatabase(), $callId, $roomId);
         } catch (Throwable) {
             $persistedClientCapabilities = [];
+        }
+    }
+    $receiverRenderEvidence = [];
+    if ($callId !== '' && $roomId !== '') {
+        try {
+            $receiverRenderEvidence = videochat_realtime_room_snapshot_receiver_render_evidence($openDatabase(), $callId, $roomId);
+        } catch (Throwable) {
+            $receiverRenderEvidence = [];
         }
     }
     $ownerAbsence = videochat_realtime_owner_absence_disabled_payload();
@@ -465,8 +600,15 @@ function videochat_realtime_room_snapshot_payload(
         $participants,
         $persistedClientCapabilities,
         $gossipReadinessByConnectionId,
-        $nowMs
+        $nowMs,
+        trim($reason) === '' ? 'snapshot' : trim($reason),
+        $receiverRenderEvidence
     );
+    $presenceState['media_session_plan'] = $mediaSessionPlan;
+    $presenceState['media_session_selected_plan'] = is_array($mediaSessionPlan['selected_plan'] ?? null)
+        ? (array) $mediaSessionPlan['selected_plan']
+        : [];
+    $presenceState['media_session_plan_epoch'] = (int) ($mediaSessionPlan['plan_epoch'] ?? 1);
     $mediaSessionPlan = videochat_realtime_room_snapshot_authoritative_media_session_plan(
         $mediaSessionPlan,
         $presenceState,
@@ -611,7 +753,7 @@ function videochat_realtime_send_gossipmesh_topology_hint(
 }
 
 function videochat_realtime_send_room_snapshot(
-    array $presenceState,
+    array &$presenceState,
     array $connection,
     callable $openDatabase,
     string $reason,
@@ -627,7 +769,7 @@ function videochat_realtime_send_room_snapshot(
 }
 
 function videochat_realtime_send_room_snapshot_if_changed(
-    array $presenceState,
+    array &$presenceState,
     array $connection,
     callable $openDatabase,
     string &$lastSignature,
@@ -645,7 +787,7 @@ function videochat_realtime_send_room_snapshot_if_changed(
 }
 
 function videochat_realtime_broadcast_room_snapshot(
-    array $presenceState,
+    array &$presenceState,
     string $roomId,
     callable $openDatabase,
     string $reason,
@@ -697,7 +839,7 @@ function videochat_realtime_broadcast_room_snapshot(
 }
 
 function videochat_realtime_broadcast_call_room_snapshots(
-    array $presenceState,
+    array &$presenceState,
     string $callId,
     int $tenantId,
     callable $openDatabase,

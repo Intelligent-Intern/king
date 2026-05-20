@@ -23,7 +23,7 @@ export function normalizeVideochatMediaCarrierMode(value: unknown): VideochatMed
   if (normalized === 'sfu_mirror' || normalized === 'sfu-mirror' || normalized === 'mirror') {
     return 'sfu_mirror'
   }
-  return 'sfu_first'
+  return 'gossip_primary'
 }
 
 export function resolveVideochatMediaCarrierConfig(env: Record<string, unknown> = import.meta.env): VideochatMediaCarrierConfig {
@@ -37,10 +37,10 @@ export function resolveVideochatMediaCarrierConfig(env: Record<string, unknown> 
     gossipPrimary,
     sfuFirst,
     sfuMirror,
-    gossipMayPublishWithoutSfu: gossipPrimary,
-    sfuRequiredBeforeGossip: !gossipPrimary,
-    sfuSendIsOptional: sfuMirror,
-    sfuFallbackAllowed: !gossipPrimary,
+    gossipMayPublishWithoutSfu: true,
+    sfuRequiredBeforeGossip: false,
+    sfuSendIsOptional: sfuFirst || sfuMirror,
+    sfuFallbackAllowed: false,
     diagnosticsLabel: gossipPrimary
       ? 'media_carrier_gossip_primary'
       : sfuMirror

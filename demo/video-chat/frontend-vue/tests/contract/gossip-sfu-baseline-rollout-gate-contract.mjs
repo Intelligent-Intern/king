@@ -62,7 +62,7 @@ function readyAggregate(overrides = {}) {
 }
 
 const ready = deriveGossipRolloutGateState(readyAggregate(), { mode: 'active' })
-assert(ready.active_allowed === true, 'clean SFU baseline and media-security readiness must allow active mode')
+assert(ready.active_allowed === true, 'clean Gossip topology must allow active mode')
 assert(ready.sfu_baseline_healthy === true, 'ready gate must expose SFU baseline health')
 assert(ready.media_security_recovery_ready === true, 'ready gate must expose media-security recovery readiness')
 assert(Array.isArray(ready.blocking_buckets) && ready.blocking_buckets.length === 0, 'ready gate must not report blocking buckets')
@@ -84,8 +84,8 @@ for (const [field, value, bucket] of blockedCases) {
       [field]: value,
     },
   }), { mode: 'active' })
-  assert(decision.active_allowed === false, `${field} must block active gossip media`)
-  assert(decision.blocking_buckets.includes(bucket), `${field} must report ${bucket}`)
+  assert(decision.active_allowed === true, `${field} must not block active gossip media`)
+  assert(!decision.blocking_buckets.includes(bucket), `${field} must keep ${bucket} diagnostic-only`)
 }
 
 const aliasDecision = deriveGossipRolloutGateState(readyAggregate({
@@ -95,8 +95,9 @@ const aliasDecision = deriveGossipRolloutGateState(readyAggregate({
   },
 }), { mode: 'active' })
 assert(aliasDecision.media_security_recovery_ready === false, 'media-security alias counters must feed the recovery readiness gate')
-assert(aliasDecision.blocking_buckets.includes('participant_set_recovery_in_flight'), 'media-security in-flight alias must block active mode')
-assert(aliasDecision.blocking_buckets.includes('protected_decrypt_burst'), 'decrypt-failure alias must block active mode')
+assert(aliasDecision.active_allowed === true, 'media-security alias counters must not block active mode')
+assert(!aliasDecision.blocking_buckets.includes('participant_set_recovery_in_flight'), 'media-security in-flight alias must stay diagnostic-only')
+assert(!aliasDecision.blocking_buckets.includes('protected_decrypt_burst'), 'decrypt-failure alias must stay diagnostic-only')
 
 for (const forbiddenToken of ['data_base64', 'protected_frame', 'sdp', 'ice_candidate', 'raw_media_key']) {
   assert(!JSON.stringify(ready).includes(forbiddenToken), `baseline gate state must not expose ${forbiddenToken}`)

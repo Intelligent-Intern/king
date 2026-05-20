@@ -1,4 +1,7 @@
-import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
+import {
+  encodeSfuBinaryFrameEnvelope,
+  prepareSfuOutboundFramePayload,
+} from '../../../../lib/sfu/framePayload';
 import { normalizeScreenShareMediaSource } from '../../screenShareIdentity.js';
 
 export const GOSSIP_MEDIA_FRAME_TYPE = 'gossip.media.frame.v1';
@@ -150,12 +153,9 @@ export function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, {
     ? (frame.relayData || frame.plainData || frame.data)
     : frame.data;
   const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
-  const dataBase64 = dataBuffer.byteLength > 0 ? arrayBufferToBase64Url(dataBuffer) : '';
-  const protectedFrame = plainRelay ? '' : String(frame.protectedFrame || '').trim();
-  if (dataBase64 === '' && protectedFrame === '') return null;
-  const protectionMode = plainRelay || protectedFrame === ''
-    ? 'transport_only'
-    : String(frame.protectionMode || 'protected');
+  if (dataBuffer.byteLength <= 0) return null;
+  const protectedFrame = '';
+  const protectionMode = 'transport_only';
   const frameKind = normalizedGossipFrameKind(frame.type || frame.frameType || frame.frame_kind);
   const timestampUnixMs = positiveGossipInteger(frame.timestamp || frame.timestamp_unix_ms, Date.now());
   const runtimePath = plainRelay ? 'gossip_primary_direct' : 'gossip_rtc_datachannel';
@@ -206,12 +206,11 @@ export function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, {
     profile_frame_rate: profileFrameRate,
     frame_width: gossipMetricValue(frame, 'frameWidth', 'frame_width', profileFrameWidth),
     frame_height: gossipMetricValue(frame, 'frameHeight', 'frame_height', profileFrameHeight),
-    payload_encoding: 'base64url',
-    payload: dataBase64,
+    payload_encoding: 'binary',
     protection_mode: protectionMode,
-    data_base64: dataBase64,
     protected_frame: protectedFrame,
-    payload_chars: protectedFrame !== '' ? protectedFrame.length : dataBase64.length,
+    payload_chars: dataBuffer.byteLength,
+    payload_bytes: dataBuffer.byteLength,
     chunk_count: 1,
     outgoing_video_quality_profile: outgoingProfile,
     selected_video_quality_profile: selectedProfile,
@@ -236,11 +235,66 @@ export function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, {
   };
 }
 
+export function gossipFrameMetadataFromEncodedFrame(frame, sequenceMap, options = {}) {
+  return gossipFrameMessageFromEncodedFrame(frame, sequenceMap, options);
+}
+
+export function gossipBinaryEnvelopeFromEncodedFrame(frame, msg) {
+  if (!frame || typeof frame !== 'object' || !msg || typeof msg !== 'object') return null;
+  const plainRelay = String(msg.runtime_path || '').trim().toLowerCase() === 'gossip_primary_direct';
+  const relayData = plainRelay
+    ? (frame.relayData || frame.plainData || frame.data)
+    : frame.data;
+  const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
+  if (dataBuffer.byteLength <= 0) return null;
+  const prepared = prepareSfuOutboundFramePayload({
+    publisherId: String(msg.publisher_id || msg.publisherId || ''),
+    publisherUserId: String(msg.publisher_user_id || msg.publisherUserId || ''),
+    trackId: String(msg.track_id || msg.trackId || ''),
+    timestamp: positiveGossipInteger(msg.timestamp_unix_ms || msg.timestamp, Date.now()),
+    data: dataBuffer,
+    type: normalizedGossipFrameKind(msg.frame_kind || msg.frame_type),
+    protectionMode: 'transport_only',
+    frameSequence: positiveGossipInteger(msg.frame_sequence || msg.sequence, 0),
+    senderSentAtMs: positiveGossipInteger(msg.sender_sent_at_ms, Date.now()),
+    codecId: String(msg.codec_id || 'wlvc_wasm'),
+    runtimeId: String(msg.runtime_id || 'wlvc_sfu'),
+    videoLayer: String(msg.video_layer || ''),
+    transportMetrics: {
+      ...msg,
+      media_transport: 'gossip_server_fanout',
+      control_transport: 'king_realtime_ws',
+      gossip_media_contract: GOSSIP_MEDIA_FRAME_TYPE,
+      binary_media_required: true,
+    },
+  });
+  prepared.payload.frame_id = String(msg.frame_id || msg.frameId || '');
+  return encodeSfuBinaryFrameEnvelope(prepared);
+}
+
+export function gossipFrameBinaryMessageFromMetadata(frame, msg) {
+  if (!frame || typeof frame !== 'object' || !msg || typeof msg !== 'object') return null;
+  const plainRelay = String(msg.runtime_path || '').trim().toLowerCase() === 'gossip_primary_direct';
+  const relayData = plainRelay
+    ? (frame.relayData || frame.plainData || frame.data)
+    : frame.data;
+  const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
+  if (dataBuffer.byteLength <= 0) return null;
+  return {
+    ...msg,
+    payload_encoding: 'binary',
+    payload_bytes: dataBuffer.byteLength,
+    payload_chars: dataBuffer.byteLength,
+    data_binary: new Uint8Array(dataBuffer),
+  };
+}
+
 export function sfuFrameFromGossipMessage(msg, delivery) {
   const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
   const trackId = String(msg.trackId || msg.track_id || '').trim();
   if (publisherId === '' || trackId === '') return null;
-  const dataBase64 = String(msg.dataBase64 || msg.data_base64 || msg.payload || '').trim();
+  const dataBinary = normalizeGossipFrameArrayBuffer(msg.dataBinary || msg.data_binary || msg.data);
+  if (dataBinary.byteLength <= 0) return null;
   const frameSequence = Math.max(0, Number(msg.frameSequence ?? msg.frame_sequence ?? msg.sequence ?? 0));
   const mediaGeneration = Math.max(0, Number(msg.mediaGeneration ?? msg.media_generation ?? 0));
   const frameKind = normalizedGossipFrameKind(msg.frameKind || msg.frame_kind || msg.frameType || msg.frame_type);
@@ -256,22 +310,15 @@ export function sfuFrameFromGossipMessage(msg, delivery) {
     screenShareParticipantUserId: positiveGossipInteger(msg.screenShareParticipantUserId || msg.screen_share_participant_user_id),
     trackId,
     timestamp: timestampUnixMs || msg.timestamp,
-    data: dataBase64 !== ''
-      ? base64UrlToArrayBuffer(dataBase64)
-      : (msg.data instanceof ArrayBuffer
-        ? msg.data
-        : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0))),
-    dataBase64: dataBase64 || null,
+    data: dataBinary,
     type: frameKind,
-    protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
-    protectedFrame: String(msg.protectedFrame || msg.protected_frame || ''),
-    protectionMode: String(msg.protectionMode || msg.protection_mode || '') === 'required'
-      ? 'required'
-      : (msg.protectedFrame || msg.protected_frame ? 'protected' : 'transport_only'),
+    protected: null,
+    protectedFrame: '',
+    protectionMode: 'transport_only',
     protocolVersion: Math.max(1, Number(msg.protocolVersion ?? msg.protocol_version ?? 1)),
     frameSequence,
     mediaGeneration,
-    payloadChars: Math.max(0, Number(msg.payloadChars ?? msg.payload_chars ?? dataBase64.length)),
+    payloadChars: Math.max(0, Number(msg.payloadChars ?? msg.payload_chars ?? dataBinary.byteLength)),
     chunkCount: Math.max(1, Number(msg.chunkCount ?? msg.chunk_count ?? 1)),
     frameId: String(msg.frameId || msg.frame_id || delivery?.frame_id || ''),
     senderSentAtMs: Math.max(0, Number(msg.senderSentAtMs ?? msg.sender_sent_at_ms ?? 0)),

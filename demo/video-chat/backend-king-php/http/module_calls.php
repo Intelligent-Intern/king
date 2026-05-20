@@ -410,18 +410,45 @@ function videochat_handle_call_routes(
             ]);
         }
 
-        try {
-            $pdo = $openDatabase();
-            $archiveResult = videochat_chat_archive_fetch(
-                $pdo,
+        $archiveResult = null;
+        $lastArchiveError = null;
+        for ($attempt = 1; $attempt <= 4; $attempt += 1) {
+            try {
+                $pdo = $openDatabase();
+                $archiveResult = videochat_chat_archive_fetch(
+                    $pdo,
+                    (string) ($chatArchiveMatch[1] ?? ''),
+                    $authenticatedUserId,
+                    $authenticatedUserRole,
+                    videochat_request_query_params($request)
+                );
+                $lastArchiveError = null;
+                break;
+            } catch (Throwable $error) {
+                $lastArchiveError = $error;
+                if (function_exists('videochat_sqlite_is_transient_lock') && videochat_sqlite_is_transient_lock($error) && $attempt < 4) {
+                    usleep(videochat_sqlite_retry_delay_us($attempt, 50_000, 250_000));
+                    continue;
+                }
+
+                break;
+            }
+        }
+        if ($lastArchiveError instanceof Throwable) {
+            $isSqliteBusy = function_exists('videochat_sqlite_is_transient_lock')
+                && videochat_sqlite_is_transient_lock($lastArchiveError);
+            error_log(sprintf(
+                '[video-chat][calls] chat archive load failed call_id=%s retryable=%s exception=%s message=%s',
                 (string) ($chatArchiveMatch[1] ?? ''),
-                $authenticatedUserId,
-                $authenticatedUserRole,
-                videochat_request_query_params($request)
-            );
-        } catch (Throwable) {
-            return $errorResponse(500, 'chat_archive_load_failed', 'Could not load chat archive.', [
-                'reason' => 'internal_error',
+                $isSqliteBusy ? '1' : '0',
+                $lastArchiveError::class,
+                $lastArchiveError->getMessage()
+            ));
+
+            return $errorResponse($isSqliteBusy ? 503 : 500, 'chat_archive_load_failed', 'Could not load chat archive.', [
+                'reason' => $isSqliteBusy ? 'sqlite_busy' : 'internal_error',
+                'retryable' => $isSqliteBusy,
+                'retry_after_seconds' => $isSqliteBusy ? 1 : 0,
             ]);
         }
 

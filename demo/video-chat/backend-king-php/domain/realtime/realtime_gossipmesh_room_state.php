@@ -25,7 +25,7 @@ function videochat_gossipmesh_room_state_payload(
     }
 
     $planOptions = [
-        'seed' => (string) ($options['seed'] ?? ($reason === '' ? 'room_state' : $reason)),
+        'seed' => (string) ($options['seed'] ?? 'room_lifecycle'),
         'max_neighbors' => VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS,
         'forward_count' => VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
     ];

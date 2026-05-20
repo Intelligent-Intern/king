@@ -43,7 +43,7 @@ COPY demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/pack
 RUN npm ci
 COPY demo/video-chat/frontend-vue/ ./
 COPY packages/iibin/dist/ /packages/iibin/dist/
-COPY demo/call-app/ /call-app/
+COPY demo/call-apps/ /call-app/
 RUN npm run build
 
 FROM php:8.4-cli-trixie
@@ -58,7 +58,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY demo/video-chat/edge/ /app/
-COPY demo/call-app/ /app/call-app/
+COPY demo/call-apps/ /app/call-app/
 COPY --from=frontend-build /frontend/dist /app/frontend-dist
 
 ENV VIDEOCHAT_EDGE_HOST=0.0.0.0

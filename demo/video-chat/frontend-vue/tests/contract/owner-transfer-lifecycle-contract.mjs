@@ -120,8 +120,8 @@ try {
   );
   assert.match(
     socketLifecycle,
-    /previousSocket\.close\(1000, 'reconnect'\);/,
-    'socket reconnect must not be treated as a room leave',
+    /previousSocket\.close\(1000, 'one_shot_cycle_replaced'\);/,
+    'socket replacement must not be treated as a room leave',
   );
   assert.match(
     socketLifecycle,

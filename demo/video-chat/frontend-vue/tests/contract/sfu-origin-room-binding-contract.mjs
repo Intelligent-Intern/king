@@ -55,10 +55,17 @@ try {
   requireContains(sfuClient, "failToNextCandidateAfterSocketClose('negotiation_timeout')", 'SFU client closes timed-out websocket negotiation before failover');
   requireContains(socketLifecycle, 'if (state.connectInFlight && !state.manualSocketClose) return;', 'workspace websocket refuses duplicate pending connect attempts');
   requireContains(socketLifecycle, 'state.connectInFlight = true;', 'workspace websocket opens a single-flight gate during handshake');
-  requireContains(socketLifecycle, 'The browser will emit close after a failed handshake', 'workspace websocket waits for close before origin failover');
-  requireContains(socketLifecycle, 'const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;', 'workspace websocket bounds pending negotiation to 5 minutes');
-  requireContains(socketLifecycle, "refs.connectionReason.value = 'socket_negotiation_timeout';", 'workspace websocket reports timed-out negotiation');
-  requireContains(socketLifecycle, "failOverToNextOrigin('negotiation_timeout')", 'workspace websocket closes timed-out negotiation before failover');
+  requireContains(socketLifecycle, 'The browser will emit close after a failed handshake', 'workspace websocket waits for close before one-shot failure classification');
+  requireContains(socketLifecycle, 'const CONNECT_CYCLE_TIMEOUT_MS = 5 * 60 * 1000;', 'workspace websocket bounds one connect cycle to 5 minutes');
+  requireContains(socketLifecycle, "reason: 'socket_negotiation_timeout',", 'workspace websocket reports timed-out negotiation');
+  requireContains(socketLifecycle, "code: 'websocket_negotiation_timeout',", 'workspace websocket classifies timed-out negotiation');
+  requireContains(socketLifecycle, '}, CONNECT_CYCLE_TIMEOUT_MS);', 'workspace websocket uses the connect-cycle timeout for negotiation');
+  requireContains(socketLifecycle, "eventType: 'realtime_websocket_one_shot_failed'", 'workspace websocket records one-shot connect failure');
+  requireContains(socketLifecycle, 'next_connect_cycle_requires_new_participant: true', 'workspace websocket requires a new participant before another connect cycle');
+  assert.ok(
+    !socketLifecycle.includes("failOverToNextOrigin('negotiation_timeout')"),
+    'workspace websocket must not auto-fail over after negotiation timeout',
+  );
 
   requireContains(sfuClient, 'room: roomId,', 'legacy room query compatibility');
   requireContains(sfuClient, 'room_id: roomId,', 'snake_case room query binding');

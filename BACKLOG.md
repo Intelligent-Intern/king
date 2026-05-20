@@ -1,297 +1,86 @@
 # King Backlog
 
 Purpose:
-- This file is the parked and future backlog only.
-- `SPRINT.md` is the only list of active top-priority work.
-- Root planning files were cleaned up; archived completion trackers are
-  not active root planning sources.
-- Historical detail stays in git history, not in this file.
+- `BACKLOG.md` is parked and future work only.
+- `SPRINT.md` is the only active top-priority checklist.
+- Historical detail stays in git history, archived docs, contracts and focused
+  readiness notes.
+- If an item becomes release-critical, move it into `SPRINT.md` and remove it
+  from this file.
 
 Rules:
 - Do not duplicate active sprint items here.
-- Do not keep completed items here.
+- Do not keep completed sprint transcripts here.
 - Do not weaken the strongest correct King v1 contract to simplify cleanup.
-- If an item becomes release-critical, move it into `SPRINT.md` and remove it from this file.
+- Keep root docs minimal and checkbox-based.
 
-## Parked After 1.0.7 SFU Media Closure
+## Parked Legacy Mechanisms
 
-1. [ ] Decide whether topology observability (`#Q-31`) is still needed for `1.0.7-beta` or can stay parked until the next beta.
-2. [ ] Selective tile/background transport survived the online HD gate; evaluate a second-pass ROI optimization after release instead of changing the current proven heuristics now.
-3. [ ] The binary media envelope is proven by the online HD gate; revisit long-term packet/header compaction after `1.0.7-beta`, not during the current release closure.
-4. [ ] The native King PHP IIBIN SFU control/metadata boundary is proven; plan deeper runtime integration only after the shipped media path remains stable.
-5. [ ] Do a second cleanup pass over superseded experiment artifacts after the `1.0.7` closure is merged.
+- [ ] STT subsystem expansion is parked. Reopen only concrete STT defects; the
+  completed STT04 implementation detail stays in git history and contracts.
+- [ ] Ad-hoc SFU fallback, SFU-specific deploy blockers and SFU repair loops
+  are parked. SFU may only be used when selected by the active sprint's
+  server/head orchestrator.
+- [ ] MediaSecurity sender-key gates, participant-set recovery and security
+  rewrites are parked outside the active call-video proof.
+- [ ] Strict 720p-only acceptance gates are parked. The active sprint starts
+  with 720p30 but proves the full orchestrated quality ladder instead of using
+  720p as a release blocker.
+- [ ] Client health gates are parked. Media success must come from
+  server-authored plan, egress and receiver render evidence.
+- [ ] Automatic quality rescue, regression harnesses and hidden repair loops are
+  parked unless rebuilt as explicit server-plan behavior.
+- [ ] Background-tab media policy is parked as a hidden call-video behavior.
+- [ ] Retry-countdown banners, reconnect chatter and green transport-ack notices
+  remain out of the visible call UI; diagnostics may keep redacted evidence.
 
-## Parked From Sprint Cleanup 2026-05-07
+## Future Video Call Work
 
-### Governance UX, Recursive CRUD, Permissions, And Onboarding
+- [ ] Add late-join and screenshare acceptance after the active two-participant
+  video proof is stable.
+- [ ] Extend `media_session_plan.v1` with durable participant media-state history
+  if diagnostics need cross-session audit.
+- [ ] Split domain/admin/ops deploy gates from media-transport-specific gates so
+  parked transports do not block unrelated release checks.
+- [ ] Convert stale SFU/Gossip/Background/regression tests into capability,
+  plan-selection and render-evidence contracts after the active sprint proves
+  the new orchestrator.
+- [ ] Revisit topology observability and binary media envelope compaction after
+  the current release path is stable.
+- [ ] Add multi-participant scaling proof for 10 participants after the
+  two-browser live proof and right-sidebar layout are stable.
 
-Moved into active Sprint 06 on 2026-05-10.
+## Call App Future Work
 
-### Admin UX And Visual Standards
+- [ ] Keep Call App package roots canonical at `demo/call-apps/<app-key>/`.
+- [ ] Keep `demo/video-chat/frontend-vue/src/domain/realtime/callApps` as
+  host/bridge/shell code, not app source.
+- [ ] Treat `demo/video-chat/frontend-vue/dist/call-app` as build output only.
+- [ ] Plan any `text-document` to `word` rename as a real migration with aliases,
+  redirects or data migration.
+- [ ] Reconcile Call App entitlement revocation and launch-token reconnect proof
+  with the current package boundaries.
+- [ ] Preserve Whiteboard, Planning Image, Presentation and Spreadsheet follow-up
+  defects as concrete future tickets, not old sprint transcripts.
 
-The action-bar, sidebar, token, create-action, and heading cleanup items moved
-into active Sprint 06 on 2026-05-10.
+## Future IAM And Product Work
 
-1. [ ] Theme management still needs persisted screenshot previews after save; iframe mini-app preview cards and the main-content editor are now contract-pinned.
-2. [ ] Localization admin still needs two-language side-by-side editing and removal of CSV/source/bundle/import-history UI from the active path.
-3. [ ] App Configuration still needs dropzone-based background image upload/crop/filter flow and metadata-free UI without search.
-
-### Calendar And Booking
-
-1. [ ] Move Calendar tabs out of Video Call Management into the top-level Calendar route.
-2. [ ] Support up to five calendars with colors, tabs, settings gear, sharing, sync options, and access levels.
-3. [ ] Replace mobile public booking calendar grid with day strip + slot list + details/confirmation step.
-4. [ ] Keep desktop calendar behavior intact while mobile uses the two-step booking flow.
-5. [ ] Include correct logo, call link, iCal, Google Calendar, and confirmation details.
-
-### Clean Refactoring With Composables And Components
-
-The CRUD scaffold, right-sidebar/forms, and Governance/User Management
-refactor items moved into active Sprint 06 on 2026-05-10.
-
-1. [ ] Settings/Profile: extract settings registry and shared section frame; credentials and merged localization/date/time panels are now extracted and contract-pinned.
-2. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-3. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
-4. [ ] Localization/Admin text: extract the remaining API/state composable and broader save proof; the two-locale editor matrix, locale pair selectors, entry matrix, CSV-free active path, and existing save route wiring are now contract-pinned.
-5. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
-6. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
-
-### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
-
-- Compatibility anchor for existing smoke/deployment contracts.
-- Active release work lives in `SPRINT.md`.
-- Completion evidence and rollout history stay in git history and surviving
-  release notes after the root markdown cleanup.
-- If new production-readiness work becomes active again, move it into `SPRINT.md` instead of expanding this parked section.
-- Keep Hetzner-specific discovery behind provider abstractions.
-- Correct live call and participant counts.
-- Ensure a fresh production deploy is repeatable.
-
-## AI / SLM / Fine-Tuning Platform (`#149`)
-
-1. [ ] Distributed model placement and inference execution.
-2. [ ] Prompt, cache, and checkpoint persistence.
-3. [ ] Fine-tuning and training-data workflows.
-4. [ ] Advanced model extensions.
-
-## Future Product Work / MarketView (`#150`)
-
-1. [ ] MarketView product boundary and data contract.
-2. [ ] Market feed, aggregation, and fanout.
-3. [ ] MarketView frontend UX.
-4. [ ] Paper trading flow.
-5. [ ] MarketView packaging and operations.
-
-## Parked From Sprint Cleanup 2026-05-09
-
-### Parked From Sprint Reset 2026-05-10: IAM12
-
-`IAM Call Access Proof Consolidation And Test Gate 12` was replaced as the
-active sprint by `Gossip Video Call v1 Streaming 01`.
-
-The parked IAM12 intent remains valid future work:
-
-1. [ ] Reconcile strong personalized-link mismatch UI proof after
-   `CallAccessJoinFooter.vue` extraction.
-2. [ ] Reconcile invalid/expired anonymous-link proof with archived readiness
-   references.
-3. [ ] Reconcile foreign-link review audit proof with archived readiness
-   references and redaction markers.
-4. [ ] Reconcile identity-mismatch review proof with audit marker preservation
-   and redaction.
-5. [ ] Reconcile lobby management moderator-rights proof with kick/reject/remove
-   lifecycle semantics.
-6. [ ] Reconcile org-removal active-privilege downgrade proof with
-   database-backed admin authority.
-7. [ ] Reconcile owner-absence realtime sync proof with current presence and
-   room-snapshot behavior.
-8. [ ] Reconcile Call-App entitlement revocation proof with package boundaries
-   under `demo/call-app/<app-key>`.
-9. [ ] Reconcile Call-App launch-token reconnect proof with current
-   route/session behavior.
-10. [ ] Reconcile registered invitee logged-in/logged-out handoff proof with
-    current session route guards.
-11. [ ] Reconcile guest-list lifecycle cleanup proof with current owner,
-    moderator, and temporary-guest behavior.
-12. [ ] Restore any remaining IAM aggregate gate cleanup as a focused future
-    sprint, not as the active Video Call/Gossip sprint.
-
-### Completed Video Call v1 Capability And Media Plan Foundation
-
-Completed on 2026-05-10. Keep proof in commit history, contracts, readiness
-documentation, and `analyse/video-call-v1-contract-map.md`; reopen only
-concrete regressions, not the completed active checklist.
-
-### Parked From Sprint Reset 2026-05-10
-
-1. [ ] Video Call Stabilization and Internal Diagnostics are paused as active
-   sprint work. Reopen only concrete production defects with current evidence.
-2. [ ] Room-bound Gossip relay, SFU disablement, MediaSecurity sender-key
-   recovery, strict 720p30, and related media tests are parked/manual unless the
-   user explicitly reopens them.
-3. [ ] Planning Image multi-image controls and Guest Join-Link Admission are
-   historical hotfixes. Reopen only new concrete defects, not the old sprint
-   checklist.
-4. [ ] Call App diagnostics/telemetry improvements remain available as future
-   work. The focused IAM/call-access batch now lives in `SPRINT.md`; do not
-   duplicate its active checklist here.
-
-### Completed Interruption: Root Markdown Cleanup
-
-Root markdown cleanup interrupted the IAM10 sprint on 2026-05-10 and completed
-as root-planning context cleanup. IAM10 remains parked as historical context;
-the focused replacement active sprint now lives in `SPRINT.md`.
-
-1. [ ] Preserve the IAM10 branch-cleanup intent and local proof context without
-   duplicating an active sprint checklist here.
-2. [ ] Do not duplicate the active IAM11 checklist from `SPRINT.md` here.
-3. [ ] Do not restore archived tracker documents as active root-file
-   dependencies.
-
-### Future IAM Sprint Queue
-
-Sprint 03, `IAM Abuse, Runtime Proof, And Cleanup Stabilization 03`, and
-Sprint 04, `IAM Cleanup, Proof Consolidation, And Browser Stability 04`,
-were completed before the 2026-05-10 root markdown cleanup.
-
-Sprint 05, `IAM Backlog Sweep, Proof Extraction, And Branch Cleanup 05`,
-was completed before the 2026-05-10 root markdown cleanup.
-
-Sprint 07, `IAM Remaining Proof And Branch Cleanup 07`, completed and moved to
-historical evidence before the 2026-05-10 root markdown cleanup.
-
-Sprint 08, `IAM Session, Audit, Guestlist, And Terminal Proof 08`, completed
-before the 2026-05-10 root markdown cleanup.
-
-Sprint 09, `IAM Calendar, Edge States, And Call-App Boundary Proof 09`,
-completed before the 2026-05-10 root markdown cleanup.
-
-Sprint 10, `IAM Branch Cleanup, Current Proof, And Stale-Diff Closure 10`,
-was parked because root markdown cleanup interrupted it on 2026-05-10. A new
-focused IAM/call-access active sprint now lives in `SPRINT.md`; do not duplicate
-that checkbox list here.
-
-### Completed/Parked Call App Integration Detail
-
-This section is parked/historical context only. If `SPRINT.md` names an active
-Call-App Package Boundary sprint, that sprint is authoritative and this backlog
-must not be read as blocking, superseding, or contradicting it.
-
-### Future Call App Package Boundary Work
-
-1. [ ] Plan any `text-document` to `word` rename as a real migration, not a
-   string-only cleanup. `text-document` is currently a persisted app key across
-   Marketplace catalog entries, organization installations, call app sessions,
-   CRDT documents, MCP metadata, Semantic-DNS registration, package paths, and
-   contract tests. A future rename needs alias/redirect behavior or data
-   migration before changing the canonical key.
-
-1. [ ] Prior `Collaborative Office Call Apps And Operator Feedback` sprint detail
-   was removed from `SPRINT.md`. Keep follow-up defects here, not in the active
-   sprint: collaborative text, presentation, spreadsheet, planning-image,
-   operator-feedback, Call App removal, availability, and Call Diagnostics
-   package work are represented by local commits on the active integration
-   branch.
-2. [ ] Prior `Call Workspace Sidebars, Call Apps, And Media Stability` detail was
-   removed from `SPRINT.md`. Reopen only concrete defects that affect the active
-   Video Call Stabilization sprint.
-3. [ ] Prior Whiteboard Call App hardening and production integration detail was
-   removed from `SPRINT.md`. Reopen only concrete runtime defects.
-4. [ ] Prior IAM E2E sprint text was removed from `SPRINT.md`. Any remaining IAM
-   proof work should be restored as focused backlog tickets, not as a large
-   embedded checklist.
-
-### Migrated Call App Contract Anchors
-
-- Prior sprint: Whiteboard Call App Hardening And Production Integration.
-- [x] WCA-01 Sprint/backlog hygiene and package contract.
-- [x] WCA-02 Whiteboard runtime tool completeness first pass.
-- [ ] WCA-08 Observability and acceptance form.
-- [ ] WCA-09 Production deployment, subdomain, and Mothernode registration:
-  Call App iframe host and Mothernode host.
-- Package roots stay `demo/call-app/<app-key>/`; the first concrete package was
-  `demo/call-app/whiteboard/`.
-- Whiteboard can be discovered from the package metadata and Marketplace/Call
-  App catalog path.
-- Collaborative whiteboard state remains synchronized through King CRDT envelopes.
-- revoked participants cannot submit CRDT ops.
-- Call App grant hardening and revocation proof remain preserved by contracts,
-  but are not the active sprint.
-- `CallWorkspaceView.vue` must not grow with app-specific logic; Call App work
-  belongs in focused host/bridge/sidebar modules.
-- Migrated Call App capability anchors:
-  - `call_apps.discover`
-  - `call_apps.marketplace.order`
-  - `call_apps.marketplace.install`
-  - `call_apps.marketplace.disable`
-  - `call_apps.call.attach`
-  - `call_apps.call.remove`
-  - `call_apps.call.view`
-  - `call_apps.permissions.manage`
-  - `call_apps.permissions.use`
-  - `call_apps.permissions.revoke`
-  - `call_apps.launch`
-  - `call_apps.launch.validate`
-  - `call_apps.crdt.read`
-  - `call_apps.crdt.append`
-  - `call_apps.crdt.replay`
-  - `call_apps.presence.publish`
-  - `call_apps.export.request`
-  - `call_apps.export.download`
-- Migrated Call App route anchors:
-  - `GET /api/admin/marketplace/apps`
-  - `POST /api/admin/marketplace/apps`
-  - `GET /api/admin/marketplace/apps/{app_id}`
-  - `PATCH /api/admin/marketplace/apps/{app_id}`
-  - `DELETE /api/admin/marketplace/apps/{app_id}`
-  - `GET /api/marketplace/call-apps`
-  - `GET /api/marketplace/call-apps/{app_key}`
-  - `POST /api/marketplace/call-apps/{app_key}/orders`
-  - `POST /api/marketplace/call-apps/{app_key}/installations`
-  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
-  - `GET /api/calls/{call_id}/call-apps/available`
-  - `GET /api/calls/{call_id}/call-app-sessions`
-  - `POST /api/calls/{call_id}/call-app-sessions`
-  - `PATCH /api/call-app-sessions/{session_id}`
-  - `DELETE /api/call-app-sessions/{session_id}`
-  - `GET /api/call-app-sessions/{session_id}/participant-grants`
-  - `PATCH /api/call-app-sessions/{session_id}/participant-grants`
-  - `POST /api/call-app-sessions/{session_id}/launch-token`
-  - `POST /api/call-app-sessions/{session_id}/launch-token/validate`
-  - `GET /api/call-app-sessions/{session_id}/crdt/bootstrap`
-  - `GET /api/call-app-sessions/{session_id}/crdt/ops`
-  - `POST /api/call-app-sessions/{session_id}/crdt/ops`
-  - `POST /api/call-app-sessions/{session_id}/crdt/snapshots`
-  - `POST /api/call-app-sessions/{session_id}/exports`
-  - `GET /api/call-app-exports/{job_id}`
-  - `GET /api/call-app-exports/{job_id}/download`
-- Migrated MCP metadata method anchors:
-  - `call_app.describe`
-  - `call_app.capabilities`
-  - `call_app.crdt_schema`
-  - `call_app.launch_contract`
-  - `call_app.health`
-  - `call_app.export_formats`
-  - `call_app.marketplace_listing`
-
-### Manual/Parked Media Work
-
-1. [ ] Background Replacement, BTGF-07 browser proof, and background tests remain
-   manual/parked. Do not let active stabilization work mutate these files.
-2. [ ] Gossip and SFU work remain manual/parked. Video-call stabilization may
-   observe diagnostics around these systems, but must not change their internals
-   in the active sprint.
-3. [ ] Dirty BGF worktrees and the dirty `codex/bgf-06-background-diagnostics`
-   checkout must be preserved or explicitly classified before cleanup; do not
-   auto-discard them.
-
-### Branch/Worktree Cleanup Holding Area
-
-Moved into active Sprint 06 on 2026-05-10. Keep dirty worktrees intact until
-their Sprint 06 classification tickets prove whether changes are merged,
-preserved, or need explicit user approval before removal.
+- [ ] Reconcile any IAM work not selected in the active sprint as focused future
+  batches with one problem statement and evidence target each.
+- [ ] Restore any remaining call-access aggregate gate cleanup only when it has a
+  current problem statement and evidence.
+- [ ] Move Calendar tabs out of Video Call Management into the top-level Calendar
+  route.
+- [ ] Finish mobile booking flow cleanup with day strip, slot list and
+  confirmation step.
+- [ ] Continue Settings/Profile, Theme Editor, Localization/Admin and
+  Calendar/Booking extraction under file-size guards.
+- [ ] Keep AI/SLM/Fine-Tuning and MarketView as future product work outside the
+  active call-video sprint.
 
 ## Cleanup Notes
 
-- Old batch items from the previous backlog were removed because they were either completed, replaced by the new active sprint, or too stale to keep as live backlog entries.
-- If a removed item still matters, restore it with a current problem statement and evidence instead of reintroducing old checklist archaeology.
+- [ ] Do not restore archived root markdown trackers as active planning sources.
+- [ ] Do not duplicate `SPRINT.md` checklists in this file.
+- [ ] Reintroduce removed historical items only with a current problem statement,
+  owner and evidence.

@@ -20,7 +20,10 @@ import {
   setCallOutgoingVideoQualityProfile,
 } from './media/preferences';
 import {
-  handleAssetVersionConnectionFailure,
+  installSputnikMediaDeviceShim,
+  resolveSputnikRouteConfig,
+} from './sputnikMediaShim';
+import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
@@ -56,9 +59,11 @@ import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/r
 import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
 import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace/lifecycle';
+import { createCallWorkspaceSttRuntime } from './workspace/callWorkspace/sttRuntime.js';
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
+import { createGossipMediaRelaySocket } from './workspace/callWorkspace/gossipMediaRelaySocket';
 import { CALL_STABILITY_POLICY } from './workspace/callWorkspace/strictStabilityPolicy';
 import { createWorkspaceForegroundRecoveryController } from './workspace/callWorkspace/foregroundRecovery';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
@@ -97,7 +102,6 @@ import {
   REACTION_CLIENT_FLUSH_INTERVAL_MS,
   REACTION_CLIENT_MAX_QUEUE,
   REACTION_CLIENT_WINDOW_MS,
-  RECONNECT_DELAYS_MS,
   resolveSfuVideoQualityProfile,
   ROSTER_VIRTUAL_OVERSCAN,
   ROSTER_VIRTUAL_ROW_HEIGHT,
@@ -177,8 +181,10 @@ import {
 } from './workspace/roster';
 import {
   apiRequest,
+  buildApiRequestError,
   extractErrorMessage,
   fetchBackend,
+  mediaRelaySocketUrlForRoom,
   requestHeaders,
   socketUrlForRoom,
 } from './workspace/api';
@@ -242,6 +248,8 @@ const MediaSecuritySession = Object.freeze({
 });
 
 const route = useRoute(); const router = useRouter();
+const sputnikConfig = resolveSputnikRouteConfig(route);
+installSputnikMediaDeviceShim(sputnikConfig);
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const activeTab = ref('users');
@@ -270,8 +278,8 @@ let manualSocketClose = false;
 let connectGeneration = 0;
 let pingTimer = null;
 let reconnectTimer = null;
-let workspaceReconnectAfterForeground = false;
-let workspaceLastForegroundReconnectAt = 0;
+let workspaceForegroundRecoveryArmed = false;
+let workspaceLastForegroundStateAt = 0;
 const socketLifecycleState = {
   get connectGeneration() { return connectGeneration; },
   set connectGeneration(value) { connectGeneration = value; },
@@ -655,11 +663,29 @@ function sendSocketFrame(payload) {
     return false;
   }
 }
+function sendSocketBinaryFrame(payload) {
+  const socket = socketRef.value;
+  if (!(socket instanceof WebSocket)) return false;
+  if (socket.readyState !== WebSocket.OPEN) return false;
+  const binaryPayload = payload instanceof ArrayBuffer
+    ? payload
+    : (ArrayBuffer.isView(payload) ? payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) : null);
+  if (!(binaryPayload instanceof ArrayBuffer) || binaryPayload.byteLength <= 0) return false;
+  try {
+    socket.send(binaryPayload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+let sendGossipMediaRelayBinaryFrame = () => false;
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
   getAssignedGossipNeighborCount,
+  handleGossipBinaryServerFrame,
   handleGossipNeighborSignal,
+  handleGossipServerFrame,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -669,28 +695,40 @@ const {
     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
     defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
+    sendMediaRelayBinaryFrame: (payload) => sendGossipMediaRelayBinaryFrame(payload),
+    sendSocketBinaryFrame,
     sendSocketFrame,
   },
   policy: CALL_STABILITY_POLICY,
 });
+const gossipMediaRelaySocket = createGossipMediaRelaySocket({
+  callbacks: {
+    activeCallId: () => activeCallId.value,
+    activeRoomId: () => activeRoomId.value,
+    captureClientDiagnostic,
+    currentUserId: () => String(currentUserId.value || ''),
+    handleGossipBinaryServerFrame,
+    handleGossipServerFrame,
+    mediaRelaySocketUrlForRoom,
+    resolveBackendWebSocketOriginCandidates: () => resolveBackendWebSocketOriginCandidates(),
+    setBackendWebSocketOrigin,
+  },
+});
+sendGossipMediaRelayBinaryFrame = (payload) => gossipMediaRelaySocket.sendBinaryFrame(payload);
+const teardownGossipDataLaneAndMediaRelay = () => {
+  teardownGossipDataLane();
+  gossipMediaRelaySocket.close();
+};
 const workspaceForegroundRecovery = createWorkspaceForegroundRecoveryController({
-  connectSocket: () => connectSocket(),
-  getArmed: () => workspaceReconnectAfterForeground, getConnectionState: () => connectionState.value,
-  getDocument: () => document, getLastAt: () => workspaceLastForegroundReconnectAt, getManualSocketClose: () => manualSocketClose,
+  captureClientDiagnostic,
+  getArmed: () => workspaceForegroundRecoveryArmed, getConnectionState: () => connectionState.value,
+  getDocument: () => document, getLastAt: () => workspaceLastForegroundStateAt, getManualSocketClose: () => manualSocketClose,
   getRouteBusy: () => routeCallResolve.pending || routeCallResolve.redirecting,
   getSessionToken: () => sessionState.sessionToken,
-  hasLiveLocalMedia: () => hasLiveLocalMedia(), hasRealtimeRoomSync: () => hasRealtimeRoomSync.value,
-  initSfu: () => initSFU(), isSfuClientOpen: () => isSfuClientOpen(), isSfuConnected: () => sfuConnected.value,
+  hasRealtimeRoomSync: () => hasRealtimeRoomSync.value,
   isSocketOpen: () => socketRef.value instanceof WebSocket && socketRef.value.readyState === WebSocket.OPEN,
-  publishLocalTracks: () => publishLocalTracks(),
-  recycleSfu: () => {
-    sfuClientRef.value?.leave();
-    sfuClientRef.value = null; sfuConnected.value = false;
-  },
-  requestRoomSnapshot: () => requestRoomSnapshotLocal(), resetReconnectAttempt: () => { reconnectAttempt.value = 0; },
-  setArmed: (value) => { workspaceReconnectAfterForeground = value; }, setLastAt: (value) => { workspaceLastForegroundReconnectAt = value; },
-  shouldAcquireLocalMedia: () => controlState.cameraEnabled !== false || controlState.micEnabled !== false,
-  shouldConnectSfu: () => shouldConnectSfu.value,
+  requestRoomSnapshot: () => requestRoomSnapshotLocal(),
+  setArmed: (value) => { workspaceForegroundRecoveryArmed = value; }, setLastAt: (value) => { workspaceLastForegroundStateAt = value; },
 });
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
@@ -715,12 +753,12 @@ function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
   return sendRoomJoinLocal(targetRoomId);
 }
 
-function markWorkspaceReconnectAfterForeground() {
-  workspaceForegroundRecovery.mark();
+function markWorkspaceLifecycleBackground(context) {
+  workspaceForegroundRecovery.mark(context);
 }
 
-function reconnectWorkspaceAfterForeground() {
-  workspaceForegroundRecovery.recover();
+function syncWorkspaceLifecycleForeground(context) {
+  workspaceForegroundRecovery.recover(context);
 }
 
 requestRoomSnapshot = requestRoomSnapshotLocal;
@@ -893,6 +931,31 @@ let sfuTrackAnnounceTimer = null;
 let localPublisherTeardownInProgress = false;
 let localTrackRecoveryTimer = null;
 let localTrackRecoveryAttempts = 0;
+const sttRuntime = createCallWorkspaceSttRuntime({
+  callbacks: {
+    apiRequest,
+    appendChatMessage: (...args) => appendChatMessage(...args),
+    buildApiRequestError,
+    fetchBackend,
+    mediaDebugLog,
+    normalizeCallRole,
+    normalizeRole,
+    requestHeaders,
+    sendSocketFrame,
+  },
+  refs: {
+    activeCallId,
+    activeRoomId,
+    callParticipantRoles,
+    canModerate,
+    connectedParticipantUsers,
+    currentUserId,
+    isSocketOnline,
+    localStreamRef,
+    sessionState,
+    workspaceSidebarState,
+  },
+});
 const backgroundFilterController = new BackgroundFilterController();
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
@@ -1410,12 +1473,6 @@ const {
   clearReconnectTimer,
   closeSocket,
   connectSocket,
-  handleSignalingEvent,
-  handleSocketMessage,
-  probeWorkspaceSession,
-  removeParticipantLocallyAfterHangup,
-  scheduleReconnect,
-  startPingLoop,
 } = createCallWorkspaceSocketHelpers({
   callbacks: {
     applyCallLayoutPayload: (...args) => applyCallLayoutPayload(...args),
@@ -1441,11 +1498,12 @@ const {
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
-    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleCallAppPresenceSignal: (...args) => dispatchCallAppPresenceSignal(...args),
+    handleGossipBinaryServerFrame,
     handleGossipNeighborSignal,
+    handleGossipServerFrame,
     handleMediaSecuritySignal: (...args) => handleMediaSecuritySignal(...args),
     handleNativeSignalingEvent,
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),
@@ -1467,6 +1525,7 @@ const {
     setAdmissionGate: (...args) => setAdmissionGate(...args),
     setBackendWebSocketOrigin,
     setNotice: (...args) => setNotice(...args),
+    stopLocalEncodingPipeline,
     syncControlStateToPeers: (...args) => syncControlStateToPeers(...args),
     syncModerationStateToPeers: (...args) => syncModerationStateToPeers(...args),
     tryDirectJoinWithModeratorBypass: (...args) => tryDirectJoinWithModeratorBypass(...args),
@@ -1474,7 +1533,6 @@ const {
   constants: {
     callStateSignalTypes: CALL_STATE_SIGNAL_TYPES,
     mediaSecuritySignalTypes: MEDIA_SECURITY_SIGNAL_TYPES,
-    reconnectDelayMs: RECONNECT_DELAYS_MS,
     strictStabilityPolicy: CALL_STABILITY_POLICY,
   },
   refs: {
@@ -1484,6 +1542,7 @@ const {
     callParticipantRoles,
     clearMediaSecurityHandshakeWatchdog,
     clearMediaSecuritySignalCaches,
+    connectedParticipantUsers,
     connectionReason,
     connectionState,
     desiredRoomId,
@@ -1492,6 +1551,7 @@ const {
     lobbyNotificationState,
     mutedUsers,
     participantActivityByUserId,
+    participantUsers,
     pendingAdmissionJoinRoomId,
     pinnedUsers,
     reconnectAttempt,
@@ -1603,6 +1663,8 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   chatUnreadByRoom,
   compactMiniStripPlacement,
   connectedParticipantUsers,
+  connectionReason,
+  connectionState,
   controlState,
   currentUserId,
   desiredRoomId,
@@ -1610,6 +1672,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   fullscreenVideoUserId,
   gridVideoSlotId,
   hangupCall: (...args) => hangupCall(...args),
+  handleExternalControlState: sttRuntime.handleRemoteControlState,
   initials,
   isAloneInCall,
   isCompactLayoutViewport,
@@ -1845,6 +1908,8 @@ const {
   usersTotal,
   usersVisibleRows,
   usersVirtualWindow,
+  visibleWorkspaceNotice,
+  workspaceConnectionBanner,
 } = participantUiHelpers;
 
 function currentCallAppSidebarControls() {
@@ -2077,13 +2142,11 @@ registerCallWorkspaceLifecycleHelpers({
     ensureSfuVideoQualityRecoveryProbeSeries,
     initSFU,
     loadDynamicIceServers,
-    markWorkspaceReconnectAfterForeground,
+    markWorkspaceLifecycleBackground,
     publishLocalActivitySample,
     publishLocalTracks,
     reconfigureLocalBackgroundFilterOnly,
     reconfigureLocalTracksFromSelectedDevices,
-    reconnectWorkspaceAfterForeground,
-    requestWlvcFullFrameKeyframe,
     refreshCallMediaDevices,
     resolveRouteCallRef,
     setActiveTab,
@@ -2093,9 +2156,10 @@ registerCallWorkspaceLifecycleHelpers({
     stopLocalTyping,
     stopSfuTrackAnnounceTimer,
     switchMediaRuntimePath,
+    syncWorkspaceLifecycleForeground,
     syncLobbyListViewport,
     syncUsersListViewport,
-    teardownGossipDataLane,
+    teardownGossipDataLane: teardownGossipDataLaneAndMediaRelay,
     teardownLocalPublisher,
     teardownNativePeerConnections,
     teardownSfuRemotePeers,
@@ -2125,7 +2189,6 @@ registerCallWorkspaceLifecycleHelpers({
     nativeAudioSecurityBannerMessage,
     nativeAudioSecurityTelemetrySnapshot,
     reconnectAttempt,
-    remotePeersRef,
     rightSidebarCollapsed,
     routeCallRef,
     serverRoomId,

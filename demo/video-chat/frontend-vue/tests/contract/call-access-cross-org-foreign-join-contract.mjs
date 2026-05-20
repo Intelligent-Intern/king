@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const videoChatRoot = path.resolve(frontendRoot, '..');
@@ -22,9 +24,9 @@ const backendContract = read('demo/video-chat/backend-king-php/tests/call-access
 const e2eSpec = read('demo/video-chat/frontend-vue/tests/e2e/call-access-cross-org-foreign-join.spec.js');
 
 assert.match(
-  String(packageJson.scripts['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /call-access-cross-org-foreign-join-contract\.mjs/,
-  'IAM call-access contract script must include the cross-org foreign join static proof',
+  'IAM call-access contract helper must include the cross-org foreign join static proof',
 );
 assert.match(
   String(packageJson.scripts['test:e2e:call-access:cross-org-foreign-join'] || ''),
@@ -37,9 +39,9 @@ assert.match(
   'IAM CI static gate must run the cross-org foreign join static proof',
 );
 assert.match(
-  String(packageJson.scripts['test:contract:iam-call-access'] || ''),
+  iamCallAccessContractSuiteText,
   /call-access-cross-org-contract\.sh/,
-  'IAM call-access contract script must keep the backend cross-org contract wired',
+  'IAM call-access contract helper must keep the backend cross-org contract wired',
 );
 
 assert.match(

@@ -35,8 +35,8 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
   read('demo/video-chat/edge/call_app_static.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
-  read('demo/call-app/whiteboard/public/index.html'),
-  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/call-apps/whiteboard/public/index.html'),
+  read('demo/call-apps/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/frontend-vue/vite.config.js'),
   read('demo/video-chat/edge/edge.php'),
   read('demo/video-chat/frontend-vue/Dockerfile'),
@@ -135,7 +135,7 @@ assert.match(
 
 assert.match(
   viteConfigSource,
-  /const callAppRoot = fileURLToPath\(new URL\('\.\.\/\.\.\/call-app\/', import\.meta\.url\)\)/,
+  /const callAppRoot = fileURLToPath\(new URL\('\.\.\/\.\.\/call-apps\/', import\.meta\.url\)\)/,
   'Vite must know the repo-native Call App package root',
 );
 
@@ -151,8 +151,8 @@ assert.match(
   'Vite dev server must serve Call App static files for local call-app testing',
 );
 
-assert.match(frontendDockerfile, /COPY demo\/call-app\/ \/call-app\//, 'frontend Docker build must include Call App packages');
-assert.match(edgeDockerfile, /COPY demo\/call-app\/ \/call-app\//, 'edge Docker build must include Call App packages');
+assert.match(frontendDockerfile, /COPY demo\/call-apps\/ \/call-app\//, 'frontend Docker build must include Call App packages');
+assert.match(edgeDockerfile, /COPY demo\/call-apps\/ \/call-app\//, 'edge Docker build must include Call App packages');
 
 assert.match(
   bridgeSource,
@@ -229,7 +229,7 @@ assert.match(
 assert.match(
   callAppDiagnosticsSource,
   /function sensitiveDiagnosticKey[\s\S]*token\|authorization\|password\|secret\|credential\|cookie[\s\S]*media_frame\|video_frame\|encoded_frame\|raw_frame\|pixel_buffer\|canvas_pixels[\s\S]*filter\(\(\[key\]\) => !sensitiveDiagnosticKey\(key\)\)/,
-  'Call App diagnostics must drop token-like keys and raw media/frame data before window or console emission',
+  'Call App diagnostics must drop token-like keys and raw media/frame data before browser event emission',
 );
 
 assert.match(

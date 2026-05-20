@@ -4,11 +4,12 @@ import {
 } from '../../media/clientCapabilities.ts';
 import {
   findMediaSessionPlanParticipant,
-  mediaSessionPlanHasGossipTransport,
   mediaSessionPlanAllowsLocalPublication,
+  mediaSessionPlanHasGossipTransport,
   mediaSessionPlanDiagnosticPayload,
   normalizeMediaSessionPlanFromSnapshot,
   normalizeMediaSessionPlanV1,
+  selectedMediaSessionPlanProfile,
 } from '../../media/mediaSessionPlan.ts';
 
 function refValue(value: any): any {
@@ -33,6 +34,14 @@ function firstStringValue(...values: any[]): string {
   for (const value of values) {
     const text = stringValue(value);
     if (text !== '') return text;
+  }
+  return '';
+}
+
+function maybeCallIdFromRoomId(value: any): string {
+  const roomId = stringValue(value).toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(roomId)) {
+    return roomId;
   }
   return '';
 }
@@ -107,6 +116,10 @@ export function activeMediaSessionPlanHasGossipTransport(sourcePayload: Record<s
   return activeMediaCapabilityPlanBridge?.mediaSessionPlanHasGossipTransportForLastPlan?.(sourcePayload) === true;
 }
 
+export function activeMediaSessionPlanSelectedProfile() {
+  return activeMediaCapabilityPlanBridge?.selectedProfileForLastPlan?.() || null;
+}
+
 export function requestLocalMediaPublicationForActivePlan(
   reason = 'media_session_plan_gate',
   sourcePayload: Record<string, any> = {},
@@ -121,27 +134,45 @@ export function requestLocalMediaPublicationForActivePlan(
 }
 
 export function resolveClientCapabilitiesContext(refs: Record<string, any> = {}, payload: Record<string, any> = {}) {
-  return {
-    callId: firstStringValue(
+  const roomId = firstStringValue(
+    payload.room_id,
+    payload.roomId,
+    payload.active_room_id,
+    payload.call_context?.room_id,
+    payload.callContext?.roomId,
+    refs.serverRoomId,
+    refs.desiredRoomId,
+  );
+  const callId = firstStringValue(
       payload.call_id,
       payload.callId,
+      payload.active_call_id,
+      payload.activeCallId,
+      payload.requested_call_id,
+      payload.requestedCallId,
       payload.viewer?.call_id,
       payload.call_context?.call_id,
+      payload.call_context?.requested_call_id,
+      payload.callContext?.callId,
+      payload.call?.id,
+      payload.details?.call_id,
       refs.activeSocketCallId,
       refs.activeCallId,
-    ),
-    roomId: firstStringValue(
-      payload.room_id,
-      payload.roomId,
-      payload.active_room_id,
-      refs.serverRoomId,
-      refs.desiredRoomId,
-    ),
+      refs.routeCallResolve?.callId,
+      maybeCallIdFromRoomId(roomId),
+      maybeCallIdFromRoomId(refs.desiredRoomId),
+    );
+
+  return {
+    callId,
+    roomId,
     participantSessionId: firstStringValue(
       payload.participant_session_id,
       payload.participantSessionId,
       payload.connection_id,
       payload.call_context?.participant_session_id,
+      payload.call_context?.connection_id,
+      payload.callContext?.participantSessionId,
       refs.participantSessionId,
     ),
   };
@@ -158,9 +189,6 @@ export function createCallWorkspaceMediaCapabilityBridge({
     : () => {};
   const publishLocalTracks = typeof callbacks.publishLocalTracks === 'function'
     ? callbacks.publishLocalTracks
-    : null;
-  const stopPlanBlockedLocalMedia = typeof callbacks.stopPlanBlockedLocalMedia === 'function'
-    ? callbacks.stopPlanBlockedLocalMedia
     : null;
   let admittedWebsocketJoin = false;
   let admittedWebsocketJoinKey = '';
@@ -252,6 +280,9 @@ export function createCallWorkspaceMediaCapabilityBridge({
       admitted_websocket_join: admittedWebsocketJoin && admittedWebsocketJoinKey === key,
       capability_ack_stored: lastCapabilityAckStoredKey === key,
       pending_local_media_publication: pendingLocalMediaPublication,
+      all_expected_call_participants_connected: typeof refs.canStartRealtimeMediaSending === 'function'
+        ? refs.canStartRealtimeMediaSending({ ...context, reason }) === true
+        : true,
       reason: stringValue(reason, 'media_session_plan_gate'),
     };
   }
@@ -431,7 +462,13 @@ export function createCallWorkspaceMediaCapabilityBridge({
     const key = capabilitySendKey(context);
     if ('isSocketOnline' in refs && refValue(refs.isSocketOnline) !== true) return false;
     if (!admittedWebsocketJoin || admittedWebsocketJoinKey !== key) return false;
-    if (lastCapabilityAckStoredKey !== key) return false;
+    if (stringValue(context.roomId) === '' || stringValue(context.participantSessionId) === '') return false;
+    if (
+      typeof refs.canStartRealtimeMediaSending === 'function'
+      && refs.canStartRealtimeMediaSending(sourcePayload) !== true
+    ) {
+      return false;
+    }
     return mediaSessionPlanAllowsLocalPublication(lastMediaSessionPlan, {
       callId: context.callId,
       roomId: context.roomId,
@@ -449,6 +486,10 @@ export function createCallWorkspaceMediaCapabilityBridge({
       if (localParticipantMatches) return true;
     }
     return mediaSessionPlanHasGossipTransport(lastMediaSessionPlan);
+  }
+
+  function selectedProfileForLastPlan() {
+    return selectedMediaSessionPlanProfile(lastMediaSessionPlan);
   }
 
   async function requestLocalMediaPublicationForLastPlan(
@@ -503,20 +544,6 @@ export function createCallWorkspaceMediaCapabilityBridge({
     }
 
     pendingLocalMediaPublication = true;
-    const stopLocalMedia = stopPlanBlockedLocalMedia
-      || activeLocalMediaPublicationCallbacks.stopPlanBlockedLocalMedia;
-    if (localMediaPublicationStarted && typeof stopLocalMedia === 'function') {
-      stopLocalMedia();
-      localMediaPublicationStarted = false;
-      captureLocalPublicationGateDiagnostic({
-        context,
-        eventType: 'media_session_plan_local_publication_stopped',
-        level: 'warning',
-        message: 'Local media publication stopped because the active media session plan no longer allows it.',
-        reason,
-        immediate: true,
-      });
-    }
     return false;
   }
 
@@ -529,6 +556,7 @@ export function createCallWorkspaceMediaCapabilityBridge({
     handleRoomSnapshotMediaSessionPlan,
     mediaSessionPlanHasGossipTransportForLastPlan,
     requestLocalMediaPublicationForLastPlan,
+    selectedProfileForLastPlan,
     sendClientCapabilities,
   };
   activeMediaCapabilityPlanBridge = bridgeApi;

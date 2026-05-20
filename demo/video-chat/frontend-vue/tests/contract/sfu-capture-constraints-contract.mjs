@@ -107,10 +107,10 @@ async function main() {
 
     assert.ok(realtime.captureWidth < quality.captureWidth, 'realtime capture width must downscale below quality');
     assert.ok(realtime.captureHeight < quality.captureHeight, 'realtime capture height must downscale below quality');
-    assert.ok(realtime.captureFrameRate < quality.captureFrameRate, 'realtime capture fps must downscale below quality');
+    assert.equal(realtime.captureFrameRate, 30, 'realtime capture keeps the orchestrator baseline at 30fps');
     assert.ok(rescue.captureWidth <= realtime.captureWidth, 'rescue capture width must not exceed realtime');
     assert.ok(rescue.captureHeight <= realtime.captureHeight, 'rescue capture height must not exceed realtime');
-    assert.ok(rescue.captureFrameRate < realtime.captureFrameRate, 'rescue capture fps must downscale below realtime');
+    assert.equal(rescue.captureFrameRate, 30, 'rescue capture keeps 30fps until the orchestrator selects an explicit 5fps plan');
     assert.ok(realtime.frameWidth < quality.frameWidth, 'realtime publisher frame width must downscale below quality');
     assert.ok(rescue.frameWidth < realtime.frameWidth, 'rescue publisher frame width must downscale below realtime');
 

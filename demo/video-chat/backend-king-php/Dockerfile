@@ -37,14 +37,14 @@ ARG VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION
 ARG TARGETARCH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libcurl4 libsqlite3-dev \
+    && apt-get install -y --no-install-recommends ffmpeg libcurl4 libsqlite3-dev \
     && docker-php-ext-install pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=king-extension-build /opt/king/king.so /opt/king/king.so
 
 COPY demo/video-chat/backend-king-php/ /app/
-COPY demo/call-app/ /call-app/
+COPY demo/call-apps/ /call-app/
 
 ENV KING_EXTENSION_PATH=/opt/king/king.so
 ENV VIDEOCHAT_CALL_APP_PACKAGE_ROOT=/call-app
@@ -54,8 +54,13 @@ ENV VIDEOCHAT_KING_WS_PORT=18080
 ENV VIDEOCHAT_KING_WS_PATH=/ws
 ENV VIDEOCHAT_KING_DB_PATH=/data/video-chat.sqlite
 ENV VIDEOCHAT_KING_SFU_BROKER_DB_PATH=/data/video-chat-sfu-broker.sqlite
+ENV VIDEOCHAT_STT_ACTIVE=false
+ENV VIDEOCHAT_STT_COMMAND=whisper-cli
+ENV VIDEOCHAT_STT_FFMPEG_COMMAND=ffmpeg
+ENV VIDEOCHAT_STT_MODEL=/data/models/whisper.cpp/ggml-tiny.en.bin
+ENV VIDEOCHAT_STT_TEMP_DIR=/data/stt-tmp
 
-RUN mkdir -p /data
+RUN mkdir -p /data /data/models/whisper.cpp /data/stt-tmp
 
 VOLUME ["/data"]
 # The image listens on 18080 only. docker-compose.v1.yml maps dedicated

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { iamCallAccessContractSuiteText } from './helpers/iamCallAccessSuiteCoverage.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(frontendRoot, '../../..');
@@ -98,7 +100,7 @@ for (const eventType of [
 }
 
 const contractPath = 'tests/contract/call-access-email-safe-texts-dispatch-audit-contract.mjs';
-assert.ok(packageJson.scripts['test:contract:iam-call-access'].includes(contractPath), 'IAM contract script must include the email-safe dispatch audit contract');
+assert.ok(iamCallAccessContractSuiteText.includes(contractPath), 'IAM contract helper must include the email-safe dispatch audit contract');
 assert.ok(ciGate.includes(contractPath), 'IAM CI gate must include the email-safe dispatch audit contract');
 
 process.stdout.write('[call-access-email-safe-texts-dispatch-audit-contract] PASS\n');

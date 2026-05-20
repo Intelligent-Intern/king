@@ -306,7 +306,7 @@ export class SFUClient {
     }
 
     const failToNextCandidateAfterAssetVersionProbe = (): void => {
-      Promise.resolve(handleAssetVersionConnectionFailure())
+      Promise.resolve(handleAssetVersionConnectionFailure({ allowReconnect: true }))
         .then((handled) => {
           if (handled) {
             this.connectAttemptInFlight = false
@@ -383,7 +383,7 @@ export class SFUClient {
     ws.onclose = (event) => {
       if (generation !== this.connectGeneration) return
       clearNegotiationTimer()
-      if (handleAssetVersionSocketClose(event)) {
+      if (handleAssetVersionSocketClose(event, { allowReconnect: true })) {
         this.connectAttemptInFlight = false
         return
       }

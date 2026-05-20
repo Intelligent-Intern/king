@@ -166,6 +166,36 @@ function isDeletable(call) {
   return Boolean(call?.id);
 }
 
+const canReactivateCalls = computed(() => Number(sessionState.userId || 0) === 1 && String(sessionState.role || '').toLowerCase() === 'admin');
+const reactivatingCallIds = ref([]);
+
+function callIdOf(call) {
+  return String(call?.id || '').trim();
+}
+
+function terminalCallStatus(call) {
+  return ['ended', 'cancelled'].includes(String(call?.status || '').toLowerCase());
+}
+
+function isReactivatable(call) {
+  return canReactivateCalls.value && callIdOf(call) !== '' && terminalCallStatus(call);
+}
+
+function isReactivatePending(call) {
+  const callId = callIdOf(call);
+  return callId !== '' && reactivatingCallIds.value.includes(callId);
+}
+
+function setReactivatePending(callId, pending) {
+  const normalizedCallId = String(callId || '').trim();
+  if (normalizedCallId === '') return;
+  const nextIds = reactivatingCallIds.value.filter((id) => id !== normalizedCallId);
+  if (pending) {
+    nextIds.push(normalizedCallId);
+  }
+  reactivatingCallIds.value = nextIds;
+}
+
 function isInvitable(call) {
   const status = String(call?.status || '').toLowerCase();
   return status !== 'cancelled' && status !== 'ended';
@@ -316,6 +346,30 @@ async function deleteAllCalls() {
     setNotice('error', error instanceof Error ? error.message : 'Could not delete all calls.');
   } finally {
     deleteAllCallsBusy.value = false;
+  }
+}
+
+async function reactivateCall(call) {
+  const callId = callIdOf(call);
+  if (!isReactivatable(call) || isReactivatePending(call)) return;
+
+  clearNotice();
+  setReactivatePending(callId, true);
+  try {
+    await apiRequest(`/api/calls/${encodeURIComponent(callId)}/reactivate`, {
+      method: 'POST',
+      body: {
+        confirm: 'reactivate_call',
+      },
+    });
+    setNotice('ok', t('calls.reactivate.reactivated_notice'));
+    publishAdminSync('calls', 'call_reactivated');
+    publishAdminSync('overview', 'call_reactivated');
+    await loadCalls();
+  } catch (error) {
+    setNotice('error', error instanceof Error ? error.message : t('calls.reactivate.reactivate_failed'));
+  } finally {
+    setReactivatePending(callId, false);
   }
 }
 

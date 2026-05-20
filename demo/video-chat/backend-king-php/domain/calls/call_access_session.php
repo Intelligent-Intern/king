@@ -174,6 +174,7 @@ function videochat_issue_session_for_call_access(
     $verifiedSessionId = videochat_call_access_session_string_option($options, 'verified_session_id');
     $authenticatedSessionId = videochat_call_access_session_string_option($options, 'authenticated_session_id');
     $hostName = videochat_call_access_session_string_option($options, 'host_name');
+    $hostVerifiedAt = '';
     $requiresGuestName = $linkKind !== 'open' && videochat_call_access_requires_guest_name($accessLink, $targetUser);
     if (($verifiedUserId > 0 || $verifiedSessionId !== '') && ($authenticatedUserId <= 0 || $authenticatedSessionId === '')) {
         videochat_call_access_record_session_context_mismatch(
@@ -654,21 +655,15 @@ function videochat_issue_session_for_call_access(
                 'pending'
             );
         } elseif (!$openLinkUsesAuthenticatedUser && !$openInviteOnlyLink) {
-            $openGuestInviteState = $callAccessMode === 'free_for_all' ? 'allowed' : 'invited';
-            videochat_ensure_internal_call_participant(
-                $pdo,
-                (string) ($call['id'] ?? ''),
-                $userId,
-                (string) ($targetUser['email'] ?? ''),
-                (string) ($targetUser['display_name'] ?? ''),
-                $openGuestInviteState
-            );
-            $callDecision = videochat_decide_call_access_for_user(
-                $pdo,
-                (string) ($call['id'] ?? ''),
-                $userId,
-                $userRole,
-                $tenantId
+            $callDecision = videochat_call_access_decision_result(
+                true,
+                'allowed',
+                'anonymous_link_lobby',
+                'call',
+                $call,
+                'participant',
+                'participant',
+                'pending'
             );
         } elseif (!$openLinkUsesOwnDirectRights && $openInviteOnlyLink) {
             $callDecision = videochat_call_access_decision_result(

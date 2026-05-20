@@ -93,7 +93,8 @@ SQL
         <<<'SQL'
 INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at) VALUES
     ('call-db-sync', 10, 'owner@example.test', 'Owner User', 'internal', 'owner', 'allowed', '2026-04-19T10:01:00Z', NULL),
-    ('call-db-sync', 20, 'waiting@example.test', 'Waiting User', 'internal', 'participant', 'pending', NULL, NULL)
+    ('call-db-sync', 20, 'waiting@example.test', 'Waiting User', 'internal', 'participant', 'pending', NULL, NULL),
+    ('call-db-sync', 40, 'moderator@example.test', 'Moderator User', 'internal', 'moderator', 'allowed', '2026-04-19T10:01:00Z', NULL)
 SQL
     );
 
@@ -127,6 +128,7 @@ SQL
     $ownerConnection['requested_call_id'] = 'call-db-sync';
     $ownerConnection['call_role'] = 'owner';
     $ownerConnection['can_moderate_call'] = true;
+    videochat_realtime_touch_call_presence($openDatabase, $ownerConnection);
 
     $ownerSnapshot = videochat_realtime_send_synced_lobby_snapshot_to_connection(
         $ownerLobbyState,
@@ -219,6 +221,51 @@ SQL
     $plainFrame = end($frames['socket-plain']);
     videochat_realtime_lobby_db_sync_assert((int) ($plainFrame['queue_count'] ?? -1) === 0, 'plain participant must not see other pending DB participants');
     videochat_realtime_lobby_db_sync_assert(($plainFrame['queue'] ?? []) === [], 'plain participant queue payload must be redacted');
+
+    $pdo->exec("UPDATE call_participants SET invite_state = 'invited', joined_at = NULL, left_at = NULL WHERE call_id = 'call-db-sync' AND user_id = 20");
+    $queueLobbyState = videochat_lobby_state_init();
+    $queuePresenceState = videochat_presence_state_init();
+    $queueConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 20,
+            'display_name' => 'Waiting User',
+            'role' => 'user',
+        ],
+        'sess-waiting-queue',
+        'conn-waiting-queue',
+        'socket-waiting-queue',
+        'waiting-room'
+    );
+    $queueConnection['requested_call_id'] = 'call-db-sync';
+    $queueConnection['active_call_id'] = 'call-db-sync';
+    $queueConnection['pending_room_id'] = 'room-db-sync';
+    $queuePresenceJoin = videochat_presence_join_room($queuePresenceState, $queueConnection, 'waiting-room', $sender);
+    $queueConnection = (array) ($queuePresenceJoin['connection'] ?? $queueConnection);
+    $queueCommand = videochat_lobby_decode_client_frame(json_encode([
+        'type' => 'lobby/queue/join',
+        'room_id' => 'room-db-sync',
+    ], JSON_UNESCAPED_SLASHES));
+    $queueResult = videochat_lobby_apply_command(
+        $queueLobbyState,
+        $queuePresenceState,
+        $queueConnection,
+        $queueCommand,
+        $sender,
+        1_777_000_000_400
+    );
+    videochat_realtime_lobby_db_sync_assert((bool) ($queueResult['ok'] ?? false), 'waiting queue join should pass lobby command validation');
+    $queuePersist = videochat_realtime_apply_successful_lobby_command(
+        $queueResult,
+        $queueLobbyState,
+        $queuePresenceState,
+        $queueConnection,
+        $openDatabase
+    );
+    videochat_realtime_lobby_db_sync_assert((bool) ($queuePersist['ok'] ?? false), 'waiting queue join should persist before notification');
+    $queuedInviteState = (string) $pdo->query(
+        "SELECT invite_state FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
+    )->fetchColumn();
+    videochat_realtime_lobby_db_sync_assert($queuedInviteState === 'pending', 'waiting queue join should persist pending participant state');
 
     $presenceState = videochat_presence_state_init();
     videochat_presence_join_room($presenceState, $ownerConnection, 'room-db-sync', $sender);
