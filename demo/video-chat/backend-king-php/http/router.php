@@ -116,6 +116,10 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if (preg_match('#^/api/user/avatar-files/[A-Za-z0-9._-]{1,200}$#', $requestPath) === 1) {
+            return true;
+        }
+
         if ($requestPath === '/api/workspace/background-images' || preg_match('#^/api/workspace/background-images/[^/]+$#', $requestPath) === 1) {
             return true;
         }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call_access.php';
+require_once __DIR__ . '/../../support/auth_request.php';
 
 function videochat_sputnik_env_int(string $name, int $default, int $min, int $max): int
 {
@@ -58,9 +59,9 @@ function videochat_sputnik_config(): array
     ];
 }
 
-function videochat_sputnik_can_control(int $userId): bool
+function videochat_sputnik_can_control(PDO $pdo, int $userId): bool
 {
-    return $userId === 1;
+    return videochat_user_is_superadmin($pdo, $userId);
 }
 
 function videochat_sputnik_absolute_join_url(string $joinPath, array $config): string
@@ -136,7 +137,7 @@ function videochat_sputnik_runner_json(string $method, string $url, ?array $payl
  */
 function videochat_sputnik_start(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
-    if (!videochat_sputnik_can_control($authUserId)) {
+    if (!videochat_sputnik_can_control($pdo, $authUserId)) {
         return ['ok' => false, 'reason' => 'forbidden', 'status' => 403, 'runner' => null];
     }
 
@@ -199,9 +200,9 @@ function videochat_sputnik_start(PDO $pdo, string $callId, int $authUserId, stri
 /**
  * @return array<string, mixed>
  */
-function videochat_sputnik_runner_action(string $method, string $callId, int $authUserId): array
+function videochat_sputnik_runner_action(PDO $pdo, string $method, string $callId, int $authUserId): array
 {
-    if (!videochat_sputnik_can_control($authUserId)) {
+    if (!videochat_sputnik_can_control($pdo, $authUserId)) {
         return ['ok' => false, 'reason' => 'forbidden', 'status' => 403, 'runner' => null];
     }
 
