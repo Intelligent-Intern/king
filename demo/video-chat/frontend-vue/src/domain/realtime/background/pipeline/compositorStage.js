@@ -40,7 +40,7 @@ varying vec2 vUv;
 float readMask(vec2 uv) {
   vec2 maskUv = uMaskFlipY > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv;
   vec4 maskColor = texture2D(uMask, maskUv);
-  return maskColor.a < 0.999 ? maskColor.a : maskColor.r;
+  return clamp(maskColor.a < 0.999 ? maskColor.a : maskColor.r, 0.0, 1.0);
 }
 
 float featherMask(vec2 uv) {
@@ -64,9 +64,9 @@ float featherMask(vec2 uv) {
 
 vec4 readBlurredBackground(vec2 uv) {
   vec2 texel = vec2(max(uBlurPx, 1.0)) / uOutputSize;
-  vec4 sum = texture2D(uBackground, uv) * 0.20;
-  sum += (texture2D(uBackground, uv + texel * vec2(-1.0, 0.0)) + texture2D(uBackground, uv + texel * vec2(1.0, 0.0)) + texture2D(uBackground, uv + texel * vec2(0.0, -1.0)) + texture2D(uBackground, uv + texel * vec2(0.0, 1.0))) * 0.12;
-  sum += (texture2D(uBackground, uv + texel * vec2(-0.707, -0.707)) + texture2D(uBackground, uv + texel * vec2(0.707, -0.707)) + texture2D(uBackground, uv + texel * vec2(-0.707, 0.707)) + texture2D(uBackground, uv + texel * vec2(0.707, 0.707))) * 0.08;
+  vec4 sum = texture2D(uBackground, clamp(uv, vec2(0.0), vec2(1.0))) * 0.20;
+  sum += (texture2D(uBackground, clamp(uv + texel * vec2(-1.0, 0.0), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(1.0, 0.0), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(0.0, -1.0), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(0.0, 1.0), vec2(0.0), vec2(1.0)))) * 0.12;
+  sum += (texture2D(uBackground, clamp(uv + texel * vec2(-0.707, -0.707), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(0.707, -0.707), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(-0.707, 0.707), vec2(0.0), vec2(1.0))) + texture2D(uBackground, clamp(uv + texel * vec2(0.707, 0.707), vec2(0.0), vec2(1.0)))) * 0.08;
   return sum;
 }
 
@@ -77,12 +77,12 @@ void main(void) {
     return;
   }
 
-  float maskAlpha = uHasMask == 1 ? smoothstep(uMaskLow, uMaskHigh, featherMask(vUv)) : 0.0;
+  float maskAlpha = uHasMask == 1 ? readMask(vUv) : 0.0;
   vec4 background = uBackgroundColor;
 
   if (uBackgroundMode == 1) {
     vec2 backgroundUv = vUv * uBackgroundUvTransform.xy + uBackgroundUvTransform.zw;
-    background = texture2D(uBackground, backgroundUv);
+    background = texture2D(uBackground, clamp(backgroundUv, vec2(0.0), vec2(1.0)));
   } else if (uBackgroundMode == 2) {
     background = readBlurredBackground(vUv);
   }
@@ -102,13 +102,7 @@ function drawCoverImage(ctx, image, width, height) {
 }
 
 function drawContainImage(ctx, image, width, height) {
-    const { width: iw, height: ih } = sourceNaturalSize(image, width, height);
-    const scale = Math.min(width / iw, height / ih);
-    const dw = iw * scale;
-    const dh = ih * scale;
-    const dx = (width - dw) * 0.5;
-    const dy = (height - dh) * 0.5;
-    ctx.drawImage(image, dx, dy, dw, dh);
+    ctx.drawImage(image, 0, 0, width, height);
 }
 
 function resolveCoverUvTransform(image, width, height) {
@@ -417,7 +411,7 @@ function createCanvasBackgroundCompositorStage({
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (mode === 'blur') {
             ctx.filter = `blur(${blurPx}px)`;
-            drawCoverImage(ctx, source, canvas.width, canvas.height);
+            drawContainImage(ctx, source, canvas.width, canvas.height);
         } else {
             ctx.filter = 'none';
             drawContainImage(ctx, source, canvas.width, canvas.height);
@@ -464,7 +458,7 @@ function createCanvasBackgroundCompositorStage({
             ctx.globalCompositeOperation = 'copy';
             ctx.filter = !showSourceUntilMask && mode === 'blur' ? `blur(${blurPx}px)` : 'none';
             if (!showSourceUntilMask && mode === 'blur') {
-                drawCoverImage(ctx, video, canvas.width, canvas.height);
+                drawContainImage(ctx, video, canvas.width, canvas.height);
             } else {
                 drawContainImage(ctx, video, canvas.width, canvas.height);
             }
@@ -640,12 +634,14 @@ function createWebGlBackgroundCompositorStage({
         latestMaskHeight = Math.max(1, Math.round(Number(maskHeight) || latestMaskBitmap?.height || canvas.height));
 
         if (latestMaskBitmap) {
-            uploadTexture(gl, textures.mask, 1, latestMaskBitmap);
-            latestMaskFlipY = 1;
-            hasUploadedMask = true;
-            if (document.getElementById('backgroundPipelineDebugDialog')) {
-                maskTools.drawMaskBitmap(latestMaskBitmap, latestMaskWidth, latestMaskHeight);
+            const drawn = maskTools.drawMaskBitmap(latestMaskBitmap, latestMaskWidth, latestMaskHeight);
+            if (!drawn) {
+                hasUploadedMask = false;
+                return false;
             }
+            uploadTexture(gl, textures.mask, 1, maskTools.maskCanvas);
+            latestMaskFlipY = 0;
+            hasUploadedMask = true;
             return true;
         }
 
@@ -687,7 +683,7 @@ function createWebGlBackgroundCompositorStage({
         if (!backgroundFrameCtx) return false;
         resizeCanvas(backgroundFrameCanvas, canvas.width, canvas.height);
         backgroundFrameCtx.filter = 'none';
-        drawCoverImage(backgroundFrameCtx, source, canvas.width, canvas.height);
+        drawContainImage(backgroundFrameCtx, source, canvas.width, canvas.height);
         uploadTexture(gl, textures.background, 2, backgroundFrameCanvas);
         return true;
     }
