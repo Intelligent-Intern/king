@@ -31,7 +31,6 @@ async function importStaticModule(modulePath) {
   );
 }
 
-const { DrawingUtils, ImageSegmenter, FilesetResolver } = await importStaticModule(tasksVisionModulePath);
 const DEFAULT_WASM_PATH = '/wasm';
 const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite';
 
@@ -40,6 +39,33 @@ let segmenterLabels = [];
 let lastTimestampMs = -1;
 let isInitializing = false;
 let renderCanvas = null;
+let DrawingUtils = null;
+let ImageSegmenter = null;
+let FilesetResolver = null;
+let tasksVisionModulePromise = null;
+
+async function loadTasksVisionModule() {
+  if (DrawingUtils && ImageSegmenter && FilesetResolver) {
+    return { DrawingUtils, ImageSegmenter, FilesetResolver };
+  }
+
+  if (!tasksVisionModulePromise) {
+    tasksVisionModulePromise = importStaticModule(tasksVisionModulePath).then((module) => {
+      DrawingUtils = module.DrawingUtils;
+      ImageSegmenter = module.ImageSegmenter;
+      FilesetResolver = module.FilesetResolver;
+      if (!DrawingUtils || !ImageSegmenter || !FilesetResolver) {
+        throw new Error('Tasks-Vision module is missing required exports');
+      }
+      return { DrawingUtils, ImageSegmenter, FilesetResolver };
+    }).catch((error) => {
+      tasksVisionModulePromise = null;
+      throw error;
+    });
+  }
+
+  return tasksVisionModulePromise;
+}
 
 function buildCategoryAlphaColors() {
   const colors = [];
@@ -146,6 +172,7 @@ function categoryMaskBitmap(categoryMask) {
 
     const glCtx = renderCanvas.getContext('webgl2');
     if (!glCtx) return null;
+    if (typeof DrawingUtils !== 'function') return null;
 
     const drawingUtils = new DrawingUtils(glCtx);
     drawingUtils.drawCategoryMask(categoryMask, CATEGORY_ALPHA_COLORS, [0, 0, 0, 0]);
@@ -213,8 +240,12 @@ async function initialize({ modelAssetPath, delegate, wasmPath }) {
   if (isInitializing) return;
   isInitializing = true;
   try {
-    const resolvedWasm = await resolveWasmPath(wasmPath || DEFAULT_WASM_PATH);
-    const resolvedModel = await resolveModelPath(modelAssetPath || DEFAULT_MODEL_PATH);
+    const tasksVision = loadTasksVisionModule();
+    const [resolvedWasm, resolvedModel] = await Promise.all([
+      resolveWasmPath(wasmPath || DEFAULT_WASM_PATH),
+      resolveModelPath(modelAssetPath || DEFAULT_MODEL_PATH),
+    ]);
+    await tasksVision;
 
     await loadModuleFactory(resolvedWasm);
 

@@ -349,7 +349,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       }
       segmentationBackendKind = segmentationBackend?.kind || 'none';
       if (segmentationBackendKind === 'none' && initFailures.length > 0) {
-        console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
+        console.warn(`[BackgroundFilter] Segmentation backend failed to initialize: ${initFailures.join('; ')}`, {
           selected: segmentationBackendKind,
           requested: 'worker-segmenter',
           failures: initFailures,
@@ -370,18 +370,19 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     }).catch((error) => {
       segmentationBackendKind = 'none';
       if (handle) handle.backend = 'none';
-      console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
+      const failureMessage = error?.message || 'init_failed';
+      console.warn(`[BackgroundFilter] Segmentation backend failed to initialize: ${failureMessage}`, {
         selected: segmentationBackendKind,
         requested: 'worker-segmenter',
-        failures: [error?.message || 'init_failed'],
+        failures: [failureMessage],
       });
       captureBackgroundBackendInitDiagnostic({
         backend: 'none',
         error,
-        failures: [error?.message || 'init_failed'],
+        failures: [failureMessage],
         phase: 'failed',
       });
-      notifySegmentationUnavailable('init_failed', [error?.message || 'init_failed']);
+      notifySegmentationUnavailable('init_failed', [failureMessage]);
     });
   }
 
