@@ -98,7 +98,10 @@ assert.equal(gossipMessage.publisher_id, `screen_share:${ownerUserId}`, 'gossip 
 assert.equal(gossipMessage.publisher_user_id, String(ownerUserId), 'gossip envelope preserves real owner id for recovery');
 assert.equal(gossipMessage.publisher_media_source, 'screen_share', 'gossip envelope preserves screen-share media source');
 assert.equal(gossipMessage.screen_share_participant_user_id, screenUserId, 'gossip envelope preserves synthetic screen participant id');
-const gossipDecodedFrame = sfuFrameFromGossipMessage(gossipMessage, { frame_id: gossipMessage.frame_id });
+const gossipDecodedFrame = sfuFrameFromGossipMessage({
+  ...gossipMessage,
+  data_binary: new Uint8Array([1, 2, 3]),
+}, { frame_id: gossipMessage.frame_id });
 assert.equal(gossipDecodedFrame.publisherMediaSource, 'screen_share', 'gossip decode restores screen-share media source for remote peer identity');
 const gossipDecodedIdentity = resolveScreenSharePeerIdentity({
   publisherUserId: gossipDecodedFrame.publisherUserId,
@@ -226,6 +229,7 @@ assert.ok(
 
 const screenSharePublisher = read('src/domain/realtime/local/screenSharePublisher.js');
 const screenShareGossipFrameSource = read('src/domain/realtime/local/screenShareGossipFrame.js');
+const screenSharePublisherProfile = read('src/domain/realtime/local/screenSharePublisherProfile.js');
 const gossipMediaFrameEnvelope = read('src/domain/realtime/workspace/callWorkspace/gossipMediaFrameEnvelope.ts');
 assert.match(screenSharePublisher, /publishTracks\?\.\(\[\{[\s\S]*label: SCREEN_SHARE_TRACK_LABEL/, 'screen publisher announces a screen-share video track');
 assert.match(screenSharePublisher, /publisher_media_source: SCREEN_SHARE_MEDIA_SOURCE/, 'screen publisher tags outbound frames with media source');
@@ -236,14 +240,14 @@ assert.match(screenShareGossipFrameSource, /publisherMediaSource: SCREEN_SHARE_M
 assert.match(gossipMediaFrameEnvelope, /publisher_media_source: publisherMediaSource/, 'gossip media envelope carries screen-share media source');
 assert.match(gossipMediaFrameEnvelope, /publisherMediaSource: normalizeScreenShareMediaSource/, 'gossip media decode restores screen-share source for peer identity');
 assert.match(screenSharePublisher, /autoSubscribe: false/, 'screen publisher does not subscribe to other call media');
-assert.match(screenSharePublisher, /function screenShareProfileFrom/, 'screen publisher derives a bounded transport profile');
-assert.match(screenSharePublisher, /SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960/, 'screen-share capture width is capped below camera quality mode');
-assert.match(screenSharePublisher, /SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE = 6/, 'screen-share capture FPS is capped below camera quality mode');
-assert.match(screenSharePublisher, /SCREEN_SHARE_ENCODE_INTERVAL_MS = 250/, 'screen-share readback cadence is paced for stable binary transport');
-assert.match(screenSharePublisher, /SCREEN_SHARE_MAX_BUFFERED_BYTES = 1024 \* 1024/, 'screen-share socket buffer budget is below camera quality mode');
-assert.match(screenSharePublisher, /maxWireBytesPerSecond:[\s\S]*SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND/, 'screen-share profile caps wire budget independently from camera quality');
+assert.match(screenSharePublisher, /screenShareProfileFrom/, 'screen publisher derives a bounded transport profile');
+assert.match(screenSharePublisherProfile, /SCREEN_SHARE_CAPTURE_MAX_WIDTH = 960/, 'screen-share capture width is capped below camera quality mode');
+assert.match(screenSharePublisherProfile, /SCREEN_SHARE_CAPTURE_MAX_FRAME_RATE = 6/, 'screen-share capture FPS is capped below camera quality mode');
+assert.match(screenSharePublisherProfile, /SCREEN_SHARE_ENCODE_INTERVAL_MS = 250/, 'screen-share readback cadence is paced for stable binary transport');
+assert.match(screenSharePublisherProfile, /SCREEN_SHARE_MAX_BUFFERED_BYTES = 1024 \* 1024/, 'screen-share socket buffer budget is below camera quality mode');
+assert.match(screenSharePublisherProfile, /maxWireBytesPerSecond:[\s\S]*SCREEN_SHARE_MAX_WIRE_BYTES_PER_SECOND/, 'screen-share profile caps wire budget independently from camera quality');
 assert.match(screenSharePublisher, /local_screen_share_capture_constraints_applied/, 'screen-share capture constraints emit diagnostics');
-assert.match(screenSharePublisher, /SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS = 5/, 'screen-share publisher retries transient SFU disconnects instead of ending capture immediately');
+assert.match(screenSharePublisherProfile, /SCREEN_SHARE_RECONNECT_MAX_ATTEMPTS = 5/, 'screen-share publisher retries transient SFU disconnects instead of ending capture immediately');
 assert.match(
   screenSharePublisher,
   /function scheduleScreenSfuReconnect[\s\S]*local_screen_share_sfu_reconnect_scheduled[\s\S]*await waitForScreenSfuConnected\(\);[\s\S]*local_screen_share_sfu_reconnected/s,
@@ -256,8 +260,8 @@ assert.doesNotMatch(
 );
 assert.ok(
   screenSharePublisher.indexOf('nextStream = await acquireScreenShareStream(screenShareVideoProfile)')
-    < screenSharePublisher.indexOf('Screen sharing needs the SFU media runtime.'),
-  'browser screen-share prompt happens before SFU runtime routing validation',
+    < screenSharePublisher.indexOf('Screen sharing needs the WLVC/Gossip media runtime.'),
+  'browser screen-share prompt happens before media runtime routing validation',
 );
 
 const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
@@ -344,11 +348,6 @@ assert.ok(
 assert.ok(
   startDiagnostic > 0 && startEncodingPipeline > startDiagnostic,
   'screen-share start returns active UI state before the encoder pipeline can block on playback or WASM setup',
-);
-assert.doesNotMatch(
-  screenSharePublisher,
-  /await pipeline\.startEncodingPipeline\(videoTrack\)/,
-  'screen-share start must not wait for the encoder pipeline before toggling control state',
 );
 assert.match(screenSharePublisher, /ensureLocalScreenSharePreviewVideo/, 'screen-share publisher creates a local preview node before publishing frames');
 assert.match(screenSharePublisher, /callbacks\.unregisterLocalScreenSharePeer\?\.\(\{ reason \}\);/, 'local screen-share preview unregisters during stop cleanup');

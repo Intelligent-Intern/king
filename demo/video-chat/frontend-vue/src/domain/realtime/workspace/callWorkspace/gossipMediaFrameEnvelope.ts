@@ -377,7 +377,7 @@ export function gossipFrameBinaryMessageFromMetadata(frame, msg) {
   };
 }
 
-export function rendererFrameFromGossipMessage(msg, delivery) {
+export function sfuFrameFromGossipMessage(msg, delivery) {
   const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
   const trackId = String(msg.trackId || msg.track_id || '').trim();
   if (publisherId === '' || trackId === '') return null;
@@ -436,4 +436,9 @@ export function rendererFrameFromGossipMessage(msg, delivery) {
     roiNormHeight: Math.max(0, Number(msg.roiNormHeight ?? msg.roi_norm_height ?? 0)),
     transportPath: runtimePath,
   };
+}
+
+// Backward-compatible alias retained for newer call sites.
+export function rendererFrameFromGossipMessage(msg, delivery) {
+  return sfuFrameFromGossipMessage(msg, delivery);
 }
