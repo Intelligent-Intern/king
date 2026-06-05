@@ -188,7 +188,7 @@ function videochat_tenancy_governance_role_permission_rows(PDO $pdo, int $tenant
         $permissionKey = (string) ($row['permission_key'] ?? '');
         $rows[(int) ($row['role_id'] ?? 0)][] = [
             'entity_key' => 'permissions',
-            'id' => 'permission:governance:' . $permissionKey,
+            'id' => videochat_tenancy_governance_permission_catalog_id($permissionKey),
             'key' => $permissionKey,
             'name' => $permissionKey,
             'status' => 'active',

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/governance_group_memberships.php';
+require_once __DIR__ . '/governance_compliance.php';
 require_once __DIR__ . '/governance_permission_grants.php';
 require_once __DIR__ . '/governance_policies.php';
 require_once __DIR__ . '/governance_portability_jobs.php';
@@ -18,6 +19,7 @@ function videochat_tenancy_governance_summary_entity(string $entity): string
         'role' => 'roles',
         'grant' => 'grants',
         'policy' => 'policies',
+        'compliance_rule', 'compliance-rule' => 'compliance',
         'tenant_export_import_job', 'tenant-export-import-job', 'data_portability' => 'data-portability',
         default => strtolower(trim($entity)),
     };
@@ -123,6 +125,7 @@ function videochat_tenancy_governance_summary_permission_decision(PDO $pdo, arra
         'roles' => videochat_tenancy_governance_role_permission_decision($pdo, $authContext, 'read'),
         'grants' => videochat_tenancy_governance_grant_permission_decision($pdo, $authContext, 'read'),
         'policies' => videochat_tenancy_governance_policy_permission_decision($pdo, $authContext, 'read'),
+        'compliance' => videochat_tenancy_governance_compliance_permission_decision($pdo, $authContext, 'read'),
         'data-portability' => videochat_tenancy_governance_portability_permission_decision($pdo, $authContext, 'read'),
         default => ['ok' => false, 'reason' => 'unsupported_entity'],
     };
@@ -420,6 +423,7 @@ function videochat_tenancy_governance_summary_rows(PDO $pdo, int $tenantId, stri
         'roles' => videochat_tenancy_governance_summary_keyed_table_rows($pdo, $tenantId, 'roles', 'governance_roles', $ids),
         'grants' => videochat_tenancy_governance_summary_grant_rows($pdo, $tenantId, $ids),
         'policies' => videochat_tenancy_governance_summary_keyed_table_rows($pdo, $tenantId, 'policies', 'governance_policies', $ids),
+        'compliance' => videochat_tenancy_governance_summary_keyed_table_rows($pdo, $tenantId, 'compliance', 'governance_compliance_rules', $ids),
         'data-portability' => videochat_tenancy_governance_summary_portability_rows($pdo, $tenantId, $ids),
         default => [],
     };

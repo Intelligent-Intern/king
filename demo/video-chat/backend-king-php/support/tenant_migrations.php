@@ -59,6 +59,10 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0043_workspace_theme_styleguide_palette',
             'statements' => videochat_workspace_theme_refresh_statements(),
         ],
+        60 => [
+            'name' => '0060_governance_compliance_rules',
+            'statements' => videochat_governance_compliance_rule_statements(),
+        ],
     ];
 }
 
@@ -216,6 +220,51 @@ CREATE TABLE IF NOT EXISTS governance_policy_permissions (
 )
 SQL,
         'CREATE INDEX IF NOT EXISTS idx_governance_policy_permissions_tenant_policy ON governance_policy_permissions(tenant_id, policy_id)',
+    ];
+}
+
+function videochat_governance_compliance_rule_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_compliance_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,
+    key TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    severity TEXT NOT NULL DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'draft', 'disabled')),
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_compliance_tenant_key ON governance_compliance_rules(tenant_id, lower(key)) WHERE key <> \'\'',
+        'CREATE INDEX IF NOT EXISTS idx_governance_compliance_tenant_status ON governance_compliance_rules(tenant_id, status, severity, updated_at DESC)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_compliance_rule_modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    rule_id INTEGER NOT NULL REFERENCES governance_compliance_rules(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    module_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(rule_id, module_key)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_compliance_modules_tenant_rule ON governance_compliance_rule_modules(tenant_id, rule_id)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_compliance_rule_policies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    rule_id INTEGER NOT NULL REFERENCES governance_compliance_rules(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    policy_id INTEGER NOT NULL REFERENCES governance_policies(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(rule_id, policy_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_compliance_policies_tenant_rule ON governance_compliance_rule_policies(tenant_id, rule_id)',
     ];
 }
 
@@ -577,6 +626,9 @@ function videochat_tenant_owned_table_names(): array
         'governance_policy_groups',
         'governance_policy_organizations',
         'governance_policy_permissions',
+        'governance_compliance_rules',
+        'governance_compliance_rule_modules',
+        'governance_compliance_rule_policies',
     ];
 }
 

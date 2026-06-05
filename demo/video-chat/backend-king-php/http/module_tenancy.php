@@ -5,6 +5,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/tenancy/tenant_administration.php';
 require_once __DIR__ . '/../domain/tenancy/governance_group_memberships.php';
 require_once __DIR__ . '/../domain/tenancy/governance_organization_memberships.php';
+require_once __DIR__ . '/../domain/tenancy/governance_audit_log.php';
+require_once __DIR__ . '/../domain/tenancy/governance_compliance.php';
 require_once __DIR__ . '/../domain/tenancy/governance_permission_grants.php';
 require_once __DIR__ . '/../domain/tenancy/governance_policies.php';
 require_once __DIR__ . '/../domain/tenancy/governance_portability_jobs.php';
@@ -175,6 +177,30 @@ function videochat_handle_governance_crud_routes(
     if ($path === '/api/governance/summaries') {
         return videochat_handle_governance_summary_routes(
             $method,
+            $request,
+            $apiAuthContext,
+            $jsonResponse,
+            $errorResponse,
+            $decodeJsonBody,
+            $openDatabase
+        );
+    }
+
+    if ($path === '/api/governance/audit-log') {
+        return videochat_handle_governance_audit_log_routes(
+            $method,
+            $request,
+            $apiAuthContext,
+            $jsonResponse,
+            $errorResponse,
+            $openDatabase
+        );
+    }
+
+    if (preg_match('#^/api/governance/compliance(?:/([^/]+))?$#', $path, $complianceMatches) === 1) {
+        return videochat_handle_governance_compliance_routes(
+            $method,
+            isset($complianceMatches[1]) ? rawurldecode((string) $complianceMatches[1]) : '',
             $request,
             $apiAuthContext,
             $jsonResponse,
