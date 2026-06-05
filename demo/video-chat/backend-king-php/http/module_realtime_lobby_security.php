@@ -3,12 +3,31 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/auth_rbac.php';
+require_once __DIR__ . '/../support/auth_request.php';
 require_once __DIR__ . '/../domain/audit/audit_lobby_events.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 
 function videochat_realtime_lobby_command_requires_moderation(array $lobbyCommand): bool
 {
     return in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/allow', 'lobby/remove', 'lobby/reject', 'lobby/kick', 'lobby/allow_all'], true);
+}
+
+function videochat_realtime_lobby_command_targets_protected_superadmin(array $lobbyCommand, callable $openDatabase): bool
+{
+    if (!in_array((string) ($lobbyCommand['type'] ?? ''), ['lobby/remove', 'lobby/reject', 'lobby/kick'], true)) {
+        return false;
+    }
+
+    $targetUserId = (int) ($lobbyCommand['target_user_id'] ?? 0);
+    if ($targetUserId <= 0) {
+        return false;
+    }
+
+    try {
+        return videochat_user_is_superadmin($openDatabase(), $targetUserId);
+    } catch (Throwable) {
+        return true;
+    }
 }
 
 function videochat_realtime_lobby_server_role_for_user(PDO $pdo, int $userId): string

@@ -11,6 +11,7 @@ export function normalizeParticipantRow(raw) {
   const connectionId = String(raw?.connection_id || raw?.connectionId || '').trim();
   const connectedAt = String(raw?.connected_at || raw?.connectedAt || '').trim();
   const connectionCount = Number(raw?.connections || raw?.connection_count || raw?.connectionCount || 0);
+  const rawSuperadmin = user.is_superadmin ?? user.isSuperadmin ?? raw?.is_superadmin ?? raw?.isSuperadmin ?? false;
   return {
     connectionId,
     hasConnection: connectionId !== '' || connectedAt !== '' || connectionCount > 0,
@@ -18,6 +19,7 @@ export function normalizeParticipantRow(raw) {
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     displayName: String(user.display_name || user.displayName || raw?.display_name || raw?.displayName || '').trim() || `User ${userId || 'unknown'}`,
     role: normalizeRole(user.role || raw?.role),
+    isSuperadmin: rawSuperadmin === true || rawSuperadmin === 1 || String(rawSuperadmin).trim() === '1',
     callRole: normalizeCallRole(user.call_role || user.callRole || raw?.call_role || raw?.callRole || 'participant'),
     connectedAt,
   };
@@ -33,6 +35,7 @@ export function participantSnapshotSignature(rows) {
       row.userId,
       row.displayName,
       row.role,
+      row.isSuperadmin ? '1' : '0',
       row.callRole,
       row.hasConnection ? '1' : '0',
     ].join('\u001f'))

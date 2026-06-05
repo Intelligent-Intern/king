@@ -660,6 +660,14 @@ export function createCallWorkspaceSocketHelpers({
       const transientBackfillError = code === 'websocket_reconnect_backfill_unavailable'
         || TRANSIENT_BACKFILL_REASONS.includes(closeReason);
       const transientRealtimeConnectError = transientAuthBackendError || transientBackfillError;
+      if (closeReason === 'kicked_from_call') {
+        state.manualSocketClose = true;
+        refs.connectionReason.value = 'kicked_from_call';
+        refs.connectionState.value = 'blocked';
+        setNotice(message || 'You were removed from the call.', 'error');
+        closeSocketLocal();
+        return;
+      }
       if (transientRealtimeConnectError) {
         const failureReason = transientAuthBackendError
           ? 'auth_backend_error'
@@ -1381,6 +1389,9 @@ export function createCallWorkspaceSocketHelpers({
           refs.connectionState.value = 'blocked';
           refs.connectionReason.value = closeReason;
           state.manualSocketClose = true;
+          if (closeReason === 'kicked_from_call') {
+            setNotice('You were removed from the call.', 'error');
+          }
           finishConnectInFlight();
           return;
         }

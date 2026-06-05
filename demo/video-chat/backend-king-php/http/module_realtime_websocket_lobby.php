@@ -29,6 +29,15 @@ function videochat_realtime_handle_lobby_websocket_command(
     )) !== null) {
         return $lobbySecurityResult;
     }
+    if (videochat_realtime_lobby_command_targets_protected_superadmin($lobbyCommand, $openDatabase)) {
+        videochat_realtime_send_lobby_command_error(
+            $websocket,
+            $lobbyCommand,
+            ['ok' => false, 'error' => 'protected_superadmin'],
+            $lobbyCommandRoomId
+        );
+        return videochat_realtime_secondary_handled_result();
+    }
     videochat_realtime_sync_lobby_room_from_database(
         $lobbyState,
         $openDatabase,

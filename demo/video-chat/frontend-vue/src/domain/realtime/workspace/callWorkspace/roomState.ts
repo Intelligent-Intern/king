@@ -114,6 +114,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       userId,
       displayName,
       role: normalizeRole(sessionState.role),
+      isSuperadmin: sessionState.isSuperadmin === true,
       callRole,
       connectedAt: currentUserConnectedAt,
       connections: 1,
@@ -134,6 +135,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
           userId: normalized.userId,
           displayName: normalized.displayName,
           role: normalized.role,
+          isSuperadmin: normalized.isSuperadmin === true,
           callRole: normalized.callRole,
           connectedAt: normalized.connectedAt,
           connections: normalized.hasConnection ? 1 : 0,
@@ -149,6 +151,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       if (roleRank(normalized.role) < roleRank(existing.role)) {
         existing.role = normalized.role;
       }
+      existing.isSuperadmin = existing.isSuperadmin === true || normalized.isSuperadmin === true;
       if (normalized.displayName.length > existing.displayName.length) {
         existing.displayName = normalized.displayName;
       }
@@ -181,6 +184,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
       if (existing) {
         existing.displayName = currentUser.displayName;
         existing.role = currentUser.role;
+        existing.isSuperadmin = currentUser.isSuperadmin;
         existing.callRole = currentUser.callRole;
         existing.connections = Math.max(1, Number(existing.connections || 0));
         existing.hasSnapshotConnection = true;
