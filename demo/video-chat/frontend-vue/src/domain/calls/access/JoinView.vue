@@ -829,13 +829,13 @@ onMounted(async () => {
   detachDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await loadJoinContext();
   if (state.contextError || state.strongMismatchRequired) return;
-  await refreshCallMediaDevices({ requestPermissions: true });
-  await startPreview();
   if (sputnikConfig.enabled && sputnikConfig.autoJoin) {
     void startSessionAndJoin();
+    return;
   }
+  await refreshCallMediaDevices({ requestPermissions: true });
+  await startPreview();
 });
-
 onBeforeUnmount(() => {
   closeAdmissionSocket({ cancel: state.waitingForAdmission && !admissionAccepted });
   if (typeof detachDeviceWatcher === 'function') {
