@@ -138,6 +138,13 @@ function setParticipantState(participant, state, timestamp = nowIso()) {
   participant.updatedAt = timestamp;
 }
 
+function lobbyStateLocator(page) {
+  return page.locator([
+    '.call-access-join-modal [data-admission-state="waiting"]',
+    '.call-access-join-modal .calls-enter-admission-status',
+  ].join(', ')).first();
+}
+
 function participantStateAgeMs(participant, timestamp = Date.now()) {
   const changedAt = Date.parse(String(participant?.stateChangedAt || participant?.updatedAt || ''));
   if (!Number.isFinite(changedAt)) return 0;
@@ -173,11 +180,22 @@ async function classifyParticipantPage(page, callId) {
   } catch {
     // keep probing DOM below
   }
+  if (await lobbyStateLocator(page).isVisible({ timeout: 200 }).catch(() => false)) return 'lobby';
   const waitingModal = page.locator('.call-access-join-modal').filter({ hasText: /Call owner has been notified|Waiting for host/i }).first();
   if (await waitingModal.isVisible({ timeout: 200 }).catch(() => false)) return 'lobby';
   const joinModal = page.locator('.call-access-join-modal').first();
   if (await joinModal.isVisible({ timeout: 200 }).catch(() => false)) return 'waiting';
   return 'waiting';
+}
+
+async function waitForJoinSettled(page, callId, timeoutMs) {
+  const deadline = Date.now() + Math.max(500, timeoutMs);
+  while (Date.now() < deadline) {
+    const state = await classifyParticipantPage(page, callId).catch(() => 'waiting');
+    if (state === 'workspace' || state === 'lobby' || state === 'closed') return state;
+    await delay(Math.min(250, Math.max(1, deadline - Date.now())));
+  }
+  return classifyParticipantPage(page, callId).catch(() => 'waiting');
 }
 
 function startParticipantMonitor(job, participant) {
@@ -241,19 +259,20 @@ async function driveJoin(page, callId, name, timeoutMs) {
       }, name).catch(() => null);
     }
 
-    const joinButton = dialog.getByRole('button', { name: /^Join call$/i });
-    if (await joinButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    const joinButtons = [
+      dialog.locator('[data-join-action="start"]').first(),
+      dialog.getByRole('button', { name: /^Join call$/i }),
+      dialog.locator('.calls-modal-footer-enter button.btn-cyan:not([disabled])').last(),
+    ];
+    for (const joinButton of joinButtons) {
+      if (!(await joinButton.isVisible({ timeout: 2_000 }).catch(() => false))) continue;
+      if (!(await joinButton.isEnabled({ timeout: 500 }).catch(() => false))) continue;
       await joinButton.click().catch(() => null);
+      break;
     }
   }
 
-  const outcome = await Promise.race([
-    page.waitForURL((url) => url.pathname === workspaceNeedle, { timeout: remaining() }).then(() => 'workspace').catch(() => null),
-    page.locator('.call-access-join-modal').filter({ hasText: /Call owner has been notified|Waiting for host/i }).waitFor({ state: 'visible', timeout: remaining() }).then(() => 'lobby').catch(() => null),
-    delay(remaining()).then(() => null),
-  ]);
-
-  return outcome || (hasWorkspaceUrl() ? 'workspace' : 'waiting');
+  return waitForJoinSettled(page, callId, Math.min(5_000, remaining()));
 }
 
 async function launchParticipant(job, index, existingParticipant = null) {
