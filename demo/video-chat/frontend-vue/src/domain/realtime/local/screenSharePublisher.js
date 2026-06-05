@@ -560,11 +560,6 @@ export function createScreenShareParticipantPublisher({
       if (useSfuTransport) {
         await waitForScreenSfuConnected();
       }
-      callbacks.registerLocalScreenSharePeer?.({
-        stream: nextStream,
-        videoElement: screenRefs.localVideoElement.value,
-        videoTrack,
-      });
       attachEndedHandler();
       callbacks.captureClientDiagnostic?.({
         category: 'media',
