@@ -1,0 +1,404 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 60000,
+  "samples": [
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 374,
+        "outCount": 245
+      },
+      "at": "2026-05-10T23:45:39.294Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.3185763888888889,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5438368055555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.014756944444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 341,
+        "outCount": 210
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 490,
+        "outCount": 319
+      },
+      "at": "2026-05-10T23:45:54.359Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.16796875,
+          "greenRatio": 0.006076388888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6341145833333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 454,
+        "outCount": 282
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 605,
+        "outCount": 390
+      },
+      "at": "2026-05-10T23:46:09.414Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.2521701388888889,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5542534722222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 569,
+        "outCount": 354
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 717,
+        "outCount": 461
+      },
+      "at": "2026-05-10T23:46:24.306Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.1779513888888889,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6371527777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015190972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 681,
+        "outCount": 425
+      }
+    }
+  ],
+  "startedAt": "2026-05-10T23:44:47.317Z",
+  "initialPixels": [
+    {
+      "brightRatio": 0.016493055555555556,
+      "darkRatio": 0.2829861111111111,
+      "greenRatio": 0.001736111111111111,
+      "paletteHits": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "patternScore": 9,
+      "vividRatio": 0.5442708333333334,
+      "height": 360,
+      "reason": "ok",
+      "selector": "canvas.remote-video",
+      "tagName": "canvas",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    },
+    {
+      "brightRatio": 0,
+      "darkRatio": 0,
+      "greenRatio": 0,
+      "paletteHits": [
+        3
+      ],
+      "patternScore": 1,
+      "vividRatio": 0,
+      "height": 360,
+      "reason": "ok",
+      "selector": ".workspace-main-video video",
+      "tagName": "video",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    }
+  ],
+  "consoleEvents": [
+    {
+      "at": "2026-05-10T23:44:53.288Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.288Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.357Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.357Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.736Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.737Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.737Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    }
+  ],
+  "finishedAt": "2026-05-10T23:46:24.338Z",
+  "noisyFailures": [
+    {
+      "at": "2026-05-10T23:44:53.288Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.288Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.357Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:53.357Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.736Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.737Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.737Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:44:57.802Z",
+      "label": "sender",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    }
+  ],
+  "error": "\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 62\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:53.288Z\",\u001b[39m\n\u001b[31m+     \"label\": \"admin\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:53.288Z\",\u001b[39m\n\u001b[31m+     \"label\": \"admin\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:53.357Z\",\u001b[39m\n\u001b[31m+     \"label\": \"admin\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:53.357Z\",\u001b[39m\n\u001b[31m+     \"label\": \"admin\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.736Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.737Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.737Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.802Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.802Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"at\": \"2026-05-10T23:44:57.802Z\",\u001b[39m\n\u001b[31m+     \"label\": \"sender\",\u001b[39m\n\u001b[31m+     \"text\": \"Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\",\u001b[39m\n\u001b[31m+     \"type\": \"pageerror\",\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m"
+}

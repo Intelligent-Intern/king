@@ -1,0 +1,959 @@
+{
+  "baseURL": "https://app.kingrt.com",
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 120000,
+  "participantCount": 20,
+  "samples": [],
+  "startedAt": "2026-05-11T08:43:15.155Z",
+  "videoFrameRate": 10,
+  "joinResults": [
+    {
+      "displayName": "Sputnik 01",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 02",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 03",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 04",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 05",
+      "outcome": "unknown"
+    },
+    {
+      "displayName": "Sputnik 06",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 07",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 08",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 09",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 10",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 11",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 12",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 13",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 14",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 15",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 16",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 17",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 18",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 19",
+      "outcome": "lobby"
+    },
+    {
+      "displayName": "Sputnik 20",
+      "outcome": "lobby"
+    }
+  ],
+  "error": "all Sputnik guests should enter the live call workspace\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m20\u001b[39m\nReceived: \u001b[31m0\u001b[39m",
+  "consoleEvents": [
+    {
+      "at": "2026-05-11T08:43:18.186Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:18.825Z",
+      "label": "Sputnik 01",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Connection closed before receiving a handshake response",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:23.998Z",
+      "label": "Sputnik 05",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:24.312Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Connection closed before receiving a handshake response",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:24.702Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:25.584Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:25.910Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:27.041Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:27.139Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:29.216Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:29.311Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:32.408Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:32.609Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:37.727Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:37.974Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:43.498Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:44.538Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:51.937Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:53.330Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:43:59.966Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:03.804Z",
+      "label": "Sputnik 07",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:07.777Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:09.041Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:09.460Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:10.734Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:11.103Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:12.260Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:12.550Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:12.738Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:13.110Z",
+      "label": "Sputnik 08",
+      "text": "Access to fetch at '[REDACTED_URL]' from origin '[REDACTED_URL]' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: It does not have HTTP ok status.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:13.110Z",
+      "label": "Sputnik 08",
+      "text": "Failed to load resource: net::ERR_FAILED",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:13.300Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:14.306Z",
+      "label": "Sputnik 06",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:14.592Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:15.421Z",
+      "label": "Sputnik 08",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:15.655Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:15.670Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:17.117Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:17.700Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:17.754Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:18.645Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:19.392Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:19.996Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:20.437Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:21.207Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:21.474Z",
+      "label": "Sputnik 06",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:21.597Z",
+      "label": "Sputnik 08",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:22.334Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:22.578Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:23.181Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:24.166Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:24.647Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:24.836Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:26.394Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:26.650Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:26.842Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:28.564Z",
+      "label": "Sputnik 01",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:28.777Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:28.904Z",
+      "label": "Sputnik 11",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:29.127Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:30.106Z",
+      "label": "Sputnik 11",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:30.701Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:30.915Z",
+      "label": "Sputnik 11",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:31.304Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:31.525Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:31.602Z",
+      "label": "Sputnik 11",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:31.794Z",
+      "label": "Sputnik 11",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:33.004Z",
+      "label": "Sputnik 02",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:33.153Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:33.383Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.477Z",
+      "label": "Sputnik 14",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.590Z",
+      "label": "Sputnik 15",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.608Z",
+      "label": "Sputnik 14",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.608Z",
+      "label": "Sputnik 14",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.611Z",
+      "label": "Sputnik 13",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.713Z",
+      "label": "Sputnik 15",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.713Z",
+      "label": "Sputnik 15",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.769Z",
+      "label": "Sputnik 13",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.769Z",
+      "label": "Sputnik 13",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:34.940Z",
+      "label": "Sputnik 16",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:35.131Z",
+      "label": "Sputnik 16",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:35.131Z",
+      "label": "Sputnik 16",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:35.385Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:35.783Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:35.887Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.053Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.400Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.687Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.712Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.934Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:36.963Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.066Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.072Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.305Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.413Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.548Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.887Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:37.900Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.040Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.239Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.248Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.508Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.509Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:38.733Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.223Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.484Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.487Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.487Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.753Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:39.799Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:40.071Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:40.266Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:40.895Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.023Z",
+      "label": "Sputnik 14",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.069Z",
+      "label": "Sputnik 17",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.116Z",
+      "label": "Sputnik 19",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.134Z",
+      "label": "Sputnik 20",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.136Z",
+      "label": "Sputnik 18",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.267Z",
+      "label": "Sputnik 17",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.267Z",
+      "label": "Sputnik 17",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.274Z",
+      "label": "Sputnik 20",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.274Z",
+      "label": "Sputnik 20",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.274Z",
+      "label": "Sputnik 19",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.274Z",
+      "label": "Sputnik 19",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.281Z",
+      "label": "Sputnik 18",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.285Z",
+      "label": "Sputnik 18",
+      "text": "The AudioContext encountered an error from the audio device or the WebAudio renderer.",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.609Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:41.935Z",
+      "label": "Sputnik 15",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.058Z",
+      "label": "Sputnik 03",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.329Z",
+      "label": "Sputnik 17",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.332Z",
+      "label": "Sputnik 18",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.425Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.431Z",
+      "label": "Sputnik 20",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.568Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.629Z",
+      "label": "Sputnik 18",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.629Z",
+      "label": "Sputnik 17",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.650Z",
+      "label": "Sputnik 19",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.717Z",
+      "label": "Sputnik 16",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.717Z",
+      "label": "Sputnik 20",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.859Z",
+      "label": "Sputnik 13",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:42.980Z",
+      "label": "Sputnik 19",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:43.042Z",
+      "label": "Sputnik 04",
+      "text": "Failed to load resource: the server responded with a status of 403 (OK)",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:43.445Z",
+      "label": "Sputnik 17",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T08:44:43.445Z",
+      "label": "Sputnik 18",
+      "text": "WebSocket connection to '[REDACTED_URL]' failed: Error during WebSocket handshake: Unexpected response code: 502",
+      "type": "error"
+    }
+  ],
+  "finishedAt": "2026-05-11T08:44:43.517Z"
+}

@@ -1,0 +1,3548 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 1800000,
+  "samples": [
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 486,
+        "outCount": 313
+      },
+      "at": "2026-05-10T23:57:01.523Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018229166666666668,
+          "darkRatio": 0.20442708333333334,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6393229166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015190972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 454,
+        "outCount": 282
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 713,
+        "outCount": 455
+      },
+      "at": "2026-05-10T23:57:31.576Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015625,
+          "darkRatio": 0.21006944444444445,
+          "greenRatio": 0.004340277777777778,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6449652777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 680,
+        "outCount": 426
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 937,
+        "outCount": 598
+      },
+      "at": "2026-05-10T23:58:01.652Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.2799479166666667,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5442708333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 906,
+        "outCount": 568
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1166,
+        "outCount": 741
+      },
+      "at": "2026-05-10T23:58:31.734Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.2829861111111111,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5460069444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1139,
+        "outCount": 712
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1393,
+        "outCount": 885
+      },
+      "at": "2026-05-10T23:59:01.802Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016059027777777776,
+          "darkRatio": 0.20789930555555555,
+          "greenRatio": 0.00390625,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6440972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1365,
+        "outCount": 855
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1621,
+        "outCount": 1027
+      },
+      "at": "2026-05-10T23:59:31.877Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014322916666666666,
+          "darkRatio": 0.14539930555555555,
+          "greenRatio": 0.005642361111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6319444444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1592,
+        "outCount": 998
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1849,
+        "outCount": 1170
+      },
+      "at": "2026-05-11T00:00:01.941Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.16015625,
+          "greenRatio": 0.003472222222222222,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6284722222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 1818,
+        "outCount": 1141
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2075,
+        "outCount": 1312
+      },
+      "at": "2026-05-11T00:00:32.002Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.2052951388888889,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6375868055555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.014322916666666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2046,
+        "outCount": 1284
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2303,
+        "outCount": 1455
+      },
+      "at": "2026-05-11T00:01:02.064Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018663194444444444,
+          "darkRatio": 0.31640625,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5442708333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2271,
+        "outCount": 1427
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2529,
+        "outCount": 1598
+      },
+      "at": "2026-05-11T00:01:32.127Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.15885416666666666,
+          "greenRatio": 0.0030381944444444445,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6271701388888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015190972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2499,
+        "outCount": 1570
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2757,
+        "outCount": 1741
+      },
+      "at": "2026-05-11T00:02:02.173Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.20008680555555555,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6423611111111112,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2725,
+        "outCount": 1713
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2983,
+        "outCount": 1884
+      },
+      "at": "2026-05-11T00:02:32.216Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.20572916666666666,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6393229166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 2956,
+        "outCount": 1857
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3212,
+        "outCount": 2027
+      },
+      "at": "2026-05-11T00:03:02.258Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.019097222222222224,
+          "darkRatio": 0.2803819444444444,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5481770833333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3183,
+        "outCount": 2000
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3438,
+        "outCount": 2170
+      },
+      "at": "2026-05-11T00:03:32.309Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.3094618055555556,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5451388888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.017795138888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3410,
+        "outCount": 2144
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3666,
+        "outCount": 2313
+      },
+      "at": "2026-05-11T00:04:02.374Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.1796875,
+          "greenRatio": 0.00390625,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6393229166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3635,
+        "outCount": 2287
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3896,
+        "outCount": 2457
+      },
+      "at": "2026-05-11T00:04:32.432Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.2074652777777778,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6380208333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.017361111111111112,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 3865,
+        "outCount": 2430
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4124,
+        "outCount": 2600
+      },
+      "at": "2026-05-11T00:05:02.481Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018229166666666668,
+          "darkRatio": 0.2847222222222222,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5455729166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4091,
+        "outCount": 2573
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4350,
+        "outCount": 2742
+      },
+      "at": "2026-05-11T00:05:32.537Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.1762152777777778,
+          "greenRatio": 0.0026041666666666665,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6414930555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4321,
+        "outCount": 2717
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4579,
+        "outCount": 2886
+      },
+      "at": "2026-05-11T00:06:02.596Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.3133680555555556,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5455729166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015190972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4547,
+        "outCount": 2860
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4806,
+        "outCount": 3028
+      },
+      "at": "2026-05-11T00:06:32.646Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.2769097222222222,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5447048611111112,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 4775,
+        "outCount": 3004
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5034,
+        "outCount": 3172
+      },
+      "at": "2026-05-11T00:07:02.695Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014756944444444444,
+          "darkRatio": 0.1818576388888889,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6380208333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5002,
+        "outCount": 3146
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5260,
+        "outCount": 3314
+      },
+      "at": "2026-05-11T00:07:32.742Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.1701388888888889,
+          "greenRatio": 0.006076388888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6323784722222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5229,
+        "outCount": 3290
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5487,
+        "outCount": 3458
+      },
+      "at": "2026-05-11T00:08:02.796Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014756944444444444,
+          "darkRatio": 0.20616319444444445,
+          "greenRatio": 0.0026041666666666665,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6440972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5457,
+        "outCount": 3432
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5713,
+        "outCount": 3601
+      },
+      "at": "2026-05-11T00:08:32.856Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.17664930555555555,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6258680555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5684,
+        "outCount": 3576
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5940,
+        "outCount": 3744
+      },
+      "at": "2026-05-11T00:09:02.914Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.01953125,
+          "darkRatio": 0.28125,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5481770833333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016493055555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 5910,
+        "outCount": 3718
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6168,
+        "outCount": 3886
+      },
+      "at": "2026-05-11T00:09:32.973Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.2105034722222222,
+          "greenRatio": 0.00390625,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6414930555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6137,
+        "outCount": 3862
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6397,
+        "outCount": 4031
+      },
+      "at": "2026-05-11T00:10:03.033Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.3094618055555556,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5490451388888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016927083333333332,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6363,
+        "outCount": 4004
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6625,
+        "outCount": 4174
+      },
+      "at": "2026-05-11T00:10:33.072Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.18055555555555555,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6371527777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6592,
+        "outCount": 4148
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6852,
+        "outCount": 4317
+      },
+      "at": "2026-05-11T00:11:03.124Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018663194444444444,
+          "darkRatio": 0.3190104166666667,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5460069444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 6818,
+        "outCount": 4290
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7079,
+        "outCount": 4459
+      },
+      "at": "2026-05-11T00:11:33.187Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.2074652777777778,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6453993055555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7050,
+        "outCount": 4435
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7307,
+        "outCount": 4603
+      },
+      "at": "2026-05-11T00:12:03.245Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.2087673611111111,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6397569444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7276,
+        "outCount": 4577
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7533,
+        "outCount": 4745
+      },
+      "at": "2026-05-11T00:12:33.292Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.2782118055555556,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5464409722222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7504,
+        "outCount": 4721
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7761,
+        "outCount": 4889
+      },
+      "at": "2026-05-11T00:13:03.350Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018663194444444444,
+          "darkRatio": 0.3190104166666667,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5447048611111112,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016493055555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7730,
+        "outCount": 4863
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7988,
+        "outCount": 5031
+      },
+      "at": "2026-05-11T00:13:33.408Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.1488715277777778,
+          "greenRatio": 0.004340277777777778,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6371527777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 7957,
+        "outCount": 5007
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8217,
+        "outCount": 5176
+      },
+      "at": "2026-05-11T00:14:03.462Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016493055555555556,
+          "darkRatio": 0.2087673611111111,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6432291666666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.014322916666666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8186,
+        "outCount": 5149
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8444,
+        "outCount": 5319
+      },
+      "at": "2026-05-11T00:14:33.528Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015625,
+          "darkRatio": 0.16927083333333334,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6271701388888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8412,
+        "outCount": 5293
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8672,
+        "outCount": 5462
+      },
+      "at": "2026-05-11T00:15:03.569Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018663194444444444,
+          "darkRatio": 0.2847222222222222,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5455729166666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8638,
+        "outCount": 5435
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8898,
+        "outCount": 5604
+      },
+      "at": "2026-05-11T00:15:33.621Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014322916666666666,
+          "darkRatio": 0.20703125,
+          "greenRatio": 0.0026041666666666665,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6449652777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 8870,
+        "outCount": 5580
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9128,
+        "outCount": 5748
+      },
+      "at": "2026-05-11T00:16:03.672Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.2990451388888889,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.55078125,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9096,
+        "outCount": 5722
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9353,
+        "outCount": 5890
+      },
+      "at": "2026-05-11T00:16:33.726Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014756944444444444,
+          "darkRatio": 0.18055555555555555,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6362847222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9324,
+        "outCount": 5866
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9582,
+        "outCount": 6034
+      },
+      "at": "2026-05-11T00:17:03.769Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.20833333333333334,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6375868055555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.014756944444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9550,
+        "outCount": 6008
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9808,
+        "outCount": 6176
+      },
+      "at": "2026-05-11T00:17:33.816Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.20442708333333334,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6440972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 9777,
+        "outCount": 6152
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10035,
+        "outCount": 6320
+      },
+      "at": "2026-05-11T00:18:03.867Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.014756944444444444,
+          "darkRatio": 0.17708333333333334,
+          "greenRatio": 0.0026041666666666665,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6380208333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10003,
+        "outCount": 6295
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10263,
+        "outCount": 6463
+      },
+      "at": "2026-05-11T00:18:33.927Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.2816840277777778,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5451388888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10232,
+        "outCount": 6438
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10492,
+        "outCount": 6606
+      },
+      "at": "2026-05-11T00:19:03.978Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018663194444444444,
+          "darkRatio": 0.3194444444444444,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5464409722222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10458,
+        "outCount": 6580
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10719,
+        "outCount": 6749
+      },
+      "at": "2026-05-11T00:19:34.028Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015625,
+          "darkRatio": 0.1775173611111111,
+          "greenRatio": 0.005208333333333333,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6432291666666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10688,
+        "outCount": 6725
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10947,
+        "outCount": 6892
+      },
+      "at": "2026-05-11T00:20:04.074Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.17578125,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.640625,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015625,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 10915,
+        "outCount": 6868
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11174,
+        "outCount": 7035
+      },
+      "at": "2026-05-11T00:20:34.129Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.20703125,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6380208333333334,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016927083333333332,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11144,
+        "outCount": 7011
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11402,
+        "outCount": 7179
+      },
+      "at": "2026-05-11T00:21:04.193Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017361111111111112,
+          "darkRatio": 0.2803819444444444,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5473090277777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11369,
+        "outCount": 7154
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11628,
+        "outCount": 7321
+      },
+      "at": "2026-05-11T00:21:34.247Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.30859375,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5529513888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11598,
+        "outCount": 7297
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11855,
+        "outCount": 7465
+      },
+      "at": "2026-05-11T00:22:04.296Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.2013888888888889,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6414930555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 11823,
+        "outCount": 7440
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12082,
+        "outCount": 7607
+      },
+      "at": "2026-05-11T00:22:34.340Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018229166666666668,
+          "darkRatio": 0.3146701388888889,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5460069444444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016493055555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12052,
+        "outCount": 7583
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12309,
+        "outCount": 7751
+      },
+      "at": "2026-05-11T00:23:04.391Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018229166666666668,
+          "darkRatio": 0.20703125,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6388888888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.015190972222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12278,
+        "outCount": 7726
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12537,
+        "outCount": 7893
+      },
+      "at": "2026-05-11T00:23:34.443Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016059027777777776,
+          "darkRatio": 0.18229166666666666,
+          "greenRatio": 0.005208333333333333,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6436631944444444,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016493055555555556,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12509,
+        "outCount": 7871
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12765,
+        "outCount": 8036
+      },
+      "at": "2026-05-11T00:24:04.483Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.018229166666666668,
+          "darkRatio": 0.14756944444444445,
+          "greenRatio": 0.0026041666666666665,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6284722222222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12735,
+        "outCount": 8013
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12990,
+        "outCount": 8179
+      },
+      "at": "2026-05-11T00:24:34.544Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.1684027777777778,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6293402777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 12962,
+        "outCount": 8157
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13223,
+        "outCount": 8323
+      },
+      "at": "2026-05-11T00:25:04.595Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.017795138888888888,
+          "darkRatio": 0.3172743055555556,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5464409722222222,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016059027777777776,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13188,
+        "outCount": 8299
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13449,
+        "outCount": 8466
+      },
+      "at": "2026-05-11T00:25:34.651Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.23524305555555555,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.64453125,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13415,
+        "outCount": 8443
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13677,
+        "outCount": 8609
+      },
+      "at": "2026-05-11T00:26:04.695Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016927083333333332,
+          "darkRatio": 0.3016493055555556,
+          "greenRatio": 0.002170138888888889,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5494791666666666,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.017795138888888888,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13644,
+        "outCount": 8587
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13879,
+        "outCount": 8736
+      },
+      "at": "2026-05-11T00:26:31.518Z",
+      "maxPatternScore": 10,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015625,
+          "darkRatio": 0.1440972222222222,
+          "greenRatio": 0.006510416666666667,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 10,
+          "vividRatio": 0.6371527777777778,
+          "height": 360,
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016927083333333332,
+          "height": 360,
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 13847,
+        "outCount": 8714
+      }
+    }
+  ],
+  "startedAt": "2026-05-10T23:55:54.446Z",
+  "initialPixels": [
+    {
+      "brightRatio": 0.016927083333333332,
+      "darkRatio": 0.2829861111111111,
+      "greenRatio": 0.002170138888888889,
+      "paletteHits": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "patternScore": 9,
+      "vividRatio": 0.5447048611111112,
+      "height": 360,
+      "reason": "ok",
+      "selector": "canvas.remote-video",
+      "tagName": "canvas",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    },
+    {
+      "brightRatio": 0,
+      "darkRatio": 0,
+      "greenRatio": 0,
+      "paletteHits": [],
+      "patternScore": 0,
+      "vividRatio": 0.015625,
+      "height": 360,
+      "reason": "ok",
+      "selector": ".workspace-main-video video",
+      "tagName": "video",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    }
+  ],
+  "consoleEvents": [
+    {
+      "at": "2026-05-10T23:56:05.372Z",
+      "label": "admin",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T00:18:26.554Z",
+      "label": "sender",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    },
+    {
+      "at": "2026-05-11T00:24:22.060Z",
+      "label": "admin",
+      "text": "Failed to load resource: net::ERR_EMPTY_RESPONSE",
+      "type": "error"
+    }
+  ],
+  "finishedAt": "2026-05-11T00:26:31.536Z",
+  "noisyFailures": []
+}

@@ -1,0 +1,430 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 30000,
+  "samples": [
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "binaryInCount": 39,
+        "binaryOutCount": 53,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 146,
+        "maxBinaryInBytes": 123699,
+        "maxBinaryOutBytes": 30854,
+        "outCount": 96
+      },
+      "at": "2026-05-12T13:46:14.804Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.016059027777777776,
+          "darkRatio": 0.2864583333333333,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.5555555555555556,
+          "className": "remote-video",
+          "dataset": {
+            "publisherId": "2",
+            "userId": "2",
+            "publisherUserId": "2",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoSurfaceUserId": "2",
+            "callVideoVisibleParticipantCount": "3"
+          },
+          "height": 480,
+          "id": "",
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 852
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.014756944444444444,
+          "className": "",
+          "dataset": {
+            "callLocalPreview": "1",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoVisibleParticipantCount": "3",
+            "callVideoSurfaceUserId": "1"
+          },
+          "height": 360,
+          "id": "",
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "binaryInCount": 51,
+        "binaryOutCount": 40,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 118,
+        "maxBinaryInBytes": 30512,
+        "maxBinaryOutBytes": 124041,
+        "outCount": 63
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "binaryInCount": 76,
+        "binaryOutCount": 90,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 220,
+        "maxBinaryInBytes": 128448,
+        "maxBinaryOutBytes": 30898,
+        "outCount": 143
+      },
+      "at": "2026-05-12T13:46:24.854Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015625,
+          "darkRatio": 0.19401041666666666,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6484375,
+          "className": "remote-video",
+          "dataset": {
+            "publisherId": "2",
+            "userId": "2",
+            "publisherUserId": "2",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoSurfaceUserId": "2",
+            "callVideoVisibleParticipantCount": "3"
+          },
+          "height": 480,
+          "id": "",
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 852
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [
+            3
+          ],
+          "patternScore": 1,
+          "vividRatio": 0,
+          "className": "",
+          "dataset": {
+            "callLocalPreview": "1",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoVisibleParticipantCount": "3",
+            "callVideoSurfaceUserId": "1"
+          },
+          "height": 360,
+          "id": "",
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "binaryInCount": 89,
+        "binaryOutCount": 78,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 193,
+        "maxBinaryInBytes": 30556,
+        "maxBinaryOutBytes": 128790,
+        "outCount": 111
+      }
+    },
+    {
+      "adminLoads": 1,
+      "adminSockets": {
+        "binaryInCount": 112,
+        "binaryOutCount": 123,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 293,
+        "maxBinaryInBytes": 128448,
+        "maxBinaryOutBytes": 30898,
+        "outCount": 185
+      },
+      "at": "2026-05-12T13:46:34.809Z",
+      "maxPatternScore": 9,
+      "pixelSurfaces": [
+        {
+          "brightRatio": 0.015190972222222222,
+          "darkRatio": 0.2009548611111111,
+          "greenRatio": 0.001736111111111111,
+          "paletteHits": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "patternScore": 9,
+          "vividRatio": 0.6427951388888888,
+          "className": "remote-video",
+          "dataset": {
+            "publisherId": "2",
+            "userId": "2",
+            "publisherUserId": "2",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoSurfaceUserId": "2",
+            "callVideoVisibleParticipantCount": "3"
+          },
+          "height": 480,
+          "id": "",
+          "reason": "ok",
+          "selector": "canvas.remote-video",
+          "tagName": "canvas",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 852
+        },
+        {
+          "brightRatio": 0,
+          "darkRatio": 0,
+          "greenRatio": 0,
+          "paletteHits": [],
+          "patternScore": 0,
+          "vividRatio": 0.016493055555555556,
+          "className": "",
+          "dataset": {
+            "callLocalPreview": "1",
+            "callVideoSurfaceRole": "mini",
+            "callVideoRenderPriority": "1",
+            "callVideoLayoutMode": "call_app_workspace",
+            "callVideoFramingMode": "contain",
+            "callVideoTargetAspectRatio": "1.717391",
+            "callVideoVisibleParticipantCount": "3",
+            "callVideoSurfaceUserId": "1"
+          },
+          "height": 360,
+          "id": "",
+          "reason": "ok",
+          "selector": ".workspace-main-video video",
+          "tagName": "video",
+          "visibleHeight": 92,
+          "visibleWidth": 158,
+          "width": 640
+        }
+      ],
+      "senderLoads": 2,
+      "senderSockets": {
+        "binaryInCount": 122,
+        "binaryOutCount": 112,
+        "closeCount": 0,
+        "errorCount": 0,
+        "inCount": 263,
+        "maxBinaryInBytes": 30556,
+        "maxBinaryOutBytes": 128790,
+        "outCount": 155
+      }
+    }
+  ],
+  "startedAt": "2026-05-12T13:45:54.416Z",
+  "preInitialPixels": [
+    {
+      "brightRatio": 0,
+      "darkRatio": 0,
+      "greenRatio": 0,
+      "paletteHits": [],
+      "patternScore": 0,
+      "vividRatio": 0.014756944444444444,
+      "className": "",
+      "dataset": {
+        "callLocalPreview": "1",
+        "callVideoSurfaceRole": "mini",
+        "callVideoRenderPriority": "1",
+        "callVideoLayoutMode": "call_app_workspace",
+        "callVideoFramingMode": "contain",
+        "callVideoTargetAspectRatio": "1.717391",
+        "callVideoVisibleParticipantCount": "3",
+        "callVideoSurfaceUserId": "1"
+      },
+      "height": 360,
+      "id": "",
+      "reason": "ok",
+      "selector": ".workspace-main-video video",
+      "tagName": "video",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    }
+  ],
+  "initialPixels": [
+    {
+      "brightRatio": 0.015625,
+      "darkRatio": 0.17057291666666666,
+      "greenRatio": 0.001736111111111111,
+      "paletteHits": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "patternScore": 9,
+      "vividRatio": 0.6462673611111112,
+      "className": "remote-video",
+      "dataset": {
+        "publisherId": "2",
+        "userId": "2",
+        "publisherUserId": "2",
+        "callVideoSurfaceRole": "mini",
+        "callVideoRenderPriority": "1",
+        "callVideoLayoutMode": "call_app_workspace",
+        "callVideoFramingMode": "contain",
+        "callVideoTargetAspectRatio": "1.717391",
+        "callVideoSurfaceUserId": "2",
+        "callVideoVisibleParticipantCount": "3"
+      },
+      "height": 480,
+      "id": "",
+      "reason": "ok",
+      "selector": "canvas.remote-video",
+      "tagName": "canvas",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 852
+    },
+    {
+      "brightRatio": 0,
+      "darkRatio": 0,
+      "greenRatio": 0,
+      "paletteHits": [
+        3
+      ],
+      "patternScore": 1,
+      "vividRatio": 0,
+      "className": "",
+      "dataset": {
+        "callLocalPreview": "1",
+        "callVideoSurfaceRole": "mini",
+        "callVideoRenderPriority": "1",
+        "callVideoLayoutMode": "call_app_workspace",
+        "callVideoFramingMode": "contain",
+        "callVideoTargetAspectRatio": "1.717391",
+        "callVideoVisibleParticipantCount": "3",
+        "callVideoSurfaceUserId": "1"
+      },
+      "height": 360,
+      "id": "",
+      "reason": "ok",
+      "selector": ".workspace-main-video video",
+      "tagName": "video",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    }
+  ],
+  "consoleEvents": [
+    {
+      "at": "2026-05-12T13:45:57.245Z",
+      "label": "admin",
+      "text": "[BackgroundFilter] Initializing compositor stage {canvas: canvas, getBackgroundColor: , getBackgroundImageUrl: , getBlurPx: , preferWebGl: true}",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T13:45:57.245Z",
+      "label": "admin",
+      "text": "[BackgroundFilter] Using WebGL compositor",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T13:45:57.317Z",
+      "label": "admin",
+      "text": "[.WebGL-0x2c7402f02400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T13:45:57.330Z",
+      "label": "admin",
+      "text": "[.WebGL-0x2c7402f02400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T13:45:57.355Z",
+      "label": "admin",
+      "text": "[.WebGL-0x2c7402f02400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T13:45:57.389Z",
+      "label": "admin",
+      "text": "[.WebGL-0x2c7402f02400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T13:46:03.735Z",
+      "label": "sender",
+      "text": "[BackgroundFilter] Initializing compositor stage {canvas: canvas, getBackgroundColor: , getBackgroundImageUrl: , getBlurPx: , preferWebGl: true}",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T13:46:03.735Z",
+      "label": "sender",
+      "text": "[BackgroundFilter] Using WebGL compositor",
+      "type": "log"
+    }
+  ],
+  "finishedAt": "2026-05-12T13:46:34.846Z",
+  "noisyFailures": []
+}
