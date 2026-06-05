@@ -26,7 +26,8 @@ function videochat_sputnik_env_int(string $name, int $default, int $min, int $ma
  *   width: int,
  *   height: int,
  *   batch_size: int,
- *   timeout_ms: int
+ *   timeout_ms: int,
+ *   stale_join_ms: int
  * }
  */
 function videochat_sputnik_config(): array
@@ -54,6 +55,7 @@ function videochat_sputnik_config(): array
         'height' => videochat_sputnik_env_int('VIDEOCHAT_SPUTNIK_HEIGHT', 360, 120, 1080),
         'batch_size' => videochat_sputnik_env_int('VIDEOCHAT_SPUTNIK_BATCH_SIZE', 3, 1, 8),
         'timeout_ms' => videochat_sputnik_env_int('VIDEOCHAT_SPUTNIK_TIMEOUT_MS', 90000, 10000, 300000),
+        'stale_join_ms' => videochat_sputnik_env_int('VIDEOCHAT_SPUTNIK_STALE_JOIN_MS', 180000, 30000, 1800000),
     ];
 }
 
@@ -170,6 +172,7 @@ function videochat_sputnik_start(PDO $pdo, string $callId, int $authUserId, stri
         'fps' => (int) ($config['fps'] ?? 10),
         'height' => (int) ($config['height'] ?? 360),
         'join_url' => $joinUrl,
+        'stale_join_ms' => (int) ($config['stale_join_ms'] ?? 180000),
         'timeout_ms' => (int) ($config['timeout_ms'] ?? 90000),
         'width' => (int) ($config['width'] ?? 640),
     ];

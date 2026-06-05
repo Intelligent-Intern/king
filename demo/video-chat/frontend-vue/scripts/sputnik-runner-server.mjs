@@ -9,6 +9,7 @@ const defaultTimeoutMs = Math.max(10_000, Number.parseInt(String(process.env.VID
 const defaultMaxRunMs = Math.max(60_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_RUN_MS || `${2 * 60 * 60 * 1000}`), 10) || 2 * 60 * 60 * 1000);
 const defaultMonitorIntervalMs = Math.max(1_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MONITOR_INTERVAL_MS || '2500'), 10) || 2_500);
 const defaultRestartDelayMs = Math.max(1_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_RESTART_DELAY_MS || '5000'), 10) || 5_000);
+const defaultStaleJoinMs = Math.max(30_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_STALE_JOIN_MS || '180000'), 10) || 180_000);
 const parsedDefaultMaxRestarts = Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_RESTARTS ?? '5'), 10);
 const defaultMaxRestarts = Math.max(0, Number.isFinite(parsedDefaultMaxRestarts) ? parsedDefaultMaxRestarts : 5);
 const maxParticipants = Math.max(1, Math.min(50, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_PARTICIPANTS || '25'), 10) || 25));
@@ -47,6 +48,7 @@ async function readJson(request) {
 }
 
 function summarizeParticipant(participant) {
+  const stateAgeMs = participantStateAgeMs(participant);
   return {
     index: participant.index,
     last_seen_at: participant.lastSeenAt || null,
@@ -55,6 +57,8 @@ function summarizeParticipant(participant) {
     restart_count: participant.restartCount || 0,
     restart_reason: participant.restartReason || '',
     state: participant.state,
+    state_age_ms: stateAgeMs,
+    state_changed_at: participant.stateChangedAt || participant.updatedAt,
     url: participant.url,
     error: participant.error || '',
     updated_at: participant.updatedAt,
@@ -125,6 +129,29 @@ function clearParticipantMonitor(participant) {
   participant.monitorTimer = null;
 }
 
+function setParticipantState(participant, state, timestamp = nowIso()) {
+  const nextState = String(state || 'waiting').trim().toLowerCase() || 'waiting';
+  if (participant.state !== nextState) {
+    participant.stateChangedAt = timestamp;
+  }
+  participant.state = nextState;
+  participant.updatedAt = timestamp;
+}
+
+function participantStateAgeMs(participant, timestamp = Date.now()) {
+  const changedAt = Date.parse(String(participant?.stateChangedAt || participant?.updatedAt || ''));
+  if (!Number.isFinite(changedAt)) return 0;
+  return Math.max(0, timestamp - changedAt);
+}
+
+function staleJoinRestartReason(job, participant) {
+  if (participant.restartInFlight || !participant.page || participant.page.isClosed()) return '';
+  const state = String(participant.state || '').trim().toLowerCase();
+  if (!['lobby', 'waiting'].includes(state)) return '';
+  if (participantStateAgeMs(participant) < job.options.staleJoinMs) return '';
+  return `stale_${state}`;
+}
+
 function updateJobState(job) {
   if (terminalJobState(job)) return;
   const counts = jobParticipantCounts(job);
@@ -163,8 +190,7 @@ function startParticipantMonitor(job, participant) {
     void (async () => {
       if (!participant.page || participant.page.isClosed()) {
         if (participant.state !== 'restarting') {
-          participant.state = 'closed';
-          participant.updatedAt = nowIso();
+          setParticipantState(participant, 'closed');
           updateJobState(job);
         }
         return;
@@ -174,8 +200,7 @@ function startParticipantMonitor(job, participant) {
         participant.lastSeenAt = nowIso();
         participant.lastStateCheckAt = participant.lastSeenAt;
         if (participant.state !== observedState && participant.state !== 'restarting') {
-          participant.state = observedState;
-          participant.updatedAt = participant.lastSeenAt;
+          setParticipantState(participant, observedState, participant.lastSeenAt);
           updateJobState(job);
         }
       } catch (error) {
@@ -247,6 +272,7 @@ async function launchParticipant(job, index, existingParticipant = null) {
     restartInFlight: false,
     restartReason: '',
     state: 'starting',
+    stateChangedAt: nowIso(),
     updatedAt: nowIso(),
     url: '',
   };
@@ -256,8 +282,7 @@ async function launchParticipant(job, index, existingParticipant = null) {
   participant.error = '';
   participant.name = name;
   participant.page = null;
-  participant.state = existingParticipant ? 'restarting' : 'starting';
-  participant.updatedAt = nowIso();
+  setParticipantState(participant, existingParticipant ? 'restarting' : 'starting');
   if (!existingParticipant) job.participants.push(participant);
   job.updatedAt = nowIso();
 
@@ -289,28 +314,25 @@ async function launchParticipant(job, index, existingParticipant = null) {
     });
     page.on('close', () => {
       if (!['stopped', 'restarting'].includes(participant.state)) {
-        participant.state = 'closed';
-        participant.updatedAt = nowIso();
+        setParticipantState(participant, 'closed');
         updateJobState(job);
       }
     });
     page.on('crash', () => {
-      participant.state = 'closed';
+      setParticipantState(participant, 'closed');
       participant.error = 'page_crashed';
-      participant.updatedAt = nowIso();
       updateJobState(job);
     });
 
     await page.goto(participant.url, { waitUntil: 'domcontentloaded', timeout: job.options.timeoutMs });
-    participant.state = await driveJoin(page, job.callId, name, job.options.timeoutMs);
+    const joinState = await driveJoin(page, job.callId, name, job.options.timeoutMs);
     participant.lastSeenAt = nowIso();
     participant.lastStateCheckAt = participant.lastSeenAt;
-    participant.updatedAt = nowIso();
+    setParticipantState(participant, joinState, participant.lastSeenAt);
     startParticipantMonitor(job, participant);
   } catch (error) {
-    participant.state = 'failed';
+    setParticipantState(participant, 'failed');
     participant.error = error instanceof Error ? error.message.slice(0, 500) : String(error || '').slice(0, 500);
-    participant.updatedAt = nowIso();
     clearParticipantMonitor(participant);
     await participant.browser?.close?.().catch(() => null);
   } finally {
@@ -322,17 +344,15 @@ async function launchParticipant(job, index, existingParticipant = null) {
 async function restartParticipant(job, participant, reason = 'participant_unhealthy') {
   if (terminalJobState(job) || participant.restartInFlight) return;
   if ((participant.restartCount || 0) >= job.options.maxRestarts) {
-    participant.state = 'failed';
+    setParticipantState(participant, 'failed');
     participant.error = `restart_limit_reached:${reason}`;
-    participant.updatedAt = nowIso();
     updateJobState(job);
     return;
   }
   participant.restartInFlight = true;
   participant.restartCount = (participant.restartCount || 0) + 1;
   participant.restartReason = reason;
-  participant.state = 'restarting';
-  participant.updatedAt = nowIso();
+  setParticipantState(participant, 'restarting');
   updateJobState(job);
   clearParticipantMonitor(participant);
   await participant.context?.close?.().catch(() => null);
@@ -356,6 +376,11 @@ function startJobSupervisor(job) {
     for (const participant of job.participants) {
       if (['closed', 'failed'].includes(participant.state)) {
         void restartParticipant(job, participant, participant.state === 'failed' ? 'launch_failed' : 'page_closed');
+        continue;
+      }
+      const staleReason = staleJoinRestartReason(job, participant);
+      if (staleReason !== '') {
+        void restartParticipant(job, participant, staleReason);
       }
     }
     updateJobState(job);
@@ -372,8 +397,7 @@ async function stopJob(callId, state = 'stopped') {
   if (job.supervisorTimer) clearInterval(job.supervisorTimer);
   await Promise.allSettled(job.participants.map(async (participant) => {
     clearParticipantMonitor(participant);
-    participant.state = 'stopped';
-    participant.updatedAt = nowIso();
+    setParticipantState(participant, 'stopped');
     await participant.context?.close?.().catch(() => null);
     await participant.browser?.close?.().catch(() => null);
   }));
@@ -424,6 +448,7 @@ function createJob(callId, payload) {
       maxRestarts: boundedInt(payload.max_restarts ?? payload.maxRestarts, defaultMaxRestarts, 0, 25),
       monitorIntervalMs: boundedInt(payload.monitor_interval_ms ?? payload.monitorIntervalMs, defaultMonitorIntervalMs, 1_000, 60_000),
       restartDelayMs: boundedInt(payload.restart_delay_ms ?? payload.restartDelayMs, defaultRestartDelayMs, 1_000, 5 * 60_000),
+      staleJoinMs: boundedInt(payload.stale_join_ms ?? payload.staleJoinMs, defaultStaleJoinMs, 30_000, 30 * 60_000),
       timeoutMs: boundedInt(payload.timeout_ms ?? payload.timeoutMs, defaultTimeoutMs, 10_000, 5 * 60_000),
       width: boundedInt(payload.width, 640, 160, 1920),
     },
