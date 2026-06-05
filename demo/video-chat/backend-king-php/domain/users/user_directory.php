@@ -115,7 +115,7 @@ function videochat_admin_list_users(
     $displayNameDirection = $effectiveOrder === 'role_then_name_desc' ? 'DESC' : 'ASC';
 
     $search = trim($query);
-    $whereParts = [];
+    $whereParts = ["lower(roles.slug) = 'admin'"];
     $params = [];
     $tenantJoin = '';
     if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id')) {
@@ -156,6 +156,10 @@ SQL;
     $total = (int) $countStatement->fetchColumn();
     $pageCount = $total === 0 ? 0 : (int) ceil($total / $effectivePageSize);
 
+    $superAdminSelect = videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin')
+        ? 'users.is_superadmin,'
+        : '0 AS is_superadmin,';
+
     $listSql = <<<SQL
 SELECT
     users.id,
@@ -165,6 +169,7 @@ SELECT
     users.time_format,
     users.theme,
     users.theme_editor_enabled,
+    {$superAdminSelect}
     users.avatar_path,
     users.created_at,
     users.updated_at,
@@ -206,6 +211,7 @@ SQL;
             'time_format' => (string) ($row['time_format'] ?? '24h'),
             'theme' => (string) ($row['theme'] ?? 'dark'),
             'theme_editor_enabled' => ((int) ($row['theme_editor_enabled'] ?? 0)) === 1,
+            'is_superadmin' => ((int) ($row['is_superadmin'] ?? 0)) === 1,
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),

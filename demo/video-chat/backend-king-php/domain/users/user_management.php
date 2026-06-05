@@ -52,13 +52,16 @@ function videochat_admin_create_user(PDO $pdo, array $payload, ?int $tenantId = 
     }
 
     try {
+        $hasSuperAdminColumn = videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin');
+        $superAdminColumn = $hasSuperAdminColumn ? ', is_superadmin' : '';
+        $superAdminValue = $hasSuperAdminColumn ? ', :is_superadmin' : '';
         $insert = $pdo->prepare(
-            <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, theme_editor_enabled, avatar_path, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, :status, :time_format, :theme, :theme_editor_enabled, :avatar_path, :updated_at)
+            <<<SQL
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, theme_editor_enabled{$superAdminColumn}, avatar_path, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, :status, :time_format, :theme, :theme_editor_enabled{$superAdminValue}, :avatar_path, :updated_at)
 SQL
         );
-        $insert->execute([
+        $insertParams = [
             ':email' => (string) $data['email'],
             ':display_name' => (string) $data['display_name'],
             ':password_hash' => $passwordHash,
@@ -69,7 +72,11 @@ SQL
             ':theme_editor_enabled' => (bool) ($data['theme_editor_enabled'] ?? false) ? 1 : 0,
             ':avatar_path' => $data['avatar_path'],
             ':updated_at' => gmdate('c'),
-        ]);
+        ];
+        if ($hasSuperAdminColumn) {
+            $insertParams[':is_superadmin'] = (bool) ($data['is_superadmin'] ?? false) ? 1 : 0;
+        }
+        $insert->execute($insertParams);
         $createdUserId = (int) $pdo->lastInsertId();
         if (is_int($tenantId) && $tenantId > 0) {
             videochat_tenant_attach_user($pdo, $createdUserId, $tenantId);
@@ -170,6 +177,17 @@ function videochat_admin_update_user(PDO $pdo, int $userId, array $payload, ?int
             'user' => null,
         ];
     }
+    $nextIsSuperAdmin = array_key_exists('is_superadmin', $data)
+        ? (bool) $data['is_superadmin']
+        : (bool) ($existing['is_superadmin'] ?? false);
+    if ($nextIsSuperAdmin && $nextRole !== 'admin') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['is_superadmin' => 'requires_admin_role'],
+            'user' => null,
+        ];
+    }
 
     $passwordHash = null;
     if (array_key_exists('password', $data)) {
@@ -184,8 +202,10 @@ function videochat_admin_update_user(PDO $pdo, int $userId, array $payload, ?int
         }
     }
 
+    $hasSuperAdminColumn = videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin');
+    $superAdminSet = $hasSuperAdminColumn ? "    is_superadmin = :is_superadmin,\n" : '';
     $update = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 UPDATE users
 SET display_name = :display_name,
     role_id = :role_id,
@@ -193,13 +213,14 @@ SET display_name = :display_name,
     time_format = :time_format,
     theme = :theme,
     theme_editor_enabled = :theme_editor_enabled,
+{$superAdminSet}
     avatar_path = :avatar_path,
     password_hash = COALESCE(:password_hash, password_hash),
     updated_at = :updated_at
 WHERE id = :id
 SQL
     );
-    $update->execute([
+    $updateParams = [
         ':display_name' => array_key_exists('display_name', $data) ? (string) $data['display_name'] : (string) $existing['display_name'],
         ':role_id' => $nextRoleId,
         ':status' => array_key_exists('status', $data) ? (string) $data['status'] : (string) $existing['status'],
@@ -212,7 +233,11 @@ SQL
         ':password_hash' => $passwordHash,
         ':updated_at' => gmdate('c'),
         ':id' => $userId,
-    ]);
+    ];
+    if ($hasSuperAdminColumn) {
+        $updateParams[':is_superadmin'] = $nextIsSuperAdmin ? 1 : 0;
+    }
+    $update->execute($updateParams);
 
     $updated = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($updated === null) {

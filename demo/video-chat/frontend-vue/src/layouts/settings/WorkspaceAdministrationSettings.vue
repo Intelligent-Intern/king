@@ -205,7 +205,7 @@ const adminDraft = reactive({
 });
 const leadRecipients = reactive([]);
 
-const isPrimaryAdmin = computed(() => Number(sessionState.userId || 0) === 1);
+const isPrimaryAdmin = computed(() => sessionState.isSuperadmin === true);
 const sidebarLogoPreview = computed(() => adminDraft.sidebar_logo_data_url || adminDraft.sidebar_logo_path || DEFAULT_LOGO);
 const modalLogoPreview = computed(() => adminDraft.modal_logo_data_url || adminDraft.modal_logo_path || DEFAULT_LOGO);
 

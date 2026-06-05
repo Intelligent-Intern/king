@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_access_guest_user.php';
+
 function videochat_create_calendar_invitation_guest_user(PDO $pdo, string $displayName, ?int $tenantId): array
 {
     $guestCreate = videochat_create_guest_user_for_call_access($pdo, $displayName, $tenantId);

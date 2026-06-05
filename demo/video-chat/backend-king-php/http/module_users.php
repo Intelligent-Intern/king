@@ -16,24 +16,34 @@ require_once __DIR__ . '/module_user_onboarding.php';
  * @param array<string, mixed> $userRow
  * @return array<string, bool>
  */
-function videochat_admin_user_permissions_snapshot(array $userRow, int $actorUserId, int $primaryAdminUserId): array
+function videochat_admin_user_permissions_snapshot(
+    array $userRow,
+    int $actorUserId,
+    int $primaryAdminUserId,
+    bool $actorIsSuperAdmin = false
+): array
 {
     $targetUserId = (int) ($userRow['id'] ?? 0);
     $isSelf = $actorUserId > 0 && $targetUserId > 0 && $actorUserId === $targetUserId;
     $isPrimaryAdmin = $primaryAdminUserId > 0 && $targetUserId > 0 && $primaryAdminUserId === $targetUserId;
+    $isSuperAdmin = ((int) ($userRow['is_superadmin'] ?? 0)) === 1;
+    $superAdminProtected = $isSuperAdmin && !$actorIsSuperAdmin;
 
-    $canChangeRole = !$isSelf && !$isPrimaryAdmin;
-    $canChangeStatus = !$isSelf && !$isPrimaryAdmin;
-    $canChangeThemeEditor = !$isSelf;
+    $canChangeRole = !$isSelf && !$isPrimaryAdmin && !$superAdminProtected;
+    $canChangeStatus = !$isSelf && !$isPrimaryAdmin && !$superAdminProtected;
+    $canChangeThemeEditor = !$isSelf && !$superAdminProtected;
+    $canChangeSuperAdmin = $actorIsSuperAdmin && !$isSelf && !$isPrimaryAdmin;
 
     return [
         'is_self' => $isSelf,
         'is_primary_admin' => $isPrimaryAdmin,
+        'is_superadmin' => $isSuperAdmin,
         'can_change_role' => $canChangeRole,
         'can_change_status' => $canChangeStatus,
         'can_change_theme_editor' => $canChangeThemeEditor,
+        'can_change_superadmin' => $canChangeSuperAdmin,
         'can_toggle_status' => $canChangeStatus,
-        'can_delete' => !$isSelf && !$isPrimaryAdmin,
+        'can_delete' => !$isSelf && !$isPrimaryAdmin && !$superAdminProtected,
     ];
 }
 
@@ -476,10 +486,19 @@ function videochat_handle_user_routes(
         try {
             $pdo = $openDatabase();
             $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
+            $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
             if ($primaryAdminUserId > 0 && $primaryAdminUserId === $userId) {
                 return $errorResponse(409, 'admin_user_conflict', 'Primary admin cannot be deactivated.', [
                     'fields' => [
                         'user_id' => 'primary_admin_cannot_be_disabled',
+                    ],
+                ]);
+            }
+            $targetUser = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
+            if (is_array($targetUser) && (bool) ($targetUser['is_superadmin'] ?? false) && !$actorIsSuperAdmin) {
+                return $errorResponse(403, 'superadmin_required', 'Only superadmins can change another superadmin account.', [
+                    'fields' => [
+                        'user_id' => 'superadmin_required',
                     ],
                 ]);
             }
@@ -524,6 +543,16 @@ function videochat_handle_user_routes(
 
         try {
             $pdo = $openDatabase();
+            $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+            $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
+            $targetUser = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
+            if (is_array($targetUser) && (bool) ($targetUser['is_superadmin'] ?? false) && !$actorIsSuperAdmin) {
+                return $errorResponse(403, 'superadmin_required', 'Only superadmins can change another superadmin account.', [
+                    'fields' => [
+                        'user_id' => 'superadmin_required',
+                    ],
+                ]);
+            }
             $reactivateResult = videochat_admin_reactivate_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_reactivate_failed', 'Could not reactivate user.', [

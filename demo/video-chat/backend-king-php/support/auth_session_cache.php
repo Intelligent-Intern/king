@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/tenant_context.php';
 require_once __DIR__ . '/localization.php';
+require_once __DIR__ . '/auth_request.php';
 
 function videochat_mark_session_revoked_locally(string $sessionId, string $revokedAt): void
 {
@@ -91,8 +92,11 @@ function videochat_validate_locally_issued_session_token(PDO $pdo, string $sessi
         ];
     }
 
+    $superAdminSelect = videochat_auth_table_has_column($pdo, 'users', 'is_superadmin')
+        ? 'users.is_superadmin,'
+        : '0 AS is_superadmin,';
     $query = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     users.id AS user_id,
     users.email,
@@ -104,6 +108,7 @@ SELECT
     users.theme,
     users.locale,
     users.theme_editor_enabled,
+    {$superAdminSelect}
     users.avatar_path,
     users.post_logout_landing_url,
     users.web_app_notifications_enabled,
@@ -193,6 +198,7 @@ SQL
             'can_edit_themes' => (string) ($row['role_slug'] ?? 'user') === 'admin'
                 || ((int) ($row['theme_editor_enabled'] ?? 0)) === 1
                 || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),
+            'is_superadmin' => videochat_auth_user_is_superadmin_row($row),
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
             'post_logout_landing_url' => is_string($row['post_logout_landing_url'] ?? null)
                 ? trim((string) $row['post_logout_landing_url'])

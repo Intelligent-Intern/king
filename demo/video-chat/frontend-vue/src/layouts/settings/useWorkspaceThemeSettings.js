@@ -93,7 +93,7 @@ export function useWorkspaceThemeSettings(options = {}) {
     return themeOptions.value.slice(start, start + pageSize);
   });
   const canEditThemes = computed(() => sessionState.role === 'admin' || sessionState.canEditThemes === true);
-  const canManageBranding = computed(() => Number(sessionState.userId || 0) === 1);
+  const canManageBranding = computed(() => sessionState.isSuperadmin === true);
   const sidebarLogoPreview = computed(() => (
     editor.sidebarLogoReset ? DEFAULT_LOGO : (editor.sidebarLogoDataUrl || appearanceState.sidebarLogoPath || DEFAULT_LOGO)
   ));

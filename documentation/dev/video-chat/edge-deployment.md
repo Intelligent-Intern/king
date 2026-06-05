@@ -9,6 +9,9 @@ Lobby-WebSocket (`/ws`) und SFU-WebSocket (`/sfu`) auf interne King-PHP
 Backend-Services. Statische CDN-Assets werden ueber denselben King/PHP Edge auf
 `VIDEOCHAT_DEPLOY_CDN_DOMAIN` ausgeliefert; Default ist `cdn.<domain>`. Der Edge
 akzeptiert `cnd.<domain>` als Legacy-Alias fuer alte Demo-Deploys.
+Der Canonical-Host `www.<domain>` wird als Zertifikats-/DNS-Name behandelt und
+vom Edge auf `https://<domain>/` umgeleitet, damit der App-Edge nicht als
+Fallback fuer den Marketing-Apex dient.
 
 ## Aktiver Scope
 

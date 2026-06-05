@@ -71,6 +71,7 @@ export const sessionState = reactive({
   userId: 0,
   accountType: '',
   isGuest: false,
+  isSuperadmin: false,
   avatarPath: null,
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
@@ -134,6 +135,7 @@ function resetUserFields() {
   sessionState.userId = 0;
   sessionState.accountType = '';
   sessionState.isGuest = false;
+  sessionState.isSuperadmin = false;
   sessionState.avatarPath = null;
   sessionState.timeFormat = '24h';
   sessionState.dateFormat = 'dmy_dot';
@@ -182,6 +184,7 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.userId = Number.isInteger(user.id) ? user.id : 0;
   sessionState.accountType = inferAccountType(user);
   sessionState.isGuest = sessionState.accountType === 'guest';
+  sessionState.isSuperadmin = role === 'admin' && user.is_superadmin === true;
   sessionState.avatarPath = typeof user.avatar_path === 'string' && normalizeString(user.avatar_path) !== ''
     ? normalizeString(user.avatar_path)
     : null;

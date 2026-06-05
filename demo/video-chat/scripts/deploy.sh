@@ -54,6 +54,9 @@ Optional environment:
   VIDEOCHAT_DEPLOY_REMOTE_LOCALE
                               Locale for remote shell commands, default: C.UTF-8.
   VIDEOCHAT_DEPLOY_APP_DOMAIN  Frontend app host, default: app.<domain>.
+  VIDEOCHAT_DEPLOY_WWW_DOMAIN  Canonical www alias, default: www.<domain>.
+                              It is included in DNS/certbot and redirected to
+                              https://<domain>/ by the King edge.
   VIDEOCHAT_DEPLOY_API_DOMAIN  API host, default: api.<domain>.
   VIDEOCHAT_DEPLOY_WS_DOMAIN   Lobby websocket host, default: ws.<domain>.
   VIDEOCHAT_DEPLOY_SFU_DOMAIN  SFU websocket host, default: sfu.<domain>.
@@ -187,6 +190,7 @@ refresh_deploy_config() {
   fi
   DEPLOY_REMOTE_LOCALE="${VIDEOCHAT_DEPLOY_REMOTE_LOCALE:-C.UTF-8}"
   DEPLOY_APP_DOMAIN="${VIDEOCHAT_DEPLOY_APP_DOMAIN:-}"
+  DEPLOY_WWW_DOMAIN="${VIDEOCHAT_DEPLOY_WWW_DOMAIN:-}"
   DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-}"
   DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-}"
   DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-}"
@@ -200,6 +204,7 @@ refresh_deploy_config() {
 
   if [[ -n "${DEPLOY_DOMAIN}" ]]; then
     DEPLOY_APP_DOMAIN="${DEPLOY_APP_DOMAIN:-app.${DEPLOY_DOMAIN}}"
+    DEPLOY_WWW_DOMAIN="${DEPLOY_WWW_DOMAIN:-www.${DEPLOY_DOMAIN}}"
     DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
     DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
     DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
@@ -214,13 +219,14 @@ refresh_deploy_config() {
 
   DEPLOY_VUE_ALLOWED_HOSTS="${VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS:-}"
   if [[ -z "${DEPLOY_VUE_ALLOWED_HOSTS}" && -n "${DEPLOY_DOMAIN}" ]]; then
-    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_APP_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN},${DEPLOY_CALL_APP_DOMAIN},${DEPLOY_REGISTRY_DOMAIN}"
+    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_WWW_DOMAIN},${DEPLOY_APP_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN},${DEPLOY_CALL_APP_DOMAIN},${DEPLOY_REGISTRY_DOMAIN}"
   fi
   if [[ -n "${DEPLOY_EXTERNAL_DOMAINS}" ]]; then
     DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS:+${DEPLOY_VUE_ALLOWED_HOSTS},}${DEPLOY_EXTERNAL_DOMAINS}"
   fi
 
   export VIDEOCHAT_DEPLOY_APP_DOMAIN="${DEPLOY_APP_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_WWW_DOMAIN="${DEPLOY_WWW_DOMAIN}"
   export VIDEOCHAT_DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN}"
   export VIDEOCHAT_DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN}"
   export VIDEOCHAT_DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN}"
@@ -259,7 +265,7 @@ deploy_dns_targets() {
   local target seen=""
   local external_domains=()
   IFS=',' read -r -a external_domains <<< "${DEPLOY_EXTERNAL_DOMAINS}"
-  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" "${external_domains[@]}"; do
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_WWW_DOMAIN}" "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" "${external_domains[@]}"; do
     target="${target//[[:space:]]/}"
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
@@ -338,6 +344,7 @@ persist_current_deploy_config() {
   local_env_upsert VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS "${DEPLOY_REFRESH_KNOWN_HOSTS:-0}"
   local_env_upsert VIDEOCHAT_DEPLOY_REMOTE_LOCALE "${DEPLOY_REMOTE_LOCALE}"
   local_env_upsert VIDEOCHAT_DEPLOY_APP_DOMAIN "${DEPLOY_APP_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_WWW_DOMAIN "${DEPLOY_WWW_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_API_DOMAIN "${DEPLOY_API_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_WS_DOMAIN "${DEPLOY_WS_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_SFU_DOMAIN "${DEPLOY_SFU_DOMAIN}"
@@ -524,6 +531,8 @@ sync_checkout() {
     -e "$(printf '%q ' "${RSYNC_SSH[@]}")" \
     --exclude '.git/' \
     --exclude '.codex/' \
+    --exclude '.vite/' \
+    --exclude 'analysis/' \
     --exclude '.env.local' \
     --exclude '*.env.local' \
     --exclude 'dist/' \
@@ -534,6 +543,7 @@ sync_checkout() {
     --exclude 'demo/video-chat/frontend-vue/node_modules/' \
     --exclude 'demo/video-chat/frontend-vue/.vite/' \
     --exclude 'demo/video-chat/frontend-vue/dist/' \
+    --exclude 'demo/video-chat/frontend-vue/playwright-report/' \
     --exclude 'demo/video-chat/frontend-vue/test-results*/' \
     --exclude 'demo/video-chat/backend-king-php/.local/' \
     --exclude 'extension/.libs/' \
@@ -552,9 +562,10 @@ sync_checkout() {
 }
 
 certbot_standalone() {
-  local deploy_path_q domain_q app_domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q
+  local deploy_path_q domain_q www_domain_q app_domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
+  www_domain_q="$(shell_quote "${DEPLOY_WWW_DOMAIN}")"
   app_domain_q="$(shell_quote "${DEPLOY_APP_DOMAIN}")"
   email_q="$(shell_quote "${DEPLOY_EMAIL}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
@@ -573,6 +584,7 @@ set -euo pipefail
 SUDO="$(sudo_prefix)"
 DEPLOY_PATH=${deploy_path_q}
 DOMAIN=${domain_q}
+WWW_DOMAIN=${www_domain_q}
 APP_DOMAIN=${app_domain_q}
 EMAIL=${email_q}
 API_DOMAIN=${api_domain_q}
@@ -587,6 +599,7 @@ EXTERNAL_DOMAINS=${external_domains_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 FRONTEND_WAS_RUNNING=0
 EDGE_WAS_RUNNING=0
+EDGE_CONTAINER_IDS=""
 
 if ! command -v certbot >/dev/null 2>&1; then
   echo "certbot is missing on remote host." >&2
@@ -618,19 +631,10 @@ trap restore_certbot_stopped_services EXIT
 
 if [ -f "\${VIDEOCHAT_DIR}/docker-compose.v1.yml" ] && [ -f "\${VIDEOCHAT_DIR}/.env.local" ] && [ -f "\${VIDEOCHAT_DIR}/docker-compose.deploy.local.yml" ]; then
   cd "\${VIDEOCHAT_DIR}"
-  if docker compose --env-file .env --env-file .env.local \\
-      -f docker-compose.v1.yml \\
-      -f docker-compose.deploy.local.yml \\
-      --profile edge \\
-      --profile turn \\
-      ps -q videochat-edge-v1 2>/dev/null | grep -q .; then
+  EDGE_CONTAINER_IDS="\$(docker ps -q --filter label=com.docker.compose.service=videochat-edge-v1 2>/dev/null || true)"
+  if [ -n "\${EDGE_CONTAINER_IDS}" ]; then
     EDGE_WAS_RUNNING=1
-    docker compose --env-file .env --env-file .env.local \\
-      -f docker-compose.v1.yml \\
-      -f docker-compose.deploy.local.yml \\
-      --profile edge \\
-      --profile turn \\
-      stop videochat-edge-v1 >/dev/null || true
+    docker stop \${EDGE_CONTAINER_IDS} >/dev/null || true
   fi
 
   if docker compose --env-file .env --env-file .env.local \\
@@ -647,6 +651,7 @@ fi
 
 CERTBOT_DOMAINS=(
   -d "\${DOMAIN}"
+  -d "\${WWW_DOMAIN}"
   -d "\${APP_DOMAIN}"
   -d "\${API_DOMAIN}"
   -d "\${WS_DOMAIN}"
@@ -724,12 +729,13 @@ certbot_standalone_if_needed() {
 }
 
 write_remote_runtime_files() {
-  local deploy_path_q domain_q app_domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
+  local deploy_path_q domain_q www_domain_q app_domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_local_node_name_q infra_local_public_ip_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
+  www_domain_q="$(shell_quote "${DEPLOY_WWW_DOMAIN}")"
   app_domain_q="$(shell_quote "${DEPLOY_APP_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
@@ -766,6 +772,7 @@ set -euo pipefail
 SUDO="$(sudo_prefix)"
 DEPLOY_PATH=${deploy_path_q}
 DOMAIN=${domain_q}
+WWW_DOMAIN=${www_domain_q}
 APP_DOMAIN=${app_domain_q}
 API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
@@ -842,7 +849,9 @@ VIDEOCHAT_EDGE_SFU_ENABLED=0
 VIDEOCHAT_V1_EDGE_HTTP_PORT=80
 VIDEOCHAT_V1_EDGE_HTTPS_PORT=443
 
+VIDEOCHAT_DEPLOY_DOMAIN=\${DOMAIN}
 VIDEOCHAT_DEPLOY_API_DOMAIN=\${API_DOMAIN}
+VIDEOCHAT_DEPLOY_WWW_DOMAIN=\${WWW_DOMAIN}
 VIDEOCHAT_DEPLOY_APP_DOMAIN=\${APP_DOMAIN}
 VIDEOCHAT_DEPLOY_WS_DOMAIN=\${WS_DOMAIN}
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=\${SFU_DOMAIN}
@@ -884,6 +893,7 @@ VIDEOCHAT_CALL_APP_MCP_ENDPOINT=mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.
 VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER=1
 VIDEOCHAT_CALL_APP_PACKAGE_ROOT=/call-app
 VIDEOCHAT_EDGE_ROOT_DOMAIN=\${DOMAIN}
+VIDEOCHAT_EDGE_WWW_DOMAIN=\${WWW_DOMAIN}
 VIDEOCHAT_EDGE_CALL_APP_DOMAIN=\${CALL_APP_DOMAIN}
 VIDEOCHAT_EDGE_CALL_APP_ROOT=/app/call-app
 VIDEOCHAT_ASSET_VERSION=\${ASSET_VERSION}
@@ -995,12 +1005,13 @@ REMOTE
 }
 
 start_production_https() {
-  local deploy_path_q domain_q app_domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q www_domain_q app_domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q registry_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_local_node_name_q infra_local_public_ip_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
+  www_domain_q="$(shell_quote "${DEPLOY_WWW_DOMAIN}")"
   app_domain_q="$(shell_quote "${DEPLOY_APP_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
@@ -1033,6 +1044,7 @@ start_production_https() {
 set -euo pipefail
 DEPLOY_PATH=${deploy_path_q}
 DOMAIN=${domain_q}
+WWW_DOMAIN=${www_domain_q}
 APP_DOMAIN=${app_domain_q}
 API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
@@ -1093,7 +1105,9 @@ set_env_value VIDEOCHAT_SFU_ENABLED 0
 set_env_value VIDEOCHAT_EDGE_SFU_ENABLED 0
 set_env_value VIDEOCHAT_V1_EDGE_HTTP_PORT 80
 set_env_value VIDEOCHAT_V1_EDGE_HTTPS_PORT 443
+set_env_value VIDEOCHAT_DEPLOY_DOMAIN "\${DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_APP_DOMAIN "\${APP_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_WWW_DOMAIN "\${WWW_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_API_DOMAIN "\${API_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
@@ -1137,6 +1151,7 @@ set_env_value VIDEOCHAT_CALL_APP_MCP_ENDPOINT "mcp://\${MOTHERNODE_DOMAIN}/call_
 set_env_value VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER 1
 set_env_value VIDEOCHAT_CALL_APP_PACKAGE_ROOT /call-app
 set_env_value VIDEOCHAT_EDGE_ROOT_DOMAIN "\${DOMAIN}"
+set_env_value VIDEOCHAT_EDGE_WWW_DOMAIN "\${WWW_DOMAIN}"
 set_env_value VIDEOCHAT_EDGE_CALL_APP_DOMAIN "\${CALL_APP_DOMAIN}"
 set_env_value VIDEOCHAT_EDGE_CALL_APP_ROOT /app/call-app
 set_env_value VITE_VIDEOCHAT_ICE_SERVERS "stun:\${TURN_DOMAIN}:3478"
@@ -1176,6 +1191,26 @@ docker compose --env-file .env --env-file .env.local \\
   -f docker-compose.deploy.local.yml \\
   --profile sfu \\
   rm -sf videochat-backend-sfu-v1 >/dev/null 2>&1 || true
+
+remove_existing_service_containers() {
+  local service="\$1"
+  local container_ids
+  container_ids="\$(docker ps -aq --filter "label=com.docker.compose.service=\${service}" 2>/dev/null || true)"
+  if [ -n "\${container_ids}" ]; then
+    docker rm -f \${container_ids} >/dev/null || true
+  fi
+}
+
+for service in \\
+  videochat-frontend-v1 \\
+  videochat-backend-v1 \\
+  videochat-backend-ws-v1 \\
+  videochat-backend-sfu-v1 \\
+  videochat-sputnik-runner-v1 \\
+  videochat-turn-v1 \\
+  videochat-edge-v1; do
+  remove_existing_service_containers "\${service}"
+done
 
 docker compose --env-file .env --env-file .env.local \\
   -f docker-compose.v1.yml \\
