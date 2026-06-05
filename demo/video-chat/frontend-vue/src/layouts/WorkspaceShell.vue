@@ -696,7 +696,7 @@ const workspaceSttState = reactive({
 });
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
-const showSputnikControls = computed(() => isCallWorkspace.value && sessionState.isSuperadmin === true);
+const showSputnikControls = computed(() => isCallWorkspace.value && Number(sessionState.userId || 0) === 1);
 const showCallOwnerInviteLink = computed(() => (
   isCallWorkspace.value
   && callOwnerEditState.visible
