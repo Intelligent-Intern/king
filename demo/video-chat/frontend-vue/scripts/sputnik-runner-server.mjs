@@ -7,6 +7,10 @@ const host = String(process.env.VIDEOCHAT_SPUTNIK_RUNNER_HOST || '0.0.0.0');
 const port = Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_RUNNER_PORT || '19090'), 10) || 19090;
 const defaultTimeoutMs = Math.max(10_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_JOIN_TIMEOUT_MS || '90000'), 10) || 90_000);
 const defaultMaxRunMs = Math.max(60_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_RUN_MS || `${2 * 60 * 60 * 1000}`), 10) || 2 * 60 * 60 * 1000);
+const defaultMonitorIntervalMs = Math.max(1_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MONITOR_INTERVAL_MS || '2500'), 10) || 2_500);
+const defaultRestartDelayMs = Math.max(1_000, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_RESTART_DELAY_MS || '5000'), 10) || 5_000);
+const parsedDefaultMaxRestarts = Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_RESTARTS ?? '5'), 10);
+const defaultMaxRestarts = Math.max(0, Number.isFinite(parsedDefaultMaxRestarts) ? parsedDefaultMaxRestarts : 5);
 const maxParticipants = Math.max(1, Math.min(50, Number.parseInt(String(process.env.VIDEOCHAT_SPUTNIK_MAX_PARTICIPANTS || '25'), 10) || 25));
 const executablePath = String(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '').trim() || undefined;
 
@@ -45,7 +49,11 @@ async function readJson(request) {
 function summarizeParticipant(participant) {
   return {
     index: participant.index,
+    last_seen_at: participant.lastSeenAt || null,
+    last_state_check_at: participant.lastStateCheckAt || null,
     name: participant.name,
+    restart_count: participant.restartCount || 0,
+    restart_reason: participant.restartReason || '',
     state: participant.state,
     url: participant.url,
     error: participant.error || '',
@@ -53,12 +61,38 @@ function summarizeParticipant(participant) {
   };
 }
 
+function jobParticipantCounts(job) {
+  const counts = {
+    closed_count: 0,
+    failed_count: 0,
+    lobby_count: 0,
+    restarting_count: 0,
+    starting_count: 0,
+    waiting_count: 0,
+    workspace_count: 0,
+  };
+  for (const participant of job.participants) {
+    const state = String(participant.state || '').trim().toLowerCase();
+    if (state === 'workspace') counts.workspace_count += 1;
+    else if (state === 'lobby') counts.lobby_count += 1;
+    else if (state === 'closed') counts.closed_count += 1;
+    else if (state === 'failed') counts.failed_count += 1;
+    else if (state === 'restarting') counts.restarting_count += 1;
+    else if (state === 'starting') counts.starting_count += 1;
+    else if (state === 'waiting') counts.waiting_count += 1;
+  }
+  return counts;
+}
+
 function summarizeJob(job) {
+  const counts = jobParticipantCounts(job);
   return {
     call_id: job.callId,
+    ...counts,
     count: job.count,
     created_at: job.createdAt,
     error: job.error || '',
+    healthy_count: counts.workspace_count + counts.lobby_count + counts.waiting_count,
     participant_count: job.participants.length,
     participants: job.participants.map(summarizeParticipant),
     state: job.state,
@@ -79,6 +113,78 @@ function sputnikJoinUrl(joinUrl, index, options) {
   url.searchParams.set('sputnik_w', String(options.width));
   url.searchParams.set('sputnik_h', String(options.height));
   return url.toString();
+}
+
+function terminalJobState(job) {
+  return ['stopped', 'expired', 'failed'].includes(String(job.state || '').trim().toLowerCase());
+}
+
+function clearParticipantMonitor(participant) {
+  if (!participant?.monitorTimer) return;
+  clearInterval(participant.monitorTimer);
+  participant.monitorTimer = null;
+}
+
+function updateJobState(job) {
+  if (terminalJobState(job)) return;
+  const counts = jobParticipantCounts(job);
+  if (job.participants.length < job.count || counts.starting_count > 0 || counts.restarting_count > 0) {
+    job.state = 'starting';
+  } else if (counts.failed_count > 0 || counts.closed_count > 0) {
+    job.state = 'degraded';
+  } else {
+    job.state = 'running';
+  }
+  job.updatedAt = nowIso();
+}
+
+async function classifyParticipantPage(page, callId) {
+  if (!page || page.isClosed()) return 'closed';
+  const workspaceNeedle = `/workspace/call/${callId}`;
+  try {
+    if (new URL(page.url()).pathname === workspaceNeedle) return 'workspace';
+  } catch {
+    // keep probing DOM below
+  }
+  const waitingModal = page.locator('.call-access-join-modal').filter({ hasText: /Call owner has been notified|Waiting for host/i }).first();
+  if (await waitingModal.isVisible({ timeout: 200 }).catch(() => false)) return 'lobby';
+  const joinModal = page.locator('.call-access-join-modal').first();
+  if (await joinModal.isVisible({ timeout: 200 }).catch(() => false)) return 'waiting';
+  return 'waiting';
+}
+
+function startParticipantMonitor(job, participant) {
+  clearParticipantMonitor(participant);
+  participant.monitorTimer = setInterval(() => {
+    if (terminalJobState(job)) {
+      clearParticipantMonitor(participant);
+      return;
+    }
+    void (async () => {
+      if (!participant.page || participant.page.isClosed()) {
+        if (participant.state !== 'restarting') {
+          participant.state = 'closed';
+          participant.updatedAt = nowIso();
+          updateJobState(job);
+        }
+        return;
+      }
+      try {
+        const observedState = await classifyParticipantPage(participant.page, job.callId);
+        participant.lastSeenAt = nowIso();
+        participant.lastStateCheckAt = participant.lastSeenAt;
+        if (participant.state !== observedState && participant.state !== 'restarting') {
+          participant.state = observedState;
+          participant.updatedAt = participant.lastSeenAt;
+          updateJobState(job);
+        }
+      } catch (error) {
+        participant.error = error instanceof Error ? error.message.slice(0, 300) : String(error || '').slice(0, 300);
+        participant.lastStateCheckAt = nowIso();
+        participant.updatedAt = participant.lastStateCheckAt;
+      }
+    })();
+  }, job.options.monitorIntervalMs);
 }
 
 async function driveJoin(page, callId, name, timeoutMs) {
@@ -125,20 +231,34 @@ async function driveJoin(page, callId, name, timeoutMs) {
   return outcome || (hasWorkspaceUrl() ? 'workspace' : 'waiting');
 }
 
-async function launchParticipant(job, index) {
+async function launchParticipant(job, index, existingParticipant = null) {
   const name = `Sputnik ${String(index + 1).padStart(2, '0')}`;
-  const participant = {
+  const participant = existingParticipant || {
     browser: null,
     context: null,
     error: '',
     index,
+    lastSeenAt: null,
+    lastStateCheckAt: null,
+    monitorTimer: null,
     name,
     page: null,
+    restartCount: 0,
+    restartInFlight: false,
+    restartReason: '',
     state: 'starting',
     updatedAt: nowIso(),
     url: '',
   };
-  job.participants.push(participant);
+  clearParticipantMonitor(participant);
+  participant.browser = null;
+  participant.context = null;
+  participant.error = '';
+  participant.name = name;
+  participant.page = null;
+  participant.state = existingParticipant ? 'restarting' : 'starting';
+  participant.updatedAt = nowIso();
+  if (!existingParticipant) job.participants.push(participant);
   job.updatedAt = nowIso();
 
   try {
@@ -168,21 +288,78 @@ async function launchParticipant(job, index) {
       participant.updatedAt = nowIso();
     });
     page.on('close', () => {
-      if (participant.state !== 'stopped') {
+      if (!['stopped', 'restarting'].includes(participant.state)) {
         participant.state = 'closed';
         participant.updatedAt = nowIso();
+        updateJobState(job);
       }
+    });
+    page.on('crash', () => {
+      participant.state = 'closed';
+      participant.error = 'page_crashed';
+      participant.updatedAt = nowIso();
+      updateJobState(job);
     });
 
     await page.goto(participant.url, { waitUntil: 'domcontentloaded', timeout: job.options.timeoutMs });
     participant.state = await driveJoin(page, job.callId, name, job.options.timeoutMs);
+    participant.lastSeenAt = nowIso();
+    participant.lastStateCheckAt = participant.lastSeenAt;
     participant.updatedAt = nowIso();
+    startParticipantMonitor(job, participant);
   } catch (error) {
     participant.state = 'failed';
     participant.error = error instanceof Error ? error.message.slice(0, 500) : String(error || '').slice(0, 500);
     participant.updatedAt = nowIso();
+    clearParticipantMonitor(participant);
     await participant.browser?.close?.().catch(() => null);
+  } finally {
+    participant.restartInFlight = false;
+    updateJobState(job);
   }
+}
+
+async function restartParticipant(job, participant, reason = 'participant_unhealthy') {
+  if (terminalJobState(job) || participant.restartInFlight) return;
+  if ((participant.restartCount || 0) >= job.options.maxRestarts) {
+    participant.state = 'failed';
+    participant.error = `restart_limit_reached:${reason}`;
+    participant.updatedAt = nowIso();
+    updateJobState(job);
+    return;
+  }
+  participant.restartInFlight = true;
+  participant.restartCount = (participant.restartCount || 0) + 1;
+  participant.restartReason = reason;
+  participant.state = 'restarting';
+  participant.updatedAt = nowIso();
+  updateJobState(job);
+  clearParticipantMonitor(participant);
+  await participant.context?.close?.().catch(() => null);
+  await participant.browser?.close?.().catch(() => null);
+  await delay(job.options.restartDelayMs);
+  if (terminalJobState(job)) {
+    participant.restartInFlight = false;
+    return;
+  }
+  await launchParticipant(job, participant.index, participant);
+}
+
+function startJobSupervisor(job) {
+  if (job.supervisorTimer) clearInterval(job.supervisorTimer);
+  job.supervisorTimer = setInterval(() => {
+    if (terminalJobState(job)) {
+      clearInterval(job.supervisorTimer);
+      job.supervisorTimer = null;
+      return;
+    }
+    for (const participant of job.participants) {
+      if (['closed', 'failed'].includes(participant.state)) {
+        void restartParticipant(job, participant, participant.state === 'failed' ? 'launch_failed' : 'page_closed');
+      }
+    }
+    updateJobState(job);
+  }, Math.max(job.options.monitorIntervalMs, 1_000));
 }
 
 async function stopJob(callId, state = 'stopped') {
@@ -192,7 +369,9 @@ async function stopJob(callId, state = 'stopped') {
   job.stoppedAt = nowIso();
   job.updatedAt = nowIso();
   if (job.timer) clearTimeout(job.timer);
+  if (job.supervisorTimer) clearInterval(job.supervisorTimer);
   await Promise.allSettled(job.participants.map(async (participant) => {
+    clearParticipantMonitor(participant);
     participant.state = 'stopped';
     participant.updatedAt = nowIso();
     await participant.context?.close?.().catch(() => null);
@@ -212,8 +391,8 @@ async function runJob(job) {
       await delay(500);
     }
     if (job.state !== 'stopped' && job.state !== 'expired') {
-      job.state = job.participants.some((participant) => participant.state === 'failed') ? 'degraded' : 'running';
-      job.updatedAt = nowIso();
+      startJobSupervisor(job);
+      updateJobState(job);
     }
   } catch (error) {
     job.error = error instanceof Error ? error.message.slice(0, 500) : String(error || '').slice(0, 500);
@@ -242,12 +421,16 @@ function createJob(callId, payload) {
       batchSize: boundedInt(payload.batch_size ?? payload.batchSize, 3, 1, 8),
       fps: boundedInt(payload.fps, 10, 1, 30),
       height: boundedInt(payload.height, 360, 120, 1080),
+      maxRestarts: boundedInt(payload.max_restarts ?? payload.maxRestarts, defaultMaxRestarts, 0, 25),
+      monitorIntervalMs: boundedInt(payload.monitor_interval_ms ?? payload.monitorIntervalMs, defaultMonitorIntervalMs, 1_000, 60_000),
+      restartDelayMs: boundedInt(payload.restart_delay_ms ?? payload.restartDelayMs, defaultRestartDelayMs, 1_000, 5 * 60_000),
       timeoutMs: boundedInt(payload.timeout_ms ?? payload.timeoutMs, defaultTimeoutMs, 10_000, 5 * 60_000),
       width: boundedInt(payload.width, 640, 160, 1920),
     },
     participants: [],
     state: 'accepted',
     stoppedAt: null,
+    supervisorTimer: null,
     timer: null,
     updatedAt: nowIso(),
   };
