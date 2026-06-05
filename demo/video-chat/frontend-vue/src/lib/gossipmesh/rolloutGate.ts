@@ -347,8 +347,6 @@ function normalizeMode(value) {
 function normalizeMediaCarrierMode(value) {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === 'gossip_primary' || mode === 'gossip-primary' || mode === 'gossip') return 'gossip_primary';
-  if (mode === 'sfu_mirror' || mode === 'sfu-mirror' || mode === 'mirror') return 'sfu_mirror';
-  if (mode === 'sfu_first' || mode === 'sfu-first') return 'sfu_first';
   return 'gossip_primary';
 }
 

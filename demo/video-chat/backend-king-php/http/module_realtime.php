@@ -13,10 +13,6 @@ require_once __DIR__ . '/../domain/realtime/realtime_asset_version.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../domain/realtime/realtime_gossipmesh.php';
-require_once __DIR__ . '/../domain/realtime/realtime_sfu_iibin.php';
-require_once __DIR__ . '/../domain/realtime/realtime_sfu_store.php';
-require_once __DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php';
-require_once __DIR__ . '/../domain/realtime/realtime_sfu_gateway.php';
 require_once __DIR__ . '/module_realtime_attachments.php';
 require_once __DIR__ . '/module_realtime_active_call_kick.php';
 require_once __DIR__ . '/module_realtime_websocket_commands.php';
@@ -92,16 +88,10 @@ function videochat_handle_realtime_routes(
     }
 
     if ($path === '/sfu') {
-        return videochat_handle_sfu_routes(
-            $path,
-            $request,
-            $presenceState,
-            $authenticateRequest,
-            $authFailureResponse,
-            $rbacFailureResponse,
-            $errorResponse,
-            $openDatabase
-        );
+        return $errorResponse(410, 'sfu_endpoint_disabled', 'SFU transport is disabled; media must use GossipMesh.', [
+            'path' => $path,
+            'media_transport' => 'gossipmesh',
+        ]);
     }
 
     return videochat_handle_realtime_websocket_route(

@@ -46,8 +46,6 @@ function videochat_media_session_plan_session_states(): array
         'gossip_720p30',
         'gossip_360p30',
         'gossip_360p5',
-        'sfu_720p30',
-        'sfu_320p30',
         'ready',
         'failed',
     ];
@@ -62,8 +60,6 @@ function videochat_media_session_plan_ladder(): array
         ['order' => 1, 'plan_id' => 'gossip_720p30', 'transport' => 'gossip', 'profile' => '720p30', 'codec_path' => 'wlvc', 'width' => 1280, 'height' => 720, 'fps' => 30, 'render_window_ms' => 30_000, 'selected_by' => 'server_head', 'selection_gate' => 'initial'],
         ['order' => 2, 'plan_id' => 'gossip_360p30', 'transport' => 'gossip', 'profile' => '360p30', 'codec_path' => 'wlvc', 'width' => 640, 'height' => 360, 'fps' => 30, 'render_window_ms' => 30_000, 'selected_by' => 'server_head', 'selection_gate' => 'after_gossip_720_render_failure'],
         ['order' => 3, 'plan_id' => 'gossip_360p5', 'transport' => 'gossip', 'profile' => '360p5', 'codec_path' => 'wlvc', 'width' => 640, 'height' => 360, 'fps' => 5, 'render_window_ms' => 30_000, 'selected_by' => 'server_head', 'selection_gate' => 'after_gossip_360p30_render_failure'],
-        ['order' => 4, 'plan_id' => 'sfu_720p30', 'transport' => 'sfu', 'profile' => '720p30', 'codec_path' => 'webrtc_sfu', 'width' => 1280, 'height' => 720, 'fps' => 30, 'render_window_ms' => 30_000, 'selected_by' => 'orchestrator', 'selection_gate' => 'after_gossip_render_failure'],
-        ['order' => 5, 'plan_id' => 'sfu_320p30', 'transport' => 'sfu', 'profile' => '320p30', 'codec_path' => 'webrtc_sfu', 'width' => 320, 'height' => 180, 'fps' => 30, 'render_window_ms' => 30_000, 'selected_by' => 'orchestrator', 'selection_gate' => 'after_sfu_720p30_render_failure'],
     ];
 }
 
@@ -498,7 +494,6 @@ function videochat_media_session_plan_barrier_state(
 function videochat_media_session_plan_build_participants(array $input, array $selectedPlan, int $nowMs): array
 {
     $selectedProfile = (string) ($selectedPlan['profile'] ?? '720p30');
-    $selectedTransport = (string) ($selectedPlan['transport'] ?? 'gossip');
     $participants = [];
     foreach ((array) ($input['participants'] ?? []) as $participant) {
         if (!is_array($participant)) {
@@ -513,22 +508,12 @@ function videochat_media_session_plan_build_participants(array $input, array $se
         $explicitState = (string) ($participant['media_state'] ?? '');
         $state = in_array($explicitState, videochat_media_session_plan_allowed_states(), true) ? $explicitState : $computedState;
         if (
-            $selectedTransport === 'sfu'
-            && $state === 'waiting_for_gossip'
-            && videochat_media_session_plan_stream_candidate($capabilities)
-        ) {
-            $state = 'streaming_720p30';
-        }
-        if (
-            $selectedTransport === 'gossip'
-            && $state === 'streaming_720p30'
+            $state === 'streaming_720p30'
             && !videochat_media_session_plan_gossip_ready($gossipReadiness)
         ) {
             $state = $computedState;
         }
-        $barrier = $selectedTransport === 'gossip'
-            ? videochat_media_session_plan_barrier_state($state, $participant, $capabilities, $nowMs)
-            : ['media_state' => $state, 'stuck_reason' => ''];
+        $barrier = videochat_media_session_plan_barrier_state($state, $participant, $capabilities, $nowMs);
         $state = (string) ($barrier['media_state'] ?? $state);
         $barrierStuckReason = (string) ($barrier['stuck_reason'] ?? '');
         $participants[] = [
@@ -538,7 +523,7 @@ function videochat_media_session_plan_build_participants(array $input, array $se
             ),
             'media_state' => $state,
             'profile' => videochat_media_session_plan_is_sending_state($state) ? $selectedProfile : '',
-            'transport' => videochat_media_session_plan_is_sending_state($state) ? $selectedTransport : '',
+            'transport' => videochat_media_session_plan_is_sending_state($state) ? 'gossip' : '',
             'security_policy' => $state === 'blocked_capability' ? 'blocked' : 'transport_only',
             'stuck_reason' => $state === 'stuck_not_sending'
                 ? (string) ($participant['stuck_reason'] ?? ($barrierStuckReason === '' ? 'not_sending' : $barrierStuckReason))

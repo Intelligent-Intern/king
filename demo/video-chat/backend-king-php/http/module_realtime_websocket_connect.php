@@ -55,10 +55,10 @@ function videochat_realtime_websocket_default_gossip_rollout_gate(): array
 
     return [
         'kind' => 'gossip_rollout_gate_state',
-        'decision' => 'sfu_first_explicit',
+        'decision' => 'gossip_topology_pending',
         'active_allowed' => false,
         'observational_only' => true,
-        'sfu_first' => true,
+        'sfu_first' => false,
         'rtc_ready' => false,
         'telemetry_ready' => false,
         'peer_count' => 0,
@@ -94,7 +94,7 @@ function videochat_realtime_websocket_gossip_ops_state_frame(
         'peer_count' => max(0, $peerCount),
         'transports' => $transports,
         'rollout_gate' => $rolloutGate,
-        'decision' => (string) ($rolloutGate['decision'] ?? 'sfu_first_explicit'),
+        'decision' => (string) ($rolloutGate['decision'] ?? 'gossip_topology_pending'),
         'active_allowed' => (bool) ($rolloutGate['active_allowed'] ?? false),
         'reason' => trim((string) ($context['reason'] ?? 'server_head_ops_state')) ?: 'server_head_ops_state',
         ...videochat_realtime_websocket_gossip_ops_state_policy(),

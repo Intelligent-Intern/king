@@ -541,7 +541,7 @@ export function createScreenShareParticipantPublisher({
       if (!useGossipPrimaryTransport && !callbacks.isWlvcRuntimePath?.()) {
         throw normalizeDisplayMediaError({
           name: 'NotSupportedError',
-          message: 'Screen sharing needs the SFU media runtime.',
+          message: 'Screen sharing needs the WLVC/Gossip media runtime.',
         });
       }
       if (String(refs.activeSocketCallId.value || '').trim() === '') {
