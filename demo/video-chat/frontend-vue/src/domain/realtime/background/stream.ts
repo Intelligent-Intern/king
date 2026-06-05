@@ -505,7 +505,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
         underLoad,
       })
       : (segmenterStage.reset(), segmenterStage.getState());
-    const hasRenderableMatte = effectEnabled && Boolean(segmenterState.hasMatteMask);
     compositorStage.render({
       hasMatteMask: segmenterState.hasMatteMask,
       maskBitmap: segmenterState.maskBitmap,
@@ -513,7 +512,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       maskUpdated: segmenterState.maskUpdated,
       maskValues: segmenterState.maskValues,
       maskWidth: segmenterState.maskWidth,
-      mode: hasRenderableMatte ? runtimeConfig.mode : 'off',
+      mode: runtimeConfig.mode,
       now,
       sourceFrame: segmenterState.sourceFrame,
     });
