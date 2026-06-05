@@ -36,7 +36,6 @@ function videochat_handle_call_sputnik_routes(
     $callId = (string) ($matches[1] ?? '');
     $result = null;
     try {
-        $pdo = $openDatabase();
         if ($method === 'POST') {
             $payload = [];
             $rawBody = $request['body'] ?? '';
@@ -51,7 +50,7 @@ function videochat_handle_call_sputnik_routes(
             }
 
             $result = videochat_sputnik_start(
-                $pdo,
+                $openDatabase(),
                 $callId,
                 $authenticatedUserId,
                 $authenticatedUserRole,
@@ -59,9 +58,9 @@ function videochat_handle_call_sputnik_routes(
                 videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } elseif ($method === 'DELETE') {
-            $result = videochat_sputnik_runner_action($pdo, 'DELETE', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action('DELETE', $callId, $authenticatedUserId);
         } else {
-            $result = videochat_sputnik_runner_action($pdo, 'GET', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action('GET', $callId, $authenticatedUserId);
         }
     } catch (Throwable $exception) {
         error_log(sprintf(
