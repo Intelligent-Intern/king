@@ -74,11 +74,7 @@ export function classifyMessage(msg: Record<string, unknown>): Lane | null {
   }
   if (OPS_MESSAGE_TYPES.includes(msg.type as string)) return LANE_OPS
   if (DATA_MESSAGE_TYPES.includes(msg.type as string)) return LANE_DATA
-  if (String(msg.type || '').startsWith('sfu/')) {
-    const sfuType = String(msg.type)
-    if (sfuType === 'sfu/frame') return LANE_DATA
-    return LANE_OPS
-  }
+  if (String(msg.type || '') === 'gossip.media.frame.v1') return LANE_DATA
   return null
 }
 

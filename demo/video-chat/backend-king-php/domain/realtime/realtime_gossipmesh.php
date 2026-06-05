@@ -786,13 +786,13 @@ function videochat_gossipmesh_decode_telemetry_snapshot(string $frame): array
     );
     $rolloutStrategy = videochat_gossipmesh_safe_label(
         $payload['rollout_strategy'] ?? '',
-        ['gossip_primary', 'sfu_first', 'sfu_mirror', 'sfu_first_explicit'],
-        'sfu_mirror'
+        ['gossip_primary'],
+        'gossip_primary'
     );
     $mediaCarrierMode = videochat_gossipmesh_safe_label(
         $payload['media_carrier_mode'] ?? $rolloutStrategy,
-        ['gossip_primary', 'sfu_first', 'sfu_mirror'],
-        $rolloutStrategy === 'gossip_primary' || $rolloutStrategy === 'sfu_first' ? $rolloutStrategy : 'sfu_mirror'
+        ['gossip_primary'],
+        'gossip_primary'
     );
 
     return [
@@ -845,8 +845,8 @@ function videochat_gossipmesh_aggregate_telemetry_snapshot(array &$presenceState
         'peer_id' => $peerId,
         'transport_kind' => (string) ($snapshot['transport_kind'] ?? 'unknown'),
         'data_lane_mode' => (string) ($snapshot['data_lane_mode'] ?? 'off'),
-        'media_carrier_mode' => (string) ($snapshot['media_carrier_mode'] ?? 'sfu_mirror'),
-        'rollout_strategy' => (string) ($snapshot['rollout_strategy'] ?? 'sfu_first_explicit'),
+        'media_carrier_mode' => (string) ($snapshot['media_carrier_mode'] ?? 'gossip_primary'),
+        'rollout_strategy' => (string) ($snapshot['rollout_strategy'] ?? 'gossip_primary'),
         'neighbor_count' => (int) ($snapshot['neighbor_count'] ?? 0),
         'topology_epoch' => (int) ($snapshot['topology_epoch'] ?? 0),
         'counters' => videochat_gossipmesh_sanitize_telemetry_counters($snapshot['counters'] ?? []),
@@ -941,10 +941,10 @@ function videochat_gossipmesh_derive_telemetry_rollout_gate(array $roomAggregate
 
     return [
         'kind' => 'gossip_rollout_gate_state',
-        'decision' => ($rtcReady && $telemetryReady) ? 'active_allowed_diagnostic' : 'sfu_first_explicit',
+        'decision' => ($rtcReady && $telemetryReady) ? 'gossip_primary_active_allowed' : 'gossip_topology_pending',
         'active_allowed' => $rtcReady && $telemetryReady,
-        'observational_only' => true,
-        'sfu_first' => !($rtcReady && $telemetryReady),
+        'observational_only' => !($rtcReady && $telemetryReady),
+        'sfu_first' => false,
         'rtc_ready' => $rtcReady,
         'telemetry_ready' => $telemetryReady,
         'peer_count' => $peerCount,

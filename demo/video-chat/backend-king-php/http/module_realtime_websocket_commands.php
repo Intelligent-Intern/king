@@ -54,7 +54,7 @@ function videochat_realtime_handle_secondary_websocket_command(
         return $mediaFanoutGuardResult;
     }
 
-    if (function_exists('videochat_sfu_binary_frame_has_magic') && videochat_sfu_binary_frame_has_magic($frame)) {
+    if (videochat_gossip_media_binary_frame_has_magic($frame)) {
         $binaryGossipMediaRelayCommand = videochat_gossip_media_relay_decode_client_frame($frame, $presenceConnection);
         $binaryGossipMediaRelayResult = videochat_realtime_handle_gossip_media_relay_command(
             $binaryGossipMediaRelayCommand,

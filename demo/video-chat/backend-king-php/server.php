@@ -410,7 +410,7 @@ $handler = static function (array $request) use (
         ]);
     }
 
-    if ($serverMode === 'ws' && !in_array($path, [$wsPath, '/sfu', '/health'], true)) {
+    if ($serverMode === 'ws' && !in_array($path, [$wsPath, '/health'], true)) {
         return $errorResponse(404, 'rest_endpoint_disabled', 'REST endpoint is disabled on this listener.', [
             'path' => $path,
             'listener_mode' => $serverMode,

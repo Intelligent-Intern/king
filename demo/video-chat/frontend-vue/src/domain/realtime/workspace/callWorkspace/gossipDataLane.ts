@@ -4,12 +4,12 @@ import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDat
 import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
 import {
   gossipBinaryEnvelopeFromEncodedFrame,
+  decodeGossipMediaBinaryEnvelope,
   gossipFrameBinaryMessageFromMetadata,
   gossipFrameMetadataFromEncodedFrame,
   isGossipMediaFrameMessage,
-  sfuFrameFromGossipMessage,
+  rendererFrameFromGossipMessage,
 } from './gossipMediaFrameEnvelope';
-import { decodeSfuBinaryFrameEnvelope } from '../../../../lib/sfu/framePayload';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
 export function createCallWorkspaceGossipDataLane({
@@ -53,8 +53,8 @@ export function createCallWorkspaceGossipDataLane({
     return {
       media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
       media_carrier_diagnostics_label: VIDEOCHAT_MEDIA_CARRIER_CONFIG.diagnosticsLabel,
-      gossip_may_publish_without_sfu: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipMayPublishWithoutSfu,
-      sfu_send_optional: VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional,
+      gossip_only_media_transport: true,
+      gossip_only_media_transport_configured: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipOnlyMediaTransport,
     };
   }
 
@@ -382,7 +382,7 @@ export function createCallWorkspaceGossipDataLane({
     if (strictGossipMediaDisabled('disableGossipReceiveRecovery')) return false;
     const msg = delivery?.message || null;
     if (!isGossipMediaFrameMessage(msg)) return false;
-    const frame = sfuFrameFromGossipMessage(msg, delivery);
+    const frame = rendererFrameFromGossipMessage(msg, delivery);
     if (!frame) return false;
     captureClientDiagnostic({
       category: 'media',
@@ -404,7 +404,7 @@ export function createCallWorkspaceGossipDataLane({
         profile: String(frame.gossipProfile || ''),
         runtime_path: directGossipPrimary ? 'gossip_primary_direct' : String(frame.transportPath || ''),
         renderer_path: 'remote_decoded_canvas',
-        renderer_entry: 'handleSFUEncodedFrame',
+        renderer_entry: 'gossip_remote_frame_renderer',
         decoded_pixels_required: true,
         frame_count_min: 1,
       },
@@ -446,13 +446,13 @@ export function createCallWorkspaceGossipDataLane({
       ? payload
       : (ArrayBuffer.isView(payload) ? payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) : null);
     if (!(input instanceof ArrayBuffer)) return false;
-    const decoded = decodeSfuBinaryFrameEnvelope(input);
+    const decoded = decodeGossipMediaBinaryEnvelope(input);
     if (!decoded?.payload || typeof decoded.payload !== 'object') return false;
     const body = {
       ...decoded.payload,
       data_binary: decoded.payloadBytes,
     };
-    const frame = sfuFrameFromGossipMessage(body, {
+    const frame = rendererFrameFromGossipMessage(body, {
       from_peer_id: String(body.publisher_user_id || body.publisher_id || ''),
     });
     if (!frame) return false;
@@ -469,7 +469,7 @@ export function createCallWorkspaceGossipDataLane({
 
   function handleGossipServerFrame(payload) {
     const body = payload?.payload && typeof payload.payload === 'object' ? payload.payload : payload;
-    const frame = sfuFrameFromGossipMessage(body, {
+    const frame = rendererFrameFromGossipMessage(body, {
       from_peer_id: String(payload?.sender?.user_id || body?.publisher_user_id || body?.publisher_id || ''),
     });
     if (!frame) return false;
@@ -588,7 +588,7 @@ export function createCallWorkspaceGossipDataLane({
       level: backendVisibleBacktrace ? 'warning' : 'info',
       eventType: 'gossip_data_lane_shadow_would_publish',
       code: 'gossip_data_lane_shadow_would_publish',
-      message: 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
+      message: 'Gossip data lane recorded a frame while direct publication was disabled; media was not published.',
       payload: {
         ...mediaCarrierDiagnosticPayload(),
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,

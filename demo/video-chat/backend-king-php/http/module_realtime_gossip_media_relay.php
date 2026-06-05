@@ -4,10 +4,108 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/realtime/realtime_signaling.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
-require_once __DIR__ . '/../domain/realtime/realtime_sfu_store.php';
 
+const VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE = 'gossip.media.frame.v1';
 const VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE = 'gossip/server-frame';
 const VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE = 'call/gossip-server-frame';
+const VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_MAGIC = 'KGFB';
+const VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_VERSION = 1;
+const VIDEOCHAT_GOSSIP_MEDIA_BINARY_HEADER_BYTES = 16;
+
+function videochat_gossip_media_binary_frame_has_magic(string $payload): bool
+{
+    return strlen($payload) >= VIDEOCHAT_GOSSIP_MEDIA_BINARY_HEADER_BYTES
+        && substr($payload, 0, 4) === VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_MAGIC;
+}
+
+function videochat_gossip_media_binary_read_u32le(string $payload, int $offset): int
+{
+    $bytes = substr($payload, $offset, 4);
+    if (strlen($bytes) !== 4) {
+        return -1;
+    }
+    $decoded = unpack('Vvalue', $bytes);
+    return is_array($decoded) ? (int) ($decoded['value'] ?? -1) : -1;
+}
+
+function videochat_gossip_media_binary_write_u32le(int $value): string
+{
+    return pack('V', max(0, min(0xffffffff, $value)));
+}
+
+function videochat_gossip_media_encode_binary_frame_envelope(array $frame): string|false
+{
+    $payloadBinary = $frame['data_binary'] ?? ($frame['dataBinary'] ?? null);
+    if (!is_string($payloadBinary) || $payloadBinary === '') {
+        return false;
+    }
+
+    unset(
+        $frame['data_binary'],
+        $frame['dataBinary'],
+        $frame['data'],
+        $frame['payload'],
+        $frame['protected_frame'],
+        $frame['protectedFrame']
+    );
+    $frame['type'] = VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE;
+    $frame['payload_encoding'] = 'binary';
+    $frame['payload_bytes'] = strlen($payloadBinary);
+    $frame['payload_chars'] = strlen($payloadBinary);
+    $frame['binary_media_required'] = true;
+    $frame['media_transport'] = 'gossip_server_fanout';
+
+    $metadataJson = json_encode($frame, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($metadataJson) || $metadataJson === '') {
+        return false;
+    }
+
+    return VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_MAGIC
+        . chr(VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_VERSION)
+        . "\0\0\0"
+        . videochat_gossip_media_binary_write_u32le(strlen($metadataJson))
+        . videochat_gossip_media_binary_write_u32le(strlen($payloadBinary))
+        . $metadataJson
+        . $payloadBinary;
+}
+
+/**
+ * @return array{ok: bool, payload: array<string, mixed>, error: string}
+ */
+function videochat_gossip_media_decode_binary_frame_envelope(string $frame): array
+{
+    if (!videochat_gossip_media_binary_frame_has_magic($frame)) {
+        return ['ok' => false, 'payload' => [], 'error' => 'unsupported_type'];
+    }
+    if (ord($frame[4]) !== VIDEOCHAT_GOSSIP_MEDIA_BINARY_FRAME_VERSION) {
+        return ['ok' => false, 'payload' => [], 'error' => 'unsupported_binary_version'];
+    }
+
+    $metadataLength = videochat_gossip_media_binary_read_u32le($frame, 8);
+    $payloadLength = videochat_gossip_media_binary_read_u32le($frame, 12);
+    $metadataStart = VIDEOCHAT_GOSSIP_MEDIA_BINARY_HEADER_BYTES;
+    $payloadStart = $metadataStart + $metadataLength;
+    $payloadEnd = $payloadStart + $payloadLength;
+    if ($metadataLength <= 0 || $payloadLength <= 0 || $payloadEnd > strlen($frame)) {
+        return ['ok' => false, 'payload' => [], 'error' => 'invalid_binary_envelope'];
+    }
+
+    try {
+        $metadata = json_decode(substr($frame, $metadataStart, $metadataLength), true, 64, JSON_THROW_ON_ERROR);
+    } catch (JsonException) {
+        return ['ok' => false, 'payload' => [], 'error' => 'invalid_binary_metadata'];
+    }
+    if (!is_array($metadata)) {
+        return ['ok' => false, 'payload' => [], 'error' => 'invalid_binary_metadata'];
+    }
+
+    $metadata['type'] = VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE;
+    $metadata['data_binary'] = substr($frame, $payloadStart, $payloadLength);
+    $metadata['payload_bytes'] = $payloadLength;
+    $metadata['payload_chars'] = $payloadLength;
+    $metadata['binary_media_required'] = true;
+    return ['ok' => true, 'payload' => $metadata, 'error' => ''];
+}
 
 function videochat_gossip_media_relay_socket_requested(array $queryParams): bool
 {
@@ -41,12 +139,12 @@ function videochat_gossip_media_relay_decode_binary_client_frame(string $frame, 
         'error' => 'unsupported_type',
     ];
 
-    if (!function_exists('videochat_sfu_binary_frame_has_magic') || !videochat_sfu_binary_frame_has_magic($frame)) {
+    if (!videochat_gossip_media_binary_frame_has_magic($frame)) {
         return $unsupported;
     }
 
     $boundRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), '');
-    $decoded = videochat_sfu_decode_binary_client_frame($frame, $boundRoomId);
+    $decoded = videochat_gossip_media_decode_binary_frame_envelope($frame);
     if (!(bool) ($decoded['ok'] ?? false)) {
         return [
             ...$unsupported,
@@ -56,6 +154,14 @@ function videochat_gossip_media_relay_decode_binary_client_frame(string $frame, 
     }
 
     $payload = is_array($decoded['payload'] ?? null) ? (array) $decoded['payload'] : [];
+    $payloadRoomId = videochat_presence_normalize_room_id((string) ($payload['room_id'] ?? ''), '');
+    if ($payloadRoomId !== '' && $boundRoomId !== '' && $payloadRoomId !== $boundRoomId) {
+        return [
+            ...$unsupported,
+            'type' => VIDEOCHAT_GOSSIP_MEDIA_RELAY_CLIENT_TYPE,
+            'error' => 'gossip_media_room_mismatch',
+        ];
+    }
     $trackId = trim((string) ($payload['track_id'] ?? ($payload['trackId'] ?? '')));
     $dataBinary = $payload['data_binary'] ?? null;
     if ($trackId === '' || !is_string($dataBinary) || $dataBinary === '') {
@@ -102,7 +208,7 @@ function videochat_gossip_media_relay_decode_client_frame(string $frame, array $
         ];
     }
 
-    if (function_exists('videochat_sfu_binary_frame_has_magic') && videochat_sfu_binary_frame_has_magic($frame)) {
+    if (videochat_gossip_media_binary_frame_has_magic($frame)) {
         return videochat_gossip_media_relay_decode_binary_client_frame($frame, $presenceConnection);
     }
 
@@ -323,7 +429,7 @@ function videochat_realtime_send_gossip_media_relay_error(
 function videochat_gossip_media_relay_frame_from_delivery_payload(array $payload): array
 {
     $frame = is_array($payload['payload'] ?? null) ? (array) $payload['payload'] : $payload;
-    return strtolower(trim((string) ($frame['type'] ?? ''))) === 'sfu/frame' ? $frame : [];
+    return strtolower(trim((string) ($frame['type'] ?? ''))) === VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE ? $frame : [];
 }
 
 function videochat_gossip_media_relay_payload_contains_binary_frame(array $payload): bool
@@ -340,11 +446,11 @@ function videochat_gossip_media_relay_send_delivery_payload(
 ): bool {
     $frame = videochat_gossip_media_relay_frame_from_delivery_payload($payload);
     if ($frame !== [] && is_string($frame['data_binary'] ?? null) && (string) $frame['data_binary'] !== '') {
+        $binaryPayload = videochat_gossip_media_encode_binary_frame_envelope($frame);
+        if (!is_string($binaryPayload) || $binaryPayload === '') {
+            return false;
+        }
         if ($sender !== null) {
-            $binaryPayload = videochat_sfu_encode_binary_frame_envelope($frame);
-            if (!is_string($binaryPayload) || $binaryPayload === '') {
-                return false;
-            }
             return videochat_presence_send_frame(
                 $socket,
                 [
@@ -357,10 +463,14 @@ function videochat_gossip_media_relay_send_delivery_payload(
                 $sender
             );
         }
-        return videochat_sfu_send_outbound_message($socket, $frame, [
-            'sfu_send_path' => 'gossip_media_binary_relay',
-            ...$sendContext,
-        ]);
+        if (!function_exists('king_websocket_send')) {
+            return false;
+        }
+        try {
+            return @king_websocket_send($socket, $binaryPayload, true) === true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     return videochat_presence_send_frame($socket, $payload, $sender);
@@ -423,7 +533,7 @@ function videochat_gossip_media_relay_broker_metadata(array $frame): array
         $frame['protected_frame'],
         $frame['protectedFrame']
     );
-    $frame['type'] = 'sfu/frame';
+    $frame['type'] = VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE;
     $frame['protection_mode'] = 'transport_only';
     return $frame;
 }
@@ -564,8 +674,10 @@ function videochat_gossip_media_relay_broker_poll(
         $frame['data_binary'] = $payloadBinary;
         $frame['protection_mode'] = 'transport_only';
         $frame['payload_bytes'] = strlen($payloadBinary);
-        videochat_sfu_send_outbound_message($websocket, $frame, [
-            'sfu_send_path' => 'gossip_media_binary_broker',
+        videochat_gossip_media_relay_send_delivery_payload($websocket, [
+            'type' => VIDEOCHAT_GOSSIP_MEDIA_RELAY_DELIVERY_TYPE,
+            'lane' => 'media',
+            'payload' => $frame,
         ]);
     }
 }
@@ -808,7 +920,7 @@ function videochat_realtime_handle_gossip_media_relay_command(
     $publisherId = $userId > 0 ? (string) $userId : (string) ($presenceConnection['connection_id'] ?? 'relay');
 
     $frame = (array) ($relayCommand['payload'] ?? []);
-    $frame['type'] = 'sfu/frame';
+    $frame['type'] = VIDEOCHAT_GOSSIP_MEDIA_FRAME_TYPE;
     $frame['publisher_id'] = $publisherId;
     $frame['publisher_user_id'] = $userId > 0 ? (string) $userId : $publisherId;
     $frame['protection_mode'] = 'transport_only';

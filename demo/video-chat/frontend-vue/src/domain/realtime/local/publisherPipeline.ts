@@ -22,7 +22,7 @@ import {
 } from './publisherFrameTrace';
 import { createPublisherSourceReadbackController } from './publisherSourceReadback';
 import {
-  diagnoseOptionalSfuPressureAfterGossip,
+  diagnoseGossipPostPublishPressure,
   dispatchWlvcPublisherFrame,
   publisherRequiresSfuBeforeEncode,
 } from './publisherFrameDispatch';
@@ -1118,7 +1118,7 @@ export function createLocalPublisherPipelineHelpers({
         );
         if (postSendBufferedAmount >= postSendPressureBytes) {
           if (dispatchResult.sfuSendOptional && dispatchResult.gossipPublished) {
-            diagnoseOptionalSfuPressureAfterGossip({
+            diagnoseGossipPostPublishPressure({
               captureClientDiagnostic,
               mediaRuntimePath: refs.mediaRuntimePathRef.value,
               trackId: videoTrack.id,

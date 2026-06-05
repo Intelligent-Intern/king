@@ -1,15 +1,14 @@
-import {
-  encodeSfuBinaryFrameEnvelope,
-  prepareSfuOutboundFramePayload,
-} from '../../../../lib/sfu/framePayload';
 import { normalizeScreenShareMediaSource } from '../../screenShareIdentity.js';
 
 export const GOSSIP_MEDIA_FRAME_TYPE = 'gossip.media.frame.v1';
 export const GOSSIP_MEDIA_FRAME_CONTRACT_VERSION = 'v1.0.0';
 export const GOSSIP_MEDIA_FRAME_PROFILE = 'video_720p30';
+export const GOSSIP_MEDIA_BINARY_FRAME_MAGIC = 'KGFB';
 const GOSSIP_MEDIA_FRAME_WIDTH = 1280;
 const GOSSIP_MEDIA_FRAME_HEIGHT = 720;
 const GOSSIP_MEDIA_FRAME_RATE = 30;
+const GOSSIP_MEDIA_BINARY_FRAME_VERSION = 1;
+const GOSSIP_MEDIA_BINARY_HEADER_BYTES = 16;
 const GOSSIP_MEDIA_WLVC_CODEC_ID = 'wlvc_v1';
 const GOSSIP_MEDIA_WEB_CODECS_CODEC_IDS = Object.freeze(['webcodecs_vp8', 'webcodecs_vp9', 'webcodecs_av1']);
 
@@ -55,7 +54,7 @@ function gossipRuntimeEncoder(frame) {
 function gossipRuntimeId(frame, encoder) {
   const explicitRuntimeId = String(frame?.runtimeId || frame?.runtime_id || '').trim();
   if (explicitRuntimeId !== '') return explicitRuntimeId;
-  return encoder === 'webcodecs' ? 'webcodecs' : 'wlvc_sfu';
+  return encoder === 'webcodecs' ? 'webcodecs' : 'gossip_wlvc';
 }
 
 function gossipMetricValue(frame, camelKey, snakeKey, fallback = 0) {
@@ -91,6 +90,110 @@ function normalizeGossipFrameArrayBuffer(data) {
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   }
   return new ArrayBuffer(0);
+}
+
+function gossipUtf8Encode(value) {
+  const input = String(value ?? '');
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(input);
+  }
+  const encoded = unescape(encodeURIComponent(input));
+  const bytes = new Uint8Array(encoded.length);
+  for (let index = 0; index < encoded.length; index += 1) {
+    bytes[index] = encoded.charCodeAt(index) & 0xff;
+  }
+  return bytes;
+}
+
+function gossipUtf8Decode(bytes) {
+  const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(normalizeGossipFrameArrayBuffer(bytes));
+  if (typeof TextDecoder !== 'undefined') {
+    return new TextDecoder().decode(input);
+  }
+  let binary = '';
+  for (let index = 0; index < input.length; index += 1) {
+    binary += String.fromCharCode(input[index]);
+  }
+  try {
+    return decodeURIComponent(escape(binary));
+  } catch {
+    return binary;
+  }
+}
+
+function gossipAsciiBytes(value) {
+  const input = String(value || '');
+  const bytes = new Uint8Array(input.length);
+  for (let index = 0; index < input.length; index += 1) {
+    bytes[index] = input.charCodeAt(index) & 0x7f;
+  }
+  return bytes;
+}
+
+export function encodeGossipMediaBinaryEnvelope(metadata, payloadBytes) {
+  if (!metadata || typeof metadata !== 'object') return null;
+  const payloadBuffer = normalizeGossipFrameArrayBuffer(payloadBytes);
+  if (payloadBuffer.byteLength <= 0) return null;
+  const payload = new Uint8Array(payloadBuffer);
+  const envelopeMetadata = {
+    ...metadata,
+    type: GOSSIP_MEDIA_FRAME_TYPE,
+    payload_encoding: 'binary',
+    payload_bytes: payload.byteLength,
+    payload_chars: payload.byteLength,
+    binary_media_required: true,
+    media_transport: 'gossip_server_fanout',
+  };
+  delete envelopeMetadata.data_binary;
+  delete envelopeMetadata.dataBinary;
+  delete envelopeMetadata.data;
+  const metadataJson = JSON.stringify(envelopeMetadata);
+  if (!metadataJson) return null;
+  const metadataBytes = gossipUtf8Encode(metadataJson);
+  if (metadataBytes.byteLength > 0xffffffff || payload.byteLength > 0xffffffff) return null;
+  const output = new Uint8Array(GOSSIP_MEDIA_BINARY_HEADER_BYTES + metadataBytes.byteLength + payload.byteLength);
+  output.set(gossipAsciiBytes(GOSSIP_MEDIA_BINARY_FRAME_MAGIC), 0);
+  output[4] = GOSSIP_MEDIA_BINARY_FRAME_VERSION;
+  output[5] = 0;
+  output[6] = 0;
+  output[7] = 0;
+  const view = new DataView(output.buffer);
+  view.setUint32(8, metadataBytes.byteLength, true);
+  view.setUint32(12, payload.byteLength, true);
+  output.set(metadataBytes, GOSSIP_MEDIA_BINARY_HEADER_BYTES);
+  output.set(payload, GOSSIP_MEDIA_BINARY_HEADER_BYTES + metadataBytes.byteLength);
+  return output.buffer;
+}
+
+export function decodeGossipMediaBinaryEnvelope(input) {
+  const buffer = normalizeGossipFrameArrayBuffer(input);
+  if (buffer.byteLength < GOSSIP_MEDIA_BINARY_HEADER_BYTES) return null;
+  const bytes = new Uint8Array(buffer);
+  const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+  if (magic !== GOSSIP_MEDIA_BINARY_FRAME_MAGIC) return null;
+  if (bytes[4] !== GOSSIP_MEDIA_BINARY_FRAME_VERSION) return null;
+  const view = new DataView(buffer);
+  const metadataLength = view.getUint32(8, true);
+  const payloadLength = view.getUint32(12, true);
+  const metadataStart = GOSSIP_MEDIA_BINARY_HEADER_BYTES;
+  const payloadStart = metadataStart + metadataLength;
+  const payloadEnd = payloadStart + payloadLength;
+  if (metadataLength <= 0 || payloadLength <= 0 || payloadEnd > buffer.byteLength) return null;
+  let payload = null;
+  try {
+    payload = JSON.parse(gossipUtf8Decode(bytes.slice(metadataStart, payloadStart)));
+  } catch {
+    return null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  return {
+    payload: {
+      ...payload,
+      type: GOSSIP_MEDIA_FRAME_TYPE,
+    },
+    payloadBytes: buffer.slice(payloadStart, payloadEnd),
+    payloadByteLength: payloadLength,
+  };
 }
 
 function nextFrameSequenceForTrack(sequenceMap, peerId, trackId) {
@@ -133,7 +236,7 @@ function screenShareEnvelopeFieldsFromFrame(frame) {
 
 export function isGossipMediaFrameMessage(msg) {
   const type = String(msg?.type || '').trim();
-  return type === GOSSIP_MEDIA_FRAME_TYPE || type === 'sfu/frame';
+  return type === GOSSIP_MEDIA_FRAME_TYPE;
 }
 
 export function gossipFrameMessageFromEncodedFrame(frame, sequenceMap, {
@@ -247,29 +350,14 @@ export function gossipBinaryEnvelopeFromEncodedFrame(frame, msg) {
     : frame.data;
   const dataBuffer = normalizeGossipFrameArrayBuffer(relayData);
   if (dataBuffer.byteLength <= 0) return null;
-  const prepared = prepareSfuOutboundFramePayload({
-    publisherId: String(msg.publisher_id || msg.publisherId || ''),
-    publisherUserId: String(msg.publisher_user_id || msg.publisherUserId || ''),
-    trackId: String(msg.track_id || msg.trackId || ''),
-    timestamp: positiveGossipInteger(msg.timestamp_unix_ms || msg.timestamp, Date.now()),
-    data: dataBuffer,
-    type: normalizedGossipFrameKind(msg.frame_kind || msg.frame_type),
-    protectionMode: 'transport_only',
-    frameSequence: positiveGossipInteger(msg.frame_sequence || msg.sequence, 0),
-    senderSentAtMs: positiveGossipInteger(msg.sender_sent_at_ms, Date.now()),
-    codecId: String(msg.codec_id || 'wlvc_wasm'),
-    runtimeId: String(msg.runtime_id || 'wlvc_sfu'),
-    videoLayer: String(msg.video_layer || ''),
-    transportMetrics: {
-      ...msg,
-      media_transport: 'gossip_server_fanout',
-      control_transport: 'king_realtime_ws',
-      gossip_media_contract: GOSSIP_MEDIA_FRAME_TYPE,
-      binary_media_required: true,
-    },
-  });
-  prepared.payload.frame_id = String(msg.frame_id || msg.frameId || '');
-  return encodeSfuBinaryFrameEnvelope(prepared);
+  return encodeGossipMediaBinaryEnvelope({
+    ...msg,
+    type: GOSSIP_MEDIA_FRAME_TYPE,
+    frame_kind: normalizedGossipFrameKind(msg.frame_kind || msg.frame_type),
+    protection_mode: 'transport_only',
+    control_transport: 'king_realtime_ws',
+    gossip_media_contract: GOSSIP_MEDIA_FRAME_TYPE,
+  }, dataBuffer);
 }
 
 export function gossipFrameBinaryMessageFromMetadata(frame, msg) {
@@ -289,7 +377,7 @@ export function gossipFrameBinaryMessageFromMetadata(frame, msg) {
   };
 }
 
-export function sfuFrameFromGossipMessage(msg, delivery) {
+export function rendererFrameFromGossipMessage(msg, delivery) {
   const publisherId = String(msg.publisherId || msg.publisher_id || msg.publisher_user_id || '').trim();
   const trackId = String(msg.trackId || msg.track_id || '').trim();
   if (publisherId === '' || trackId === '') return null;

@@ -19,8 +19,6 @@ export const MEDIA_SESSION_PLAN_STATE_VALUES = Object.freeze([
   'gossip_720p30',
   'gossip_360p30',
   'gossip_360p5',
-  'sfu_720p30',
-  'sfu_320p30',
   'ready',
   'failed',
 ]);
