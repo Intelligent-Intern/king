@@ -50,6 +50,7 @@ function normalizeBackgroundFilterRuntimeConfig(options = {}) {
     mode,
     overloadConsecutiveFrames: Math.max(3, Math.min(60, Math.round(toNumber(options.overloadConsecutiveFrames, 12)))),
     overloadFrameMs: Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90))),
+    showSourceUntilMask: options.showSourceUntilMask !== false,
     sourceActive: options.sourceActive !== false,
     statsIntervalMs: Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3)))),
   };
@@ -514,6 +515,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       maskWidth: segmenterState.maskWidth,
       mode: runtimeConfig.mode,
       now,
+      showSourceUntilMask: runtimeConfig.showSourceUntilMask,
       sourceFrame: segmenterState.sourceFrame,
     });
     markReady();
