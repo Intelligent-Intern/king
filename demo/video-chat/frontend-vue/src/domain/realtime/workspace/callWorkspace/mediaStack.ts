@@ -497,7 +497,7 @@ export function createCallWorkspaceMediaStack(options) {
       unregisterLocalScreenSharePeer,
     },
     constants: {
-      backgroundSnapshotEnabled: constants.backgroundSnapshotEnabled,
+      backgroundSnapshotEnabled: false,
       backgroundSnapshotMaxChangedRatio: constants.backgroundSnapshotMaxChangedRatio,
       backgroundSnapshotMaxPatchAreaRatio: constants.backgroundSnapshotMaxPatchAreaRatio,
       backgroundSnapshotMinChangedRatio: constants.backgroundSnapshotMinChangedRatio,
@@ -512,7 +512,7 @@ export function createCallWorkspaceMediaStack(options) {
       protectedMediaEnabled: constants.protectedMediaEnabled,
       selectiveTileBaseRefreshMs: constants.selectiveTileBaseRefreshMs,
       selectiveTileDiffThreshold: constants.selectiveTileDiffThreshold,
-      selectiveTileEnabled: constants.selectiveTileEnabled,
+      selectiveTileEnabled: false,
       selectiveTileHeight: constants.selectiveTileHeight,
       selectiveTileMaxChangedRatio: constants.selectiveTileMaxChangedRatio,
       selectiveTileMaxPatchAreaRatio: constants.selectiveTileMaxPatchAreaRatio,
