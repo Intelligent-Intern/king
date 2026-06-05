@@ -1,0 +1,40 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 60000,
+  "samples": [],
+  "startedAt": "2026-05-10T23:27:52.450Z",
+  "error": "page.waitForURL: Timeout 60000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n============================================================",
+  "consoleEvents": [
+    {
+      "at": "2026-05-10T23:27:58.021Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:27:58.021Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:27:58.088Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:27:58.088Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:27:58.479Z",
+      "label": "sender",
+      "text": "Failed to load resource: the server responded with a status of 502 (Bad Gateway)",
+      "type": "error"
+    }
+  ],
+  "finishedAt": "2026-05-10T23:29:29.366Z"
+}

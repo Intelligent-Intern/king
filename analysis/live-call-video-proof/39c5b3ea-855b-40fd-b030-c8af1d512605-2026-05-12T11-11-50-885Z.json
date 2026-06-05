@@ -1,0 +1,132 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 15000,
+  "samples": [],
+  "startedAt": "2026-05-12T11:11:50.885Z",
+  "preInitialPixels": [
+    {
+      "brightRatio": 0,
+      "darkRatio": 0,
+      "greenRatio": 0,
+      "paletteHits": [],
+      "patternScore": 0,
+      "vividRatio": 0.014322916666666666,
+      "height": 360,
+      "reason": "ok",
+      "selector": ".workspace-main-video video",
+      "tagName": "video",
+      "visibleHeight": 92,
+      "visibleWidth": 158,
+      "width": 640
+    }
+  ],
+  "error": "\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: >= \u001b[32m4\u001b[39m\nReceived:    \u001b[31m0\u001b[39m\n\nCall Log:\n- Timeout 20000ms exceeded while waiting on the predicate",
+  "failureState": {
+    "adminPixels": [
+      {
+        "brightRatio": 0,
+        "darkRatio": 0,
+        "greenRatio": 0,
+        "paletteHits": [],
+        "patternScore": 0,
+        "vividRatio": 0.017361111111111112,
+        "height": 360,
+        "reason": "ok",
+        "selector": ".workspace-main-video video",
+        "tagName": "video",
+        "visibleHeight": 92,
+        "visibleWidth": 158,
+        "width": 640
+      }
+    ],
+    "adminSockets": {
+      "closeCount": 0,
+      "errorCount": 0,
+      "inCount": 413,
+      "outCount": 256
+    },
+    "adminUrl": "https://app.kingrt.com/workspace/call/39c5b3ea-855b-40fd-b030-c8af1d512605",
+    "senderPixels": [
+      {
+        "brightRatio": 0.013888888888888888,
+        "darkRatio": 0.2421875,
+        "greenRatio": 0.0013020833333333333,
+        "paletteHits": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "patternScore": 9,
+        "vividRatio": 0.5594618055555556,
+        "height": 360,
+        "reason": "ok",
+        "selector": ".workspace-main-video video",
+        "tagName": "video",
+        "visibleHeight": 92,
+        "visibleWidth": 158,
+        "width": 640
+      }
+    ],
+    "senderSockets": {
+      "closeCount": 0,
+      "errorCount": 0,
+      "inCount": 199,
+      "outCount": 58
+    },
+    "senderUrl": "https://app.kingrt.com/workspace/call/39c5b3ea-855b-40fd-b030-c8af1d512605?entry=invite"
+  },
+  "consoleEvents": [
+    {
+      "at": "2026-05-12T11:11:54.004Z",
+      "label": "admin",
+      "text": "[BackgroundFilter] Initializing compositor stage {canvas: canvas, getBackgroundColor: , getBackgroundImageUrl: , getBlurPx: , preferWebGl: true}",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T11:11:54.004Z",
+      "label": "admin",
+      "text": "[BackgroundFilter] Using WebGL compositor",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T11:11:54.073Z",
+      "label": "admin",
+      "text": "[.WebGL-0x23c0313a400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T11:11:54.096Z",
+      "label": "admin",
+      "text": "[.WebGL-0x23c0313a400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T11:11:54.146Z",
+      "label": "admin",
+      "text": "[.WebGL-0x23c0313a400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T11:11:54.175Z",
+      "label": "admin",
+      "text": "[.WebGL-0x23c0313a400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)",
+      "type": "warning"
+    },
+    {
+      "at": "2026-05-12T11:12:00.509Z",
+      "label": "sender",
+      "text": "[BackgroundFilter] Initializing compositor stage {canvas: canvas, getBackgroundColor: , getBackgroundImageUrl: , getBlurPx: , preferWebGl: true}",
+      "type": "log"
+    },
+    {
+      "at": "2026-05-12T11:12:00.509Z",
+      "label": "sender",
+      "text": "[BackgroundFilter] Using WebGL compositor",
+      "type": "log"
+    }
+  ],
+  "finishedAt": "2026-05-12T11:12:46.656Z"
+}

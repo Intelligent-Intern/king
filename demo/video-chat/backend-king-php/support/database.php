@@ -272,12 +272,14 @@ SQL
 
         $seededDemoUsers = [];
         $seededDemoCalls = [];
+        $seededTranslations = [];
         // HTTP workers bootstrap the same SQLite file; serialize fixed demo IDs.
         $pdo->exec('BEGIN IMMEDIATE');
         try {
             $seededDemoUsers = videochat_seed_demo_users($pdo);
             videochat_prune_expired_guest_users($pdo);
             videochat_seed_default_governance_roles($pdo);
+            $seededTranslations = videochat_seed_translation_resources($pdo);
             if (function_exists('videochat_tenant_backfill_default_memberships')) {
                 videochat_tenant_backfill_default_memberships($pdo);
             }
@@ -321,6 +323,7 @@ SQL
             'journal_mode' => strtoupper($journalMode),
             'demo_users' => $seededDemoUsers,
             'demo_calls' => $seededDemoCalls,
+            'translation_resources' => $seededTranslations,
         ];
     } finally {
         flock($lockHandle, LOCK_UN);

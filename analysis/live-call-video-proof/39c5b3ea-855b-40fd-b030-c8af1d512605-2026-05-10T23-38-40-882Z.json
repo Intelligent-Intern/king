@@ -1,0 +1,34 @@
+{
+  "callId": "39c5b3ea-855b-40fd-b030-c8af1d512605",
+  "durationMs": 60000,
+  "samples": [],
+  "startedAt": "2026-05-10T23:38:40.882Z",
+  "error": "page.waitForURL: Timeout 60000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation until \"load\"\n============================================================",
+  "consoleEvents": [
+    {
+      "at": "2026-05-10T23:38:46.341Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:38:46.342Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:38:46.409Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    },
+    {
+      "at": "2026-05-10T23:38:46.409Z",
+      "label": "admin",
+      "text": "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+      "type": "pageerror"
+    }
+  ],
+  "finishedAt": "2026-05-10T23:40:17.832Z"
+}

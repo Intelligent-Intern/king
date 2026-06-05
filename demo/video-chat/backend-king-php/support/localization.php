@@ -367,3 +367,164 @@ SQL
 
     return $resources;
 }
+
+function videochat_localization_seed_directory(): string
+{
+    return __DIR__ . DIRECTORY_SEPARATOR . 'localization_seed';
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_localization_seed_files(): array
+{
+    $directory = videochat_localization_seed_directory();
+    if (!is_dir($directory)) {
+        return [];
+    }
+
+    $files = glob($directory . DIRECTORY_SEPARATOR . '*.json');
+    if (!is_array($files)) {
+        return [];
+    }
+
+    sort($files);
+    return array_values($files);
+}
+
+/**
+ * @return array{namespace: string, resource_key: string}|null
+ */
+function videochat_localization_seed_resource_key_parts(string $fullKey): ?array
+{
+    $separator = strpos($fullKey, '.');
+    if ($separator === false || $separator <= 0) {
+        return null;
+    }
+
+    $namespace = substr($fullKey, 0, $separator);
+    $resourceKey = substr($fullKey, $separator + 1);
+    if (
+        !is_string($namespace)
+        || !is_string($resourceKey)
+        || preg_match('/^[A-Za-z][A-Za-z0-9_.-]{0,119}$/', $namespace) !== 1
+        || preg_match('/^[A-Za-z0-9_.:-]{1,240}$/', $resourceKey) !== 1
+    ) {
+        return null;
+    }
+
+    return [
+        'namespace' => $namespace,
+        'resource_key' => $resourceKey,
+    ];
+}
+
+/**
+ * @return array{
+ *   locales: array<int, string>,
+ *   inserted: int,
+ *   updated: int,
+ *   skipped: int
+ * }
+ */
+function videochat_seed_translation_resources(PDO $pdo): array
+{
+    $summary = [
+        'locales' => [],
+        'inserted' => 0,
+        'updated' => 0,
+        'skipped' => 0,
+    ];
+    if (!videochat_locale_table_exists($pdo, 'translation_resources')) {
+        return $summary;
+    }
+
+    $select = $pdo->prepare(
+        <<<'SQL'
+SELECT id, value, created_by_user_id
+FROM translation_resources
+WHERE tenant_id IS NULL
+  AND locale = :locale
+  AND namespace = :namespace
+  AND resource_key = :resource_key
+LIMIT 1
+SQL
+    );
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, created_by_user_id, created_at, updated_at)
+VALUES(NULL, :locale, :namespace, :resource_key, :value, NULL, :created_at, :updated_at)
+SQL
+    );
+    $update = $pdo->prepare(
+        <<<'SQL'
+UPDATE translation_resources
+SET value = :value,
+    updated_at = :updated_at
+WHERE id = :id
+  AND created_by_user_id IS NULL
+SQL
+    );
+
+    foreach (videochat_localization_seed_files() as $file) {
+        $locale = videochat_normalize_locale_code((string) pathinfo($file, PATHINFO_FILENAME));
+        if ($locale === '' || !videochat_locale_is_supported($pdo, $locale)) {
+            continue;
+        }
+
+        $json = file_get_contents($file);
+        if (!is_string($json)) {
+            throw new RuntimeException(sprintf('Could not read localization seed file: %s', $file));
+        }
+        $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($decoded)) {
+            throw new RuntimeException(sprintf('Localization seed file must contain a JSON object: %s', $file));
+        }
+
+        $summary['locales'][] = $locale;
+        foreach ($decoded as $fullKey => $value) {
+            $parts = videochat_localization_seed_resource_key_parts((string) $fullKey);
+            if ($parts === null) {
+                $summary['skipped']++;
+                continue;
+            }
+
+            $params = [
+                ':locale' => $locale,
+                ':namespace' => $parts['namespace'],
+                ':resource_key' => $parts['resource_key'],
+            ];
+            $select->execute($params);
+            $existing = $select->fetch(PDO::FETCH_ASSOC);
+            $translation = (string) ($value ?? '');
+            if (is_array($existing)) {
+                if (($existing['created_by_user_id'] ?? null) !== null) {
+                    $summary['skipped']++;
+                    continue;
+                }
+                if ((string) ($existing['value'] ?? '') === $translation) {
+                    $summary['skipped']++;
+                    continue;
+                }
+                $update->execute([
+                    ':value' => $translation,
+                    ':updated_at' => gmdate('c'),
+                    ':id' => (int) ($existing['id'] ?? 0),
+                ]);
+                $summary['updated']++;
+                continue;
+            }
+
+            $now = gmdate('c');
+            $insert->execute(array_merge($params, [
+                ':value' => $translation,
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ]));
+            $summary['inserted']++;
+        }
+    }
+
+    $summary['locales'] = array_values(array_unique($summary['locales']));
+    return $summary;
+}
