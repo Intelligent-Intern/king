@@ -13,6 +13,29 @@ function videochat_tenancy_normalize_grant_action(string $action): string
     return in_array($normalized, ['create', 'read', 'update', 'delete', 'share', 'manage'], true) ? $normalized : '';
 }
 
+function videochat_tenancy_governance_normalize_permission_key(string $value): string
+{
+    $trimmed = trim($value);
+    if (str_starts_with($trimmed, 'permission:')) {
+        $parts = explode(':', $trimmed);
+        $trimmed = (string) end($parts);
+    }
+
+    return trim($trimmed);
+}
+
+function videochat_tenancy_governance_permission_catalog_id(string $permissionKey): string
+{
+    $normalized = videochat_tenancy_governance_normalize_permission_key($permissionKey);
+    $parts = array_values(array_filter(explode('.', $normalized), static fn (string $part): bool => trim($part) !== ''));
+    $moduleKey = $parts !== [] ? trim((string) $parts[0]) : 'governance';
+    if ($moduleKey === '') {
+        $moduleKey = 'governance';
+    }
+
+    return 'permission:' . $moduleKey . ':' . $normalized;
+}
+
 function videochat_tenancy_timestamp_is_active(?string $validFrom, ?string $validUntil, string $now): bool
 {
     $nowUnix = strtotime($now);

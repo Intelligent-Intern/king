@@ -101,6 +101,7 @@ export function sessionPermissionKeys(tenantPermissions = {}) {
   if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_permission_grants === true) {
     output.add('governance.audit_log.export');
     output.add('governance.audit_log.read');
+    output.add('governance.compliance.read');
     output.add('governance.compliance.create');
     output.add('governance.compliance.update');
     output.add('governance.compliance.delete');

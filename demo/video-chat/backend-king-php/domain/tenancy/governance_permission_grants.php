@@ -247,17 +247,6 @@ function videochat_tenancy_governance_relation_text(array $row, array $keys): st
     return '';
 }
 
-function videochat_tenancy_governance_normalize_permission_key(string $value): string
-{
-    $trimmed = trim($value);
-    if (str_starts_with($trimmed, 'permission:')) {
-        $parts = explode(':', $trimmed);
-        $trimmed = (string) end($parts);
-    }
-
-    return trim($trimmed);
-}
-
 function videochat_tenancy_governance_resource_type_from_segment(string $segment): string
 {
     $normalized = strtolower(trim(str_replace('-', '_', $segment)));
@@ -284,9 +273,17 @@ function videochat_tenancy_governance_parse_permission(array $payload): array
     }
 
     $parts = array_values(array_filter(explode('.', $permissionKey), static fn (string $part): bool => trim($part) !== ''));
-    $action = $parts !== [] ? videochat_tenancy_normalize_grant_action((string) end($parts)) : '';
+    $actionSegment = $parts !== [] ? strtolower(trim((string) end($parts))) : '';
+    $action = $actionSegment !== '' ? videochat_tenancy_normalize_grant_action($actionSegment) : '';
+    if ($action === '' && $permissionKey !== '' && $actionSegment !== '') {
+        $action = 'manage';
+    }
     if ($action === '' && array_key_exists('action', $payload)) {
-        $action = videochat_tenancy_normalize_grant_action((string) $payload['action']);
+        $payloadAction = strtolower(trim((string) $payload['action']));
+        $action = videochat_tenancy_normalize_grant_action($payloadAction);
+        if ($action === '' && $payloadAction !== '') {
+            $action = 'manage';
+        }
     }
     if ($action === '') {
         return ['ok' => false, 'errors' => ['permission' => 'invalid_action']];
@@ -642,7 +639,7 @@ function videochat_tenancy_governance_grant_public_row(PDO $pdo, int $tenantId, 
             'subject' => $subject !== [] ? [$subject] : [],
             'permission' => [[
                 'entity_key' => 'permissions',
-                'id' => 'permission:governance:' . $permissionKey,
+                'id' => videochat_tenancy_governance_permission_catalog_id($permissionKey),
                 'key' => $permissionKey,
                 'name' => $permissionKey,
                 'status' => 'active',

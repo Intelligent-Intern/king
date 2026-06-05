@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/users/user_management.php';
 require_once __DIR__ . '/../domain/users/user_email_identity.php';
 require_once __DIR__ . '/../domain/calls/call_guest_lifecycle.php';
+require_once __DIR__ . '/governance_seed.php';
 
 function videochat_demo_user_blueprint(): array
 {
@@ -143,66 +144,9 @@ SQL
 
 function videochat_seed_default_governance_roles(PDO $pdo): array
 {
-    $hasTables = $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('tenants', 'governance_roles')")->fetchColumn();
-    if ((int) $hasTables !== 2) {
-        return [];
-    }
-
-    $roles = [
-        ['key' => 'administrator', 'name' => 'Administrator', 'description' => 'Workspace administrators with account and governance access.'],
-        ['key' => 'user', 'name' => 'User', 'description' => 'Standard retained user role for governance assignments.'],
-        ['key' => 'guest', 'name' => 'Guest', 'description' => 'Temporary external call participant role.'],
-    ];
-    $tenantRows = $pdo->query('SELECT id FROM tenants ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC) ?: [];
-    $insert = $pdo->prepare(
-        <<<'SQL'
-INSERT OR IGNORE INTO governance_roles(tenant_id, public_id, key, name, description, status, created_at, updated_at)
-VALUES(:tenant_id, :public_id, :key, :name, :description, 'active', :created_at, :updated_at)
-SQL
-    );
-    $update = $pdo->prepare(
-        <<<'SQL'
-UPDATE governance_roles
-SET name = :name,
-    description = :description,
-    status = 'active',
-    updated_at = :updated_at
-WHERE tenant_id = :tenant_id
-  AND lower(key) = lower(:key)
-SQL
-    );
-
-    $seeded = [];
-    foreach ($tenantRows as $tenantRow) {
-        $tenantId = (int) ($tenantRow['id'] ?? 0);
-        if ($tenantId <= 0) {
-            continue;
-        }
-        foreach ($roles as $index => $role) {
-            $now = gmdate('c');
-            $publicNumber = 100000 + ($tenantId * 10) + $index + 1;
-            $params = [
-                ':tenant_id' => $tenantId,
-                ':public_id' => sprintf('00000000-0000-4000-8000-%012d', $publicNumber),
-                ':key' => $role['key'],
-                ':name' => $role['name'],
-                ':description' => $role['description'],
-                ':created_at' => $now,
-                ':updated_at' => $now,
-            ];
-            $insert->execute($params);
-            $update->execute([
-                ':tenant_id' => $tenantId,
-                ':key' => $role['key'],
-                ':name' => $role['name'],
-                ':description' => $role['description'],
-                ':updated_at' => $now,
-            ]);
-            $seeded[] = ['tenant_id' => $tenantId, 'key' => $role['key'], 'name' => $role['name']];
-        }
-    }
-
-    return $seeded;
+    return function_exists('videochat_seed_default_governance_data')
+        ? videochat_seed_default_governance_data($pdo)
+        : [];
 }
 
 /**

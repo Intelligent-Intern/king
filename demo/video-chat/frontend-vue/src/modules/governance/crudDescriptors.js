@@ -414,6 +414,7 @@ const descriptors = {
   }),
   compliance: descriptor('compliance', {
     resource_type: 'compliance_rule',
+    endpoint: '/api/governance/compliance',
     fields: Object.freeze([
       textField('name', 'governance.field.compliance_rule_name', { required: true }),
       textField('key', 'governance.field.compliance_rule_key', { validation: GOVERNANCE_KEY_VALIDATION }),

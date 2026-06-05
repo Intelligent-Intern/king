@@ -520,7 +520,7 @@ function videochat_tenancy_governance_group_permission_map(PDO $pdo, int $tenant
         $seen[$fingerprint] = true;
         $permissionsByGroup[$groupId][] = [
             'entity_key' => 'permissions',
-            'id' => 'permission:governance:' . $permissionKey,
+            'id' => videochat_tenancy_governance_permission_catalog_id($permissionKey),
             'key' => $permissionKey,
             'name' => $permissionKey,
             'status' => 'active',
