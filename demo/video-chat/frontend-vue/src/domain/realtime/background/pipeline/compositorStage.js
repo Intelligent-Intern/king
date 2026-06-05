@@ -439,6 +439,7 @@ function createCanvasBackgroundCompositorStage({
         maskValues = null,
         maskWidth = 0,
         mode = 'blur',
+        showSourceUntilMask = true,
         sourceFrame = null,
     }) {
         const backgroundColor = String(getBackgroundColor?.() || '').trim();
@@ -467,8 +468,8 @@ function createCanvasBackgroundCompositorStage({
         if (!hasRenderableMask) {
             ctx.save();
             ctx.globalCompositeOperation = 'copy';
-            ctx.filter = mode === 'replace' ? 'none' : `blur(${blurPx}px)`;
-            if (mode === 'blur') {
+            ctx.filter = !showSourceUntilMask && mode === 'blur' ? `blur(${blurPx}px)` : 'none';
+            if (!showSourceUntilMask && mode === 'blur') {
                 drawCoverImage(ctx, video, canvas.width, canvas.height);
             } else {
                 drawContainImage(ctx, video, canvas.width, canvas.height);
@@ -694,6 +695,7 @@ function createWebGlBackgroundCompositorStage({
         maskValues = null,
         maskWidth = 0,
         mode = 'blur',
+        showSourceUntilMask = true,
         sourceFrame = null,
     }) {
         if (gl.isContextLost()) return;
@@ -708,6 +710,7 @@ function createWebGlBackgroundCompositorStage({
         }
 
         const hasRenderableMask = hasUploadedMask && hasMatteMask;
+        const suppressNoMaskEffect = !hasRenderableMask && (mode === 'replace' || showSourceUntilMask);
 
         gl.viewport(0, 0, canvas.width, canvas.height);
         gl.useProgram(program);
@@ -718,7 +721,7 @@ function createWebGlBackgroundCompositorStage({
 
         let backgroundMode = 0;
         let backgroundUvTransform = [1, 1, 0, 0];
-        if (mode === 'replace' && !hasRenderableMask) {
+        if (suppressNoMaskEffect) {
             backgroundMode = 0;
         } else if (mode === 'replace' && backgroundImageCanvas) {
             backgroundMode = 1;
@@ -728,7 +731,7 @@ function createWebGlBackgroundCompositorStage({
             backgroundMode = 2;
         }
 
-        gl.uniform1i(locations.uEffect, mode === 'off' || (mode === 'replace' && !hasRenderableMask) ? 0 : 1);
+        gl.uniform1i(locations.uEffect, mode === 'off' || suppressNoMaskEffect ? 0 : 1);
         gl.uniform1i(locations.uBackgroundMode, backgroundMode);
         gl.uniform1i(locations.uHasMask, hasRenderableMask ? 1 : 0);
         gl.uniform1f(locations.uBlurPx, blurPx);
