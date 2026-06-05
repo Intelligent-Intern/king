@@ -36,6 +36,7 @@ function videochat_handle_call_sputnik_routes(
     $callId = (string) ($matches[1] ?? '');
     $result = null;
     try {
+        $pdo = $openDatabase();
         if ($method === 'POST') {
             $payload = [];
             $rawBody = $request['body'] ?? '';
@@ -50,7 +51,7 @@ function videochat_handle_call_sputnik_routes(
             }
 
             $result = videochat_sputnik_start(
-                $openDatabase(),
+                $pdo,
                 $callId,
                 $authenticatedUserId,
                 $authenticatedUserRole,
@@ -58,9 +59,9 @@ function videochat_handle_call_sputnik_routes(
                 videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } elseif ($method === 'DELETE') {
-            $result = videochat_sputnik_runner_action('DELETE', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action($pdo, 'DELETE', $callId, $authenticatedUserId);
         } else {
-            $result = videochat_sputnik_runner_action('GET', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action($pdo, 'GET', $callId, $authenticatedUserId);
         }
     } catch (Throwable $exception) {
         error_log(sprintf(
@@ -79,7 +80,7 @@ function videochat_handle_call_sputnik_routes(
         $reason = (string) ($result['reason'] ?? 'runner_failed');
         $status = max(400, (int) ($result['status'] ?? 500));
         if ($reason === 'forbidden') {
-            return $errorResponse(403, 'call_sputnik_forbidden', 'Only primary user #1 can control Sputnik participants.', [
+            return $errorResponse(403, 'call_sputnik_forbidden', 'Only superadmins can control Sputnik participants.', [
                 'call_id' => $callId,
             ]);
         }

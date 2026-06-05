@@ -191,15 +191,14 @@ function videochat_handle_workspace_administration_routes(
 
     if (preg_match('#^/api/admin/workspace-administration/email-texts(?:/([^/]+))?$#', $path, $emailTextMatch) === 1) {
         $authenticatedUser = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
-        if ((int) ($authenticatedUser['id'] ?? 0) !== videochat_workspace_primary_admin_user_id()) {
-            return $errorResponse(403, 'primary_admin_required', 'Only the primary admin user can manage app configuration email texts.', [
-                'required_user_id' => videochat_workspace_primary_admin_user_id(),
-            ]);
-        }
-
         $emailTextId = isset($emailTextMatch[1]) ? rawurldecode((string) $emailTextMatch[1]) : '';
         try {
             $pdo = $openDatabase();
+            if (!videochat_workspace_user_is_superadmin($pdo, $authenticatedUser)) {
+                return $errorResponse(403, 'superadmin_required', 'Only superadmins can manage app configuration email texts.', [
+                    'required_permission' => 'is_superadmin',
+                ]);
+            }
             $tenantId = videochat_workspace_effective_tenant_id($pdo, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'workspace_email_texts_failed', 'Could not access email texts.', [
@@ -302,15 +301,14 @@ function videochat_handle_workspace_administration_routes(
 
     if (preg_match('#^/api/admin/workspace-administration/background-images(?:/([^/]+))?$#', $path, $backgroundMatch) === 1) {
         $authenticatedUser = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
-        if ((int) ($authenticatedUser['id'] ?? 0) !== videochat_workspace_primary_admin_user_id()) {
-            return $errorResponse(403, 'primary_admin_required', 'Only the primary admin user can manage background images.', [
-                'required_user_id' => videochat_workspace_primary_admin_user_id(),
-            ]);
-        }
-
         $backgroundId = isset($backgroundMatch[1]) ? rawurldecode((string) $backgroundMatch[1]) : '';
         try {
             $pdo = $openDatabase();
+            if (!videochat_workspace_user_is_superadmin($pdo, $authenticatedUser)) {
+                return $errorResponse(403, 'superadmin_required', 'Only superadmins can manage background images.', [
+                    'required_permission' => 'is_superadmin',
+                ]);
+            }
             $tenantId = videochat_workspace_effective_tenant_id($pdo, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'workspace_background_images_failed', 'Could not access background images.', [
@@ -571,10 +569,9 @@ function videochat_handle_workspace_administration_routes(
 
     if ($path === '/api/admin/workspace-administration') {
         $authenticatedUser = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
-        $authenticatedUserId = (int) ($authenticatedUser['id'] ?? 0);
-        $isPrimaryAdmin = $authenticatedUserId === videochat_workspace_primary_admin_user_id();
         try {
             $pdo = $openDatabase();
+            $isSuperAdmin = videochat_workspace_user_is_superadmin($pdo, $authenticatedUser);
             $canEditThemes = videochat_workspace_user_can_edit_themes($pdo, $authenticatedUser);
         } catch (Throwable) {
             return $errorResponse(500, 'workspace_administration_load_failed', 'Could not load administration settings.', [
@@ -582,7 +579,7 @@ function videochat_handle_workspace_administration_routes(
             ]);
         }
 
-        if (!$isPrimaryAdmin && !$canEditThemes) {
+        if (!$isSuperAdmin && !$canEditThemes) {
             return $errorResponse(403, 'theme_editor_access_required', 'Theme editor access is required.', [
                 'required_permission' => 'theme_editor_enabled',
             ]);
@@ -590,7 +587,7 @@ function videochat_handle_workspace_administration_routes(
 
         if ($method === 'GET') {
             try {
-                $settings = $isPrimaryAdmin
+                $settings = $isSuperAdmin
                     ? videochat_workspace_settings_payload(videochat_workspace_get_admin_settings_row($pdo, videochat_tenant_id_from_auth_context($apiAuthContext)), false)
                     : [];
                 $appearance = videochat_workspace_public_appearance($pdo, videochat_tenant_id_from_auth_context($apiAuthContext));
@@ -607,11 +604,11 @@ function videochat_handle_workspace_administration_routes(
                     'settings' => $settings,
                     'appearance' => $appearance,
                     'permissions' => [
-                        'can_manage_mail_server' => $isPrimaryAdmin,
-                        'can_manage_lead_notifications' => $isPrimaryAdmin,
-                        'can_manage_branding' => $isPrimaryAdmin,
-                        'can_manage_email_texts' => $isPrimaryAdmin,
-                        'can_manage_background_images' => $isPrimaryAdmin,
+                        'can_manage_mail_server' => $isSuperAdmin,
+                        'can_manage_lead_notifications' => $isSuperAdmin,
+                        'can_manage_branding' => $isSuperAdmin,
+                        'can_manage_email_texts' => $isSuperAdmin,
+                        'can_manage_background_images' => $isSuperAdmin,
                         'can_edit_themes' => $canEditThemes,
                     ],
                 ],
@@ -632,9 +629,9 @@ function videochat_handle_workspace_administration_routes(
             ]);
         }
 
-        if (!$isPrimaryAdmin && !videochat_workspace_payload_has_only_theme($payload)) {
-            return $errorResponse(403, 'primary_admin_required', 'Only the primary admin user can change mail, lead, and branding settings.', [
-                'required_user_id' => videochat_workspace_primary_admin_user_id(),
+        if (!$isSuperAdmin && !videochat_workspace_payload_has_only_theme($payload)) {
+            return $errorResponse(403, 'superadmin_required', 'Only superadmins can change mail, lead, and branding settings.', [
+                'required_permission' => 'is_superadmin',
             ]);
         }
 

@@ -21,7 +21,10 @@
             <div>{{ user.email }}</div>
             <div class="users-subline">{{ user.time_format }} · {{ user.theme }}</div>
           </td>
-          <td :data-label="t('users.role')"><span class="tag" :class="roleTagClass(user.role)">{{ roleLabel(user.role) }}</span></td>
+          <td :data-label="t('users.role')">
+            <span class="tag" :class="roleTagClass(user.role)">{{ roleLabel(user.role) }}</span>
+            <span v-if="props.showSuperadminFlag && user.is_superadmin === true" class="tag warn">{{ t('users.superadmin') }}</span>
+          </td>
           <td :data-label="t('users.status')"><span class="tag" :class="statusTagClass(user.status)">{{ statusLabel(user.status) }}</span></td>
           <td :data-label="t('users.updated')">{{ formatDateTime(user.updated_at) }}</td>
           <td :data-label="t('users.actions')">
@@ -65,7 +68,7 @@ import { sessionState } from '../../../../domain/auth/session';
 import { formatLocalizedDateTimeDisplay } from '../../../../support/dateTimeFormat';
 import { t } from '../../../localization/i18nRuntime.js';
 
-defineProps({
+const props = defineProps({
   rows: {
     type: Array,
     default: () => [],
@@ -73,6 +76,10 @@ defineProps({
   mutatingUserId: {
     type: Number,
     default: 0,
+  },
+  showSuperadminFlag: {
+    type: Boolean,
+    default: false,
   },
   canToggleStatus: {
     type: Function,

@@ -97,6 +97,7 @@ persist_wizard_env() {
   local key value
   local keys=(
     VIDEOCHAT_DEPLOY_DOMAIN
+    VIDEOCHAT_DEPLOY_WWW_DOMAIN
     VIDEOCHAT_DEPLOY_EMAIL
     VIDEOCHAT_DEPLOY_HOST
     VIDEOCHAT_DEPLOY_PUBLIC_IP
@@ -309,19 +310,22 @@ hcloud_ensure_server() {
 
 resolved_ips_for_domain() {
   local domain="$1" resolved
-  if ! command -v getent >/dev/null 2>&1; then
-    return 0
+  if command -v getent >/dev/null 2>&1; then
+    resolved="$(getent ahostsv4 "${domain}" 2>/dev/null | awk '{ print $1 }' | sort -u || true)"
+    if [[ -z "${resolved}" ]]; then
+      resolved="$(getent ahosts "${domain}" 2>/dev/null | awk '{ print $1 }' | sort -u || true)"
+    fi
   fi
-  resolved="$(getent ahostsv4 "${domain}" 2>/dev/null | awk '{ print $1 }' | sort -u || true)"
-  if [[ -z "${resolved}" ]]; then
-    resolved="$(getent ahosts "${domain}" 2>/dev/null | awk '{ print $1 }' | sort -u || true)"
+  if [[ -z "${resolved}" ]] && command -v dig >/dev/null 2>&1; then
+    resolved="$(dig +short A "${domain}" 2>/dev/null | awk '/^[0-9]+(\.[0-9]+){3}$/ { print }' | sort -u || true)"
   fi
   printf '%s\n' "${resolved}"
 }
 
 wait_for_dns_to_server() {
   local timeout="${VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS:-900}" deadline resolved target target_resolved all_ok
-  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}")
+  local targets=()
+  mapfile -t targets < <(deploy_dns_targets)
   if ! command -v getent >/dev/null 2>&1; then
     log "WARN: getent is missing locally; skipping DNS wait"
     return 0
@@ -406,14 +410,15 @@ hcloud_set_dns_a_record() {
 
 hcloud_set_videochat_subdomain_records() {
   local target seen=""
-  for target in "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}"; do
+  while IFS= read -r target; do
     [[ -n "${target}" ]] || continue
+    [[ "${target}" != "${DEPLOY_DOMAIN}" ]] || continue
     case " ${seen} " in
       *" ${target} "*) continue ;;
     esac
     seen="${seen} ${target}"
     hcloud_set_dns_a_record_for_domain "${target}" || true
-  done
+  done < <(deploy_dns_targets)
 }
 
 run_hcloud_dns_step() {
@@ -434,7 +439,7 @@ run_hcloud_dns_step() {
     hcloud_set_dns_a_record || true
     hcloud_set_videochat_subdomain_records
   else
-    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_APP_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN}, ${DEPLOY_CDN_DOMAIN}, ${DEPLOY_CALL_APP_DOMAIN}, ${DEPLOY_REGISTRY_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
+    log "Manual DNS required: set A $(deploy_dns_targets | tr '\n' ' ' | sed -E 's/[[:space:]]+$//') -> ${DEPLOY_PUBLIC_IP}"
   fi
 
   wait_for_dns_to_server

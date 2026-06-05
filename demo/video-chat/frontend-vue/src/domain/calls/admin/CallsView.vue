@@ -166,7 +166,7 @@ function isDeletable(call) {
   return Boolean(call?.id);
 }
 
-const canReactivateCalls = computed(() => Number(sessionState.userId || 0) === 1 && String(sessionState.role || '').toLowerCase() === 'admin');
+const canReactivateCalls = computed(() => sessionState.isSuperadmin === true && String(sessionState.role || '').toLowerCase() === 'admin');
 const reactivatingCallIds = ref([]);
 
 function callIdOf(call) {

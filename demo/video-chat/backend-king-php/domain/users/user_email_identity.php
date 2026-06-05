@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/auth_request.php';
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 /**
  * @return array{
  *   id: int,
@@ -34,6 +37,25 @@ function videochat_normalize_user_email_address(?string $value): string
 
 function videochat_primary_admin_user_id(PDO $pdo): int
 {
+    if (videochat_auth_table_has_column($pdo, 'users', 'is_superadmin')) {
+        $superAdminQuery = $pdo->query(
+            <<<'SQL'
+SELECT users.id
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE lower(roles.slug) = 'admin'
+  AND users.status = 'active'
+  AND users.is_superadmin = 1
+ORDER BY users.id ASC
+LIMIT 1
+SQL
+        );
+        $superAdminId = (int) $superAdminQuery->fetchColumn();
+        if ($superAdminId > 0) {
+            return $superAdminId;
+        }
+    }
+
     $query = $pdo->query(
         <<<'SQL'
 SELECT users.id
@@ -90,8 +112,11 @@ function videochat_fetch_user_auth_snapshot(PDO $pdo, int $userId): ?array
         return null;
     }
 
+    $superAdminSelect = videochat_auth_table_has_column($pdo, 'users', 'is_superadmin')
+        ? 'users.is_superadmin,'
+        : '0 AS is_superadmin,';
     $query = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     users.id,
     users.email,
@@ -103,6 +128,7 @@ SELECT
     users.theme,
     users.avatar_path,
     users.post_logout_landing_url,
+    {$superAdminSelect}
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -136,6 +162,7 @@ SQL
             : '',
         'account_type' => $accountType,
         'is_guest' => $accountType === 'guest',
+        'is_superadmin' => videochat_auth_user_is_superadmin_row($row),
     ];
 }
 

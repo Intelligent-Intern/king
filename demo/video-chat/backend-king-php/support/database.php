@@ -105,6 +105,11 @@ function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
             'ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))',
         ],
         [
+            'users',
+            'is_superadmin',
+            'ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0 CHECK (is_superadmin IN (0, 1))',
+        ],
+        [
             'appointment_calendar_settings',
             'slot_mode',
             "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
@@ -164,6 +169,17 @@ SET locale = 'en'
 WHERE locale IS NULL
    OR trim(locale) = ''
    OR lower(locale) NOT IN (SELECT code FROM supported_locales WHERE is_enabled = 1)
+SQL
+        );
+    }
+    if (videochat_bootstrap_sqlite_column_exists($pdo, 'users', 'is_superadmin')) {
+        videochat_bootstrap_exec_schema_statement(
+            <<<'SQL'
+UPDATE users
+SET is_superadmin = 1
+WHERE id = 1
+  AND lower(email) = 'admin@intelligent-intern.com'
+  AND role_id = (SELECT id FROM roles WHERE slug = 'admin' LIMIT 1)
 SQL
         );
     }
@@ -259,6 +275,8 @@ SQL
         $pdo->exec('BEGIN IMMEDIATE');
         try {
             $seededDemoUsers = videochat_seed_demo_users($pdo);
+            videochat_prune_expired_guest_users($pdo);
+            videochat_seed_default_governance_roles($pdo);
             if (function_exists('videochat_tenant_backfill_default_memberships')) {
                 videochat_tenant_backfill_default_memberships($pdo);
             }

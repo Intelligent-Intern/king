@@ -170,6 +170,14 @@
             </label>
           </section>
 
+          <section v-if="canViewSuperadmin" class="users-field">
+            <span>{{ t('users.superadmin') }}</span>
+            <label class="users-checkbox-row">
+              <input v-model="form.is_superadmin" type="checkbox" :disabled="!canEditSuperadmin" />
+              <span>{{ t('users.superadmin_allow') }}</span>
+            </label>
+          </section>
+
           <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
             <div class="users-avatar-preview-wrap">
               <img class="users-avatar-preview" :src="avatarPreviewSrc" :alt="t('users.avatar_preview_alt')" />
@@ -348,6 +356,14 @@ const props = defineProps({
   canEditThemeEditor: {
     type: Boolean,
     default: true,
+  },
+  canViewSuperadmin: {
+    type: Boolean,
+    default: false,
+  },
+  canEditSuperadmin: {
+    type: Boolean,
+    default: false,
   },
   themeOptions: {
     type: Array,

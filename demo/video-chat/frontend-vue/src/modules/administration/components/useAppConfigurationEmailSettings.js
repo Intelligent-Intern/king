@@ -21,7 +21,7 @@ export function useAppConfigurationEmailSettings(options = {}) {
     mail_smtp_password_clear: false,
     mail_smtp_password_set: false,
   });
-  const isPrimaryAdmin = computed(() => Number(sessionState.userId || 0) === 1);
+  const isPrimaryAdmin = computed(() => sessionState.isSuperadmin === true);
 
   function applySettings(result) {
     const settings = result?.settings || {};

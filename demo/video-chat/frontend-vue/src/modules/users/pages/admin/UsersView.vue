@@ -6,19 +6,13 @@
 
     <template #toolbar>
       <label class="search-field search-field-main" :aria-label="t('users.search')">
-        <input
-          v-model.trim="queryDraft"
-          class="input"
-          type="search"
-          :placeholder="t('users.search')"
-        />
+        <input v-model.trim="queryDraft" class="input" type="search" :placeholder="t('users.search')" />
       </label>
 
       <AppIconButton
         class="users-toolbar-search-btn"
         icon="/assets/orgas/kingrt/icons/send.png"
-        :title="t('users.search')"
-        :aria-label="t('users.search')"
+        :title="t('users.search')" :aria-label="t('users.search')"
         @click="applySearchNow"
       />
     </template>
@@ -31,6 +25,7 @@
       v-else
       :rows="rows"
       :mutating-user-id="mutatingUserId"
+      :show-superadmin-flag="sessionState.isSuperadmin === true"
       :can-toggle-status="canToggleStatus"
       :can-delete-user="canDeleteUser"
       @edit-user="openEditUser"
@@ -72,6 +67,8 @@
       :can-edit-governance-groups="canEditGovernanceGroups"
       :can-edit-status="canEditStatus"
       :can-edit-theme-editor="canEditThemeEditor"
+      :can-view-superadmin="canViewSuperadmin"
+      :can-edit-superadmin="canEditSuperadmin"
       :theme-options="workspaceThemeOptions"
       :governance-role-options="governanceRoleOptions"
       :governance-group-options="governanceGroupOptions"
@@ -125,12 +122,7 @@ const rows = ref([]);
 const loading = ref(false);
 const error = ref('');
 const notice = ref('');
-const pagination = reactive({
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-});
+const pagination = reactive({ total: 0, pageCount: 1, hasPrev: false, hasNext: false });
 const dialogOpen = ref(false);
 const formSaving = ref(false);
 const formError = ref('');
@@ -150,6 +142,7 @@ const form = reactive({
   time_format: '24h',
   theme: 'dark',
   theme_editor_enabled: false,
+  is_superadmin: false,
   avatar_path: '',
   governance_groups: [],
   governance_roles: [],
@@ -164,9 +157,11 @@ const userEmailMutatingId = ref(0);
 const selectedUserPermissions = reactive({
   isSelf: false,
   isPrimaryAdmin: false,
+  isSuperadmin: false,
   canChangeRole: true,
   canChangeStatus: true,
   canChangeThemeEditor: true,
+  canChangeSuperadmin: false,
   canToggleStatus: true,
   canDelete: true,
 });
@@ -382,6 +377,8 @@ const canEditGovernanceGroups = computed(() => (form.mode === 'create' ? true : 
 const canEditGovernanceRoles = canEditGovernanceGroups;
 const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const canEditThemeEditor = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeThemeEditor));
+const canViewSuperadmin = computed(() => sessionState.isSuperadmin === true);
+const canEditSuperadmin = computed(() => sessionState.isSuperadmin === true && (form.mode === 'create' ? true : selectedUserPermissions.canChangeSuperadmin));
 const workspaceThemeOptions = computed(() => (
   appearanceState.themes.length > 0
     ? appearanceState.themes
@@ -431,7 +428,6 @@ async function handleAvatarFileSelect(event) {
     formError.value = err instanceof Error ? err.message : t('settings.avatar_prepare_failed');
   }
 }
-
 
 function setDefaultAvatar(path) {
   avatarDefaultSelection.value = String(path || '').trim();
@@ -553,6 +549,7 @@ async function submitForm() {
           password_repeat: form.password_repeat,
           role,
           theme_editor_enabled: Boolean(form.theme_editor_enabled),
+          ...(canEditSuperadmin.value ? { is_superadmin: Boolean(form.is_superadmin) } : {}),
           relationships: {
             groups: governanceGroupRelationshipPayload(form.governance_groups),
             roles: governanceRoleRelationshipPayload(form.governance_roles),
@@ -571,6 +568,9 @@ async function submitForm() {
       };
       if (canEditThemeEditor.value) {
         patchBody.theme_editor_enabled = Boolean(form.theme_editor_enabled);
+      }
+      if (canEditSuperadmin.value) {
+        patchBody.is_superadmin = Boolean(form.is_superadmin);
       }
       if (canEditRole.value) {
         patchBody.role = role;

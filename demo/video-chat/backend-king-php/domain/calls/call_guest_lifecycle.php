@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
+require_once __DIR__ . '/../users/user_management.php';
 
 /**
  * @return array<int, int>
@@ -144,6 +145,57 @@ SQL
     $query->execute([':id' => $userId]);
 
     return $query->fetchColumn() !== false;
+}
+
+function videochat_guest_account_ttl_seconds(): int
+{
+    $ttl = (int) (getenv('VIDEOCHAT_GUEST_ACCOUNT_TTL_SECONDS') ?: 259200);
+    if ($ttl < 3600) {
+        return 3600;
+    }
+    if ($ttl > 2592000) {
+        return 2592000;
+    }
+    return $ttl;
+}
+
+function videochat_prune_expired_guest_users(PDO $pdo): int
+{
+    try {
+        $cutoff = gmdate('c', time() - videochat_guest_account_ttl_seconds());
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT id
+FROM users
+WHERE lower(email) LIKE 'guest+%@videochat.local'
+  AND coalesce(password_hash, '') = ''
+  AND created_at < :cutoff
+SQL
+        );
+        $query->execute([':cutoff' => $cutoff]);
+        $ids = array_values(array_unique(array_map('intval', $query->fetchAll(PDO::FETCH_COLUMN) ?: [])));
+    } catch (Throwable) {
+        return 0;
+    }
+
+    $deleted = 0;
+    foreach ($ids as $userId) {
+        if ($userId <= 0) {
+            continue;
+        }
+        $result = videochat_admin_delete_user($pdo, $userId, null);
+        if ((bool) ($result['ok'] ?? false) && (string) ($result['reason'] ?? '') === 'deleted') {
+            $deleted++;
+            continue;
+        }
+        $now = gmdate('c');
+        $disable = $pdo->prepare("UPDATE users SET status = 'disabled', updated_at = :updated_at WHERE id = :id");
+        $disable->execute([':updated_at' => $now, ':id' => $userId]);
+        $revoke = $pdo->prepare("UPDATE sessions SET revoked_at = :revoked_at WHERE user_id = :user_id AND (revoked_at IS NULL OR revoked_at = '')");
+        $revoke->execute([':revoked_at' => $now, ':user_id' => $userId]);
+    }
+
+    return $deleted;
 }
 
 /**

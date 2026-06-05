@@ -4,6 +4,32 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
 require_once __DIR__ . '/../domain/tenancy/governance_user_group_assignments.php';
+require_once __DIR__ . '/../support/auth_request.php';
+
+function videochat_admin_user_account_response_row(array $row, array $permissions, bool $actorIsSuperAdmin): array
+{
+    $payload = [
+        ...$row,
+        'is_self' => (bool) ($permissions['is_self'] ?? false),
+        'is_primary_admin' => (bool) ($permissions['is_primary_admin'] ?? false),
+        'permissions' => [
+            'can_change_role' => (bool) ($permissions['can_change_role'] ?? false),
+            'can_change_status' => (bool) ($permissions['can_change_status'] ?? false),
+            'can_change_theme_editor' => (bool) ($permissions['can_change_theme_editor'] ?? false),
+            'can_toggle_status' => (bool) ($permissions['can_toggle_status'] ?? false),
+            'can_delete' => (bool) ($permissions['can_delete'] ?? false),
+        ],
+    ];
+
+    if ($actorIsSuperAdmin) {
+        $payload['is_superadmin'] = (bool) ($permissions['is_superadmin'] ?? ($row['is_superadmin'] ?? false));
+        $payload['permissions']['can_change_superadmin'] = (bool) ($permissions['can_change_superadmin'] ?? false);
+    } else {
+        unset($payload['is_superadmin']);
+    }
+
+    return $payload;
+}
 
 function videochat_admin_user_has_governance_relationship_payload(array $payload): bool
 {
@@ -69,6 +95,7 @@ function videochat_handle_admin_user_account_routes(
                 );
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
+                $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
             } catch (Throwable $error) {
                 return $errorResponse(500, 'admin_user_list_failed', 'Could not load admin user list.', [
                     'reason' => 'internal_error',
@@ -79,23 +106,12 @@ function videochat_handle_admin_user_account_routes(
             $rows = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_role_rows($pdo, $tenantId, $rows) : $rows;
             $rows = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_group_rows($pdo, $tenantId, $rows) : $rows;
             $rows = array_map(
-                static function ($row) use ($actorUserId, $primaryAdminUserId) {
+                static function ($row) use ($actorUserId, $primaryAdminUserId, $actorIsSuperAdmin) {
                     if (!is_array($row)) {
                         return $row;
                     }
-                    $permissions = videochat_admin_user_permissions_snapshot($row, $actorUserId, $primaryAdminUserId);
-                    return [
-                        ...$row,
-                        'is_self' => $permissions['is_self'],
-                        'is_primary_admin' => $permissions['is_primary_admin'],
-                        'permissions' => [
-                            'can_change_role' => $permissions['can_change_role'],
-                            'can_change_status' => $permissions['can_change_status'],
-                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
-                            'can_toggle_status' => $permissions['can_toggle_status'],
-                            'can_delete' => $permissions['can_delete'],
-                        ],
-                    ];
+                    $permissions = videochat_admin_user_permissions_snapshot($row, $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
+                    return videochat_admin_user_account_response_row($row, $permissions, $actorIsSuperAdmin);
                 },
                 $rows
             );
@@ -124,7 +140,7 @@ function videochat_handle_admin_user_account_routes(
                     'has_next' => $pageCount > 0 && $page < $pageCount,
                 ],
                 'sort' => [
-                    'role_priority' => ['admin', 'user'],
+                    'role_priority' => ['admin'],
                     'secondary' => $displayNameSecondary,
                     'tie_breaker' => 'id_asc',
                 ],
@@ -149,6 +165,14 @@ function videochat_handle_admin_user_account_routes(
             $pdo = $openDatabase();
             $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
             $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+            $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
+            if (array_key_exists('is_superadmin', $payload) && !$actorIsSuperAdmin) {
+                return $errorResponse(403, 'superadmin_required', 'Only superadmins can grant superadmin access.', [
+                    'fields' => [
+                        'is_superadmin' => 'superadmin_required',
+                    ],
+                ]);
+            }
             $roleValidation = videochat_tenancy_governance_validate_user_roles($pdo, $tenantId, $payload);
             if (!(bool) ($roleValidation['ok'] ?? false)) {
                 return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
@@ -178,6 +202,14 @@ function videochat_handle_admin_user_account_routes(
                 }
                 $createResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $createResult['user']);
                 $createResult['user'] = videochat_tenancy_governance_enrich_user_group_relationships($pdo, $tenantId, (array) $createResult['user']);
+                $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
+                $permissions = videochat_admin_user_permissions_snapshot((array) $createResult['user'], $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
+                $createResult['user'] = videochat_admin_user_account_response_row((array) $createResult['user'], $permissions, $actorIsSuperAdmin);
+            }
+            if ((bool) ($createResult['ok'] ?? false) && is_array($createResult['user'] ?? null) && !is_array(($createResult['user'] ?? [])['permissions'] ?? null)) {
+                $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
+                $permissions = videochat_admin_user_permissions_snapshot((array) $createResult['user'], $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
+                $createResult['user'] = videochat_admin_user_account_response_row((array) $createResult['user'], $permissions, $actorIsSuperAdmin);
             }
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
@@ -231,40 +263,20 @@ function videochat_handle_admin_user_account_routes(
 
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
-                $permissions = videochat_admin_user_permissions_snapshot($user, $actorUserId, $primaryAdminUserId);
+                $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
+                $permissions = videochat_admin_user_permissions_snapshot($user, $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_fetch_failed', 'Could not load user.', [
                     'reason' => 'internal_error',
                 ]);
             }
+            $userRow = videochat_admin_user_account_response_row($user, $permissions, $actorIsSuperAdmin);
 
             return $jsonResponse(200, [
                 'status' => 'ok',
                 'result' => [
-                    'user' => [
-                        ...$user,
-                        'is_self' => $permissions['is_self'],
-                        'is_primary_admin' => $permissions['is_primary_admin'],
-                        'permissions' => [
-                            'can_change_role' => $permissions['can_change_role'],
-                            'can_change_status' => $permissions['can_change_status'],
-                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
-                            'can_toggle_status' => $permissions['can_toggle_status'],
-                            'can_delete' => $permissions['can_delete'],
-                        ],
-                    ],
-                    'row' => [
-                        ...$user,
-                        'is_self' => $permissions['is_self'],
-                        'is_primary_admin' => $permissions['is_primary_admin'],
-                        'permissions' => [
-                            'can_change_role' => $permissions['can_change_role'],
-                            'can_change_status' => $permissions['can_change_status'],
-                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
-                            'can_toggle_status' => $permissions['can_toggle_status'],
-                            'can_delete' => $permissions['can_delete'],
-                        ],
-                    ],
+                    'user' => $userRow,
+                    'row' => $userRow,
                 ],
                 'time' => gmdate('c'),
             ]);
@@ -282,6 +294,7 @@ function videochat_handle_admin_user_account_routes(
                 $pdo = $openDatabase();
                 $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+                $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
                 $existingUser = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
                 if ($existingUser === null) {
                     return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
@@ -292,6 +305,7 @@ function videochat_handle_admin_user_account_routes(
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
                 $existingRole = strtolower(trim((string) ($existingUser['role'] ?? 'user')));
                 $existingStatus = strtolower(trim((string) ($existingUser['status'] ?? 'active')));
+                $existingIsSuperAdmin = (bool) ($existingUser['is_superadmin'] ?? false);
 
                 if (array_key_exists('email', $payload)) {
                     $nextEmail = videochat_normalize_user_email_address((string) ($payload['email'] ?? ''));
@@ -339,6 +353,31 @@ function videochat_handle_admin_user_account_routes(
                         return $errorResponse(409, 'admin_user_conflict', 'Primary admin cannot be deactivated.', [
                             'fields' => [
                                 'status' => 'primary_admin_cannot_be_disabled',
+                            ],
+                        ]);
+                    }
+                }
+
+                if (array_key_exists('is_superadmin', $payload)) {
+                    $requestedSuperAdmin = videochat_admin_truthy($payload['is_superadmin']);
+                    if (!$actorIsSuperAdmin) {
+                        return $errorResponse(403, 'superadmin_required', 'Only superadmins can grant or revoke superadmin access.', [
+                            'fields' => [
+                                'is_superadmin' => 'superadmin_required',
+                            ],
+                        ]);
+                    }
+                    if ($primaryAdminUserId > 0 && $primaryAdminUserId === $userId && !$requestedSuperAdmin) {
+                        return $errorResponse(409, 'admin_user_conflict', 'Primary superadmin access cannot be removed.', [
+                            'fields' => [
+                                'is_superadmin' => 'primary_superadmin_locked',
+                            ],
+                        ]);
+                    }
+                    if ($actorUserId > 0 && $actorUserId === $userId && $existingIsSuperAdmin && !$requestedSuperAdmin) {
+                        return $errorResponse(409, 'admin_user_conflict', 'You cannot remove your own superadmin access.', [
+                            'fields' => [
+                                'is_superadmin' => 'cannot_remove_own_superadmin',
                             ],
                         ]);
                     }
@@ -412,6 +451,12 @@ function videochat_handle_admin_user_account_routes(
                     }
                     $updateResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $updateResult['user']);
                     $updateResult['user'] = videochat_tenancy_governance_enrich_user_group_relationships($pdo, $tenantId, (array) $updateResult['user']);
+                    $permissions = videochat_admin_user_permissions_snapshot((array) $updateResult['user'], $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
+                    $updateResult['user'] = videochat_admin_user_account_response_row((array) $updateResult['user'], $permissions, $actorIsSuperAdmin);
+                }
+                if ((bool) ($updateResult['ok'] ?? false) && is_array($updateResult['user'] ?? null) && !is_array(($updateResult['user'] ?? [])['permissions'] ?? null)) {
+                    $permissions = videochat_admin_user_permissions_snapshot((array) $updateResult['user'], $actorUserId, $primaryAdminUserId, $actorIsSuperAdmin);
+                    $updateResult['user'] = videochat_admin_user_account_response_row((array) $updateResult['user'], $permissions, $actorIsSuperAdmin);
                 }
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
@@ -458,6 +503,7 @@ function videochat_handle_admin_user_account_routes(
                 $pdo = $openDatabase();
                 $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+                $actorIsSuperAdmin = videochat_user_is_superadmin($pdo, $actorUserId);
                 if ($actorUserId > 0 && $actorUserId === $userId) {
                     return $errorResponse(409, 'admin_user_conflict', 'You cannot delete your own account.', [
                         'fields' => [
@@ -471,6 +517,14 @@ function videochat_handle_admin_user_account_routes(
                     return $errorResponse(409, 'admin_user_conflict', 'Primary admin account cannot be deleted.', [
                         'fields' => [
                             'user_id' => 'primary_admin_delete_locked',
+                        ],
+                    ]);
+                }
+                $targetUser = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
+                if (is_array($targetUser) && (bool) ($targetUser['is_superadmin'] ?? false) && !$actorIsSuperAdmin) {
+                    return $errorResponse(403, 'superadmin_required', 'Only superadmins can delete another superadmin account.', [
+                        'fields' => [
+                            'user_id' => 'superadmin_required',
                         ],
                     ]);
                 }

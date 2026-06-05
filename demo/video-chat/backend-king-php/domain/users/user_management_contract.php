@@ -36,6 +36,7 @@ function videochat_admin_allowed_update_fields(): array
         'time_format',
         'theme',
         'theme_editor_enabled',
+        'is_superadmin',
         'avatar_path',
     ];
 }
@@ -89,6 +90,9 @@ function videochat_admin_fetch_user_by_id(PDO $pdo, int $userId, ?int $tenantId 
         $tenantJoin = 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id';
         $tenantWhere = 'AND tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\'';
     }
+    $superAdminSelect = videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin')
+        ? 'users.is_superadmin,'
+        : '0 AS is_superadmin,';
     $statement = $pdo->prepare(
         <<<SQL
 SELECT
@@ -99,6 +103,7 @@ SELECT
     users.time_format,
     users.theme,
     users.theme_editor_enabled,
+    {$superAdminSelect}
     users.avatar_path,
     users.created_at,
     users.updated_at,
@@ -130,6 +135,7 @@ SQL
         'time_format' => (string) ($row['time_format'] ?? '24h'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
         'theme_editor_enabled' => ((int) ($row['theme_editor_enabled'] ?? 0)) === 1,
+        'is_superadmin' => ((int) ($row['is_superadmin'] ?? 0)) === 1,
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
         'created_at' => (string) ($row['created_at'] ?? ''),
         'updated_at' => (string) ($row['updated_at'] ?? ''),
@@ -215,6 +221,10 @@ function videochat_admin_validate_create_user_payload(array $payload): array
     }
 
     $themeEditorEnabled = videochat_admin_truthy($payload['theme_editor_enabled'] ?? false);
+    $isSuperAdmin = videochat_admin_truthy($payload['is_superadmin'] ?? false);
+    if ($isSuperAdmin && $role !== 'admin') {
+        $errors['is_superadmin'] = 'requires_admin_role';
+    }
 
     $avatarPath = null;
     if (array_key_exists('avatar_path', $payload)) {
@@ -242,6 +252,7 @@ function videochat_admin_validate_create_user_payload(array $payload): array
             'time_format' => $timeFormat,
             'theme' => $theme,
             'theme_editor_enabled' => $themeEditorEnabled,
+            'is_superadmin' => $isSuperAdmin,
             'avatar_path' => $avatarPath,
         ],
         'errors' => $errors,
@@ -332,6 +343,10 @@ function videochat_admin_validate_update_user_payload(array $payload): array
 
     if (array_key_exists('theme_editor_enabled', $payload)) {
         $data['theme_editor_enabled'] = videochat_admin_truthy($payload['theme_editor_enabled']);
+    }
+
+    if (array_key_exists('is_superadmin', $payload)) {
+        $data['is_superadmin'] = videochat_admin_truthy($payload['is_superadmin']);
     }
 
     if (array_key_exists('avatar_path', $payload)) {

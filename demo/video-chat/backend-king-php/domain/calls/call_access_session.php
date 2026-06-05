@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../audit/audit_events.php';
 require_once __DIR__ . '/../users/user_settings.php';
+require_once __DIR__ . '/call_access_guest_user.php';
 
 function videochat_call_access_session_int_option(array $options, string $key): int
 {

@@ -18,6 +18,7 @@ $httpPort = (int) (getenv('VIDEOCHAT_EDGE_HTTP_PORT') ?: '8080');
 $httpsPort = (int) (getenv('VIDEOCHAT_EDGE_HTTPS_PORT') ?: '8443');
 $domain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_DOMAIN') ?: getenv('VIDEOCHAT_V1_PUBLIC_HOST') ?: 'localhost')));
 $rootDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_ROOT_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_DOMAIN') ?: $domain)));
+$wwwDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WWW_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_WWW_DOMAIN') ?: ($rootDomain !== '' ? 'www.' . $rootDomain : ''))));
 $apiDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_API_DOMAIN') ?: 'api.' . $rootDomain)));
 $wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.' . $rootDomain)));
 $sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $rootDomain)));
@@ -1030,6 +1031,19 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
+$canonicalRedirectTarget = static function (array $request) use ($rootDomain, $wwwDomain): ?string {
+    $host = (string) ($request['host'] ?? '');
+    if ($wwwDomain === '' || $rootDomain === '' || $host !== $wwwDomain) {
+        return null;
+    }
+
+    $target = (string) ($request['target'] ?: '/');
+    if ($target === '' || $target[0] !== '/') {
+        $target = '/';
+    }
+    return 'https://' . $rootDomain . $target;
+};
+
 $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $sfuEnabled, $externalUpstream, $callAppKeyForHost): ?string {
     $host = $request['host'];
     $path = $request['path'];
@@ -1060,7 +1074,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     return 'static';
 };
 
-$handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot, $assetVersion, $readRequestHead, $parseRequest, $writeResponse, $contentType, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog, $callAppKeyForHost): void {
+$handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot, $assetVersion, $readRequestHead, $parseRequest, $writeResponse, $contentType, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog, $callAppKeyForHost, $canonicalRedirectTarget): void {
     stream_set_timeout($client, 10);
     if ($tls) {
         $crypto = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_SERVER);
@@ -1083,16 +1097,27 @@ $handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot,
     }
 
     $request = $parseRequest($head);
+    $canonicalLocation = $canonicalRedirectTarget($request);
     if (!$tls) {
         $host = (string) ($request['headers']['host'] ?? $domain);
         $host = preg_replace('/:\d+$/', '', $host) ?: $domain;
         $target = (string) ($request['target'] ?: '/');
-        $location = 'https://' . $host . $target;
+        $location = $canonicalLocation ?? ('https://' . $host . $target);
         $writeResponse($client, 301, 'Moved Permanently', [
             'Location' => $location,
             'Content-Type' => 'text/plain; charset=utf-8',
             'Cache-Control' => 'no-store',
         ], "Redirecting to {$location}\n", $request['method'] === 'HEAD');
+        @fclose($client);
+        return;
+    }
+    if ($canonicalLocation !== null) {
+        $writeResponse($client, 301, 'Moved Permanently', [
+            'Location' => $canonicalLocation,
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Cache-Control' => 'no-store',
+            'Strict-Transport-Security' => 'max-age=31536000; includeSubDomains',
+        ], "Redirecting to {$canonicalLocation}\n", $request['method'] === 'HEAD');
         @fclose($client);
         return;
     }

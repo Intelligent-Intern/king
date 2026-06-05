@@ -18,7 +18,7 @@ require_once __DIR__ . '/call_permanent_lifecycle.php';
  */
 function videochat_reactivate_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload = []): array
 {
-    if ($authUserId !== 1 || !videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
+    if (!videochat_user_has_system_admin_call_rights($pdo, $authUserId, $authRole)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',

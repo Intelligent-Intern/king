@@ -117,6 +117,77 @@ function videochat_user_is_guest_account(?string $email, mixed $passwordHash): b
     return videochat_user_account_type($email, $passwordHash) === 'guest';
 }
 
+function videochat_auth_table_has_column(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $safeTable = preg_replace('/[^A-Za-z0-9_]/', '', $tableName);
+    if (!is_string($safeTable) || $safeTable === '') {
+        return false;
+    }
+
+    try {
+        $columns = $pdo->query('PRAGMA table_info(' . $safeTable . ')');
+        foreach ($columns ?: [] as $column) {
+            if (strcasecmp((string) ($column['name'] ?? ''), $columnName) === 0) {
+                return true;
+            }
+        }
+    } catch (Throwable) {
+        return false;
+    }
+
+    return false;
+}
+
+function videochat_auth_user_is_superadmin_row(array $row): bool
+{
+    $role = strtolower(trim((string) ($row['role_slug'] ?? ($row['role'] ?? ''))));
+    $status = strtolower(trim((string) ($row['status'] ?? ($row['user_status'] ?? 'active'))));
+    if ($role !== 'admin' || $status !== 'active') {
+        return false;
+    }
+
+    $email = strtolower(trim((string) ($row['email'] ?? '')));
+    $passwordHash = is_string($row['password_hash'] ?? null) ? trim((string) $row['password_hash']) : '';
+    if (videochat_user_is_guest_account($email, $passwordHash)) {
+        return false;
+    }
+
+    return ((int) ($row['is_superadmin'] ?? 0)) === 1;
+}
+
+function videochat_user_is_superadmin(PDO $pdo, int $userId): bool
+{
+    if ($userId <= 0 || !videochat_auth_table_has_column($pdo, 'users', 'is_superadmin')) {
+        return false;
+    }
+
+    try {
+        $query = $pdo->prepare(
+            <<<'SQL'
+SELECT users.email, users.password_hash, users.status, users.is_superadmin, roles.slug AS role_slug
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE users.id = :id
+LIMIT 1
+SQL
+        );
+        $query->execute([':id' => $userId]);
+        $row = $query->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable) {
+        return false;
+    }
+
+    return is_array($row) && videochat_auth_user_is_superadmin_row($row);
+}
+
+function videochat_auth_context_user_is_superadmin(array $apiAuthContext): bool
+{
+    $user = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
+    return ((int) ($user['is_superadmin'] ?? 0)) === 1
+        && strtolower(trim((string) ($user['role'] ?? ''))) === 'admin'
+        && strtolower(trim((string) ($user['status'] ?? 'active'))) === 'active';
+}
+
 /**
  * @return array{
  *   ok: bool,

@@ -483,20 +483,21 @@ The wizard asks for:
 - Hetzner Cloud API token with server and DNS-zone write access
 - server name, server type, location, and image, with defaults offered by the
   script
-- optional API, lobby websocket, SFU, TURN, and CDN hostnames; by default the helper
-  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, `turn.<domain>`, and `cdn.<domain>`
+- optional API, lobby websocket, SFU, TURN, CDN, and `www` hostnames; by default
+  the helper uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, `turn.<domain>`,
+  `cdn.<domain>`, and redirects `www.<domain>` to `https://<domain>/`
 
 The helper loads `demo/video-chat/.env.local` before it checks required deploy
 variables. The wizard and manual deploy actions write the effective deploy
 settings back to that same file, so later runs can reuse them without retyping
-everything. This includes the Hetzner Cloud API token, derived
-`api/ws/sfu/turn/cdn` hostnames, the SSH key path, selected server settings, and
-the resolved server IP. The file is ignored by git.
+everything. This includes the Hetzner Cloud API token, the derived `www`
+canonical alias plus `api/ws/sfu/turn/cdn` hostnames, the SSH key path, selected
+server settings, and the resolved server IP. The file is ignored by git.
 
 The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
 Manual deploy actions also auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is
 known. Before the first SSH connection the helper removes stale entries for the
-deploy host, expected public IP, root domain, and `api/ws/sfu/turn/cdn` hostnames
+deploy host, expected public IP, root domain, `www`, and `api/ws/sfu/turn/cdn` hostnames
 from `~/.ssh/known_hosts`, including the `[host]:port` form. This keeps reruns
 idempotent when Hetzner reuses an IP address or a server was recreated. Set
 `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=0` if you want to keep SSH host key
@@ -520,7 +521,7 @@ What the wizard does:
 - stores the new public IPv4 as the deploy target
 - tries to set the Hetzner DNS `A` record through the Cloud API when the matching
   DNS zone is visible to the API token
-- tries to set matching `A` records for `api`, `ws`, `sfu`, `turn`, `cdn`, and
+- tries to set matching `A` records for `www`, `api`, `ws`, `sfu`, `turn`, `cdn`, and
   the legacy `cnd` alias
 - waits until the domain and those subdomains resolve to the new server IP
 - waits until SSH is reachable
@@ -534,6 +535,7 @@ the helper prints the new server IP. Set these records to the same IP unless you
 intentionally allocate dedicated IPs:
 
 - `video.example.com`
+- `www.video.example.com`
 - `api.video.example.com`
 - `ws.video.example.com`
 - `sfu.video.example.com`
@@ -543,7 +545,7 @@ intentionally allocate dedicated IPs:
 
 The helper waits before requesting the certificate because Certbot needs the
 public domain and subdomains to point at the server. Production actions run the
-same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`; when
+same DNS preflight for the root domain, `www`, and `api/ws/sfu/turn/cdn`; when
 `VIDEOCHAT_DEPLOY_PUBLIC_IP` is set every name must resolve to that IP before
 Certbot is allowed to run.
 Normal `deploy` reruns do not mutate DNS anymore. When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1`
@@ -629,6 +631,7 @@ standalone certificate challenge is restored even if Certbot fails.
 Public production URLs:
 
 - frontend: `https://<domain>/`
+- canonical www alias: `https://www.<domain>/` redirects to `https://<domain>/`
 - API: `https://api.<domain>/`
 - lobby websocket: `wss://ws.<domain>/ws`
 - SFU websocket: `wss://sfu.<domain>/sfu`
@@ -647,6 +650,7 @@ Override the defaults when needed:
 
 ```bash
 VIDEOCHAT_DEPLOY_API_DOMAIN=api.video.example.com \
+VIDEOCHAT_DEPLOY_WWW_DOMAIN=www.video.example.com \
 VIDEOCHAT_DEPLOY_WS_DOMAIN=ws.video.example.com \
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=sfu.video.example.com \
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=turn.video.example.com \

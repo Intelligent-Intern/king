@@ -3,10 +3,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/../calls/appointment_calendar_settings.php';
 require_once __DIR__ . '/../calls/appointment_calendar_mail.php';
 require_once __DIR__ . '/../users/avatar_upload.php';
+require_once __DIR__ . '/../../support/auth_request.php';
 require_once __DIR__ . '/../../support/tenant_context.php';
-function videochat_workspace_primary_admin_user_id(): int
+
+function videochat_workspace_user_is_superadmin(PDO $pdo, array $authUser): bool
 {
-    return 1;
+    return videochat_user_is_superadmin($pdo, (int) ($authUser['id'] ?? 0));
 }
 function videochat_workspace_user_can_edit_themes(PDO $pdo, array $authUser): bool
 {

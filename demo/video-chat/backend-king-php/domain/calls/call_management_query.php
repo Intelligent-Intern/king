@@ -105,9 +105,13 @@ function videochat_user_has_system_admin_call_rights(PDO $pdo, int $authUserId, 
         $hasStatusColumn = videochat_tenant_table_has_column($pdo, 'users', 'status');
         $passwordHashSelect = $hasPasswordHashColumn ? 'users.password_hash' : "'' AS password_hash";
         $statusSelect = $hasStatusColumn ? 'users.status' : "'active' AS status";
+        $hasSuperAdminColumn = videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin');
+        if (!$hasSuperAdminColumn) {
+            return false;
+        }
         $query = $pdo->prepare(
             <<<SQL
-SELECT users.email, {$passwordHashSelect}, {$statusSelect}, roles.slug AS role_slug
+SELECT users.email, {$passwordHashSelect}, {$statusSelect}, users.is_superadmin, roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
 WHERE users.id = :user_id
@@ -126,6 +130,9 @@ SQL
     $roleSlug = strtolower(trim((string) ($row['role_slug'] ?? '')));
     $status = strtolower(trim((string) ($row['status'] ?? '')));
     if ($roleSlug !== 'admin' || $status !== 'active') {
+        return false;
+    }
+    if (((int) ($row['is_superadmin'] ?? 0)) !== 1) {
         return false;
     }
 
