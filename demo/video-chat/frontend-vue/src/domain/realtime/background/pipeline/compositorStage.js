@@ -62,17 +62,11 @@ float featherMask(vec2 uv) {
   return sum / 16.0;
 }
 
-vec4 readBlurredFrame(vec2 uv) {
+vec4 readBlurredBackground(vec2 uv) {
   vec2 texel = vec2(max(uBlurPx, 1.0)) / uOutputSize;
-  vec4 sum = texture2D(uFrame, uv) * 0.20;
-  sum += texture2D(uFrame, uv + texel * vec2(-1.0, 0.0)) * 0.12;
-  sum += texture2D(uFrame, uv + texel * vec2(1.0, 0.0)) * 0.12;
-  sum += texture2D(uFrame, uv + texel * vec2(0.0, -1.0)) * 0.12;
-  sum += texture2D(uFrame, uv + texel * vec2(0.0, 1.0)) * 0.12;
-  sum += texture2D(uFrame, uv + texel * vec2(-0.707, -0.707)) * 0.08;
-  sum += texture2D(uFrame, uv + texel * vec2(0.707, -0.707)) * 0.08;
-  sum += texture2D(uFrame, uv + texel * vec2(-0.707, 0.707)) * 0.08;
-  sum += texture2D(uFrame, uv + texel * vec2(0.707, 0.707)) * 0.08;
+  vec4 sum = texture2D(uBackground, uv) * 0.20;
+  sum += (texture2D(uBackground, uv + texel * vec2(-1.0, 0.0)) + texture2D(uBackground, uv + texel * vec2(1.0, 0.0)) + texture2D(uBackground, uv + texel * vec2(0.0, -1.0)) + texture2D(uBackground, uv + texel * vec2(0.0, 1.0))) * 0.12;
+  sum += (texture2D(uBackground, uv + texel * vec2(-0.707, -0.707)) + texture2D(uBackground, uv + texel * vec2(0.707, -0.707)) + texture2D(uBackground, uv + texel * vec2(-0.707, 0.707)) + texture2D(uBackground, uv + texel * vec2(0.707, 0.707))) * 0.08;
   return sum;
 }
 
@@ -90,7 +84,7 @@ void main(void) {
     vec2 backgroundUv = vUv * uBackgroundUvTransform.xy + uBackgroundUvTransform.zw;
     background = texture2D(uBackground, backgroundUv);
   } else if (uBackgroundMode == 2) {
-    background = readBlurredFrame(vUv);
+    background = readBlurredBackground(vUv);
   }
 
   gl_FragColor = vec4(mix(background.rgb, frame.rgb, maskAlpha), 1.0);
@@ -607,6 +601,8 @@ function createWebGlBackgroundCompositorStage({
         frame: createTexture(gl),
         mask: createTexture(gl),
     };
+    const backgroundFrameCanvas = document.createElement('canvas');
+    const backgroundFrameCtx = backgroundFrameCanvas.getContext('2d', { alpha: false });
     const maskTools = createMaskCanvasTools(canvas);
     let backgroundImageCanvas = null;
     let backgroundImageUrl = '';
@@ -687,6 +683,15 @@ function createWebGlBackgroundCompositorStage({
         }
     }
 
+    function uploadBlurBackground(source) {
+        if (!backgroundFrameCtx) return false;
+        resizeCanvas(backgroundFrameCanvas, canvas.width, canvas.height);
+        backgroundFrameCtx.filter = 'none';
+        drawCoverImage(backgroundFrameCtx, source, canvas.width, canvas.height);
+        uploadTexture(gl, textures.background, 2, backgroundFrameCanvas);
+        return true;
+    }
+
     function render({
         hasMatteMask,
         maskBitmap = null,
@@ -727,7 +732,7 @@ function createWebGlBackgroundCompositorStage({
             backgroundMode = 1;
             backgroundUvTransform = resolveCoverUvTransform(backgroundImageCanvas, canvas.width, canvas.height);
             uploadTexture(gl, textures.background, 2, backgroundImageCanvas);
-        } else if (mode === 'blur' && !backgroundColor) {
+        } else if (mode === 'blur' && !backgroundColor && uploadBlurBackground(foregroundSource)) {
             backgroundMode = 2;
         }
 
