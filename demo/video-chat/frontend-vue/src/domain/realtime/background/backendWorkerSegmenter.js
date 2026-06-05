@@ -20,7 +20,8 @@ const MEDIAPIPE_MODEL_BASE_PATH = '/cdn/vendor/mediapipe/models/';
 const MEDIAPIPE_WASM_BASE_PATH = '/wasm/';
 const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_multiclass_256x256.tflite`;
 const WASM_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_WASM_BASE_PATH}`;
-const INIT_TIMEOUT_MS = 15000;
+const READY_TIMEOUT_MS = 5000;
+const INIT_TIMEOUT_MS = 45000;
 const LEASE_WAIT_TIMEOUT_MS = 2000;
 const LEASE_WAIT_POLL_MS = 25;
 const SHARED_BACKEND_IDLE_TTL_MS = 60000;
@@ -50,7 +51,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             try { worker.terminate(); } catch { /* ignore */ }
             reject(error);
         };
-        const timeout = setTimeout(() => fail(new Error('Worker READY timeout')), 5000);
+        const timeout = setTimeout(() => fail(new Error('Worker READY timeout')), READY_TIMEOUT_MS);
         worker.onmessage = (e) => {
             if (e.data?.type === 'READY') {
                 clearTimeout(timeout);
