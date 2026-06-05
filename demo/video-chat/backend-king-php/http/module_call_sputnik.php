@@ -58,9 +58,9 @@ function videochat_handle_call_sputnik_routes(
                 videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } elseif ($method === 'DELETE') {
-            $result = videochat_sputnik_runner_action('DELETE', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action($openDatabase(), 'DELETE', $callId, $authenticatedUserId);
         } else {
-            $result = videochat_sputnik_runner_action('GET', $callId, $authenticatedUserId);
+            $result = videochat_sputnik_runner_action($openDatabase(), 'GET', $callId, $authenticatedUserId);
         }
     } catch (Throwable $exception) {
         error_log(sprintf(

@@ -51,9 +51,12 @@ export function createGossipMediaRelaySocket({
   let connecting = false;
   let originIndex = 0;
   let generation = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectAttempt = 0;
   const pendingFrames: ArrayBuffer[] = [];
   const maxPendingFrames = 24;
   const maxPendingBytes = 8 * 1024 * 1024;
+  const maxReconnectDelayMs = 10_000;
 
   function pendingBytes(): number {
     return pendingFrames.reduce((total, frame) => total + Number(frame.byteLength || 0), 0);
@@ -87,6 +90,42 @@ export function createGossipMediaRelaySocket({
     }
   }
 
+  function clearReconnectTimer(): void {
+    if (reconnectTimer === null) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function reconnectDelayMs(): number {
+    const exponent = Math.min(5, Math.max(0, reconnectAttempt));
+    return Math.min(maxReconnectDelayMs, 500 * Math.max(1, 2 ** exponent));
+  }
+
+  function scheduleReconnect(key: string, reason: string, payload: Record<string, unknown> = {}): boolean {
+    if (socketKey !== key) return false;
+    if (key.includes(':call:') || key.endsWith(':0')) return false;
+    if (reconnectTimer !== null) return true;
+
+    connecting = false;
+    originIndex = 0;
+    const scheduledGeneration = generation;
+    const delayMs = reconnectDelayMs();
+    reconnectAttempt += 1;
+    diagnostic('gossip_media_relay_socket_reconnect_scheduled', 'warning', {
+      reason: String(reason || 'socket_closed'),
+      reconnect_attempt: reconnectAttempt,
+      retry_delay_ms: delayMs,
+      ...payload,
+    });
+
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (scheduledGeneration !== generation || socketKey !== key) return;
+      connectCurrentOrigin(key);
+    }, delayMs);
+    return true;
+  }
+
   function parseRelayTextFrame(raw: string): boolean {
     let payload: Record<string, unknown> | null = null;
     try {
@@ -108,6 +147,11 @@ export function createGossipMediaRelaySocket({
   function connectCurrentOrigin(key: string): boolean {
     const origins = resolveBackendWebSocketOriginCandidates();
     if (!Array.isArray(origins) || originIndex >= origins.length) {
+      if (Array.isArray(origins) && origins.length > 0) {
+        return scheduleReconnect(key, 'origin_candidates_exhausted', {
+          origin_count: origins.length,
+        });
+      }
       diagnostic('gossip_media_relay_socket_unavailable', 'warning', {
         origin_count: Array.isArray(origins) ? origins.length : 0,
       });
@@ -124,7 +168,19 @@ export function createGossipMediaRelaySocket({
 
     connecting = true;
     const connectGeneration = generation;
-    const nextSocket = new WebSocket(url);
+    let nextSocket: WebSocket;
+    try {
+      nextSocket = new WebSocket(url);
+    } catch (error) {
+      connecting = false;
+      originIndex += 1;
+      diagnostic('gossip_media_relay_socket_connect_failed', 'warning', {
+        origin_index: originIndex - 1,
+        error_name: error instanceof Error ? error.name : 'Error',
+        error_message: error instanceof Error ? error.message : String(error || ''),
+      });
+      return connectCurrentOrigin(key);
+    }
     nextSocket.binaryType = 'arraybuffer';
     socket = nextSocket;
 
@@ -133,7 +189,9 @@ export function createGossipMediaRelaySocket({
         closeQuietly(nextSocket, 1000, 'stale_media_relay');
         return;
       }
+      clearReconnectTimer();
       connecting = false;
+      reconnectAttempt = 0;
       setBackendWebSocketOrigin(origin);
       diagnostic('gossip_media_relay_socket_open', 'info', {
         origin_index: originIndex,
@@ -160,13 +218,22 @@ export function createGossipMediaRelaySocket({
       });
     });
 
-    nextSocket.addEventListener('close', () => {
+    nextSocket.addEventListener('close', (event) => {
       if (connectGeneration !== generation || socket !== nextSocket) return;
       socket = null;
       connecting = false;
       originIndex += 1;
+      const closePayload = {
+        close_code: Number(event?.code || 0),
+        close_reason: String(event?.reason || ''),
+        origin_index: originIndex - 1,
+        origin_count: origins.length,
+      };
       if (pendingFrames.length > 0 && originIndex < origins.length) {
+        diagnostic('gossip_media_relay_socket_retrying_next_origin', 'warning', closePayload);
         connectCurrentOrigin(key);
+      } else if (pendingFrames.length > 0) {
+        scheduleReconnect(key, 'socket_closed_with_pending_frames', closePayload);
       }
     });
 
@@ -181,11 +248,13 @@ export function createGossipMediaRelaySocket({
     );
     if (key.includes(':call:') || key.endsWith(':0')) return false;
     if (socketKey !== key) {
+      clearReconnectTimer();
       closeQuietly(socket, 1000, 'media_relay_context_changed');
       socket = null;
       socketKey = key;
       connecting = false;
       originIndex = 0;
+      reconnectAttempt = 0;
       generation += 1;
       pendingFrames.length = 0;
     }
@@ -210,6 +279,11 @@ export function createGossipMediaRelaySocket({
       pendingFrames.length >= maxPendingFrames
       || pendingBytes() + frame.byteLength > maxPendingBytes
     ) {
+      diagnostic('gossip_media_relay_socket_pending_buffer_full', 'warning', {
+        frame_bytes: frame.byteLength,
+        max_pending_frames: maxPendingFrames,
+        max_pending_bytes: maxPendingBytes,
+      });
       return false;
     }
     pendingFrames.push(frame);
@@ -218,9 +292,12 @@ export function createGossipMediaRelaySocket({
 
   function close(): void {
     generation += 1;
+    clearReconnectTimer();
     pendingFrames.length = 0;
     connecting = false;
     socketKey = '';
+    originIndex = 0;
+    reconnectAttempt = 0;
     closeQuietly(socket);
     socket = null;
   }
