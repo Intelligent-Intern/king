@@ -15,6 +15,7 @@
   const modeBadge = document.getElementById('modeBadge');
   const cursorOverlay = document.getElementById('cursorOverlay');
   const widthInput = document.getElementById('width');
+  const resetButton = document.getElementById('resetBoard');
   const inlineEditor = document.getElementById('inlineEditor');
   const inlineText = document.getElementById('inlineText');
   const state = {
@@ -38,6 +39,7 @@
   let activeTool = 'pen';
   let activeColor = colors[0];
   let latestClock = 0;
+  let resetClock = 0;
   let drawing = null;
   let preview = null;
   let selectedId = '';
@@ -58,7 +60,8 @@
   }
 
   function canAppendPayload(payloadType) {
-    return String(payloadType || '').trim().toLowerCase().endsWith('.delete') ? canDelete() : canAppend();
+    const normalized = String(payloadType || '').trim().toLowerCase();
+    return normalized.endsWith('.delete') || normalized.endsWith('.reset') ? canDelete() : canAppend();
   }
 
   function canRead() {
@@ -80,6 +83,7 @@
     });
     document.getElementById('undo').disabled = !canAppend() || undoStack.length === 0;
     document.getElementById('redo').disabled = !canAppend() || redoStack.length === 0;
+    if (resetButton) resetButton.disabled = !canDelete();
   }
 
   function applyAccessState(result = {}) {
@@ -143,10 +147,7 @@
       causal_dependencies: latestClock > 0 ? [{ logical_clock: latestClock }] : [],
       payload,
     };
-    emit('call_app.crdt.op.append', {
-      request_id: operationId('request'),
-      operation,
-    });
+    emit('call_app.crdt.op.append', { request_id: operationId('request'), operation });
     if (options.history !== false) {
       undoStack.push({ payloadType, payload: structuredClone(payload) });
       redoStack.length = 0;
@@ -194,12 +195,7 @@
     };
     if (payloadType === 'cursor.move') outgoingPayload.label = participantLabel;
     applyPresence(payloadType, outgoingPayload, actorId);
-    emit('call_app.presence.publish', {
-      request_id: operationId('presence'),
-      payload_type: payloadType,
-      actor_id: actorId,
-      payload: outgoingPayload,
-    });
+    emit('call_app.presence.publish', { request_id: operationId('presence'), payload_type: payloadType, actor_id: actorId, payload: outgoingPayload });
     return true;
   }
 
@@ -294,15 +290,7 @@
       targetCtx.stroke();
     } else if (type === 'ellipse') {
       targetCtx.beginPath();
-      targetCtx.ellipse(
-        shape.x + shape.w / 2,
-        shape.y + shape.h / 2,
-        Math.abs(shape.w / 2),
-        Math.abs(shape.h / 2),
-        0,
-        0,
-        Math.PI * 2,
-      );
+      targetCtx.ellipse(shape.x + shape.w / 2, shape.y + shape.h / 2, Math.abs(shape.w / 2), Math.abs(shape.h / 2), 0, 0, Math.PI * 2);
       targetCtx.stroke();
     } else {
       targetCtx.strokeRect(shape.x, shape.y, shape.w, shape.h);
@@ -316,12 +304,7 @@
     const text = state.texts.get(id);
     if (text) return { x: text.x, y: text.y, w: 380, h: 90 };
     const shape = state.shapes.get(id);
-    if (shape) return {
-      x: Math.min(shape.x, shape.x + shape.w),
-      y: Math.min(shape.y, shape.y + shape.h),
-      w: Math.abs(shape.w),
-      h: Math.abs(shape.h),
-    };
+    if (shape) return { x: Math.min(shape.x, shape.x + shape.w), y: Math.min(shape.y, shape.y + shape.h), w: Math.abs(shape.w), h: Math.abs(shape.h) };
     return null;
   }
 
@@ -397,6 +380,7 @@
   function applySnapshot(snapshot) {
     if (snapshot?.kind !== 'whiteboard.snapshot.v1' || typeof snapshot.state !== 'object') return;
     for (const key of ['strokes', 'shapes', 'texts', 'notes']) state[key].clear();
+    resetClock = Math.max(resetClock, Number(snapshot.state.reset_clock || snapshot.state.resetClock || 0));
     state.cursors.clear();
     state.selections.clear();
     for (const stroke of snapshot.state.strokes || []) state.strokes.set(stroke.id, stroke);
@@ -405,29 +389,50 @@
     for (const note of snapshot.state.notes || []) state.notes.set(note.id, note);
   }
 
+  function clearBoardContent() {
+    for (const key of ['strokes', 'shapes', 'texts', 'notes']) state[key].clear();
+    state.selections.clear();
+    selectedId = '';
+    drawing = null;
+    preview = null;
+    moving = null;
+    undoStack.length = 0; redoStack.length = 0;
+    closeInlineEditor();
+  }
+
   function applyEnvelope(envelope) {
     if (!envelope || state.applied.has(envelope.operation_id)) return;
     state.applied.add(envelope.operation_id);
-    latestClock = Math.max(latestClock, Number(envelope.logical_clock || 0));
+    const envelopeClock = Number(envelope.logical_clock || 0);
+    const payloadType = String(envelope.payload_type || '');
+    latestClock = Math.max(latestClock, envelopeClock);
     const payload = envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {};
     const withActor = { ...payload, actor_id: envelope.actor_id };
-    if (envelope.payload_type === 'stroke.add') state.strokes.set(payload.id, withActor);
-    if (envelope.payload_type === 'shape.add') state.shapes.set(payload.id, withActor);
-    if (envelope.payload_type === 'shape.update' && state.shapes.has(payload.id)) {
+    if (payloadType === 'whiteboard.reset') {
+      resetClock = Math.max(resetClock, envelopeClock, Number(payload.cleared_before_clock || payload.clearedBeforeClock || 0));
+      clearBoardContent();
+      setStatus(canAppend() ? 'Whiteboard reset synchronized.' : 'Read-only whiteboard synchronized.');
+      render();
+      return;
+    }
+    if (resetClock > 0 && envelopeClock <= resetClock) return;
+    if (payloadType === 'stroke.add') state.strokes.set(payload.id, withActor);
+    if (payloadType === 'shape.add') state.shapes.set(payload.id, withActor);
+    if (payloadType === 'shape.update' && state.shapes.has(payload.id)) {
       state.shapes.set(payload.id, { ...state.shapes.get(payload.id), ...withActor });
     }
-    if (envelope.payload_type === 'shape.delete') {
+    if (payloadType === 'shape.delete') {
       state.shapes.delete(payload.id);
       state.strokes.delete(payload.id);
       state.texts.delete(payload.id);
       state.notes.delete(payload.id);
     }
-    if (envelope.payload_type === 'text.add') state.texts.set(payload.id, withActor);
-    if (envelope.payload_type === 'text.update' && state.texts.has(payload.id)) {
+    if (payloadType === 'text.add') state.texts.set(payload.id, withActor);
+    if (payloadType === 'text.update' && state.texts.has(payload.id)) {
       state.texts.set(payload.id, { ...state.texts.get(payload.id), ...withActor });
     }
-    if (envelope.payload_type === 'sticky_note.add') state.notes.set(payload.id, withActor);
-    if (envelope.payload_type === 'sticky_note.update' && state.notes.has(payload.id)) {
+    if (payloadType === 'sticky_note.add') state.notes.set(payload.id, withActor);
+    if (payloadType === 'sticky_note.update' && state.notes.has(payload.id)) {
       state.notes.set(payload.id, { ...state.notes.get(payload.id), ...withActor });
     }
     setStatus(canAppend() ? 'Whiteboard synchronized.' : 'Read-only whiteboard synchronized.');
@@ -523,13 +528,7 @@
   function commitInlineEditor() {
     const text = inlineText.value.trim();
     if (text && editorPoint) {
-      appendOperation(editorKind === 'sticky' ? 'sticky_note.add' : 'text.add', {
-        id: operationId(editorKind),
-        text,
-        x: editorPoint.x,
-        y: editorPoint.y,
-        color: activeColor,
-      });
+      appendOperation(editorKind === 'sticky' ? 'sticky_note.add' : 'text.add', { id: operationId(editorKind), text, x: editorPoint.x, y: editorPoint.y, color: activeColor });
     }
     closeInlineEditor();
   }
@@ -587,16 +586,7 @@
     }
     if (!drawing || !canAppend()) return;
     if (activeTool === 'rect' || activeTool === 'line' || activeTool === 'ellipse') {
-      preview = {
-        kind: 'shape',
-        type: activeTool,
-        x: activeTool === 'line' ? drawing.start.x : Math.min(drawing.start.x, point.x),
-        y: activeTool === 'line' ? drawing.start.y : Math.min(drawing.start.y, point.y),
-        w: activeTool === 'line' ? point.x - drawing.start.x : Math.abs(point.x - drawing.start.x),
-        h: activeTool === 'line' ? point.y - drawing.start.y : Math.abs(point.y - drawing.start.y),
-        color: activeColor,
-        width: Number(widthInput.value),
-      };
+      preview = { kind: 'shape', type: activeTool, x: activeTool === 'line' ? drawing.start.x : Math.min(drawing.start.x, point.x), y: activeTool === 'line' ? drawing.start.y : Math.min(drawing.start.y, point.y), w: activeTool === 'line' ? point.x - drawing.start.x : Math.abs(point.x - drawing.start.x), h: activeTool === 'line' ? point.y - drawing.start.y : Math.abs(point.y - drawing.start.y), color: activeColor, width: Number(widthInput.value) };
     } else {
       drawing.points.push(point);
       preview = { kind: 'stroke', tool: activeTool, points: drawing.points.slice(), color: activeColor, width: Number(widthInput.value) };
@@ -625,13 +615,7 @@
     } else {
       drawing.points.push(point);
       if (drawing.points.length > 1) {
-        appendOperation('stroke.add', {
-          id: operationId('stroke'),
-          tool: activeTool,
-          points: drawing.points,
-          color: activeColor,
-          width: Number(widthInput.value),
-        });
+        appendOperation('stroke.add', { id: operationId('stroke'), tool: activeTool, points: drawing.points, color: activeColor, width: Number(widthInput.value) });
       }
     }
     drawing = null;
@@ -640,14 +624,11 @@
   }
 
   function sendCursor(point) {
-    publishPresence('cursor.move', {
-      x: point.x,
-      y: point.y,
-      color: activeColor,
-      actor_id: actorId,
-      display_name: participantLabel,
-      label: participantLabel,
-    });
+    publishPresence('cursor.move', { x: point.x, y: point.y, color: activeColor, actor_id: actorId, display_name: participantLabel, label: participantLabel });
+  }
+
+  function resetWhiteboard() {
+    appendOperation('whiteboard.reset', { reset_id: operationId('reset'), cleared_before_clock: latestClock }, { history: false });
   }
 
   function undoLast() {
@@ -755,6 +736,7 @@
   canvas.addEventListener('pointercancel', pointerUp);
   document.getElementById('undo').addEventListener('click', undoLast);
   document.getElementById('redo').addEventListener('click', redoLast);
+  resetButton?.addEventListener('click', resetWhiteboard);
   document.getElementById('exportPng').addEventListener('click', () => downloadDataUrl(exportCanvas('image/png'), 'kingrt-whiteboard.png'));
   document.getElementById('exportPdf').addEventListener('click', exportPdf);
 

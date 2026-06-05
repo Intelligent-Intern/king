@@ -12,6 +12,7 @@
         "shape.add",
         "shape.update",
         "shape.delete",
+        "whiteboard.reset",
         "text.add",
         "text.update",
         "sticky_note.add",
