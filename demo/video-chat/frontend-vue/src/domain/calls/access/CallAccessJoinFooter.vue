@@ -1,5 +1,8 @@
 <template>
-  <footer class="calls-modal-footer calls-modal-footer-enter">
+  <footer
+    class="calls-modal-footer calls-modal-footer-enter"
+    :data-admission-state="waitingForAdmission ? 'waiting' : (joining ? 'joining' : 'idle')"
+  >
     <p v-if="admissionMessage" class="calls-enter-admission-status" role="status" aria-live="polite">
       {{ admissionMessage }}
     </p>
@@ -76,6 +79,7 @@
     <button
       v-else
       class="btn btn-cyan"
+      data-join-action="start"
       type="button"
       :disabled="joining || waitingForAdmission"
       @click="$emit('start-join')"
