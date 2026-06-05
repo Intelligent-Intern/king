@@ -57,6 +57,10 @@ export function createGossipMediaRelaySocket({
   const maxPendingFrames = 24;
   const maxPendingBytes = 8 * 1024 * 1024;
   const maxReconnectDelayMs = 10_000;
+  type RelaySendResult = {
+    sent: boolean;
+    queued: boolean;
+  };
 
   function pendingBytes(): number {
     return pendingFrames.reduce((total, frame) => total + Number(frame.byteLength || 0), 0);
@@ -263,16 +267,20 @@ export function createGossipMediaRelaySocket({
     return connectCurrentOrigin(key);
   }
 
-  function sendBinaryFrame(payload: unknown): boolean {
+  function sendBinaryFrame(payload: unknown): RelaySendResult {
     const frame = asArrayBuffer(payload);
-    if (!(frame instanceof ArrayBuffer) || frame.byteLength <= 0) return false;
-    if (!ensureSocket()) return false;
+    if (!(frame instanceof ArrayBuffer) || frame.byteLength <= 0) {
+      return { sent: false, queued: false };
+    }
+    if (!ensureSocket()) {
+      return { sent: false, queued: false };
+    }
     if (socket instanceof WebSocket && socket.readyState === WebSocket.OPEN) {
       try {
         socket.send(frame);
-        return true;
+        return { sent: true, queued: false };
       } catch {
-        return false;
+        return { sent: false, queued: false };
       }
     }
     if (
@@ -284,10 +292,10 @@ export function createGossipMediaRelaySocket({
         max_pending_frames: maxPendingFrames,
         max_pending_bytes: maxPendingBytes,
       });
-      return false;
+      return { sent: false, queued: false };
     }
     pendingFrames.push(frame);
-    return true;
+    return { sent: false, queued: true };
   }
 
   function close(): void {

@@ -35,6 +35,19 @@ export function createCallWorkspaceGossipDataLane({
   let liveGossipControllerKey = '';
   let liveGossipDirectPublisherKey = '';
   let unsubscribeLiveGossipDelivery = null;
+  type MediaRelaySendResult = {
+    sent: boolean;
+    queued: boolean;
+  };
+  const GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_ENTRIES = 12;
+  const GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_BYTES = 4 * 1024 * 1024;
+  const GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_AGE_MS = 4_000;
+  const GOSSIP_PRIMARY_PUBLISH_QUEUE_FLUSH_DELAY_MS = 250;
+  const GOSSIP_PRIMARY_NO_EGRESS_WARNING_COOLDOWN_MS = 10_000;
+  const gossipPrimaryPublishQueue = [];
+  let gossipPrimaryPublishQueueBytes = 0;
+  let gossipPrimaryPublishQueueFlushTimer = null;
+  let gossipPrimaryNoEgressDiagnosticAtMs = 0;
   const assignedGossipNeighborIds = new Set();
   const openGossipDataChannelPeerIds = new Set();
   const liveGossipFrameSequenceByTrack = new Map();
@@ -108,6 +121,9 @@ export function createCallWorkspaceGossipDataLane({
         const normalizedPeerId = String(peerId || '');
         if (state === 'open' && eventType === 'open') {
           openGossipDataChannelPeerIds.add(normalizedPeerId);
+          if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
+            scheduleGossipPrimaryPublishQueueFlush();
+          }
         } else if (state === 'closed' || eventType === 'close' || eventType === 'error') {
           openGossipDataChannelPeerIds.delete(normalizedPeerId);
         }
@@ -190,6 +206,7 @@ export function createCallWorkspaceGossipDataLane({
       liveGossipControllerKey = '';
       assignedGossipNeighborIds.clear();
       openGossipDataChannelPeerIds.clear();
+      clearGossipPrimaryQueue();
       gossipNeighborLifecycle?.teardown?.();
       gossipNeighborLifecycle = null;
       lastGossipTelemetrySnapshotSentAtMs = 0;
@@ -305,6 +322,154 @@ export function createCallWorkspaceGossipDataLane({
     return sent;
   }
 
+  function estimatePayloadBytes(frame) {
+    const data = frame?.data;
+    if (data instanceof ArrayBuffer) return Number(data.byteLength || 0);
+    if (ArrayBuffer.isView(data)) return Number(data.byteLength || 0);
+    return 0;
+  }
+
+  function clearGossipPrimaryQueue() {
+    gossipPrimaryPublishQueue.length = 0;
+    gossipPrimaryPublishQueueBytes = 0;
+    if (gossipPrimaryPublishQueueFlushTimer !== null) {
+      clearTimeout(gossipPrimaryPublishQueueFlushTimer);
+      gossipPrimaryPublishQueueFlushTimer = null;
+    }
+  }
+
+  function pruneExpiredGossipPrimaryQueue(nowMs = Date.now()) {
+    while (gossipPrimaryPublishQueue.length > 0) {
+      const next = gossipPrimaryPublishQueue[0];
+      if (nowMs - Number(next.enqueuedAtMs || 0) <= GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_AGE_MS) {
+        break;
+      }
+      const entry = gossipPrimaryPublishQueue.shift();
+      if (!entry) continue;
+      gossipPrimaryPublishQueueBytes = Math.max(0, gossipPrimaryPublishQueueBytes - Number(entry.payloadBytes || 0));
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_primary_publish_queue_expired',
+        code: 'gossip_primary_publish_queue_expired',
+        message: 'A queued gossip primary media frame was dropped because it exceeded the queue age limit.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          media_runtime_path: 'gossip_primary_publish_queue',
+          queued_frames: gossipPrimaryPublishQueue.length,
+          track_id: String(entry.msg?.track_id || ''),
+        },
+      });
+    }
+  }
+
+  function trimGossipPrimaryPublishQueueIfNeeded() {
+    while (
+      gossipPrimaryPublishQueue.length > GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_ENTRIES
+      || gossipPrimaryPublishQueueBytes > GOSSIP_PRIMARY_PUBLISH_QUEUE_MAX_BYTES
+    ) {
+      const dropped = gossipPrimaryPublishQueue.shift();
+      if (!dropped) break;
+      gossipPrimaryPublishQueueBytes = Math.max(0, gossipPrimaryPublishQueueBytes - Number(dropped.payloadBytes || 0));
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_primary_publish_queue_dropped',
+        code: 'gossip_primary_publish_queue_dropped',
+        message: 'A queued gossip primary media frame was dropped to make room for newer frames.',
+        payload: {
+          ...mediaCarrierDiagnosticPayload(),
+          media_runtime_path: 'gossip_primary_publish_queue',
+          dropped_track_id: String(dropped.msg?.track_id || ''),
+          queued_frames: gossipPrimaryPublishQueue.length,
+        },
+      });
+    }
+  }
+
+  function queueGossipPrimaryFrame(msg, frame) {
+    const payloadBytes = estimatePayloadBytes(frame);
+    const queueEntry = {
+      msg: { ...msg },
+      frame,
+      enqueuedAtMs: Date.now(),
+      payloadBytes,
+    };
+    gossipPrimaryPublishQueue.push(queueEntry);
+    gossipPrimaryPublishQueueBytes += Number(payloadBytes || 0);
+    pruneExpiredGossipPrimaryQueue();
+    trimGossipPrimaryPublishQueueIfNeeded();
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'gossip_primary_publish_queued',
+      code: 'gossip_primary_publish_queued',
+      message: 'Gossip primary media frame was queued while transport was not ready.',
+      payload: {
+        ...mediaCarrierDiagnosticPayload(),
+        media_runtime_path: 'gossip_primary_publish_queue',
+        queued_frames: gossipPrimaryPublishQueue.length,
+        queued_bytes: gossipPrimaryPublishQueueBytes,
+        track_id: String(msg?.track_id || ''),
+      },
+    });
+    return true;
+  }
+
+  function scheduleGossipPrimaryPublishQueueFlush(force = false) {
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return false;
+    if (gossipPrimaryPublishQueue.length === 0) return false;
+    if (gossipPrimaryPublishQueueFlushTimer !== null && !force) return false;
+    if (gossipPrimaryPublishQueueFlushTimer !== null && force) {
+      clearTimeout(gossipPrimaryPublishQueueFlushTimer);
+      gossipPrimaryPublishQueueFlushTimer = null;
+    }
+    gossipPrimaryPublishQueueFlushTimer = setTimeout(() => {
+      gossipPrimaryPublishQueueFlushTimer = null;
+      flushGossipPrimaryPublishQueue();
+    }, GOSSIP_PRIMARY_PUBLISH_QUEUE_FLUSH_DELAY_MS);
+    return true;
+  }
+
+  function publishGossipPrimaryFrame(peerId, frame, msg) {
+    const serverFanoutSent = sendGossipFrameOverCallSocket(msg, frame);
+    const controller = ensureLiveGossipController();
+    const directGossipEgressAccepted = directGossipEgressCanAcceptLocalFrame(controller, peerId);
+    if (controller && directGossipEgressAccepted) {
+      const directMsg = gossipFrameBinaryMessageFromMetadata(frame, msg);
+      if (directMsg) {
+        controller.publishFrame(peerId, directMsg);
+      }
+      emitGossipTelemetrySnapshot('local_publish');
+    }
+    return {
+      serverFanoutSent,
+      directGossipEgressAccepted,
+    };
+  }
+
+  function flushGossipPrimaryPublishQueue() {
+    if (!VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) return;
+    if (gossipPrimaryPublishQueue.length === 0) return;
+    const peerId = localPeerId();
+    if (peerId === '' || peerId === '0') return;
+    pruneExpiredGossipPrimaryQueue();
+    if (gossipPrimaryPublishQueue.length === 0) return;
+    let flushed = 0;
+    while (gossipPrimaryPublishQueue.length > 0 && flushed < 2) {
+      const next = gossipPrimaryPublishQueue[0];
+      const { serverFanoutSent, directGossipEgressAccepted } = publishGossipPrimaryFrame(peerId, next.frame, next.msg);
+      const canSendQueuedFrame = serverFanoutSent || directGossipEgressAccepted;
+      if (!canSendQueuedFrame) break;
+      gossipPrimaryPublishQueue.shift();
+      gossipPrimaryPublishQueueBytes = Math.max(0, gossipPrimaryPublishQueueBytes - Number(next.payloadBytes || 0));
+      flushed += 1;
+    }
+    if (gossipPrimaryPublishQueue.length > 0) {
+      scheduleGossipPrimaryPublishQueueFlush(true);
+    }
+  }
+
   function gossipTopologyNeighborUsesRtcDataChannel(topologyHint, peerId) {
     const normalizedPeerId = String(peerId || '').trim();
     if (normalizedPeerId === '') return false;
@@ -356,6 +521,9 @@ export function createCallWorkspaceGossipDataLane({
       }
     }
     const boundCount = bindAssignedGossipNeighbors(topologyHint);
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary && gossipPrimaryPublishQueue.length > 0) {
+      scheduleGossipPrimaryPublishQueueFlush();
+    }
     emitGossipTelemetrySnapshot('topology_hint_applied');
     captureClientDiagnostic({
       category: 'media',
@@ -426,19 +594,35 @@ export function createCallWorkspaceGossipDataLane({
     return true;
   }
 
-  function sendGossipFrameOverCallSocket(msg, frame = null) {
+  function normalizeMediaRelaySendResult(value): MediaRelaySendResult {
+    if (value && typeof value === 'object' && typeof value.sent === 'boolean' && typeof value.queued === 'boolean') {
+      return {
+        sent: value.sent === true,
+        queued: value.queued === true,
+      };
+    }
+    if (value === true) {
+      return { sent: true, queued: false };
+    }
+    return { sent: false, queued: false };
+  }
+
+  function sendGossipFrameOverCallSocket(msg, frame = null): MediaRelaySendResult {
     if (!msg || typeof msg !== 'object') return false;
     if (typeof sendSocketBinaryFrame === 'function' && frame && typeof frame === 'object') {
       const binaryEnvelope = gossipBinaryEnvelopeFromEncodedFrame(frame, msg);
       if (!binaryEnvelope) return false;
-      if (typeof sendMediaRelayBinaryFrame === 'function' && sendMediaRelayBinaryFrame(binaryEnvelope) === true) {
-        return true;
+      if (typeof sendMediaRelayBinaryFrame === 'function') {
+        const result = normalizeMediaRelaySendResult(sendMediaRelayBinaryFrame(binaryEnvelope));
+        if (result.sent || result.queued) {
+          return result;
+        }
       }
       if (sendSocketBinaryFrame(binaryEnvelope) === true) {
-        return true;
+        return { sent: true, queued: false };
       }
     }
-    return false;
+    return { sent: false, queued: false };
   }
 
   function handleGossipBinaryServerFrame(payload) {
@@ -529,45 +713,45 @@ export function createCallWorkspaceGossipDataLane({
       plainRelay: directGossipPrimary,
     });
     if (!msg) return false;
-    const serverFanoutSent = sendGossipFrameOverCallSocket(msg, frame);
-    const controller = ensureLiveGossipController();
-    const directGossipEgressAccepted = directGossipPrimary
-      ? directGossipEgressCanAcceptLocalFrame(controller, peerId)
-      : Boolean(controller);
-    const gossipPrimaryEgressAvailable = serverFanoutSent || directGossipEgressAccepted;
-    if (directGossipPrimary && !gossipPrimaryEgressAvailable) {
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        code: 'gossip_server_fanout_socket_unavailable',
-        message: 'Gossip primary frame was encoded while no server fanout or direct gossip egress was available.',
-        payload: {
-          ...mediaCarrierDiagnosticPayload(),
-          room_id: roomId(),
-          call_id: callId(),
-          local_peer_id: peerId,
-          track_id: String(msg.track_id || ''),
-          frame_sequence: Number(msg.frame_sequence || 0),
-          assigned_neighbor_count: assignedGossipNeighborIds.size,
-          open_data_channel_neighbor_count: openGossipDataChannelPeerIds.size,
-          direct_gossip_egress_accepted: false,
-        },
-        eventType: 'gossip_server_fanout_socket_unavailable',
-        immediate: true,
-      });
-      return false;
-    }
-    if (controller && directGossipEgressAccepted) {
-      const directMsg = gossipFrameBinaryMessageFromMetadata(frame, msg);
-      if (directMsg) {
-        controller.publishFrame(peerId, directMsg);
-      }
-      emitGossipTelemetrySnapshot('local_publish');
-    }
     if (directGossipPrimary) {
-      return gossipPrimaryEgressAvailable;
+      const publication = publishGossipPrimaryFrame(peerId, frame, msg);
+      const gossipPrimaryEgressAvailable = publication.serverFanoutSent
+        || publication.serverFanoutQueued
+        || publication.directGossipEgressAccepted;
+      if (!gossipPrimaryEgressAvailable) {
+        if (Date.now() - gossipPrimaryNoEgressDiagnosticAtMs > GOSSIP_PRIMARY_NO_EGRESS_WARNING_COOLDOWN_MS) {
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'warning',
+            code: 'gossip_server_fanout_socket_unavailable',
+            message: 'Gossip primary frame was encoded while no server fanout or direct gossip egress was available.',
+            payload: {
+              ...mediaCarrierDiagnosticPayload(),
+              room_id: roomId(),
+              call_id: callId(),
+              local_peer_id: peerId,
+              track_id: String(msg.track_id || ''),
+              frame_sequence: Number(msg.frame_sequence || 0),
+              assigned_neighbor_count: assignedGossipNeighborIds.size,
+              open_data_channel_neighbor_count: openGossipDataChannelPeerIds.size,
+              direct_gossip_egress_accepted: false,
+            },
+            eventType: 'gossip_server_fanout_socket_unavailable',
+            immediate: true,
+          });
+          gossipPrimaryNoEgressDiagnosticAtMs = Date.now();
+        }
+        queueGossipPrimaryFrame(msg, frame);
+        scheduleGossipPrimaryPublishQueueFlush();
+        return true;
+      }
+      flushGossipPrimaryPublishQueue();
+      return true;
     }
-    return serverFanoutSent || Boolean(controller);
+
+    const controller = ensureLiveGossipController();
+    const serverFanoutResult = sendGossipFrameOverCallSocket(msg, frame);
+    return serverFanoutResult.sent || serverFanoutResult.queued || Boolean(controller);
   }
   function gossipDataPlaneAllowed() {
     return GOSSIP_DATA_LANE_CONFIG.mode === 'active'
@@ -689,6 +873,7 @@ export function createCallWorkspaceGossipDataLane({
     openGossipDataChannelPeerIds.clear();
     lastGossipOpsLaneState = null;
     lastGossipTelemetrySnapshotSentAtMs = 0;
+    clearGossipPrimaryQueue();
     gossipNeighborLifecycle?.teardown?.();
     gossipNeighborLifecycle = null;
     gossipDataChannelTransport?.close();
