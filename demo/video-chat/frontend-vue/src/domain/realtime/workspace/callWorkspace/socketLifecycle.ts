@@ -6,11 +6,18 @@ import { isScreenShareUserId } from '../../screenShareIdentity.js';
 import { CALL_APP_PRESENCE_SIGNAL_TYPE } from '../../callApps/callAppPresenceRelay.js';
 import { createCallWorkspaceMediaCapabilityBridge } from './mediaCapabilityPlanBridge.ts';
 import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
+import {
+  CONNECT_CYCLE_TIMEOUT_MS,
+  CONTROL_LANE_RECONNECT_INITIAL_DELAY_MS,
+  bindBrowserPageExitCloseGuard,
+  controlLaneReconnectDelayMs,
+  getBrowserPageExitObservedAtMs,
+  isExpectedBrowserPageExitSocketClose,
+  normalizeConnectFailureReason,
+  shouldScheduleControlLaneReconnect,
+} from './socketReconnectPolicy.ts';
 import { strictPolicyEnabled } from './strictStabilityPolicy.ts';
 
-const CONNECT_CYCLE_TIMEOUT_MS = 5 * 60 * 1000;
-const CONTROL_LANE_SECOND_CONNECT_DELAY_MS = 5 * 1000;
-const CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS = 1;
 const TRANSIENT_BACKFILL_REASONS = Object.freeze([
   'access_session_binding_unavailable',
   'realtime_backfill_unavailable',
@@ -33,39 +40,9 @@ const INTERNAL_STATUS_SIGNAL_TYPES = Object.freeze([
   'gossip/recovery/request',
 ]);
 const CALL_WORKSPACE_FORCE_RELOAD_EVENT = 'kingrt:call-workspace-force-reload';
-const EXPECTED_BROWSER_PAGE_EXIT_SOCKET_CLOSE_GRACE_MS = 15 * 1000;
-
-let browserPageExitObservedAtMs = 0;
-let browserPageExitCloseGuardBound = false;
 
 function isInternalStatusSignalType(type) {
   return INTERNAL_STATUS_SIGNAL_TYPES.includes(String(type || '').trim().toLowerCase());
-}
-
-function markBrowserPageExitObserved(event = null) {
-  if (event?.persisted === true) return;
-  browserPageExitObservedAtMs = Date.now();
-}
-
-function clearBrowserPageExitObserved() {
-  browserPageExitObservedAtMs = 0;
-}
-
-function bindBrowserPageExitCloseGuard() {
-  if (browserPageExitCloseGuardBound || typeof window === 'undefined') return;
-  browserPageExitCloseGuardBound = true;
-  window.addEventListener(CALL_WORKSPACE_FORCE_RELOAD_EVENT, markBrowserPageExitObserved, { capture: true });
-  window.addEventListener('beforeunload', markBrowserPageExitObserved, { capture: true });
-  window.addEventListener('pagehide', markBrowserPageExitObserved, { capture: true });
-  window.addEventListener('pageshow', clearBrowserPageExitObserved, { capture: true });
-}
-
-function isExpectedBrowserPageExitSocketClose(event, nowMs = Date.now()) {
-  const closeCode = Number(event?.code || 0);
-  const closeReason = String(event?.reason || '').trim();
-  if (closeCode !== 1006 || closeReason !== '') return false;
-  if (browserPageExitObservedAtMs <= 0) return false;
-  return (nowMs - browserPageExitObservedAtMs) <= EXPECTED_BROWSER_PAGE_EXIT_SOCKET_CLOSE_GRACE_MS;
 }
 
 export function createCallWorkspaceSocketHelpers({
@@ -687,14 +664,28 @@ export function createCallWorkspaceSocketHelpers({
         const failureReason = transientAuthBackendError
           ? 'auth_backend_error'
           : (closeReason || code || 'websocket_reconnect_backfill_unavailable');
-        failConnectCycleOnce({
+        const reconnectScheduled = scheduleControlLaneSecondConnect({
           reason: failureReason,
           code: code || failureReason,
           message,
           payload: {
             details: payload?.details || {},
           },
+          requireParticipants: false,
         });
+        if (reconnectScheduled) {
+          const activeSocket = refs.socketRef.value;
+          if (activeSocket instanceof WebSocket) {
+            try {
+              activeSocket.close(1000, 'control_lane_second_connect');
+            } catch {
+              // The scheduled reconnect will replace the socket even if close throws.
+            }
+            if (refs.socketRef.value === activeSocket) {
+              refs.socketRef.value = null;
+            }
+          }
+        }
         return;
       }
       if (code === 'websocket_session_invalidated' || closeReason === 'session_invalidated') {
@@ -806,11 +797,6 @@ export function createCallWorkspaceSocketHelpers({
     }
   }
 
-  function normalizeConnectFailureReason(reason, fallback = 'network_error') {
-    const normalized = String(reason || '').trim().toLowerCase();
-    return normalized !== '' ? normalized : fallback;
-  }
-
   function failConnectCycleOnce({
     reason = 'socket_closed',
     code = '',
@@ -876,24 +862,24 @@ export function createCallWorkspaceSocketHelpers({
     code = 'websocket_closed_second_connect_scheduled',
     message = '',
     payload = {},
-    delayMs = CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+    delayMs = null,
+    requireParticipants = true,
   } = {}) {
     if (state.manualSocketClose) return false;
-    if (!controlLaneHasParticipantsForConnect()) return false;
-    if ((Number(state.connectCycleSecondConnectAttempts || 0)) >= CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS) return false;
+    if (requireParticipants && !controlLaneHasParticipantsForConnect()) return false;
     if (state.connectCycleSecondConnectPending === true || state.reconnectTimer !== null) return false;
 
     const retryReason = normalizeConnectFailureReason(reason, 'socket_closed');
-    const retryDelayMs = Math.max(0, Number(delayMs) || 0);
     clearControlLaneReadinessTimer();
     state.connectCycleSecondConnectAttempts = Number(state.connectCycleSecondConnectAttempts || 0) + 1;
+    const retryDelayMs = controlLaneReconnectDelayMs(state.connectCycleSecondConnectAttempts, delayMs);
     state.connectCycleSecondConnectPending = true;
     refs.connectionState.value = 'retrying';
-    refs.connectionReason.value = 'control_lane_second_connect_wait';
+    refs.connectionReason.value = 'control_lane_reconnect_wait';
     try {
       stopLocalEncodingPipeline();
     } catch {
-      // Encoding restarts only after the second websocket path reaches readiness.
+      // Encoding restarts only after the replacement websocket path reaches readiness.
     }
     captureClientDiagnostic({
       category: 'realtime',
@@ -906,11 +892,12 @@ export function createCallWorkspaceSocketHelpers({
         automatic_second_connect: true,
         retryable: true,
         second_connect_scheduled: true,
+        continuous_reconnect: true,
         second_connect_delay_ms: retryDelayMs,
         second_connect_attempt: state.connectCycleSecondConnectAttempts,
-        second_connect_max_attempts: CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS,
+        second_connect_max_attempts: null,
         failure_reason: retryReason,
-        local_encoding_stopped_before_second_connect: true,
+        local_encoding_stopped_before_reconnect: true,
         requested_room_id: refs.desiredRoomId.value,
         active_call_id: refs.activeSocketCallId.value,
         expected_participant_ids: expectedCallParticipantIds(),
@@ -932,7 +919,6 @@ export function createCallWorkspaceSocketHelpers({
     if (state.manualSocketClose) return false;
     if (state.controlLaneReadinessTimer !== null && state.controlLaneReadinessTimer !== undefined) return false;
     if (state.connectCycleSecondConnectPending === true) return false;
-    if ((Number(state.connectCycleSecondConnectAttempts || 0)) >= CONTROL_LANE_SECOND_CONNECT_MAX_ATTEMPTS) return false;
     if (!controlLaneHasParticipantsForConnect() || allExpectedCallParticipantsConnected()) return false;
     const generation = state.connectGeneration;
     state.controlLaneReadinessTimer = setTimeout(() => {
@@ -955,7 +941,7 @@ export function createCallWorkspaceSocketHelpers({
             retryable: false,
             second_connect_scheduled: false,
             readiness_check_reason: String(reason || 'room_snapshot'),
-            readiness_check_delay_ms: CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+            readiness_check_delay_ms: CONTROL_LANE_RECONNECT_INITIAL_DELAY_MS,
             requested_room_id: refs.desiredRoomId.value,
             active_call_id: refs.activeSocketCallId.value,
             expected_participant_ids: expectedCallParticipantIds(),
@@ -968,31 +954,16 @@ export function createCallWorkspaceSocketHelpers({
       const secondConnectScheduled = scheduleControlLaneSecondConnect({
         reason: 'control_lane_participants_not_connected_after_5s',
         code: 'websocket_control_lane_second_connect_after_unready_roster',
-        message: 'Control lane still has participants that are not connected after 5 seconds; one second connect will be attempted.',
+        message: 'Control lane still has participants that are not connected after 5 seconds; a reconnect will be attempted.',
         delayMs: 0,
         payload: {
           readiness_check_reason: String(reason || 'room_snapshot'),
-          readiness_check_delay_ms: CONTROL_LANE_SECOND_CONNECT_DELAY_MS,
+          readiness_check_delay_ms: CONTROL_LANE_RECONNECT_INITIAL_DELAY_MS,
         },
       });
       if (!secondConnectScheduled) return;
-    }, CONTROL_LANE_SECOND_CONNECT_DELAY_MS);
+    }, CONTROL_LANE_RECONNECT_INITIAL_DELAY_MS);
     return true;
-  }
-
-  function isAbnormalControlLaneClose(event, closeReason = '') {
-    const closeCode = Number(event?.code || 0);
-    const normalizedReason = String(closeReason || '').trim().toLowerCase();
-    if (normalizedReason === 'client_leave' || normalizedReason === 'client_close') return false;
-    if (normalizedReason === 'session_invalidated' || normalizedReason === 'stale_asset_version') return false;
-    return closeCode === 1006 || closeCode === 1011 || normalizedReason === 'socket_error';
-  }
-
-  function shouldScheduleCloseSecondConnect({ opened = false, event = null, closeReason = '' } = {}) {
-    if (opened !== true) {
-      return !allExpectedCallParticipantsConnected();
-    }
-    return isAbnormalControlLaneClose(event, closeReason);
   }
 
   function suppressConnectCycle(reason = 'one_shot_cycle_already_used') {
@@ -1033,7 +1004,7 @@ export function createCallWorkspaceSocketHelpers({
         close_code: Number(event?.code || 0),
         close_reason: closeReason,
         opened,
-        browser_page_exit_observed_at_ms: browserPageExitObservedAtMs,
+        browser_page_exit_observed_at_ms: getBrowserPageExitObservedAtMs(),
         requested_room_id: refs.desiredRoomId.value,
         active_call_id: refs.activeSocketCallId.value,
         expected_participant_ids: expectedCallParticipantIds(),
@@ -1142,7 +1113,7 @@ export function createCallWorkspaceSocketHelpers({
   }
 
   async function connectSocket() {
-    bindBrowserPageExitCloseGuard();
+    bindBrowserPageExitCloseGuard(CALL_WORKSPACE_FORCE_RELOAD_EVENT);
     if (state.connectInFlight && !state.manualSocketClose) return;
     const admission = connectCycleAdmission();
     if (!admission.allowed) {
@@ -1237,11 +1208,11 @@ export function createCallWorkspaceSocketHelpers({
         finishConnectInFlight();
         return;
       }
-      failConnectCycleOnce({
+      scheduleControlLaneSecondConnect({
         reason: sessionProbe.reason || 'session_probe_failed',
-        code: 'websocket_session_probe_failed',
+        code: 'websocket_session_probe_reconnect_scheduled',
         message: sessionProbe.message,
-        closeActiveSocket: false,
+        requireParticipants: false,
       });
       finishConnectInFlight();
       return;
@@ -1259,14 +1230,14 @@ export function createCallWorkspaceSocketHelpers({
     const connectWithOriginAt = (originIndex) => {
       if (generation !== state.connectGeneration || state.manualSocketClose) return;
       if (originIndex >= orderedSocketOrigins.length) {
-        failConnectCycleOnce({
+        scheduleControlLaneSecondConnect({
           reason: 'socket_unreachable',
-          code: 'websocket_connect_one_shot_failed',
-          message: 'websocket_one_shot_connect_unreachable',
+          code: 'websocket_connect_reconnect_scheduled',
+          message: 'websocket_connect_unreachable_reconnect_scheduled',
           payload: {
             origin_count: orderedSocketOrigins.length,
           },
-          closeActiveSocket: false,
+          requireParticipants: false,
         });
         finishConnectInFlight();
         return;
@@ -1346,14 +1317,27 @@ export function createCallWorkspaceSocketHelpers({
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (!opened) {
           // The browser will emit close after a failed handshake; the close path
-          // records the one-shot failure without opening another websocket.
+          // schedules the retry without opening another websocket immediately.
           return;
         }
-        failConnectCycleOnce({
-          reason: 'socket_error',
+        refs.connectionState.value = 'retrying';
+        refs.connectionReason.value = 'socket_error';
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'realtime_websocket_error_reconnect_pending',
           code: 'websocket_error',
-          message: 'websocket_one_shot_socket_error',
-          closeActiveSocket: false,
+          message: 'websocket_error_reconnect_pending',
+          payload: {
+            automatic_second_connect: true,
+            retryable: true,
+            reconnect_pending_on_close: true,
+            requested_room_id: refs.desiredRoomId.value,
+            active_call_id: refs.activeSocketCallId.value,
+            expected_participant_ids: expectedCallParticipantIds(),
+            connected_participant_ids: connectedCallParticipantIds(),
+          },
+          immediate: true,
         });
       });
 
@@ -1400,10 +1384,11 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        const canScheduleCloseSecondConnect = shouldScheduleCloseSecondConnect({
+        const canScheduleCloseSecondConnect = shouldScheduleControlLaneReconnect({
           opened,
           event,
           closeReason,
+          transientReasons: TRANSIENT_BACKFILL_REASONS,
         });
         if (canScheduleCloseSecondConnect && scheduleControlLaneSecondConnect({
           reason: closeReason || (event?.code === 1011 ? 'socket_internal_error' : 'socket_closed'),
@@ -1418,7 +1403,12 @@ export function createCallWorkspaceSocketHelpers({
             close_reason: closeReason,
             opened,
           },
+          requireParticipants: false,
         })) {
+          finishConnectInFlight();
+          return;
+        }
+        if (canScheduleCloseSecondConnect && (state.reconnectTimer !== null || state.connectCycleSecondConnectPending === true)) {
           finishConnectInFlight();
           return;
         }
@@ -1441,15 +1431,15 @@ export function createCallWorkspaceSocketHelpers({
       negotiationTimer = setTimeout(() => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (opened) return;
-        failConnectCycleOnce({
+        scheduleControlLaneSecondConnect({
           reason: 'socket_negotiation_timeout',
-          code: 'websocket_negotiation_timeout',
-          message: 'websocket_one_shot_negotiation_timeout',
+          code: 'websocket_negotiation_timeout_reconnect_scheduled',
+          message: 'websocket_negotiation_timeout_reconnect_scheduled',
           payload: {
             origin: socketOrigin,
             negotiation_timeout_ms: CONNECT_CYCLE_TIMEOUT_MS,
           },
-          closeActiveSocket: false,
+          requireParticipants: false,
         });
         try {
           socket.close(1000, 'socket_negotiation_timeout');
