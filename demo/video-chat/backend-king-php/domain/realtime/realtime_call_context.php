@@ -593,6 +593,10 @@ function videochat_realtime_connection_with_call_context(array $connection, call
 
 function videochat_realtime_connection_removed_from_active_call(array $connection): bool
 {
+    if ((bool) ($connection['is_superadmin'] ?? false)) {
+        return false;
+    }
+
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
     if ($roomId === '' || $roomId === 'lobby' || $roomId === videochat_realtime_waiting_room_id()) {
         return false;

@@ -23,8 +23,12 @@ function videochat_realtime_db_room_participants(callable $openDatabase, array $
         $pdo = $openDatabase();
         videochat_realtime_presence_db_bootstrap($pdo);
         videochat_realtime_presence_db_prune($pdo, $effectiveNowMs);
+        $superadminSelect = function_exists('videochat_tenant_table_has_column')
+            && videochat_tenant_table_has_column($pdo, 'users', 'is_superadmin')
+            ? 'users.is_superadmin'
+            : '0';
         $statement = $pdo->prepare(
-            <<<'SQL'
+            <<<SQL
 SELECT
     rpc.connection_id,
     rpc.user_id,
@@ -35,6 +39,7 @@ SELECT
     cp.display_name AS participant_display_name,
     cp.call_role,
     users.display_name AS user_display_name,
+    {$superadminSelect} AS is_superadmin,
     roles.slug AS role_slug
 FROM realtime_presence_connections rpc
 LEFT JOIN call_participants cp
@@ -87,6 +92,7 @@ SQL
                 'id' => $userId,
                 'display_name' => $displayName !== '' ? $displayName : ('User ' . $userId),
                 'role' => videochat_normalize_role_slug((string) (($row['presence_role'] ?? '') ?: ($row['role_slug'] ?? 'user'))),
+                'is_superadmin' => ((int) ($row['is_superadmin'] ?? 0)) === 1,
                 'call_role' => $callRole,
             ],
             'connected_at' => (string) ($row['connected_at'] ?? ''),

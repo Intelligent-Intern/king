@@ -283,8 +283,8 @@
                 v-if="visibleActionSet.has('kick')"
                 class="icon-mini-btn danger roster-action-btn roster-kick-btn"
                 type="button"
-                :title="t('calls.workspace.remove_from_lobby')"
-                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveFromLobby"
+                :title="t('calls.workspace.remove_user')"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveUser"
                 @click="$emit('remove-lobby-user', row.userId)"
               >
                 <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
