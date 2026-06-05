@@ -174,6 +174,7 @@ SQL
     }
     if (videochat_bootstrap_sqlite_column_exists($pdo, 'users', 'is_superadmin')) {
         videochat_bootstrap_exec_schema_statement(
+            $pdo,
             <<<'SQL'
 UPDATE users
 SET is_superadmin = 1
