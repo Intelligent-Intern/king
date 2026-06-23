@@ -658,6 +658,17 @@ namespace {
     function king_get_stats($session): array|false {}
 
     /**
+     * Run one userland writer callback behind a host-local exclusive lock and
+     * return the callback result. Supported options include `lock_path`,
+     * `timeout_ms`, and `poll_us`.
+     * @param callable():mixed $writer
+     * @param array<string,mixed>|null $options
+     * @return mixed
+     * @throws \King\RuntimeException|\King\TimeoutException|\ValueError
+     */
+    function king_db_ingest(string $name, callable $writer, ?array $options = null): mixed {}
+
+    /**
      * Initializes local runtime settings for the object-store/CDN
      * layer without replacing the extension-wide INI configuration.
      * The verified v1 storage contract is `local_fs`, `distributed`,
@@ -1080,6 +1091,31 @@ namespace {
      * Registrations are name-only in the active runtime.
      */
     function king_proto_is_enum_defined(string $enum_name): bool {}
+
+    /**
+     * Return SaxonC runtime availability and product metadata for the native
+     * XSLT 2.0/3.0 integration.
+     * @return array<string,mixed>
+     */
+    function king_xslt_engine_status(): array {}
+
+    /**
+     * Transform one source XML file with one stylesheet and return the
+     * materialized result string plus runtime metadata.
+     * @param array<string,mixed>|null $options
+     * @return array<string,mixed>
+     * @throws \King\RuntimeException|\King\ValidationException
+     */
+    function king_xslt_transform_file(string $source_path, string $stylesheet_path, ?array $options = null): array {}
+
+    /**
+     * Transform one source XML file with one stylesheet and write the result
+     * to `output_path`.
+     * @param array<string,mixed>|null $options
+     * @return array<string,mixed>
+     * @throws \King\RuntimeException|\King\ValidationException
+     */
+    function king_xslt_transform_to_file(string $source_path, string $stylesheet_path, string $output_path, ?array $options = null): array {}
 
     /**
      * Telemetry runtime status, queue pressure, and self-observation counters.
