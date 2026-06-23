@@ -41,6 +41,7 @@ dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
 .cache/
+.vite/
 .codex
 demo/video-chat/frontend-vue/.vite/
 demo/video-chat/frontend-vue/dist/
