@@ -43,6 +43,7 @@ static const char *const king_active_runtime_names[] = {
     "semantic_dns_server_runtime",
     "object_store_registry",
     "cdn_cache_registry",
+    "xslt_saxonc_runtime",
     "mcp_runtime",
     "pipeline_orchestrator_runtime",
     "telemetry_runtime",
@@ -94,7 +95,7 @@ const char *king_get_active_runtime_summary(void)
         "server_admin_api_runtime, server_tls_runtime, "
         "server_cors_runtime, server_open_telemetry_runtime, "
         "iibin_proto, semantic_dns_registry, semantic_dns_server_runtime, "
-        "object_store_registry, cdn_cache_registry, mcp_runtime, "
+        "object_store_registry, cdn_cache_registry, xslt_saxonc_runtime, mcp_runtime, "
         "pipeline_orchestrator_runtime, telemetry_runtime, "
         "autoscaling_runtime, system_integration_runtime";
 }

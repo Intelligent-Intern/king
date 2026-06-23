@@ -16,6 +16,7 @@ int king_cdn_cache_registry_minit(void);
 void king_cdn_cache_registry_mshutdown(void);
 void king_object_store_request_shutdown(void);
 void king_object_store_shutdown_system(void);
+void king_xslt_shutdown_system(void);
 
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);
@@ -158,6 +159,10 @@ PHP_FUNCTION(king_object_store_cleanup_expired_objects);
 PHP_FUNCTION(king_object_store_get_metadata);
 PHP_FUNCTION(king_cdn_cache_object);
 PHP_FUNCTION(king_cdn_invalidate_cache);
+
+PHP_FUNCTION(king_xslt_engine_status);
+PHP_FUNCTION(king_xslt_transform_file);
+PHP_FUNCTION(king_xslt_transform_to_file);
 
 PHP_FUNCTION(king_telemetry_init);
 PHP_FUNCTION(king_telemetry_start_span);

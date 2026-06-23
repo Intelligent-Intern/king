@@ -219,6 +219,7 @@ PHP_MINIT_FUNCTION(king)
 
 PHP_MSHUTDOWN_FUNCTION(king)
 {
+    king_xslt_shutdown_system();
     king_http1_pool_module_shutdown();
     king_http2_pool_module_shutdown();
     king_object_store_shutdown_system();

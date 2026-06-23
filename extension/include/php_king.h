@@ -67,6 +67,7 @@
 #endif /* KING_RUNTIME_BUILD */
 
 #include "mcp/mcp.h"
+#include "xslt/xslt.h"
 
 
 /* -----------------------------------------------------------------------------
