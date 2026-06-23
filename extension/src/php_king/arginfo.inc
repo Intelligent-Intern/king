@@ -443,6 +443,19 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_system_process_request, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, request_data, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_xslt_transform_file, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_xslt_transform_to_file, 0, 0, 3)
+    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, output_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 const zend_function_entry king_object_store_class_methods[] = {
     ZEND_ME_MAPPING(init, king_object_store_init, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(put, king_object_store_put, arginfo_king_object_store_put, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

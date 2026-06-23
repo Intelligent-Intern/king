@@ -233,6 +233,13 @@ PHP_FUNCTION(king_system_get_component_info)
             king_safe_string(king_native_cdn_config.origin_mcp_endpoint));
         add_assoc_string(&configuration, "origin_http_endpoint",
             king_safe_string(king_native_cdn_config.origin_http_endpoint));
+    } else if (
+        zend_string_equals_literal(component_name, "xslt") ||
+        zend_string_equals_literal(component_name, "saxonc")
+    ) {
+        king_component_info_init(return_value, "xslt", "runtime_loaded");
+        array_init(&configuration);
+        king_xslt_add_component_info(&configuration);
     } else if (zend_string_equals_literal(component_name, "semantic_dns")) {
         king_component_info_init(return_value, "semantic_dns", "config_backed");
         array_init(&configuration);

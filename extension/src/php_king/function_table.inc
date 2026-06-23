@@ -132,6 +132,10 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_cdn_invalidate_cache, arginfo_king_optional_object_id)
     PHP_FE(king_cdn_get_edge_nodes, arginfo_king_no_args)
 
+    PHP_FE(king_xslt_engine_status, arginfo_king_no_args)
+    PHP_FE(king_xslt_transform_file, arginfo_king_xslt_transform_file)
+    PHP_FE(king_xslt_transform_to_file, arginfo_king_xslt_transform_to_file)
+
     PHP_FE(king_telemetry_init, arginfo_king_config_array)
     PHP_FE(king_telemetry_start_span, arginfo_king_telemetry_start_span)
     PHP_FE(king_telemetry_end_span, arginfo_king_telemetry_end_span)
