@@ -47,22 +47,18 @@ That gives you the extension plus the matching QUIC runtime artifacts for the
 local release profile. If you only want the extension build, use
 [`./infra/scripts/build-extension.sh`](./infra/scripts/build-extension.sh).
 
-If you want the beginner path from zero to a local WebSocket roundtrip, start
-with [documentation/getting-started.md](./documentation/getting-started.md).
-
 King also ships a
 [PIE](https://github.com/php/pie) install path. PIE is the successor to PECL.
 Tagged releases that publish the matching PIE source asset can be installed
-with `pie install intelligent-intern/king-ext`. Packaging details and local
-verification steps live in
-[`documentation/pie-install.md`](./documentation/pie-install.md).
+with `pie install intelligent-intern/king-ext`. Packaging and verification are
+handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
 ## Small But Oho
 
 One good first King application is this:
 
 - clients subscribe over WebSocket to `/watch?bucket=inbox`
-- an uploader sends `POST /upload?bucket=inbox&object=demo.txt`
+- an uploader sends `POST /upload?bucket=inbox&object=example.txt`
 - the application stores the file in the object store
 - every subscriber for that bucket immediately gets a realtime notification
 
@@ -72,7 +68,7 @@ The event looks like this:
 {
   "event": "object.available",
   "bucket": "inbox",
-  "object_id": "demo.txt",
+  "object_id": "example.txt",
   "content_type": "text/plain",
   "size": 1234
 }
@@ -100,7 +96,7 @@ use King\ObjectStore;
 
 $subscribers = [];
 
-function king_demo_bucket_from_request(array $request): string
+function king_example_bucket_from_request(array $request): string
 {
     $query = [];
     parse_str((string) parse_url($request['uri'] ?? '/', PHP_URL_QUERY), $query);
@@ -108,7 +104,7 @@ function king_demo_bucket_from_request(array $request): string
     return (string) ($query['bucket'] ?? 'inbox');
 }
 
-function king_demo_object_from_request(array $request): string
+function king_example_object_from_request(array $request): string
 {
     $query = [];
     parse_str((string) parse_url($request['uri'] ?? '/', PHP_URL_QUERY), $query);
@@ -116,7 +112,7 @@ function king_demo_object_from_request(array $request): string
     return (string) ($query['object'] ?? 'upload.bin');
 }
 
-function king_demo_publish(array &$subscribers, string $bucket, array $event): void
+function king_example_publish(array &$subscribers, string $bucket, array $event): void
 {
     $payload = json_encode($event, JSON_UNESCAPED_SLASHES);
 
@@ -134,7 +130,7 @@ ObjectStore::init([
 ]);
 
 $watchHandler = static function (array $request) use (&$subscribers): array {
-    $bucket = king_demo_bucket_from_request($request);
+    $bucket = king_example_bucket_from_request($request);
     $websocket = king_server_upgrade_to_websocket($request['session'], $request['stream_id']);
 
     if (!is_resource($websocket)) {
@@ -151,8 +147,8 @@ $watchHandler = static function (array $request) use (&$subscribers): array {
 };
 
 $uploadHandler = static function (array $request) use (&$subscribers): array {
-    $bucket = king_demo_bucket_from_request($request);
-    $objectId = king_demo_object_from_request($request);
+    $bucket = king_example_bucket_from_request($request);
+    $objectId = king_example_object_from_request($request);
     $storageKey = $bucket . '/' . $objectId;
 
     $source = fopen('php://temp', 'r+');
@@ -163,7 +159,7 @@ $uploadHandler = static function (array $request) use (&$subscribers): array {
         'content_type' => 'text/plain',
     ]);
 
-    king_demo_publish($subscribers, $bucket, [
+    king_example_publish($subscribers, $bucket, [
         'event' => 'object.available',
         'bucket' => $bucket,
         'object_id' => $objectId,
@@ -191,6 +187,7 @@ King brings the following into one extension:
 - router and load-balancer control-plane configuration and policy
 - IIBIN for schema-defined native binary encoding and decoding
 - MCP for agent and tool protocol integration
+- XSLT 2.0/3.0 transformation hooks for XML standards and Schematron/SVRL pipelines through optional SaxonC runtime loading
 - real multi-backend object-store and CDN primitives
 - telemetry, metrics, tracing, and admin control surfaces
 - autoscaling, orchestration, and cluster-facing infrastructure hooks
@@ -327,6 +324,7 @@ King is also a data and protocol runtime:
 
 - IIBIN for schema-defined binary serialization
 - MCP for tool and agent protocol traffic
+- XSLT-backed XML transformation and validation pipelines for standards-heavy payloads
 - real multi-backend object-store primitives
 - CDN-oriented cache distribution hooks
 - pipeline orchestration for multi-step, recovery-aware workloads
@@ -342,100 +340,6 @@ Operational visibility is a first-class concern:
 - ticket, certificate, and reload lifecycle management
 - autoscaling and cluster integration hooks
 
-For KingRT production call investigations, use:
-
-```bash
-demo/video-chat/scripts/prod-debug.sh
-```
-
-For local IAM and call-access proof runs, use
-[`documentation/dev/video-chat/iam-call-access-local-tests.md`](./documentation/dev/video-chat/iam-call-access-local-tests.md).
-The canonical local gate is `cd demo/video-chat/frontend-vue && npm run
-test:ci:iam-call-access`; the host-safe static subset is `npm run
-test:ci:iam-call-access:static`.
-
-The prod-debug process is read-only. It inspects public runtime health, domains,
-asset/version endpoints, API/WS/SFU reachability, marketplace and call-app
-reachability, Whiteboard Call App CSP/`Allow-CSP-From` frame headers, container
-status, and recent redacted remote logs. Its Call App proof checks both
-`/public/index.html` and `/call-app/whiteboard/public/index.html` on the
-configured Whiteboard host for `https://app.kingrt.com` compatibility, absence
-of `X-Frame-Options`, and absence of nested `*.app.kingrt.com` service origins.
-Remote log sections are labeled for the BGF-07 browser proof event buckets:
-background init, matte rejected, replacement unavailable, modal choice,
-media/screen reconnect, stale local media capture discard, audio/video track
-loss, SFU reconnect, and Call App frame/CSP errors. The background fallback
-bucket also looks for the live-call BGF diagnostic event fields
-`failed_backend`, `fallback_reason`, and `user_choice_required`. It uses
-existing `demo/video-chat/.env.local` values only for production domains and
-the SSH target. `prod-debug.sh` does not deploy, restart, write DB data, change
-DNS, or use admin actions. Set `VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1` to run only
-public HTTP/WebSocket/header probes, or `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1` to
-prove the local read-only flow without network or SSH.
-When remote compose status/log reads are enabled, the script builds a temporary
-sanitized env-file from the remote `.env.local` and excludes token, password,
-secret, credential, cookie, session, key, and provider-token variables before
-running read-only `docker compose ps/logs`.
-
-Read-only BGF-07 browser proof buckets in prod-debug.sh are non-mutating:
-background init, matte rejected, replacement unavailable, modal choice,
-media/screen reconnect, stale local media capture discard, audio/video track
-loss, SFU reconnect, and Call App frame/CSP checks do not deploy, restart,
-write DB data, change DNS, or use admin actions.
-
-For the BGF production browser smoke after the Loop 10 proof has merged, prefer
-the safe runner when it exists:
-
-```bash
-PLAYWRIGHT_PRODUCTION_BASE_URL="https://app.kingrt.com" \
-VITE_VIDEOCHAT_BACKEND_ORIGIN="https://api.kingrt.com" \
-VITE_VIDEOCHAT_WS_ORIGIN="wss://ws.kingrt.com" \
-VITE_VIDEOCHAT_SFU_ORIGIN="wss://sfu.kingrt.com" \
-VIDEOCHAT_PRODUCTION_ADMIN_EMAIL="<admin-email>" \
-VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD="<admin-password>" \
-VIDEOCHAT_PRODUCTION_USER_EMAIL="<user-email>" \
-VIDEOCHAT_PRODUCTION_USER_PASSWORD="<user-password>" \
-demo/video-chat/scripts/bgf-production-browser-smoke.sh
-```
-
-If that runner is not present in the merged tree, run the raw npm fallback from
-the frontend package:
-
-```bash
-cd demo/video-chat/frontend-vue
-PLAYWRIGHT_PRODUCTION_BASE_URL="https://app.kingrt.com" \
-VITE_VIDEOCHAT_BACKEND_ORIGIN="https://api.kingrt.com" \
-VITE_VIDEOCHAT_WS_ORIGIN="wss://ws.kingrt.com" \
-VITE_VIDEOCHAT_SFU_ORIGIN="wss://sfu.kingrt.com" \
-VIDEOCHAT_PRODUCTION_ADMIN_EMAIL="<admin-email>" \
-VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD="<admin-password>" \
-VIDEOCHAT_PRODUCTION_USER_EMAIL="<user-email>" \
-VIDEOCHAT_PRODUCTION_USER_PASSWORD="<user-password>" \
-npm run test:e2e:production-browser-smoke
-```
-
-This browser smoke is read-only from an infrastructure perspective. It must not
-run deploys, certbot, DNS changes, SSH writes, or any other remote-host write.
-It does create a normal app-level call through the deployed API, admits a user,
-and exercises camera/audio, SFU media, screen share, reconnect/focus stability,
-and the background-unavailable fallback choices for proof.
-
-Required origins are the app origin (`PLAYWRIGHT_PRODUCTION_BASE_URL`, or
-`VIDEOCHAT_ONLINE_BASE_URL`/`VIDEOCHAT_DEPLOY_APP_ORIGIN`), API origin
-(`VITE_VIDEOCHAT_BACKEND_ORIGIN`), lobby websocket origin
-(`VITE_VIDEOCHAT_WS_ORIGIN`), and SFU websocket origin
-(`VITE_VIDEOCHAT_SFU_ORIGIN`). The production-domain aliases
-`VIDEOCHAT_DEPLOY_DOMAIN`, `VIDEOCHAT_DEPLOY_API_DOMAIN`,
-`VIDEOCHAT_DEPLOY_WS_DOMAIN`, and `VIDEOCHAT_DEPLOY_SFU_DOMAIN` may also fill
-the service origins when the Playwright config is allowed to derive them.
-Provide credentials only through the environment or a secret manager:
-`VIDEOCHAT_PRODUCTION_ADMIN_EMAIL`, `VIDEOCHAT_PRODUCTION_ADMIN_PASSWORD`,
-`VIDEOCHAT_PRODUCTION_USER_EMAIL`, and `VIDEOCHAT_PRODUCTION_USER_PASSWORD`.
-The fallback credential names are `VIDEOCHAT_E2E_ADMIN_EMAIL`,
-`VIDEOCHAT_E2E_ADMIN_PASSWORD`, `VIDEOCHAT_E2E_USER_EMAIL`, and
-`VIDEOCHAT_E2E_USER_PASSWORD`; admin/user password fallback also accepts
-`VIDEOCHAT_DEPLOY_ADMIN_PASSWORD` and `VIDEOCHAT_DEPLOY_USER_PASSWORD`.
-
 ## Public Programming Model
 
 The core programming model is:
@@ -448,6 +352,8 @@ The core programming model is:
 - `King\MCP`, `King\IIBIN`, `King\ObjectStore`,
   `King\PipelineOrchestrator`, `King\Autoscaling`, and
   `King\WebSocket\Connection` expose subsystem-specific runtime surfaces.
+- Procedural `king_xslt_*` functions expose the SaxonC-backed XSLT runtime
+  status and file transformation primitives.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.
@@ -490,18 +396,15 @@ The important boundary is this:
 King is not supposed to look like "PHP calling random native helpers".
 It is supposed to look like one native system with a PHP-facing control surface.
 
-## Documentation
+## Repository Map
 
-Core documents:
+Core source areas:
 
-- [`BACKLOG.md`](BACKLOG.md): open and parked work.
-- [`SPRINT.md`](SPRINT.md): active branch scope.
-- [`documentation/`](documentation/README.md): handbook and developer docs.
-
-Root Markdown is kept to the active set: `README.md`, `BACKLOG.md`, and
-`SPRINT.md`. Historical root planning and tracker files are archived under
-[`documentation/archive/root-md-2026-05-10/`](documentation/archive/root-md-2026-05-10/);
-cleanup notes live in [`analyse/`](analyse/).
+- [`extension/`](extension/): PHP extension source, tests, headers, and build glue.
+- [`infra/scripts/`](infra/scripts/): build, package, release, and local install scripts.
+- [`libcurl/`](libcurl/): vendored curl headers used by the extension build.
+- [`analyse/`](analyse/): local inventory and cleanup notes.
+- [`CONTRIBUTE`](CONTRIBUTE): contribution notes.
 
 ## Build
 
@@ -533,7 +436,7 @@ longer part of the active build or release contract.
 The repository build must stay portable. macOS and other developer machines may
 use locally installed LSQUIC or BoringSSL, but those paths are passed through
 `pkg-config` or explicit environment variables. Homebrew/Cellar paths must
-stay local and must not be committed into build scripts, CI, or documentation.
+stay local and must not be committed into build scripts, CI, or release assets.
 
 Preferred `pkg-config` shape:
 
@@ -594,7 +497,8 @@ The intended package shape is:
 That source asset is the important part. King cannot rely on the default
 repository ZIP for PIE because the pinned QUIC dependency bootstrap and
 package provenance have to travel with the source asset. The maintainer
-workflow is documented in [`documentation/pie-install.md`](documentation/pie-install.md).
+workflow runs through [`infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
+and the release install/smoke matrix scripts.
 
 ## Contributing
 
