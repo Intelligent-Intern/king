@@ -511,6 +511,11 @@ static void king_client_session_populate_stats(
         "config_cdn_cache_mode",
         zend_string_copy(session->config_cdn_cache_mode)
     );
+    add_assoc_str(
+        return_value,
+        "config_cdn_allowed_http_methods",
+        zend_string_copy(session->config_cdn_allowed_http_methods)
+    );
     add_assoc_bool(return_value, "config_dns_server_enable", session->config_dns_server_enable);
     add_assoc_str(
         return_value,

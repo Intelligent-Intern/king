@@ -196,6 +196,10 @@ void king_client_session_init_config_state(king_client_session_t *session)
         king_native_cdn_config.cache_mode
     );
     king_client_session_set_string(
+        &session->config_cdn_allowed_http_methods,
+        king_native_cdn_config.allowed_http_methods
+    );
+    king_client_session_set_string(
         &session->config_dns_mode,
         king_smart_dns_config.mode
     );

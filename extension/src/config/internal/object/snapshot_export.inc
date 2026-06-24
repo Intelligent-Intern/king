@@ -20,6 +20,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
     );
     add_assoc_bool(target, "cdn.enable", cfg->cdn.enable);
     add_assoc_string(target, "cdn.cache_mode", cfg->cdn.cache_mode != NULL ? cfg->cdn.cache_mode : "");
+    add_assoc_string(
+        target,
+        "cdn.allowed_http_methods",
+        cfg->cdn.allowed_http_methods != NULL ? cfg->cdn.allowed_http_methods : ""
+    );
     add_assoc_bool(target, "dns.server_enable", cfg->dns.server_enable);
     add_assoc_string(target, "dns.mode", cfg->dns.mode != NULL ? cfg->dns.mode : "");
     add_assoc_bool(target, "otel.enable", cfg->observability.enable);

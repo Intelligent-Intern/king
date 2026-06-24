@@ -81,6 +81,20 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "cdn.allowed_http_methods",
+            sizeof("cdn.allowed_http_methods") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->cdn.allowed_http_methods != NULL ? cfg->cdn.allowed_http_methods : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "dns.server_enable",
             sizeof("dns.server_enable") - 1
         )
