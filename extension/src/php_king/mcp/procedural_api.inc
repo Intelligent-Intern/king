@@ -135,6 +135,58 @@ PHP_FUNCTION(king_mcp_request)
     RETURN_STR(response_payload);
 }
 
+PHP_FUNCTION(king_mcp_request_async)
+{
+    zval *connection;
+    char *service_name = NULL;
+    char *method_name = NULL;
+    size_t service_name_len = 0;
+    size_t method_name_len = 0;
+    zend_string *request_payload_str;
+    zval *options = NULL;
+    zval params[5];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(4, 5)
+        Z_PARAM_ZVAL(connection)
+        Z_PARAM_STRING(service_name, service_name_len)
+        Z_PARAM_STRING(method_name, method_name_len)
+        Z_PARAM_STR(request_payload_str)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], connection);
+    ZVAL_STRINGL(&params[1], service_name, service_name_len);
+    ZVAL_STRINGL(&params[2], method_name, method_name_len);
+    ZVAL_STR_COPY(&params[3], request_payload_str);
+    if (options != NULL) {
+        ZVAL_COPY(&params[4], options);
+    } else {
+        ZVAL_NULL(&params[4]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_mcp_request_async",
+            sizeof("king_mcp_request_async") - 1,
+            "king_mcp_request",
+            sizeof("king_mcp_request") - 1,
+            params,
+            5,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 5; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 5; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_FUNCTION(king_mcp_close)
 {
     zval *connection;
@@ -401,4 +453,3 @@ PHP_FUNCTION(king_mcp_download_to_stream)
     king_set_error("");
     RETURN_TRUE;
 }
-

@@ -20,6 +20,10 @@ void king_xslt_shutdown_system(void);
 
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);
+PHP_FUNCTION(king_await);
+PHP_FUNCTION(king_awaitable_poll);
+PHP_FUNCTION(king_awaitable_cancel);
+PHP_FUNCTION(king_awaitable_status);
 PHP_FUNCTION(king_get_last_error);
 PHP_FUNCTION(king_db_ingest);
 PHP_FUNCTION(king_client_websocket_get_last_error);
@@ -75,6 +79,7 @@ PHP_FUNCTION(king_new_config);
 PHP_FUNCTION(king_connect);
 PHP_FUNCTION(king_close);
 PHP_FUNCTION(king_send_request);
+PHP_FUNCTION(king_send_request_async);
 PHP_FUNCTION(king_receive_response);
 PHP_FUNCTION(king_poll);
 PHP_FUNCTION(king_cancel_stream);
@@ -85,6 +90,7 @@ PHP_FUNCTION(king_set_client_cert);
 PHP_FUNCTION(king_get_stats);
 
 PHP_FUNCTION(king_client_send_request);
+PHP_FUNCTION(king_client_send_request_async);
 PHP_FUNCTION(king_client_stream_cancel);
 PHP_FUNCTION(king_client_tls_set_ca_file);
 PHP_FUNCTION(king_client_tls_set_client_cert);
@@ -94,14 +100,22 @@ PHP_FUNCTION(king_client_early_hints_get_pending);
 PHP_FUNCTION(king_client_early_hints_process);
 
 PHP_FUNCTION(king_http1_request_send);
+PHP_FUNCTION(king_http1_request_send_async);
 PHP_FUNCTION(king_http2_request_send);
+PHP_FUNCTION(king_http2_request_send_async);
 PHP_FUNCTION(king_http2_request_send_multi);
+PHP_FUNCTION(king_http2_request_send_multi_async);
 PHP_FUNCTION(king_http3_request_send);
+PHP_FUNCTION(king_http3_request_send_async);
 PHP_FUNCTION(king_http3_request_send_multi);
+PHP_FUNCTION(king_http3_request_send_multi_async);
 
 PHP_FUNCTION(king_client_websocket_connect);
+PHP_FUNCTION(king_client_websocket_connect_async);
 PHP_FUNCTION(king_client_websocket_send);
+PHP_FUNCTION(king_client_websocket_send_async);
 PHP_FUNCTION(king_client_websocket_receive);
+PHP_FUNCTION(king_client_websocket_receive_async);
 PHP_FUNCTION(king_client_websocket_ping);
 PHP_FUNCTION(king_client_websocket_get_status);
 PHP_FUNCTION(king_client_websocket_close);
@@ -132,12 +146,15 @@ PHP_FUNCTION(king_admin_api_listen);
 
 PHP_FUNCTION(king_mcp_connect);
 PHP_FUNCTION(king_mcp_request);
+PHP_FUNCTION(king_mcp_request_async);
 PHP_FUNCTION(king_mcp_upload_from_stream);
 PHP_FUNCTION(king_mcp_download_to_stream);
 PHP_FUNCTION(king_mcp_close);
 
 PHP_FUNCTION(king_pipeline_orchestrator_run);
+PHP_FUNCTION(king_pipeline_orchestrator_run_async);
 PHP_FUNCTION(king_pipeline_orchestrator_dispatch);
+PHP_FUNCTION(king_pipeline_orchestrator_dispatch_async);
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool);
 PHP_FUNCTION(king_pipeline_orchestrator_register_handler);
 PHP_FUNCTION(king_pipeline_orchestrator_configure_logging);

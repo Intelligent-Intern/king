@@ -12,6 +12,14 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_request, 0, 3, IS
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_MCP_requestAsync, 0, 3, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, service, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_MCP_close, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 

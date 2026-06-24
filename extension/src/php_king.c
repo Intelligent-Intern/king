@@ -45,5 +45,6 @@
 #include "php_king/cancel_token.inc"
 #include "php_king/mcp.inc"
 #include "php_king/objects.inc"
+#include "php_king/awaitable.inc"
 #include "php_king/lifecycle.inc"
 #include "php_king/module_entry.inc"

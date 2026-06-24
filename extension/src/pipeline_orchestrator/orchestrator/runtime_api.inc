@@ -2308,6 +2308,50 @@ PHP_FUNCTION(king_pipeline_orchestrator_run)
     RETURN_THROWS();
 }
 
+PHP_FUNCTION(king_pipeline_orchestrator_run_async)
+{
+    zval *initial_data;
+    zval *pipeline;
+    zval *exec_options = NULL;
+    zval params[3];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_ZVAL(initial_data)
+        Z_PARAM_ARRAY(pipeline)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(exec_options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], initial_data);
+    ZVAL_COPY(&params[1], pipeline);
+    if (exec_options != NULL) {
+        ZVAL_COPY(&params[2], exec_options);
+    } else {
+        ZVAL_NULL(&params[2]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_pipeline_orchestrator_run_async",
+            sizeof("king_pipeline_orchestrator_run_async") - 1,
+            "king_pipeline_orchestrator_run",
+            sizeof("king_pipeline_orchestrator_run") - 1,
+            params,
+            3,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 3; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 3; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_FUNCTION(king_pipeline_orchestrator_dispatch)
 {
     zval *initial_data;
@@ -2326,6 +2370,50 @@ PHP_FUNCTION(king_pipeline_orchestrator_dispatch)
     }
 
     RETURN_THROWS();
+}
+
+PHP_FUNCTION(king_pipeline_orchestrator_dispatch_async)
+{
+    zval *initial_data;
+    zval *pipeline;
+    zval *exec_options = NULL;
+    zval params[3];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_ZVAL(initial_data)
+        Z_PARAM_ARRAY(pipeline)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(exec_options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], initial_data);
+    ZVAL_COPY(&params[1], pipeline);
+    if (exec_options != NULL) {
+        ZVAL_COPY(&params[2], exec_options);
+    } else {
+        ZVAL_NULL(&params[2]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_pipeline_orchestrator_dispatch_async",
+            sizeof("king_pipeline_orchestrator_dispatch_async") - 1,
+            "king_pipeline_orchestrator_dispatch",
+            sizeof("king_pipeline_orchestrator_dispatch") - 1,
+            params,
+            3,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 3; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 3; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
 }
 
 PHP_FUNCTION(king_pipeline_orchestrator_worker_run_next)

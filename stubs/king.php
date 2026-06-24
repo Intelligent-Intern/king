@@ -11,6 +11,11 @@ declare(strict_types=1);
  */
 
 namespace {
+    function king_await(\King\Awaitable $awaitable, ?int $timeout_ms = null): mixed {}
+    function king_awaitable_poll(\King\Awaitable $awaitable, int $timeout_ms = 0): bool {}
+    function king_awaitable_cancel(\King\Awaitable $awaitable): bool {}
+    function king_awaitable_status(\King\Awaitable $awaitable): string {}
+
     /**
      * Establish a local runtime QUIC session handle backed by a real
      * non-blocking UDP socket and return a `King\Session` resource.
@@ -53,6 +58,8 @@ namespace {
      * @throws \King\TlsException
      */
     function king_send_request(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): mixed {}
+
+    function king_send_request_async(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): \King\Awaitable {}
 
     /**
      * Legacy receive half of the historical request/response split.
@@ -105,6 +112,8 @@ namespace {
      */
     function king_client_send_request(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): mixed {}
 
+    function king_client_send_request_async(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): \King\Awaitable {}
+
     /**
      * Direct live HTTP/1 one-shot request path over a native TCP socket.
      * Only absolute `http://` URLs are live in the current runtime;
@@ -126,6 +135,8 @@ namespace {
      */
     function king_http1_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): mixed {}
 
+    function king_http1_request_send_async(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): \King\Awaitable {}
+
     /**
      * Direct live HTTP/2 one-shot request path over the active libcurl runtime.
      * Supports absolute `http://` h2c and `https://` ALPN-backed URLs, keeps a
@@ -144,6 +155,8 @@ namespace {
      */
     function king_http2_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
 
+    function king_http2_request_send_async(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): \King\Awaitable {}
+
     /**
      * Direct live HTTP/2 multiplex leaf over the active libcurl session pool.
      * Each request entry accepts `url`, optional `method`, optional `headers`,
@@ -161,6 +174,8 @@ namespace {
      * @throws \King\ProtocolException
      */
     function king_http2_request_send_multi(array $requests, ?array $options = null): array|false {}
+
+    function king_http2_request_send_multi_async(array $requests, ?array $options = null): \King\Awaitable {}
 
     /**
      * Direct live HTTP/3 one-shot request path over the active QUIC runtime.
@@ -182,6 +197,8 @@ namespace {
      */
     function king_http3_request_send(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): array|false {}
 
+    function king_http3_request_send_async(string $url, ?string $method = 'GET', ?array $headers = null, mixed $body = null, ?array $options = null): \King\Awaitable {}
+
     /**
      * Direct live HTTP/3 multiplex leaf over one active QUIC + HTTP/3
      * connection. Each request entry accepts `url`, optional `method`,
@@ -200,6 +217,8 @@ namespace {
      */
     function king_http3_request_send_multi(array $requests, ?array $options = null): array|false {}
 
+    function king_http3_request_send_multi_async(array $requests, ?array $options = null): \King\Awaitable {}
+
     /**
      * Materialize an on-wire validated WebSocket client connection resource.
      * The current runtime accepts absolute `ws://` and `wss://` URLs,
@@ -212,6 +231,8 @@ namespace {
      */
     function king_client_websocket_connect(string $url, ?array $headers = null, ?array $options = null) {}
 
+    function king_client_websocket_connect_async(string $url, ?array $headers = null, ?array $options = null): \King\Awaitable {}
+
     /**
      * Send a WebSocket text or binary frame on an active `King\WebSocket`
      * resource.
@@ -221,6 +242,8 @@ namespace {
      */
     function king_client_websocket_send(mixed $websocket, string $data, bool $is_binary = false): bool {}
 
+    function king_client_websocket_send_async(mixed $websocket, string $data, bool $is_binary = false): \King\Awaitable {}
+
     /**
      * Receive the next available frame payload from an active
      * `King\WebSocket` resource. Returns `""` when no payload is currently
@@ -229,6 +252,8 @@ namespace {
      * @return string|false
      */
     function king_client_websocket_receive(mixed $websocket, int $timeout_ms = -1): string|false {}
+
+    function king_client_websocket_receive_async(mixed $websocket, int $timeout_ms = -1): \King\Awaitable {}
 
     /**
      * Send a WebSocket ping on an active `King\WebSocket` resource.
@@ -319,6 +344,8 @@ namespace {
      * @return string|false
      */
     function king_mcp_request(mixed $connection, string $service_name, string $method_name, string $request_payload, ?array $options = null): string|false {}
+
+    function king_mcp_request_async(mixed $connection, string $service_name, string $method_name, string $request_payload, ?array $options = null): \King\Awaitable {}
 
     /**
      * Drain a PHP stream and upload the bytes to the active remote MCP peer
@@ -1784,6 +1811,8 @@ namespace {
      */
     function king_pipeline_orchestrator_run(mixed $initial_data, array $pipeline, ?array $exec_options = null): array {}
 
+    function king_pipeline_orchestrator_run_async(mixed $initial_data, array $pipeline, ?array $exec_options = null): \King\Awaitable {}
+
     /**
      * Queue one pipeline run onto the configured file-worker backend.
      * Requires `king.orchestrator_execution_backend=file_worker` plus a
@@ -1793,6 +1822,8 @@ namespace {
      * @return array<string,mixed>
      */
     function king_pipeline_orchestrator_dispatch(mixed $initial_data, array $pipeline, ?array $exec_options = null): array {}
+
+    function king_pipeline_orchestrator_dispatch_async(mixed $initial_data, array $pipeline, ?array $exec_options = null): \King\Awaitable {}
 
     /**
      * Register or replace one tool definition in the active pipeline
@@ -1961,6 +1992,17 @@ namespace King {
         public function isCancelled(): bool {}
     }
 
+    final class Awaitable {
+        public function await(?int $timeout_ms = null): mixed {}
+        public function poll(int $timeout_ms = 0): bool {}
+        public function cancel(): bool {}
+        public function isPending(): bool {}
+        public function isDone(): bool {}
+        public function isCancelled(): bool {}
+        public function getStatus(): string {}
+        public function getOperation(): string {}
+    }
+
     /* ===========================
      * Config
      * =========================== */
@@ -2096,6 +2138,8 @@ namespace King {
          */
         public function request(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): string {}
 
+        public function requestAsync(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): Awaitable {}
+
         /**
          * Drain a source stream into the remote MCP transfer store keyed by
          * `(service, method, streamIdentifier)`. The tuple is encoded
@@ -2130,6 +2174,8 @@ namespace King {
          */
         public static function run(mixed $initialData, array $pipeline, ?array $execOptions = null): array {}
 
+        public static function runAsync(mixed $initialData, array $pipeline, ?array $execOptions = null): Awaitable {}
+
         /**
          * Queue one pipeline run for the file-worker backend.
          * @param array<int,array<string,mixed>> $pipeline
@@ -2137,6 +2183,8 @@ namespace King {
          * @return array<string,mixed>
          */
         public static function dispatch(mixed $initialData, array $pipeline, ?array $execOptions = null): array {}
+
+        public static function dispatchAsync(mixed $initialData, array $pipeline, ?array $execOptions = null): Awaitable {}
 
         /** @param array<string,mixed> $config */
         public static function registerTool(string $toolName, array $config): bool {}
@@ -2294,6 +2342,7 @@ namespace King {
  * HTTP Client (1/2/3)
  * =========================== */
 namespace King\Client {
+    use King\Awaitable;
     use King\CancelToken;
     use King\Config;
     use King\Response;
@@ -2308,6 +2357,8 @@ namespace King\Client {
          */
         public function request(string $method, string $url, array $headers = [], string $body = '', ?CancelToken $cancel = null): Response {}
 
+        public function requestAsync(string $method, string $url, array $headers = [], string $body = '', ?CancelToken $cancel = null): Awaitable {}
+
         public function close(): void {}
     }
 
@@ -2320,6 +2371,7 @@ namespace King\Client {
  * WebSocket over HTTP/3
  * =========================== */
 namespace King\WebSocket {
+    use King\Awaitable;
     use King\Config;
 
     final class Server {
@@ -2345,8 +2397,11 @@ namespace King\WebSocket {
     final class Connection {
         public function __construct(string $url, ?array $headers = null, ?array $options = null) {}
         public function send(string $message): void {}
+        public function sendAsync(string $message): Awaitable {}
         public function sendBinary(string $payload): void {}
+        public function sendBinaryAsync(string $payload): Awaitable {}
         public function receive(?int $timeout_ms = null): ?string {}
+        public function receiveAsync(?int $timeout_ms = null): Awaitable {}
         public function ping(?string $data = null): void {}
         public function close(int $code = 1000, ?string $reason = null): void {}
         /**

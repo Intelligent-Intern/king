@@ -17,6 +17,8 @@ fi
 cd "${ROOT_DIR}"
 
 exec "${PHP_BIN}" \
+    -n \
+    -d "extension=tokenizer" \
     -d "extension=${EXT_SO}" \
     "${SCRIPT_DIR}/check-stub-parity.php" \
     "$@"
