@@ -9,14 +9,21 @@ if [[ -z "${PHP_VERSION}" ]]; then
     exit 1
 fi
 
-for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
-    if [[ -f "${source_file}" ]]; then
-        sed -i \
-            -e 's|http://archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' \
-            -e 's|http://security.ubuntu.com/ubuntu|https://security.ubuntu.com/ubuntu|g' \
-            "${source_file}"
-    fi
-done
+normalize_ubuntu_sources_to_scheme() {
+    local scheme="$1"
+    local source_file=""
+
+    for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+        if [[ -f "${source_file}" ]]; then
+            sed -i \
+                -e "s|https\\?://archive.ubuntu.com/ubuntu|${scheme}://archive.ubuntu.com/ubuntu|g" \
+                -e "s|https\\?://security.ubuntu.com/ubuntu|${scheme}://security.ubuntu.com/ubuntu|g" \
+                "${source_file}"
+        fi
+    done
+}
+
+normalize_ubuntu_sources_to_scheme http
 
 apt-get \
     -o Acquire::Retries=5 \
@@ -31,6 +38,15 @@ apt-get install -y --no-install-recommends \
     gnupg \
     libcurl3t64-gnutls \
     libuuid1
+
+normalize_ubuntu_sources_to_scheme https
+
+apt-get \
+    -o Acquire::Retries=5 \
+    -o Acquire::http::Timeout=30 \
+    -o Acquire::https::Timeout=30 \
+    -o Acquire::ForceIPv4=true \
+    update
 
 mkdir -p /usr/share/keyrings
 curl --retry 5 --retry-delay 2 --retry-connrefused --retry-all-errors -fsSL \
