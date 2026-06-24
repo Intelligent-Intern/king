@@ -1,10 +1,10 @@
 # DB Ingest
 
-`king_db_ingest()` fuehrt einen Writer-Callback unter einem host-lokalen
-exklusiven Lock aus. Das ist fuer kleine lokale Schreibpfade nuetzlich, bei
-denen mehrere Prozesse denselben lokalen Zustand anfassen koennen.
+`king_db_ingest()` executes a writer callback under a host-local exclusive
+lock. This is useful for small local write paths where multiple processes may
+touch the same local state.
 
-## Function, Beispiel 1: JSONL Ledger atomar erweitern
+## Function, Example 1: Append to a JSONL Ledger Atomically
 
 ```php
 <?php
@@ -27,7 +27,7 @@ $result = king_db_ingest('invoice-ledger', static function (): array {
 var_dump($result);
 ```
 
-## Function, Beispiel 2: SQLite Schreibtransaktion schuetzen
+## Function, Example 2: Protect a SQLite Write Transaction
 
 ```php
 <?php
@@ -46,7 +46,7 @@ king_db_ingest('invoice-sqlite', static function (): int {
 ]);
 ```
 
-## OO, Beispiel 1: Ingest Adapter
+## OO, Example 1: Ingest Adapter
 
 ```php
 <?php
@@ -65,7 +65,7 @@ $ingest = new LockedIngest();
 $ingest->write('audit', fn () => file_put_contents(__DIR__ . '/var/audit.log', "ok\n", FILE_APPEND), __DIR__ . '/var/audit.lock');
 ```
 
-## OO, Beispiel 2: Repository mit geschuetztem Writer
+## OO, Example 2: Repository with Protected Writer
 
 ```php
 <?php

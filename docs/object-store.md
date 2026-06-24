@@ -1,10 +1,10 @@
 # Object Store
 
-Der Object Store speichert Payloads, Metadaten, Streams, Backups und
-resumable Uploads. Procedural heisst die API `king_object_store_*`, OO
-heisst sie `King\ObjectStore`.
+The object store persists payloads, metadata, streams, backups, and resumable
+uploads. The procedural API is `king_object_store_*`; the OO API is
+`King\ObjectStore`.
 
-## Function, Beispiel 1: speichern und lesen
+## Function, Example 1: Store and Read
 
 ```php
 <?php
@@ -30,7 +30,7 @@ $payload = king_object_store_get('tenant-42/invoices/INV-1001.xml');
 var_dump($metadata, strlen($payload));
 ```
 
-## Function, Beispiel 2: Stream, Backup und Restore
+## Function, Example 2: Stream, Backup, and Restore
 
 ```php
 <?php
@@ -59,7 +59,7 @@ king_object_store_get_to_stream('tenant-42/invoices/large.xml', $out);
 fclose($out);
 ```
 
-## OO, Beispiel 1: ObjectStore
+## OO, Example 1: ObjectStore
 
 ```php
 <?php
@@ -74,7 +74,7 @@ ObjectStore::put('tenant-42/readme.txt', 'ready', ['content_type' => 'text/plain
 echo ObjectStore::get('tenant-42/readme.txt') . PHP_EOL;
 ```
 
-## OO, Beispiel 2: resumable Upload
+## OO, Example 2: Resumable Upload
 
 ```php
 <?php

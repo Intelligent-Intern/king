@@ -1,12 +1,11 @@
-# XSLT 2.0/3.0 fuer E-Rechnungen
+# XSLT 2.0/3.0 for E-Invoicing
 
-XSLT ist procedural ueber `king_xslt_engine_status()`,
-`king_xslt_transform_file()` und `king_xslt_transform_to_file()` verfuegbar.
-Die native OO-Oberflaeche ist `King\XSLT\Processor`. Der Processor haelt
-Default-Optionen wie SaxonC-Properties und kann sie pro Transformationslauf
-gezielt ueberschreiben.
+XSLT is available procedurally through `king_xslt_engine_status()`,
+`king_xslt_transform_file()`, and `king_xslt_transform_to_file()`. The native
+OO surface is `King\XSLT\Processor`. The processor stores default options such
+as SaxonC properties and can override them per transformation run.
 
-## Function, Beispiel 1: Engine pruefen
+## Function, Example 1: Check Engine
 
 ```php
 <?php
@@ -23,7 +22,7 @@ printf(
 );
 ```
 
-## Function, Beispiel 2: UBL 2.1 Invoice in Pruefbericht transformieren
+## Function, Example 2: Transform a UBL 2.1 Invoice into a Validation Report
 
 `invoice.xml`:
 
@@ -83,7 +82,7 @@ $result = king_xslt_transform_file(
 file_put_contents(__DIR__ . '/invoice-report.xml', $result['result']);
 ```
 
-## OO, Beispiel 1: native King\XSLT\Processor Klasse
+## OO, Example 1: Native King\XSLT\Processor Class
 
 ```php
 <?php
@@ -108,7 +107,7 @@ $result = $processor->transformFile(
 echo $result['result'];
 ```
 
-## OO, Beispiel 2: UBL Validator Service mit Ausgabedatei
+## OO, Example 2: UBL Validator Service with Output File
 
 ```php
 <?php

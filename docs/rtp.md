@@ -1,9 +1,9 @@
 # RTP
 
-RTP ist procedural ueber `king_rtp_*` verfuegbar. Die native OO-Oberflaeche
-ist `King\RTP\Socket` und haelt intern dieselbe native RTP-Resource.
+RTP is available procedurally through `king_rtp_*`. The native OO surface is
+`King\RTP\Socket` and keeps the same native RTP resource internally.
 
-## Function, Beispiel 1: Socket binden und ICE/DTLS Daten lesen
+## Function, Example 1: Bind Socket and Read ICE/DTLS Data
 
 ```php
 <?php
@@ -19,7 +19,7 @@ var_dump($ice, $fingerprint);
 king_rtp_close($socket);
 ```
 
-## Function, Beispiel 2: DTLS akzeptieren und RTP Paket senden
+## Function, Example 2: Accept DTLS and Send an RTP Packet
 
 ```php
 <?php
@@ -37,7 +37,7 @@ var_dump($packet);
 king_rtp_close($socket);
 ```
 
-## OO, Beispiel 1: native King\RTP\Socket Klasse
+## OO, Example 1: Native King\RTP\Socket Class
 
 ```php
 <?php
@@ -49,7 +49,7 @@ echo $rtp->dtlsFingerprint() . PHP_EOL;
 $rtp->close();
 ```
 
-## OO, Beispiel 2: Media Peer Service mit nativer Socket-Klasse
+## OO, Example 2: Media Peer Service with Native Socket Class
 
 ```php
 <?php

@@ -1,9 +1,9 @@
 # IIBIN
 
-IIBIN ist Kings native binaere Serialisierung. Die procedural API heisst
-`king_proto_*`, die native OO-Fassade heisst `King\IIBIN`.
+IIBIN is King's native binary serialization format. The procedural API is
+`king_proto_*`; the native OO facade is `King\IIBIN`.
 
-## Function, Beispiel 1: Schema, Encode, Decode
+## Function, Example 1: Schema, Encode, Decode
 
 ```php
 <?php
@@ -22,7 +22,7 @@ $decoded = king_proto_decode('InvoiceHeader', $binary);
 var_dump($decoded);
 ```
 
-## Function, Beispiel 2: Oneof und Batch
+## Function, Example 2: Oneof and Batch
 
 ```php
 <?php
@@ -41,7 +41,7 @@ $events = king_proto_decode_batch('InvoiceEvent', $records);
 var_dump($events);
 ```
 
-## OO, Beispiel 1: King\IIBIN
+## OO, Example 1: King\IIBIN
 
 ```php
 <?php
@@ -56,7 +56,7 @@ $payload = IIBIN::encode('TenantRef', ['tenant_id' => 42, 'name' => 'Acme GmbH']
 var_dump(IIBIN::decode('TenantRef', $payload));
 ```
 
-## OO, Beispiel 2: Objekt-Hydration
+## OO, Example 2: Object Hydration
 
 ```php
 <?php

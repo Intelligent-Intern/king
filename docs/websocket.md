@@ -1,11 +1,11 @@
 # WebSocket
 
-Der WebSocket-Client kann procedural ueber `king_client_websocket_*` oder OO
-ueber `King\WebSocket\Connection` genutzt werden. Server-seitig gibt es
-procedural Upgrade ueber `king_server_upgrade_to_websocket()` und OO
-`King\WebSocket\Server`.
+The WebSocket client can be used procedurally through
+`king_client_websocket_*` or through `King\WebSocket\Connection`. On the
+server side, procedural upgrade is available through
+`king_server_upgrade_to_websocket()` and OO through `King\WebSocket\Server`.
 
-## Function, Beispiel 1: Client Echo
+## Function, Example 1: Client Echo
 
 ```php
 <?php
@@ -30,7 +30,7 @@ var_dump($payload);
 king_client_websocket_close($ws, 1000, 'done');
 ```
 
-## Function, Beispiel 2: HTTP/1 Upgrade im Handler
+## Function, Example 2: HTTP/1 Upgrade in a Handler
 
 ```php
 <?php
@@ -56,7 +56,7 @@ king_http1_server_listen_once('127.0.0.1', 8081, null, static function (array $r
 });
 ```
 
-## OO, Beispiel 1: Connection
+## OO, Example 1: Connection
 
 ```php
 <?php
@@ -73,7 +73,7 @@ echo $message . PHP_EOL;
 $connection->close(1000, 'done');
 ```
 
-## OO, Beispiel 2: Server mit Broadcast
+## OO, Example 2: Server with Broadcast
 
 ```php
 <?php

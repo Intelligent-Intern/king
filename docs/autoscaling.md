@@ -1,9 +1,9 @@
 # Autoscaling
 
-Autoscaling kann procedural ueber `king_autoscaling_*` und OO ueber
-`King\Autoscaling` genutzt werden.
+Autoscaling can be used procedurally through `king_autoscaling_*` and through
+the `King\Autoscaling` OO facade.
 
-## Function, Beispiel 1: Runtime initialisieren und Status lesen
+## Function, Example 1: Initialize Runtime and Read Status
 
 ```php
 <?php
@@ -23,7 +23,7 @@ $metrics = king_autoscaling_get_metrics();
 var_dump($status['provider_mode'], $metrics);
 ```
 
-## Function, Beispiel 2: Node Lifecycle
+## Function, Example 2: Node Lifecycle
 
 ```php
 <?php
@@ -39,7 +39,7 @@ king_autoscaling_scale_down(1);
 king_autoscaling_stop_monitoring();
 ```
 
-## OO, Beispiel 1: King\Autoscaling
+## OO, Example 1: King\Autoscaling
 
 ```php
 <?php
@@ -56,7 +56,7 @@ var_dump(Autoscaling::getStatus());
 Autoscaling::stopMonitoring();
 ```
 
-## OO, Beispiel 2: Controller-Klasse
+## OO, Example 2: Controller Class
 
 ```php
 <?php

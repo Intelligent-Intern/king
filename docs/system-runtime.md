@@ -1,11 +1,11 @@
 # System Runtime
 
-Die System Runtime koordiniert Komponenten wie Client, Server, Object Store,
-CDN, Telemetry, Autoscaling, MCP, IIBIN und Orchestrator. Die native API ist
-procedural `king_system_*`. Eine native OO-Klasse gibt es aktuell nicht, die
-OO-Beispiele sind userland Adapter.
+The system runtime coordinates components such as client, server, object
+store, CDN, telemetry, autoscaling, MCP, IIBIN, and orchestrator. The native
+API is procedural `king_system_*`. A native OO class is not exported yet; the
+OO examples are userland adapters.
 
-## Function, Beispiel 1: Init, Status, Shutdown
+## Function, Example 1: Init, Status, Shutdown
 
 ```php
 <?php
@@ -25,7 +25,7 @@ if (($status['lifecycle'] ?? '') !== 'ready') {
 king_system_shutdown();
 ```
 
-## Function, Beispiel 2: Request durch Runtime und Recovery
+## Function, Example 2: Request Through Runtime and Recovery
 
 ```php
 <?php
@@ -44,7 +44,7 @@ $report = king_system_get_performance_report();
 var_dump($response, $report);
 ```
 
-## OO, Beispiel 1: Runtime Adapter
+## OO, Example 1: Runtime Adapter
 
 ```php
 <?php
@@ -68,7 +68,7 @@ $runtime->init(['cluster_id' => 'local-dev', 'node_id' => 'node-1']);
 var_dump($runtime->status());
 ```
 
-## OO, Beispiel 2: Health Gate fuer Worker
+## OO, Example 2: Health Gate for Worker
 
 ```php
 <?php

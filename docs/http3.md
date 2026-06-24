@@ -1,10 +1,10 @@
 # HTTP/3
 
-HTTP/3 nutzt QUIC und liefert zusaetzliche Transport- und TLS-Ticket-Metadaten.
-Procedural Code nutzt `king_http3_request_send()` und
-`king_http3_request_send_multi()`. OO-Code nutzt `King\Client\Http3Client`.
+HTTP/3 uses QUIC and returns additional transport and TLS ticket metadata.
+Procedural code uses `king_http3_request_send()` and
+`king_http3_request_send_multi()`. OO code uses `King\Client\Http3Client`.
 
-## Function, Beispiel 1: einzelner HTTP/3 Request
+## Function, Example 1: Single HTTP/3 Request
 
 ```php
 <?php
@@ -31,7 +31,7 @@ printf(
 );
 ```
 
-## Function, Beispiel 2: HTTP/3 Multiplex
+## Function, Example 2: HTTP/3 Multiplex
 
 ```php
 <?php
@@ -60,7 +60,7 @@ foreach ($responses as $response) {
 }
 ```
 
-## OO, Beispiel 1: Http3Client
+## OO, Example 1: Http3Client
 
 ```php
 <?php
@@ -78,7 +78,7 @@ echo $response->getStatusCode() . PHP_EOL;
 $client->close();
 ```
 
-## OO, Beispiel 2: Cancelbarer HTTP/3 Aufruf
+## OO, Example 2: Cancelable HTTP/3 Call
 
 ```php
 <?php

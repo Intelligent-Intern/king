@@ -1,10 +1,10 @@
 # Pipeline Orchestrator
 
-Der Orchestrator fuehrt Tool-Schritte aus, kann Runs persistieren und kennt
-lokale, file-worker und remote-peer Backends. Handler sind process-local und
-muessen im ausfuehrenden Prozess registriert werden.
+The orchestrator executes tool steps, can persist runs, and supports local,
+file-worker, and remote-peer backends. Handlers are process-local and must be
+registered inside the executing process.
 
-## Function, Beispiel 1: lokaler zweistufiger Lauf
+## Function, Example 1: Local Two-Step Run
 
 ```php
 <?php
@@ -35,7 +35,7 @@ $result = king_pipeline_orchestrator_run(
 var_dump($result);
 ```
 
-## Function, Beispiel 2: Queue fuer File Worker
+## Function, Example 2: Queue for File Worker
 
 ```php
 <?php
@@ -60,7 +60,7 @@ $snapshot = king_pipeline_orchestrator_get_run($runId);
 var_dump($workerResult, $snapshot);
 ```
 
-## OO, Beispiel 1: statische OO-Fassade
+## OO, Example 1: Static OO Facade
 
 ```php
 <?php
@@ -80,7 +80,7 @@ $result = PipelineOrchestrator::run(
 var_dump($result);
 ```
 
-## OO, Beispiel 2: Async Run und Run-Snapshot
+## OO, Example 2: Async Run and Run Snapshot
 
 ```php
 <?php

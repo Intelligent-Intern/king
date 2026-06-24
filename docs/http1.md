@@ -1,10 +1,9 @@
 # HTTP/1
 
-HTTP/1 kann direkt ueber `king_http1_request_send()` oder ueber
-`King\Client\Http1Client` genutzt werden. Der Client kann auch die neue
-HTTP-Methode `QUERY` senden.
+HTTP/1 can be used directly through `king_http1_request_send()` or through
+`King\Client\Http1Client`. The client can also send the HTTP `QUERY` method.
 
-## Function, Beispiel 1: einfacher GET
+## Function, Example 1: Simple GET
 
 ```php
 <?php
@@ -24,7 +23,7 @@ echo $response['status'] . PHP_EOL;
 echo $response['body'] . PHP_EOL;
 ```
 
-## Function, Beispiel 2: QUERY mit Body und Streaming Response
+## Function, Example 2: QUERY with Body and Streaming Response
 
 ```php
 <?php
@@ -56,7 +55,7 @@ while (!$response->isEndOfBody()) {
 }
 ```
 
-## OO, Beispiel 1: Http1Client
+## OO, Example 1: Http1Client
 
 ```php
 <?php
@@ -73,7 +72,7 @@ echo $response->getBody() . PHP_EOL;
 $client->close();
 ```
 
-## OO, Beispiel 2: Request-Service mit CancelToken
+## OO, Example 2: Request Service with CancelToken
 
 ```php
 <?php

@@ -1,27 +1,27 @@
 # King Primitives
 
-Diese Doku zeigt die oeffentlichen King-Primitives praktisch und ohne
-Release-Sprache. Jede Primitive hat denselben Aufbau:
+This documentation shows the public King primitives in practical terms without
+release language. Each primitive follows the same structure:
 
-- Function, Beispiel 1: kleines Beispiel
-- Function, Beispiel 2: ausfuehrliches Beispiel
-- OO, Beispiel 1: kleines Beispiel
-- OO, Beispiel 2: ausfuehrliches Beispiel
+- Function, example 1: compact example
+- Function, example 2: extended example
+- OO, example 1: compact example
+- OO, example 2: extended example
 
-Wenn King fuer eine Primitive noch keine native OO-Klasse exportiert, steht das
-in der jeweiligen Datei klar dabei. Die OO-Beispiele sind dann kleine
-userland Adapter um die echten `king_*` Funktionen.
+If King does not export a native OO class for a primitive yet, the respective
+file states that explicitly. In that case the OO examples are small userland
+adapters around the real `king_*` functions.
 
-## Inhaltsverzeichnis
+## Table of Contents
 
-- [Async und Awaitables](async-awaitables.md)
-- [Config, Session, TLS und QUIC](config-session-tls-quic.md)
+- [Async and Awaitables](async-awaitables.md)
+- [Config, Session, TLS, and QUIC](config-session-tls-quic.md)
 - [HTTP/1](http1.md)
 - [HTTP/2](http2.md)
 - [HTTP/3](http3.md)
 - [WebSocket](websocket.md)
 - [Pipeline Orchestrator](pipeline-orchestrator.md)
-- [XSLT 2.0/3.0 fuer E-Rechnungen](xslt.md)
+- [XSLT 2.0/3.0 for E-Invoicing](xslt.md)
 - [MCP](mcp.md)
 - [IIBIN](iibin.md)
 - [Object Store](object-store.md)
@@ -32,15 +32,16 @@ userland Adapter um die echten `king_*` Funktionen.
 - [System Runtime](system-runtime.md)
 - [RTP](rtp.md)
 - [DB Ingest](db-ingest.md)
+- [E-Invoicing, EDI, and B2B Commerce Platform](e-invoicing-commerce-platform.md)
 
-## Grundregeln
+## Ground Rules
 
-- Procedural APIs heissen `king_*`.
-- Native OO-APIs liegen unter `King\...`, `King\Client\...` oder
+- Procedural APIs use the `king_*` naming scheme.
+- Native OO APIs live under `King\...`, `King\Client\...`, or
   `King\WebSocket\...`.
-- Async-Methoden geben `King\Awaitable` zurueck und werden mit
-  `king_await()` oder `$awaitable->await()` aufgeloest.
-- Fehler sollten ueber Exceptions behandelt werden. `king_get_last_error()`
-  ist nur fuer alte Integrationspunkte gedacht.
-- Konfigurationen laufen entweder ueber `King\Config` oder, bei aelteren
-  Funktionen, ueber ein Array bzw. `king_new_config()`.
+- Async methods return `King\Awaitable` and are resolved with `king_await()`
+  or `$awaitable->await()`.
+- Errors should be handled through exceptions. `king_get_last_error()` exists
+  for older integration points.
+- Configuration flows through either `King\Config` or, for older functions,
+  an array or `king_new_config()`.

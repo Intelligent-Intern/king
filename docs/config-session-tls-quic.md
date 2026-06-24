@@ -1,10 +1,10 @@
-# Config, Session, TLS und QUIC
+# Config, Session, TLS, and QUIC
 
-`King\Config` ist die OO-Konfiguration. `king_new_config()` ist die
-procedural Variante. Low-level Sessions werden mit `king_connect()` oder
-`new King\Session(...)` aufgebaut.
+`King\Config` is the OO configuration surface. `king_new_config()` is the
+procedural variant. Low-level sessions are created with `king_connect()` or
+`new King\Session(...)`.
 
-## Function, Beispiel 1: Config Resource und Session Stats
+## Function, Example 1: Config Resource and Session Stats
 
 ```php
 <?php
@@ -31,7 +31,7 @@ printf("state=%s tx=%d rx=%d\n",
 king_close($session);
 ```
 
-## Function, Beispiel 2: TLS Defaults und Session Tickets
+## Function, Example 2: TLS Defaults and Session Tickets
 
 ```php
 <?php
@@ -62,7 +62,7 @@ echo ($stats['tls_ticket_source'] ?? 'none') . PHP_EOL;
 king_close($second);
 ```
 
-## OO, Beispiel 1: Config setzen und auslesen
+## OO, Example 1: Set and Read Config
 
 ```php
 <?php
@@ -79,7 +79,7 @@ var_dump($config->get('http2.enable'));
 var_dump($config->toArray()['cdn.allowed_http_methods']);
 ```
 
-## OO, Beispiel 2: Session, Stream, Response und CancelToken
+## OO, Example 2: Session, Stream, Response, and CancelToken
 
 ```php
 <?php

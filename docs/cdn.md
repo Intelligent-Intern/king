@@ -1,11 +1,11 @@
 # CDN
 
-Die CDN-Primitive liegt procedural unter `king_cdn_*` und haengt am
-Object-Store/CDN Runtime-State. Eine native `King\CDN` Klasse ist aktuell
-nicht exportiert. Die OO-Beispiele unten sind userland Adapter um die echten
-Funktionen.
+The CDN primitive is available procedurally through `king_cdn_*` and is tied
+to the object-store/CDN runtime state. A native `King\CDN` class is not
+exported yet. The OO examples below are userland adapters around the real
+functions.
 
-## Function, Beispiel 1: Objekt in CDN Cache aufnehmen
+## Function, Example 1: Admit an Object into the CDN Cache
 
 ```php
 <?php
@@ -32,7 +32,7 @@ $stats = king_object_store_get_stats();
 var_dump($stats['cdn']);
 ```
 
-## Function, Beispiel 2: QUERY als erlaubte CDN-Methode konfigurieren
+## Function, Example 2: Configure QUERY as an Allowed CDN Method
 
 ```php
 <?php
@@ -51,7 +51,7 @@ $removed = king_cdn_invalidate_cache();
 echo "invalidated=$removed\n";
 ```
 
-## OO, Beispiel 1: userland CDN Adapter
+## OO, Example 1: Userland CDN Adapter
 
 ```php
 <?php
@@ -74,7 +74,7 @@ $cdn = new CdnCache();
 $cdn->cache('public/invoice-report.json', 300);
 ```
 
-## OO, Beispiel 2: Cache-Warmup Service
+## OO, Example 2: Cache Warmup Service
 
 ```php
 <?php

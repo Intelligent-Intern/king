@@ -1,11 +1,11 @@
 # Semantic DNS
 
-Semantic DNS registriert Services mit Last-/Statusdaten und liefert
-Discovery- und Routing-Entscheidungen. Die native API ist procedural
-`king_semantic_dns_*`. Eine native OO-Klasse gibt es aktuell nicht, die
-OO-Beispiele sind userland Adapter.
+Semantic DNS registers services with load and status data and returns
+discovery and routing decisions. The native API is procedural
+`king_semantic_dns_*`. A native OO class is not exported yet; the OO examples
+are userland adapters.
 
-## Function, Beispiel 1: Service registrieren und finden
+## Function, Example 1: Register and Discover a Service
 
 ```php
 <?php
@@ -32,7 +32,7 @@ $discovery = king_semantic_dns_discover_service('http', [
 var_dump($discovery);
 ```
 
-## Function, Beispiel 2: Status-Update und optimale Route
+## Function, Example 2: Status Update and Optimal Route
 
 ```php
 <?php
@@ -58,7 +58,7 @@ $route = king_semantic_dns_get_optimal_route('invoice-api', [
 var_dump($route);
 ```
 
-## OO, Beispiel 1: Registry Adapter
+## OO, Example 1: Registry Adapter
 
 ```php
 <?php
@@ -87,7 +87,7 @@ $registry->registerHttp('portal-api-1', 'portal-api', '10.0.1.10', 8080);
 var_dump($registry->discover('http'));
 ```
 
-## OO, Beispiel 2: Router Service
+## OO, Example 2: Router Service
 
 ```php
 <?php

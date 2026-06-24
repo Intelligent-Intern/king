@@ -1,12 +1,11 @@
-# Async und Awaitables
+# Async and Awaitables
 
-King verwendet `King\Awaitable` fuer asynchrone HTTP-, MCP- und
-Orchestrator-Aufrufe. Procedural Code kann `king_await()`,
-`king_awaitable_poll()`, `king_awaitable_cancel()` und
-`king_awaitable_status()` nutzen. OO-Code nutzt die Methoden direkt am
-Awaitable.
+King uses `King\Awaitable` for asynchronous HTTP, MCP, and orchestrator calls.
+Procedural code can use `king_await()`, `king_awaitable_poll()`,
+`king_awaitable_cancel()`, and `king_awaitable_status()`. OO code calls the
+methods directly on the awaitable.
 
-## Function, Beispiel 1: HTTP Request awaiten
+## Function, Example 1: Await an HTTP Request
 
 ```php
 <?php
@@ -27,7 +26,7 @@ echo $response['status'] . PHP_EOL;
 echo $response['body'] . PHP_EOL;
 ```
 
-## Function, Beispiel 2: Abbruch eines langen Orchestrator-Laufs
+## Function, Example 2: Cancel a Long Orchestrator Run
 
 ```php
 <?php
@@ -58,7 +57,7 @@ if (king_awaitable_status($awaitable) !== 'cancelled') {
 }
 ```
 
-## OO, Beispiel 1: Awaitable direkt am Objekt
+## OO, Example 1: Awaitable Directly on the Object
 
 ```php
 <?php
@@ -74,7 +73,7 @@ echo $response->getBody() . PHP_EOL;
 $client->close();
 ```
 
-## OO, Beispiel 2: mehrere Awaitables im Projektcode kapseln
+## OO, Example 2: Wrap Multiple Awaitables in Project Code
 
 ```php
 <?php

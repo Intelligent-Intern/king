@@ -1,11 +1,10 @@
 # HTTP/2
 
-HTTP/2 nutzt die libcurl-basierte Runtime. Einzelrequests laufen ueber
-`king_http2_request_send()`, Multiplexing ueber
-`king_http2_request_send_multi()`. Im OO-Code steht `King\Client\Http2Client`
-zur Verfuegung.
+HTTP/2 uses the libcurl-backed runtime. Single requests use
+`king_http2_request_send()`, while multiplexing uses
+`king_http2_request_send_multi()`. OO code uses `King\Client\Http2Client`.
 
-## Function, Beispiel 1: einzelner Request
+## Function, Example 1: Single Request
 
 ```php
 <?php
@@ -28,7 +27,7 @@ echo $response['status'] . PHP_EOL;
 echo $response['protocol'] . PHP_EOL;
 ```
 
-## Function, Beispiel 2: Multiplex mit gleicher Origin
+## Function, Example 2: Multiplex Against One Origin
 
 ```php
 <?php
@@ -58,7 +57,7 @@ foreach ($responses as $response) {
 }
 ```
 
-## OO, Beispiel 1: Http2Client
+## OO, Example 1: Http2Client
 
 ```php
 <?php
@@ -79,7 +78,7 @@ echo $response->getStatusCode() . PHP_EOL;
 $client->close();
 ```
 
-## OO, Beispiel 2: Async HTTP/2 mit Fehlerbehandlung
+## OO, Example 2: Async HTTP/2 with Error Handling
 
 ```php
 <?php

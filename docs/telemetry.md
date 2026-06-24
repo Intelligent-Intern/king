@@ -1,10 +1,10 @@
 # Telemetry
 
-Telemetry erfasst Spans, Metrics und Logs und kann Trace-Kontext weitergeben.
-Die native API ist procedural `king_telemetry_*`. Eine native OO-Klasse gibt
-es aktuell nicht, die OO-Beispiele sind userland Adapter.
+Telemetry records spans, metrics, and logs and can propagate trace context.
+The native API is procedural `king_telemetry_*`. A native OO class is not
+exported yet; the OO examples are userland adapters.
 
-## Function, Beispiel 1: Span, Metric, Log
+## Function, Example 1: Span, Metric, Log
 
 ```php
 <?php
@@ -28,7 +28,7 @@ $flush = king_telemetry_flush();
 var_dump($flush);
 ```
 
-## Function, Beispiel 2: Trace-Kontext an HTTP weitergeben
+## Function, Example 2: Propagate Trace Context to HTTP
 
 ```php
 <?php
@@ -55,7 +55,7 @@ king_telemetry_end_span($span);
 king_telemetry_flush();
 ```
 
-## OO, Beispiel 1: userland Tracer
+## OO, Example 1: Userland Tracer
 
 ```php
 <?php
@@ -77,7 +77,7 @@ $span = $tracer->start('invoice.map', ['invoice_id' => 'INV-1003']);
 $tracer->end($span, ['result' => 'ok']);
 ```
 
-## OO, Beispiel 2: instrumentierter Service
+## OO, Example 2: Instrumented Service
 
 ```php
 <?php

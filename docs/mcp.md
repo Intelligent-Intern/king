@@ -1,10 +1,10 @@
 # MCP
 
-MCP verbindet King mit einem remote peer. Procedural wird mit
-`king_mcp_connect()`, `king_mcp_request()`, Stream-Upload/Download und
-`king_mcp_close()` gearbeitet. OO nutzt `King\MCP`.
+MCP connects King to a remote peer. Procedural code uses
+`king_mcp_connect()`, `king_mcp_request()`, stream upload/download, and
+`king_mcp_close()`. OO code uses `King\MCP`.
 
-## Function, Beispiel 1: Unary Request
+## Function, Example 1: Unary Request
 
 ```php
 <?php
@@ -29,7 +29,7 @@ var_dump(json_decode($response, true, flags: JSON_THROW_ON_ERROR));
 king_mcp_close($connection);
 ```
 
-## Function, Beispiel 2: Stream Upload und Download
+## Function, Example 2: Stream Upload and Download
 
 ```php
 <?php
@@ -60,7 +60,7 @@ fclose($target);
 king_mcp_close($connection);
 ```
 
-## OO, Beispiel 1: King\MCP Request
+## OO, Example 1: King\MCP Request
 
 ```php
 <?php
@@ -78,7 +78,7 @@ var_dump(json_decode($response, true, flags: JSON_THROW_ON_ERROR));
 $mcp->close();
 ```
 
-## OO, Beispiel 2: Async Request mit CancelToken
+## OO, Example 2: Async Request with CancelToken
 
 ```php
 <?php
