@@ -103,7 +103,7 @@ int kg_config_native_cdn_apply_userland_config_to(
                 return FAILURE;
             }
         } else if (zend_string_equals_literal(key, "allowed_http_methods")) {
-            const char *allowed[] = {"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", NULL};
+            const char *allowed[] = {"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "QUERY", NULL};
             if (kg_validate_comma_separated_string_from_allowlist(value, allowed, &target->allowed_http_methods) != SUCCESS) {
                 return FAILURE;
             }

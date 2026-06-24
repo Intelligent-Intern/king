@@ -83,6 +83,10 @@ void king_client_session_free(void *session_ptr)
         zend_string_release(session->config_cdn_cache_mode);
     }
 
+    if (session->config_cdn_allowed_http_methods != NULL) {
+        zend_string_release(session->config_cdn_allowed_http_methods);
+    }
+
     if (session->config_dns_mode != NULL) {
         zend_string_release(session->config_dns_mode);
     }

@@ -65,6 +65,10 @@ void king_client_session_apply_config_resource(
         cfg->cdn.cache_mode
     );
     king_client_session_set_string(
+        &session->config_cdn_allowed_http_methods,
+        cfg->cdn.allowed_http_methods
+    );
+    king_client_session_set_string(
         &session->config_dns_mode,
         cfg->dns.mode
     );
