@@ -311,6 +311,7 @@ function king_server_websocket_wire_raw_client_connect(int $port, string $path)
     }
 
     $response = '';
+    $maxHandshakeBytes = 65536;
     while (!str_contains($response, "\r\n\r\n")) {
         $chunk = @socket_read($socket, 8192, PHP_BINARY_READ);
         if ($chunk === false || $chunk === '') {
@@ -320,6 +321,10 @@ function king_server_websocket_wire_raw_client_connect(int $port, string $path)
         }
 
         $response .= $chunk;
+        if (strlen($response) > $maxHandshakeBytes) {
+            socket_close($socket);
+            throw new RuntimeException('raw websocket handshake response exceeded maximum allowed size');
+        }
     }
 
     if (!str_starts_with($response, "HTTP/1.1 101 ")) {
