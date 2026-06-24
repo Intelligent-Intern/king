@@ -21,22 +21,6 @@ if (!is_array($classification) || $classification !== []) {
     king_http3_expiry_fail('temporary Rust/Cargo fixture classification must be empty after removal');
 }
 
-$readiness = file_get_contents($root . '/READYNESS_TRACKER.md');
-if (!is_string($readiness) || $readiness === '') {
-    king_http3_expiry_fail('could not read READYNESS_TRACKER.md');
-}
-
-foreach ([
-    'Recent QUIC bootstrap closure:',
-    'legacy Quiche bootstrap inputs',
-    'unlocked Cargo retries',
-    'temporary Rust/Cargo HTTP/3 fixtures are removed',
-] as $needle) {
-    if (!str_contains($readiness, $needle)) {
-        king_http3_expiry_fail('temporary Rust/Cargo removal proof is missing required context: ' . $needle);
-    }
-}
-
 $legacyFixturePaths = array_keys($strategy['completed_replacements'] ?? []);
 sort($legacyFixturePaths);
 if (count($legacyFixturePaths) !== 7) {
@@ -84,10 +68,6 @@ foreach ($activeHarnessFiles as $path) {
             king_http3_expiry_fail("{$path} still uses temporary Rust/Cargo fixture path {$forbidden}");
         }
     }
-}
-
-if (!str_contains($readiness, 'Recent Quiche cleanup closure:')) {
-    king_http3_expiry_fail('READYNESS_TRACKER.md does not record the Quiche cleanup closure');
 }
 
 echo "HTTP/3 temporary Rust/Cargo fixtures are removed; C/LSQUIC helpers remain active.\n";

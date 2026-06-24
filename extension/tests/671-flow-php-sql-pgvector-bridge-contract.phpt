@@ -3,7 +3,7 @@ Repo-local Flow PHP SQL/pgvector bridge keeps the boundary non-native and enforc
 --FILE--
 <?php
 require_once __DIR__ . '/mcp_test_helper.inc';
-require_once __DIR__ . '/../../demo/userland/flow-php/src/SqlVectorBridge.php';
+require_once __DIR__ . '/../../userland/flow-php/src/SqlVectorBridge.php';
 
 use King\Flow\McpResourceSqlVectorTransport;
 use King\Flow\McpSqlVectorBridge;

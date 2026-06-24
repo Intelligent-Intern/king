@@ -36,13 +36,10 @@ var_dump(str_contains($ci, 'php-version: "8.5"' . "\n" . '            runner: ub
 var_dump(str_contains($ci, 'king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}'));
 var_dump(str_contains($ci, 'ubuntu-24.04-arm'));
 var_dump(!str_contains($ci, 'docker-build-and-push:'));
-var_dump(!str_contains($ci, 'docker-build-demo:'));
 var_dump($legacyDockerWorkflowExists === false);
 var_dump($docker === '');
 var_dump(str_contains($release, 'docker-build-and-push:'));
-var_dump(str_contains($release, 'docker-build-demo:'));
 var_dump(str_contains($release, 'Build and push King PHP ${{ matrix.php-version }}'));
-var_dump(str_contains($release, 'Build and push demo application PHP ${{ matrix.php-version }}'));
 var_dump(!str_contains($release, 'workflow_run:'));
 var_dump(!str_contains($release, 'run-id: ${{ needs.gate.outputs.source-run-id }}'));
 var_dump(str_contains($release, 'king-release-package-php${{ matrix.php-version }}-linux-amd64'));
@@ -55,9 +52,6 @@ var_dump(str_contains($runtime, 'extension=/opt/king/package/modules/king.so'));
 var_dump(str_contains($runtime, 'PHP_BIN=php /opt/king/package/bin/smoke.sh'));
 ?>
 --EXPECT--
-bool(true)
-bool(true)
-bool(true)
 bool(true)
 bool(true)
 bool(true)

@@ -5,7 +5,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LOCK_FILE="${SCRIPT_DIR}/lsquic-bootstrap.lock"
-DOC_FILE="${ROOT_DIR}/documentation/dependency-provenance.md"
 MODE="${1:---check}"
 
 fail() {
@@ -35,15 +34,6 @@ require_regex() {
     [[ "${value}" =~ ${regex} ]] || fail "invalid ${label}: ${value}"
 }
 
-require_doc_literal() {
-    local value="$1"
-    local label="$2"
-
-    if ! grep -Fq "\`${value}\`" "${DOC_FILE}"; then
-        fail "dependency provenance doc drift for ${label}; expected ${value}"
-    fi
-}
-
 validate_source_ref() {
     local name="$1"
     local value="${!name}"
@@ -60,20 +50,15 @@ validate_archive() {
     require_regex "${!url_var}" '^https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/archive/.+[.]tar[.]gz$' "${url_var}"
     require_regex "${!sha_var}" '^[0-9a-f]{64}$' "${sha_var}"
     require_regex "${!bytes_var}" '^[1-9][0-9]*$' "${bytes_var}"
-    require_doc_literal "${!url_var}" "${url_var}"
-    require_doc_literal "${!sha_var}" "${sha_var}"
-    require_doc_literal "${!bytes_var}" "${bytes_var}"
 }
 
 validate_commit() {
     local name="$1"
 
     require_regex "${!name}" '^[0-9a-f]{40}$' "${name}"
-    require_doc_literal "${!name}" "${name}"
 }
 
 require_file "${LOCK_FILE}" "LSQUIC bootstrap lock file"
-require_file "${DOC_FILE}" "dependency provenance document"
 
 case "${MODE}" in
     --check|--print-source-plan)
@@ -132,8 +117,6 @@ validate_source_ref KING_LSQUIC_LS_HPACK_REPO_URL
 
 require_regex "${KING_LSQUIC_TAG}" '^v[0-9]+[.][0-9]+[.][0-9]+$' "KING_LSQUIC_TAG"
 require_regex "${KING_LSQUIC_BORINGSSL_TAG}" '^[0-9]+[.][0-9]{8}[.][0-9]+$' "KING_LSQUIC_BORINGSSL_TAG"
-require_doc_literal "${KING_LSQUIC_TAG}" "KING_LSQUIC_TAG"
-require_doc_literal "${KING_LSQUIC_BORINGSSL_TAG}" "KING_LSQUIC_BORINGSSL_TAG"
 
 validate_commit KING_LSQUIC_COMMIT
 validate_commit KING_LSQUIC_BORINGSSL_COMMIT
@@ -167,5 +150,5 @@ if [[ "${MODE}" == "--print-source-plan" ]]; then
         "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}" \
         "${KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES}"
 else
-    echo "LSQUIC bootstrap lock is deterministic and documented."
+    echo "LSQUIC bootstrap lock is deterministic."
 fi

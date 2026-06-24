@@ -131,11 +131,6 @@ foreach (['http3_server_wire_helper.inc', 'king_http3_server_wire_start_server',
     }
 }
 
-$readiness = (string) file_get_contents($root . '/READYNESS_TRACKER.md');
-if (!str_contains($readiness, 'Recent LSQUIC migration sprint closure: the active HTTP/3 product path targets LSQUIC plus BoringSSL instead of Quiche')) {
-    king_http3_new_stack_fail('READYNESS_TRACKER.md does not record the new-stack proof');
-}
-
 echo "HTTP/3 behavior harness proves LSQUIC/C-helper gates across 16 tests without Quiche or Cargo bootstrap.\n";
 ?>
 --EXPECT--

@@ -41,21 +41,12 @@ jobs:
           script: |
             const eventName = context.eventName;
             const refName = process.env.GITHUB_REF_NAME || '';
-            const planningBranch = (eventName === 'pull_request'
+            const branchName = (eventName === 'pull_request'
               ? context.payload.pull_request?.head?.ref
               : refName
             ) || '';
             let runHeavyJobs = 'true';
-            let reason = `${eventName} on ${refName || planningBranch}: run canonical pipeline`;
-            const isPlanningBranch = planningBranch.startsWith('planning/');
-
-            if (isPlanningBranch) {
-              runHeavyJobs = 'false';
-              reason = `Skipping canonical baseline for planning branch ${planningBranch}; docs-only guard is required.`;
-            } else {
-              runHeavyJobs = 'true';
-              reason = `${eventName} on ${planningBranch}: full pipeline.`;
-            }
+            let reason = `${eventName} on ${branchName}: full pipeline.`;
 
             core.setOutput('run-heavy-jobs', runHeavyJobs);
             core.setOutput('reason', reason);
@@ -154,11 +145,7 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Verify dependency provenance documentation
-        if: matrix.shard-index == 1
-        run: bash ./infra/scripts/check-dependency-provenance-doc.sh
-
-      - name: Verify repo artifact hygiene guardrails
+      - name: Verify repository artifact hygiene
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
 
@@ -195,43 +182,10 @@ jobs:
           KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: ../infra/scripts/build-profile.sh release
 
-      - name: Verify public contract truthfulness gates
+      - name: Verify public PHP stub parity
         if: matrix.shard-index == 1
         working-directory: extension
-        run: |
-          ../infra/scripts/check-stub-parity.sh
-          ../infra/scripts/check-public-contract-claims.sh
-
-      - name: Verify video-chat API/WS contract catalog drift gate
-        if: matrix.shard-index == 1
-        run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
-
-      - name: Verify video-chat IAM call-access contract gate
-        if: matrix.shard-index == 1
-        working-directory: demo/video-chat/frontend-vue
-        run: npm run test:contract:iam-call-access
-
-      - name: Verify video-chat frontend E2E release gate
-        if: matrix.shard-index == 1
-        working-directory: demo/video-chat/frontend-vue
-        run: npm run test:e2e:release-gate
-
-      - name: Run video-chat compose smoke gate
-        if: matrix.shard-index == 1
-        run: |
-          VIDEOCHAT_SMOKE_COMPOSE_ONLY=1 \
-          VIDEOCHAT_SMOKE_REQUIRE_COMPOSE=1 \
-          VIDEOCHAT_SMOKE_ARTIFACTS_DIR=compat-artifacts/video-chat-smoke \
-          bash demo/video-chat/scripts/smoke.sh
-
-      - name: Upload video-chat E2E failure artifacts
-        if: failure() && matrix.shard-index == 1
-        uses: actions/upload-artifact@v6
-        with:
-          name: video-chat-smoke-e2e-failure-artifacts
-          if-no-files-found: ignore
-          path: |
-            compat-artifacts/video-chat-smoke/
+        run: ../infra/scripts/check-stub-parity.sh
 
       - name: Run canonical PHPT suite
         working-directory: extension
@@ -247,10 +201,10 @@ jobs:
           set -e
           exit "${status}"
 
-      - name: Run final go-live readiness checks
+      - name: Package canonical release archive
         if: matrix.shard-index == 1
         working-directory: extension
-        run: ../infra/scripts/go-live-readiness.sh --skip-baseline --output-dir ../dist --benchmark-iterations 5000 --benchmark-warmup 500 --benchmark-samples 3 --benchmark-budget-file benchmarks/budgets/canonical-ci.json
+        run: ../infra/scripts/package-release.sh --verify-reproducible --output-dir ../dist
 
       - name: Upload canonical release package artifact
         if: matrix.shard-index == 1

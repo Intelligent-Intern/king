@@ -2,7 +2,7 @@
 Repo-local Flow PHP control plane reconciles predictive run-id races without stale backend bindings
 --FILE--
 <?php
-require_once __DIR__ . '/../../demo/userland/flow-php/src/ControlPlane.php';
+require_once __DIR__ . '/../../userland/flow-php/src/ControlPlane.php';
 
 use King\Flow\CheckpointCommitResult;
 use King\Flow\CheckpointRecord;

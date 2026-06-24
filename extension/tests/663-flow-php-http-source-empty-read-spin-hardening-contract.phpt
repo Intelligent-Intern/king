@@ -8,7 +8,7 @@ if (!function_exists('proc_open') || !function_exists('proc_get_status')) {
 ?>
 --FILE--
 <?php
-$sourcePath = realpath(__DIR__ . '/../../demo/userland/flow-php/src/StreamingSource.php');
+$sourcePath = realpath(__DIR__ . '/../../userland/flow-php/src/StreamingSource.php');
 if ($sourcePath === false) {
     throw new RuntimeException('failed to resolve StreamingSource.php');
 }

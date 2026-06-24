@@ -35,7 +35,6 @@ extension/tests/*.sh
 extension/tests/*.mem
 extension/tmp-php.ini
 extension/run-test-info.php
-benchmarks/results/
 compat-artifacts/
 dist/
 !packages/iibin/dist/
@@ -43,30 +42,15 @@ dist/
 .cache/
 .vite/
 .codex
-demo/video-chat/frontend-vue/.vite/
-demo/video-chat/frontend-vue/dist/
-demo/video-chat/frontend-vue/test-results/
-demo/video-chat/frontend-vue/test-results.root-owned/
-demo/video-chat/**/src/lib/wasm/build/
 
 # Local machine-specific environment overrides.
 .env.local
 *.env.local
-demo/video-chat/docker-compose.deploy.local.yml
-demo/video-chat/scripts/deploy.local.sh
-demo/video-chat/scripts/*.local.sh
-demo/video-chat/deploy-logs/
-
-# model-inference backend: ephemeral sqlite + object-store + GGUF fixture
-# installed on demand via
-# demo/model-inference/backend-king-php/scripts/install-llama-runtime.sh.
-demo/model-inference/backend-king-php/.local/
 
 # Model weights MUST NEVER be checked in (they are large and provenance
 # belongs on a model registry / object store, not in git). Catch-all
 # patterns repo-wide — if you actually need a tiny test fixture that
-# overlaps, negate it explicitly under the owning demo directory, not
-# by weakening these rules.
+# overlaps, negate it explicitly under the owning source tree.
 *.gguf
 *.safetensors
 *.pt
@@ -75,11 +59,6 @@ demo/model-inference/backend-king-php/.local/
 *.onnx
 *.tflite
 *.bin
-# Browser runtime assets intentionally vendored for the video-chat CDN path.
-!demo/video-chat/frontend-vue/public/cdn/vendor/mediapipe/selfie_segmentation/*.tflite
-!demo/video-chat/frontend-vue/public/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite
-# Tiny video-chat upload rejection fixture; keep the global model-artifact guard above.
-!demo/video-chat/frontend-vue/tests/fixtures/chat/blocked/blob.bin
 # Exception: cargo vendor + ring/flate2 test fixtures + quiche cmake
 # artifacts need to keep their `.bin` names. These trees are already
 # scoped by earlier ignore rules (target/, .cargo/) and are not
@@ -112,9 +91,6 @@ compile_commands.json
 *~
 *.orig
 
-# Demo local runtime data (SQLite DB, seeded fixtures)
-demo/video-chat/backend-king-php/.local/
-
 # Local image artifacts
 *.png
 *.jpg
@@ -124,14 +100,6 @@ demo/video-chat/backend-king-php/.local/
 *.bmp
 *.tiff
 *.svg
-!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/logo.svg
-!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icon.svg
-!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/king_logo-withslogan.svg
-!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/avatar-placeholder.svg
-!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icons/*.png
-!demo/video-chat/backend-king-php/support/workspace_background_seed/*.png
-!demo/video-chat/backend-king-php/support/workspace_background_seed/*.jpg
-!demo/video-chat/backend-king-php/support/workspace_background_seed/*.webp
 !mock/assets/orgas/intelligent-intern/logo.svg
 !mock/assets/orgas/intelligent-intern/icon.svg
 !mock/assets/orgas/intelligent-intern/icons/*.png

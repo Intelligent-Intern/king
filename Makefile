@@ -1,4 +1,4 @@
-.PHONY: build test unit fuzz benchmark stub-parity go-live-readiness help clean static-checks profile-release profile-debug profile-asan profile-ubsan profile-smoke-release profile-smoke-debug profile-smoke-asan profile-smoke-ubsan release-package release-package-verify container-smoke demo-network-matrix docker-php-matrix tree ext-tree infra-tree tests-tree
+.PHONY: build test unit fuzz stub-parity help clean static-checks profile-release profile-debug profile-asan profile-ubsan profile-smoke-release profile-smoke-debug profile-smoke-asan profile-smoke-ubsan release-package release-package-verify container-smoke docker-php-matrix tree ext-tree infra-tree tests-tree
 
 build:
 	bash infra/scripts/build-extension.sh
@@ -11,14 +11,8 @@ unit: test
 fuzz:
 	bash infra/scripts/fuzz-runtime.sh
 
-benchmark:
-	bash benchmarks/run-canonical.sh
-
 stub-parity:
 	bash infra/scripts/check-stub-parity.sh
-
-go-live-readiness:
-	bash infra/scripts/go-live-readiness.sh
 
 static-checks:
 	bash infra/scripts/static-checks.sh
@@ -56,9 +50,6 @@ release-package-verify:
 container-smoke:
 	bash infra/scripts/container-smoke-matrix.sh
 
-demo-network-matrix:
-	bash infra/scripts/demo-network-matrix.sh
-
 docker-php-matrix:
 	bash infra/scripts/php-version-docker-matrix.sh
 
@@ -83,13 +74,10 @@ help:
 		'  build                  Build the extension' \
 		'  test                   Run the PHPT suite' \
 		'  fuzz                   Run the canonical fuzz/stress subset' \
-		'  benchmark              Run the canonical benchmark set' \
 		'  stub-parity            Check the public PHP stub surface' \
 		'  static-checks          Run repo-local structural checks' \
-		'  go-live-readiness      Run the final readiness gate' \
 		'  release-package        Build the release archive' \
 		'  release-package-verify Build the release archive and verify reproducibility' \
 		'  container-smoke        Build runtime containers and run install smoke' \
-		'  demo-network-matrix    Build the King demo server and probe it over Docker networking' \
-		'  docker-php-matrix      Run build/test/demo checks across PHP 8.1-8.5 containers' \
+		'  docker-php-matrix      Run build/test/runtime checks across PHP 8.1-8.5 containers' \
 		'  clean                  Remove generated build and artifact output'

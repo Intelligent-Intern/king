@@ -87,7 +87,7 @@ function king_session_stop_once_response_server(array $server): void
 }
 
 $session = new King\Session('127.0.0.1', 443);
-$stream = $session->sendRequest('GET', '/demo');
+$stream = $session->sendRequest('GET', '/sample');
 
 try {
     $stream->receiveResponse(-1);

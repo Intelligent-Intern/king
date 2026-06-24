@@ -56,12 +56,12 @@ while (strlen($body) < $contentLength) {
 
 $requestLine = strtok($headerBlock, "\r\n");
 [$method, $target] = explode(' ', $requestLine, 3);
-$demoHeader = '';
-if (preg_match('/^x-king-demo:\s*(.+)\s*$/mi', $headerBlock, $matches)) {
-    $demoHeader = trim($matches[1]);
+$probeHeader = '';
+if (preg_match('/^x-king-probe:\s*(.+)\s*$/mi', $headerBlock, $matches)) {
+    $probeHeader = trim($matches[1]);
 }
 
-$responseBody = $method . '|' . $target . '|' . $demoHeader . '|' . $body;
+$responseBody = $method . '|' . $target . '|' . $probeHeader . '|' . $body;
 $response = "HTTP/1.1 201 Created\r\n"
     . "Content-Type: text/plain\r\n"
     . "Content-Length: " . strlen($responseBody) . "\r\n"
@@ -113,7 +113,7 @@ try {
     $stream = $session->sendRequest(
         'POST',
         '/echo?mode=full',
-        ['X-King-Demo' => 'yes'],
+        ['X-King-Probe' => 'yes'],
         'alpha'
     );
 

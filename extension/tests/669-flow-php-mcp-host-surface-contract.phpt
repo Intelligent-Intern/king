@@ -2,7 +2,7 @@
 Repo-local Flow PHP MCP host provides startup dispatch and shutdown/error lifecycle behavior
 --FILE--
 <?php
-require_once __DIR__ . '/../../demo/userland/flow-php/src/McpHost.php';
+require_once __DIR__ . '/../../userland/flow-php/src/McpHost.php';
 
 use King\Flow\McpHost;
 use King\Flow\McpHostRequest;

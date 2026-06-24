@@ -125,7 +125,7 @@ function king_http1_stop_test_server(array $server): void
 $server = king_http1_start_test_server();
 try {
     $response = king_http1_request_send(
-        'http://127.0.0.1:' . $server[3] . '/demo?x=1',
+        'http://127.0.0.1:' . $server[3] . '/sample?x=1',
         'POST',
         [
             'X-Test' => 'alpha',
@@ -166,7 +166,7 @@ string(6) "active"
 string(8) "http/1.1"
 string(10) "tcp_socket"
 string(4) "POST"
-string(9) "/demo?x=1"
+string(11) "/sample?x=1"
 string(5) "alpha"
 string(10) "text/plain"
 string(1) "7"

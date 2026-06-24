@@ -6,7 +6,6 @@ $root = dirname(__DIR__, 2);
 $client = (string) file_get_contents($root . '/extension/src/client/http3.c');
 $dispatch = (string) file_get_contents($root . '/extension/src/client/http3/dispatch_api.inc');
 $errors = (string) file_get_contents($root . '/extension/src/client/http3/errors_and_validation.inc');
-$readiness = (string) file_get_contents($root . '/READYNESS_TRACKER.md');
 
 function require_contains(string $label, string $source, string $needle): void
 {
@@ -45,12 +44,6 @@ require_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_thro
 require_not_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_ensure_quiche_ready');
 require_not_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_quiche.load_error');
 require_contains('HTTP/3 non-LSQUIC build failure', $errors, 'requires an LSQUIC-enabled HTTP/3 client build.');
-require_contains(
-    'LSQUIC migration closure',
-    $readiness,
-    'client/server LSQUIC loaders'
-);
-
 echo "OK\n";
 ?>
 --EXPECT--

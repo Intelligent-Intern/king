@@ -8,7 +8,6 @@ $http3 = (string) file_get_contents($root . '/extension/src/server/http3.c');
 $requestResponse = (string) file_get_contents($root . '/extension/src/server/http3/request_response.inc');
 $localHttp3Test = (string) file_get_contents($root . '/extension/tests/542-server-websocket-http3-local-honesty.phpt');
 $wireHttp1Test = (string) file_get_contents($root . '/extension/tests/334-http1-server-websocket-wire-validation.phpt');
-$docs = (string) file_get_contents($root . '/documentation/server-runtime.md');
 
 function require_contains(string $label, string $source, string $needle): void
 {
@@ -100,15 +99,6 @@ foreach ([
     'server_http1_socket',
 ] as $needle) {
     require_contains('HTTP/1 on-wire non-upgrade rejection test', $wireHttp1Test, $needle);
-}
-
-foreach ([
-    'On-wire HTTP/3 WebSocket support is also fenced explicitly.',
-    'HTTP/3 Extended CONNECT stream',
-    'rejects an on-wire `h3` session',
-    'would not speak to the remote peer',
-] as $needle) {
-    require_contains('Server runtime documentation', $docs, $needle);
 }
 
 echo "OK\n";

@@ -4,7 +4,7 @@ Repo-local Flow PHP canonical RAG orchestration reference flow covers chat inges
 king.security_allow_config_override=1
 --FILE--
 <?php
-require_once __DIR__ . '/../../demo/userland/flow-php/src/RagOrchestrationReference.php';
+require_once __DIR__ . '/../../userland/flow-php/src/RagOrchestrationReference.php';
 
 use King\Flow\McpServiceDiscovery;
 use King\Flow\ObjectStoreIngestor;

@@ -90,7 +90,7 @@ $server = king_session_start_stream_response_server();
 try {
     $session = new King\Session('127.0.0.1', $server[3]);
 
-    $stream = $session->sendRequest('GET', '/demo');
+    $stream = $session->sendRequest('GET', '/sample');
     var_dump($stream instanceof King\Stream);
     var_dump($stream->isClosed());
 

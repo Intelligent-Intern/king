@@ -119,7 +119,6 @@ tar \
     --exclude='./extension/config.log' \
     --exclude='./extension/config.status' \
     --exclude='./quiche/target' \
-    --exclude='./demo/video-chat/node_modules' \
     -C "${ROOT_DIR}" \
     -cf - . | tar -C "${STAGE_ROOT}" -xf -
 

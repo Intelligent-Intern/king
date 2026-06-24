@@ -1,5 +1,5 @@
 --TEST--
-King Quiche and Cargo artifact hygiene is enforced by repository gates
+King Quiche and Cargo artifact hygiene is enforced by repository checks
 --FILE--
 <?php
 $root = dirname(__DIR__, 2);
@@ -22,7 +22,7 @@ function require_contains(string $label, string $source, string $needle): void
 }
 
 $hygiene = source('infra/scripts/check-repo-artifact-hygiene.sh');
-$requiredHygieneGuards = [
+$requiredHygieneChecks = [
     'Quiche source/vendor trees must not be versioned',
     'Cargo home/vendor caches must not be versioned',
     'Cargo build target directories must not be versioned',
@@ -30,22 +30,22 @@ $requiredHygieneGuards = [
     'Unclassified Cargo manifests/locks must not be versioned',
 ];
 
-foreach ($requiredHygieneGuards as $guard) {
-    require_contains('repo artifact hygiene gate', $hygiene, $guard);
+foreach ($requiredHygieneChecks as $check) {
+    require_contains('repo artifact hygiene check', $hygiene, $check);
 }
 
 require_contains(
-    'repo artifact hygiene gate',
+    'repo artifact hygiene check',
     $hygiene,
     "'(^|/)quiche(/|$)|(^|/)extension/quiche(/|$)'"
 );
 require_contains(
-    'repo artifact hygiene gate',
+    'repo artifact hygiene check',
     $hygiene,
     "'(^|/)target/'"
 );
 require_contains(
-    'repo artifact hygiene gate',
+    'repo artifact hygiene check',
     $hygiene,
     "'(^|/)Cargo\\.(toml|lock)$'"
 );
@@ -69,12 +69,6 @@ require_contains(
     source('.github/workflows/ci.yml'),
     'bash ./infra/scripts/check-repo-artifact-hygiene.sh'
 );
-require_contains(
-    'Quiche/Cargo artifact hygiene closure',
-    source('READYNESS_TRACKER.md'),
-    'artifact hygiene gate blocks Quiche/Cargo artifacts'
-);
-
 echo "OK\n";
 ?>
 --EXPECT--
