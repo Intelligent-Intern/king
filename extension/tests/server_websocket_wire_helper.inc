@@ -18,6 +18,7 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
             $serverName = stream_socket_get_name($probe, false);
             fclose($probe);
             [, $port] = explode(':', $serverName, 2);
+            $port = (int) $port;
         }
 
         $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
