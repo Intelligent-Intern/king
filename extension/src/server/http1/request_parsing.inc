@@ -287,7 +287,7 @@ static zend_result king_server_http1_parse_request_head(
                     zval_ptr_dtor(request);
                     ZVAL_UNDEF(request);
                     king_server_local_set_errorf(
-                        "%s() received an invalid HTTP/1 Content-Length header.",
+                        "%s() received an HTTP/1 request body that exceeds the active one-shot limit.",
                         function_name
                     );
                     return FAILURE;

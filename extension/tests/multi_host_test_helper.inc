@@ -134,7 +134,7 @@ function king_multi_host_test_detect_non_loopback_ipv4(): string
     }
 
     foreach (preg_split('/\R+/', $output) as $line) {
-        if (preg_match('/\sinet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\//', $line, $matches) !== 1) {
+        if (preg_match('/[[:space:]][i]net[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\//', $line, $matches) !== 1) {
             continue;
         }
 
