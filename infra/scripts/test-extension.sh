@@ -11,6 +11,12 @@ PROFILE_RUNTIME_DIR="${EXT_DIR}/build/profiles/release/runtime"
 SHARD_TOTAL="${SHARD_TOTAL:-1}"
 SHARD_INDEX="${SHARD_INDEX:-1}"
 KING_PREBUILD_HTTP3_TEST_HELPERS="${KING_PREBUILD_HTTP3_TEST_HELPERS:-0}"
+PHP_TEST_EXTENSION_ARGS=(
+    -n
+    -d "extension=posix"
+    -d "extension=sockets"
+    -d "extension=${EXT_SO}"
+)
 
 if [[ ! -f "${EXT_SO}" ]]; then
     echo "Missing extension binary: ${EXT_SO}" >&2
@@ -34,7 +40,7 @@ if [[ "${KING_PREBUILD_HTTP3_TEST_HELPERS}" == "1" ]]; then
 fi
 
 if [[ "$#" -gt 0 ]]; then
-    exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "$@"
+    exec "${PHP_BIN}" run-tests.php -q "${PHP_TEST_EXTENSION_ARGS[@]}" "$@"
 fi
 
 if ! [[ "${SHARD_TOTAL}" =~ ^[0-9]+$ ]] || ! [[ "${SHARD_INDEX}" =~ ^[0-9]+$ ]]; then
@@ -75,7 +81,7 @@ if (( SHARD_TOTAL > 1 )); then
     fi
 
     echo "Running PHPT shard ${SHARD_INDEX}/${SHARD_TOTAL} with ${#SHARD_TEST_FILES[@]} tests."
-    exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "${SHARD_TEST_FILES[@]}"
+    exec "${PHP_BIN}" run-tests.php -q "${PHP_TEST_EXTENSION_ARGS[@]}" "${SHARD_TEST_FILES[@]}"
 fi
 
-exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "${TEST_FILES[@]}"
+exec "${PHP_BIN}" run-tests.php -q "${PHP_TEST_EXTENSION_ARGS[@]}" "${TEST_FILES[@]}"
