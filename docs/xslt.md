@@ -1,10 +1,10 @@
 # XSLT 2.0/3.0 fuer E-Rechnungen
 
-Die native King-XSLT-Schnittstelle ist aktuell procedural:
-`king_xslt_engine_status()`, `king_xslt_transform_file()` und
-`king_xslt_transform_to_file()`. Es gibt noch keine exportierte
-`King\Xslt` Klasse. Die OO-Beispiele unten sind deshalb bewusst als
-userland Adapter gekennzeichnet.
+XSLT ist procedural ueber `king_xslt_engine_status()`,
+`king_xslt_transform_file()` und `king_xslt_transform_to_file()` verfuegbar.
+Die native OO-Oberflaeche ist `King\XSLT\Processor`. Der Processor haelt
+Default-Optionen wie SaxonC-Properties und kann sie pro Transformationslauf
+gezielt ueberschreiben.
 
 ## Function, Beispiel 1: Engine pruefen
 
@@ -83,34 +83,48 @@ $result = king_xslt_transform_file(
 file_put_contents(__DIR__ . '/invoice-report.xml', $result['result']);
 ```
 
-## OO, Beispiel 1: userland Adapter fuer eine Transformation
+## OO, Beispiel 1: native King\XSLT\Processor Klasse
 
 ```php
 <?php
-final class XsltProcessor
-{
-    public function transform(string $xml, string $xsl): string
-    {
-        $result = king_xslt_transform_file($xml, $xsl);
-        return $result['result'];
-    }
+use King\XSLT\Processor;
+
+$processor = new Processor([
+    'properties' => [
+        'http://saxon.sf.net/feature/version-warning' => 'false',
+    ],
+]);
+
+$status = $processor->engineStatus();
+if (!($status['available'] ?? false)) {
+    throw new RuntimeException($status['error'] ?? 'SaxonC runtime not available');
 }
 
-$processor = new XsltProcessor();
-echo $processor->transform(__DIR__ . '/invoice.xml', __DIR__ . '/ubl-summary.xsl');
+$result = $processor->transformFile(
+    __DIR__ . '/invoice.xml',
+    __DIR__ . '/ubl-summary.xsl'
+);
+
+echo $result['result'];
 ```
 
 ## OO, Beispiel 2: UBL Validator Service mit Ausgabedatei
 
 ```php
 <?php
+use King\XSLT\Processor;
+
 final class UblXsltValidationService
 {
+    public function __construct(private Processor $processor)
+    {
+    }
+
     public function validateToFile(string $invoicePath, string $reportPath): array
     {
         $stylesheet = __DIR__ . '/ubl-validation-report.xsl';
 
-        $result = king_xslt_transform_to_file(
+        $result = $this->processor->transformToFile(
             $invoicePath,
             $stylesheet,
             $reportPath,
@@ -125,7 +139,10 @@ final class UblXsltValidationService
     }
 }
 
-$service = new UblXsltValidationService();
+$processor = new Processor([
+    'cwd' => __DIR__,
+]);
+$service = new UblXsltValidationService($processor);
 $report = $service->validateToFile(
     __DIR__ . '/invoice.xml',
     __DIR__ . '/invoice-validation-report.xml'

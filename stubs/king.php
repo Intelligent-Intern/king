@@ -2415,6 +2415,40 @@ namespace King\WebSocket {
 }
 
 /* ===========================
+ * XSLT 2.0/3.0
+ * =========================== */
+namespace King\XSLT {
+    final class Processor {
+        /**
+         * @param array<string,mixed>|null $options
+         */
+        public function __construct(?array $options = null) {}
+
+        /**
+         * @return array<string,mixed>
+         */
+        public function getOptions(): array {}
+
+        /**
+         * @return array<string,mixed>
+         */
+        public function engineStatus(): array {}
+
+        /**
+         * @param array<string,mixed>|null $options
+         * @return array<string,mixed>
+         */
+        public function transformFile(string $source_path, string $stylesheet_path, ?array $options = null): array {}
+
+        /**
+         * @param array<string,mixed>|null $options
+         * @return array<string,mixed>
+         */
+        public function transformToFile(string $source_path, string $stylesheet_path, string $output_path, ?array $options = null): array {}
+    }
+}
+
+/* ===========================
  * RTP / ICE-lite / DTLS-SRTP
  * =========================== */
 namespace King\RTP {

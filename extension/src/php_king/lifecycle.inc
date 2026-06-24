@@ -181,6 +181,12 @@ PHP_MINIT_FUNCTION(king)
         king_rtp_socket_class_methods,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
+    king_ce_xslt_processor = king_register_class_with_flags(
+        "King\\XSLT\\Processor",
+        NULL,
+        king_xslt_processor_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
     king_ce_client_http = king_register_class_with_flags(
         "King\\Client\\HttpClient",
         NULL,
@@ -222,6 +228,7 @@ PHP_MINIT_FUNCTION(king)
     king_config_object_handlers_init();
     king_mcp_object_handlers_init();
     king_rtp_socket_object_handlers_init();
+    king_xslt_processor_object_handlers_init();
     king_stream_object_handlers_init();
     king_response_object_handlers_init();
     king_http_client_object_handlers_init();

@@ -16,6 +16,20 @@ PHP_FUNCTION(king_xslt_engine_status);
 PHP_FUNCTION(king_xslt_transform_file);
 PHP_FUNCTION(king_xslt_transform_to_file);
 
+void king_xslt_engine_status_array(zval *return_value);
+zend_result king_xslt_transform_file_result(
+    zend_string *source_path,
+    zend_string *stylesheet_path,
+    zval *options,
+    zval *return_value
+);
+zend_result king_xslt_transform_to_file_result(
+    zend_string *source_path,
+    zend_string *stylesheet_path,
+    zend_string *output_path,
+    zval *options,
+    zval *return_value
+);
 void king_xslt_shutdown_system(void);
 void king_xslt_add_component_info(zval *configuration);
 

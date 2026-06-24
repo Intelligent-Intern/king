@@ -354,8 +354,8 @@ The core programming model is:
   `King\WebSocket\Connection` expose subsystem-specific runtime surfaces.
 - `King\RTP\Socket` exposes the native RTP/ICE-lite/DTLS-SRTP runtime as a
   resource-backed OO surface.
-- Procedural `king_xslt_*` functions expose the SaxonC-backed XSLT runtime
-  status and file transformation primitives.
+- `King\XSLT\Processor` and the procedural `king_xslt_*` functions expose the
+  SaxonC-backed XSLT runtime status and file transformation primitives.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

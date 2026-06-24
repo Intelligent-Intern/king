@@ -118,6 +118,7 @@ extern zend_class_entry
     *king_ce_object_store,
     *king_ce_autoscaling,
     *king_ce_rtp_socket,
+    *king_ce_xslt_processor,
     *king_ce_client_http,
     *king_ce_client_http1,
     *king_ce_client_http2,
@@ -334,6 +335,11 @@ typedef struct _king_rtp_socket_object {
     zend_object std;
 } king_rtp_socket_object;
 
+typedef struct _king_xslt_processor_object {
+    zval options;
+    zend_object std;
+} king_xslt_processor_object;
+
 struct _king_ws_server_object {
     zval config;
     zend_string *host;
@@ -401,6 +407,13 @@ php_king_rtp_socket_obj_from_zend(zend_object *obj)
 {
     return (king_rtp_socket_object *)
         ((char*)obj - XtOffsetOf(king_rtp_socket_object, std));
+}
+
+static inline king_xslt_processor_object *
+php_king_xslt_processor_obj_from_zend(zend_object *obj)
+{
+    return (king_xslt_processor_object *)
+        ((char*)obj - XtOffsetOf(king_xslt_processor_object, std));
 }
 
 #if PHP_VERSION_ID < 80200
