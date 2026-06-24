@@ -619,7 +619,8 @@ namespace {
      * The canonical runtime-build override surface uses namespaced keys
      * under `quic.`, `tls.`, `http2.`, `tcp.`, `autoscale.`, `mcp.`,
      * `orchestrator.`, `geometry.`, `smartcontract.`, `ssh.`,
-     * `storage.`, `cdn.`, `dns.`, and `otel.`.
+     * `storage.`, `cdn.`, `dns.`, and `otel.`. The CDN method override
+     * accepts standard HTTP methods including RFC 10008 `QUERY`.
      * @param array<string,mixed>|null $options
      * @return resource|false
      * @throws \King\RuntimeException

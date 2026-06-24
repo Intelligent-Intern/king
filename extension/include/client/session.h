@@ -27,6 +27,7 @@ typedef struct _king_client_session {
     zend_string *config_quic_cc_algorithm;
     zend_string *config_storage_default_redundancy_mode;
     zend_string *config_cdn_cache_mode;
+    zend_string *config_cdn_allowed_http_methods;
     zend_string *config_dns_mode;
     zend_string *config_security_cors_allowed_origins;
     zend_string *config_otel_service_name;
