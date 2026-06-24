@@ -19,7 +19,7 @@ $ipOutput = trim((string) shell_exec('ip -4 -o addr show up scope global 2>/dev/
 if ($ipOutput === '') {
     $ipOutput = trim((string) shell_exec('ip -4 -o addr show up 2>/dev/null'));
 }
-if (!preg_match('/\\sinet\\s+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput)) {
+if (!preg_match('/[[:space:]][i]net[[:space:]]+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput)) {
     echo "skip a non-loopback IPv4 address is required for the Semantic-DNS distributed topology harness";
 }
 ?>

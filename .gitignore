@@ -76,6 +76,7 @@ __pycache__/
 
 # Editor / IDE personal state
 .idea/
+*.code-workspace
 
 # macOS Finder metadata
 .DS_Store
