@@ -10,6 +10,8 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
         if ($fixedPort !== null) {
             $port = $fixedPort;
         } else {
+            $errno = 0;
+            $errstr = '';
             $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
             if ($probe === false) {
                 throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
