@@ -26,9 +26,9 @@ array(8) {
   ["config_override_allowed"]=>
   bool(false)
   ["active_runtime_count"]=>
-  int(30)
+  int(31)
   ["active_runtimes"]=>
-  array(30) {
+  array(31) {
     [0]=>
     string(6) "config"
     [1]=>
@@ -80,14 +80,16 @@ array(8) {
     [24]=>
     string(18) "cdn_cache_registry"
     [25]=>
-    string(11) "mcp_runtime"
+    string(19) "xslt_saxonc_runtime"
     [26]=>
-    string(29) "pipeline_orchestrator_runtime"
+    string(11) "mcp_runtime"
     [27]=>
-    string(17) "telemetry_runtime"
+    string(29) "pipeline_orchestrator_runtime"
     [28]=>
-    string(19) "autoscaling_runtime"
+    string(17) "telemetry_runtime"
     [29]=>
+    string(19) "autoscaling_runtime"
+    [30]=>
     string(26) "system_integration_runtime"
   }
   ["stubbed_api_group_count"]=>
