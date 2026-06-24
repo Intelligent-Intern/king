@@ -29,7 +29,7 @@
  * Extension Version and Global Constants
  */
 #ifndef PHP_KING_VERSION
-#  define PHP_KING_VERSION      "1.0.6"
+#  define PHP_KING_VERSION      "1.0.9"
 #endif
 
 #ifndef KING_MAX_TICKET_SIZE
