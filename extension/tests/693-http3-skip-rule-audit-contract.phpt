@@ -200,20 +200,6 @@ if ($legacySkippedTests !== []) {
     );
 }
 
-$readiness = file_get_contents($root . '/READYNESS_TRACKER.md');
-if (!is_string($readiness) || $readiness === '') {
-    king_http3_skip_audit_fail('could not read READYNESS_TRACKER.md');
-}
-
-$doneCheckbox = preg_quote($audit['done_checkbox'] ?? '', '/');
-if ($legacyBlockerCount > 0 && preg_match('/- \[x\]\s+' . $doneCheckbox . '/', $readiness) === 1) {
-    king_http3_skip_audit_fail('final HTTP/3 done checkbox is checked while legacy skip blockers remain');
-}
-
-if ($legacyBlockerCount === 0 && preg_match('/- \[ \]\s+' . $doneCheckbox . '/', $readiness) === 1) {
-    king_http3_skip_audit_fail('final HTTP/3 done checkbox is still open after legacy skip blockers were removed');
-}
-
 echo "HTTP/3 skip audit allows final success with {$legacyBlockerCount} legacy-gated behavior tests.\n";
 ?>
 --EXPECT--

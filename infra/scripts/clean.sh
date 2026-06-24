@@ -17,7 +17,6 @@ rm -rf \
     "${ROOT_DIR}/soak-artifacts" \
     "${ROOT_DIR}/extension/modules" \
     "${ROOT_DIR}/extension/build/profiles" \
-    "${ROOT_DIR}/extension/build/soak" \
-    "${ROOT_DIR}/demo/video-chat/dist"
+    "${ROOT_DIR}/extension/build/soak"
 
 echo "Clean complete"

@@ -12,13 +12,13 @@ if ($ipOutput === '') {
     return;
 }
 
-if (!preg_match('/\\sinet\\s+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput)) {
+if (!preg_match('/[[:space:]][i]net[[:space:]]+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput)) {
     echo "skip a non-loopback IPv4 address is required";
 }
 ?>
 --FILE--
 <?php
-require_once __DIR__ . '/../../demo/userland/flow-php/src/McpHost.php';
+require_once __DIR__ . '/../../userland/flow-php/src/McpHost.php';
 
 use King\Flow\McpHost;
 use King\Flow\McpHostRequest;
@@ -29,7 +29,7 @@ if ($ipOutput === '') {
     $ipOutput = trim((string) shell_exec('ip -4 -o addr show up 2>/dev/null'));
 }
 
-if (preg_match('/\\sinet\\s+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput, $matches) !== 1) {
+if (preg_match('/[[:space:]][i]net[[:space:]]+((?!127\\.)[0-9]+(?:\\.[0-9]+){3})\\//', $ipOutput, $matches) !== 1) {
     throw new RuntimeException('missing non-loopback IPv4 test address.');
 }
 

@@ -2,7 +2,7 @@
 Repo-local Flow PHP MCP service discovery resolves retrieval embedding and document roles with explicit Semantic-DNS failover order
 --FILE--
 <?php
-require_once __DIR__ . '/../../demo/userland/flow-php/src/McpServiceDiscovery.php';
+require_once __DIR__ . '/../../userland/flow-php/src/McpServiceDiscovery.php';
 
 use King\Flow\McpServiceDiscovery;
 use King\Flow\SemanticDnsServiceDirectory;

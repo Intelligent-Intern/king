@@ -4,12 +4,11 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./infra/scripts/php-version-docker-matrix.sh [--php-versions 8.1,8.2,...] [--build-jobs N] [--skip-container-smoke] [--skip-demo-network] [--artifact-dir DIR]
+Usage: ./infra/scripts/php-version-docker-matrix.sh [--php-versions 8.1,8.2,...] [--build-jobs N] [--skip-container-smoke] [--artifact-dir DIR]
 
 Builds a local Ubuntu 24.04 runner image for each requested PHP version, runs
 the repo-local King build and PHPT suite inside that container, and then can
-execute the runtime container smoke plus the real demo-server network probe for
-the same PHP version.
+execute the runtime container smoke for the same PHP version.
 EOF
 }
 
@@ -18,7 +17,6 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PHP_VERSIONS_CSV="${PHP_VERSIONS:-8.1,8.2,8.3,8.4,8.5}"
 BUILD_JOBS="${BUILD_JOBS:-4}"
 RUN_CONTAINER_SMOKE=1
-RUN_DEMO_NETWORK=1
 RUNNER_IMAGE_PREFIX="${RUNNER_IMAGE_PREFIX:-king-php-matrix-runner}"
 ARTIFACT_ROOT="${ARTIFACT_ROOT:-${ROOT_DIR}/compat-artifacts/php-matrix}"
 DIST_PACKAGE_ROOT="${DIST_PACKAGE_ROOT:-${ROOT_DIR}/dist/docker-packages}"
@@ -74,10 +72,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-container-smoke)
             RUN_CONTAINER_SMOKE=0
-            shift
-            ;;
-        --skip-demo-network)
-            RUN_DEMO_NETWORK=0
             shift
             ;;
         --artifact-dir)
@@ -178,16 +172,6 @@ for php_version in "${php_versions[@]}"; do
             2 \
             "container smoke for PHP ${php_version}" \
             "${ROOT_DIR}/infra/scripts/container-smoke-matrix.sh" \
-            --php-versions "${php_version}" \
-            --artifact-root "${DIST_PACKAGE_ROOT}"
-    fi
-
-    if [[ "${RUN_DEMO_NETWORK}" == "1" ]]; then
-        run_with_retries \
-            3 \
-            2 \
-            "demo network matrix for PHP ${php_version}" \
-            "${ROOT_DIR}/infra/scripts/demo-network-matrix.sh" \
             --php-versions "${php_version}" \
             --artifact-root "${DIST_PACKAGE_ROOT}"
     fi

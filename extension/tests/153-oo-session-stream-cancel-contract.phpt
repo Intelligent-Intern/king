@@ -7,7 +7,7 @@ $cancelled = new King\CancelToken();
 $cancelled->cancel();
 
 try {
-    $session->sendRequest('GET', '/demo', [], '', $cancelled);
+    $session->sendRequest('GET', '/sample', [], '', $cancelled);
     echo "no-exception-1\n";
 } catch (Throwable $e) {
     var_dump(get_class($e));
@@ -15,7 +15,7 @@ try {
 }
 
 $bound = new King\CancelToken();
-$stream = $session->sendRequest('GET', '/demo', [], '', $bound);
+$stream = $session->sendRequest('GET', '/sample', [], '', $bound);
 $bound->cancel();
 
 try {

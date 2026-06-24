@@ -3,7 +3,7 @@ King Stream per-call CancelTokens are accepted locally and cancel the stream whe
 --FILE--
 <?php
 $session = new King\Session('127.0.0.1', 443);
-$stream = $session->sendRequest('GET', '/demo');
+$stream = $session->sendRequest('GET', '/sample');
 $cancel = new King\CancelToken();
 
 var_dump($stream->isClosed());

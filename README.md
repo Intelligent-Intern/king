@@ -81,7 +81,7 @@ handing the work to a sidecar or an external glue service.
 
 The bucket-subscription registry in this example is intentionally
 application-managed and process-local. King already gives you the real object
-store and WebSocket runtime needed for it, but it does not currently claim a built-in distributed bucket-watch API. For the same reason, this README example
+store and WebSocket runtime needed for it, but it does not currently expose a built-in distributed bucket-watch API. For the same reason, this README example
 stays single-node on purpose instead of pretending the current router or
 load-balancer control-plane layer is already a verified WebSocket forwarding
 dataplane.
@@ -403,8 +403,7 @@ Core source areas:
 - [`extension/`](extension/): PHP extension source, tests, headers, and build glue.
 - [`infra/scripts/`](infra/scripts/): build, package, release, and local install scripts.
 - [`libcurl/`](libcurl/): vendored curl headers used by the extension build.
-- [`analyse/`](analyse/): local inventory and cleanup notes.
-- [`CONTRIBUTE`](CONTRIBUTE): contribution notes.
+- [`userland/flow-php/`](userland/flow-php/): repository-local PHP adapters for streaming ETL, checkpointing, and King-backed pipeline orchestration.
 
 ## Build
 
@@ -473,9 +472,6 @@ phpize
 make
 ```
 
-`infra/scripts/check-dev-path-configuration.rb` enforces that active build
-files keep this contract.
-
 The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
 `./infra/scripts/package-release.sh`, `./infra/scripts/install-package-matrix.sh`, and
@@ -499,10 +495,6 @@ repository ZIP for PIE because the pinned QUIC dependency bootstrap and
 package provenance have to travel with the source asset. The maintainer
 workflow runs through [`infra/scripts/package-pie-source.sh`](infra/scripts/package-pie-source.sh)
 and the release install/smoke matrix scripts.
-
-## Contributing
-
-See [CONTRIBUTE](CONTRIBUTE).
 
 ## License
 

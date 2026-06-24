@@ -24,7 +24,7 @@ Options:
 Example:
   ./infra/scripts/inventory-release-cves.sh \
     --images intelligentintern/king:v1.0.5-beta \
-    --output documentation/release-cve-inventory-v1.0.5-beta.json
+    --output dist/release-cve-inventory-v1.0.5-beta.json
 USAGE
 }
 
