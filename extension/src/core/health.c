@@ -118,7 +118,7 @@ const char *king_get_stubbed_api_summary(void)
  *     'php_version'      => '8.4.x',
  *     'pid'              => 12345,
  *     'config_override_allowed' => false, // king_globals.is_userland_override_allowed
- *     'active_runtime_count' => 30,
+ *     'active_runtime_count' => 31,
  *     'active_runtimes'  => [...],
  *     'stubbed_api_group_count' => 0,
  *     'stubbed_api_groups' => [...],
