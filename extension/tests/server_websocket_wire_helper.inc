@@ -346,10 +346,11 @@ function king_server_websocket_wire_raw_client_send_text($socket, string $payloa
         $frame .= chr(0x80 | 127) . pack('N2', $high, $low);
     }
 
-    $maskedPayload = '';
+    $maskedBytes = [];
     for ($i = 0; $i < $payloadLength; $i++) {
-        $maskedPayload .= $payload[$i] ^ $mask[$i % 4];
+        $maskedBytes[] = $payload[$i] ^ $mask[$i % 4];
     }
+    $maskedPayload = implode('', $maskedBytes);
 
     $frame .= $mask . $maskedPayload;
 
