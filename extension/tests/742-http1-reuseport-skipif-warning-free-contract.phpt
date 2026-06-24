@@ -20,7 +20,17 @@ function king_run_skipif_isolated(string $skipif): array
 {
     $warnings = [];
     $process = proc_open(
-        [PHP_BINARY],
+        [
+            PHP_BINARY,
+            '-d',
+            'disable_functions=',
+            '-d',
+            'display_errors=1',
+            '-d',
+            'display_startup_errors=1',
+            '-d',
+            'error_reporting=' . E_ALL,
+        ],
         [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
