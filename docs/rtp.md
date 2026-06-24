@@ -1,7 +1,7 @@
 # RTP
 
-RTP ist procedural ueber `king_rtp_*` verfuegbar. Eine native OO-Klasse gibt es
-aktuell nicht, die OO-Beispiele sind userland Adapter.
+RTP ist procedural ueber `king_rtp_*` verfuegbar. Die native OO-Oberflaeche
+ist `King\RTP\Socket` und haelt intern dieselbe native RTP-Resource.
 
 ## Function, Beispiel 1: Socket binden und ICE/DTLS Daten lesen
 
@@ -37,61 +37,49 @@ var_dump($packet);
 king_rtp_close($socket);
 ```
 
-## OO, Beispiel 1: RtpSocket Adapter
+## OO, Beispiel 1: native King\RTP\Socket Klasse
 
 ```php
 <?php
-final class RtpSocket
-{
-    private mixed $socket;
+use King\RTP\Socket;
 
-    public function __construct(string $host, int $port)
+$rtp = new Socket('127.0.0.1', 5004);
+var_dump($rtp->iceCredentials());
+echo $rtp->dtlsFingerprint() . PHP_EOL;
+$rtp->close();
+```
+
+## OO, Beispiel 2: Media Peer Service mit nativer Socket-Klasse
+
+```php
+<?php
+use King\RTP\Socket;
+
+final class MediaPeer
+{
+    public function __construct(private Socket $rtp) {}
+
+    public function acceptPeer(string $ip, int $port): void
     {
-        $this->socket = king_rtp_bind($host, $port);
-        if ($this->socket === false) {
+        if (!$this->rtp->acceptDtls($ip, $port, 3000)) {
             throw new RuntimeException(king_get_last_error());
         }
     }
 
-    public function iceCredentials(): array
+    public function sendAudioFrame(string $host, int $port, string $frame): void
     {
-        return king_rtp_ice_credentials($this->socket);
-    }
-
-    public function send(string $host, int $port, string $frame): void
-    {
-        if (king_rtp_send($this->socket, $host, $port, $frame) !== true) {
+        if (!$this->rtp->send($host, $port, $frame)) {
             throw new RuntimeException('RTP send failed');
         }
     }
 
-    public function receive(int $timeoutMs): array|false
+    public function receiveAudioFrame(): ?array
     {
-        return king_rtp_recv($this->socket, $timeoutMs);
-    }
-
-    public function close(): void
-    {
-        king_rtp_close($this->socket);
+        $packet = $this->rtp->receive(1000);
+        return $packet === false ? null : $packet;
     }
 }
 
-$rtp = new RtpSocket('127.0.0.1', 5004);
-var_dump($rtp->iceCredentials());
-$rtp->close();
-```
-
-## OO, Beispiel 2: Media Peer Adapter
-
-```php
-<?php
-final class MediaPeer
-{
-    public function __construct(private RtpSocket $rtp) {}
-
-    public function sendAudioFrame(string $host, int $port, string $frame): void
-    {
-        $this->rtp->send($host, $port, $frame);
-    }
-}
+$peer = new MediaPeer(new Socket('0.0.0.0', 5004));
+$peer->sendAudioFrame('192.0.2.10', 5004, random_bytes(160));
 ```

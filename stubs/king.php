@@ -304,13 +304,13 @@ namespace {
      * Perform DTLS handshake with a remote peer.
      * @return bool|false
      */
-    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms) {}
+    function king_rtp_dtls_accept($socket, string $ip, int $port, int $timeout_ms = 5000) {}
 
     /**
      * Receive RTP data from a peer.
      * @return array|false
      */
-    function king_rtp_recv($socket, int $timeout_ms) {}
+    function king_rtp_recv($socket, int $timeout_ms = 0) {}
 
     /**
      * Send RTP data to a peer.
@@ -2411,5 +2411,43 @@ namespace King\WebSocket {
          * }
          */
         public function getInfo(): array {}
+    }
+}
+
+/* ===========================
+ * RTP / ICE-lite / DTLS-SRTP
+ * =========================== */
+namespace King\RTP {
+    final class Socket {
+        public function __construct(string $host, int $port) {}
+
+        /** @return array{ufrag:string,pwd:string} */
+        public function iceCredentials(): array {}
+
+        public function dtlsFingerprint(): string {}
+
+        public function acceptDtls(string $ip, int $port, int $timeout_ms = 5000): bool {}
+
+        /**
+         * @return array{
+         *   ssrc:int,
+         *   payload_type:int,
+         *   seq:int,
+         *   timestamp:int,
+         *   marker:bool,
+         *   data:string,
+         *   from_ip:string,
+         *   from_port:int,
+         *   ice_consented:bool,
+         *   srtp:bool
+         * }|false
+         */
+        public function receive(int $timeout_ms = 0): array|false {}
+
+        public function send(string $host, int $port, string $data): bool {}
+
+        public function close(): void {}
+
+        public function isClosed(): bool {}
     }
 }

@@ -45,6 +45,7 @@ PHP_MINIT_FUNCTION(king)
         king_ws_dtor, NULL, "King\\WebSocket", module_number);
     le_king_request_context = zend_register_list_destructors_ex(
         king_http1_request_context_dtor, NULL, "King\\HttpRequestContext", module_number);
+    king_rtp_minit(module_number);
 
     king_ce_exception = king_register_exception(
         "King\\Exception", zend_ce_exception);
@@ -174,6 +175,12 @@ PHP_MINIT_FUNCTION(king)
         king_autoscaling_class_methods,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
+    king_ce_rtp_socket = king_register_class_with_flags(
+        "King\\RTP\\Socket",
+        NULL,
+        king_rtp_socket_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
     king_ce_client_http = king_register_class_with_flags(
         "King\\Client\\HttpClient",
         NULL,
@@ -214,6 +221,7 @@ PHP_MINIT_FUNCTION(king)
     king_awaitable_object_handlers_init();
     king_config_object_handlers_init();
     king_mcp_object_handlers_init();
+    king_rtp_socket_object_handlers_init();
     king_stream_object_handlers_init();
     king_response_object_handlers_init();
     king_http_client_object_handlers_init();

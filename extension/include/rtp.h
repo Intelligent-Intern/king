@@ -97,6 +97,20 @@ typedef struct {
     socklen_t               from_len;
 } king_rtp_packet_t;
 
+typedef struct {
+    uint32_t ssrc;
+    uint8_t  payload_type;
+    uint8_t  marker;
+    uint16_t seq;
+    uint32_t timestamp;
+    uint8_t  data[KING_RTP_MTU];
+    size_t   data_len;
+    char     from_ip[46];
+    int      from_port;
+    int      ice_consented;
+    int      srtp;
+} king_rtp_receive_result_t;
+
 /* ── Internal API ───────────────────────────────────────────────────────── */
 
 king_rtp_socket_t *king_rtp_socket_create(const char *host, int port,
@@ -116,6 +130,14 @@ king_rtp_peer_t *king_rtp_peer_get(king_rtp_socket_t *sock,
 int  king_rtp_dtls_do_accept(king_rtp_socket_t *sock,
                              const char *peer_ip, int peer_port,
                              int timeout_ms, char *errbuf, size_t errbuf_len);
+int  king_rtp_socket_recv_packet(king_rtp_socket_t *sock,
+                                 int timeout_ms,
+                                 king_rtp_receive_result_t *out);
+int  king_rtp_socket_send_packet(king_rtp_socket_t *sock,
+                                 const char *host,
+                                 int port,
+                                 const char *data,
+                                 size_t data_len);
 
 /* ── PHP resource type ──────────────────────────────────────────────────── */
 extern int le_king_rtp_socket;

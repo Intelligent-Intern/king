@@ -352,6 +352,8 @@ The core programming model is:
 - `King\MCP`, `King\IIBIN`, `King\ObjectStore`,
   `King\PipelineOrchestrator`, `King\Autoscaling`, and
   `King\WebSocket\Connection` expose subsystem-specific runtime surfaces.
+- `King\RTP\Socket` exposes the native RTP/ICE-lite/DTLS-SRTP runtime as a
+  resource-backed OO surface.
 - Procedural `king_xslt_*` functions expose the SaxonC-backed XSLT runtime
   status and file transformation primitives.
 
