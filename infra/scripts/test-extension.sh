@@ -34,7 +34,7 @@ if [[ "${KING_PREBUILD_HTTP3_TEST_HELPERS}" == "1" ]]; then
 fi
 
 if [[ "$#" -gt 0 ]]; then
-    exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "$@"
+    exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "$@"
 fi
 
 if ! [[ "${SHARD_TOTAL}" =~ ^[0-9]+$ ]] || ! [[ "${SHARD_INDEX}" =~ ^[0-9]+$ ]]; then
@@ -75,7 +75,7 @@ if (( SHARD_TOTAL > 1 )); then
     fi
 
     echo "Running PHPT shard ${SHARD_INDEX}/${SHARD_TOTAL} with ${#SHARD_TEST_FILES[@]} tests."
-    exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${SHARD_TEST_FILES[@]}"
+    exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "${SHARD_TEST_FILES[@]}"
 fi
 
-exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${TEST_FILES[@]}"
+exec "${PHP_BIN}" run-tests.php -q -n -d "extension=${EXT_SO}" "${TEST_FILES[@]}"

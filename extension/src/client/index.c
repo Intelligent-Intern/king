@@ -323,6 +323,69 @@ static void king_client_send_request_internal(
     }
 }
 
+static void king_client_send_request_async_internal(
+    INTERNAL_FUNCTION_PARAMETERS,
+    const char *operation_name,
+    const char *function_name)
+{
+    char *url_str;
+    size_t url_len;
+    char *method_str = "GET";
+    size_t method_len = sizeof("GET") - 1;
+    zval *headers_array = NULL;
+    zval *body_zval = NULL;
+    zval *options_array = NULL;
+    zval params[5];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(1, 5)
+        Z_PARAM_STRING(url_str, url_len)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STRING(method_str, method_len)
+        Z_PARAM_ARRAY_OR_NULL(headers_array)
+        Z_PARAM_ZVAL_OR_NULL(body_zval)
+        Z_PARAM_ARRAY_OR_NULL(options_array)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_STRINGL(&params[0], url_str, url_len);
+    ZVAL_STRINGL(&params[1], method_str, method_len);
+    if (headers_array != NULL) {
+        ZVAL_COPY(&params[2], headers_array);
+    } else {
+        ZVAL_NULL(&params[2]);
+    }
+    if (body_zval != NULL) {
+        ZVAL_COPY(&params[3], body_zval);
+    } else {
+        ZVAL_NULL(&params[3]);
+    }
+    if (options_array != NULL) {
+        ZVAL_COPY(&params[4], options_array);
+    } else {
+        ZVAL_NULL(&params[4]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            operation_name,
+            strlen(operation_name),
+            function_name,
+            strlen(function_name),
+            params,
+            5,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 5; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 5; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 #include "object.inc"
 
 PHP_FUNCTION(king_client_send_request)
@@ -333,10 +396,28 @@ PHP_FUNCTION(king_client_send_request)
     );
 }
 
+PHP_FUNCTION(king_client_send_request_async)
+{
+    king_client_send_request_async_internal(
+        INTERNAL_FUNCTION_PARAM_PASSTHRU,
+        "king_client_send_request_async",
+        "king_client_send_request"
+    );
+}
+
 PHP_FUNCTION(king_send_request)
 {
     king_client_send_request_internal(
         INTERNAL_FUNCTION_PARAM_PASSTHRU,
+        "king_send_request"
+    );
+}
+
+PHP_FUNCTION(king_send_request_async)
+{
+    king_client_send_request_async_internal(
+        INTERNAL_FUNCTION_PARAM_PASSTHRU,
+        "king_send_request_async",
         "king_send_request"
     );
 }

@@ -120,6 +120,12 @@ PHP_MINIT_FUNCTION(king)
         king_cancel_token_class_methods,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
+    king_ce_awaitable = king_register_class_with_flags(
+        "King\\Awaitable",
+        NULL,
+        king_awaitable_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
     king_ce_config = king_register_class_with_flags(
         "King\\Config",
         NULL,
@@ -205,6 +211,7 @@ PHP_MINIT_FUNCTION(king)
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
     king_cancel_token_object_handlers_init();
+    king_awaitable_object_handlers_init();
     king_config_object_handlers_init();
     king_mcp_object_handlers_init();
     king_stream_object_handlers_init();

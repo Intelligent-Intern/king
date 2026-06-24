@@ -7,6 +7,53 @@
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_no_args, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_await, 0, 1, IS_MIXED, 0)
+    ZEND_ARG_OBJ_INFO(0, awaitable, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_awaitable_poll, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_OBJ_INFO(0, awaitable, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_awaitable_cancel, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_OBJ_INFO(0, awaitable, King\\Awaitable, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_awaitable_status, 0, 1, IS_STRING, 0)
+    ZEND_ARG_OBJ_INFO(0, awaitable, King\\Awaitable, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Awaitable___construct, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_await, 0, 0, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_poll, 0, 0, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_cancel, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_isPending, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_isDone, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_isCancelled, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_getStatus, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_getOperation, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_one_string, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -206,12 +253,30 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_request_send, 0, 0, 1)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_request_send_async, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, method, IS_STRING, 1, "\"GET\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, headers, IS_ARRAY, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, body, IS_MIXED, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http2_request_send_multi, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_http2_request_send_multi_async, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_http3_request_send_multi, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_http3_request_send_multi_async, 0, 1, King\\Awaitable, 0)
     ZEND_ARG_TYPE_INFO(0, requests, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
@@ -235,13 +300,30 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_websocket_connect, 0, 0, 1)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_websocket_connect_async, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, headers, IS_ARRAY, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_websocket_send, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, websocket, IS_MIXED, 0)
     ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, is_binary, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_websocket_send_async, 0, 2, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, websocket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, is_binary, _IS_BOOL, 0, "false")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_websocket_receive, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, websocket, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "-1")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_websocket_receive_async, 0, 1, King\\Awaitable, 0)
     ZEND_ARG_TYPE_INFO(0, websocket, IS_MIXED, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 0, "-1")
 ZEND_END_ARG_INFO()
@@ -364,6 +446,14 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_request, 0, 0, 4)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_mcp_request_async, 0, 4, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, connection, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, service_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, method_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, request_payload, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_close, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, connection, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -387,6 +477,12 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_download_to_stream, 0, 0, 5)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_pipeline_run, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, initial_data, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, pipeline, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, exec_options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_pipeline_run_async, 0, 2, King\\Awaitable, 0)
     ZEND_ARG_TYPE_INFO(0, initial_data, IS_MIXED, 0)
     ZEND_ARG_TYPE_INFO(0, pipeline, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, exec_options, IS_ARRAY, 1, "null")
@@ -497,7 +593,9 @@ const zend_function_entry king_autoscaling_class_methods[] = {
 
 const zend_function_entry king_pipeline_orchestrator_class_methods[] = {
     ZEND_ME_MAPPING(run, king_pipeline_orchestrator_run, arginfo_king_pipeline_run, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(runAsync, king_pipeline_orchestrator_run_async, arginfo_king_pipeline_run_async, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(dispatch, king_pipeline_orchestrator_dispatch, arginfo_king_pipeline_run, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(dispatchAsync, king_pipeline_orchestrator_dispatch_async, arginfo_king_pipeline_run_async, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(registerTool, king_pipeline_orchestrator_register_tool, arginfo_king_pipeline_register_tool, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(registerHandler, king_pipeline_orchestrator_register_handler, arginfo_king_pipeline_register_handler, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(configureLogging, king_pipeline_orchestrator_configure_logging, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

@@ -191,6 +191,33 @@ PHP_METHOD(King_WebSocket_Connection, send)
     }
 }
 
+PHP_METHOD(King_WebSocket_Connection, sendAsync)
+{
+    zend_string *message;
+    zval params[1];
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(message)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_STR_COPY(&params[0], message);
+    if (king_awaitable_create_method_call(
+            return_value,
+            "King\\WebSocket\\Connection::sendAsync",
+            sizeof("King\\WebSocket\\Connection::sendAsync") - 1,
+            ZEND_THIS,
+            "send",
+            sizeof("send") - 1,
+            params,
+            1,
+            NULL
+        ) != SUCCESS) {
+        zval_ptr_dtor(&params[0]);
+        RETURN_FALSE;
+    }
+    zval_ptr_dtor(&params[0]);
+}
+
 PHP_METHOD(King_WebSocket_Connection, sendBinary)
 {
     zend_string *payload;
@@ -209,6 +236,33 @@ PHP_METHOD(King_WebSocket_Connection, sendBinary)
     ) {
         RETURN_THROWS();
     }
+}
+
+PHP_METHOD(King_WebSocket_Connection, sendBinaryAsync)
+{
+    zend_string *payload;
+    zval params[1];
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(payload)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_STR_COPY(&params[0], payload);
+    if (king_awaitable_create_method_call(
+            return_value,
+            "King\\WebSocket\\Connection::sendBinaryAsync",
+            sizeof("King\\WebSocket\\Connection::sendBinaryAsync") - 1,
+            ZEND_THIS,
+            "sendBinary",
+            sizeof("sendBinary") - 1,
+            params,
+            1,
+            NULL
+        ) != SUCCESS) {
+        zval_ptr_dtor(&params[0]);
+        RETURN_FALSE;
+    }
+    zval_ptr_dtor(&params[0]);
 }
 
 PHP_METHOD(King_WebSocket_Connection, receive)
@@ -291,6 +345,40 @@ PHP_METHOD(King_WebSocket_Connection, receive)
         "WebSocket connection is closed."
     );
     RETURN_THROWS();
+}
+
+PHP_METHOD(King_WebSocket_Connection, receiveAsync)
+{
+    zend_long timeout_ms = -1;
+    bool timeout_is_null = true;
+    zval params[1];
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG_OR_NULL(timeout_ms, timeout_is_null)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (timeout_is_null) {
+        ZVAL_NULL(&params[0]);
+    } else {
+        ZVAL_LONG(&params[0], timeout_ms);
+    }
+
+    if (king_awaitable_create_method_call(
+            return_value,
+            "King\\WebSocket\\Connection::receiveAsync",
+            sizeof("King\\WebSocket\\Connection::receiveAsync") - 1,
+            ZEND_THIS,
+            "receive",
+            sizeof("receive") - 1,
+            params,
+            1,
+            NULL
+        ) != SUCCESS) {
+        zval_ptr_dtor(&params[0]);
+        RETURN_FALSE;
+    }
+    zval_ptr_dtor(&params[0]);
 }
 
 PHP_METHOD(King_WebSocket_Connection, ping)
@@ -455,6 +543,55 @@ PHP_FUNCTION(king_client_websocket_connect)
     RETURN_RES(zend_register_resource(state, le_king_ws));
 }
 
+PHP_FUNCTION(king_client_websocket_connect_async)
+{
+    char *url_str = NULL;
+    size_t url_len = 0;
+    zval *headers_array = NULL;
+    zval *options_array = NULL;
+    zval params[3];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(1, 3)
+        Z_PARAM_STRING(url_str, url_len)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(headers_array)
+        Z_PARAM_ARRAY_OR_NULL(options_array)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_STRINGL(&params[0], url_str, url_len);
+    if (headers_array != NULL) {
+        ZVAL_COPY(&params[1], headers_array);
+    } else {
+        ZVAL_NULL(&params[1]);
+    }
+    if (options_array != NULL) {
+        ZVAL_COPY(&params[2], options_array);
+    } else {
+        ZVAL_NULL(&params[2]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_client_websocket_connect_async",
+            sizeof("king_client_websocket_connect_async") - 1,
+            "king_client_websocket_connect",
+            sizeof("king_client_websocket_connect") - 1,
+            params,
+            3,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 3; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 3; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_FUNCTION(king_client_websocket_send)
 {
     zval *websocket;
@@ -507,6 +644,47 @@ PHP_FUNCTION(king_client_websocket_send)
 
     king_set_error("");
     RETURN_TRUE;
+}
+
+PHP_FUNCTION(king_client_websocket_send_async)
+{
+    zval *websocket;
+    char *data = NULL;
+    size_t data_len = 0;
+    zend_bool is_binary = false;
+    zval params[3];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_ZVAL(websocket)
+        Z_PARAM_STRING(data, data_len)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_BOOL(is_binary)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], websocket);
+    ZVAL_STRINGL(&params[1], data, data_len);
+    ZVAL_BOOL(&params[2], is_binary);
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_client_websocket_send_async",
+            sizeof("king_client_websocket_send_async") - 1,
+            "king_client_websocket_send",
+            sizeof("king_client_websocket_send") - 1,
+            params,
+            3,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 3; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 3; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
 }
 
 PHP_FUNCTION(king_websocket_send)
@@ -629,6 +807,43 @@ PHP_FUNCTION(king_client_websocket_receive)
         "king_client_websocket_receive() cannot run on a closed WebSocket connection."
     );
     RETURN_FALSE;
+}
+
+PHP_FUNCTION(king_client_websocket_receive_async)
+{
+    zval *websocket;
+    zend_long timeout_ms = -1;
+    zval params[2];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_ZVAL(websocket)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(timeout_ms)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], websocket);
+    ZVAL_LONG(&params[1], timeout_ms);
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_client_websocket_receive_async",
+            sizeof("king_client_websocket_receive_async") - 1,
+            "king_client_websocket_receive",
+            sizeof("king_client_websocket_receive") - 1,
+            params,
+            2,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 2; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 2; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
 }
 
 PHP_FUNCTION(king_client_websocket_ping)
@@ -771,8 +986,11 @@ PHP_FUNCTION(king_client_websocket_close)
 const zend_function_entry king_ws_connection_class_methods[] = {
     PHP_ME(King_WebSocket_Connection, __construct, arginfo_class_King_WebSocket_Connection___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(King_WebSocket_Connection, send, arginfo_class_King_WebSocket_Connection_send, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Connection, sendAsync, arginfo_class_King_WebSocket_Connection_sendAsync, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, sendBinary, arginfo_class_King_WebSocket_Connection_sendBinary, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Connection, sendBinaryAsync, arginfo_class_King_WebSocket_Connection_sendBinaryAsync, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, receive, arginfo_class_King_WebSocket_Connection_receive, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Connection, receiveAsync, arginfo_class_King_WebSocket_Connection_receiveAsync, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, ping, arginfo_class_King_WebSocket_Connection_ping, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, close, arginfo_class_King_WebSocket_Connection_close, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Connection, getInfo, arginfo_class_King_WebSocket_Connection_getInfo, ZEND_ACC_PUBLIC)

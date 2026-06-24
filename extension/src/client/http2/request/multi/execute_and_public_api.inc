@@ -363,3 +363,44 @@ fail:
 
     RETURN_FALSE;
 }
+
+PHP_FUNCTION(king_http2_request_send_multi_async)
+{
+    zval *requests_array;
+    zval *options_array = NULL;
+    zval params[2];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_ARRAY(requests_array)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options_array)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], requests_array);
+    if (options_array != NULL) {
+        ZVAL_COPY(&params[1], options_array);
+    } else {
+        ZVAL_NULL(&params[1]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_http2_request_send_multi_async",
+            sizeof("king_http2_request_send_multi_async") - 1,
+            "king_http2_request_send_multi",
+            sizeof("king_http2_request_send_multi") - 1,
+            params,
+            2,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 2; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 2; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}

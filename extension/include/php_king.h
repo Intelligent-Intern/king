@@ -108,6 +108,7 @@ extern zend_class_entry
 
 extern zend_class_entry
     *king_ce_cancel_token,
+    *king_ce_awaitable,
     *king_ce_config,
     *king_ce_session,
     *king_ce_stream,
@@ -254,6 +255,29 @@ typedef struct _king_cancel_token_object {
     zend_object std;
 } king_cancel_token_object;
 
+typedef enum _king_awaitable_status {
+    KING_AWAITABLE_PENDING = 0,
+    KING_AWAITABLE_RESOLVED = 1,
+    KING_AWAITABLE_REJECTED = 2,
+    KING_AWAITABLE_CANCELLED = 3
+} king_awaitable_status_t;
+
+typedef struct _king_awaitable_object king_awaitable_object;
+typedef zend_result (*king_awaitable_runner)(king_awaitable_object *intern, zval *result);
+
+struct _king_awaitable_object {
+    king_awaitable_status_t status;
+    zend_string *operation;
+    zval payload;
+    zval result;
+    zval error;
+    zval cancel_token;
+    king_awaitable_runner runner;
+    bool started;
+    bool cancel_requested;
+    zend_object std;
+};
+
 typedef struct _king_response_object {
     zval payload;
     zval request_context;
@@ -356,6 +380,13 @@ php_king_cancel_token_obj_from_zend(zend_object *obj)
 {
     return (king_cancel_token_object *)
         ((char*)obj - XtOffsetOf(king_cancel_token_object, std));
+}
+
+static inline king_awaitable_object *
+php_king_awaitable_obj_from_zend(zend_object *obj)
+{
+    return (king_awaitable_object *)
+        ((char*)obj - XtOffsetOf(king_awaitable_object, std));
 }
 
 #if PHP_VERSION_ID < 80200
@@ -575,6 +606,7 @@ extern void king_ticket_ring_put(const uint8_t *ticket, size_t len);
 extern int king_ticket_ring_get(uint8_t *out, size_t *out_len);
 extern void king_client_session_free(void *session_ptr);
 extern const zend_function_entry king_cancel_token_class_methods[];
+extern const zend_function_entry king_awaitable_class_methods[];
 extern const zend_function_entry king_config_class_methods[];
 extern const zend_function_entry king_session_class_methods[];
 extern const zend_function_entry king_stream_class_methods[];
@@ -586,6 +618,36 @@ extern const zend_function_entry king_autoscaling_class_methods[];
 extern const zend_function_entry king_http_client_class_methods[];
 extern const zend_function_entry king_ws_server_class_methods[];
 extern const zend_function_entry king_ws_connection_class_methods[];
+
+zend_result king_awaitable_create(
+    zval *return_value,
+    const char *operation,
+    size_t operation_len,
+    king_awaitable_runner runner,
+    zval *payload,
+    zval *cancel_token
+);
+zend_result king_awaitable_create_function_call(
+    zval *return_value,
+    const char *operation,
+    size_t operation_len,
+    const char *function_name,
+    size_t function_name_len,
+    zval *params,
+    uint32_t param_count,
+    zval *cancel_token
+);
+zend_result king_awaitable_create_method_call(
+    zval *return_value,
+    const char *operation,
+    size_t operation_len,
+    zval *object,
+    const char *method_name,
+    size_t method_name_len,
+    zval *params,
+    uint32_t param_count,
+    zval *cancel_token
+);
 
 /* -----------------------------------------------------------------------------
  * PHP_FUNCTION Prototypes: active public entry points

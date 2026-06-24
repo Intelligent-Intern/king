@@ -39,6 +39,14 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Client_HttpClient_requ
     ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Client_HttpClient_requestAsync, 0, 2, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, headers, IS_ARRAY, 0, "[]")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, body, IS_STRING, 0, "\"\"")
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Client_HttpClient_close, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
@@ -538,6 +546,71 @@ PHP_METHOD(King_Client_HttpClient, request)
     }
 }
 
+PHP_METHOD(King_Client_HttpClient, requestAsync)
+{
+    zend_string *method;
+    zend_string *url;
+    zval *headers_array = NULL;
+    zend_string *body = NULL;
+    bool body_is_temp_empty = false;
+    zval *cancel = NULL;
+    zval params[5];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(2, 5)
+        Z_PARAM_STR(method)
+        Z_PARAM_STR(url)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY(headers_array)
+        Z_PARAM_STR(body)
+        Z_PARAM_OBJECT_OF_CLASS_OR_NULL(cancel, king_ce_cancel_token)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (body == NULL) {
+        body = zend_string_init("", 0, 0);
+        body_is_temp_empty = true;
+    }
+
+    ZVAL_STR_COPY(&params[0], method);
+    ZVAL_STR_COPY(&params[1], url);
+    if (headers_array != NULL) {
+        ZVAL_COPY(&params[2], headers_array);
+    } else {
+        array_init(&params[2]);
+    }
+    ZVAL_STR_COPY(&params[3], body);
+    if (cancel != NULL) {
+        ZVAL_COPY(&params[4], cancel);
+    } else {
+        ZVAL_NULL(&params[4]);
+    }
+
+    if (body_is_temp_empty) {
+        zend_string_release(body);
+    }
+
+    if (king_awaitable_create_method_call(
+            return_value,
+            "King\\Client\\HttpClient::requestAsync",
+            sizeof("King\\Client\\HttpClient::requestAsync") - 1,
+            ZEND_THIS,
+            "request",
+            sizeof("request") - 1,
+            params,
+            5,
+            cancel
+        ) != SUCCESS) {
+        for (index = 0; index < 5; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 5; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_METHOD(King_Client_HttpClient, close)
 {
     king_http_client_object *intern;
@@ -565,6 +638,7 @@ const zend_function_entry king_response_class_methods[] = {
 const zend_function_entry king_http_client_class_methods[] = {
     PHP_ME(King_Client_HttpClient, __construct, arginfo_class_King_Client_HttpClient___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(King_Client_HttpClient, request, arginfo_class_King_Client_HttpClient_request, ZEND_ACC_PUBLIC)
+    PHP_ME(King_Client_HttpClient, requestAsync, arginfo_class_King_Client_HttpClient_requestAsync, ZEND_ACC_PUBLIC)
     PHP_ME(King_Client_HttpClient, close, arginfo_class_King_Client_HttpClient_close, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };

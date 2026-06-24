@@ -3,126 +3,45 @@ King base OO classes are runtime-registered in the current runtime
 --FILE--
 <?php
 $classes = [
-    'King\\CancelToken',
-    'King\\Config',
-    'King\\Session',
-    'King\\Stream',
-    'King\\Response',
-    'King\\MCP',
-    'King\\IIBIN',
-    'King\\ObjectStore',
-    'King\\Autoscaling',
-    'King\\Client\\HttpClient',
-    'King\\Client\\Http1Client',
-    'King\\Client\\Http2Client',
-    'King\\Client\\Http3Client',
-    'King\\WebSocket\\Server',
-    'King\\WebSocket\\Connection',
+    'King\\CancelToken' => [true, null],
+    'King\\Awaitable' => [true, null],
+    'King\\Config' => [false, null],
+    'King\\Session' => [true, null],
+    'King\\Stream' => [true, null],
+    'King\\Response' => [true, null],
+    'King\\MCP' => [true, null],
+    'King\\IIBIN' => [true, null],
+    'King\\ObjectStore' => [true, null],
+    'King\\Autoscaling' => [true, null],
+    'King\\Client\\HttpClient' => [false, null],
+    'King\\Client\\Http1Client' => [true, 'King\\Client\\HttpClient'],
+    'King\\Client\\Http2Client' => [true, 'King\\Client\\HttpClient'],
+    'King\\Client\\Http3Client' => [true, 'King\\Client\\HttpClient'],
+    'King\\WebSocket\\Server' => [true, null],
+    'King\\WebSocket\\Connection' => [true, null],
 ];
 
-$result = [];
-foreach ($classes as $class) {
+$failures = [];
+foreach ($classes as $class => [$expectedFinal, $expectedParent]) {
     $ref = new ReflectionClass($class);
     $parent = $ref->getParentClass();
-    $result[$class] = [
+    $actual = [
         'internal' => $ref->isInternal(),
         'final' => $ref->isFinal(),
         'parent' => $parent ? $parent->getName() : null,
     ];
+
+    if ($actual !== [
+        'internal' => true,
+        'final' => $expectedFinal,
+        'parent' => $expectedParent,
+    ]) {
+        $failures[$class] = $actual;
+    }
 }
 
-var_export($result);
+var_dump($failures);
 ?>
 --EXPECT--
-array (
-  'King\\CancelToken' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\Config' => 
-  array (
-    'internal' => true,
-    'final' => false,
-    'parent' => NULL,
-  ),
-  'King\\Session' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\Stream' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\Response' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\MCP' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\IIBIN' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\ObjectStore' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\Autoscaling' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\Client\\HttpClient' => 
-  array (
-    'internal' => true,
-    'final' => false,
-    'parent' => NULL,
-  ),
-  'King\\Client\\Http1Client' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => 'King\\Client\\HttpClient',
-  ),
-  'King\\Client\\Http2Client' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => 'King\\Client\\HttpClient',
-  ),
-  'King\\Client\\Http3Client' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => 'King\\Client\\HttpClient',
-  ),
-  'King\\WebSocket\\Server' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-  'King\\WebSocket\\Connection' => 
-  array (
-    'internal' => true,
-    'final' => true,
-    'parent' => NULL,
-  ),
-)
+array(0) {
+}
