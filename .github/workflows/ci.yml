@@ -452,18 +452,11 @@ jobs:
       - name: Resolve previous compatibility ref
         id: previous
         run: |
-          previous_ref=""
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            previous_ref="${{ github.event.pull_request.base.sha }}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            previous_ref="${{ github.event.before }}"
-          fi
-
-          if [[ -z "${previous_ref}" || "${previous_ref}" =~ ^0+$ ]]; then
-            previous_ref="$(git rev-parse HEAD^)"
-          fi
-
-          echo "ref=${previous_ref}" >> "${GITHUB_OUTPUT}"
+          bash ./infra/scripts/resolve-previous-compatibility-ref.sh \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --push-before "${{ github.event.before }}" \
+            --pull-request-base "${{ github.event.pull_request.base.sha }}" \
+            --github-output "${GITHUB_OUTPUT}"
 
       - name: Run release upgrade compatibility gate
         working-directory: extension
@@ -519,18 +512,11 @@ jobs:
       - name: Resolve previous compatibility ref
         id: previous
         run: |
-          previous_ref=""
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            previous_ref="${{ github.event.pull_request.base.sha }}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            previous_ref="${{ github.event.before }}"
-          fi
-
-          if [[ -z "${previous_ref}" || "${previous_ref}" =~ ^0+$ ]]; then
-            previous_ref="$(git rev-parse HEAD^)"
-          fi
-
-          echo "ref=${previous_ref}" >> "${GITHUB_OUTPUT}"
+          bash ./infra/scripts/resolve-previous-compatibility-ref.sh \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --push-before "${{ github.event.before }}" \
+            --pull-request-base "${{ github.event.pull_request.base.sha }}" \
+            --github-output "${GITHUB_OUTPUT}"
 
       - name: Run release downgrade compatibility gate
         working-directory: extension
@@ -586,18 +572,11 @@ jobs:
       - name: Resolve previous compatibility ref
         id: previous
         run: |
-          previous_ref=""
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            previous_ref="${{ github.event.pull_request.base.sha }}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            previous_ref="${{ github.event.before }}"
-          fi
-
-          if [[ -z "${previous_ref}" || "${previous_ref}" =~ ^0+$ ]]; then
-            previous_ref="$(git rev-parse HEAD^)"
-          fi
-
-          echo "ref=${previous_ref}" >> "${GITHUB_OUTPUT}"
+          bash ./infra/scripts/resolve-previous-compatibility-ref.sh \
+            --event-name "${GITHUB_EVENT_NAME}" \
+            --push-before "${{ github.event.before }}" \
+            --pull-request-base "${{ github.event.pull_request.base.sha }}" \
+            --github-output "${GITHUB_OUTPUT}"
 
       - name: Run release persistence migration gate
         working-directory: extension
