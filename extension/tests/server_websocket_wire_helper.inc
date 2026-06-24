@@ -149,7 +149,18 @@ function king_server_http1_wire_request_retry(int $port, string $request, int $t
 {
     $client = king_server_http1_wire_connect_retry($port, $timeoutMs);
     stream_set_timeout($client, 2);
-    fwrite($client, $request);
+
+    $written = 0;
+    $length = strlen($request);
+    while ($written < $length) {
+        $chunk = fwrite($client, substr($request, $written), $length - $written);
+        if ($chunk === false || $chunk === 0) {
+            fclose($client);
+            throw new RuntimeException('failed while writing HTTP/1 request');
+        }
+        $written += $chunk;
+    }
+
     $response = stream_get_contents($client);
     fclose($client);
     return (string) $response;
