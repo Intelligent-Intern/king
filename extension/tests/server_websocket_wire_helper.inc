@@ -105,14 +105,21 @@ function king_server_websocket_wire_stop_server(array $server): array
 
     $capture = [];
     if (is_file($server['capture'])) {
-        $captureRaw = (string) file_get_contents($server['capture']);
-        $decodedCapture = json_decode($captureRaw, true);
-        if (is_array($decodedCapture)) {
-            $capture = $decodedCapture;
+        $captureRead = file_get_contents($server['capture']);
+        if ($captureRead === false) {
+            $capture = [
+                '__read_error' => 'failed to read capture file',
+            ];
         } else {
-            $capture = [];
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                $capture['__json_error'] = json_last_error_msg();
+            $captureRaw = (string) $captureRead;
+            $decodedCapture = json_decode($captureRaw, true);
+            if (is_array($decodedCapture)) {
+                $capture = $decodedCapture;
+            } else {
+                $capture = [];
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    $capture['__json_error'] = json_last_error_msg();
+                }
             }
         }
         @unlink($server['capture']);
