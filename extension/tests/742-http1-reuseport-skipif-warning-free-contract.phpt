@@ -16,25 +16,50 @@ function king_extract_skipif(string $path): string
     return $matches[1];
 }
 
+function king_run_skipif_isolated(string $skipif): array
+{
+    $warnings = [];
+    $process = proc_open(
+        [PHP_BINARY],
+        [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ],
+        $pipes
+    );
+
+    if (!is_resource($process)) {
+        return ['', ['failed to execute isolated SKIPIF process']];
+    }
+
+    fwrite($pipes[0], $skipif);
+    fclose($pipes[0]);
+
+    $stdout = (string) stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = (string) stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+
+    $exit = proc_close($process);
+    if ($stderr !== '') {
+        $warnings[] = trim($stderr);
+    }
+    if ($exit !== 0) {
+        $warnings[] = 'isolated SKIPIF process exited with code ' . $exit;
+    }
+
+    return [trim($stdout), $warnings];
+}
+
 foreach ($paths as $path) {
     $skipif = king_extract_skipif($path);
 
     var_dump(!str_contains($skipif, "['command', '-v', 'python3']"));
     var_dump(!str_contains($skipif, 'command -v python3'));
-    var_dump(str_contains($skipif, '@proc_open('));
+    var_dump((bool) preg_match('~@proc_open\s*\(\s*\[\s*\$candidate\s*,\s*[\'"]-c[\'"]\s*,~s', $skipif));
 
-    $warnings = [];
-    set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
-        $warnings[] = $message;
-        return true;
-    });
-    ob_start();
-    try {
-        eval('?>' . $skipif);
-    } finally {
-        $output = trim((string) ob_get_clean());
-        restore_error_handler();
-    }
+    [$output, $warnings] = king_run_skipif_isolated($skipif);
 
     var_dump($warnings === []);
     var_dump($output === '' || str_starts_with($output, 'skip '));
