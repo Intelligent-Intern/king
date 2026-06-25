@@ -1338,7 +1338,9 @@ namespace {
      * King inference models. Supported routes are `GET /v1/models`,
      * `GET /v1/models/{model}`, `POST /v1/chat/completions`,
      * `POST /v1/responses`, legacy `POST /v1/completions`, and
-     * `POST /v1/embeddings`.
+     * `POST /v1/embeddings`. POST routes require `body` to be a JSON string
+     * containing a JSON object; missing, empty, array, or scalar request bodies
+     * are rejected before model selection.
      * For generation requests, the JSON `model` field
      * selects either a string key from `$models` or the model name stored in
      * the loaded King model. If exactly one model is registered, `model` may

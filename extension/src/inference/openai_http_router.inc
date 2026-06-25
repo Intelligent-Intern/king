@@ -472,10 +472,10 @@ static zend_result king_inference_openai_router_chat_response(
     zval *options,
     zval *return_value)
 {
-    zval *body;
     zval decoded;
     zval *model;
     zend_result result;
+    bool has_error_response = false;
 
     if (!king_inference_openai_request_method_is(request, "POST")) {
         return king_inference_openai_error_response(
@@ -486,18 +486,16 @@ static zend_result king_inference_openai_router_chat_response(
         );
     }
 
-    body = king_inference_array_find(request, "body");
-    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Chat completions HTTP request requires a JSON string body.",
-            "invalid_request_error"
-        );
-    }
-
-    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
-        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    result = king_inference_openai_decode_object_body(
+        request,
+        "Chat completions HTTP request requires a JSON string body.",
+        "Chat completions HTTP request body must be a JSON object.",
+        return_value,
+        &decoded,
+        &has_error_response
+    );
+    if (result != SUCCESS || has_error_response) {
+        return result;
     }
 
     result = king_inference_openai_require_model(
@@ -523,10 +521,10 @@ static zend_result king_inference_openai_router_responses_response(
     zval *options,
     zval *return_value)
 {
-    zval *body;
     zval decoded;
     zval *model;
     zend_result result;
+    bool has_error_response = false;
 
     if (!king_inference_openai_request_method_is(request, "POST")) {
         return king_inference_openai_error_response(
@@ -537,18 +535,16 @@ static zend_result king_inference_openai_router_responses_response(
         );
     }
 
-    body = king_inference_array_find(request, "body");
-    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Responses HTTP request requires a JSON string body.",
-            "invalid_request_error"
-        );
-    }
-
-    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
-        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    result = king_inference_openai_decode_object_body(
+        request,
+        "Responses HTTP request requires a JSON string body.",
+        "Responses HTTP request body must be a JSON object.",
+        return_value,
+        &decoded,
+        &has_error_response
+    );
+    if (result != SUCCESS || has_error_response) {
+        return result;
     }
 
     result = king_inference_openai_require_model(
@@ -574,10 +570,10 @@ static zend_result king_inference_openai_router_completions_response(
     zval *options,
     zval *return_value)
 {
-    zval *body;
     zval decoded;
     zval *model;
     zend_result result;
+    bool has_error_response = false;
 
     if (!king_inference_openai_request_method_is(request, "POST")) {
         return king_inference_openai_error_response(
@@ -588,18 +584,16 @@ static zend_result king_inference_openai_router_completions_response(
         );
     }
 
-    body = king_inference_array_find(request, "body");
-    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Completions HTTP request requires a JSON string body.",
-            "invalid_request_error"
-        );
-    }
-
-    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
-        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    result = king_inference_openai_decode_object_body(
+        request,
+        "Completions HTTP request requires a JSON string body.",
+        "Completions HTTP request body must be a JSON object.",
+        return_value,
+        &decoded,
+        &has_error_response
+    );
+    if (result != SUCCESS || has_error_response) {
+        return result;
     }
 
     result = king_inference_openai_require_model(
@@ -625,10 +619,10 @@ static zend_result king_inference_openai_router_embeddings_response(
     zval *options,
     zval *return_value)
 {
-    zval *body;
     zval decoded;
     zval *model;
     zend_result result;
+    bool has_error_response = false;
 
     if (!king_inference_openai_request_method_is(request, "POST")) {
         return king_inference_openai_error_response(
@@ -639,18 +633,16 @@ static zend_result king_inference_openai_router_embeddings_response(
         );
     }
 
-    body = king_inference_array_find(request, "body");
-    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Embeddings HTTP request requires a JSON string body.",
-            "invalid_request_error"
-        );
-    }
-
-    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
-        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    result = king_inference_openai_decode_object_body(
+        request,
+        "Embeddings HTTP request requires a JSON string body.",
+        "Embeddings HTTP request body must be a JSON object.",
+        return_value,
+        &decoded,
+        &has_error_response
+    );
+    if (result != SUCCESS || has_error_response) {
+        return result;
     }
 
     result = king_inference_openai_require_model(

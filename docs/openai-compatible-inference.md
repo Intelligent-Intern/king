@@ -56,6 +56,11 @@ The router supports:
 - `POST /v1/completions`
 - `POST /v1/embeddings`
 
+All POST routes require `body` to be a JSON string containing a JSON object.
+Missing, empty, array, or scalar request bodies are rejected before model
+selection so malformed requests receive endpoint-specific request-body errors
+instead of misleading model-selection errors.
+
 Router options include bounded drain controls (`read_timeout_ms`,
 `max_events`, `max_idle_events`), generation input limits
 (`max_chat_messages`, `max_response_input_items`, `max_completion_prompts`),
