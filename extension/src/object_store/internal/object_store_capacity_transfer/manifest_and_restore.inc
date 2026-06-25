@@ -745,4 +745,4 @@ static int king_object_store_restore_all_objects_from_manifest(
     return SUCCESS;
 }
 
-#include "object_store_capacity_transfer/manifest_and_restore/commit_helpers.inc"
+#include "manifest_and_restore/commit_helpers.inc"
