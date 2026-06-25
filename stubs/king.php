@@ -1313,6 +1313,20 @@ namespace {
     function king_inference_stream(\King\Inference\Model $model, array $request, ?array $options = null): \King\Inference\Stream {}
 
     /**
+     * Handle one OpenAI-compatible `POST /v1/chat/completions` HTTP request
+     * and return a King HTTP server response array. The request body must be a
+     * JSON Chat Completions payload with `messages`; `stream=true` returns a
+     * bounded `text/event-stream` body, otherwise an OpenAI-shaped
+     * `chat.completion` JSON body. Options include `read_timeout_ms`,
+     * `max_events`, and `max_idle_events` for the bounded drain window.
+     * @param array<string,mixed> $request
+     * @param array<string,mixed>|null $options
+     * @return array{status:int,headers:array<string,string>,body:string}
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_openai_chat_http_response(\King\Inference\Model $model, array $request, ?array $options = null): array {}
+
+    /**
      * Read the next inference stream event. Native events use `type=start`,
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
      * return `chat.completion.chunk`-style arrays.
@@ -2627,6 +2641,13 @@ namespace King {
          * @param array<string,mixed>|null $options
          */
         public static function stream(Inference\Model $model, array $request, ?array $options = null): Inference\Stream {}
+
+        /**
+         * @param array<string,mixed> $request
+         * @param array<string,mixed>|null $options
+         * @return array{status:int,headers:array<string,string>,body:string}
+         */
+        public static function openaiChatHttpResponse(Inference\Model $model, array $request, ?array $options = null): array {}
     }
 
 }

@@ -371,8 +371,9 @@ The core programming model is:
   stack, softmax, weighted-sum context assembly, serializable KV state,
   range-based KV attention, token selection from logits, scale, and add steps
   without an external inference runtime. The stream layer can emit explicit
-  OpenAI-compatible Chat Completions chunks while full graph execution and
-  quantized kernels are added.
+  OpenAI-compatible Chat Completions chunks, and the HTTP helper can serve
+  `POST /v1/chat/completions` through King server response arrays while full
+  graph execution and quantized kernels are added.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

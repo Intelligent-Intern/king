@@ -7,6 +7,7 @@
  */
 
 #include "Zend/zend_smart_str.h"
+#include "ext/json/php_json.h"
 #include "include/config/high_perf_compute_and_ai/base_layer.h"
 
 #include <errno.h>
@@ -14,6 +15,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -99,6 +101,7 @@ ZEND_END_ARG_INFO()
 #include "inference/model_config.inc"
 #include "inference/tokenizer.inc"
 #include "inference/stream_events.inc"
+#include "inference/openai_compat.inc"
 
 static zend_result king_inference_next_async_runner(king_awaitable_object *intern, zval *result)
 {
@@ -753,6 +756,7 @@ const zend_function_entry king_inference_class_methods[] = {
     ZEND_ME_MAPPING(graphRun, king_inference_graph_run, arginfo_king_inference_graph_run, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(kvCachePlan, king_inference_kv_cache_plan, arginfo_king_inference_kv_cache_plan, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(stream, king_inference_stream, arginfo_king_inference_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(openaiChatHttpResponse, king_inference_openai_chat_http_response, arginfo_king_inference_openai_chat_http_response, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };
 

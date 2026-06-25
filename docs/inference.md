@@ -457,6 +457,48 @@ The active stream backend is still the configured `local` backend until
 `/v1/chat/completions` route enough structure to forward OpenAI-shaped requests
 into King without creating a second inference runtime.
 
+## Function, Example 1a.1: OpenAI-Compatible HTTP Route
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'local-small-model',
+    'artifact_path' => getenv('KING_INFERENCE_MODEL_PATH'),
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => getenv('KING_INFERENCE_RUNNER'),
+    ],
+]);
+
+while (true) {
+    king_http1_server_listen_once(
+        '127.0.0.1',
+        8080,
+        null,
+        static function (array $request) use ($model): array {
+            return king_inference_openai_chat_http_response($model, $request, [
+                'read_timeout_ms' => 250,
+                'max_events' => 4096,
+                'max_idle_events' => 240,
+            ]);
+        }
+    );
+}
+```
+
+The helper accepts the normalized King HTTP request array and owns the
+OpenAI-compatible endpoint contract for `POST /v1/chat/completions`. The request
+body is decoded as a Chat Completions JSON payload, `messages` are validated,
+and the loaded King model is used for both normal and streaming responses.
+
+For `stream=false` or a missing `stream` field, the helper drains the inference
+stream into one OpenAI-shaped `chat.completion` JSON response. For `stream=true`,
+it returns a `text/event-stream` response body with `data: {chunk}` events and a
+final `data: [DONE]` marker. The current King HTTP server response contract
+still uses string bodies, so this helper performs a bounded drain controlled by
+`read_timeout_ms`, `max_events`, and `max_idle_events`; it does not pretend to be
+the later zero-copy incremental server-body path.
+
 ## Function, Example 1b: Configured Model Path
 
 ```php
