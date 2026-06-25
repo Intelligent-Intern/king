@@ -1,5 +1,5 @@
 /*
- * include/php_king/index.h - Core extension bootstrap umbrella
+ * include/php_king/index.h - Core extension public umbrella
  */
 
 #ifndef KING_PHP_KING_INDEX_H
@@ -7,7 +7,6 @@
 
 #include "class_entries.h"
 #include "constants.h"
-#include "externals.h"
 #include "globals.h"
 #include "init.h"
 #include "method_tables.h"
