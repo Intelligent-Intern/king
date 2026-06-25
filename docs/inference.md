@@ -606,6 +606,7 @@ $stream = king_inference_stream($model, [
     'graphs' => $graphs,
 ], [
     'max_native_stream_tokens' => 64,
+    'with_memory' => false,
     'graph_options' => [
         'max_vector_values' => 65536,
         'max_operations' => 524288,
@@ -624,15 +625,19 @@ while (($event = king_inference_next($stream, 0)) !== null) {
 
 The native stream path is intentionally graph-driven. A request can provide one
 `graph` repeated for a bounded token count or a `graphs` sequence for explicit
-decode steps. If a graph omits `state`, King carries the previous graph result
-state into the next graph, so KV cache entries written by `kv_write` can be read
-by later steps through `kv_read` or `kv_attention`. This is the current native
-handoff for token events; higher-level prompt-to-graph compilation is a later
-layer and does not need a second inference runtime.
+decode steps. Streams are stateless by default: King does not carry graph
+result state into the next graph unless `with_memory => true` is set in the
+stream options, request, or `graph_options`. When memory is enabled and a graph
+omits `state`, King carries the previous graph result state into the next graph,
+so KV cache entries written by `kv_write` can be read by later steps through
+`kv_read` or `kv_attention`. This is the current native handoff for token
+events; higher-level prompt-to-graph compilation is a later layer and does not
+need a second inference runtime.
 
 Native graph stream startup is bounded by `max_native_stream_tokens`, which can
 be set as a stream option or graph option. If it is not set, King allows up to
 4096 native token steps before rejecting the stream request.
+`with_memory` and the alias `with-memory` must be booleans when provided.
 
 ## Function, Example 1c: OpenAI-Compatible HTTP Route
 
@@ -679,7 +684,8 @@ and the loaded King model is used for both normal and streaming responses. For
 `king_native_cpu` models, the same route accepts an explicit `graph` object or
 `graphs` array in the JSON payload and emits OpenAI-shaped responses from the
 native graph-selected token stream. `graph_options` must be a JSON object when
-provided.
+provided. Native graph streams are stateless unless the payload or options set
+`with_memory` or `with-memory` to `true`.
 
 For `stream=false`, the helper drains into one OpenAI-shaped `chat.completion`
 JSON response. For `stream=true`, it returns a bounded `text/event-stream` body

@@ -127,7 +127,9 @@ the router does not synthesize a
 native graph from arbitrary Chat Completions payloads. When a generation route
 selects a native graph backend without an explicit graph request, King returns an
 OpenAI-shaped `400` JSON error instead of falling through to a low-level stream
-exception.
+exception. Native graph streams are stateless by default. Set `with_memory` or
+`with-memory` to `true` in the request, stream options, or `graph_options` only
+when the next graph should inherit the previous graph result state.
 
 ## Function, Example 2: Embeddings
 

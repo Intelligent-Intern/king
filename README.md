@@ -370,8 +370,10 @@ The core programming model is:
   a native mini-graph for embedding, RMSNorm, linear projection, RoPE, dot,
   stack, softmax, weighted-sum context assembly, serializable KV state,
   range-based KV attention, token selection from logits, scale, add steps, and
-  graph-backed native CPU token streaming without an external inference
-  runtime. The stream layer can emit explicit OpenAI-compatible Chat
+  graph-backed native CPU token streaming without an external inference runtime.
+  Native graph streams are stateless by default; `with_memory` opts into
+  carrying graph result state between decode steps. The stream layer can emit
+  explicit OpenAI-compatible Chat
   Completions chunks, and the HTTP helper can serve
   `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,
   `POST /v1/responses`, legacy `POST /v1/completions`, and

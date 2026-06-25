@@ -37,6 +37,43 @@ static zend_result king_inference_king_native_stream_token_limit(
     return SUCCESS;
 }
 
+static zval *king_inference_king_native_find_memory_option(zval *source)
+{
+    zval *value = king_inference_array_find(source, "with_memory");
+
+    return value != NULL ? value : king_inference_array_find(source, "with-memory");
+}
+
+static zend_result king_inference_king_native_stream_with_memory(
+    king_inference_stream_object *stream,
+    zval *graph_options,
+    bool *with_memory)
+{
+    zval *value = king_inference_king_native_find_memory_option(&stream->options);
+
+    if (value == NULL) {
+        value = king_inference_king_native_find_memory_option(&stream->request);
+    }
+    if (value == NULL && graph_options != NULL) {
+        value = king_inference_king_native_find_memory_option(graph_options);
+    }
+    if (value == NULL) {
+        *with_memory = false;
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_TRUE && Z_TYPE_P(value) != IS_FALSE) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native stream with_memory must be a boolean."
+        );
+        return FAILURE;
+    }
+
+    *with_memory = Z_TYPE_P(value) == IS_TRUE;
+    return SUCCESS;
+}
+
 static zval *king_inference_king_native_graph_token_payload(zval *graph_result, zval *graph)
 {
     zval *final = king_inference_array_find(graph_result, "final");
@@ -114,7 +151,8 @@ static zend_result king_inference_king_native_append_graph_token(
     king_inference_stream_object *stream,
     zval *graph,
     zval *graph_options,
-    zval *state
+    zval *state,
+    bool with_memory
 ) {
     zval working_graph;
     zval graph_result;
@@ -130,7 +168,8 @@ static zend_result king_inference_king_native_append_graph_token(
 
     ZVAL_DUP(&working_graph, graph);
     SEPARATE_ARRAY(&working_graph);
-    if (!Z_ISUNDEF_P(state)
+    if (with_memory
+        && !Z_ISUNDEF_P(state)
         && king_inference_array_find(&working_graph, "state") == NULL) {
         zval state_copy;
         ZVAL_COPY(&state_copy, state);
@@ -157,7 +196,7 @@ static zend_result king_inference_king_native_append_graph_token(
     }
     add_next_index_str(&stream->native_events, token_text);
 
-    next_state = king_inference_array_find(&graph_result, "state");
+    next_state = with_memory ? king_inference_array_find(&graph_result, "state") : NULL;
     if (next_state != NULL && Z_TYPE_P(next_state) == IS_ARRAY) {
         if (!Z_ISUNDEF_P(state)) {
             zval_ptr_dtor(state);
@@ -185,6 +224,7 @@ static zend_result king_inference_king_native_prepare_events(
     zend_long max_tokens = 1;
     zend_long max_native_stream_tokens;
     zend_long emitted = 0;
+    bool with_memory = false;
 
     if (graph != NULL && !king_inference_openai_array_is_object(graph)) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graph must be an object array.");
@@ -235,6 +275,9 @@ static zend_result king_inference_king_native_prepare_events(
         );
         return FAILURE;
     }
+    if (king_inference_king_native_stream_with_memory(stream, graph_options, &with_memory) != SUCCESS) {
+        return FAILURE;
+    }
 
     if (!Z_ISUNDEF(stream->native_events)) {
         zval_ptr_dtor(&stream->native_events);
@@ -248,7 +291,7 @@ static zend_result king_inference_king_native_prepare_events(
             if (emitted >= max_tokens) {
                 break;
             }
-            if (king_inference_king_native_append_graph_token(model, stream, entry, graph_options, &state) != SUCCESS) {
+            if (king_inference_king_native_append_graph_token(model, stream, entry, graph_options, &state, with_memory) != SUCCESS) {
                 if (!Z_ISUNDEF(state)) {
                     zval_ptr_dtor(&state);
                 }
@@ -258,7 +301,7 @@ static zend_result king_inference_king_native_prepare_events(
         } ZEND_HASH_FOREACH_END();
     } else {
         while (emitted < max_tokens) {
-            if (king_inference_king_native_append_graph_token(model, stream, graph, graph_options, &state) != SUCCESS) {
+            if (king_inference_king_native_append_graph_token(model, stream, graph, graph_options, &state, with_memory) != SUCCESS) {
                 if (!Z_ISUNDEF(state)) {
                     zval_ptr_dtor(&state);
                 }
