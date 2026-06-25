@@ -37,6 +37,7 @@
 #include "iibin/index.h"
 #include "inference/index.h"
 #include "integration/index.h"
+#include "king_init/ticket_ring.h"
 #include "media/index.h"
 #include "mcp/index.h"
 #include "object_store/index.h"

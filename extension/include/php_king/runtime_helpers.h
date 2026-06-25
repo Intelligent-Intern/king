@@ -9,7 +9,6 @@
 #include "memory_helpers.h"
 #include "string_helpers.h"
 #include "interrupt_helpers.h"
-#include "resource_helpers.h"
 #include "transport_cancel.h"
 
 #endif /* KING_PHP_KING_RUNTIME_HELPERS_H */
