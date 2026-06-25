@@ -34,6 +34,7 @@
 #include "client/index.h"
 #include "config/index.h"
 #include "server/index.h"
+#include "validation/index.h"
 
 #include "iibin/index.h"
 #include "inference/index.h"
