@@ -5,6 +5,12 @@ to the object-store/CDN runtime state. A native `King\CDN` class is not
 exported yet. The OO examples below are userland adapters around the real
 functions.
 
+## Internal Layout
+
+CDN registration shares the object-store module registration fragments under
+`extension/src/object_store/`, because the CDN cache is backed by the same
+runtime state and public function table section.
+
 ## Function, Example 1: Admit an Object into the CDN Cache
 
 ```php

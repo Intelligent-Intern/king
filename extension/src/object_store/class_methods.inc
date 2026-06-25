@@ -1,0 +1,23 @@
+const zend_function_entry king_object_store_class_methods[] = {
+    ZEND_ME_MAPPING(init, king_object_store_init, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(put, king_object_store_put, arginfo_king_object_store_put, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(putFromStream, king_object_store_put_from_stream, arginfo_king_object_store_put_from_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(beginResumableUpload, king_object_store_begin_resumable_upload, arginfo_king_object_store_begin_resumable_upload, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(appendResumableUploadChunk, king_object_store_append_resumable_upload_chunk, arginfo_king_object_store_append_resumable_upload_chunk, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(completeResumableUpload, king_object_store_complete_resumable_upload, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(abortResumableUpload, king_object_store_abort_resumable_upload, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getResumableUploadStatus, king_object_store_get_resumable_upload_status, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(get, king_object_store_get, arginfo_king_object_lookup, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getToStream, king_object_store_get_to_stream, arginfo_king_object_store_get_to_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(delete, king_object_store_delete, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(backupObject, king_object_store_backup_object, arginfo_king_object_store_backup, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(restoreObject, king_object_store_restore_object, arginfo_king_object_store_restore, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(backupAllObjects, king_object_store_backup_all_objects, arginfo_king_object_store_backup_all_objects, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(restoreAllObjects, king_object_store_restore_all_objects, arginfo_king_object_store_all_objects_path, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(listObjects, king_object_store_list, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getStats, king_object_store_get_stats, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(optimize, king_object_store_optimize, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(cleanupExpiredObjects, king_object_store_cleanup_expired_objects, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(getMetadata, king_object_store_get_metadata, arginfo_king_object_id, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_FE_END
+};
