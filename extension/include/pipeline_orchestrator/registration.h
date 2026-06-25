@@ -6,6 +6,7 @@
 #define KING_PIPELINE_ORCHESTRATOR_REGISTRATION_H
 
 #include <php.h>
+#include "class_methods.h"
 
 void king_pipeline_orchestrator_register_classes(void);
 

@@ -6,6 +6,7 @@
 #define KING_CLIENT_REGISTRATION_H
 
 #include <php.h>
+#include "class_methods.h"
 
 void king_client_register_session_classes(void);
 void king_client_register_http_classes(void);

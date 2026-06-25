@@ -6,6 +6,7 @@
 #define KING_OBJECT_STORE_REGISTRATION_H
 
 #include <php.h>
+#include "class_methods.h"
 
 void king_object_store_register_classes(void);
 

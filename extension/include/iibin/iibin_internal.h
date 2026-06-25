@@ -14,6 +14,7 @@
 #include <string.h>
 #include <zend_hash.h>
 #include <zend_smart_str.h>
+#include "iibin/class_methods.h"
 
 /* --- Wire Format Constants --- */
 #define KING_WIRETYPE_VARINT         0
@@ -141,7 +142,6 @@ void king_proto_runtime_enum_free(king_proto_runtime_enum *runtime_enum);
 void king_proto_runtime_enum_zval_dtor(zval *zv);
 
 int king_iibin_minit(void);
-extern const zend_function_entry king_iibin_class_methods[];
 
 /* --- Wire Helpers --- */
 

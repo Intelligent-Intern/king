@@ -6,6 +6,7 @@
 #define KING_AUTOSCALING_REGISTRATION_H
 
 #include <php.h>
+#include "class_methods.h"
 
 void king_autoscaling_register_classes(void);
 

@@ -11,6 +11,7 @@
 #ifndef KING_IIBIN_INDEX_H
 #define KING_IIBIN_INDEX_H
 
+#include "class_methods.h"
 #include "iibin.h"
 
 #endif /* KING_IIBIN_INDEX_H */
