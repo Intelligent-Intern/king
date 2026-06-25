@@ -44,6 +44,7 @@
 #include "openai_options.inc"
 #include "openai_usage.inc"
 #include "stream_events.inc"
+#include "object_handlers.inc"
 #include "openai_compat.inc"
 #include "openai_responses.inc"
 #include "openai_completions.inc"

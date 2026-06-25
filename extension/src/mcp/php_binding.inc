@@ -15,6 +15,7 @@
 #include <strings.h>
 #include <time.h>
 
+#include "php_binding/object_handlers.inc"
 #include "php_binding/arginfo_and_runtime_controls.inc"
 #include "php_binding/transfer_helpers.inc"
 #include "php_binding/iibin_helpers.inc"
