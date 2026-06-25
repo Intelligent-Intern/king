@@ -232,7 +232,7 @@ static void king_inference_stream_prepare_openai(king_inference_stream_object *s
     stream->created_at = (zend_long) time(NULL);
     stream->response_id = strpprintf(
         0,
-        "chatcmpl-king-%lu-%ld",
+        "chatcmpl-king-%lu-" ZEND_LONG_FMT,
         (zend_ulong) stream->std.handle,
         stream->created_at
     );

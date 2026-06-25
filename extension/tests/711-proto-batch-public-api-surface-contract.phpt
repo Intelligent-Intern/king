@@ -29,25 +29,21 @@ $expectations = [
         'public static function decodeBatch(string $schema, array $records, bool|string|array $decodeAsObject = false): array {}',
         'whole batch fails',
     ],
-    'extension/src/php_king/arginfo.inc' => [
+    'extension/include/iibin/arginfo/arginfo.h' => [
         'arginfo_king_proto_encode_batch',
         'arginfo_king_proto_decode_batch',
         'ZEND_ARG_TYPE_INFO(0, records, IS_ARRAY, 0)',
         'ZEND_ARG_TYPE_INFO(0, binary_records, IS_ARRAY, 0)',
     ],
-    'extension/src/php_king/externals.inc' => [
-        'PHP_FUNCTION(king_proto_encode_batch);',
-        'PHP_FUNCTION(king_proto_decode_batch);',
-    ],
-    'extension/src/php_king/function_table.inc' => [
-        'PHP_FE(king_proto_encode_batch, arginfo_king_proto_encode_batch)',
-        'PHP_FE(king_proto_decode_batch, arginfo_king_proto_decode_batch)',
-    ],
     'extension/include/iibin/iibin.h' => [
         'PHP_FUNCTION(king_proto_encode_batch);',
         'PHP_FUNCTION(king_proto_decode_batch);',
     ],
-    'extension/src/iibin/iibin_api.c' => [
+    'extension/include/iibin/function_entries.h' => [
+        'PHP_FE(king_proto_encode_batch, arginfo_king_proto_encode_batch)',
+        'PHP_FE(king_proto_decode_batch, arginfo_king_proto_decode_batch)',
+    ],
+    'extension/include/iibin/class_method_entries.h' => [
         'ZEND_ME_MAPPING(encodeBatch, king_proto_encode_batch, arginfo_class_King_IIBIN_encodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)',
         'ZEND_ME_MAPPING(decodeBatch, king_proto_decode_batch, arginfo_class_King_IIBIN_decodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)',
     ],

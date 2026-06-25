@@ -1,11 +1,11 @@
 static zend_string *king_inference_responses_id(king_inference_stream_object *stream)
 {
-    return strpprintf(0, "resp_king_%ld_%lu", stream->created_at, (zend_ulong) stream->std.handle);
+    return strpprintf(0, "resp_king_" ZEND_LONG_FMT "_%lu", stream->created_at, (zend_ulong) stream->std.handle);
 }
 
 static zend_string *king_inference_responses_message_id(king_inference_stream_object *stream)
 {
-    return strpprintf(0, "msg_king_%ld_%lu", stream->created_at, (zend_ulong) stream->std.handle);
+    return strpprintf(0, "msg_king_" ZEND_LONG_FMT "_%lu", stream->created_at, (zend_ulong) stream->std.handle);
 }
 
 static zend_result king_inference_responses_message_from_item(zval *item, zval *messages)

@@ -155,7 +155,7 @@ release_env_has_pinned_lsquic_runtime() {
 }
 
 resolve_version() {
-    sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king.h" | head -n 1
+    sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king/constants.h" | head -n 1
 }
 
 resolve_git_short() {
@@ -272,7 +272,7 @@ ensure_release_git_lock_state() {
 
 VERSION="$(resolve_version)"
 if [[ -z "${VERSION}" ]]; then
-    echo "Failed to resolve PHP_KING_VERSION from ${EXT_DIR}/include/php_king.h." >&2
+    echo "Failed to resolve PHP_KING_VERSION from ${EXT_DIR}/include/php_king/constants.h." >&2
     exit 1
 fi
 

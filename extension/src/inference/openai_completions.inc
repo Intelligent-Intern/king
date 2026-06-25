@@ -1,6 +1,6 @@
 static zend_string *king_inference_completion_id(king_inference_stream_object *stream)
 {
-    return strpprintf(0, "cmpl_king_%ld_%lu", stream->created_at, (zend_ulong) stream->std.handle);
+    return strpprintf(0, "cmpl_king_" ZEND_LONG_FMT "_%lu", stream->created_at, (zend_ulong) stream->std.handle);
 }
 
 static zend_result king_inference_completion_prompt_to_chat_payload(
@@ -63,7 +63,7 @@ static zend_result king_inference_completion_payload(
     zval *requested_model = king_inference_array_find(payload, "model");
     king_inference_model_object *model_object = php_king_inference_model_obj_from_zend(Z_OBJ_P(model));
     zend_long created_at = (zend_long) time(NULL);
-    zend_string *completion_id = strpprintf(0, "cmpl_king_%ld_%lu", created_at, (zend_ulong) Z_OBJ_HANDLE_P(model));
+    zend_string *completion_id = strpprintf(0, "cmpl_king_" ZEND_LONG_FMT "_%lu", created_at, (zend_ulong) Z_OBJ_HANDLE_P(model));
 
     array_init(return_value);
     add_assoc_str(return_value, "id", completion_id);

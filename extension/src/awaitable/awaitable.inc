@@ -148,11 +148,6 @@ static zend_result king_awaitable_function_call_runner(
     uint32_t param_count = 0;
     zend_result status;
 
-    if (timeout_ms == 0) {
-        ZVAL_UNDEF(result);
-        return SUCCESS;
-    }
-
     function_name = zend_hash_str_find(
         Z_ARRVAL(intern->payload),
         "function",
@@ -199,11 +194,6 @@ static zend_result king_awaitable_method_call_runner(
     zval *params = NULL;
     uint32_t param_count = 0;
     zend_result status;
-
-    if (timeout_ms == 0) {
-        ZVAL_UNDEF(result);
-        return SUCCESS;
-    }
 
     object = zend_hash_str_find(
         Z_ARRVAL(intern->payload),
@@ -420,10 +410,6 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
         && instanceof_function(Z_OBJCE(intern->cancel_token), king_ce_cancel_token)
         && php_king_cancel_token_obj_from_zend(Z_OBJ(intern->cancel_token))->cancelled) {
         king_awaitable_cancel_native(intern);
-        return SUCCESS;
-    }
-
-    if (timeout_ms == 0) {
         return SUCCESS;
     }
 
