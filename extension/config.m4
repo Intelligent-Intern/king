@@ -239,6 +239,7 @@ if test "$PHP_KING" != "no"; then
         src/king_globals.c    \
         src/king_init.c       \
         src/config/config.c   \
+        src/db_ingest/db_ingest.c \
         src/config/app_http3_websockets_webtransport/base_layer.c \
         src/config/app_http3_websockets_webtransport/config.c \
         src/config/app_http3_websockets_webtransport/default.c \
