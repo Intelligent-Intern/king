@@ -1,4 +1,6 @@
 const zend_function_entry king_inference_class_methods[] = {
+    ZEND_ME_MAPPING(runtimeModelConfig, king_inference_runtime_model_config, arginfo_king_inference_runtime_model_config, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(runtimeModelLoad, king_inference_runtime_model_load, arginfo_king_inference_runtime_model_load, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(loadModel, king_inference_model_load, arginfo_king_inference_model_load, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(modelInfo, king_inference_model_info, arginfo_king_inference_model_info, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(tokenize, king_inference_tokenize, arginfo_king_inference_tokenize, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

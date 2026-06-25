@@ -23,6 +23,7 @@
 #include "php.h"
 #include <Zend/zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
+#include <math.h>
 
 static int kg_high_perf_apply_bool_field(zval *value, const char *name, bool *target)
 {
@@ -53,17 +54,65 @@ static int kg_validate_non_negative_long_local(zval *value, zend_long *target)
 }
 
 static const char *k_high_perf_gpu_backend_allowed[] = {"auto", "cuda", "rocm", "sycl", NULL};
+static const char *k_high_perf_inference_profile_allowed[] = {"auto", "gpu", "cpu", NULL};
 
-int kg_config_high_perf_compute_and_ai_apply_userland_config(zval *config_arr)
+static int kg_high_perf_apply_string_field(zval *value, const char *name, char **target)
+{
+    if (Z_TYPE_P(value) != IS_STRING) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type for %s. A string is required.",
+            name
+        );
+        return FAILURE;
+    }
+
+    if (*target) {
+        pefree(*target, 1);
+    }
+    *target = pestrdup(Z_STRVAL_P(value), 1);
+    return SUCCESS;
+}
+
+static int kg_high_perf_apply_positive_double_field(zval *value, const char *name, double *target)
+{
+    double number;
+
+    if (Z_TYPE_P(value) == IS_LONG) {
+        number = (double) Z_LVAL_P(value);
+    } else if (Z_TYPE_P(value) == IS_DOUBLE) {
+        number = Z_DVAL_P(value);
+    } else {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type for %s. A positive finite number is required.",
+            name
+        );
+        return FAILURE;
+    }
+
+    if (!isfinite(number) || number <= 0.0) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid value for %s. A positive finite number is required.",
+            name
+        );
+        return FAILURE;
+    }
+
+    *target = number;
+    return SUCCESS;
+}
+
+int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
+    kg_high_perf_compute_ai_config_t *target,
+    zval *config_arr)
 {
     zval *value;
     zend_string *key;
-
-    if (!king_globals.is_userland_override_allowed) {
-        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
-            "Configuration override from userland is disabled by system administrator.");
-        return FAILURE;
-    }
 
     if (Z_TYPE_P(config_arr) != IS_ARRAY) {
         zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
@@ -77,39 +126,71 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config(zval *config_arr)
         }
 
         if (zend_string_equals_literal(key, "dataframe_enable")) {
-            if (kg_high_perf_apply_bool_field(value, "dataframe_enable", &king_high_perf_compute_ai_config.dataframe_enable) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "dataframe_enable", &target->dataframe_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "dataframe_memory_limit_mb")) {
-            if (kg_validate_positive_long(value, &king_high_perf_compute_ai_config.dataframe_memory_limit_mb) != SUCCESS) return FAILURE;
+            if (kg_validate_positive_long(value, &target->dataframe_memory_limit_mb) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "dataframe_string_interning_enable")) {
-            if (kg_high_perf_apply_bool_field(value, "dataframe_string_interning_enable", &king_high_perf_compute_ai_config.dataframe_string_interning_enable) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "dataframe_string_interning_enable", &target->dataframe_string_interning_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "dataframe_cpu_parallelism_default")) {
-            if (kg_validate_non_negative_long_local(value, &king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default) != SUCCESS) return FAILURE;
+            if (kg_validate_non_negative_long_local(value, &target->dataframe_cpu_parallelism_default) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_with_memory")) {
-            if (kg_high_perf_apply_bool_field(value, "inference_with_memory", &king_high_perf_compute_ai_config.inference_with_memory) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "inference_with_memory", &target->inference_with_memory) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_preferred_model_profile")) {
+            if (kg_validate_string_from_allowlist(value, k_high_perf_inference_profile_allowed, &target->inference_preferred_model_profile) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_cpu_model_name")) {
+            if (kg_high_perf_apply_string_field(value, "inference_cpu_model_name", &target->inference_cpu_model_name) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_cpu_model_artifact")) {
+            if (kg_high_perf_apply_string_field(value, "inference_cpu_model_artifact", &target->inference_cpu_model_artifact) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_model_name")) {
+            if (kg_high_perf_apply_string_field(value, "inference_gpu_model_name", &target->inference_gpu_model_name) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_model_artifact")) {
+            if (kg_high_perf_apply_string_field(value, "inference_gpu_model_artifact", &target->inference_gpu_model_artifact) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_max_gpu_layers")) {
+            if (kg_validate_non_negative_long_local(value, &target->inference_gpu_max_gpu_layers) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_thermal_sensor_path")) {
+            if (kg_high_perf_apply_string_field(value, "inference_gpu_thermal_sensor_path", &target->inference_gpu_thermal_sensor_path) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_thermal_max_temperature_c")) {
+            if (kg_high_perf_apply_positive_double_field(value, "inference_gpu_thermal_max_temperature_c", &target->inference_gpu_thermal_max_temperature_c) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_allow_unmonitored")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_gpu_allow_unmonitored", &target->inference_gpu_allow_unmonitored) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_bindings_enable")) {
-            if (kg_high_perf_apply_bool_field(value, "gpu_bindings_enable", &king_high_perf_compute_ai_config.gpu_bindings_enable) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "gpu_bindings_enable", &target->gpu_bindings_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_default_backend")) {
-            if (kg_validate_string_from_allowlist(value, k_high_perf_gpu_backend_allowed, &king_high_perf_compute_ai_config.gpu_default_backend) != SUCCESS) return FAILURE;
+            if (kg_validate_string_from_allowlist(value, k_high_perf_gpu_backend_allowed, &target->gpu_default_backend) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "worker_gpu_affinity_map")) {
-            if (kg_validate_cpu_affinity_map_string(value, &king_high_perf_compute_ai_config.worker_gpu_affinity_map) != SUCCESS) return FAILURE;
+            if (kg_validate_cpu_affinity_map_string(value, &target->worker_gpu_affinity_map) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_memory_preallocation_mb")) {
-            if (kg_validate_positive_long(value, &king_high_perf_compute_ai_config.gpu_memory_preallocation_mb) != SUCCESS) return FAILURE;
+            if (kg_validate_positive_long(value, &target->gpu_memory_preallocation_mb) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_p2p_enable")) {
-            if (kg_high_perf_apply_bool_field(value, "gpu_p2p_enable", &king_high_perf_compute_ai_config.gpu_p2p_enable) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "gpu_p2p_enable", &target->gpu_p2p_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "storage_enable_directstorage")) {
-            if (kg_high_perf_apply_bool_field(value, "storage_enable_directstorage", &king_high_perf_compute_ai_config.storage_enable_directstorage) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "storage_enable_directstorage", &target->storage_enable_directstorage) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "cuda_enable_tensor_cores")) {
-            if (kg_high_perf_apply_bool_field(value, "cuda_enable_tensor_cores", &king_high_perf_compute_ai_config.cuda_enable_tensor_cores) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "cuda_enable_tensor_cores", &target->cuda_enable_tensor_cores) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "cuda_stream_pool_size")) {
-            if (kg_validate_positive_long(value, &king_high_perf_compute_ai_config.cuda_stream_pool_size) != SUCCESS) return FAILURE;
+            if (kg_validate_positive_long(value, &target->cuda_stream_pool_size) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "rocm_enable_gfx_optimizations")) {
-            if (kg_high_perf_apply_bool_field(value, "rocm_enable_gfx_optimizations", &king_high_perf_compute_ai_config.rocm_enable_gfx_optimizations) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "rocm_enable_gfx_optimizations", &target->rocm_enable_gfx_optimizations) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "arc_enable_xmx_optimizations")) {
-            if (kg_high_perf_apply_bool_field(value, "arc_enable_xmx_optimizations", &king_high_perf_compute_ai_config.arc_enable_xmx_optimizations) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "arc_enable_xmx_optimizations", &target->arc_enable_xmx_optimizations) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "arc_video_acceleration_enable")) {
-            if (kg_high_perf_apply_bool_field(value, "arc_video_acceleration_enable", &king_high_perf_compute_ai_config.arc_video_acceleration_enable) != SUCCESS) return FAILURE;
+            if (kg_high_perf_apply_bool_field(value, "arc_video_acceleration_enable", &target->arc_video_acceleration_enable) != SUCCESS) return FAILURE;
         }
     } ZEND_HASH_FOREACH_END();
 
     return SUCCESS;
+}
+
+int kg_config_high_perf_compute_and_ai_apply_userland_config(zval *config_arr)
+{
+    if (!king_globals.is_userland_override_allowed) {
+        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
+            "Configuration override from userland is disabled by system administrator.");
+        return FAILURE;
+    }
+
+    return kg_config_high_perf_compute_and_ai_apply_userland_config_to(
+        &king_high_perf_compute_ai_config,
+        config_arr
+    );
 }

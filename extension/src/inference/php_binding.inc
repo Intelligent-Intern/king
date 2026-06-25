@@ -9,7 +9,9 @@
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/base64.h"
 #include "ext/json/php_json.h"
+#include "config/config.h"
 #include "config/high_perf_compute_and_ai/base_layer.h"
+#include "config/resource_helpers.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -45,6 +47,7 @@
 #include "backend_king_native.inc"
 #include "backend_registry.inc"
 #include "model_config.inc"
+#include "runtime_profile.inc"
 #include "openai_usage.inc"
 #include "stream_events.inc"
 #include "object_handlers.inc"

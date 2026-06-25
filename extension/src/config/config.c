@@ -23,6 +23,7 @@
 #include "php_king.h"
 #include "config/cloud_autoscale/config.h"
 #include "config/config.h"
+#include "config/high_perf_compute_and_ai/config.h"
 #include "config/http2/config.h"
 #include "config/mcp_and_orchestrator/config.h"
 #include "config/native_cdn/config.h"
@@ -53,7 +54,8 @@ typedef enum _king_config_override_module_t {
     KING_CONFIG_OVERRIDE_STORAGE,
     KING_CONFIG_OVERRIDE_CDN,
     KING_CONFIG_OVERRIDE_DNS,
-    KING_CONFIG_OVERRIDE_OTEL
+    KING_CONFIG_OVERRIDE_OTEL,
+    KING_CONFIG_OVERRIDE_COMPUTE_AI
 } king_config_override_module_t;
 
 #define KING_CONFIG_FREE_PERSISTENT(field) \
@@ -91,7 +93,14 @@ void king_config_release_module_globals(void)
     KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.key_file);
     memset(&king_dynamic_admin_api_config, 0, sizeof(king_dynamic_admin_api_config));
 
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_preferred_model_profile);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_name);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_artifact);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_name);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_artifact);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.gpu_default_backend);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.worker_gpu_affinity_map);
     memset(&king_high_perf_compute_ai_config, 0, sizeof(king_high_perf_compute_ai_config));
 
     memset(&king_iibin_config, 0, sizeof(king_iibin_config));

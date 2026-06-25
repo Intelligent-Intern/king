@@ -1221,6 +1221,28 @@ namespace {
     function king_xslt_transform_to_file(string $source_path, string $stylesheet_path, string $output_path, ?array $options = null): array {}
 
     /**
+     * Resolve the effective King runtime inference model config.
+     * The default profile is `auto`: when GPU use is enabled and
+     * `inference.gpu_model_artifact` is configured, King selects the
+     * `gemma4:12b` profile; otherwise it falls back to `gemma3:1b` through
+     * `inference.cpu_model_artifact`. The returned array can be passed to
+     * `king_inference_model_load()`.
+     * @param mixed $config null, King\Config, or native King\Config resource
+     * @return array<string,mixed>
+     * @throws \King\ValidationException
+     */
+    function king_inference_runtime_model_config(mixed $config = null): array {}
+
+    /**
+     * Load the model selected by the effective King runtime inference profile.
+     * This is the direct primitive for applications that want "use the
+     * configured runtime model" instead of manually composing the model array.
+     * @param mixed $config null, King\Config, or native King\Config resource
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_runtime_model_load(mixed $config = null): \King\Inference\Model {}
+
+    /**
      * Register a local quantized GGUF model artifact for King inference.
      * Artifacts are materialized filesystem paths supplied through `artifact`,
      * `artifact.path`, or `artifact_path`; the selected path must be a
@@ -2685,6 +2707,17 @@ namespace King {
      * Inference
      * =========================== */
     final class Inference {
+        /**
+         * @param mixed $config null, King\Config, or native King\Config resource
+         * @return array<string,mixed>
+         */
+        public static function runtimeModelConfig(mixed $config = null): array {}
+
+        /**
+         * @param mixed $config null, King\Config, or native King\Config resource
+         */
+        public static function runtimeModelLoad(mixed $config = null): Inference\Model {}
+
         /** @param array<string,mixed> $config */
         public static function loadModel(array $config): Inference\Model {}
 

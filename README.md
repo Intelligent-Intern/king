@@ -380,7 +380,10 @@ The core programming model is:
   `POST /v1/responses`, legacy `POST /v1/completions`, and
   `POST /v1/embeddings` through King server response arrays while broader
   native layer coverage and quantized kernels are added. Omitted inference
-  backend config selects `king_native_cpu`; the process-runner path is explicit
+  backend config selects `king_native_cpu`; the runtime model primitive can
+  resolve the configured `auto|gpu|cpu` model profile, preferring
+  `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
+  falling back to `gemma3:1b` for CPU. The process-runner path is explicit
   `local` configuration.
 
 The procedural API exists for direct systems work and low-friction interop.

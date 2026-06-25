@@ -123,6 +123,7 @@ typedef struct king_cfg_s {
     zend_bool owns_tcp_strings;
     zend_bool owns_quic_cc_algorithm;
     zend_bool owns_mcp_orchestrator_strings;
+    zend_bool owns_compute_ai_strings;
 
     /* Composed configuration modules. */
     kg_app_protocols_config_t      app_protocols;

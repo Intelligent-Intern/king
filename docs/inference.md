@@ -77,6 +77,64 @@ array when provided, `gpu.thermal.sensor_path` must be a non-empty string,
 `gpu.thermal.max_temperature_c` must be a positive finite number, and
 `gpu.thermal.allow_unmonitored_gpu` must be a boolean.
 
+## Runtime Model Profile
+
+Applications that should use "the configured King model" do not have to build
+the model config array themselves. King exposes a runtime model primitive with
+one explicit profile switch:
+
+```ini
+king.inference_preferred_model_profile=auto
+king.inference_cpu_model_name=gemma3:1b
+king.inference_cpu_model_artifact=/models/gemma3-1b.gguf
+king.inference_gpu_model_name=gemma4:12b
+king.inference_gpu_model_artifact=/models/gemma4-12b.gguf
+king.inference_gpu_max_gpu_layers=0
+king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
+king.inference_gpu_thermal_max_temperature_c=78
+king.inference_gpu_allow_unmonitored=0
+```
+
+`auto` selects the GPU profile only when process-level GPU bindings are enabled
+and `inference_gpu_model_artifact` points to a materialized local GGUF file.
+Otherwise it selects the CPU profile. `gpu` requires the GPU profile and fails
+fast when the GPU artifact or process-level GPU allowance is missing. `cpu`
+always selects the CPU profile.
+
+The same settings can be scoped to a `King\Config` snapshot:
+
+```php
+<?php
+$config = King\Config::new([
+    'inference.preferred_model_profile' => 'auto',
+    'inference.cpu_model_name' => 'gemma3:1b',
+    'inference.cpu_model_artifact' => '/models/gemma3-1b.gguf',
+    'inference.gpu_model_name' => 'gemma4:12b',
+    'inference.gpu_model_artifact' => '/models/gemma4-12b.gguf',
+    'inference.gpu_max_gpu_layers' => 48,
+    'inference.gpu_thermal_sensor_path' => '/sys/class/hwmon/hwmon0/temp1_input',
+    'inference.gpu_thermal_max_temperature_c' => 78.0,
+    'inference.gpu_allow_unmonitored' => false,
+]);
+
+$modelConfig = king_inference_runtime_model_config($config);
+$model = king_inference_runtime_model_load($config);
+```
+
+The procedural and OO surfaces are equivalent:
+
+```php
+<?php
+$modelConfig = King\Inference::runtimeModelConfig($config);
+$model = King\Inference::runtimeModelLoad($config);
+```
+
+The resolved config still loads through the implemented King backend contract.
+Today that means `king_native_cpu` is the backend that can load and inspect the
+GGUF artifact; the GPU profile carries the selected Gemma4 artifact and the
+strict GPU thermal policy so the native GPU backend can take over without
+changing application code when that backend is completed.
+
 ## Internal Backend Layout
 
 The public API stays stable while backend internals can be optimized one module

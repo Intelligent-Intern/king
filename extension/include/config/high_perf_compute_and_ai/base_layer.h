@@ -25,6 +25,15 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     zend_long dataframe_cpu_parallelism_default;
 
     bool inference_with_memory;
+    char *inference_preferred_model_profile;
+    char *inference_cpu_model_name;
+    char *inference_cpu_model_artifact;
+    char *inference_gpu_model_name;
+    char *inference_gpu_model_artifact;
+    zend_long inference_gpu_max_gpu_layers;
+    char *inference_gpu_thermal_sensor_path;
+    double inference_gpu_thermal_max_temperature_c;
+    bool inference_gpu_allow_unmonitored;
 
     /* --- General GPU Configuration --- */
     bool gpu_bindings_enable;

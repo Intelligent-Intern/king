@@ -21,7 +21,7 @@ static void king_config_object_throw_unsupported_key(
     zend_throw_exception_ex(
         spl_ce_InvalidArgumentException,
         0,
-        "Unsupported runtime config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., or otel.",
+        "Unsupported runtime config override '%s'. Use namespaced keys under quic., tls., http2., tcp., autoscale., mcp., orchestrator., geometry., smartcontract., ssh., storage., cdn., dns., otel., or inference.",
         ZSTR_VAL(key)
     );
 }
@@ -171,6 +171,12 @@ static zend_string *king_config_object_build_canonical_key(
             return king_config_object_build_prefixed_key("dns.", "dns_", normalized_key);
         case KING_CONFIG_OVERRIDE_OTEL:
             return king_config_object_build_prefixed_key("otel.", "otel_", normalized_key);
+        case KING_CONFIG_OVERRIDE_COMPUTE_AI:
+            return king_config_object_build_prefixed_key(
+                "inference.",
+                "inference_",
+                normalized_key
+            );
         case KING_CONFIG_OVERRIDE_NONE:
         default:
             return NULL;

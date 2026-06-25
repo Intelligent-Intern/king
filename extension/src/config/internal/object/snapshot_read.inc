@@ -166,6 +166,146 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.with_memory",
+            sizeof("inference.with_memory") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_with_memory);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.preferred_model_profile",
+            sizeof("inference.preferred_model_profile") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_preferred_model_profile != NULL
+                ? cfg->compute_ai.inference_preferred_model_profile
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.cpu_model_name",
+            sizeof("inference.cpu_model_name") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_cpu_model_name != NULL
+                ? cfg->compute_ai.inference_cpu_model_name
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.cpu_model_artifact",
+            sizeof("inference.cpu_model_artifact") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_cpu_model_artifact != NULL
+                ? cfg->compute_ai.inference_cpu_model_artifact
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_model_name",
+            sizeof("inference.gpu_model_name") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_gpu_model_name != NULL
+                ? cfg->compute_ai.inference_gpu_model_name
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_model_artifact",
+            sizeof("inference.gpu_model_artifact") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_gpu_model_artifact != NULL
+                ? cfg->compute_ai.inference_gpu_model_artifact
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_max_gpu_layers",
+            sizeof("inference.gpu_max_gpu_layers") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_max_gpu_layers);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_thermal_sensor_path",
+            sizeof("inference.gpu_thermal_sensor_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_gpu_thermal_sensor_path != NULL
+                ? cfg->compute_ai.inference_gpu_thermal_sensor_path
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_thermal_max_temperature_c",
+            sizeof("inference.gpu_thermal_max_temperature_c") - 1
+        )
+    ) {
+        ZVAL_DOUBLE(return_value, cfg->compute_ai.inference_gpu_thermal_max_temperature_c);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_allow_unmonitored",
+            sizeof("inference.gpu_allow_unmonitored") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_gpu_allow_unmonitored);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "mcp.enable_request_caching",
             sizeof("mcp.enable_request_caching") - 1
         )

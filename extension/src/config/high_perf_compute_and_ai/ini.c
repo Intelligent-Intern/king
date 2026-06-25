@@ -19,6 +19,11 @@
 #include <ext/spl/spl_exceptions.h>
 #include <Zend/zend_exceptions.h>
 #include <zend_ini.h>
+#include <errno.h>
+#include <ctype.h>
+#include <math.h>
+#include <stdlib.h>
+#include <strings.h>
 
 static void high_perf_replace_string(char **target, zend_string *value)
 {
@@ -45,6 +50,95 @@ static ZEND_INI_MH(OnUpdateAiPositiveLong)
         king_high_perf_compute_ai_config.gpu_memory_preallocation_mb = val;
     } else if (zend_string_equals_literal(entry->name, "king.cuda_stream_pool_size")) {
         king_high_perf_compute_ai_config.cuda_stream_pool_size = val;
+    }
+
+    return SUCCESS;
+}
+
+static ZEND_INI_MH(OnUpdateAiNonNegativeLong)
+{
+    zend_long val = ZEND_STRTOL(ZSTR_VAL(new_value), NULL, 10);
+
+    if (val < 0) {
+        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
+            "Invalid value for an AI/Compute directive. A non-negative integer is required.");
+        return FAILURE;
+    }
+
+    if (zend_string_equals_literal(entry->name, "king.inference_gpu_max_gpu_layers")) {
+        king_high_perf_compute_ai_config.inference_gpu_max_gpu_layers = val;
+    }
+
+    return SUCCESS;
+}
+
+static ZEND_INI_MH(OnUpdateAiPositiveDouble)
+{
+    char *endptr;
+    double val;
+
+    errno = 0;
+    val = strtod(ZSTR_VAL(new_value), &endptr);
+    while (*endptr != '\0' && isspace((unsigned char) *endptr)) {
+        endptr++;
+    }
+    if (errno != 0
+        || endptr == ZSTR_VAL(new_value)
+        || *endptr != '\0'
+        || !isfinite(val)
+        || val <= 0.0) {
+        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
+            "Invalid value for an AI/Compute directive. A positive finite number is required.");
+        return FAILURE;
+    }
+
+    if (zend_string_equals_literal(entry->name, "king.inference_gpu_thermal_max_temperature_c")) {
+        king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = val;
+    }
+
+    return SUCCESS;
+}
+
+static ZEND_INI_MH(OnUpdateInferenceProfile)
+{
+    const char *allowed[] = {"auto", "gpu", "cpu", NULL};
+    bool is_allowed = false;
+
+    for (int i = 0; allowed[i] != NULL; i++) {
+        if (strcasecmp(ZSTR_VAL(new_value), allowed[i]) == 0) {
+            is_allowed = true;
+            break;
+        }
+    }
+
+    if (!is_allowed) {
+        zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0,
+            "Invalid value for inference model profile. Must be one of 'auto', 'gpu', or 'cpu'.");
+        return FAILURE;
+    }
+
+    high_perf_replace_string(
+        &king_high_perf_compute_ai_config.inference_preferred_model_profile,
+        new_value
+    );
+    return SUCCESS;
+}
+
+static ZEND_INI_MH(OnUpdateInferenceString)
+{
+    if (zend_string_equals_literal(entry->name, "king.inference_cpu_model_name")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_cpu_model_name, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_cpu_model_artifact")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_cpu_model_artifact, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_model_name")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_gpu_model_name, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_model_artifact")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_gpu_model_artifact, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_thermal_sensor_path")) {
+        high_perf_replace_string(
+            &king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path,
+            new_value
+        );
     }
 
     return SUCCESS;
@@ -79,6 +173,15 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.dataframe_cpu_parallelism_default", "0", PHP_INI_SYSTEM, OnUpdateLong, dataframe_cpu_parallelism_default, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
 
     STD_PHP_INI_ENTRY("king.inference_with_memory", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_with_memory, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    ZEND_INI_ENTRY_EX("king.inference_preferred_model_profile", "auto", PHP_INI_SYSTEM, OnUpdateInferenceProfile, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_cpu_model_name", "gemma3:1b", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_cpu_model_artifact", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_model_name", "gemma4:12b", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_model_artifact", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_max_gpu_layers", "0", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_path", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_max_temperature_c", "78", PHP_INI_SYSTEM, OnUpdateAiPositiveDouble, NULL)
+    STD_PHP_INI_ENTRY("king.inference_gpu_allow_unmonitored", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_gpu_allow_unmonitored, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
 
     STD_PHP_INI_ENTRY("king.gpu_bindings_enable", "0", PHP_INI_SYSTEM, OnUpdateBool, gpu_bindings_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     ZEND_INI_ENTRY_EX("king.gpu_default_backend", "auto", PHP_INI_SYSTEM, OnUpdateGpuBackend, NULL)

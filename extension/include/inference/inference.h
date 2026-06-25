@@ -85,6 +85,8 @@ typedef struct _king_inference_stream_object {
 /* --- PHP Function Prototypes --- */
 
 PHP_FUNCTION(king_inference_model_load);
+PHP_FUNCTION(king_inference_runtime_model_config);
+PHP_FUNCTION(king_inference_runtime_model_load);
 PHP_FUNCTION(king_inference_model_info);
 PHP_FUNCTION(king_inference_tokenize);
 PHP_FUNCTION(king_inference_tensor_view);

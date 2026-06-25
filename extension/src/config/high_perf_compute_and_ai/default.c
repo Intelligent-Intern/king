@@ -21,6 +21,15 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.dataframe_string_interning_enable = true;
     king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default = 0;
     king_high_perf_compute_ai_config.inference_with_memory = false;
+    king_high_perf_compute_ai_config.inference_preferred_model_profile = pestrdup("auto", 1);
+    king_high_perf_compute_ai_config.inference_cpu_model_name = pestrdup("gemma3:1b", 1);
+    king_high_perf_compute_ai_config.inference_cpu_model_artifact = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_model_name = pestrdup("gemma4:12b", 1);
+    king_high_perf_compute_ai_config.inference_gpu_model_artifact = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_max_gpu_layers = 0;
+    king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = 78.0;
+    king_high_perf_compute_ai_config.inference_gpu_allow_unmonitored = false;
 
     king_high_perf_compute_ai_config.gpu_bindings_enable = false;
     king_high_perf_compute_ai_config.gpu_default_backend = NULL;

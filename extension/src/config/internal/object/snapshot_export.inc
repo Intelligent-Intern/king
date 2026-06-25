@@ -44,6 +44,64 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         cfg->autoscale.provider != NULL ? cfg->autoscale.provider : ""
     );
     add_assoc_long(target, "autoscale.max_nodes", cfg->autoscale.max_nodes);
+    add_assoc_bool(target, "inference.with_memory", cfg->compute_ai.inference_with_memory);
+    add_assoc_string(
+        target,
+        "inference.preferred_model_profile",
+        cfg->compute_ai.inference_preferred_model_profile != NULL
+            ? cfg->compute_ai.inference_preferred_model_profile
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.cpu_model_name",
+        cfg->compute_ai.inference_cpu_model_name != NULL
+            ? cfg->compute_ai.inference_cpu_model_name
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.cpu_model_artifact",
+        cfg->compute_ai.inference_cpu_model_artifact != NULL
+            ? cfg->compute_ai.inference_cpu_model_artifact
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_model_name",
+        cfg->compute_ai.inference_gpu_model_name != NULL
+            ? cfg->compute_ai.inference_gpu_model_name
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_model_artifact",
+        cfg->compute_ai.inference_gpu_model_artifact != NULL
+            ? cfg->compute_ai.inference_gpu_model_artifact
+            : ""
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_max_gpu_layers",
+        cfg->compute_ai.inference_gpu_max_gpu_layers
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_thermal_sensor_path",
+        cfg->compute_ai.inference_gpu_thermal_sensor_path != NULL
+            ? cfg->compute_ai.inference_gpu_thermal_sensor_path
+            : ""
+    );
+    add_assoc_double(
+        target,
+        "inference.gpu_thermal_max_temperature_c",
+        cfg->compute_ai.inference_gpu_thermal_max_temperature_c
+    );
+    add_assoc_bool(
+        target,
+        "inference.gpu_allow_unmonitored",
+        cfg->compute_ai.inference_gpu_allow_unmonitored
+    );
     add_assoc_bool(target, "mcp.enable_request_caching", cfg->mcp.mcp_enable_request_caching);
     add_assoc_long(
         target,
