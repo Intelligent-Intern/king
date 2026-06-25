@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/quic_transport/index.h"
-#include "include/config/quic_transport/default.h"
-#include "include/config/quic_transport/ini.h"
+#include "config/quic_transport/index.h"
+#include "config/quic_transport/default.h"
+#include "config/quic_transport/ini.h"
 
 void kg_config_quic_transport_init(void)
 {

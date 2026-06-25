@@ -15,7 +15,7 @@
 #define KING_SERVER_CORS_H
 
 #include <php.h>
-#include "include/client/session.h"
+#include "client/session.h"
 
 void king_server_cors_add_request_metadata(
     zval *request,

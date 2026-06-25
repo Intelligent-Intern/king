@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/tls_and_crypto/default.h"
-#include "include/config/tls_and_crypto/base_layer.h"
+#include "config/tls_and_crypto/default.h"
+#include "config/tls_and_crypto/base_layer.h"
 
 void kg_config_tls_and_crypto_defaults_load(void)
 {

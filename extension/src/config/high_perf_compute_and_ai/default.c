@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/high_perf_compute_and_ai/default.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
+#include "config/high_perf_compute_and_ai/default.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
 
 void kg_config_high_perf_compute_and_ai_defaults_load(void)
 {

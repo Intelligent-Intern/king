@@ -5,7 +5,7 @@
  */
 
 #include "php_king.h"
-#include "include/iibin/iibin_internal.h"
+#include "iibin/iibin_internal.h"
 
 HashTable king_proto_schema_registry;
 HashTable king_proto_enum_registry;

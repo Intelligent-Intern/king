@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/app_http3_websockets_webtransport/default.h"
-#include "include/config/app_http3_websockets_webtransport/base_layer.h"
+#include "config/app_http3_websockets_webtransport/default.h"
+#include "config/app_http3_websockets_webtransport/base_layer.h"
 
 void kg_config_app_http3_websockets_webtransport_defaults_load(void)
 {

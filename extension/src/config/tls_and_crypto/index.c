@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/tls_and_crypto/index.h"
-#include "include/config/tls_and_crypto/default.h"
-#include "include/config/tls_and_crypto/ini.h"
+#include "config/tls_and_crypto/index.h"
+#include "config/tls_and_crypto/default.h"
+#include "config/tls_and_crypto/ini.h"
 
 void kg_config_tls_and_crypto_init(void)
 {

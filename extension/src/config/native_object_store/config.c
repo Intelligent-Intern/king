@@ -12,15 +12,15 @@
  * =========================================================================
  */
 
-#include "include/config/native_object_store/config.h"
-#include "include/config/native_object_store/base_layer.h"
-#include "include/king_globals.h"
+#include "config/native_object_store/config.h"
+#include "config/native_object_store/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
-#include "include/validation/config_param/validate_generic_string.h"
-#include "include/validation/config_param/validate_erasure_coding_shards_string.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string_from_allowlist.h"
+#include "validation/config_param/validate_generic_string.h"
+#include "validation/config_param/validate_erasure_coding_shards_string.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

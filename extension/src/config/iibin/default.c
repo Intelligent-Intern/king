@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/iibin/default.h"
-#include "include/config/iibin/base_layer.h"
+#include "config/iibin/default.h"
+#include "config/iibin/base_layer.h"
 
 void kg_config_iibin_defaults_load(void)
 {

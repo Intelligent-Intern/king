@@ -5,7 +5,7 @@
  */
 
 #include "php.h"
-#include "include/iibin/iibin_internal.h"
+#include "iibin/iibin_internal.h"
 
 PHP_FUNCTION(king_proto_define_enum);
 PHP_FUNCTION(king_proto_define_schema);

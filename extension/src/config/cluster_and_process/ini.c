@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/cluster_and_process/ini.h"
-#include "include/config/cluster_and_process/base_layer.h"
+#include "config/cluster_and_process/ini.h"
+#include "config/cluster_and_process/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

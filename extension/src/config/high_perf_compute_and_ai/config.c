@@ -11,14 +11,14 @@
  * =========================================================================
  */
 
-#include "include/config/high_perf_compute_and_ai/config.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
-#include "include/king_globals.h"
+#include "config/high_perf_compute_and_ai/config.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_cpu_affinity_map_string.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_cpu_affinity_map_string.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string_from_allowlist.h"
 
 #include "php.h"
 #include <Zend/zend_exceptions.h>

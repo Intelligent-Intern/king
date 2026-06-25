@@ -9,7 +9,7 @@
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/base64.h"
 #include "ext/json/php_json.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
 
 #include <errno.h>
 #include <fcntl.h>

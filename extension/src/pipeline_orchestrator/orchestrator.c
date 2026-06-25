@@ -4,10 +4,10 @@
  * classification and the persisted step snapshots used by resume/recovery.
  */
 #include "php_king.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/king_hrtime.h"
-#include "include/pipeline_orchestrator/orchestrator.h"
-#include "include/telemetry/telemetry.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "king_hrtime.h"
+#include "pipeline_orchestrator/orchestrator.h"
+#include "telemetry/telemetry.h"
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
 #include "zend_smart_str.h"

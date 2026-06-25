@@ -7,11 +7,11 @@
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/base64.h"
 #include "ext/json/php_json.h"
-#include "include/mcp/mcp.h"
-#include "include/iibin/iibin_internal.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/config/mcp_and_orchestrator/default.h"
-#include "include/king_hrtime.h"
+#include "mcp/mcp.h"
+#include "iibin/iibin_internal.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "config/mcp_and_orchestrator/default.h"
+#include "king_hrtime.h"
 #include <strings.h>
 #include <time.h>
 

@@ -4,8 +4,8 @@
  * scoped telemetry state.
  */
 
-#include "include/pipeline_orchestrator/orchestrator.h"
-#include "include/telemetry/telemetry.h"
+#include "pipeline_orchestrator/orchestrator.h"
+#include "telemetry/telemetry.h"
 
 int king_request_init(int type, int module_number)
 {

@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/http2/ini.h"
-#include "include/config/http2/base_layer.h"
+#include "config/http2/ini.h"
+#include "config/http2/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

@@ -3,7 +3,7 @@
  * checks and raises the shared validation error when the value is not bool.
  */
 
-#include "include/validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_bool.h"
 #include "php.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>

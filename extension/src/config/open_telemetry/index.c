@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/index.h"
-#include "include/config/open_telemetry/default.h"
-#include "include/config/open_telemetry/ini.h"
+#include "config/open_telemetry/index.h"
+#include "config/open_telemetry/default.h"
+#include "config/open_telemetry/ini.h"
 
 void kg_config_open_telemetry_init(void)
 {

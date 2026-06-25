@@ -15,8 +15,8 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/server/cors.h"
+#include "client/session.h"
+#include "server/cors.h"
 
 #include <string.h>
 #include <time.h>

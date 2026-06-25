@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/ssh_over_quic/default.h"
-#include "include/config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/default.h"
+#include "config/ssh_over_quic/base_layer.h"
 
 void kg_config_ssh_over_quic_defaults_load(void)
 {

@@ -21,7 +21,7 @@
 #define KING_CONFIG_SMART_CONTRACTS_CONFIG_H
 
 #include "php.h"
-#include "include/config/smart_contracts/base_layer.h"
+#include "config/smart_contracts/base_layer.h"
 
 /**
  * @brief Applies smart-contract settings from a PHP array to the live runtime state.

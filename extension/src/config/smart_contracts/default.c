@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/smart_contracts/default.h"
-#include "include/config/smart_contracts/base_layer.h"
+#include "config/smart_contracts/default.h"
+#include "config/smart_contracts/base_layer.h"
 
 void kg_config_smart_contracts_defaults_load(void)
 {

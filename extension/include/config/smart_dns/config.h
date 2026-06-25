@@ -24,7 +24,7 @@
 #define KING_CONFIG_SMART_DNS_CONFIG_H
 
 #include "php.h"
-#include "include/config/smart_dns/base_layer.h"
+#include "config/smart_dns/base_layer.h"
 
 /**
  * @brief Applies Smart-DNS settings from a PHP array to the live runtime state.

@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/smart_dns/ini.h"
-#include "include/config/smart_dns/base_layer.h"
+#include "config/smart_dns/ini.h"
+#include "config/smart_dns/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/tls_and_crypto/ini.h"
-#include "include/config/tls_and_crypto/base_layer.h"
+#include "config/tls_and_crypto/ini.h"
+#include "config/tls_and_crypto/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

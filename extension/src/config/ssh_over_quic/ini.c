@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/ssh_over_quic/ini.h"
-#include "include/config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/ini.h"
+#include "config/ssh_over_quic/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

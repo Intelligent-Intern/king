@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/native_cdn/default.h"
-#include "include/config/native_cdn/base_layer.h"
+#include "config/native_cdn/default.h"
+#include "config/native_cdn/base_layer.h"
 
 void kg_config_native_cdn_defaults_load(void)
 {

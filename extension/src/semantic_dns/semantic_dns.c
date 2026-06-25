@@ -6,8 +6,8 @@
  */
 
 #include "php_king.h"
-#include "include/config/smart_dns/base_layer.h"
-#include "include/semantic_dns/semantic_dns.h"
+#include "config/smart_dns/base_layer.h"
+#include "semantic_dns/semantic_dns.h"
 
 #include <arpa/inet.h>
 #include <errno.h>

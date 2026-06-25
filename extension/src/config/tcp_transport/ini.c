@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/tcp_transport/ini.h"
-#include "include/config/tcp_transport/base_layer.h"
+#include "config/tcp_transport/ini.h"
+#include "config/tcp_transport/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

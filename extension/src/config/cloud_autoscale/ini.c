@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/ini.h"
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/ini.h"
+#include "config/cloud_autoscale/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

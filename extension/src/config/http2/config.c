@@ -12,12 +12,12 @@
  * =========================================================================
  */
 
-#include "include/config/http2/config.h"
-#include "include/config/http2/base_layer.h"
-#include "include/king_globals.h"
+#include "config/http2/config.h"
+#include "config/http2/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

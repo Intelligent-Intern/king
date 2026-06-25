@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/smart_contracts/index.h"
-#include "include/config/smart_contracts/default.h"
-#include "include/config/smart_contracts/ini.h"
+#include "config/smart_contracts/index.h"
+#include "config/smart_contracts/default.h"
+#include "config/smart_contracts/ini.h"
 
 void kg_config_smart_contracts_init(void)
 {

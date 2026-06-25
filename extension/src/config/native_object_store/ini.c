@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/native_object_store/ini.h"
-#include "include/config/native_object_store/base_layer.h"
+#include "config/native_object_store/ini.h"
+#include "config/native_object_store/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

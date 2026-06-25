@@ -13,11 +13,11 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/config/config.h"
-#include "include/server/http1.h"
-#include "include/server/http2.h"
-#include "include/server/http3.h"
-#include "include/server/index.h"
+#include "config/config.h"
+#include "server/http1.h"
+#include "server/http2.h"
+#include "server/http3.h"
+#include "server/index.h"
 #include <zend_exceptions.h>
 
 extern int le_king_cfg;

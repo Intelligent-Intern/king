@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/native_cdn/ini.h"
-#include "include/config/native_cdn/base_layer.h"
+#include "config/native_cdn/ini.h"
+#include "config/native_cdn/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

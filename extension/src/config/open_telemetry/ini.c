@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/ini.h"
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/ini.h"
+#include "config/open_telemetry/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

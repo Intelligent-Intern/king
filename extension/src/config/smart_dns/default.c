@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/smart_dns/default.h"
-#include "include/config/smart_dns/base_layer.h"
+#include "config/smart_dns/default.h"
+#include "config/smart_dns/base_layer.h"
 
 void kg_config_smart_dns_defaults_load(void)
 {

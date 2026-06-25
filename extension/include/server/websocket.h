@@ -7,7 +7,7 @@
 #include <zend_object_handlers.h>
 #include <stdbool.h>
 
-#include "include/client/websocket.h"
+#include "client/websocket.h"
 
 typedef struct _king_client_session king_client_session_t;
 

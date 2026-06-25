@@ -4,7 +4,7 @@
  * metrics together with pending telemetry signals for export.
  */
 #include "php_king.h"
-#include "include/telemetry/telemetry.h"
+#include "telemetry/telemetry.h"
 
 static HashTable king_metrics_registry;
 static bool king_metrics_initialized = false;

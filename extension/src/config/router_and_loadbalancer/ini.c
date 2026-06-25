@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/router_and_loadbalancer/ini.h"
-#include "include/config/router_and_loadbalancer/base_layer.h"
+#include "config/router_and_loadbalancer/ini.h"
+#include "config/router_and_loadbalancer/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

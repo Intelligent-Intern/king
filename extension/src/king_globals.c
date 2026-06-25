@@ -11,7 +11,7 @@
  * =========================================================================
  */
 
-#include "include/king_globals.h"
+#include "king_globals.h"
 
 /*
  * The single authoritative instance of the extension's global state.

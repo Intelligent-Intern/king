@@ -12,11 +12,11 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/early_hints.h"
-#include "include/client/http1.h"
-#include "include/config/config.h"
-#include "include/config/tcp_transport/base_layer.h"
-#include "include/telemetry/telemetry.h"
+#include "client/early_hints.h"
+#include "client/http1.h"
+#include "config/config.h"
+#include "config/tcp_transport/base_layer.h"
+#include "telemetry/telemetry.h"
 
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/url.h"

@@ -3,7 +3,7 @@
  * bounded origin-shape checks used by the current server config surface.
  */
 
-#include "include/validation/config_param/validate_cors_origin_string.h"
+#include "validation/config_param/validate_cors_origin_string.h"
 
 #include "ext/standard/php_string.h" /* For php_trim */
 #include "ext/standard/url.h"        /* For php_url_parse_ex */

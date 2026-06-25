@@ -21,7 +21,7 @@
 #define KING_CONFIG_SSH_OVER_QUIC_CONFIG_H
 
 #include "php.h"
-#include "include/config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/base_layer.h"
 
 /**
  * @brief Applies SSH-over-QUIC settings from a PHP array to the live runtime state.

@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/quic_transport/ini.h"
-#include "include/config/quic_transport/base_layer.h"
+#include "config/quic_transport/ini.h"
+#include "config/quic_transport/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/smart_contracts/ini.h"
-#include "include/config/smart_contracts/base_layer.h"
+#include "config/smart_contracts/ini.h"
+#include "config/smart_contracts/base_layer.h"
 
 #include "php.h"
 #include <Zend/zend_exceptions.h>

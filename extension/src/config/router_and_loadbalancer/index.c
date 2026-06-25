@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/router_and_loadbalancer/index.h"
-#include "include/config/router_and_loadbalancer/default.h"
-#include "include/config/router_and_loadbalancer/ini.h"
+#include "config/router_and_loadbalancer/index.h"
+#include "config/router_and_loadbalancer/default.h"
+#include "config/router_and_loadbalancer/ini.h"
 
 void kg_config_router_and_loadbalancer_init(void)
 {

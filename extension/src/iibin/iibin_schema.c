@@ -5,7 +5,7 @@
  */
 
 #include "php_king.h"
-#include "include/iibin/iibin_internal.h"
+#include "iibin/iibin_internal.h"
 
 zend_result king_iibin_define_schema(
     zend_string *schema_name,

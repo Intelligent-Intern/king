@@ -4,7 +4,7 @@
  */
 
 #include "php.h"
-#include "include/iibin/iibin_internal.h"
+#include "iibin/iibin_internal.h"
 
 int king_iibin_minit(void)
 {

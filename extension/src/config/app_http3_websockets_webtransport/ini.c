@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/app_http3_websockets_webtransport/ini.h"
-#include "include/config/app_http3_websockets_webtransport/base_layer.h"
+#include "config/app_http3_websockets_webtransport/ini.h"
+#include "config/app_http3_websockets_webtransport/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/index.h"
-#include "include/config/cloud_autoscale/default.h"
-#include "include/config/cloud_autoscale/ini.h"
+#include "config/cloud_autoscale/index.h"
+#include "config/cloud_autoscale/default.h"
+#include "config/cloud_autoscale/ini.h"
 
 void kg_config_cloud_autoscale_init(void)
 {

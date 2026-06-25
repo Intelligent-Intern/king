@@ -11,13 +11,13 @@
  * =========================================================================
  */
 
-#include "include/config/iibin/config.h"
-#include "include/config/iibin/base_layer.h"
-#include "include/king_globals.h"
+#include "config/iibin/config.h"
+#include "config/iibin/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_generic_string.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_generic_string.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

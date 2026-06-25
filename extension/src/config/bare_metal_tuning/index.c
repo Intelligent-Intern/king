@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/bare_metal_tuning/index.h"
-#include "include/config/bare_metal_tuning/default.h"
-#include "include/config/bare_metal_tuning/ini.h"
+#include "config/bare_metal_tuning/index.h"
+#include "config/bare_metal_tuning/default.h"
+#include "config/bare_metal_tuning/ini.h"
 
 void kg_config_bare_metal_tuning_init(void)
 {

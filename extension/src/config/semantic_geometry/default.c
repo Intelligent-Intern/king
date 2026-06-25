@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/semantic_geometry/default.h"
-#include "include/config/semantic_geometry/base_layer.h"
+#include "config/semantic_geometry/default.h"
+#include "config/semantic_geometry/base_layer.h"
 
 void kg_config_semantic_geometry_defaults_load(void)
 {

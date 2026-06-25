@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/router_and_loadbalancer/default.h"
-#include "include/config/router_and_loadbalancer/base_layer.h"
+#include "config/router_and_loadbalancer/default.h"
+#include "config/router_and_loadbalancer/base_layer.h"
 
 void kg_config_router_and_loadbalancer_defaults_load(void)
 {

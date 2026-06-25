@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/default.h"
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/default.h"
+#include "config/open_telemetry/base_layer.h"
 
 void kg_config_open_telemetry_defaults_load(void)
 {

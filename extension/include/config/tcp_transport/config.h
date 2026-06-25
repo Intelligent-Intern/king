@@ -21,7 +21,7 @@
 #define KING_CONFIG_TCP_TRANSPORT_CONFIG_H
 
 #include "php.h"
-#include "include/config/tcp_transport/base_layer.h"
+#include "config/tcp_transport/base_layer.h"
 
 /**
  * @brief Applies TCP transport settings from a PHP array to the live runtime state.

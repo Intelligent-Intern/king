@@ -14,7 +14,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/king_globals.h"
+#include "king_globals.h"
 #include <unistd.h>
 
 static const char *const king_active_runtime_names[] = {

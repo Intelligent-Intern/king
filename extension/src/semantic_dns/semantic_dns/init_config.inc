@@ -336,5 +336,5 @@ static bool king_semantic_dns_runtime_require_initialized(const char *function_n
     return false;
 }
 
-#include "include/king_globals.h"
+#include "king_globals.h"
 

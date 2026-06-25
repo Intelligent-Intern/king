@@ -12,7 +12,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/server/cancel.h"
+#include "server/cancel.h"
 
 #include <stdarg.h>
 #include <time.h>

@@ -11,9 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/bare_metal_tuning/ini.h"
-#include "include/config/bare_metal_tuning/base_layer.h"
-#include "include/validation/config_param/validate_cpu_affinity_map_string.h"
+#include "config/bare_metal_tuning/ini.h"
+#include "config/bare_metal_tuning/base_layer.h"
+#include "validation/config_param/validate_cpu_affinity_map_string.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

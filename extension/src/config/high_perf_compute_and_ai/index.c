@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/high_perf_compute_and_ai/index.h"
-#include "include/config/high_perf_compute_and_ai/default.h"
-#include "include/config/high_perf_compute_and_ai/ini.h"
+#include "config/high_perf_compute_and_ai/index.h"
+#include "config/high_perf_compute_and_ai/default.h"
+#include "config/high_perf_compute_and_ai/ini.h"
 
 void kg_config_high_perf_compute_and_ai_init(void)
 {

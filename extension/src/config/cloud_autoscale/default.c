@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/default.h"
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/default.h"
+#include "config/cloud_autoscale/base_layer.h"
 
 void kg_config_cloud_autoscale_defaults_load(void)
 {

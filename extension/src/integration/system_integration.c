@@ -5,7 +5,7 @@
  * helpers over that inventory.
  */
 #include "php_king.h"
-#include "include/integration/system_integration.h"
+#include "integration/system_integration.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>

@@ -11,9 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/router_and_loadbalancer/base_layer.h"
-#include "include/pipeline_orchestrator/orchestrator.h"
-#include "include/telemetry/telemetry.h"
+#include "config/router_and_loadbalancer/base_layer.h"
+#include "pipeline_orchestrator/orchestrator.h"
+#include "telemetry/telemetry.h"
 #include "introspection/prelude.inc"
 #include "introspection/telemetry.inc"
 #include "introspection/object_store.inc"

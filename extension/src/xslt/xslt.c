@@ -10,7 +10,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/runtime/saxonc_candidates.h"
+#include "runtime/saxonc_candidates.h"
 #include "xslt/xslt.h"
 #include "Zend/zend_exceptions.h"
 #include <dlfcn.h>

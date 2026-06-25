@@ -14,7 +14,7 @@
 #define KING_CONFIG_CLOUD_AUTOSCALE_CONFIG_H
 
 #include "php.h"
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/base_layer.h"
 
 /**
  * @brief Applies runtime configuration settings from a PHP array.

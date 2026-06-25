@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/high_perf_compute_and_ai/ini.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
+#include "config/high_perf_compute_and_ai/ini.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

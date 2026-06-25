@@ -4,9 +4,9 @@
  * and builds the normalized request path used by the local protocol leaves.
  */
 
-#include "include/server/cors.h"
-#include "include/server/open_telemetry.h"
-#include "include/telemetry/telemetry.h"
+#include "server/cors.h"
+#include "server/open_telemetry.h"
+#include "telemetry/telemetry.h"
 
 static void king_server_local_set_errorf(const char *format, ...)
 {

@@ -3,7 +3,7 @@
  * related native resource handles when their userland wrappers are freed.
  */
 
-#include "include/mcp/mcp.h"
+#include "mcp/mcp.h"
 
 static void king_session_dtor(zend_resource *rsrc)
 {

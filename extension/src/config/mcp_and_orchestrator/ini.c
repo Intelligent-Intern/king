@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/mcp_and_orchestrator/ini.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "config/mcp_and_orchestrator/ini.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

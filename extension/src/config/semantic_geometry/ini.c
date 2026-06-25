@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/semantic_geometry/ini.h"
-#include "include/config/semantic_geometry/base_layer.h"
+#include "config/semantic_geometry/ini.h"
+#include "config/semantic_geometry/base_layer.h"
 
 #include "php.h"
 #include <zend_ini.h>

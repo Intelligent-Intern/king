@@ -9,11 +9,11 @@
  * =========================================================================
  */
 #include "php_king.h"
-#include "include/autoscaling/autoscaling.h"
-#include "include/config/cloud_autoscale/base_layer.h"
-#include "include/config/cloud_autoscale/config.h"
-#include "include/king_globals.h"
-#include "include/telemetry/telemetry.h"
+#include "autoscaling/autoscaling.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/config.h"
+#include "king_globals.h"
+#include "telemetry/telemetry.h"
 #include "autoscaling/autoscaling_internal.h"
 
 #include <errno.h>

@@ -12,7 +12,7 @@
 #define KING_AUTOSCALING_H
 
 #include <php.h>
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/base_layer.h"
 #include <stdint.h>
 #include <time.h>
 

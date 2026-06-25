@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/http2/default.h"
-#include "include/config/http2/base_layer.h"
+#include "config/http2/default.h"
+#include "config/http2/base_layer.h"
 
 void kg_config_http2_defaults_load(void)
 {

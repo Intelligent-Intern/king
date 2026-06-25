@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/iibin/index.h"
-#include "include/config/iibin/default.h"
-#include "include/config/iibin/ini.h"
+#include "config/iibin/index.h"
+#include "config/iibin/default.h"
+#include "config/iibin/ini.h"
 
 void kg_config_iibin_init(void)
 {

@@ -13,9 +13,9 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/websocket.h"
-#include "include/config/config.h"
-#include "include/config/app_http3_websockets_webtransport/base_layer.h"
+#include "client/websocket.h"
+#include "config/config.h"
+#include "config/app_http3_websockets_webtransport/base_layer.h"
 
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/base64.h"

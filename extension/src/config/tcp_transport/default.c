@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/tcp_transport/default.h"
-#include "include/config/tcp_transport/base_layer.h"
+#include "config/tcp_transport/default.h"
+#include "config/tcp_transport/base_layer.h"
 
 void kg_config_tcp_transport_defaults_load(void)
 {

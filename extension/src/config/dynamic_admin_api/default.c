@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/dynamic_admin_api/default.h"
-#include "include/config/dynamic_admin_api/base_layer.h"
+#include "config/dynamic_admin_api/default.h"
+#include "config/dynamic_admin_api/base_layer.h"
 
 void kg_config_dynamic_admin_api_defaults_load(void)
 {

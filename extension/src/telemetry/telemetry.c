@@ -5,8 +5,8 @@
  * span to userland.
  */
 #include "php_king.h"
-#include "include/telemetry/telemetry.h"
-#include "include/runtime/libcurl_candidates.h"
+#include "telemetry/telemetry.h"
+#include "runtime/libcurl_candidates.h"
 #include <zend_hash.h>
 #include <curl/curl.h>
 #include <dlfcn.h>
@@ -20,7 +20,7 @@
 #include <ext/spl/spl_exceptions.h>
 #include <ext/standard/php_var.h>
 #include "zend_smart_str.h"
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/base_layer.h"
 
 static king_telemetry_config_t king_telemetry_runtime_config;
 static bool king_telemetry_system_initialized = false;

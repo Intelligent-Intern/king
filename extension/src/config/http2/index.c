@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/http2/index.h"
-#include "include/config/http2/default.h"
-#include "include/config/http2/ini.h"
+#include "config/http2/index.h"
+#include "config/http2/default.h"
+#include "config/http2/ini.h"
 
 void kg_config_http2_init(void)
 {

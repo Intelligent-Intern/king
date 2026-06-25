@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/dynamic_admin_api/ini.h"
-#include "include/config/dynamic_admin_api/base_layer.h"
+#include "config/dynamic_admin_api/ini.h"
+#include "config/dynamic_admin_api/base_layer.h"
 
 #include "php.h"
 #include "main/php_streams.h"

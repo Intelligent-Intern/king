@@ -12,16 +12,16 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/config.h"
-#include "include/config/open_telemetry/base_layer.h"
-#include "include/king_globals.h"
+#include "config/open_telemetry/config.h"
+#include "config/open_telemetry/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
-#include "include/validation/config_param/validate_generic_string.h"
-#include "include/validation/config_param/validate_double_range.h"
-#include "include/validation/config_param/validate_comma_separated_numeric_string.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string_from_allowlist.h"
+#include "validation/config_param/validate_generic_string.h"
+#include "validation/config_param/validate_double_range.h"
+#include "validation/config_param/validate_comma_separated_numeric_string.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

@@ -14,10 +14,10 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/client/http1.h"
-#include "include/server/session.h"
-#include "include/config/config.h"
+#include "client/session.h"
+#include "client/http1.h"
+#include "server/session.h"
+#include "config/config.h"
 
 #include <arpa/inet.h>
 #include <errno.h>

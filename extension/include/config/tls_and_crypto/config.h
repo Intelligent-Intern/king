@@ -20,7 +20,7 @@
 #define KING_CONFIG_TLS_CRYPTO_CONFIG_H
 
 #include "php.h"
-#include "include/config/tls_and_crypto/base_layer.h"
+#include "config/tls_and_crypto/base_layer.h"
 
 /**
  * @brief Applies TLS/crypto settings from a PHP array to the live runtime state.

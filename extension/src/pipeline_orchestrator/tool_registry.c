@@ -4,8 +4,8 @@
  * that reload orchestrator state after restart.
  */
 #include "php_king.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/pipeline_orchestrator/orchestrator.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "pipeline_orchestrator/orchestrator.h"
 
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"

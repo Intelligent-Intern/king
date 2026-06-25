@@ -15,10 +15,10 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/config/config.h"
-#include "include/server/open_telemetry.h"
-#include "include/telemetry/telemetry.h"
+#include "client/session.h"
+#include "config/config.h"
+#include "server/open_telemetry.h"
+#include "telemetry/telemetry.h"
 
 #include <ctype.h>
 #include <stdlib.h>

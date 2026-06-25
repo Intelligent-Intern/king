@@ -11,13 +11,13 @@
  * =========================================================================
  */
 
-#include "include/config/app_http3_websockets_webtransport/config.h"
-#include "include/config/app_http3_websockets_webtransport/base_layer.h"
-#include "include/king_globals.h"
+#include "config/app_http3_websockets_webtransport/config.h"
+#include "config/app_http3_websockets_webtransport/base_layer.h"
+#include "king_globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_comma_separated_string_from_allowlist.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_comma_separated_string_from_allowlist.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

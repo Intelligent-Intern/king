@@ -483,5 +483,5 @@ static void king_mcp_throw_state_error(
     zend_throw_exception_ex(exception_ce, 0, "%s", message);
 }
 
-#include "include/king_globals.h"
+#include "king_globals.h"
 

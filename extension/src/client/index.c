@@ -14,10 +14,10 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/http1.h"
-#include "include/client/http2.h"
-#include "include/client/http3.h"
-#include "include/client/index.h"
+#include "client/http1.h"
+#include "client/http2.h"
+#include "client/http3.h"
+#include "client/index.h"
 
 #include <zend_exceptions.h>
 #include <stdio.h>

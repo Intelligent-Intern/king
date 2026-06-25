@@ -21,7 +21,7 @@
 #define KING_CONFIG_QUIC_TRANSPORT_CONFIG_H
 
 #include "php.h"
-#include "include/config/quic_transport/base_layer.h"
+#include "config/quic_transport/base_layer.h"
 
 /**
  * @brief Applies QUIC transport settings from a PHP array to the live runtime state.

@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/iibin/ini.h"
-#include "include/config/iibin/base_layer.h"
+#include "config/iibin/ini.h"
+#include "config/iibin/base_layer.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

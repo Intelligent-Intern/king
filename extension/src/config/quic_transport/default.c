@@ -12,8 +12,8 @@
  * =========================================================================
  */
 
-#include "include/config/quic_transport/default.h"
-#include "include/config/quic_transport/base_layer.h"
+#include "config/quic_transport/default.h"
+#include "config/quic_transport/base_layer.h"
 
 void kg_config_quic_transport_defaults_load(void)
 {

@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/dynamic_admin_api/index.h"
-#include "include/config/dynamic_admin_api/default.h"
-#include "include/config/dynamic_admin_api/ini.h"
+#include "config/dynamic_admin_api/index.h"
+#include "config/dynamic_admin_api/default.h"
+#include "config/dynamic_admin_api/ini.h"
 
 void kg_config_dynamic_admin_api_init(void)
 {
