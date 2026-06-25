@@ -149,6 +149,8 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_validate_non_negative_long_local(value, &target->inference_gpu_max_gpu_layers) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_thermal_sensor_path")) {
             if (kg_high_perf_apply_string_field(value, "inference_gpu_thermal_sensor_path", &target->inference_gpu_thermal_sensor_path) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_thermal_sensor_command")) {
+            if (kg_high_perf_apply_string_field(value, "inference_gpu_thermal_sensor_command", &target->inference_gpu_thermal_sensor_command) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_thermal_max_temperature_c")) {
             if (kg_high_perf_apply_positive_double_field(value, "inference_gpu_thermal_max_temperature_c", &target->inference_gpu_thermal_max_temperature_c) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_allow_unmonitored")) {

@@ -41,6 +41,14 @@ loads the current King extension, materializes a Gemma3 GGUF model through the
 native loader, builds token-step graphs with KV state, and streams decoded token
 text on stdout for the OpenAI-compatible router.
 
+For the local OpenAI-compatible router, `bin/king-openai-router` loads
+`infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
+`gemma4:12b` for the GPU profile, configures GPU layers, and uses
+`nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits` as the
+temperature source. The router registers `gemma4:12b` only when GPU bindings
+and a positive GPU-layer count are active; otherwise only the CPU model is
+listed.
+
 Native graph stream memory is opt-in. The compiled default is stateless and the
 system baseline can be changed in `php.ini`:
 
@@ -133,11 +141,13 @@ override that array for a single run.
 
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
-`king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
-required unless the operator explicitly accepts unmonitored GPU execution.
+`king.gpu_bindings_enable` setting must allow it, and either a thermal sensor
+path or a thermal sensor command is required unless the operator explicitly
+accepts unmonitored GPU execution.
 The `gpu` config itself is strict: `gpu.enabled` must be a boolean,
 `gpu.max_gpu_layers` must be a non-negative integer, `gpu.thermal` must be an
-array when provided, `gpu.thermal.sensor_path` must be a non-empty string,
+array when provided, `gpu.thermal.sensor_path` and
+`gpu.thermal.sensor_command` must be non-empty strings when provided,
 `gpu.thermal.max_temperature_c` must be a positive finite number, and
 `gpu.thermal.allow_unmonitored_gpu` must be a boolean.
 
@@ -155,6 +165,7 @@ king.inference_gpu_model_name=gemma4:12b
 king.inference_gpu_model_artifact=/models/gemma4-12b.gguf
 king.inference_gpu_max_gpu_layers=0
 king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
+king.inference_gpu_thermal_sensor_command=
 king.inference_gpu_thermal_max_temperature_c=78
 king.inference_gpu_allow_unmonitored=0
 king.inference_llm_cache_enable=1
@@ -181,6 +192,7 @@ $config = King\Config::new([
     'inference.gpu_model_artifact' => '/models/gemma4-12b.gguf',
     'inference.gpu_max_gpu_layers' => 48,
     'inference.gpu_thermal_sensor_path' => '/sys/class/hwmon/hwmon0/temp1_input',
+    'inference.gpu_thermal_sensor_command' => '',
     'inference.gpu_thermal_max_temperature_c' => 78.0,
     'inference.gpu_allow_unmonitored' => false,
     'inference.llm_cache_path' => '/var/cache/king/llm',

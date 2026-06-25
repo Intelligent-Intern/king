@@ -142,6 +142,11 @@ static ZEND_INI_MH(OnUpdateInferenceString)
             &king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path,
             new_value
         );
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_thermal_sensor_command")) {
+        high_perf_replace_string(
+            &king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command,
+            new_value
+        );
     } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_path")) {
         high_perf_replace_string(&king_high_perf_compute_ai_config.inference_llm_cache_path, new_value);
     } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_disk_alert_webhook")) {
@@ -214,6 +219,7 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.inference_gpu_model_artifact", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_max_gpu_layers", "0", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_path", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_command", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_max_temperature_c", "78", PHP_INI_SYSTEM, OnUpdateAiPositiveDouble, NULL)
     STD_PHP_INI_ENTRY("king.inference_gpu_allow_unmonitored", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_gpu_allow_unmonitored, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     STD_PHP_INI_ENTRY("king.inference_llm_cache_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, inference_llm_cache_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)

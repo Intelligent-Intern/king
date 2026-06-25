@@ -182,6 +182,12 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
             "gpu.thermal.sensor_path",
             function_name
         ) != SUCCESS
+        || king_inference_validate_gpu_string_field(
+            thermal,
+            "sensor_command",
+            "gpu.thermal.sensor_command",
+            function_name
+        ) != SUCCESS
         || king_inference_validate_gpu_positive_number_field(
             thermal,
             "max_temperature_c",

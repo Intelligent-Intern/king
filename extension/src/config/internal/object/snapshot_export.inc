@@ -92,6 +92,13 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
             ? cfg->compute_ai.inference_gpu_thermal_sensor_path
             : ""
     );
+    add_assoc_string(
+        target,
+        "inference.gpu_thermal_sensor_command",
+        cfg->compute_ai.inference_gpu_thermal_sensor_command != NULL
+            ? cfg->compute_ai.inference_gpu_thermal_sensor_command
+            : ""
+    );
     add_assoc_double(
         target,
         "inference.gpu_thermal_max_temperature_c",

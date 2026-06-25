@@ -1273,7 +1273,8 @@ namespace {
      * explicit config plus thermal policy when enabled. GPU config is strict:
      * `gpu.enabled` and `gpu.thermal.allow_unmonitored_gpu` must be booleans,
      * `gpu.max_gpu_layers` must be a non-negative integer,
-     * `gpu.thermal.sensor_path` must be a non-empty string, and
+     * `gpu.thermal.sensor_path` and `gpu.thermal.sensor_command` must be
+     * non-empty strings when provided, and
      * `gpu.thermal.max_temperature_c` must be a positive finite number.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\RuntimeException

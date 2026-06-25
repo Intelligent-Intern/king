@@ -25,6 +25,7 @@ function parse_args(array $argv): array
         'top_p' => 0.95,
         'seed' => 0,
         'context' => 0,
+        'gpu_layers' => 0,
         'stops' => [],
     ];
 
@@ -73,7 +74,7 @@ function parse_args(array $argv): array
                 break;
             case '-ngl':
             case '--gpu-layers':
-                $next();
+                $options['gpu_layers'] = max(0, (int) $next());
                 break;
             case '--no-display-prompt':
             case '--log-disable':
@@ -91,6 +92,15 @@ function parse_args(array $argv): array
     }
 
     return $options;
+}
+
+function require_supported_execution(array $args): void
+{
+    if ((int) $args['gpu_layers'] > 0) {
+        fail(
+            'GPU offload was requested, but this King local PHP graph runner has no native GPU decoder kernel yet. Refusing CPU fallback.'
+        );
+    }
 }
 
 function model_load(string $path): King\Inference\Model
@@ -341,6 +351,7 @@ function should_stop(string $buffer, array $stops): bool
 }
 
 $args = parse_args($argv);
+require_supported_execution($args);
 $model = model_load($args['model']);
 $info = king_inference_model_info($model);
 $gguf = $info['gguf'] ?? [];

@@ -212,6 +212,13 @@ static zend_result king_inference_runtime_model_config_array(
                 compute->inference_gpu_thermal_sensor_path
             );
         }
+        if (king_inference_runtime_non_empty(compute->inference_gpu_thermal_sensor_command)) {
+            add_assoc_string(
+                &thermal,
+                "sensor_command",
+                compute->inference_gpu_thermal_sensor_command
+            );
+        }
         add_assoc_double(
             &thermal,
             "max_temperature_c",
