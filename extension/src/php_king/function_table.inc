@@ -154,17 +154,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_inference_next_async, arginfo_king_inference_next_async)
     PHP_FE(king_inference_cancel, arginfo_king_inference_cancel)
 
-    PHP_FE(king_telemetry_init, arginfo_king_config_array)
-    PHP_FE(king_telemetry_start_span, arginfo_king_telemetry_start_span)
-    PHP_FE(king_telemetry_end_span, arginfo_king_telemetry_end_span)
-    PHP_FE(king_telemetry_record_metric, arginfo_king_telemetry_record_metric)
-    PHP_FE(king_telemetry_log, arginfo_king_telemetry_log)
-    PHP_FE(king_telemetry_flush, arginfo_king_no_args)
-    PHP_FE(king_telemetry_get_metrics, arginfo_king_no_args)
-    PHP_FE(king_telemetry_get_status, arginfo_king_no_args)
-    PHP_FE(king_telemetry_get_trace_context, arginfo_king_no_args)
-    PHP_FE(king_telemetry_inject_context, arginfo_king_optional_headers)
-    PHP_FE(king_telemetry_extract_context, arginfo_king_headers)
+#include "../telemetry/function_entries.inc"
 
 #include "../autoscaling/function_entries.inc"
 

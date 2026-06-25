@@ -4,6 +4,12 @@ Telemetry records spans, metrics, and logs and can propagate trace context.
 The native API is procedural `king_telemetry_*`. A native OO class is not
 exported yet; the OO examples are userland adapters.
 
+## Internal Layout
+
+The telemetry runtime lives under `extension/src/telemetry/` with public
+contracts in `extension/include/telemetry/`. Its PHP arginfo and function-table
+entries live beside the runtime and are included by the extension bootstrap.
+
 ## Function, Example 1: Span, Metric, Log
 
 ```php

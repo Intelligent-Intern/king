@@ -42,6 +42,7 @@
 #include "object_store/class_methods.inc"
 #include "autoscaling/arginfo.inc"
 #include "autoscaling/class_methods.inc"
+#include "telemetry/arginfo.inc"
 #include "db_ingest/api.inc"
 #include "php_king/function_table.inc"
 #include "php_king/resources.inc"
