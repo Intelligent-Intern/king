@@ -20,6 +20,11 @@ expects an explicit `graph` or `graphs` request and decodes the selected token
 ids through the artifact tokenizer; it does not call an external inference
 runtime.
 
+When `backend` is omitted, King selects `king_native_cpu`. The process-runner
+backend is still available, but it must be selected intentionally with
+`backend => 'local'`, `backend.name => 'local'`, `backend.type => 'local'`, or
+a runner-bearing backend config.
+
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
 `king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
@@ -441,10 +446,19 @@ before falling back to the model's unknown token id.
 
 ```php
 <?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = king_inference_model_load([
     'name' => 'invoice-assistant-small',
     'artifact' => '/models/invoice-assistant-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 
 $stream = king_inference_stream($model, [
@@ -467,10 +481,19 @@ while (($event = king_inference_next($stream, 1000)) !== null) {
 
 ```php
 <?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = king_inference_model_load([
     'name' => 'king-local-invoice',
     'artifact' => '/models/invoice-assistant-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 
 $stream = king_inference_stream($model, [
@@ -624,7 +647,8 @@ while (true) {
                 'max_idle_events' => 240,
             ]);
         }
-    );}
+    );
+}
 ```
 
 The helper accepts the normalized King HTTP request array and owns the
@@ -644,16 +668,23 @@ with `data: {chunk}` events and a final `data: [DONE]` marker.
 
 ```php
 <?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $models = [
     'support-small' => king_inference_model_load([
         'name' => 'support-small',
         'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
-        'backend' => ['name' => 'local'], 'owned_by' => 'internal-platform',
+        'backend' => ['name' => 'local', 'runner_path' => $runner],
+        'owned_by' => 'internal-platform',
     ]),
     'invoice-checker' => king_inference_model_load([
         'name' => 'invoice-checker',
         'artifact_path' => getenv('KING_INVOICE_MODEL_PATH'),
-        'backend' => ['name' => 'local'], 'owned_by' => 'internal-platform',
+        'backend' => ['name' => 'local', 'runner_path' => $runner],
+        'owned_by' => 'internal-platform',
     ]),
 ];
 
@@ -752,15 +783,28 @@ while (($event = king_inference_next($stream, 250)) !== null) {
 
 ```php
 <?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $supportModel = king_inference_model_load([
     'name' => 'support-routing',
     'artifact' => '/models/support-routing-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 $invoiceModel = king_inference_model_load([
     'name' => 'invoice-format-check',
     'artifact' => '/models/invoice-format-check-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 
 $streams = [
@@ -824,10 +868,19 @@ while ($reads !== []) {
 <?php
 use King\Inference;
 
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = Inference::loadModel([
     'name' => 'assistant',
     'artifact_path' => '/models/assistant-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 $info = Inference::modelInfo($model);
 
@@ -903,10 +956,19 @@ use King\Awaitable;
 use King\Inference\Model;
 use King\Inference\Stream;
 
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = new Model([
     'name' => 'operations-assistant',
     'artifact_path' => '/models/operations-assistant-q4.gguf',
     'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
 ]);
 
 $streams = [

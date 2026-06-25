@@ -376,7 +376,9 @@ The core programming model is:
   `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,
   `POST /v1/responses`, legacy `POST /v1/completions`, and
   `POST /v1/embeddings` through King server response arrays while broader
-  native layer coverage and quantized kernels are added.
+  native layer coverage and quantized kernels are added. Omitted inference
+  backend config selects `king_native_cpu`; the process-runner path is explicit
+  `local` configuration.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

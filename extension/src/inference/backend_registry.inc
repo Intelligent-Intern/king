@@ -63,7 +63,7 @@ static void king_inference_backend_model_info(king_inference_model_object *inter
     zval capabilities;
 
     if (king_inference_backend_kind_from_config(&intern->config, &kind, "King\\Inference\\Model::info") != SUCCESS) {
-        kind = KING_INFERENCE_BACKEND_LOCAL;
+        kind = KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
     }
 
     add_assoc_string(return_value, "backend", king_inference_backend_kind_name(kind));

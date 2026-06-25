@@ -63,6 +63,16 @@ static zval *king_inference_backend_config_value(zval *config)
     return backend;
 }
 
+static bool king_inference_backend_config_implies_local_runner(zval *config)
+{
+    zval *backend = king_inference_array_find(config, "backend");
+
+    return backend != NULL
+        && Z_TYPE_P(backend) == IS_ARRAY
+        && (king_inference_array_find(backend, "runner") != NULL
+            || king_inference_array_find(backend, "runner_path") != NULL);
+}
+
 static zend_result king_inference_backend_kind_from_config(
     zval *config,
     king_inference_backend_kind *kind,
@@ -70,9 +80,12 @@ static zend_result king_inference_backend_kind_from_config(
 ) {
     zval *backend_name = king_inference_backend_config_value(config);
 
-    *kind = KING_INFERENCE_BACKEND_LOCAL;
+    *kind = KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
 
     if (backend_name == NULL) {
+        if (king_inference_backend_config_implies_local_runner(config)) {
+            *kind = KING_INFERENCE_BACKEND_LOCAL;
+        }
         return SUCCESS;
     }
 
