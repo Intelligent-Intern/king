@@ -398,3 +398,64 @@ static void king_orchestrator_finish_pipeline_span(
     (void) king_telemetry_end_internal_span(span, &final_attributes);
     zval_ptr_dtor(&final_attributes);
 }
+
+static void king_orchestrator_begin_pipeline_run_span(
+    king_trace_context_t **run_span,
+    zend_string *run_id,
+    zend_string *attempt_identity,
+    zend_long attempt_number,
+    const char *execution_backend,
+    const char *topology_scope
+)
+{
+    zval run_attributes;
+
+    if (run_span == NULL || !king_telemetry_is_capture_enabled() || attempt_identity == NULL) {
+        return;
+    }
+
+    array_init(&run_attributes);
+    king_orchestrator_append_pipeline_span_attributes(
+        &run_attributes,
+        run_id,
+        attempt_identity,
+        NULL,
+        -1
+    );
+    add_assoc_string(&run_attributes, "identity_scope", "run");
+    if (attempt_number > 1) {
+        add_assoc_stringl(
+            &run_attributes,
+            "retry_identity",
+            ZSTR_VAL(attempt_identity),
+            ZSTR_LEN(attempt_identity)
+        );
+    }
+    (void) king_telemetry_start_internal_span(
+        run_span,
+        "pipeline-orchestrator-run",
+        KING_SPAN_KIND_CONSUMER,
+        &run_attributes,
+        NULL
+    );
+    zval_ptr_dtor(&run_attributes);
+
+    king_orchestrator_record_pipeline_counter(
+        "pipeline.run.count",
+        execution_backend,
+        topology_scope,
+        "attempt",
+        NULL,
+        NULL
+    );
+    if (attempt_number > 1) {
+        king_orchestrator_record_pipeline_counter(
+            "pipeline.retry.count",
+            execution_backend,
+            topology_scope,
+            "recovered_attempt",
+            NULL,
+            "caller_managed_retry"
+        );
+    }
+}

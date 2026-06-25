@@ -158,6 +158,71 @@ static void king_orchestrator_classify_handler_throwable_failure(
     }
 }
 
+static zend_result king_orchestrator_prepare_registered_handler_execution(
+    zend_string *run_id,
+    zval *initial_data,
+    zval *handler_boundary,
+    zval *current_payload,
+    zend_long *persisted_completed_step_count,
+    zend_bool *use_registered_tool_handlers,
+    zend_bool *use_handler_boundary,
+    zend_bool throw_on_error
+)
+{
+    if (
+        handler_boundary == NULL
+        || current_payload == NULL
+        || persisted_completed_step_count == NULL
+        || use_registered_tool_handlers == NULL
+        || use_handler_boundary == NULL
+    ) {
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() could not prepare registered-handler execution state.",
+            king_ce_runtime_exception,
+            throw_on_error
+        );
+    }
+
+    if (king_orchestrator_backend_is_file_worker()) {
+        if (run_id == NULL || king_orchestrator_load_run_handler_boundary(run_id, handler_boundary) != SUCCESS) {
+            return king_orchestrator_raise_error(
+                "king_pipeline_orchestrator_run() could not load the persisted file-worker handler boundary.",
+                king_ce_runtime_exception,
+                throw_on_error
+            );
+        }
+
+        if (king_orchestrator_handler_boundary_requires_process_registration(handler_boundary)) {
+            *use_registered_tool_handlers = 1;
+            *use_handler_boundary = 1;
+        }
+    }
+
+    if (*use_registered_tool_handlers) {
+        if (
+            run_id == NULL
+            || king_orchestrator_load_run_progress(
+                run_id,
+                current_payload,
+                persisted_completed_step_count
+            ) != SUCCESS
+        ) {
+            return king_orchestrator_raise_error(
+                "king_pipeline_orchestrator_run() could not load persisted registered-handler progress.",
+                king_ce_runtime_exception,
+                throw_on_error
+            );
+        }
+
+        if (*persisted_completed_step_count <= 0) {
+            zval_ptr_dtor(current_payload);
+            ZVAL_COPY(current_payload, initial_data);
+        }
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_orchestrator_invoke_registered_tool_handler(
     zend_string *run_id,
     zval *step,
