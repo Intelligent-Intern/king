@@ -306,6 +306,25 @@ static bool king_inference_openai_stream_field_valid(zval *source, const char **
     return false;
 }
 
+static bool king_inference_openai_model_field_valid(zval *source, const char **message)
+{
+    zval *model = king_inference_array_find(source, "model");
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (model == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(model) == IS_STRING && Z_STRLEN_P(model) > 0) {
+        return true;
+    }
+    if (message != NULL) {
+        *message = "OpenAI model must be a non-empty string when provided.";
+    }
+    return false;
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");

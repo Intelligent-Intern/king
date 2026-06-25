@@ -58,7 +58,8 @@ The router supports:
 
 Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the
-loaded model name.
+loaded model name. Direct helpers that already receive one loaded model may omit
+`model`, but any provided `model` field must be a non-empty string.
 
 `GET /v1/models` and `GET /v1/models/{model}` return normal OpenAI model
 objects plus an `x_king` extension object. That object contains the resolved

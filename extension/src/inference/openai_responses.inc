@@ -333,7 +333,16 @@ static zend_result king_inference_openai_responses_payload_response(
     const char *generation_error = NULL;
     const char *stream_options_error = NULL;
     const char *stream_error = NULL;
+    const char *model_error = NULL;
 
+    if (!king_inference_openai_model_field_valid(payload, &model_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            model_error != NULL ? model_error : "OpenAI model is invalid.",
+            "invalid_request_error"
+        );
+    }
     if (!king_inference_openai_stream_field_valid(payload, &stream_error)) {
         return king_inference_openai_error_response(
             return_value,

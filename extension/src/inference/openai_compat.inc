@@ -120,6 +120,7 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
     const char *stop_error = NULL;
     const char *stream_options_error = NULL;
     const char *stream_error = NULL;
+    const char *model_error = NULL;
 
     if (has_error_response != NULL) {
         *has_error_response = false;
@@ -146,6 +147,17 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
             return_value,
             400,
             "Chat completions request requires a non-empty messages array.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_model_field_valid(payload, &model_error)) {
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            model_error != NULL ? model_error : "OpenAI model is invalid.",
             "invalid_request_error"
         );
     }

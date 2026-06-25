@@ -330,6 +330,7 @@ static zend_result king_inference_openai_require_model(
     zval **model_out)
 {
     zval *requested_model;
+    const char *model_error = NULL;
 
     *model_out = NULL;
     if (!king_inference_openai_models_valid(models)) {
@@ -342,16 +343,15 @@ static zend_result king_inference_openai_require_model(
     }
 
     requested_model = king_inference_array_find(decoded, "model");
-    if (requested_model != NULL && Z_TYPE_P(requested_model) != IS_STRING) {
+    if (!king_inference_openai_model_field_valid(decoded, &model_error)) {
         return king_inference_openai_error_response(
             return_value,
             400,
-            endpoint_name,
+            model_error != NULL ? model_error : endpoint_name,
             "invalid_request_error"
         );
     }
-    if ((requested_model == NULL || Z_STRLEN_P(requested_model) == 0)
-        && zend_hash_num_elements(Z_ARRVAL_P(models)) > 1) {
+    if (requested_model == NULL && zend_hash_num_elements(Z_ARRVAL_P(models)) > 1) {
         return king_inference_openai_error_response(
             return_value,
             400,
@@ -466,7 +466,7 @@ static zend_result king_inference_openai_router_chat_response(
     result = king_inference_openai_require_model(
         models,
         &decoded,
-        "Chat completions request model must be a string when provided.",
+        "Chat completions request model must be a non-empty string when provided.",
         return_value,
         &model
     );
@@ -517,7 +517,7 @@ static zend_result king_inference_openai_router_responses_response(
     result = king_inference_openai_require_model(
         models,
         &decoded,
-        "Responses request model must be a string when provided.",
+        "Responses request model must be a non-empty string when provided.",
         return_value,
         &model
     );
@@ -568,7 +568,7 @@ static zend_result king_inference_openai_router_completions_response(
     result = king_inference_openai_require_model(
         models,
         &decoded,
-        "Completions request model must be a string when provided.",
+        "Completions request model must be a non-empty string when provided.",
         return_value,
         &model
     );
@@ -619,7 +619,7 @@ static zend_result king_inference_openai_router_embeddings_response(
     result = king_inference_openai_require_model(
         models,
         &decoded,
-        "Embeddings request model must be a string when provided.",
+        "Embeddings request model must be a non-empty string when provided.",
         return_value,
         &model
     );
