@@ -4,6 +4,14 @@ The orchestrator executes tool steps, can persist runs, and supports local,
 file-worker, and remote-peer backends. Handlers are process-local and must be
 registered inside the executing process.
 
+## Internal Layout
+
+The native orchestrator runtime lives under
+`extension/src/pipeline_orchestrator/` with public contracts in
+`extension/include/pipeline_orchestrator/`. The module owns its PHP arginfo,
+class-method table, function-table entries, runtime execution API, durable tool
+registry, and queue/state persistence helpers.
+
 ## Function, Example 1: Local Two-Step Run
 
 ```php
