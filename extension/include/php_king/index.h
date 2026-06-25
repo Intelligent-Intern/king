@@ -8,7 +8,6 @@
 #include "class_entries.h"
 #include "externals.h"
 #include "method_tables.h"
-#include "public_functions.h"
 #include "registration.h"
 #include "resource_ids.h"
 #include "resources.h"
