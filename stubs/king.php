@@ -1212,6 +1212,8 @@ namespace {
      * Supported options are `cwd` and `properties`; unknown options are
      * rejected. Source and stylesheet paths must resolve to readable local
      * files; `cwd` must resolve to a readable and searchable local directory.
+     * Output is written through a temporary sibling file and moved into place
+     * only after SaxonC produced a readable result.
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>
      * @throws \King\RuntimeException|\King\ValidationException
@@ -2876,6 +2878,8 @@ namespace King\XSLT {
          * rejected. Source and stylesheet paths must resolve to readable local
          * files; `cwd` must resolve to a readable and searchable local
          * directory.
+         * Output is written through a temporary sibling file and moved into
+         * place only after SaxonC produced a readable result.
          * @param array<string,mixed>|null $options
          * @return array<string,mixed>
          */

@@ -344,6 +344,43 @@ static const char *king_xslt_saxon_error(sxnc_environment *environment)
         : "SaxonC XSLT transformation failed.";
 }
 
+static bool king_xslt_saxon_has_error(sxnc_environment *environment, const char **message)
+{
+    *message = NULL;
+
+    if (environment != NULL && king_saxonc.c_getErrorMessage_fn != NULL) {
+        *message = king_saxonc.c_getErrorMessage_fn(environment);
+    }
+
+    return *message != NULL && (*message)[0] != '\0';
+}
+
+static zend_string *king_xslt_temporary_output_path(zend_string *output_abs)
+{
+    char path_template[PATH_MAX];
+    int fd;
+
+    if (ZSTR_LEN(output_abs) + sizeof(".kingtmpXXXXXX") >= PATH_MAX) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT output temporary path is too long.", 0);
+        return NULL;
+    }
+
+    snprintf(path_template, sizeof(path_template), "%s.kingtmpXXXXXX", ZSTR_VAL(output_abs));
+    fd = mkstemp(path_template);
+    if (fd < 0) {
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output temporary file could not be created.", 0);
+        return NULL;
+    }
+
+    close(fd);
+    if (unlink(path_template) != 0) {
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output temporary file could not be prepared.", 0);
+        return NULL;
+    }
+
+    return zend_string_init(path_template, strlen(path_template), 0);
+}
+
 void king_xslt_shutdown_system(void)
 {
     king_saxonc_close_runtime_handle();
@@ -495,7 +532,9 @@ zend_result king_xslt_transform_to_file_result(
     zend_string *source_abs = NULL;
     zend_string *stylesheet_abs = NULL;
     zend_string *output_abs = NULL;
+    zend_string *temp_output_abs = NULL;
     zend_string *cwd = NULL;
+    struct stat output_stat;
     sxnc_environment *environment = NULL;
     sxnc_processor *processor = NULL;
     sxnc_parameter *parameters = NULL;
@@ -529,12 +568,29 @@ zend_result king_xslt_transform_to_file_result(
         zend_string_release(cwd);
         return FAILURE;
     }
+    if (stat(ZSTR_VAL(output_abs), &output_stat) == 0 && !S_ISREG(output_stat.st_mode)) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT output path must be a local file path.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
+    }
+    temp_output_abs = king_xslt_temporary_output_path(output_abs);
+    if (temp_output_abs == NULL) {
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
+    }
 
     king_saxonc.initSaxonc_fn(&environment, &processor, &parameters, &properties, 0, property_cap);
     if (environment == NULL || processor == NULL) {
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
         zend_throw_exception(king_ce_runtime_exception, "SaxonC processor could not be initialized.", 0);
         return FAILURE;
@@ -545,6 +601,7 @@ zend_result king_xslt_transform_to_file_result(
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
         return FAILURE;
     }
@@ -555,25 +612,52 @@ zend_result king_xslt_transform_to_file_result(
         ZSTR_VAL(cwd),
         ZSTR_VAL(source_abs),
         ZSTR_VAL(stylesheet_abs),
-        ZSTR_VAL(output_abs),
+        ZSTR_VAL(temp_output_abs),
         parameters,
         properties,
         0,
         property_len
     );
 
-    message = king_xslt_saxon_error(environment);
-    saxon_message = zend_string_init(message, strlen(message), 0);
+    if (king_xslt_saxon_has_error(environment, &message)) {
+        saxon_message = zend_string_init(message, strlen(message), 0);
+    }
 
     king_saxonc.freeSaxonc_fn(&environment, &processor, &parameters, &properties);
 
-    if (access(ZSTR_VAL(output_abs), R_OK) != 0) {
-        zend_throw_exception(king_ce_runtime_exception, ZSTR_VAL(saxon_message), 0);
+    if (saxon_message != NULL) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_validation_exception, ZSTR_VAL(saxon_message), 0);
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
         zend_string_release(saxon_message);
+        return FAILURE;
+    }
+
+    if (stat(ZSTR_VAL(temp_output_abs), &output_stat) != 0
+        || !S_ISREG(output_stat.st_mode)
+        || access(ZSTR_VAL(temp_output_abs), R_OK) != 0) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_runtime_exception, "SaxonC XSLT transformation did not produce a readable output file.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
+    }
+
+    if (rename(ZSTR_VAL(temp_output_abs), ZSTR_VAL(output_abs)) != 0) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output file could not be moved into place.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
+        zend_string_release(cwd);
         return FAILURE;
     }
 
@@ -586,8 +670,8 @@ zend_result king_xslt_transform_to_file_result(
     zend_string_release(source_abs);
     zend_string_release(stylesheet_abs);
     zend_string_release(output_abs);
+    zend_string_release(temp_output_abs);
     zend_string_release(cwd);
-    zend_string_release(saxon_message);
 
     return SUCCESS;
 }

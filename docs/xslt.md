@@ -26,6 +26,9 @@ Supported transformation options are deliberately explicit:
 
 The source XML and stylesheet paths must resolve to readable local files.
 Directories are rejected before SaxonC is invoked.
+`transformToFile()` writes to a temporary sibling file first and only replaces
+the requested output path after SaxonC produced a readable result, so an older
+output file cannot be mistaken for a successful transformation.
 
 Unknown options are rejected instead of being silently ignored. Stylesheet
 parameters require SaxonC XDM values and are not accepted by this PHP-visible
