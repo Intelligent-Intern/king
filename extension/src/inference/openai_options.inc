@@ -85,6 +85,173 @@ static bool king_inference_openai_stop_option_valid(zval *source, const char **m
     return true;
 }
 
+static bool king_inference_openai_long_option_valid(
+    zval *source,
+    const char *key,
+    bool positive,
+    const char **message)
+{
+    zval *field = king_inference_array_find(source, key);
+
+    if (field == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(field) != IS_LONG) {
+        if (message != NULL) {
+            *message = "Generation integer options must be integers.";
+        }
+        return false;
+    }
+    if (positive && Z_LVAL_P(field) <= 0) {
+        if (message != NULL) {
+            *message = "Generation max token options must be positive integers.";
+        }
+        return false;
+    }
+    if (!positive && Z_LVAL_P(field) < 0) {
+        if (message != NULL) {
+            *message = "Generation top_k must be a non-negative integer.";
+        }
+        return false;
+    }
+
+    return true;
+}
+
+static bool king_inference_openai_integer_option_type_valid(
+    zval *source,
+    const char *key,
+    const char **message)
+{
+    zval *field = king_inference_array_find(source, key);
+
+    if (field == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(field) == IS_LONG) {
+        return true;
+    }
+    if (message != NULL) {
+        *message = "Generation integer options must be integers.";
+    }
+    return false;
+}
+
+static bool king_inference_openai_numeric_option_value(
+    zval *source,
+    const char *key,
+    bool *present,
+    double *value,
+    const char **message)
+{
+    zval *field = king_inference_array_find(source, key);
+
+    *present = false;
+    *value = 0.0;
+    if (field == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(field) == IS_DOUBLE) {
+        *present = true;
+        *value = Z_DVAL_P(field);
+        return true;
+    }
+    if (Z_TYPE_P(field) == IS_LONG) {
+        *present = true;
+        *value = (double) Z_LVAL_P(field);
+        return true;
+    }
+    if (message != NULL) {
+        *message = "Generation numeric options must be numbers.";
+    }
+    return false;
+}
+
+static bool king_inference_openai_generation_options_valid(
+    zval *source,
+    const char * const *max_token_keys,
+    const char **message)
+{
+    size_t i;
+    bool present;
+    double value;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    for (i = 0; max_token_keys[i] != NULL; i++) {
+        if (!king_inference_openai_long_option_valid(source, max_token_keys[i], true, message)) {
+            return false;
+        }
+    }
+    if (!king_inference_openai_integer_option_type_valid(source, "seed", message)
+        || !king_inference_openai_long_option_valid(source, "top_k", false, message)) {
+        return false;
+    }
+    if (!king_inference_openai_numeric_option_value(source, "temperature", &present, &value, message)) {
+        return false;
+    }
+    if (present && value < 0.0) {
+        if (message != NULL) {
+            *message = "Generation temperature must be non-negative.";
+        }
+        return false;
+    }
+    if (!king_inference_openai_numeric_option_value(source, "top_p", &present, &value, message)) {
+        return false;
+    }
+    if (present && (value <= 0.0 || value > 1.0)) {
+        if (message != NULL) {
+            *message = "Generation top_p must be greater than zero and at most one.";
+        }
+        return false;
+    }
+
+    return true;
+}
+
+static bool king_inference_openai_chat_generation_options_valid(zval *source, const char **message)
+{
+    static const char * const max_token_keys[] = {
+        "max_completion_tokens",
+        "max_tokens",
+        NULL
+    };
+
+    return king_inference_openai_generation_options_valid(source, max_token_keys, message);
+}
+
+static bool king_inference_openai_completion_generation_options_valid(zval *source, const char **message)
+{
+    static const char * const max_token_keys[] = {
+        "max_tokens",
+        NULL
+    };
+
+    return king_inference_openai_generation_options_valid(source, max_token_keys, message);
+}
+
+static bool king_inference_openai_response_generation_options_valid(zval *source, const char **message)
+{
+    static const char * const max_token_keys[] = {
+        "max_output_tokens",
+        "max_tokens",
+        NULL
+    };
+
+    return king_inference_openai_generation_options_valid(source, max_token_keys, message);
+}
+
+static bool king_inference_openai_stream_generation_options_valid(zval *source, const char **message)
+{
+    static const char * const max_token_keys[] = {
+        "max_tokens",
+        NULL
+    };
+
+    return king_inference_openai_generation_options_valid(source, max_token_keys, message);
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");

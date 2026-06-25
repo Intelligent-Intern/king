@@ -330,12 +330,22 @@ static zend_result king_inference_openai_responses_payload_response(
     bool stream_requested = king_inference_bool_from_array(payload, "stream", false);
     zend_result result;
     bool has_error_response = false;
+    const char *generation_error = NULL;
 
     if (king_inference_responses_payload_to_chat_payload(payload, &chat_payload) != SUCCESS) {
         return king_inference_openai_error_response(
             return_value,
             400,
             "Responses request requires input as a string or a list of message items.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_response_generation_options_valid(payload, &generation_error)) {
+        zval_ptr_dtor(&chat_payload);
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            generation_error != NULL ? generation_error : "OpenAI generation options are invalid.",
             "invalid_request_error"
         );
     }

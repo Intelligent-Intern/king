@@ -119,6 +119,11 @@ selected backend kind; configured GPU use remains visible through
 graph finishers such as `argmax_token` and `sample_token`, not to local runner
 text generation.
 
+Generation stream options are validated before the local runner process starts.
+`max_tokens` must be a positive integer, `temperature` must be non-negative,
+`top_p` must be greater than zero and at most one, and `top_k` must be a
+non-negative integer.
+
 ## Function, Tensor Index and Tensor View
 
 ```php
