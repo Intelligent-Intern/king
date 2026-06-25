@@ -186,56 +186,6 @@ static zend_object *king_ws_object_create(zend_class_entry *ce)
     return &intern->std;
 }
 
-static void king_rtp_socket_object_free(zend_object *object)
-{
-    king_rtp_socket_object *intern = php_king_rtp_socket_obj_from_zend(object);
-
-    if (!Z_ISUNDEF(intern->resource)) {
-        zval_ptr_dtor(&intern->resource);
-        ZVAL_UNDEF(&intern->resource);
-    }
-
-    zend_object_std_dtor(&intern->std);
-}
-
-static zend_object *king_rtp_socket_object_create(zend_class_entry *ce)
-{
-    king_rtp_socket_object *intern = zend_object_alloc(sizeof(*intern), ce);
-
-    ZVAL_UNDEF(&intern->resource);
-    intern->closed = true;
-    zend_object_std_init(&intern->std, ce);
-    object_properties_init(&intern->std, ce);
-    intern->std.handlers = &king_rtp_socket_object_handlers;
-
-    return &intern->std;
-}
-
-static void king_xslt_processor_object_free(zend_object *object)
-{
-    king_xslt_processor_object *intern = php_king_xslt_processor_obj_from_zend(object);
-
-    if (!Z_ISUNDEF(intern->options)) {
-        zval_ptr_dtor(&intern->options);
-        ZVAL_UNDEF(&intern->options);
-    }
-
-    zend_object_std_dtor(&intern->std);
-}
-
-static zend_object *king_xslt_processor_object_create(zend_class_entry *ce)
-{
-    king_xslt_processor_object *intern = zend_object_alloc(sizeof(*intern), ce);
-
-    ZVAL_UNDEF(&intern->options);
-    array_init(&intern->options);
-    zend_object_std_init(&intern->std, ce);
-    object_properties_init(&intern->std, ce);
-    intern->std.handlers = &king_xslt_processor_object_handlers;
-
-    return &intern->std;
-}
-
 static void king_inference_model_object_free(zend_object *object)
 {
     king_inference_model_object *intern = php_king_inference_model_obj_from_zend(object);
@@ -607,32 +557,6 @@ static void king_ws_object_handlers_init(void)
     king_ws_object_handlers.free_obj = king_ws_object_free;
     king_ws_object_handlers.clone_obj = NULL;
     king_ce_ws_connection->create_object = king_ws_object_create;
-}
-
-static void king_rtp_socket_object_handlers_init(void)
-{
-    memcpy(
-        &king_rtp_socket_object_handlers,
-        &std_object_handlers,
-        sizeof(zend_object_handlers)
-    );
-    king_rtp_socket_object_handlers.offset = XtOffsetOf(king_rtp_socket_object, std);
-    king_rtp_socket_object_handlers.free_obj = king_rtp_socket_object_free;
-    king_rtp_socket_object_handlers.clone_obj = NULL;
-    king_ce_rtp_socket->create_object = king_rtp_socket_object_create;
-}
-
-static void king_xslt_processor_object_handlers_init(void)
-{
-    memcpy(
-        &king_xslt_processor_object_handlers,
-        &std_object_handlers,
-        sizeof(zend_object_handlers)
-    );
-    king_xslt_processor_object_handlers.offset = XtOffsetOf(king_xslt_processor_object, std);
-    king_xslt_processor_object_handlers.free_obj = king_xslt_processor_object_free;
-    king_xslt_processor_object_handlers.clone_obj = NULL;
-    king_ce_xslt_processor->create_object = king_xslt_processor_object_create;
 }
 
 static void king_inference_model_object_handlers_init(void)

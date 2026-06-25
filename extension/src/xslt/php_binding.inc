@@ -6,6 +6,44 @@
 
 #include "xslt/xslt.h"
 
+static void king_xslt_processor_object_free(zend_object *object)
+{
+    king_xslt_processor_object *intern = php_king_xslt_processor_obj_from_zend(object);
+
+    if (!Z_ISUNDEF(intern->options)) {
+        zval_ptr_dtor(&intern->options);
+        ZVAL_UNDEF(&intern->options);
+    }
+
+    zend_object_std_dtor(&intern->std);
+}
+
+static zend_object *king_xslt_processor_object_create(zend_class_entry *ce)
+{
+    king_xslt_processor_object *intern = zend_object_alloc(sizeof(*intern), ce);
+
+    ZVAL_UNDEF(&intern->options);
+    array_init(&intern->options);
+    zend_object_std_init(&intern->std, ce);
+    object_properties_init(&intern->std, ce);
+    intern->std.handlers = &king_xslt_processor_object_handlers;
+
+    return &intern->std;
+}
+
+static void king_xslt_processor_object_handlers_init(void)
+{
+    memcpy(
+        &king_xslt_processor_object_handlers,
+        &std_object_handlers,
+        sizeof(zend_object_handlers)
+    );
+    king_xslt_processor_object_handlers.offset = XtOffsetOf(king_xslt_processor_object, std);
+    king_xslt_processor_object_handlers.free_obj = king_xslt_processor_object_free;
+    king_xslt_processor_object_handlers.clone_obj = NULL;
+    king_ce_xslt_processor->create_object = king_xslt_processor_object_create;
+}
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_XSLT_Processor___construct, 0, 0, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
