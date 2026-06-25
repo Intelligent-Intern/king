@@ -35,6 +35,7 @@
 #include "php_king/arginfo.h"
 #include "php_king/externals.h"
 #include "php_king/function_table.h"
+#include "php_king/method_tables.h"
 #include "autoscaling/registration.h"
 #include "config/internal/registration.h"
 #include "media/registration.h"
