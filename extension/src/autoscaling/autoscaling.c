@@ -62,7 +62,7 @@ king_autoscaling_runtime_state_t king_autoscaling_runtime = {0};
 uint32_t king_current_instances = 1;
 
 
-#include "autoscaling/runtime_config.inc"
-#include "autoscaling/signal_and_monitoring.inc"
-#include "autoscaling/runtime_state.inc"
-#include "autoscaling/public_api.inc"
+#include "runtime/runtime_config.inc"
+#include "runtime/signal_and_monitoring.inc"
+#include "runtime/runtime_state.inc"
+#include "runtime/public_api.inc"

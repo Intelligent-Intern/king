@@ -5,10 +5,10 @@ the `King\Autoscaling` OO facade.
 
 ## Internal Layout
 
-The autoscaling runtime lives under `extension/src/autoscaling/` with public
-contracts in `extension/include/autoscaling/`. The PHP arginfo,
-`King\Autoscaling` method table, and function-table entries live beside that
-runtime and are included by the extension bootstrap.
+The autoscaling runtime lives under `extension/src/autoscaling/runtime/` with
+public contracts in `extension/include/autoscaling/`. The PHP arginfo,
+`King\Autoscaling` method table, and function-table entries live beside the
+runtime entry unit and are included by the extension bootstrap.
 
 ## Function, Example 1: Initialize Runtime and Read Status
 
