@@ -35,16 +35,7 @@ PHP_MINIT_FUNCTION(king)
         return FAILURE;
     }
 
-    le_king_session = zend_register_list_destructors_ex(
-        king_session_dtor, NULL, "King\\Session", module_number);
-    le_king_cfg = zend_register_list_destructors_ex(
-        king_cfg_dtor, NULL, "King\\Config", module_number);
-    le_king_mcp = zend_register_list_destructors_ex(
-        king_mcp_dtor, NULL, "King\\MCP", module_number);
-    le_king_ws = zend_register_list_destructors_ex(
-        king_ws_dtor, NULL, "King\\WebSocket", module_number);
-    le_king_request_context = zend_register_list_destructors_ex(
-        king_http1_request_context_dtor, NULL, "King\\HttpRequestContext", module_number);
+    king_register_resource_types(module_number);
     king_rtp_minit(module_number);
 
     king_register_php_classes_and_handlers();
