@@ -8,44 +8,6 @@ static zend_string *king_inference_responses_message_id(king_inference_stream_ob
     return strpprintf(0, "msg_king_%ld_%lu", stream->created_at, (zend_ulong) stream->std.handle);
 }
 
-static zend_result king_inference_responses_append_content_text(zval *content, smart_str *buffer)
-{
-    zval *part;
-
-    if (content == NULL) {
-        return FAILURE;
-    }
-    if (Z_TYPE_P(content) == IS_STRING) {
-        smart_str_append(buffer, Z_STR_P(content));
-        return SUCCESS;
-    }
-    if (!king_inference_openai_array_is_list(content)) {
-        return FAILURE;
-    }
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(content), part) {
-        zval *text;
-
-        if (Z_TYPE_P(part) == IS_STRING) {
-            smart_str_append(buffer, Z_STR_P(part));
-            continue;
-        }
-        if (Z_TYPE_P(part) != IS_ARRAY) {
-            continue;
-        }
-
-        text = king_inference_array_find(part, "text");
-        if (text == NULL) {
-            text = king_inference_array_find(part, "content");
-        }
-        if (text != NULL && Z_TYPE_P(text) == IS_STRING) {
-            smart_str_append(buffer, Z_STR_P(text));
-        }
-    } ZEND_HASH_FOREACH_END();
-
-    return SUCCESS;
-}
-
 static zend_result king_inference_responses_message_from_item(zval *item, zval *messages)
 {
     zval *role;
@@ -62,7 +24,7 @@ static zend_result king_inference_responses_message_from_item(zval *item, zval *
     if (role == NULL || Z_TYPE_P(role) != IS_STRING || Z_STRLEN_P(role) == 0) {
         return FAILURE;
     }
-    if (king_inference_responses_append_content_text(content, &text) != SUCCESS) {
+    if (king_inference_openai_append_content_text(content, &text) != SUCCESS) {
         smart_str_free(&text);
         return FAILURE;
     }

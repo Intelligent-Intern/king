@@ -26,6 +26,7 @@
 
 #include "inference/arginfo.inc"
 #include "inference/helpers.inc"
+#include "inference/openai_messages.inc"
 #include "inference/backend_contract.inc"
 #include "inference/thermal_policy.inc"
 #include "inference/resource_policy.inc"

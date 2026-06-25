@@ -33,11 +33,6 @@ static zend_result king_inference_openai_json_decode(zend_string *json, zval *de
     return SUCCESS;
 }
 
-static bool king_inference_openai_array_is_list(zval *value)
-{
-    return value != NULL && Z_TYPE_P(value) == IS_ARRAY && zend_array_is_list(Z_ARRVAL_P(value));
-}
-
 static bool king_inference_openai_method_is_post(zval *request)
 {
     zval *method = king_inference_array_find(request, "method");
@@ -181,16 +176,21 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
                 "invalid_request_error"
             );
         }
-        if (content == NULL || Z_TYPE_P(content) != IS_STRING) {
-            if (has_error_response != NULL) {
-                *has_error_response = true;
+        {
+            smart_str text = {0};
+            if (king_inference_openai_append_content_text(content, &text) != SUCCESS) {
+                smart_str_free(&text);
+                if (has_error_response != NULL) {
+                    *has_error_response = true;
+                }
+                return king_inference_openai_error_response(
+                    return_value,
+                    400,
+                    "Each chat message requires string content or text content parts.",
+                    "invalid_request_error"
+                );
             }
-            return king_inference_openai_error_response(
-                return_value,
-                400,
-                "Each chat message requires string content.",
-                "invalid_request_error"
-            );
+            smart_str_free(&text);
         }
     } ZEND_HASH_FOREACH_END();
 

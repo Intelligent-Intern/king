@@ -47,22 +47,28 @@ static zend_string *king_inference_king_local_prompt_from_request(zval *request)
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(messages), message) {
         zval *role;
         zval *content;
+        smart_str text = {0};
 
         if (Z_TYPE_P(message) != IS_ARRAY) {
             continue;
         }
         role = king_inference_array_find(message, "role");
         content = king_inference_array_find(message, "content");
-        if (content == NULL || Z_TYPE_P(content) != IS_STRING) {
+        if (king_inference_openai_append_content_text(content, &text) != SUCCESS) {
+            smart_str_free(&text);
             continue;
         }
+        smart_str_0(&text);
 
         if (role != NULL && Z_TYPE_P(role) == IS_STRING && Z_STRLEN_P(role) > 0) {
             smart_str_append(&buffer, Z_STR_P(role));
             smart_str_appends(&buffer, ": ");
         }
-        smart_str_append(&buffer, Z_STR_P(content));
+        if (text.s != NULL) {
+            smart_str_append(&buffer, text.s);
+        }
         smart_str_appendc(&buffer, '\n');
+        smart_str_free(&text);
     } ZEND_HASH_FOREACH_END();
 
     smart_str_appends(&buffer, "assistant: ");
