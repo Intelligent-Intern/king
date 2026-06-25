@@ -10,7 +10,6 @@
 
 #include "client/objects.h"
 
-extern void *king_fetch_config(zval *zcfg);
 extern void king_ticket_ring_put(const uint8_t *ticket, size_t len);
 extern int king_ticket_ring_get(uint8_t *out, size_t *out_len);
 extern void king_client_session_free(void *session_ptr);

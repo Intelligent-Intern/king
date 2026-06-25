@@ -6,6 +6,7 @@
 #define KING_CONFIG_INDEX_H
 
 #include "object.h"
+#include "internal/resource_helpers.h"
 
 #ifndef KING_RUNTIME_BUILD
 #  include "config.h"

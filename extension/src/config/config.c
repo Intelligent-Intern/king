@@ -69,6 +69,7 @@ typedef enum _king_config_override_module_t {
 #include "internal/overrides.inc"
 #include "internal/api.inc"
 #include "internal/object.inc"
+#include "internal/resource_helpers.inc"
 
 void king_config_release_module_globals(void)
 {
