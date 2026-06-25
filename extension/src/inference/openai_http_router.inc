@@ -137,6 +137,7 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "native_token_selection", false);
     add_assoc_bool(return_value, "token_generation", false);
     add_assoc_bool(return_value, "gpu", false);
+    add_assoc_bool(return_value, "gpu_backend", false);
     add_assoc_string(return_value, "model_format", "gguf");
 }
 
@@ -190,6 +191,7 @@ static void king_inference_openai_model_object(
         backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
     );
     add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    add_assoc_bool(&king_meta, "gpu_enabled", backend_config_valid && king_inference_gpu_enabled(&model->config));
     if (backend_config_valid) {
         king_inference_backend_capabilities_array(kind, &capabilities);
     } else {

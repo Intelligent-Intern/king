@@ -64,10 +64,11 @@ loaded model name.
 objects plus an `x_king` extension object. That object contains the resolved
 King backend, whether the backend configuration resolved cleanly, whether the
 model can serve the generic OpenAI generation routes, whether it supports
-native graph streaming, whether it can serve embeddings, and the backend
-capability map from the loaded model. If a backend configuration cannot be
-resolved, `x_king.backend` is `invalid`, `x_king.backend_config_valid` is
-`false`, and all executable capability flags are reported as unavailable.
+native graph streaming, whether it can serve embeddings, whether configured GPU
+use is enabled for the model, and the backend capability map from the loaded
+model. If a backend configuration cannot be resolved, `x_king.backend` is
+`invalid`, `x_king.backend_config_valid` is `false`, and all executable
+capability flags are reported as unavailable.
 
 Chat message `content` and Responses input item `content` may be a string or an
 array of text content parts. King extracts text from `text`, `content`, or

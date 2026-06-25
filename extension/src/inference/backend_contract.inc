@@ -124,6 +124,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "native_graph_streaming", kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
     add_assoc_bool(return_value, "native_token_selection", true);
     add_assoc_bool(return_value, "token_generation", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
-    add_assoc_bool(return_value, "gpu", kind != KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    add_assoc_bool(return_value, "gpu", kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+    add_assoc_bool(return_value, "gpu_backend", kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
     add_assoc_string(return_value, "model_format", "gguf");
 }

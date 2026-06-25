@@ -105,14 +105,17 @@ without handing the model to an external runtime.
 
 `King\Inference\Model::info()` and `king_inference_model_info()` expose backend
 metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
-`runner_path`, `runner_protocol`, and `backend_capabilities`. The `gguf` entry
-contains `architecture`, `tokenizer_model`, `tokenizer_token_count`,
-`tensor_data_offset`, `tensor_type_counts`, and parser status fields when the
-source artifact provides them. Native backend info additionally exposes
-`native_model_mapped`, `native_map_bytes`, `native_tensor_index_count`,
-`native_tokenizer_token_count`, `native_tokenizer_merge_count`,
-`tokenization_ready`, and `paged_kv_cache_ready`. The model info payload also
-contains `paged_kv_cache`.
+`runner_path`, `runner_protocol`, `gpu_enabled`, and `backend_capabilities`.
+The `gguf` entry contains `architecture`, `tokenizer_model`,
+`tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
+status fields when the source artifact provides them. Native backend info
+additionally exposes `native_model_mapped`, `native_map_bytes`,
+`native_tensor_index_count`, `native_tokenizer_token_count`,
+`native_tokenizer_merge_count`, `tokenization_ready`, and
+`paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`.
+`backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
+selected backend kind; configured GPU use remains visible through
+`gpu_enabled`.
 
 ## Function, Tensor Index and Tensor View
 
