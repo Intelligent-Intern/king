@@ -325,6 +325,32 @@ static bool king_inference_openai_model_field_valid(zval *source, const char **m
     return false;
 }
 
+static bool king_inference_openai_single_choice_option_valid(zval *source, const char **message)
+{
+    zval *choice_count = king_inference_array_find(source, "n");
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (choice_count == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(choice_count) != IS_LONG || Z_LVAL_P(choice_count) <= 0) {
+        if (message != NULL) {
+            *message = "OpenAI n must be a positive integer when provided.";
+        }
+        return false;
+    }
+    if (Z_LVAL_P(choice_count) != 1) {
+        if (message != NULL) {
+            *message = "King OpenAI-compatible generation routes require n=1.";
+        }
+        return false;
+    }
+
+    return true;
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");

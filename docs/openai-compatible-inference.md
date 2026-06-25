@@ -149,7 +149,9 @@ controls return an OpenAI-shaped `400` response before any backend process is
 started.
 Chat Completions and legacy Completions also validate OpenAI `stop` as a
 string or an array of one to four non-empty strings and pass those stop
-sequences to the local generation runner.
+sequences to the local generation runner. They accept `n` only when it is the
+integer `1`; requests for multiple independent choices return an OpenAI-shaped
+`400` instead of silently returning fewer choices than requested.
 
 All OpenAI generation routes validate `stream` as a boolean when it is provided.
 They also validate `stream_options` as a JSON object, and

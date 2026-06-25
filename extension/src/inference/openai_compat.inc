@@ -121,6 +121,7 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
     const char *stream_options_error = NULL;
     const char *stream_error = NULL;
     const char *model_error = NULL;
+    const char *choice_count_error = NULL;
 
     if (has_error_response != NULL) {
         *has_error_response = false;
@@ -191,6 +192,17 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
             return_value,
             400,
             stream_error != NULL ? stream_error : "OpenAI stream is invalid.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_single_choice_option_valid(payload, &choice_count_error)) {
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            choice_count_error != NULL ? choice_count_error : "OpenAI n is invalid.",
             "invalid_request_error"
         );
     }

@@ -1317,8 +1317,10 @@ namespace {
      * and return a King HTTP server response array. The request body must be a
      * JSON Chat Completions payload with `messages`; `stream=true` returns a
      * bounded `text/event-stream` body, otherwise an OpenAI-shaped
-     * `chat.completion` JSON body. Options include `read_timeout_ms`,
-     * `max_events`, and `max_idle_events` for the bounded drain window.
+     * `chat.completion` JSON body. `n` may be omitted or set to `1`; higher
+     * choice counts are rejected instead of being silently collapsed. Options
+     * include `read_timeout_ms`, `max_events`, and `max_idle_events` for the
+     * bounded drain window.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @return array{status:int,headers:array<string,string>,body:string}
@@ -1339,6 +1341,7 @@ namespace {
      * GGUF token embedding tensor and return float vectors or base64-encoded
      * Float32LE vectors. Embedding requests may set `dimensions` when a
      * bounded prefix of the native embedding width is required.
+     * Chat Completions and legacy Completions accept `n` only when it is `1`.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
