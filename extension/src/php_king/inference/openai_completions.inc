@@ -151,6 +151,7 @@ static zend_result king_inference_completion_stream_response(
     bool include_usage = king_inference_openai_stream_usage_requested(payload);
     smart_str sse = {0};
     smart_str content = {0};
+    zend_string *finish_reason = NULL;
 
     if (king_inference_completion_prompt_to_chat_payload(payload, prompt, &chat_payload) != SUCCESS) {
         return FAILURE;
@@ -169,6 +170,7 @@ static zend_result king_inference_completion_stream_response(
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ(stream_value));
     completion_id = king_inference_completion_id(stream);
     model_name = king_inference_stream_openai_model_name(stream);
+    finish_reason = zend_string_init("stop", sizeof("stop") - 1, 0);
 
     while (events < max_events && idle_events < max_idle_events) {
         zval chunk;
@@ -185,6 +187,7 @@ static zend_result king_inference_completion_stream_response(
             zval_ptr_dtor(&chat_payload);
             smart_str_free(&content);
             smart_str_free(&sse);
+            zend_string_release(finish_reason);
             return FAILURE;
         }
         if (Z_TYPE(chunk) == IS_NULL) {
@@ -226,14 +229,22 @@ static zend_result king_inference_completion_stream_response(
                 zval_ptr_dtor(&chat_payload);
                 smart_str_free(&content);
                 smart_str_free(&sse);
+                zend_string_release(finish_reason);
                 return FAILURE;
             }
             zval_ptr_dtor(&event);
         }
-        if (king_inference_openai_chunk_is_terminal(&chunk, NULL)) {
-            zval_ptr_dtor(&chunk);
-            finished = true;
-            break;
+        {
+            const char *chunk_finish_reason = NULL;
+            if (king_inference_openai_chunk_is_terminal(&chunk, &chunk_finish_reason)) {
+                if (chunk_finish_reason != NULL && chunk_finish_reason[0] != '\0') {
+                    zend_string_release(finish_reason);
+                    finish_reason = zend_string_init(chunk_finish_reason, strlen(chunk_finish_reason), 0);
+                }
+                zval_ptr_dtor(&chunk);
+                finished = true;
+                break;
+            }
         }
         zval_ptr_dtor(&chunk);
     }
@@ -245,6 +256,7 @@ static zend_result king_inference_completion_stream_response(
         zval_ptr_dtor(&chat_payload);
         smart_str_free(&content);
         smart_str_free(&sse);
+        zend_string_release(finish_reason);
         return FAILURE;
     }
 
@@ -258,7 +270,7 @@ static zend_result king_inference_completion_stream_response(
         add_assoc_long(&event, "created", stream->created_at);
         add_assoc_str(&event, "model", king_inference_stream_openai_model_name(stream));
         array_init(&choices);
-        king_inference_completion_choice(&choice, 0, NULL, "stop");
+        king_inference_completion_choice(&choice, 0, NULL, ZSTR_VAL(finish_reason));
         add_next_index_zval(&choices, &choice);
         add_assoc_zval(&event, "choices", &choices);
         if (include_usage) {
@@ -270,6 +282,7 @@ static zend_result king_inference_completion_stream_response(
             zval_ptr_dtor(&chat_payload);
             smart_str_free(&content);
             smart_str_free(&sse);
+            zend_string_release(finish_reason);
             return FAILURE;
         }
         zval_ptr_dtor(&event);
@@ -296,6 +309,7 @@ static zend_result king_inference_completion_stream_response(
             zval_ptr_dtor(&chat_payload);
             smart_str_free(&content);
             smart_str_free(&sse);
+            zend_string_release(finish_reason);
             return FAILURE;
         }
         zval_ptr_dtor(&event);
@@ -304,6 +318,7 @@ static zend_result king_inference_completion_stream_response(
     zval_ptr_dtor(&stream_value);
     zval_ptr_dtor(&chat_payload);
     smart_str_free(&content);
+    zend_string_release(finish_reason);
     smart_str_appends(&sse, "data: [DONE]\n\n");
     smart_str_0(&sse);
     king_inference_openai_http_array_response(return_value, 200, "text/event-stream", sse.s, true);
