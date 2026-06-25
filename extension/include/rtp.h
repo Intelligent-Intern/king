@@ -14,6 +14,9 @@
 #ifndef KING_MEDIA_RTP_H
 #define KING_MEDIA_RTP_H
 
+#include <php.h>
+#include <zend_object_handlers.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/socket.h>
@@ -110,6 +113,19 @@ typedef struct {
     int      ice_consented;
     int      srtp;
 } king_rtp_receive_result_t;
+
+typedef struct _king_rtp_socket_object {
+    zval resource;
+    bool closed;
+    zend_object std;
+} king_rtp_socket_object;
+
+static inline king_rtp_socket_object *
+php_king_rtp_socket_obj_from_zend(zend_object *obj)
+{
+    return (king_rtp_socket_object *)
+        ((char*)obj - XtOffsetOf(king_rtp_socket_object, std));
+}
 
 /* ── Internal API ───────────────────────────────────────────────────────── */
 

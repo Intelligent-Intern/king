@@ -5,6 +5,13 @@ XSLT is available procedurally through `king_xslt_engine_status()`,
 OO surface is `King\XSLT\Processor`. The processor stores default options such
 as SaxonC properties and can override them per transformation run.
 
+## Internal Layout
+
+The native XSLT runtime and object contracts live in
+`extension/include/xslt/xslt.h`. Runtime code lives under `extension/src/xslt/`;
+`extension/src/php_king/xslt.inc` is the PHP userland binding and extension
+bootstrap bridge.
+
 ## Function, Example 1: Check Engine
 
 ```php

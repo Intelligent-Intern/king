@@ -11,6 +11,19 @@
 #define KING_XSLT_H
 
 #include <php.h>
+#include <zend_object_handlers.h>
+
+typedef struct _king_xslt_processor_object {
+    zval options;
+    zend_object std;
+} king_xslt_processor_object;
+
+static inline king_xslt_processor_object *
+php_king_xslt_processor_obj_from_zend(zend_object *obj)
+{
+    return (king_xslt_processor_object *)
+        ((char*)obj - XtOffsetOf(king_xslt_processor_object, std));
+}
 
 PHP_FUNCTION(king_xslt_engine_status);
 PHP_FUNCTION(king_xslt_transform_file);
