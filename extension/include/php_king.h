@@ -76,6 +76,8 @@
 #include "iibin/index.h"
 #include "inference/index.h"
 #include "mcp/index.h"
+#include "php_king/registration.h"
+#include "php_king/resources.h"
 #include "xslt/index.h"
 
 

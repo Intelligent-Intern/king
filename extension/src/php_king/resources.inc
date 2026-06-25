@@ -40,7 +40,7 @@ static void king_http1_request_context_dtor(zend_resource *rsrc)
     }
 }
 
-static void king_register_resource_types(int module_number)
+void king_register_resource_types(int module_number)
 {
     le_king_session = zend_register_list_destructors_ex(
         king_session_dtor, NULL, "King\\Session", module_number);

@@ -105,7 +105,7 @@ static void king_init_object_handlers(void)
     king_client_init_session_object_handlers();
 }
 
-static void king_register_php_classes_and_handlers(void)
+void king_register_php_classes_and_handlers(void)
 {
     king_register_exception_classes();
     king_register_userland_classes();
