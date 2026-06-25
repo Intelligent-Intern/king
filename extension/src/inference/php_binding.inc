@@ -14,6 +14,7 @@
 #include "config/resource_helpers.h"
 
 #include <errno.h>
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <math.h>
 #include <signal.h>

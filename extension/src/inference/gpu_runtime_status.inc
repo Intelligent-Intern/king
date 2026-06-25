@@ -12,6 +12,142 @@ static bool king_inference_gpu_status_path_readable(const char *path)
     return king_inference_gpu_status_non_empty(path) && access(path, R_OK) == 0;
 }
 
+typedef int (*king_inference_cuda_cu_init_fn)(unsigned int flags);
+typedef int (*king_inference_cuda_cu_driver_get_version_fn)(int *driver_version);
+typedef int (*king_inference_cuda_cu_device_get_count_fn)(int *count);
+typedef int (*king_inference_cuda_cu_device_get_fn)(int *device, int ordinal);
+typedef int (*king_inference_cuda_cu_device_get_name_fn)(char *name, int len, int device);
+typedef int (*king_inference_cuda_cu_device_total_mem_fn)(size_t *bytes, int device);
+
+typedef struct _king_inference_cuda_driver_status {
+    bool loader_available;
+    bool symbols_available;
+    bool initialized;
+    int init_result;
+    int driver_version;
+    int device_count;
+    char first_device_name[256];
+    size_t first_device_total_memory_bytes;
+    char error[160];
+} king_inference_cuda_driver_status;
+
+static void king_inference_cuda_driver_status_init(king_inference_cuda_driver_status *status)
+{
+    memset(status, 0, sizeof(*status));
+    status->init_result = -1;
+    status->driver_version = 0;
+    status->device_count = 0;
+    status->first_device_name[0] = '\0';
+    status->error[0] = '\0';
+}
+
+static void king_inference_cuda_driver_status_set_error(
+    king_inference_cuda_driver_status *status,
+    const char *message)
+{
+    if (message == NULL) {
+        message = "unknown_cuda_driver_error";
+    }
+
+    snprintf(status->error, sizeof(status->error), "%s", message);
+}
+
+static bool king_inference_cuda_driver_symbol(
+    void *handle,
+    const char *name,
+    void **symbol,
+    king_inference_cuda_driver_status *status)
+{
+    *symbol = dlsym(handle, name);
+    if (*symbol != NULL) {
+        return true;
+    }
+
+    king_inference_cuda_driver_status_set_error(status, name);
+    return false;
+}
+
+static void king_inference_cuda_driver_probe(king_inference_cuda_driver_status *status)
+{
+    void *handle;
+    king_inference_cuda_cu_init_fn cu_init;
+    king_inference_cuda_cu_driver_get_version_fn cu_driver_get_version;
+    king_inference_cuda_cu_device_get_count_fn cu_device_get_count;
+    king_inference_cuda_cu_device_get_fn cu_device_get;
+    king_inference_cuda_cu_device_get_name_fn cu_device_get_name;
+    king_inference_cuda_cu_device_total_mem_fn cu_device_total_mem;
+    int device = 0;
+
+    king_inference_cuda_driver_status_init(status);
+
+    handle = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_LOCAL);
+    if (handle == NULL) {
+        king_inference_cuda_driver_status_set_error(status, dlerror());
+        return;
+    }
+    status->loader_available = true;
+
+    if (!king_inference_cuda_driver_symbol(handle, "cuInit", (void **) &cu_init, status)
+        || !king_inference_cuda_driver_symbol(
+            handle,
+            "cuDriverGetVersion",
+            (void **) &cu_driver_get_version,
+            status
+        )
+        || !king_inference_cuda_driver_symbol(
+            handle,
+            "cuDeviceGetCount",
+            (void **) &cu_device_get_count,
+            status
+        )
+        || !king_inference_cuda_driver_symbol(handle, "cuDeviceGet", (void **) &cu_device_get, status)
+        || !king_inference_cuda_driver_symbol(
+            handle,
+            "cuDeviceGetName",
+            (void **) &cu_device_get_name,
+            status
+        )) {
+        dlclose(handle);
+        return;
+    }
+
+    cu_device_total_mem = NULL;
+    if (dlsym(handle, "cuDeviceTotalMem_v2") != NULL) {
+        cu_device_total_mem = (king_inference_cuda_cu_device_total_mem_fn)
+            dlsym(handle, "cuDeviceTotalMem_v2");
+    } else if (dlsym(handle, "cuDeviceTotalMem") != NULL) {
+        cu_device_total_mem = (king_inference_cuda_cu_device_total_mem_fn)
+            dlsym(handle, "cuDeviceTotalMem");
+    }
+
+    status->symbols_available = true;
+    status->init_result = cu_init(0);
+    if (status->init_result != 0) {
+        king_inference_cuda_driver_status_set_error(status, "cuInit_failed");
+        dlclose(handle);
+        return;
+    }
+    status->initialized = true;
+
+    if (cu_driver_get_version(&status->driver_version) != 0) {
+        status->driver_version = 0;
+    }
+    if (cu_device_get_count(&status->device_count) != 0 || status->device_count < 0) {
+        status->device_count = 0;
+    }
+    if (status->device_count > 0 && cu_device_get(&device, 0) == 0) {
+        if (cu_device_get_name(status->first_device_name, sizeof(status->first_device_name), device) != 0) {
+            status->first_device_name[0] = '\0';
+        }
+        if (cu_device_total_mem != NULL
+            && cu_device_total_mem(&status->first_device_total_memory_bytes, device) != 0) {
+            status->first_device_total_memory_bytes = 0;
+        }
+    }
+
+    dlclose(handle);
+}
+
 static bool king_inference_gpu_status_driver_visible(void)
 {
     return access("/proc/driver/nvidia/version", R_OK) == 0
@@ -164,6 +300,8 @@ static void king_inference_gpu_runtime_status_array(
     bool allow_unmonitored
 ) {
     zval thermal;
+    zval cuda_driver;
+    king_inference_cuda_driver_status cuda_status;
     bool backend_supported = king_inference_gpu_status_backend_supported(backend);
     bool artifact_configured = king_inference_gpu_status_non_empty(artifact_path);
     bool artifact_readable = king_inference_gpu_status_path_readable(artifact_path);
@@ -172,10 +310,14 @@ static void king_inference_gpu_runtime_status_array(
     bool thermal_monitored = thermal_path_configured || thermal_command_configured;
     bool temperature_available = false;
     bool temperature_ok = false;
-    bool driver_visible = king_inference_gpu_status_driver_visible();
+    bool driver_visible;
     bool config_ready;
     double temperature_c = 0.0;
     const char *reason;
+
+    king_inference_cuda_driver_probe(&cuda_status);
+    driver_visible = (cuda_status.initialized && cuda_status.device_count > 0)
+        || king_inference_gpu_status_driver_visible();
 
     if (thermal_path_configured) {
         temperature_available = king_inference_gpu_status_read_temperature_path(
@@ -243,6 +385,22 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
     add_assoc_string(return_value, "reason", reason);
+
+    array_init(&cuda_driver);
+    add_assoc_bool(&cuda_driver, "loader_available", cuda_status.loader_available);
+    add_assoc_bool(&cuda_driver, "symbols_available", cuda_status.symbols_available);
+    add_assoc_bool(&cuda_driver, "initialized", cuda_status.initialized);
+    add_assoc_long(&cuda_driver, "init_result", cuda_status.init_result);
+    add_assoc_long(&cuda_driver, "driver_version", cuda_status.driver_version);
+    add_assoc_long(&cuda_driver, "device_count", cuda_status.device_count);
+    add_assoc_string(&cuda_driver, "first_device_name", cuda_status.first_device_name);
+    add_assoc_long(
+        &cuda_driver,
+        "first_device_total_memory_bytes",
+        (zend_long) cuda_status.first_device_total_memory_bytes
+    );
+    add_assoc_string(&cuda_driver, "error", cuda_status.error);
+    add_assoc_zval(return_value, "cuda_driver", &cuda_driver);
 
     array_init(&thermal);
     add_assoc_string(

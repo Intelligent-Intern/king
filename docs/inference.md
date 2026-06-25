@@ -225,6 +225,12 @@ if (!$status['generation_ready']) {
 $sameStatus = King\Inference::gpuRuntimeStatus($config);
 ```
 
+The status probe is native. King opens the CUDA driver library at runtime when
+available, checks driver initialization and device visibility, and reports the
+first CUDA device name and total memory. Thermal guardrails still come from the
+configured sensor path or command, because operators may prefer platform-specific
+sensor files over driver-level telemetry.
+
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status
 fields separate the layers:
