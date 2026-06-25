@@ -289,13 +289,15 @@ static zend_result king_inference_completion_stream_response(
 
     if (include_usage) {
         zval event;
+        zval choices;
         smart_str_0(&content);
         array_init(&event);
         add_assoc_str(&event, "id", king_inference_completion_id(stream));
         add_assoc_string(&event, "object", "text_completion");
         add_assoc_long(&event, "created", stream->created_at);
         add_assoc_str(&event, "model", king_inference_stream_openai_model_name(stream));
-        add_assoc_empty_array(&event, "choices");
+        array_init(&choices);
+        add_assoc_zval(&event, "choices", &choices);
         king_inference_openai_add_text_completion_stream_usage(
             &event,
             model,

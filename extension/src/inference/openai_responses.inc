@@ -142,7 +142,11 @@ static zend_result king_inference_responses_output_payload(
     add_assoc_str(&content_part, "text", content != NULL && content->s != NULL
         ? zend_string_copy(content->s)
         : zend_string_init("", 0, 0));
-    add_assoc_empty_array(&content_part, "annotations");
+    {
+        zval annotations;
+        array_init(&annotations);
+        add_assoc_zval(&content_part, "annotations", &annotations);
+    }
     add_next_index_zval(&content_list, &content_part);
     add_assoc_zval(&item, "content", &content_list);
     add_next_index_zval(&output, &item);

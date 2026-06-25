@@ -45,6 +45,28 @@ Use `with_memory => true` only when a later graph should inherit the previous
 graph result state. The alias `with-memory` is accepted for external payloads;
 do not provide both spellings in the same array.
 
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'king-native-stateless',
+    'artifact' => '/models/king-small-q4.gguf',
+    'backend' => 'king_native_cpu',
+    'with_memory' => false,
+]);
+
+$stateless = king_inference_stream($model, [
+    'graphs' => $decodeSteps,
+], [
+    'with_memory' => false,
+]);
+
+$stateful = king_inference_stream($model, [
+    'graphs' => $decodeSteps,
+], [
+    'with_memory' => true,
+]);
+```
+
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
 `king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
@@ -652,6 +674,44 @@ Native graph stream startup is bounded by `max_native_stream_tokens`, which can
 be set as a stream option or graph option. If it is not set, King allows up to
 4096 native token steps before rejecting the stream request.
 `with_memory` and the alias `with-memory` must be booleans when provided.
+
+## CI and Test Model Strategy
+
+King keeps the default CI path independent from downloaded model artifacts.
+Contract tests can validate exported functions, INI defaults, strict config
+validation, OpenAI-compatible routing, and error contracts without a GGUF file.
+Native model integration tests remain opt-in through
+`KING_INFERENCE_TEST_MODEL_PATH`, because CI should not silently fetch hundreds
+of megabytes or depend on an external model host.
+
+The split is deliberate:
+
+- Model-free CI tests prove the extension API, INI surface, and validation.
+- Optional GGUF tests prove loader, tokenizer, tensor, graph, and stream
+  behavior against a real artifact.
+- Release or nightly CI can mount a cached GGUF artifact and set
+  `KING_INFERENCE_TEST_MODEL_PATH`.
+
+For a small King command model, start with a compact instruct model and
+fine-tune it on deterministic King-specific command traces instead of training
+from scratch. The initial dataset should be JSONL chat records with:
+
+- system prompt describing the King runtime contract
+- user request in natural language
+- assistant response containing one validated King command or structured plan
+- tool/result records for negative cases and error handling
+- metadata tags for primitive, sync/async, stateless/stateful, and security
+
+Example record:
+
+```json
+{"messages":[{"role":"system","content":"You emit precise King PHP runtime calls. Prefer stateless inference unless memory is explicitly requested."},{"role":"user","content":"Open a native inference stream without memory for three decode graphs."},{"role":"assistant","content":"$stream = king_inference_stream($model, ['graphs' => $graphs], ['with_memory' => false]);"}],"metadata":{"primitive":"inference","mode":"stateless","language":"php"}}
+```
+
+Build the first dataset from King docs, public stubs, PHPT tests, and manually
+reviewed examples. Do not train on failing or obsolete snippets unless the
+assistant answer explicitly fixes them. The first useful target is command
+selection and argument correctness, not general chat quality.
 
 ## Function, Example 1c: OpenAI-Compatible HTTP Route
 

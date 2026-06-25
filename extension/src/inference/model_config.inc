@@ -96,6 +96,35 @@ static zend_result king_inference_validate_optional_bool_config(
     return SUCCESS;
 }
 
+static zend_result king_inference_validate_optional_bool_alias_config(
+    zval *config,
+    const char *field_name,
+    const char *alias_name,
+    const char *function_name
+) {
+    zval *value = king_inference_array_find(config, field_name);
+    zval *alias = king_inference_array_find(config, alias_name);
+
+    if (value != NULL && alias != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() memory config must use either %s or %s, not both.",
+            function_name,
+            field_name,
+            alias_name
+        );
+        return FAILURE;
+    }
+
+    if (king_inference_validate_optional_bool_config(config, field_name, function_name) != SUCCESS
+        || king_inference_validate_optional_bool_config(config, alias_name, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_inference_validate_model_config(zval *config, const char *function_name)
 {
     if (king_inference_validate_optional_string_config(config, "name", function_name) != SUCCESS
@@ -104,8 +133,7 @@ static zend_result king_inference_validate_model_config(zval *config, const char
         || king_inference_validate_optional_string_config(config, "embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "token_embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS
-        || king_inference_validate_optional_bool_config(config, "with_memory", function_name) != SUCCESS
-        || king_inference_validate_optional_bool_config(config, "with-memory", function_name) != SUCCESS
+        || king_inference_validate_optional_bool_alias_config(config, "with_memory", "with-memory", function_name) != SUCCESS
         || king_inference_validate_gpu_config(config, function_name) != SUCCESS) {
         return FAILURE;
     }

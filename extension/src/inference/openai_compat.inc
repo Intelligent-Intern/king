@@ -480,10 +480,12 @@ static zend_result king_inference_openai_append_stream_usage_chunk(
     smart_str *sse)
 {
     zval chunk;
+    zval choices;
     zend_result result;
 
     king_inference_stream_openai_chunk_base(stream, &chunk);
-    add_assoc_empty_array(&chunk, "choices");
+    array_init(&choices);
+    add_assoc_zval(&chunk, "choices", &choices);
     king_inference_openai_add_completion_usage(
         &chunk,
         &stream->model,
