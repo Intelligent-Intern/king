@@ -185,6 +185,20 @@ mkdir -p "${SEMANTIC_DNS_STATE_DIR}"
 chmod 0700 "${SEMANTIC_DNS_STATE_DIR}"
 rm -f "${SEMANTIC_DNS_STATE_FILE}"
 
+prepare_legacy_packaging_tree() {
+    local tree_root="$1"
+    local package_script="${tree_root}/infra/scripts/package-release.sh"
+    local constants_header="${tree_root}/extension/include/php_king/constants.h"
+
+    if [[ ! -f "${package_script}" || ! -f "${constants_header}" ]]; then
+        return 0
+    fi
+
+    sed -i \
+        -e 's#${EXT_DIR}/include/php_king.h#${EXT_DIR}/include/php_king/constants.h#g' \
+        "${package_script}"
+}
+
 package_tree() {
     local tree_root="$1"
     local output_dir="$2"
@@ -293,6 +307,7 @@ PREVIOUS_WORKTREE="$(mktemp -d)"
 rm -rf "${PREVIOUS_WORKTREE}"
 git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${FROM_REF}" >/dev/null
 git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
+prepare_legacy_packaging_tree "${PREVIOUS_WORKTREE}"
 
 PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${PREVIOUS_BUILD_DIR}/package.log")"
 

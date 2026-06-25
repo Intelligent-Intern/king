@@ -164,6 +164,20 @@ CURRENT_BUILD_DIR="${ARTIFACTS_DIR}/current"
 INSTALL_ROOT="${ARTIFACTS_DIR}/upgrade-prefix"
 mkdir -p "${PREVIOUS_BUILD_DIR}" "${CURRENT_BUILD_DIR}" "${INSTALL_ROOT}"
 
+prepare_legacy_packaging_tree() {
+    local tree_root="$1"
+    local package_script="${tree_root}/infra/scripts/package-release.sh"
+    local constants_header="${tree_root}/extension/include/php_king/constants.h"
+
+    if [[ ! -f "${package_script}" || ! -f "${constants_header}" ]]; then
+        return 0
+    fi
+
+    sed -i \
+        -e 's#${EXT_DIR}/include/php_king.h#${EXT_DIR}/include/php_king/constants.h#g' \
+        "${package_script}"
+}
+
 package_tree() {
     local tree_root="$1"
     local output_dir="$2"
@@ -260,6 +274,7 @@ prepare_previous_archive() {
         rm -rf "${PREVIOUS_WORKTREE}"
         git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${candidate_ref}" >/dev/null
         git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
+        prepare_legacy_packaging_tree "${PREVIOUS_WORKTREE}"
 
         if PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${package_log}")"; then
             BASELINE_REF="${candidate_ref}"
