@@ -1,15 +1,8 @@
 /*
- * Shared php_king module state. Declares resource ids, core exception class
- * pointers, module class-entry storage, and the shared error buffer reused
+ * Shared php_king module state. Declares core exception class pointers,
+ * module-owned entry/resource storage, and the shared error buffer reused
  * across the bootstrap slices.
  */
-
-int le_king_session = -1;
-int le_king_cfg     = -1;
-int le_king_perf    = -1;
-int le_king_mcp     = -1;
-int le_king_ws      = -1;
-int le_king_request_context = -1;
 
 zend_class_entry *king_ce_exception            = NULL;
 zend_class_entry *king_ce_stream_exception     = NULL;
@@ -36,9 +29,12 @@ zend_class_entry *king_ce_protocol_exception   = NULL;
 #include "../autoscaling/class_entries.inc"
 #include "../awaitable/class_entries.inc"
 #include "../client/class_entries.inc"
+#include "../client/resource_ids.inc"
 #include "../config/internal/class_entries.inc"
+#include "../config/internal/resource_ids.inc"
 #include "../inference/class_entries.inc"
 #include "../mcp/php_binding/class_entries.inc"
+#include "../mcp/php_binding/resource_ids.inc"
 #include "../media/class_entries.inc"
 #include "../object_store/class_entries.inc"
 #include "../pipeline_orchestrator/class_entries.inc"

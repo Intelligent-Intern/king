@@ -11,6 +11,7 @@
 #include "legacy.h"
 #include "objects.h"
 #include "registration.h"
+#include "resource_ids.h"
 #include "session.h"
 #include "tls.h"
 #include "websocket.h"

@@ -14,5 +14,6 @@
 #include "class_entries.h"
 #include "mcp.h"
 #include "registration.h"
+#include "resource_ids.h"
 
 #endif /* KING_MCP_INDEX_H */

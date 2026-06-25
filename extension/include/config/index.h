@@ -7,6 +7,7 @@
 
 #include "object.h"
 #include "internal/resource_helpers.h"
+#include "internal/resource_ids.h"
 
 #ifndef KING_RUNTIME_BUILD
 #  include "config.h"
