@@ -37,27 +37,8 @@ static void king_register_exception_classes(void)
     king_ce_congestion_control = king_register_exception(
         "King\\CongestionControlException", king_ce_quic_exception);
 
-    king_ce_mcp_exception = king_register_exception(
-        "King\\MCPException", king_ce_exception);
-    king_ce_mcp_connection_error = king_register_exception(
-        "King\\MCPConnectionException", king_ce_mcp_exception);
-    king_ce_mcp_protocol_error = king_register_exception(
-        "King\\MCPProtocolException", king_ce_mcp_exception);
-    king_ce_mcp_timeout = king_register_exception(
-        "King\\MCPTimeoutException", king_ce_mcp_exception);
-    king_ce_mcp_data_error = king_register_exception(
-        "King\\MCPDataException", king_ce_mcp_exception);
-
-    king_ce_ws_exception = king_register_exception(
-        "King\\WebSocketException", king_ce_exception);
-    king_ce_ws_connection_error = king_register_exception(
-        "King\\WebSocketConnectionException", king_ce_ws_exception);
-    king_ce_ws_protocol_error = king_register_exception(
-        "King\\WebSocketProtocolException", king_ce_ws_exception);
-    king_ce_ws_timeout = king_register_exception(
-        "King\\WebSocketTimeoutException", king_ce_ws_exception);
-    king_ce_ws_closed = king_register_exception(
-        "King\\WebSocketClosedException", king_ce_ws_exception);
+    king_mcp_register_exception_classes();
+    king_client_register_websocket_exception_classes();
 
     king_ce_runtime_exception = king_register_exception(
         "King\\RuntimeException", king_ce_exception);

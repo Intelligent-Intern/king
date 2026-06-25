@@ -8,6 +8,7 @@
 #include <php.h>
 #include "class_methods.h"
 
+void king_client_register_websocket_exception_classes(void);
 void king_client_register_session_classes(void);
 void king_client_register_http_classes(void);
 void king_client_register_websocket_classes(void);

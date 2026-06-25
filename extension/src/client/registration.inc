@@ -1,3 +1,17 @@
+void king_client_register_websocket_exception_classes(void)
+{
+    king_ce_ws_exception = king_register_exception(
+        "King\\WebSocketException", king_ce_exception);
+    king_ce_ws_connection_error = king_register_exception(
+        "King\\WebSocketConnectionException", king_ce_ws_exception);
+    king_ce_ws_protocol_error = king_register_exception(
+        "King\\WebSocketProtocolException", king_ce_ws_exception);
+    king_ce_ws_timeout = king_register_exception(
+        "King\\WebSocketTimeoutException", king_ce_ws_exception);
+    king_ce_ws_closed = king_register_exception(
+        "King\\WebSocketClosedException", king_ce_ws_exception);
+}
+
 void king_client_register_session_classes(void)
 {
     king_ce_session = king_register_class_with_flags(

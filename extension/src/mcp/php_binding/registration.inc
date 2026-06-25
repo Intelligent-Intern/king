@@ -1,3 +1,17 @@
+void king_mcp_register_exception_classes(void)
+{
+    king_ce_mcp_exception = king_register_exception(
+        "King\\MCPException", king_ce_exception);
+    king_ce_mcp_connection_error = king_register_exception(
+        "King\\MCPConnectionException", king_ce_mcp_exception);
+    king_ce_mcp_protocol_error = king_register_exception(
+        "King\\MCPProtocolException", king_ce_mcp_exception);
+    king_ce_mcp_timeout = king_register_exception(
+        "King\\MCPTimeoutException", king_ce_mcp_exception);
+    king_ce_mcp_data_error = king_register_exception(
+        "King\\MCPDataException", king_ce_mcp_exception);
+}
+
 void king_mcp_register_classes(void)
 {
     king_ce_mcp = king_register_class_with_flags(
