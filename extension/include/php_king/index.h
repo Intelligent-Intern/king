@@ -5,6 +5,7 @@
 #ifndef KING_PHP_KING_INDEX_H
 #define KING_PHP_KING_INDEX_H
 
+#include "externals.h"
 #include "registration.h"
 #include "resources.h"
 

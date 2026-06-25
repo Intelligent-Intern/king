@@ -34,8 +34,9 @@
 #include "include/king_init.h"
 
 #include "php_king/state.inc"
-#include "php_king/externals.inc"
 #include "include/php_king_arginfo.h"
+#include "include/php_king/externals.h"
+#include "include/php_king/function_table.h"
 #include "include/php_king/registration.h"
 #include "include/php_king/resources.h"
 #include "include/autoscaling/registration.h"
@@ -50,7 +51,6 @@
 #include "include/server/registration.h"
 #include "include/xslt/registration.h"
 #include "db_ingest/api.inc"
-#include "php_king/function_table.inc"
 #include "php_king/resources.inc"
 #include "php_king/exceptions.inc"
 #include "php_king/classes.inc"
