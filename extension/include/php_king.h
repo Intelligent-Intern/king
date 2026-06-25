@@ -27,9 +27,7 @@
 #include <stdbool.h>
 
 /* Include core headers required in every build. */
-#include "php_king/constants.h"
-#include "php_king/globals.h"
-#include "php_king/init.h"
+#include "php_king/index.h"
 
 #include "autoscaling/index.h"
 #include "awaitable/index.h"
@@ -49,14 +47,5 @@
 #include "telemetry/index.h"
 #include "validation/index.h"
 #include "xslt/index.h"
-
-#include "php_king/class_entries.h"
-#include "php_king/method_tables.h"
-#include "php_king/public_functions.h"
-#include "php_king/registration.h"
-#include "php_king/resource_ids.h"
-#include "php_king/resources.h"
-#include "php_king/runtime_contracts.h"
-#include "php_king/runtime_helpers.h"
 
 #endif /* PHP_KING_H */
