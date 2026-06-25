@@ -6,5 +6,4 @@
 
 #include "../config/registration.inc"
 #include "../client/registration.inc"
-#include "../pipeline_orchestrator/registration.inc"
 #include "../server/registration.inc"

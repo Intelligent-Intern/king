@@ -1,3 +1,8 @@
+/*
+ * Pipeline-orchestrator registration aggregation. The orchestrator runtime
+ * translation unit includes this module boundary beside the runner runtime.
+ */
+
 #include "pipeline_orchestrator/class_method_entries.h"
 
 void king_pipeline_orchestrator_register_classes(void)
