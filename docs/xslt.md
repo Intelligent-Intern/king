@@ -8,10 +8,12 @@ as SaxonC properties and can override them per transformation run.
 ## Internal Layout
 
 The native XSLT runtime and object contracts live in
-`extension/include/xslt/xslt.h`. Runtime code lives under `extension/src/xslt/`;
-`extension/src/xslt/php_binding.inc` is the PHP userland binding, while
-`extension/src/xslt/arginfo.inc` and `extension/src/xslt/function_entries.inc`
-own the PHP registration surface included by the extension bootstrap.
+`extension/include/xslt/xslt.h` and are exported through
+`extension/include/xslt/index.h`. Runtime code lives under
+`extension/src/xslt/`; `extension/src/xslt/php_binding.inc` is the PHP userland
+binding, while `extension/src/xslt/arginfo.inc` and
+`extension/src/xslt/function_entries.inc` own the PHP registration surface
+included by the extension bootstrap through the public XSLT header surface.
 
 ## Function, Example 1: Check Engine
 
