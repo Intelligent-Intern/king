@@ -65,8 +65,9 @@ extension/src/inference/
 └── stream_events.inc
 ```
 
-The object and metadata contracts live in `extension/include/inference/inference.h`;
-`extension/src/php_king/inference.inc` is only the extension bootstrap bridge.
+The object and metadata contracts live in
+`extension/include/inference/inference.h`; the implementation is included
+directly from `extension/src/inference/` by the extension bootstrap.
 
 `backend_contract.inc` owns backend names and capabilities.
 `backend_registry.inc` dispatches stream startup to the selected backend.
