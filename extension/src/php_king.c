@@ -34,7 +34,7 @@
 #include "king_init.h"
 
 #include "php_king/state.inc"
-#include "php_king_arginfo.h"
+#include "php_king/arginfo.h"
 #include "php_king/externals.h"
 #include "php_king/function_table.h"
 #include "php_king/registration.h"

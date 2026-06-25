@@ -13,7 +13,7 @@ in `extension/include/iibin/iibin.h`, and the binding arginfo is pulled through
 The PHP binding metadata is owned by the module in
 `extension/src/iibin/arginfo.inc` and
 `extension/src/iibin/function_entries.inc`. `extension/src/php_king.c` consumes
-those declarations through `extension/include/php_king_arginfo.h` and only keeps
+those declarations through `extension/include/php_king/arginfo.h` and only keeps
 the central extension bootstrap and shared function table assembly.
 
 ## Function, Example 1: Schema, Encode, Decode

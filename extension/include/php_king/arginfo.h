@@ -5,14 +5,14 @@
  * fragments under extension/src. This header is the public include-side anchor
  * that keeps php_king.c from reaching into every module directly.
  */
-#ifndef PHP_KING_ARGINFO_H
-#define PHP_KING_ARGINFO_H
+#ifndef KING_PHP_KING_ARGINFO_H
+#define KING_PHP_KING_ARGINFO_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include "../src/php_king/arginfo.inc"
+#include "../../src/php_king/arginfo.inc"
 #include "client/arginfo/index.h"
 #include "awaitable/arginfo/index.h"
 #include "db_ingest/arginfo/index.h"
@@ -33,4 +33,4 @@ extern "C" {
 }
 #endif
 
-#endif /* PHP_KING_ARGINFO_H */
+#endif /* KING_PHP_KING_ARGINFO_H */
