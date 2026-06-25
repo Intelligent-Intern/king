@@ -30,15 +30,26 @@
 #include "php_king/constants.h"
 #include "php_king/globals.h"
 #include "php_king/init.h"
+
+#include "autoscaling/index.h"
 #include "awaitable/index.h"
 #include "client/index.h"
 #include "config/index.h"
-#include "server/index.h"
-#include "validation/index.h"
-
+#include "db_ingest/index.h"
 #include "iibin/index.h"
 #include "inference/index.h"
+#include "integration/index.h"
+#include "media/index.h"
 #include "mcp/index.h"
+#include "object_store/index.h"
+#include "pipeline_orchestrator/index.h"
+#include "runtime/index.h"
+#include "semantic_dns/index.h"
+#include "server/index.h"
+#include "telemetry/index.h"
+#include "validation/index.h"
+#include "xslt/index.h"
+
 #include "php_king/class_entries.h"
 #include "php_king/method_tables.h"
 #include "php_king/public_functions.h"
@@ -47,6 +58,5 @@
 #include "php_king/resources.h"
 #include "php_king/runtime_contracts.h"
 #include "php_king/runtime_helpers.h"
-#include "xslt/index.h"
 
 #endif /* PHP_KING_H */
