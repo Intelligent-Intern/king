@@ -1336,7 +1336,9 @@ namespace {
      * selects either a string key from `$models` or the model name stored in
      * the loaded King model. If exactly one model is registered, `model` may
      * be omitted. Embeddings use the configured `embedding_tensor` or a known
-     * GGUF token embedding tensor and return float vectors.
+     * GGUF token embedding tensor and return float vectors or base64-encoded
+     * Float32LE vectors. Embedding requests may set `dimensions` when a
+     * bounded prefix of the native embedding width is required.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options

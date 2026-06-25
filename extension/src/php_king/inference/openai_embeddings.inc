@@ -74,7 +74,6 @@ static zend_result king_inference_openai_embeddings_resolve_view(
     zend_string *tensor = king_inference_openai_embeddings_configured_tensor_name(model, options);
     zend_ulong dimensions;
     zend_ulong vocab;
-    zend_long max_dimensions = king_inference_openai_option_long(options, "max_embedding_dimensions", 8192);
 
     *tensor_name_out = NULL;
     *dimensions_out = 0;
@@ -108,8 +107,7 @@ static zend_result king_inference_openai_embeddings_resolve_view(
         || king_inference_tensor_dimension_at(view->dimensions, 0, &dimensions) != SUCCESS
         || king_inference_tensor_dimension_at(view->dimensions, 1, &vocab) != SUCCESS
         || dimensions == 0
-        || vocab == 0
-        || (max_dimensions > 0 && dimensions > (zend_ulong) max_dimensions)) {
+        || vocab == 0) {
         zend_string_release(tensor);
         return king_inference_openai_error_response(
             return_value,
@@ -123,6 +121,107 @@ static zend_result king_inference_openai_embeddings_resolve_view(
     *dimensions_out = dimensions;
     *vocab_out = vocab;
     return SUCCESS;
+}
+
+static zend_result king_inference_openai_embeddings_output_dimensions(
+    zval *payload,
+    zval *options,
+    zend_ulong native_dimensions,
+    zval *return_value,
+    zend_ulong *output_dimensions)
+{
+    zval *requested = king_inference_array_find(payload, "dimensions");
+    zend_long max_dimensions = king_inference_openai_option_long(options, "max_embedding_dimensions", 8192);
+
+    *output_dimensions = native_dimensions;
+
+    if (requested != NULL) {
+        if (Z_TYPE_P(requested) != IS_LONG || Z_LVAL_P(requested) <= 0) {
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Embeddings dimensions must be a positive integer.",
+                "invalid_request_error"
+            );
+        }
+        if ((zend_ulong) Z_LVAL_P(requested) > native_dimensions) {
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Embeddings dimensions cannot exceed the native embedding tensor width.",
+                "invalid_request_error"
+            );
+        }
+        if (max_dimensions > 0 && (zend_ulong) Z_LVAL_P(requested) > (zend_ulong) max_dimensions) {
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Embeddings dimensions exceed configured router limits.",
+                "invalid_request_error"
+            );
+        }
+
+        *output_dimensions = (zend_ulong) Z_LVAL_P(requested);
+        return SUCCESS;
+    }
+
+    if (max_dimensions > 0 && native_dimensions > (zend_ulong) max_dimensions) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            "Native embedding tensor width exceeds configured router limits; request a smaller dimensions value or raise max_embedding_dimensions.",
+            "server_error"
+        );
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_openai_embeddings_encoding_format(
+    zval *payload,
+    zval *return_value,
+    bool *base64_out)
+{
+    zval *encoding = king_inference_array_find(payload, "encoding_format");
+
+    *base64_out = false;
+    if (encoding == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(encoding) != IS_STRING) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Embeddings encoding_format must be a string.",
+            "invalid_request_error"
+        );
+    }
+    if (zend_string_equals_literal(Z_STR_P(encoding), "float")) {
+        return SUCCESS;
+    }
+    if (zend_string_equals_literal(Z_STR_P(encoding), "base64")) {
+        *base64_out = true;
+        return SUCCESS;
+    }
+
+    return king_inference_openai_error_response(
+        return_value,
+        400,
+        "King embeddings support encoding_format=float or encoding_format=base64.",
+        "invalid_request_error"
+    );
+}
+
+static void king_inference_openai_embeddings_write_float32le(double value, unsigned char *target)
+{
+    float f32 = (float) value;
+    uint32_t bits;
+
+    memcpy(&bits, &f32, sizeof(bits));
+    target[0] = (unsigned char) (bits & 0xffU);
+    target[1] = (unsigned char) ((bits >> 8) & 0xffU);
+    target[2] = (unsigned char) ((bits >> 16) & 0xffU);
+    target[3] = (unsigned char) ((bits >> 24) & 0xffU);
 }
 
 static zend_result king_inference_openai_embeddings_tokenize_text(
@@ -171,9 +270,11 @@ static zend_result king_inference_openai_embeddings_add_vector(
     king_inference_tensor_native_view *view,
     zval *tokens,
     zend_ulong index,
-    zend_ulong dimensions,
+    zend_ulong native_dimensions,
+    zend_ulong output_dimensions,
     zend_ulong vocab,
     zend_ulong max_tokens,
+    bool base64_encoding,
     zend_ulong *total_tokens)
 {
     zend_ulong token_count = (zend_ulong) zend_hash_num_elements(Z_ARRVAL_P(tokens));
@@ -181,14 +282,13 @@ static zend_result king_inference_openai_embeddings_add_vector(
     zend_ulong col;
     zval *token;
     zval item;
-    zval embedding;
 
-    if (token_count == 0 || token_count > max_tokens || dimensions > (zend_ulong) (SIZE_MAX / sizeof(double))) {
+    if (token_count == 0 || token_count > max_tokens || output_dimensions > (zend_ulong) (SIZE_MAX / sizeof(double))) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "Embedding input token count or dimension exceeds configured limits.");
         return FAILURE;
     }
 
-    sums = ecalloc((size_t) dimensions, sizeof(double));
+    sums = ecalloc((size_t) output_dimensions, sizeof(double));
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(tokens), token) {
         zend_ulong token_id;
         if (Z_TYPE_P(token) != IS_LONG || Z_LVAL_P(token) < 0 || (zend_ulong) Z_LVAL_P(token) >= vocab) {
@@ -197,14 +297,14 @@ static zend_result king_inference_openai_embeddings_add_vector(
             return FAILURE;
         }
         token_id = (zend_ulong) Z_LVAL_P(token);
-        if (token_id > ZEND_ULONG_MAX / dimensions) {
+        if (token_id > ZEND_ULONG_MAX / native_dimensions) {
             efree(sums);
             zend_throw_exception_ex(king_ce_validation_exception, 0, "Embedding token offset exceeds native tensor bounds.");
             return FAILURE;
         }
-        for (col = 0; col < dimensions; col++) {
+        for (col = 0; col < output_dimensions; col++) {
             double value;
-            if (king_inference_tensor_value_at(view, token_id * dimensions + col, &value) != SUCCESS) {
+            if (king_inference_tensor_value_at(view, token_id * native_dimensions + col, &value) != SUCCESS) {
                 efree(sums);
                 return FAILURE;
             }
@@ -215,11 +315,42 @@ static zend_result king_inference_openai_embeddings_add_vector(
     array_init(&item);
     add_assoc_string(&item, "object", "embedding");
     add_assoc_long(&item, "index", (zend_long) index);
-    array_init(&embedding);
-    for (col = 0; col < dimensions; col++) {
-        add_next_index_double(&embedding, sums[col] / (double) token_count);
+    if (base64_encoding) {
+        unsigned char *bytes;
+        zend_string *encoded;
+        size_t byte_length;
+
+        if (output_dimensions > (zend_ulong) (SIZE_MAX / 4)) {
+            zval_ptr_dtor(&item);
+            efree(sums);
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "Embedding output exceeds configured byte limits.");
+            return FAILURE;
+        }
+        byte_length = (size_t) output_dimensions * 4;
+        bytes = emalloc(byte_length);
+        for (col = 0; col < output_dimensions; col++) {
+            king_inference_openai_embeddings_write_float32le(
+                sums[col] / (double) token_count,
+                bytes + (col * 4)
+            );
+        }
+        encoded = php_base64_encode(bytes, byte_length);
+        efree(bytes);
+        if (encoded == NULL) {
+            zval_ptr_dtor(&item);
+            efree(sums);
+            zend_throw_exception_ex(king_ce_runtime_exception, 0, "Embedding base64 encoding failed.");
+            return FAILURE;
+        }
+        add_assoc_str(&item, "embedding", encoded);
+    } else {
+        zval embedding;
+        array_init(&embedding);
+        for (col = 0; col < output_dimensions; col++) {
+            add_next_index_double(&embedding, sums[col] / (double) token_count);
+        }
+        add_assoc_zval(&item, "embedding", &embedding);
     }
-    add_assoc_zval(&item, "embedding", &embedding);
     add_next_index_zval(data, &item);
 
     efree(sums);
@@ -233,9 +364,11 @@ static zend_result king_inference_openai_embeddings_add_string_input(
     king_inference_tensor_native_view *view,
     zend_string *input,
     zend_ulong index,
-    zend_ulong dimensions,
+    zend_ulong native_dimensions,
+    zend_ulong output_dimensions,
     zend_ulong vocab,
     zend_ulong max_tokens,
+    bool base64_encoding,
     zend_ulong *total_tokens)
 {
     zval tokens;
@@ -249,9 +382,11 @@ static zend_result king_inference_openai_embeddings_add_string_input(
         view,
         &tokens,
         index,
-        dimensions,
+        native_dimensions,
+        output_dimensions,
         vocab,
         max_tokens,
+        base64_encoding,
         total_tokens
     );
     zval_ptr_dtor(&tokens);
@@ -263,10 +398,12 @@ static zend_result king_inference_openai_embeddings_payload_data(
     king_inference_model_object *model,
     king_inference_tensor_native_view *view,
     zval *input,
-    zend_ulong dimensions,
+    zend_ulong native_dimensions,
+    zend_ulong output_dimensions,
     zend_ulong vocab,
     zend_ulong max_inputs,
     zend_ulong max_tokens,
+    bool base64_encoding,
     zend_ulong *total_tokens)
 {
     zend_ulong index = 0;
@@ -282,9 +419,11 @@ static zend_result king_inference_openai_embeddings_payload_data(
             view,
             Z_STR_P(input),
             0,
-            dimensions,
+            native_dimensions,
+            output_dimensions,
             vocab,
             max_tokens,
+            base64_encoding,
             total_tokens
         );
     }
@@ -304,9 +443,11 @@ static zend_result king_inference_openai_embeddings_payload_data(
             view,
             input,
             0,
-            dimensions,
+            native_dimensions,
+            output_dimensions,
             vocab,
             max_tokens,
+            base64_encoding,
             total_tokens
         );
     }
@@ -324,9 +465,11 @@ static zend_result king_inference_openai_embeddings_payload_data(
                 view,
                 Z_STR_P(entry),
                 index,
-                dimensions,
+                native_dimensions,
+                output_dimensions,
                 vocab,
                 max_tokens,
+                base64_encoding,
                 total_tokens
             );
         } else if (Z_TYPE_P(entry) == IS_ARRAY && king_inference_openai_embeddings_list_is_long_list(entry)) {
@@ -335,9 +478,11 @@ static zend_result king_inference_openai_embeddings_payload_data(
                 view,
                 entry,
                 index,
-                dimensions,
+                native_dimensions,
+                output_dimensions,
                 vocab,
                 max_tokens,
+                base64_encoding,
                 total_tokens
             );
         } else {
@@ -361,7 +506,6 @@ static zend_result king_inference_openai_embeddings_payload_response(
 {
     king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ_P(model_value));
     zval *input = king_inference_array_find(payload, "input");
-    zval *encoding = king_inference_array_find(payload, "encoding_format");
     zend_long max_inputs = king_inference_openai_option_long(options, "max_embedding_inputs", 2048);
     zend_long max_tokens = king_inference_openai_option_long(options, "max_embedding_tokens", 8192);
     king_inference_tensor_native_view view;
@@ -369,8 +513,10 @@ static zend_result king_inference_openai_embeddings_payload_response(
     zend_string *model_name = NULL;
     zend_string *json = NULL;
     zend_ulong dimensions = 0;
+    zend_ulong output_dimensions = 0;
     zend_ulong vocab = 0;
     zend_ulong total_tokens = 0;
+    bool base64_encoding = false;
     zval data;
     zval response_payload;
     zval usage;
@@ -384,14 +530,8 @@ static zend_result king_inference_openai_embeddings_payload_response(
             "invalid_request_error"
         );
     }
-    if (encoding != NULL
-        && (Z_TYPE_P(encoding) != IS_STRING || !zend_string_equals_literal(Z_STR_P(encoding), "float"))) {
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "King embeddings currently support encoding_format=float.",
-            "invalid_request_error"
-        );
+    if (king_inference_openai_embeddings_encoding_format(payload, return_value, &base64_encoding) != SUCCESS) {
+        return Z_TYPE_P(return_value) == IS_ARRAY ? SUCCESS : FAILURE;
     }
     if (max_inputs <= 0 || max_tokens <= 0) {
         return king_inference_openai_error_response(
@@ -412,6 +552,16 @@ static zend_result king_inference_openai_embeddings_payload_response(
     ) != SUCCESS) {
         return Z_TYPE_P(return_value) == IS_ARRAY ? SUCCESS : FAILURE;
     }
+    if (king_inference_openai_embeddings_output_dimensions(
+        payload,
+        options,
+        dimensions,
+        return_value,
+        &output_dimensions
+    ) != SUCCESS) {
+        zend_string_release(tensor_name);
+        return Z_TYPE_P(return_value) == IS_ARRAY ? SUCCESS : FAILURE;
+    }
 
     result = king_inference_openai_embeddings_payload_data(
         &data,
@@ -419,9 +569,11 @@ static zend_result king_inference_openai_embeddings_payload_response(
         &view,
         input,
         dimensions,
+        output_dimensions,
         vocab,
         (zend_ulong) max_inputs,
         (zend_ulong) max_tokens,
+        base64_encoding,
         &total_tokens
     );
     if (result != SUCCESS) {
@@ -449,7 +601,9 @@ static zend_result king_inference_openai_embeddings_payload_response(
     add_assoc_zval(&response_payload, "data", &data);
     add_assoc_str(&response_payload, "model", model_name);
     add_assoc_str(&response_payload, "embedding_tensor", tensor_name);
-    add_assoc_long(&response_payload, "dimensions", (zend_long) dimensions);
+    add_assoc_string(&response_payload, "encoding_format", base64_encoding ? "base64" : "float");
+    add_assoc_long(&response_payload, "dimensions", (zend_long) output_dimensions);
+    add_assoc_long(&response_payload, "native_dimensions", (zend_long) dimensions);
     array_init(&usage);
     add_assoc_long(&usage, "prompt_tokens", (zend_long) total_tokens);
     add_assoc_long(&usage, "total_tokens", (zend_long) total_tokens);

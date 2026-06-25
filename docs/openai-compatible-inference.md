@@ -66,6 +66,7 @@ $response = king_inference_openai_http_response($models, [
             'question: why did my electronic invoice fail validation?',
         ],
         'encoding_format' => 'float',
+        'dimensions' => 1024,
     ], JSON_UNESCAPED_SLASHES),
 ], [
     'embedding_tensor' => 'token_embd.weight',
@@ -88,8 +89,10 @@ config as `embedding_tensor` or `token_embedding_tensor`, or as router option
 names such as `token_embd.weight`.
 
 `input` may be a string, a list of strings, one token-id list, or a batch of
-token-id lists. `encoding_format` currently supports `float` because the route
-returns the real PHP float vector produced from the native tensor.
+token-id lists. `dimensions` can request a bounded prefix of the native
+embedding width; the tensor row stride remains the native width internally.
+`encoding_format` supports `float` arrays and `base64` strings. The base64 form
+contains the same mean-pooled vector encoded as Float32 little-endian bytes.
 
 ## OO, Example 1: Static Facade
 
