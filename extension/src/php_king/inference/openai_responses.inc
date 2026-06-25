@@ -143,29 +143,7 @@ static zend_result king_inference_responses_payload_to_chat_payload(zval *payloa
     add_assoc_zval(chat_payload, "messages", &messages);
     add_assoc_bool(chat_payload, "stream", king_inference_bool_from_array(payload, "stream", false));
 
-    field = king_inference_array_find(payload, "max_output_tokens");
-    if (field == NULL) {
-        field = king_inference_array_find(payload, "max_tokens");
-    }
-    if (field != NULL && Z_TYPE_P(field) == IS_LONG) {
-        add_assoc_long(chat_payload, "max_tokens", Z_LVAL_P(field));
-    }
-    field = king_inference_array_find(payload, "temperature");
-    if (field != NULL && (Z_TYPE_P(field) == IS_LONG || Z_TYPE_P(field) == IS_DOUBLE)) {
-        zval copy;
-        ZVAL_COPY(&copy, field);
-        add_assoc_zval(chat_payload, "temperature", &copy);
-    }
-    field = king_inference_array_find(payload, "top_p");
-    if (field != NULL && (Z_TYPE_P(field) == IS_LONG || Z_TYPE_P(field) == IS_DOUBLE)) {
-        zval copy;
-        ZVAL_COPY(&copy, field);
-        add_assoc_zval(chat_payload, "top_p", &copy);
-    }
-    field = king_inference_array_find(payload, "seed");
-    if (field != NULL && Z_TYPE_P(field) == IS_LONG) {
-        add_assoc_long(chat_payload, "seed", Z_LVAL_P(field));
-    }
+    king_inference_openai_copy_response_generation_options(payload, chat_payload);
 
     return SUCCESS;
 }

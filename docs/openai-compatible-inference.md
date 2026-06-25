@@ -101,6 +101,12 @@ Responses payloads return `input_tokens`, `output_tokens`, and `total_tokens`.
 If token counting is unavailable for the model, the router keeps `usage` as
 `null` instead of failing an otherwise completed inference request.
 
+Generation controls are normalized before the stream starts. Chat Completions
+accept `max_completion_tokens` and legacy `max_tokens`; Responses accepts
+`max_output_tokens` and legacy `max_tokens`. King maps those fields to the
+internal `max_tokens` stream contract and carries `temperature`, `top_p`,
+`seed`, and the King-specific `top_k` option through the same path.
+
 ## OO, Example 1: Static Facade
 
 ```php

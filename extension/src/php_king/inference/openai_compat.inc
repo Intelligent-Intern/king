@@ -227,6 +227,7 @@ static zend_result king_inference_openai_create_stream(
 
     add_assoc_bool(&stream->request, "openai_compatible", true);
     add_assoc_string(&stream->request, "format", "openai_chat_completions");
+    king_inference_openai_copy_chat_generation_options(&stream->request, &stream->request);
     add_assoc_bool(&stream->options, "openai_compatible", true);
     add_assoc_string(&stream->options, "format", "openai_chat_completions");
     stream->openai_compatible = true;

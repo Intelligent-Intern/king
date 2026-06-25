@@ -40,6 +40,7 @@
 #include "inference/backend_registry.inc"
 #include "inference/model_config.inc"
 #include "inference/tokenizer.inc"
+#include "inference/openai_options.inc"
 #include "inference/openai_usage.inc"
 #include "inference/stream_events.inc"
 #include "inference/openai_compat.inc"
