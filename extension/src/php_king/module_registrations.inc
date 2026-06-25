@@ -5,9 +5,9 @@
  */
 
 #include "../awaitable/registration.inc"
-#include "../config/internal/registration.inc"
+#include "../config/registration.inc"
 #include "../client/registration.inc"
-#include "../mcp/php_binding/registration.inc"
+#include "../mcp/registration.inc"
 #include "../pipeline_orchestrator/registration.inc"
 #include "../object_store/registration.inc"
 #include "../autoscaling/registration.inc"

@@ -6,7 +6,7 @@
 
 #include "../db_ingest/php_binding.inc"
 #include "../awaitable/php_binding.inc"
-#include "../config/internal/php_binding.inc"
+#include "../config/php_binding.inc"
 #include "../mcp/php_binding.inc"
 #include "../media/php_binding.inc"
 #include "../xslt/php_binding.inc"
