@@ -4,6 +4,5 @@
  * registration hooks from their owning translation unit.
  */
 
-#include "../config/registration.inc"
 #include "../client/registration.inc"
 #include "../server/registration.inc"

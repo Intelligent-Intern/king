@@ -5,6 +5,5 @@
  */
 
 #include "../db_ingest/php_binding.inc"
-#include "../config/php_binding.inc"
 #include "../client/php_binding.inc"
 #include "../server/php_binding.inc"
