@@ -1,11 +1,1 @@
-PHP_FUNCTION(king_autoscaling_init);
-PHP_FUNCTION(king_autoscaling_start_monitoring);
-PHP_FUNCTION(king_autoscaling_stop_monitoring);
-PHP_FUNCTION(king_autoscaling_get_metrics);
-PHP_FUNCTION(king_autoscaling_get_status);
-PHP_FUNCTION(king_autoscaling_get_nodes);
-PHP_FUNCTION(king_autoscaling_scale_up);
-PHP_FUNCTION(king_autoscaling_scale_down);
-PHP_FUNCTION(king_autoscaling_register_node);
-PHP_FUNCTION(king_autoscaling_mark_node_ready);
-PHP_FUNCTION(king_autoscaling_drain_node);
+#include "autoscaling/index.h"
