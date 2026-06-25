@@ -6,6 +6,7 @@ procedural variant. Low-level sessions are created with `king_connect()` or
 
 ## Internal Layout
 
+The config include-side umbrella lives in `extension/include/config/index.h`.
 The native config snapshot lives in `extension/include/config/config.h`; the
 PHP-visible `King\Config` object contract lives in
 `extension/include/config/object.h`. `King\CancelToken` is shared across

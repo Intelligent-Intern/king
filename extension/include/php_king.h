@@ -32,16 +32,8 @@
 #include "php_king/init.h"
 #include "awaitable/index.h"
 #include "client/index.h"
-#include "config/object.h"
+#include "config/index.h"
 #include "server/index.h"
-
-/*
- * Keep this header lightweight for the current v1 runtime surface so the
- * extension can compile without pulling in the full native dependency graph.
- */
-#ifndef KING_RUNTIME_BUILD
-#  include "config/config.h"
-#endif /* KING_RUNTIME_BUILD */
 
 #include "iibin/index.h"
 #include "inference/index.h"
