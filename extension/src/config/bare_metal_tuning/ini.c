@@ -13,6 +13,7 @@
 
 #include "config/bare_metal_tuning/ini.h"
 #include "config/bare_metal_tuning/base_layer.h"
+#include "php_king/init.h"
 #include "validation/config_param/validate_cpu_affinity_map_string.h"
 
 #include "php.h"
@@ -107,7 +108,6 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.io_thread_numa_node_policy", "default", PHP_INI_SYSTEM, OnUpdateNumaPolicyString, NULL)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_bare_metal_tuning_ini_register(void)
 {

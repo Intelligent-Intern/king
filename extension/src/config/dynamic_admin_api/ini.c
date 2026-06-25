@@ -13,6 +13,7 @@
 
 #include "config/dynamic_admin_api/ini.h"
 #include "config/dynamic_admin_api/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "main/php_streams.h"
@@ -21,7 +22,6 @@
 #include <strings.h>
 #include <zend_ini.h>
 
-extern int king_ini_module_number;
 
 static void dynamic_admin_replace_string(char **target, zend_string *value)
 {

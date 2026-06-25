@@ -14,6 +14,7 @@
 
 #include "config/router_and_loadbalancer/ini.h"
 #include "config/router_and_loadbalancer/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -21,7 +22,6 @@
 #include <strings.h>
 #include <zend_ini.h>
 
-extern int king_ini_module_number;
 
 /* INI strings live in persistent module storage, so replace them manually. */
 static void router_replace_string(char **target, zend_string *value)

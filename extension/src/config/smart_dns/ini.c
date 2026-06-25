@@ -14,6 +14,7 @@
 
 #include "config/smart_dns/ini.h"
 #include "config/smart_dns/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -161,7 +162,6 @@ PHP_INI_BEGIN()
         OnUpdateString, mothernode_uri, kg_smart_dns_config_t, king_smart_dns_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_smart_dns_ini_register(void)
 {

@@ -14,6 +14,7 @@
 
 #include "config/security_and_traffic/ini.h"
 #include "config/security_and_traffic/base_layer.h"
+#include "php_king/init.h"
 #include "php_king/globals.h"
 
 #include "php.h"
@@ -130,7 +131,6 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.security_cors_allowed_origins", "*", PHP_INI_SYSTEM, OnUpdateCorsOrigins, NULL)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_security_ini_register(void)
 {

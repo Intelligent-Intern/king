@@ -14,6 +14,7 @@
 
 #include "config/native_object_store/ini.h"
 #include "config/native_object_store/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -136,7 +137,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.storage_enable_directstorage", "0", PHP_INI_SYSTEM, OnUpdateBool, enable_directstorage, kg_native_object_store_config_t, king_native_object_store_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_native_object_store_ini_register(void)
 {

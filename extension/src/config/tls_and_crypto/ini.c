@@ -14,6 +14,7 @@
 
 #include "config/tls_and_crypto/ini.h"
 #include "config/tls_and_crypto/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -130,7 +131,6 @@ PHP_INI_BEGIN()
         transport_disable_encryption, kg_tls_and_crypto_config_t, king_tls_and_crypto_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_tls_and_crypto_ini_register(void)
 {

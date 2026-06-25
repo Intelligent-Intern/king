@@ -23,6 +23,7 @@
 #include "config/open_telemetry/base_layer.h"
 #include "config/smart_dns/base_layer.h"
 #include "iibin/iibin_internal.h"
+#include "object_store/object_store_internal.h"
 
 HashTable king_semantic_dns_service_registry;
 HashTable king_semantic_dns_mother_node_registry;

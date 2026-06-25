@@ -20,8 +20,6 @@
 #include "server/index.h"
 #include <zend_exceptions.h>
 
-extern int le_king_cfg;
-
 static const char *king_server_select_listener_name(const king_cfg_t *cfg)
 {
     if (cfg != NULL && !cfg->tcp.enable) {

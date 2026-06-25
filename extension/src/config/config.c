@@ -39,8 +39,6 @@
 #include <ext/spl/spl_exceptions.h>
 #include "zend_exceptions.h"
 
-extern int le_king_cfg;
-
 typedef enum _king_config_override_module_t {
     KING_CONFIG_OVERRIDE_NONE = 0,
     KING_CONFIG_OVERRIDE_TLS,

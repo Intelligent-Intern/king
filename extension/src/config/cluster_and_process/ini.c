@@ -13,13 +13,13 @@
 
 #include "config/cluster_and_process/ini.h"
 #include "config/cluster_and_process/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
 #include <Zend/zend_exceptions.h>
 #include <zend_ini.h>
 
-extern int king_ini_module_number;
 
 static ZEND_INI_MH(OnUpdateClusterNonNegativeLong)
 {

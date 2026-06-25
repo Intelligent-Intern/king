@@ -14,6 +14,7 @@
 
 #include "config/tcp_transport/ini.h"
 #include "config/tcp_transport/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -101,7 +102,6 @@ PHP_INI_BEGIN()
         PHP_INI_SYSTEM, OnUpdateString, tls_ciphers_tls12, kg_tcp_transport_config_t, king_tcp_transport_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_tcp_transport_ini_register(void)
 {

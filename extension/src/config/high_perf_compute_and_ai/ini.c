@@ -13,6 +13,7 @@
 
 #include "config/high_perf_compute_and_ai/ini.h"
 #include "config/high_perf_compute_and_ai/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -92,7 +93,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.arc_video_acceleration_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, arc_video_acceleration_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_high_perf_compute_and_ai_ini_register(void)
 {

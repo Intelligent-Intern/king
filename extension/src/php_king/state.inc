@@ -3,9 +3,6 @@
  * pointers and forward declarations reused across the bootstrap slices.
  */
 
-typedef struct king_cfg_s king_cfg_t;
-void king_config_free(king_cfg_t *cfg);
-
 int le_king_session = -1;
 int le_king_cfg     = -1;
 int le_king_perf    = -1;

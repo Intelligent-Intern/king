@@ -13,6 +13,7 @@
 
 #include "config/app_http3_websockets_webtransport/ini.h"
 #include "config/app_http3_websockets_webtransport/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -88,7 +89,6 @@ PHP_INI_BEGIN()
         webtransport_max_streams_per_session, kg_app_protocols_config_t, king_app_protocols_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_app_http3_websockets_webtransport_ini_register(void)
 {
