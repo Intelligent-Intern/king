@@ -33,35 +33,45 @@ at a time:
 ```text
 extension/src/inference/
 ├── api.inc
-├── helpers.inc
 ├── backend_contract.inc
-├── backend_registry.inc
 ├── backend_king_local.inc
 ├── backend_king_native.inc
-├── gguf_loader.inc
+├── backend_registry.inc
+├── class_entries.inc
 ├── gguf_architecture_metadata.inc
+├── gguf_loader.inc
 ├── gguf_metadata_helpers.inc
-├── native_memory.inc
-├── tensor_view.inc
-├── tensor_math.inc
-├── tensor_graph.inc
-├── tensor_graph_ops.inc
-├── tensor_graph_kv.inc
-├── tensor_graph_sampling.inc
-├── paged_kv_cache.inc
+├── helpers.inc
 ├── model_config.inc
+├── native_memory.inc
+├── object_handlers.inc
+├── openai_backend.inc
 ├── openai_compat.inc
 ├── openai_completions.inc
 ├── openai_embeddings.inc
+├── openai_http_body.inc
+├── openai_http_helpers.inc
+├── openai_http_request.inc
 ├── openai_http_router.inc
 ├── openai_messages.inc
+├── openai_models.inc
 ├── openai_options.inc
 ├── openai_responses.inc
 ├── openai_usage.inc
+├── paged_kv_cache.inc
+├── php_binding.inc
+├── registration.inc
 ├── resource_policy.inc
+├── state.inc
+├── stream_events.inc
+├── tensor_graph.inc
+├── tensor_graph_kv.inc
+├── tensor_graph_ops.inc
+├── tensor_graph_sampling.inc
+├── tensor_math.inc
+├── tensor_view.inc
 ├── thermal_policy.inc
-├── tokenizer.inc
-└── stream_events.inc
+└── tokenizer.inc
 ```
 
 The object and metadata contracts live in
@@ -77,6 +87,10 @@ directly by the extension bootstrap.
 mapping, fork/exec handoff, and prompt normalization. Resource and thermal
 policy are intentionally separate so CPU/GPU scheduling, VRAM limits, and
 temperature behavior can evolve without changing userland code.
+`openai_http_router.inc` owns route selection only. Request extraction,
+response helpers, body decoding, model registry handling, route generation
+helpers, and endpoint-specific payloads live in the focused `openai_*`
+fragments so the OpenAI-compatible router remains inspectable as it grows.
 `gguf_loader.inc` validates the model artifact, parses GGUF metadata key/value
 entries, records architecture and tokenizer metadata where present, walks the
 tensor directory, builds an internal tensor index keyed by tensor name, computes

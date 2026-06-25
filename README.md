@@ -26,7 +26,7 @@ signals, and cluster-facing workflows in one coherent runtime model.
 The current line is beta. The repo-local baseline is green, the multi-backend
 object-store and control-plane surfaces are real, and the remaining closure
 work is now about narrower hardening, distributed-operating proof, and
-multi-node fleet behavior rather than placeholder subsystem stories.
+multi-node fleet behavior rather than paper subsystem claims.
 
 If you do not have a Hetzner account yet, it is time to fix that. Use the
 [Hetzner Cloud referral link](https://hetzner.cloud/?ref=VYfKUSIni63u) and you
