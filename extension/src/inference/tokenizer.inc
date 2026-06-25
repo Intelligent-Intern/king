@@ -162,3 +162,75 @@ static zend_result king_inference_tokenizer_encode(
     zend_string_release(normalized);
     return SUCCESS;
 }
+
+static bool king_inference_tokenizer_hex_nibble(char c, unsigned char *value)
+{
+    if (c >= '0' && c <= '9') {
+        *value = (unsigned char) (c - '0');
+        return true;
+    }
+    if (c >= 'A' && c <= 'F') {
+        *value = (unsigned char) (c - 'A' + 10);
+        return true;
+    }
+    if (c >= 'a' && c <= 'f') {
+        *value = (unsigned char) (c - 'a' + 10);
+        return true;
+    }
+
+    return false;
+}
+
+static zend_string *king_inference_tokenizer_decode_token(
+    king_inference_model_object *model,
+    zend_ulong token_id
+) {
+    zval *token = zend_hash_index_find(Z_ARRVAL(model->tokenizer_tokens), token_id);
+    smart_str decoded = {0};
+    const char *bytes;
+    size_t length;
+    size_t i = 0;
+
+    if (token == NULL || Z_TYPE_P(token) != IS_STRING) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "King native tokenizer cannot decode token id %lu for model '%s'.",
+            token_id,
+            ZSTR_VAL(model->name)
+        );
+        return NULL;
+    }
+
+    bytes = Z_STRVAL_P(token);
+    length = Z_STRLEN_P(token);
+    if (length == 6
+        && bytes[0] == '<'
+        && bytes[1] == '0'
+        && bytes[2] == 'x'
+        && bytes[5] == '>') {
+        unsigned char high;
+        unsigned char low;
+        if (king_inference_tokenizer_hex_nibble(bytes[3], &high)
+            && king_inference_tokenizer_hex_nibble(bytes[4], &low)) {
+            char value = (char) ((high << 4) | low);
+            return zend_string_init(&value, 1, 0);
+        }
+    }
+
+    while (i < length) {
+        if (i + 3 <= length
+            && (unsigned char) bytes[i] == 0xE2
+            && (unsigned char) bytes[i + 1] == 0x96
+            && (unsigned char) bytes[i + 2] == 0x81) {
+            smart_str_appendc(&decoded, ' ');
+            i += 3;
+            continue;
+        }
+        smart_str_appendc(&decoded, bytes[i]);
+        i++;
+    }
+
+    smart_str_0(&decoded);
+    return decoded.s != NULL ? decoded.s : zend_string_init("", 0, 0);
+}

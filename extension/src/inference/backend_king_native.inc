@@ -1,3 +1,230 @@
+static zval *king_inference_king_native_graph_options(king_inference_stream_object *stream)
+{
+    zval *options = king_inference_array_find(&stream->request, "graph_options");
+
+    if (options != NULL && Z_TYPE_P(options) == IS_ARRAY) {
+        return options;
+    }
+
+    options = king_inference_array_find(&stream->options, "graph_options");
+    return options != NULL && Z_TYPE_P(options) == IS_ARRAY ? options : NULL;
+}
+
+static zval *king_inference_king_native_graph_token_payload(zval *graph_result, zval *graph)
+{
+    zval *final = king_inference_array_find(graph_result, "final");
+    zval *output_id = king_inference_array_find(graph, "output");
+    zval *payload = NULL;
+
+    if (final == NULL || Z_TYPE_P(final) != IS_ARRAY) {
+        return NULL;
+    }
+    if (output_id != NULL && Z_TYPE_P(output_id) == IS_STRING) {
+        payload = zend_hash_find(Z_ARRVAL_P(final), Z_STR_P(output_id));
+        if (payload != NULL) {
+            return payload;
+        }
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(final), payload) {
+        return payload;
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_result king_inference_king_native_token_id_from_result(
+    zval *graph_result,
+    zval *graph,
+    zend_ulong *token_id
+) {
+    zval *payload = king_inference_king_native_graph_token_payload(graph_result, graph);
+    zval *values;
+    zval *token;
+    double token_value;
+
+    if (payload == NULL || Z_TYPE_P(payload) != IS_ARRAY) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph stream produced no final token payload.");
+        return FAILURE;
+    }
+
+    values = king_inference_array_find(payload, "values");
+    if (values == NULL || Z_TYPE_P(values) != IS_ARRAY) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph token payload has no values vector.");
+        return FAILURE;
+    }
+
+    token = zend_hash_index_find(Z_ARRVAL_P(values), 0);
+    if (token == NULL) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph token payload is empty.");
+        return FAILURE;
+    }
+    if (Z_TYPE_P(token) == IS_LONG) {
+        if (Z_LVAL_P(token) < 0) {
+            zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph produced a negative token id.");
+            return FAILURE;
+        }
+        *token_id = (zend_ulong) Z_LVAL_P(token);
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(token) != IS_DOUBLE || Z_DVAL_P(token) < 0.0) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph produced an invalid token id.");
+        return FAILURE;
+    }
+
+    token_value = Z_DVAL_P(token);
+    if (token_value > (double) ZEND_ULONG_MAX) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native graph token id exceeds supported limits.");
+        return FAILURE;
+    }
+
+    *token_id = (zend_ulong) token_value;
+    return SUCCESS;
+}
+
+static zend_result king_inference_king_native_append_graph_token(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream,
+    zval *graph,
+    zval *graph_options,
+    zval *state
+) {
+    zval working_graph;
+    zval graph_result;
+    zval *next_state;
+    zend_ulong token_id;
+    zend_string *token_text;
+    zend_result status;
+
+    if (graph == NULL || Z_TYPE_P(graph) != IS_ARRAY) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graph entries must be arrays.");
+        return FAILURE;
+    }
+
+    ZVAL_DUP(&working_graph, graph);
+    SEPARATE_ARRAY(&working_graph);
+    if (!Z_ISUNDEF_P(state)
+        && king_inference_array_find(&working_graph, "state") == NULL) {
+        zval state_copy;
+        ZVAL_COPY(&state_copy, state);
+        add_assoc_zval(&working_graph, "state", &state_copy);
+    }
+
+    ZVAL_UNDEF(&graph_result);
+    status = king_inference_graph_run_array(model, &working_graph, graph_options, &graph_result);
+    if (status != SUCCESS) {
+        zval_ptr_dtor(&working_graph);
+        return FAILURE;
+    }
+    if (king_inference_king_native_token_id_from_result(&graph_result, &working_graph, &token_id) != SUCCESS) {
+        zval_ptr_dtor(&graph_result);
+        zval_ptr_dtor(&working_graph);
+        return FAILURE;
+    }
+
+    token_text = king_inference_tokenizer_decode_token(model, token_id);
+    if (token_text == NULL) {
+        zval_ptr_dtor(&graph_result);
+        zval_ptr_dtor(&working_graph);
+        return FAILURE;
+    }
+    add_next_index_str(&stream->native_events, token_text);
+
+    next_state = king_inference_array_find(&graph_result, "state");
+    if (next_state != NULL && Z_TYPE_P(next_state) == IS_ARRAY) {
+        if (!Z_ISUNDEF_P(state)) {
+            zval_ptr_dtor(state);
+        }
+        ZVAL_COPY(state, next_state);
+    }
+
+    zval_ptr_dtor(&graph_result);
+    zval_ptr_dtor(&working_graph);
+    return SUCCESS;
+}
+
+static zend_result king_inference_king_native_prepare_events(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream
+) {
+    zval *graph = king_inference_array_find(&stream->request, "graph");
+    zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *graph_options = king_inference_king_native_graph_options(stream);
+    zval *max_tokens_value = king_inference_array_find(&stream->request, "max_tokens");
+    zval state;
+    zval *entry;
+    zend_long max_tokens = 1;
+    zend_long emitted = 0;
+
+    if (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graphs must be an array.");
+        return FAILURE;
+    }
+    if (graphs == NULL && (graph == NULL || Z_TYPE_P(graph) != IS_ARRAY)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native CPU streaming requires a native graph or graphs request."
+        );
+        return FAILURE;
+    }
+    if (max_tokens_value != NULL) {
+        if (Z_TYPE_P(max_tokens_value) != IS_LONG) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream max_tokens must be an integer.");
+            return FAILURE;
+        }
+        max_tokens = Z_LVAL_P(max_tokens_value);
+    } else if (graphs != NULL) {
+        max_tokens = (zend_long) zend_hash_num_elements(Z_ARRVAL_P(graphs));
+    }
+    if (max_tokens <= 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream max_tokens must be positive.");
+        return FAILURE;
+    }
+
+    if (!Z_ISUNDEF(stream->native_events)) {
+        zval_ptr_dtor(&stream->native_events);
+    }
+    array_init(&stream->native_events);
+    stream->native_event_index = 0;
+    ZVAL_UNDEF(&state);
+
+    if (graphs != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(graphs), entry) {
+            if (emitted >= max_tokens) {
+                break;
+            }
+            if (king_inference_king_native_append_graph_token(model, stream, entry, graph_options, &state) != SUCCESS) {
+                if (!Z_ISUNDEF(state)) {
+                    zval_ptr_dtor(&state);
+                }
+                return FAILURE;
+            }
+            emitted++;
+        } ZEND_HASH_FOREACH_END();
+    } else {
+        while (emitted < max_tokens) {
+            if (king_inference_king_native_append_graph_token(model, stream, graph, graph_options, &state) != SUCCESS) {
+                if (!Z_ISUNDEF(state)) {
+                    zval_ptr_dtor(&state);
+                }
+                return FAILURE;
+            }
+            emitted++;
+        }
+    }
+
+    if (!Z_ISUNDEF(state)) {
+        zval_ptr_dtor(&state);
+    }
+    if (zend_hash_num_elements(Z_ARRVAL(stream->native_events)) == 0) {
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "King native stream produced no token events.");
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_inference_king_native_cpu_stream_start(
     king_inference_stream_object *stream,
     const char *function_name
@@ -8,13 +235,7 @@ static zend_result king_inference_king_native_cpu_stream_start(
         return FAILURE;
     }
 
-    zend_throw_exception_ex(
-        king_ce_runtime_exception,
-        0,
-        "%s() loaded the GGUF model through King native metadata code, but native token generation is not wired yet. No external inference runtime was used.",
-        function_name
-    );
-    return FAILURE;
+    return king_inference_king_native_prepare_events(model, stream);
 }
 
 static void king_inference_king_native_model_info(
@@ -25,8 +246,8 @@ static void king_inference_king_native_model_info(
     add_assoc_string(return_value, "loader", "king_gguf_structure");
     add_assoc_bool(return_value, "external_runtime", false);
     add_assoc_bool(return_value, "tokenization_ready", intern->gguf.tokenizer_lookup_loaded);
-    add_assoc_bool(return_value, "token_generation_ready", false);
-    add_assoc_string(return_value, "generation_runtime", "pending_native_graph");
+    add_assoc_bool(return_value, "token_generation_ready", true);
+    add_assoc_string(return_value, "generation_runtime", "king_native_graph");
     add_assoc_long(return_value, "native_file_bytes", (zend_long) intern->gguf.file_size);
     add_assoc_bool(return_value, "native_metadata_ready", intern->gguf.metadata_parsed);
     add_assoc_bool(return_value, "native_tensor_directory_ready", intern->gguf.tensor_directory_parsed);

@@ -369,13 +369,14 @@ The core programming model is:
   dequantization, K-quant block decoding, first CPU tensor/vector math, and
   a native mini-graph for embedding, RMSNorm, linear projection, RoPE, dot,
   stack, softmax, weighted-sum context assembly, serializable KV state,
-  range-based KV attention, token selection from logits, scale, and add steps
-  without an external inference runtime. The stream layer can emit explicit
-  OpenAI-compatible Chat Completions chunks, and the HTTP helper can serve
+  range-based KV attention, token selection from logits, scale, add steps, and
+  graph-backed native CPU token streaming without an external inference
+  runtime. The stream layer can emit explicit OpenAI-compatible Chat
+  Completions chunks, and the HTTP helper can serve
   `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,
   `POST /v1/responses`, legacy `POST /v1/completions`, and
-  `POST /v1/embeddings` through King server response arrays while full graph
-  execution and quantized kernels are added.
+  `POST /v1/embeddings` through King server response arrays while broader
+  native layer coverage and quantized kernels are added.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

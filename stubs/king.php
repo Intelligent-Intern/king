@@ -1211,10 +1211,10 @@ namespace {
      * `artifact.path`, or `artifact_path`. Backend selection is config-driven.
      * The `local` backend streams through the King runner contract; the
      * `king_native_cpu` backend exposes native GGUF metadata, an internal
-     * tensor index, native tokenizer lookup, paged KV-cache planning, and
-     * read-only model mapping without an external inference runtime. GPU use is
-     * disabled by default and requires explicit config plus thermal policy when
-     * enabled.
+     * tensor index, native tokenizer lookup, paged KV-cache planning, native
+     * graph-backed token streaming, and read-only model mapping without an
+     * external inference runtime. GPU use is disabled by default and requires
+     * explicit config plus thermal policy when enabled.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\RuntimeException
      */

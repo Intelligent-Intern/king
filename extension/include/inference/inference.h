@@ -64,6 +64,8 @@ typedef struct _king_inference_stream_object {
     zval model;
     zval request;
     zval options;
+    zval native_events;
+    zend_ulong native_event_index;
     int stdout_fd;
     int stderr_fd;
     zend_long child_pid;

@@ -17,6 +17,65 @@ static void king_inference_stream_close_process(king_inference_stream_object *st
     }
 }
 
+static bool king_inference_stream_has_native_events(king_inference_stream_object *stream)
+{
+    return !Z_ISUNDEF(stream->native_events) && Z_TYPE(stream->native_events) == IS_ARRAY;
+}
+
+static void king_inference_stream_openai_chunk(
+    king_inference_stream_object *stream,
+    const char *role,
+    const char *content,
+    size_t content_len,
+    const char *finish_reason,
+    zval *return_value
+);
+
+static void king_inference_stream_done_event(king_inference_stream_object *stream, zval *return_value);
+
+static zend_result king_inference_stream_next_native_event(
+    king_inference_stream_object *stream,
+    zval *return_value
+) {
+    zval *event;
+
+    if (!king_inference_stream_has_native_events(stream)) {
+        return FAILURE;
+    }
+
+    event = zend_hash_index_find(Z_ARRVAL(stream->native_events), stream->native_event_index);
+    if (event == NULL) {
+        stream->exit_code = 0;
+        king_inference_stream_done_event(stream, return_value);
+        return SUCCESS;
+    }
+
+    stream->native_event_index++;
+    if (Z_TYPE_P(event) == IS_STRING) {
+        stream->chunk_count++;
+        stream->bytes_emitted += (zend_long) Z_STRLEN_P(event);
+        if (stream->openai_compatible) {
+            king_inference_stream_openai_chunk(
+                stream,
+                NULL,
+                Z_STRVAL_P(event),
+                Z_STRLEN_P(event),
+                NULL,
+                return_value
+            );
+            return SUCCESS;
+        }
+
+        array_init(return_value);
+        add_assoc_string(return_value, "type", "token");
+        add_assoc_str(return_value, "text", zend_string_copy(Z_STR_P(event)));
+        return SUCCESS;
+    }
+
+    ZVAL_COPY(return_value, event);
+    return SUCCESS;
+}
+
 static bool king_inference_stream_openai_requested(zval *request, zval *options)
 {
     zval *flag = king_inference_array_find(options, "openai_compatible");
@@ -222,6 +281,10 @@ static zend_result king_inference_stream_next_event(
             king_inference_stream_close_process(stream, true);
             return FAILURE;
         }
+    }
+
+    if (king_inference_stream_has_native_events(stream)) {
+        return king_inference_stream_next_native_event(stream, return_value);
     }
 
     if (stream->stdout_fd < 0 && stream->stderr_fd < 0) {

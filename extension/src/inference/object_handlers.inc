@@ -94,6 +94,10 @@ static void king_inference_stream_object_free(zend_object *object)
         zval_ptr_dtor(&intern->options);
         ZVAL_UNDEF(&intern->options);
     }
+    if (!Z_ISUNDEF(intern->native_events)) {
+        zval_ptr_dtor(&intern->native_events);
+        ZVAL_UNDEF(&intern->native_events);
+    }
     if (intern->response_id != NULL) {
         zend_string_release(intern->response_id);
         intern->response_id = NULL;
@@ -109,6 +113,8 @@ static zend_object *king_inference_stream_object_create(zend_class_entry *ce)
     ZVAL_UNDEF(&intern->model);
     ZVAL_UNDEF(&intern->request);
     ZVAL_UNDEF(&intern->options);
+    ZVAL_UNDEF(&intern->native_events);
+    intern->native_event_index = 0;
     intern->stdout_fd = -1;
     intern->stderr_fd = -1;
     intern->child_pid = -1;

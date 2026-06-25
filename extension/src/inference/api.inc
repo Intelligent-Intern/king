@@ -282,6 +282,7 @@ PHP_FUNCTION(king_inference_stream)
     }
     stream->openai_compatible = king_inference_stream_openai_requested(&stream->request, &stream->options);
     stream->created_at = (zend_long) time(NULL);
+    stream->native_event_index = 0;
     if (stream->openai_compatible) {
         king_inference_stream_prepare_openai(stream);
     }
@@ -538,6 +539,10 @@ PHP_METHOD(King_Inference_Stream, __construct)
     if (!Z_ISUNDEF(stream->options)) {
         zval_ptr_dtor(&stream->options);
     }
+    if (!Z_ISUNDEF(stream->native_events)) {
+        zval_ptr_dtor(&stream->native_events);
+        ZVAL_UNDEF(&stream->native_events);
+    }
     ZVAL_COPY(&stream->model, model);
     ZVAL_COPY(&stream->request, request);
     if (options != NULL) {
@@ -552,6 +557,7 @@ PHP_METHOD(King_Inference_Stream, __construct)
     stream->chunk_count = 0;
     stream->stderr_count = 0;
     stream->bytes_emitted = 0;
+    stream->native_event_index = 0;
     stream->openai_compatible = king_inference_stream_openai_requested(&stream->request, &stream->options);
     stream->created_at = (zend_long) time(NULL);
     if (stream->openai_compatible) {

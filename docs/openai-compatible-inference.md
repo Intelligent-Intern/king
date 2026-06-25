@@ -14,6 +14,15 @@ $models = [
     'support-small' => king_inference_model_load([
         'name' => 'support-small',
         'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
+        'backend' => [
+            'name' => 'local',
+            'runner_path' => getenv('KING_INFERENCE_RUNNER'),
+        ],
+        'owned_by' => 'internal-platform',
+    ]),
+    'support-embeddings' => king_inference_model_load([
+        'name' => 'support-embeddings',
+        'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
         'backend' => 'king_native_cpu',
         'embedding_tensor' => 'token_embd.weight',
         'owned_by' => 'internal-platform',
@@ -57,6 +66,12 @@ array of text content parts. King extracts text from `text`, `content`, or
 parts such as image, audio, or file payloads are rejected for this local text
 inference route instead of being silently ignored.
 
+The generic OpenAI HTTP generation routes expect a text-generation stream
+backend. `king_native_cpu` can stream graph-selected tokens through
+`king_inference_stream()` when the request carries `graph` or `graphs`, and it
+serves native embeddings through the router, but the router does not synthesize
+a native graph from arbitrary Chat Completions payloads.
+
 ## Function, Example 2: Embeddings
 
 ```php
@@ -66,7 +81,7 @@ $response = king_inference_openai_http_response($models, [
     'method' => 'POST',
     'uri' => '/v1/embeddings',
     'body' => json_encode([
-        'model' => 'support-small',
+        'model' => 'support-embeddings',
         'input' => [
             'invoice status: rejected because VAT summary does not match lines',
             'question: why did my electronic invoice fail validation?',

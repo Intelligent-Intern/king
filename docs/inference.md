@@ -9,16 +9,16 @@ artifact, parses the GGUF structure inside King, resolves an inference backend,
 and streams backend output as King events. Model artifacts are passed as direct
 filesystem paths through `artifact`, `artifact.path`, or `artifact_path`.
 
-The implemented token-streaming backend is `local`. It uses a King-owned
-process runner contract while the public backend name stays independent from
-the runner implementation. The `king_native_cpu` backend exposes the native
-GGUF loader, metadata parser, tokenizer lookup, paged KV-cache planning,
-public tensor views, bounded tensor dequantization, first CPU tensor/vector
-math, and a read-only memory map of the model artifact. It can encode text
-through the artifact tokenizer, plan attention cache pages, address tensor byte
-ranges safely, and execute initial tensor math against mapped weights, but it
-does not pretend to generate model tokens until the graph executor is wired
-through the full layer stack.
+The implemented token-streaming backends are `local` and `king_native_cpu`.
+`local` uses a King-owned process runner contract while the public backend name
+stays independent from the runner implementation. The `king_native_cpu` backend
+uses King's native GGUF loader, metadata parser, tokenizer lookup, paged
+KV-cache planning, public tensor views, bounded tensor dequantization, first
+CPU tensor/vector math, native mini-graph execution, token selection from
+logits, and a read-only memory map of the model artifact. Native CPU streaming
+expects an explicit `graph` or `graphs` request and decodes the selected token
+ids through the artifact tokenizer; it does not call an external inference
+runtime.
 
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
@@ -186,14 +186,14 @@ printf(
 );
 ```
 
-This is intentionally the first compute step, not a token generator. The CPU
-path currently supports scalar F32, F16, BF16, I8, I16, I32, I64, F64 and the
-Q4_0, Q4_1, Q8_0, Q4_K, Q5_K, and Q6_K block formats. Rank-2 matmul follows
-GGUF tensor order: dimension 0 is the input width and dimension 1 is the output
-row count. Quantized rows use blockwise dot decoding where supported. The
-operation guards input size, output size, and total multiply-add count so a
-large model tensor cannot accidentally consume the host without an explicit
-operator decision.
+This is one compute step inside the native graph path. The CPU path currently
+supports scalar F32, F16, BF16, I8, I16, I32, I64, F64 and the Q4_0, Q4_1,
+Q8_0, Q4_K, Q5_K, and Q6_K block formats. Rank-2 matmul follows GGUF tensor
+order: dimension 0 is the input width and dimension 1 is the output row count.
+Quantized rows use blockwise dot decoding where supported. The operation
+guards input size, output size, and total multiply-add count so a large model
+tensor cannot accidentally consume the host without an explicit operator
+decision.
 
 ## Function, Mini Tensor Graph
 
@@ -468,10 +468,10 @@ The compatibility mode is explicit. Set `openai_compatible => true` or
 `format => openai_chat_completions` in the request/options and King returns
 Chat-Completions-style streaming chunks from `king_inference_next()`. The same
 stream object still supports King-native events when the mode is not enabled.
-The active stream backend is still the configured `local` backend until
-`king_native_cpu` token generation is fully wired. This gives a thin
-`/v1/chat/completions` route enough structure to forward OpenAI-shaped requests
-into King without creating a second inference runtime.
+For `king_native_cpu`, the request must provide a native `graph` or `graphs`
+sequence whose final output is a token vector produced by `argmax_token` or
+`sample_token`. King decodes those token ids through the model tokenizer and
+emits the same stream surface without creating a second inference runtime.
 
 ## Function, Example 1a.1: OpenAI-Compatible HTTP Route
 
