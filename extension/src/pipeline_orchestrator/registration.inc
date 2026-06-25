@@ -1,3 +1,5 @@
+#include "class_methods.inc"
+
 void king_pipeline_orchestrator_register_classes(void)
 {
     king_ce_pipeline_orchestrator = king_register_class_with_flags(

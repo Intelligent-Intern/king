@@ -1,3 +1,5 @@
+#include "class_methods.inc"
+
 void king_autoscaling_register_classes(void)
 {
     king_ce_autoscaling = king_register_class_with_flags(

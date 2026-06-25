@@ -1,3 +1,5 @@
+#include "class_methods.inc"
+
 void king_object_store_register_classes(void)
 {
     king_ce_object_store = king_register_class_with_flags(
