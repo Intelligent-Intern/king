@@ -499,6 +499,54 @@ still uses string bodies, so this helper performs a bounded drain controlled by
 `read_timeout_ms`, `max_events`, and `max_idle_events`; it does not pretend to be
 the later zero-copy incremental server-body path.
 
+## Function, Example 1a.2: OpenAI-Compatible Model Router
+
+```php
+<?php
+$models = [
+    'support-small' => king_inference_model_load([
+        'name' => 'support-small',
+        'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
+        'backend' => ['name' => 'local'],
+        'owned_by' => 'internal-platform',
+    ]),
+    'invoice-checker' => king_inference_model_load([
+        'name' => 'invoice-checker',
+        'artifact_path' => getenv('KING_INVOICE_MODEL_PATH'),
+        'backend' => ['name' => 'local'],
+        'owned_by' => 'internal-platform',
+    ]),
+];
+
+while (true) {
+    king_http1_server_listen_once(
+        '127.0.0.1',
+        8080,
+        null,
+        static fn (array $request): array => king_inference_openai_http_response(
+            $models,
+            $request,
+            [
+                'read_timeout_ms' => 250,
+                'max_events' => 4096,
+                'max_idle_events' => 240,
+            ]
+        )
+    );
+}
+```
+
+`king_inference_openai_http_response()` is the higher-level OpenAI-compatible
+router for applications that want a single HTTP handler. It supports
+`GET /v1/models` and `POST /v1/chat/completions`; chat requests resolve the
+JSON `model` field against the `$models` array key first and then against the
+loaded model name. If exactly one model is registered, `model` may be omitted.
+
+The single-model helper remains useful when the surrounding application already
+does routing or model selection. The router is the better default for an API
+surface that should look familiar to OpenAI-compatible clients because it makes
+model discovery explicit and keeps model lookup out of userland glue code.
+
 ## Function, Example 1b: Configured Model Path
 
 ```php

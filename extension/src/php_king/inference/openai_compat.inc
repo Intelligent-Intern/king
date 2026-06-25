@@ -75,7 +75,7 @@ static void king_inference_openai_error_payload(
     add_assoc_zval(return_value, "error", &error);
 }
 
-static void king_inference_openai_http_response(
+static void king_inference_openai_http_array_response(
     zval *return_value,
     zend_long status,
     const char *content_type,
@@ -113,7 +113,7 @@ static zend_result king_inference_openai_error_response(
         return FAILURE;
     }
 
-    king_inference_openai_http_response(return_value, status, "application/json", json, false);
+    king_inference_openai_http_array_response(return_value, status, "application/json", json, false);
     zend_string_release(json);
     return SUCCESS;
 }
@@ -463,7 +463,7 @@ static zend_result king_inference_openai_payload_response(
                 "server_error"
             );
         }
-        king_inference_openai_http_response(return_value, 200, "text/event-stream", sse.s, true);
+        king_inference_openai_http_array_response(return_value, 200, "text/event-stream", sse.s, true);
         smart_str_free(&sse);
         return SUCCESS;
     }
@@ -492,7 +492,7 @@ static zend_result king_inference_openai_payload_response(
         }
     }
 
-    king_inference_openai_http_response(return_value, 200, "application/json", json, false);
+    king_inference_openai_http_array_response(return_value, 200, "application/json", json, false);
     zend_string_release(json);
     return SUCCESS;
 }

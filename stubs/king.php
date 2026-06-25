@@ -1327,6 +1327,21 @@ namespace {
     function king_inference_openai_chat_http_response(\King\Inference\Model $model, array $request, ?array $options = null): array {}
 
     /**
+     * Route one OpenAI-compatible HTTP request against a registry of loaded
+     * King inference models. Supported routes are `GET /v1/models` and
+     * `POST /v1/chat/completions`. For chat requests, the JSON `model` field
+     * selects either a string key from `$models` or the model name stored in
+     * the loaded King model. If exactly one model is registered, `model` may
+     * be omitted.
+     * @param array<string|int,\King\Inference\Model> $models
+     * @param array<string,mixed> $request
+     * @param array<string,mixed>|null $options
+     * @return array{status:int,headers:array<string,string>,body:string}
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_openai_http_response(array $models, array $request, ?array $options = null): array {}
+
+    /**
      * Read the next inference stream event. Native events use `type=start`,
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
      * return `chat.completion.chunk`-style arrays.
@@ -2648,6 +2663,14 @@ namespace King {
          * @return array{status:int,headers:array<string,string>,body:string}
          */
         public static function openaiChatHttpResponse(Inference\Model $model, array $request, ?array $options = null): array {}
+
+        /**
+         * @param array<string|int,Inference\Model> $models
+         * @param array<string,mixed> $request
+         * @param array<string,mixed>|null $options
+         * @return array{status:int,headers:array<string,string>,body:string}
+         */
+        public static function openaiHttpResponse(array $models, array $request, ?array $options = null): array {}
     }
 
 }

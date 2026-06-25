@@ -102,6 +102,7 @@ ZEND_END_ARG_INFO()
 #include "inference/tokenizer.inc"
 #include "inference/stream_events.inc"
 #include "inference/openai_compat.inc"
+#include "inference/openai_http_router.inc"
 
 static zend_result king_inference_next_async_runner(king_awaitable_object *intern, zval *result)
 {
@@ -757,6 +758,7 @@ const zend_function_entry king_inference_class_methods[] = {
     ZEND_ME_MAPPING(kvCachePlan, king_inference_kv_cache_plan, arginfo_king_inference_kv_cache_plan, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(stream, king_inference_stream, arginfo_king_inference_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(openaiChatHttpResponse, king_inference_openai_chat_http_response, arginfo_king_inference_openai_chat_http_response, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(openaiHttpResponse, king_inference_openai_http_response, arginfo_king_inference_openai_http_response, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };
 
