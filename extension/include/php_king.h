@@ -5,8 +5,8 @@
  *
  * PURPOSE:
  * Central public header for the extension. It exposes the shared constants,
- * resource identifiers, exception class entries, object wrappers, and core
- * helper prototypes used across the active C sources.
+ * core object wrappers, and helper prototypes used across the active C
+ * sources. Bootstrap-owned extern declarations live under include/php_king.
  * =========================================================================
  */
 
@@ -76,80 +76,12 @@
 #include "iibin/index.h"
 #include "inference/index.h"
 #include "mcp/index.h"
+#include "php_king/class_entries.h"
+#include "php_king/method_tables.h"
 #include "php_king/registration.h"
+#include "php_king/resource_ids.h"
 #include "php_king/resources.h"
 #include "xslt/index.h"
-
-
-/* -----------------------------------------------------------------------------
- * Exception Class Entry Declarations
- */
-extern zend_class_entry
-    *king_ce_exception,
-    *king_ce_stream_exception,
-    *king_ce_invalid_state,
-    *king_ce_unknown_stream,
-    *king_ce_stream_blocked,
-    *king_ce_stream_limit,
-    *king_ce_final_size,
-    *king_ce_stream_stopped,
-    *king_ce_fin_expected,
-    *king_ce_invalid_fin_state,
-    *king_ce_done,
-    *king_ce_quic_exception,
-    *king_ce_congestion_control,
-    *king_ce_too_many_streams,
-    *king_ce_runtime_exception,
-    *king_ce_system_exception,
-    *king_ce_validation_exception,
-    *king_ce_timeout_exception,
-    *king_ce_network_exception,
-    *king_ce_tls_exception,
-    *king_ce_protocol_exception,
-    *king_ce_mcp_exception,
-    *king_ce_mcp_connection_error,
-    *king_ce_mcp_protocol_error,
-    *king_ce_mcp_timeout,
-    *king_ce_mcp_data_error,
-    *king_ce_ws_exception,
-    *king_ce_ws_connection_error,
-    *king_ce_ws_protocol_error,
-    *king_ce_ws_timeout,
-    *king_ce_ws_closed;
-
-extern zend_class_entry
-    *king_ce_cancel_token,
-    *king_ce_awaitable,
-    *king_ce_config,
-    *king_ce_session,
-    *king_ce_stream,
-    *king_ce_response,
-    *king_ce_mcp,
-    *king_ce_mcp_server,
-    *king_ce_pipeline_orchestrator,
-    *king_ce_object_store,
-    *king_ce_autoscaling,
-    *king_ce_rtp_socket,
-    *king_ce_xslt_processor,
-    *king_ce_inference,
-    *king_ce_inference_model,
-    *king_ce_inference_stream,
-    *king_ce_client_http,
-    *king_ce_client_http1,
-    *king_ce_client_http2,
-    *king_ce_client_http3,
-    *king_ce_ws_server,
-    *king_ce_ws_connection;
-
-/* -----------------------------------------------------------------------------
- * Resource Type Identifiers
- */
-extern int le_king_session;
-extern int le_king_cfg;
-extern int le_king_perf;
-extern int le_king_mcp;
-extern int le_king_ws;
-extern int le_king_request_context;
 
 void king_http1_pool_request_shutdown(void);
 void king_http1_pool_module_shutdown(void);
@@ -388,19 +320,6 @@ extern void *king_fetch_config(zval *zcfg);
 extern void king_ticket_ring_put(const uint8_t *ticket, size_t len);
 extern int king_ticket_ring_get(uint8_t *out, size_t *out_len);
 extern void king_client_session_free(void *session_ptr);
-extern const zend_function_entry king_cancel_token_class_methods[];
-extern const zend_function_entry king_awaitable_class_methods[];
-extern const zend_function_entry king_config_class_methods[];
-extern const zend_function_entry king_session_class_methods[];
-extern const zend_function_entry king_stream_class_methods[];
-extern const zend_function_entry king_response_class_methods[];
-extern const zend_function_entry king_mcp_class_methods[];
-extern const zend_function_entry king_pipeline_orchestrator_class_methods[];
-extern const zend_function_entry king_object_store_class_methods[];
-extern const zend_function_entry king_autoscaling_class_methods[];
-extern const zend_function_entry king_http_client_class_methods[];
-extern const zend_function_entry king_ws_server_class_methods[];
-extern const zend_function_entry king_ws_connection_class_methods[];
 
 /* -----------------------------------------------------------------------------
  * PHP_FUNCTION Prototypes: active public entry points
