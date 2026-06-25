@@ -371,7 +371,10 @@ namespace {
 
     /**
      * Normalize a public MCP server definition for JSON-RPC stdio and
-     * Streamable HTTP transports.
+     * Streamable HTTP transports. Creation options are applied once to the
+     * normalized definition; supported keys are `streamable_http.prefer_sse`
+     * and `streamable_http.allowed_origins`, with top-level shortcuts
+     * `prefer_sse` and `allowed_origins`.
      *
      * @param array<string,mixed> $definition
      * @param array<string,mixed>|null $options
@@ -2445,6 +2448,9 @@ namespace King {
     final class MCPServer {
         /**
          * @param array<string,mixed> $definition
+         * Supported creation options are `streamable_http.prefer_sse` and
+         * `streamable_http.allowed_origins`, with top-level shortcuts
+         * `prefer_sse` and `allowed_origins`.
          * @param array<string,mixed>|null $options
          */
         public function __construct(array $definition, ?array $options = null) {}

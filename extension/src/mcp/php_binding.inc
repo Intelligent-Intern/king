@@ -20,6 +20,7 @@
 #include "php_binding/transfer_helpers.inc"
 #include "php_binding/iibin_helpers.inc"
 #include "php_binding/public_server_helpers.inc"
+#include "php_binding/public_server_options.inc"
 #include "php_binding/public_server_http_helpers.inc"
 #include "php_binding/procedural_api.inc"
 #include "php_binding/object_api.inc"

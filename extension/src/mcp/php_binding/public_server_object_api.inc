@@ -11,8 +11,6 @@ PHP_METHOD(King_MCPServer, __construct)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    (void) options;
-
     ZVAL_UNDEF(&normalized);
     if (king_mcp_public_server_normalize(definition, &normalized) != SUCCESS) {
         zend_throw_exception_ex(
@@ -20,6 +18,17 @@ PHP_METHOD(King_MCPServer, __construct)
             0,
             "%s",
             king_get_error()[0] != '\0' ? king_get_error() : "Invalid MCP server definition."
+        );
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_public_server_apply_creation_options(&normalized, options) != SUCCESS) {
+        zval_ptr_dtor(&normalized);
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s",
+            king_get_error()[0] != '\0' ? king_get_error() : "Invalid MCP server options."
         );
         RETURN_THROWS();
     }

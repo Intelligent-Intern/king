@@ -67,6 +67,24 @@ $server = new MCPServer([
 ]);
 ```
 
+`MCPServer` and `king_mcp_server_create()` also accept creation options for
+transport defaults. These options are applied once to the normalized server
+definition and are not read again at request time:
+
+```php
+<?php
+$server = new MCPServer($definition, [
+    'streamable_http' => [
+        'prefer_sse' => true,
+        'allowed_origins' => ['https://support.example.com'],
+    ],
+]);
+```
+
+For convenience, `prefer_sse` and `allowed_origins` may also be passed as
+top-level creation options. Unknown option keys are rejected so configuration
+typos do not silently change the transport contract.
+
 The tool handler receives the MCP `arguments` and a caller-provided context.
 Return a complete MCP tool result when you need exact control over `content`,
 `structuredContent`, or `isError`. Returning a scalar or arbitrary array is

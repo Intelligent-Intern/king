@@ -9,9 +9,12 @@ PHP_FUNCTION(king_mcp_server_create)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    (void) options;
-
     if (king_mcp_public_server_normalize(definition, return_value) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_public_server_apply_creation_options(return_value, options) != SUCCESS) {
+        zval_ptr_dtor(return_value);
         RETURN_FALSE;
     }
 
