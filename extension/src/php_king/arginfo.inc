@@ -517,15 +517,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_telemetry_log, 0, 0, 2)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, attributes, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_optional_instances, 0, 0, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, instances, IS_LONG, 0, "1")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_autoscaling_register_node, 0, 0, 1)
-    ZEND_ARG_TYPE_INFO(0, server_id, IS_LONG, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, name, IS_STRING, 1, "null")
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_system_process_request, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, request_data, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
@@ -621,21 +612,6 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_cancel, 0, 1, _IS_BOOL, 0)
     ZEND_ARG_OBJ_INFO(0, stream, King\\Inference\\Stream, 0)
 ZEND_END_ARG_INFO()
-
-const zend_function_entry king_autoscaling_class_methods[] = {
-    ZEND_ME_MAPPING(init, king_autoscaling_init, arginfo_king_config_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(startMonitoring, king_autoscaling_start_monitoring, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(stopMonitoring, king_autoscaling_stop_monitoring, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(getMetrics, king_autoscaling_get_metrics, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(getStatus, king_autoscaling_get_status, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(getNodes, king_autoscaling_get_nodes, arginfo_king_no_args, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(scaleUp, king_autoscaling_scale_up, arginfo_king_optional_instances, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(scaleDown, king_autoscaling_scale_down, arginfo_king_optional_instances, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(registerNode, king_autoscaling_register_node, arginfo_king_autoscaling_register_node, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(markNodeReady, king_autoscaling_mark_node_ready, arginfo_king_one_long, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(drainNode, king_autoscaling_drain_node, arginfo_king_one_long, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_FE_END
-};
 
 const zend_function_entry king_pipeline_orchestrator_class_methods[] = {
     ZEND_ME_MAPPING(run, king_pipeline_orchestrator_run, arginfo_king_pipeline_run, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
