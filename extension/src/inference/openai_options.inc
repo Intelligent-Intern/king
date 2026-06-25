@@ -271,6 +271,26 @@ static void king_inference_openai_copy_stop_option(zval *source, zval *target)
     add_assoc_zval(target, "stop", &copy);
 }
 
+static void king_inference_openai_copy_array_option(zval *source, zval *target, const char *key)
+{
+    zval *field = king_inference_array_find(source, key);
+    zval copy;
+
+    if (field == NULL || Z_TYPE_P(field) != IS_ARRAY) {
+        return;
+    }
+
+    ZVAL_COPY(&copy, field);
+    add_assoc_zval(target, key, &copy);
+}
+
+static void king_inference_openai_copy_native_graph_options(zval *source, zval *target)
+{
+    king_inference_openai_copy_array_option(source, target, "graph");
+    king_inference_openai_copy_array_option(source, target, "graphs");
+    king_inference_openai_copy_array_option(source, target, "graph_options");
+}
+
 static void king_inference_openai_copy_generation_options(
     zval *source,
     zval *target,
@@ -297,6 +317,7 @@ static void king_inference_openai_copy_chat_generation_options(zval *source, zva
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
     king_inference_openai_copy_stop_option(source, target);
+    king_inference_openai_copy_native_graph_options(source, target);
 }
 
 static void king_inference_openai_copy_completion_generation_options(zval *source, zval *target)
@@ -308,6 +329,7 @@ static void king_inference_openai_copy_completion_generation_options(zval *sourc
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
     king_inference_openai_copy_stop_option(source, target);
+    king_inference_openai_copy_native_graph_options(source, target);
 }
 
 static void king_inference_openai_copy_response_generation_options(zval *source, zval *target)
@@ -319,6 +341,7 @@ static void king_inference_openai_copy_response_generation_options(zval *source,
     };
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
+    king_inference_openai_copy_native_graph_options(source, target);
 }
 
 static bool king_inference_openai_stream_usage_requested(zval *source)

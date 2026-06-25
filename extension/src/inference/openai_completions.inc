@@ -369,6 +369,7 @@ static zend_result king_inference_openai_completions_payload_response(
     if (king_inference_openai_require_generation_backend(
         return_value,
         model,
+        payload,
         "Completions endpoint",
         &has_error_response
     ) != SUCCESS) {

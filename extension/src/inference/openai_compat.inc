@@ -219,6 +219,7 @@ static zend_long king_inference_openai_option_long(zval *options, const char *ke
 static zend_result king_inference_openai_require_generation_backend(
     zval *return_value,
     zval *model,
+    zval *payload,
     const char *endpoint_name,
     bool *has_error_response)
 {
@@ -252,12 +253,32 @@ static zend_result king_inference_openai_require_generation_backend(
         return SUCCESS;
     }
 
+    if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
+        zval *graph = king_inference_array_find(payload, "graph");
+        zval *graphs = king_inference_array_find(payload, "graphs");
+
+        if ((graph != NULL && Z_TYPE_P(graph) != IS_ARRAY)
+            || (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY)) {
+            if (has_error_response != NULL) {
+                *has_error_response = true;
+            }
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Native graph generation requires graph and graphs to be arrays when provided.",
+                "invalid_request_error"
+            );
+        }
+        if (graph != NULL || graphs != NULL) {
+            return SUCCESS;
+        }
+    }
+
     kind_name = king_inference_backend_kind_name(kind);
     message = strpprintf(
         0,
-        "%s requires a text-generation stream backend. "
-        "The selected King model uses '%s'; native graph streaming must use "
-        "king_inference_stream() with an explicit graph or graphs request.",
+        "%s requires a text-generation stream backend or an explicit native "
+        "graph or graphs request. The selected King model uses '%s'.",
         endpoint_name,
         kind_name
     );
@@ -566,6 +587,7 @@ static zend_result king_inference_openai_payload_response(
     if (king_inference_openai_require_generation_backend(
         return_value,
         model,
+        payload,
         "Chat completions endpoint",
         &has_error_response
     ) != SUCCESS) {

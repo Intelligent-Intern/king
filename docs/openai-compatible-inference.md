@@ -76,13 +76,13 @@ array of text content parts. King extracts text from `text`, `content`, or
 parts such as image, audio, or file payloads are rejected for this local text
 inference route instead of being silently ignored.
 
-The generic OpenAI HTTP generation routes expect a text-generation stream
-backend. `king_native_cpu` can stream graph-selected tokens through
-`king_inference_stream()` when the request carries `graph` or `graphs`, and it
-serves native embeddings through the router, but the router does not synthesize
-a native graph from arbitrary Chat Completions payloads. When a generation
-route selects a native graph-only backend, King returns an OpenAI-shaped `400`
-JSON error instead of falling through to a low-level stream exception.
+The generic OpenAI HTTP generation routes accept either a text-generation stream
+backend or a `king_native_cpu` request that explicitly carries `graph` or
+`graphs`. Native graph requests still return OpenAI-compatible Chat Completions
+chunks or JSON responses, but the router does not synthesize a native graph from
+arbitrary Chat Completions payloads. When a generation route selects a native
+graph backend without an explicit graph request, King returns an OpenAI-shaped
+`400` JSON error instead of falling through to a low-level stream exception.
 
 ## Function, Example 2: Embeddings
 
