@@ -1,0 +1,7 @@
+    PHP_FE(king_rtp_bind, arginfo_king_rtp_bind)
+    PHP_FE(king_rtp_ice_credentials, arginfo_king_rtp_ice_credentials)
+    PHP_FE(king_rtp_dtls_fingerprint, arginfo_king_rtp_dtls_fingerprint)
+    PHP_FE(king_rtp_dtls_accept, arginfo_king_rtp_dtls_accept)
+    PHP_FE(king_rtp_recv, arginfo_king_rtp_recv)
+    PHP_FE(king_rtp_send, arginfo_king_rtp_send)
+    PHP_FE(king_rtp_close, arginfo_king_rtp_close)

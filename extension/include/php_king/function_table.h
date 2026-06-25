@@ -8,6 +8,6 @@
 #ifndef KING_PHP_KING_FUNCTION_TABLE_H
 #define KING_PHP_KING_FUNCTION_TABLE_H
 
-#include "../../src/php_king/function_table.inc"
+#include "function_table_entries.h"
 
 #endif /* KING_PHP_KING_FUNCTION_TABLE_H */

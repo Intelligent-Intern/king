@@ -1,11 +1,1 @@
-    PHP_FE(king_proto_define_schema, arginfo_king_proto_define_schema)
-    PHP_FE(king_proto_define_enum, arginfo_king_proto_define_enum)
-    PHP_FE(king_proto_encode, arginfo_king_proto_encode)
-    PHP_FE(king_proto_encode_batch, arginfo_king_proto_encode_batch)
-    PHP_FE(king_proto_decode, arginfo_king_proto_decode)
-    PHP_FE(king_proto_decode_batch, arginfo_king_proto_decode_batch)
-    PHP_FE(king_proto_is_schema_defined, arginfo_king_one_string)
-    PHP_FE(king_proto_is_enum_defined, arginfo_king_one_string)
-    PHP_FE(king_proto_is_defined, arginfo_king_one_string)
-    PHP_FE(king_proto_get_defined_schemas, arginfo_king_no_args)
-    PHP_FE(king_proto_get_defined_enums, arginfo_king_no_args)
+#include "../../include/iibin/function_entries.h"
