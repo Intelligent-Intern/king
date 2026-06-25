@@ -52,6 +52,9 @@
 #include "king_globals.h"
 #include "king_init.h"
 #include "client/session.h"
+#include "client/objects.h"
+#include "client/websocket.h"
+#include "server/websocket.h"
 
 /*
  * Keep this header lightweight for the current v1 runtime surface so the
@@ -143,71 +146,10 @@ extern int le_king_mcp;
 extern int le_king_ws;
 extern int le_king_request_context;
 
-typedef struct _king_http1_request_context king_http1_request_context;
-typedef enum _king_ws_connection_state {
-    KING_WS_STATE_CONNECTING = 0,
-    KING_WS_STATE_OPEN = 1,
-    KING_WS_STATE_CLOSING = 2,
-    KING_WS_STATE_CLOSED = 3
-} king_ws_connection_state_t;
-
-typedef struct _king_ws_message {
-    zend_string *payload;
-    bool is_binary;
-    struct _king_ws_message *next;
-} king_ws_message;
-
-typedef struct _king_ws_server_object king_ws_server_object;
-
-typedef struct _king_ws_state {
-    zend_string *url;
-    zend_string *connection_id;
-    zend_string *scheme;
-    zend_string *host;
-    zend_string *request_target;
-    php_stream *transport_stream;
-    zval config;
-    zval headers;
-    zend_long port;
-    zend_long max_payload_size;
-    zend_long max_queued_messages;
-    zend_long max_queued_bytes;
-    zend_long queued_message_count;
-    zend_long queued_bytes;
-    zend_long ping_interval_ms;
-    zend_long handshake_timeout_ms;
-    zend_long last_close_status_code;
-    king_ws_connection_state_t state;
-    king_ws_message *incoming_head;
-    king_ws_message *incoming_tail;
-    zend_string *last_close_reason;
-    zend_string *last_ping_payload;
-    bool secure;
-    bool server_endpoint;
-    bool server_local_only;
-    bool handshake_complete;
-    bool close_frame_sent;
-    bool closed;
-    king_ws_server_object *server_owner;
-} king_ws_state;
-
-typedef enum _king_client_protocol_preference {
-    KING_CLIENT_PROTOCOL_AUTO = 0,
-    KING_CLIENT_PROTOCOL_HTTP1,
-    KING_CLIENT_PROTOCOL_HTTP2,
-    KING_CLIENT_PROTOCOL_HTTP3
-} king_client_protocol_preference_t;
-
 void king_http1_pool_request_shutdown(void);
 void king_http1_pool_module_shutdown(void);
 void king_http2_pool_request_shutdown(void);
 void king_http2_pool_module_shutdown(void);
-zend_result king_response_object_init_from_array(zval *target, zval *payload);
-zend_result king_response_object_init_from_context(
-    zval *target,
-    zval *payload,
-    zval *request_context
-);
 void king_http1_request_context_free(king_http1_request_context *context);
 zend_result king_http1_request_context_build_payload(
     king_http1_request_context *context,
@@ -240,11 +182,6 @@ bool king_http1_request_context_is_end_of_body(
     king_http1_request_context *context,
     zend_long read_offset
 );
-void king_ws_server_registry_detach(
-    king_ws_server_object *server,
-    king_ws_state *state
-);
-void king_ws_state_free(king_ws_state *state);
 zend_result king_server_cancel_invoke_if_registered(
     king_client_session_t *session,
     zend_long stream_id
@@ -263,60 +200,6 @@ typedef struct _king_cancel_token_object {
     bool cancelled;
     zend_object std;
 } king_cancel_token_object;
-
-typedef struct _king_response_object {
-    zval payload;
-    zval request_context;
-    zend_long read_offset;
-    zend_object std;
-} king_response_object;
-
-typedef struct _king_http_client_object {
-    zval config;
-    king_client_protocol_preference_t preferred_protocol;
-    bool closed;
-    zend_object std;
-} king_http_client_object;
-
-typedef struct _king_session_object {
-    zval resource;
-    zval config;
-    zend_object        std;
-} king_session_object;
-
-typedef struct _king_stream_object {
-    zval session;
-    zval cancel_token;
-    zval connection_config;
-    zval request_headers;
-    zend_string *request_method;
-    zend_string *request_path;
-    zend_string *request_body;
-    zend_long stream_id;
-    zend_long buffered_bytes;
-    bool request_body_was_supplied;
-    bool finished;
-    bool closed;
-    bool response_started;
-    zend_object std;
-} king_stream_object;
-
-typedef struct _king_ws_object {
-    zval resource;
-    zend_object   std;
-} king_ws_object;
-
-struct _king_ws_server_object {
-    zval config;
-    zend_string *host;
-    zend_long port;
-    int listener_fd;
-    HashTable connections;
-    zend_ulong next_connection_sequence;
-    bool registry_initialized;
-    bool closed;
-    zend_object std;
-};
 
 /* -----------------------------------------------------------------------------
  * Shared Error Buffer
@@ -513,34 +396,6 @@ static inline zend_result king_transport_maybe_throw_cancel(
     return FAILURE;
 }
 
-static inline king_session_object *
-php_king_obj_from_zend(zend_object *obj)
-{
-    return (king_session_object *)
-        ((char*)obj - XtOffsetOf(king_session_object, std));
-}
-
-static inline king_stream_object *
-php_king_stream_obj_from_zend(zend_object *obj)
-{
-    return (king_stream_object *)
-        ((char*)obj - XtOffsetOf(king_stream_object, std));
-}
-
-static inline king_response_object *
-php_king_response_obj_from_zend(zend_object *obj)
-{
-    return (king_response_object *)
-        ((char*)obj - XtOffsetOf(king_response_object, std));
-}
-
-static inline king_http_client_object *
-php_king_http_client_obj_from_zend(zend_object *obj)
-{
-    return (king_http_client_object *)
-        ((char*)obj - XtOffsetOf(king_http_client_object, std));
-}
-
 static inline void *king_obj_fetch(zval *zobj)
 {
     if (Z_TYPE_P(zobj) != IS_OBJECT) return NULL;
@@ -550,20 +405,6 @@ static inline void *king_obj_fetch(zval *zobj)
     }
 
     return Z_RES(intern->resource)->ptr;
-}
-
-static inline king_ws_object *
-php_king_ws_obj_from_zend(zend_object *obj)
-{
-    return (king_ws_object *)
-        ((char*)obj - XtOffsetOf(king_ws_object, std));
-}
-
-static inline king_ws_server_object *
-php_king_ws_server_obj_from_zend(zend_object *obj)
-{
-    return (king_ws_server_object *)
-        ((char*)obj - XtOffsetOf(king_ws_server_object, std));
 }
 
 extern void *king_fetch_config(zval *zcfg);

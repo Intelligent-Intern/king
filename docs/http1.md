@@ -3,6 +3,13 @@
 HTTP/1 can be used directly through `king_http1_request_send()` or through
 `King\Client\Http1Client`. The client can also send the HTTP `QUERY` method.
 
+## Internal Layout
+
+The PHP-visible client/session/stream/response object contracts live in
+`extension/include/client/objects.h`. HTTP/1 request runtime code lives under
+`extension/src/client/http1/`; shared client object glue lives in
+`extension/src/client/object.inc`.
+
 ## Function, Example 1: Simple GET
 
 ```php

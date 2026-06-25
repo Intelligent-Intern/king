@@ -4,8 +4,31 @@
 #define KING_SERVER_WEBSOCKET_H
 
 #include <php.h>
+#include <zend_object_handlers.h>
+#include <stdbool.h>
+
+#include "include/client/websocket.h"
 
 typedef struct _king_client_session king_client_session_t;
+
+struct _king_ws_server_object {
+    zval config;
+    zend_string *host;
+    zend_long port;
+    int listener_fd;
+    HashTable connections;
+    zend_ulong next_connection_sequence;
+    bool registry_initialized;
+    bool closed;
+    zend_object std;
+};
+
+static inline king_ws_server_object *
+php_king_ws_server_obj_from_zend(zend_object *obj)
+{
+    return (king_ws_server_object *)
+        ((char*)obj - XtOffsetOf(king_ws_server_object, std));
+}
 
 /**
  * @file extension/include/server/websocket.h

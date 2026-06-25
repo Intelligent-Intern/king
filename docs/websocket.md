@@ -5,6 +5,14 @@ The WebSocket client can be used procedurally through
 server side, procedural upgrade is available through
 `king_server_upgrade_to_websocket()` and OO through `King\WebSocket\Server`.
 
+## Internal Layout
+
+The shared WebSocket state and connection object contract live in
+`extension/include/client/websocket.h`. The server object contract lives in
+`extension/include/server/websocket.h`. Client runtime code lives under
+`extension/src/client/websocket/`; server upgrade and `King\WebSocket\Server`
+runtime code live under `extension/src/server/`.
+
 ## Function, Example 1: Client Echo
 
 ```php
