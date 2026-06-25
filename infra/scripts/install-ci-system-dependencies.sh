@@ -24,6 +24,37 @@ packages=(
   zlib1g-dev
 )
 
+dependencies_present() {
+  local missing=0
+  local tool
+
+  for tool in autoconf automake bison cc clang cmake ninja pkg-config re2c php phpize nm; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+      echo "[ci-deps] missing tool: ${tool}" >&2
+      missing=1
+    fi
+  done
+
+  for pkg in libcurl openssl zlib; do
+    if ! pkg-config --exists "${pkg}" >/dev/null 2>&1; then
+      echo "[ci-deps] missing pkg-config dependency: ${pkg}" >&2
+      missing=1
+    fi
+  done
+
+  return "${missing}"
+}
+
+if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true >/dev/null 2>&1; then
+  if dependencies_present; then
+    echo "[ci-deps] sudo is unavailable, but required CI dependencies are already installed."
+    exit 0
+  fi
+
+  echo "[ci-deps] sudo is unavailable and required CI dependencies are missing." >&2
+  exit 1
+fi
+
 run_with_retry() {
   local label="$1"
   shift

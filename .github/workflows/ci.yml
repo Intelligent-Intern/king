@@ -62,10 +62,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-24.04
+          - runner: king
             arch-label: linux-amd64
+            local-lsquic-cache-dir: /opt/king/cache/lsquic/runtime
           - runner: ubuntu-24.04-arm
             arch-label: linux-arm64
+            local-lsquic-cache-dir: ""
 
     steps:
       - name: Checkout repository
@@ -74,8 +76,17 @@ jobs:
       - name: Install system dependencies
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
+      - name: Restore local pinned LSQUIC runtime cache
+        id: restore-local-lsquic-runtime-cache
+        if: matrix.local-lsquic-cache-dir != ''
+        env:
+          KING_CI_LOCAL_LSQUIC_CACHE_DIR: ${{ matrix.local-lsquic-cache-dir }}
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: bash ./infra/scripts/local-lsquic-runtime-cache.sh restore --github-output "${GITHUB_OUTPUT}"
+
       - name: Restore pinned LSQUIC runtime cache
         id: restore-lsquic-runtime-cache
+        if: steps.restore-local-lsquic-runtime-cache.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v5
         with:
           path: .cache/king/lsquic/runtime/prefix
@@ -86,8 +97,7 @@ jobs:
         env:
           KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: |
-          if [[ "${{ steps.restore-lsquic-runtime-cache.outputs.cache-hit }}" == "true" ]] \
-            && bash ./infra/scripts/build-lsquic-runtime.sh --verify-current; then
+          if bash ./infra/scripts/build-lsquic-runtime.sh --verify-current; then
             echo "cache-current=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -99,6 +109,13 @@ jobs:
         env:
           KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: bash ./infra/scripts/build-lsquic-runtime.sh
+
+      - name: Save local pinned LSQUIC runtime cache
+        if: matrix.local-lsquic-cache-dir != '' && steps.restore-local-lsquic-runtime-cache.outputs.cache-hit != 'true'
+        env:
+          KING_CI_LOCAL_LSQUIC_CACHE_DIR: ${{ matrix.local-lsquic-cache-dir }}
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: bash ./infra/scripts/local-lsquic-runtime-cache.sh save
 
       - name: Save pinned LSQUIC runtime cache
         if: steps.verify-lsquic-runtime-cache.outputs.cache-current != 'true'
