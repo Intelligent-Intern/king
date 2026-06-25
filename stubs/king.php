@@ -2284,7 +2284,7 @@ namespace King {
         public static function new(array $options = []): static {}
 
         /**
-         * Read a key from the active OO config parity slice.
+         * Read a key from the active config snapshot or explicit OO overrides.
          */
         public function get(string $key): mixed {}
 
@@ -2294,7 +2294,7 @@ namespace King {
         public function set(string $key, mixed $value): void {}
 
         /**
-         * Export the active OO config parity slice plus explicit OO overrides.
+         * Export the active config snapshot plus explicit OO overrides.
          * @return array<string,mixed>
          */
         public function toArray(): array {}
