@@ -530,6 +530,8 @@ PHP_METHOD(King_Inference_Stream, __construct)
     zval *model;
     zval *request;
     zval *options = NULL;
+    zval empty_options;
+    zval *validation_options;
     king_inference_stream_object *stream;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
@@ -538,6 +540,27 @@ PHP_METHOD(King_Inference_Stream, __construct)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (options != NULL) {
+        validation_options = options;
+    } else {
+        ZVAL_UNDEF(&empty_options);
+        array_init(&empty_options);
+        validation_options = &empty_options;
+    }
+    if (king_inference_stream_validate_request_options(
+        request,
+        validation_options,
+        "King\\Inference\\Stream::__construct"
+    ) != SUCCESS) {
+        if (options == NULL) {
+            zval_ptr_dtor(&empty_options);
+        }
+        RETURN_THROWS();
+    }
+    if (options == NULL) {
+        zval_ptr_dtor(&empty_options);
+    }
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(ZEND_THIS));
     king_inference_stream_close_process(stream, true);

@@ -2725,6 +2725,10 @@ namespace King {
         /**
          * @param array<string,mixed> $request
          * @param array<string,mixed>|null $options
+         * `openai_compatible` must be a boolean and `format` must be one of
+         * `openai`, `openai_chat`, or `openai_chat_completions` when provided.
+         * Native graph streams require `graph` as an object array, `graphs` as
+         * a list array, and `graph_options` as an object array when provided.
          */
         public static function stream(Inference\Model $model, array $request, ?array $options = null): Inference\Stream {}
 
