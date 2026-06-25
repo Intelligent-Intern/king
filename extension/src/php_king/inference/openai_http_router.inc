@@ -22,6 +22,35 @@ static bool king_inference_openai_request_path_is(zval *request, const char *pat
             && Z_STRVAL_P(uri)[path_len] == '?';
 }
 
+static zend_string *king_inference_openai_request_path_suffix(zval *request, const char *prefix)
+{
+    zval *uri = king_inference_openai_request_field(request, "uri");
+    size_t prefix_len = strlen(prefix);
+    const char *start;
+    const char *end;
+
+    if (uri == NULL) {
+        uri = king_inference_openai_request_field(request, "path");
+    }
+    if (uri == NULL || Z_TYPE_P(uri) != IS_STRING || Z_STRLEN_P(uri) <= prefix_len) {
+        return NULL;
+    }
+    if (memcmp(Z_STRVAL_P(uri), prefix, prefix_len) != 0) {
+        return NULL;
+    }
+
+    start = Z_STRVAL_P(uri) + prefix_len;
+    end = memchr(start, '?', Z_STRLEN_P(uri) - prefix_len);
+    if (end == NULL) {
+        end = Z_STRVAL_P(uri) + Z_STRLEN_P(uri);
+    }
+    if (end <= start) {
+        return NULL;
+    }
+
+    return zend_string_init(start, (size_t) (end - start), 0);
+}
+
 static bool king_inference_openai_request_method_is(zval *request, const char *method)
 {
     zval *actual = king_inference_openai_request_field(request, "method");
@@ -204,17 +233,96 @@ static zval *king_inference_openai_find_model(zval *models, zval *payload)
     return NULL;
 }
 
-static zend_result king_inference_openai_router_chat_response(
+static zval *king_inference_openai_find_model_by_id(zval *models, zend_string *requested)
+{
+    zval *entry;
+    zend_string *key;
+    zend_ulong index;
+
+    if (requested == NULL || ZSTR_LEN(requested) == 0) {
+        return NULL;
+    }
+
+    entry = zend_hash_find(Z_ARRVAL_P(models), requested);
+    if (king_inference_openai_is_model(entry)) {
+        return entry;
+    }
+
+    ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
+        (void) index;
+        (void) key;
+        if (king_inference_openai_is_model(entry)
+            && king_inference_openai_model_name_matches(entry, requested)) {
+            return entry;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_result king_inference_openai_require_model(
     zval *models,
-    zval *request,
+    zval *decoded,
+    const char *endpoint_name,
+    zval *return_value,
+    zval **model_out)
+{
+    zval *requested_model;
+
+    *model_out = NULL;
+    if (!king_inference_openai_models_valid(models)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "server_error"
+        );
+    }
+
+    requested_model = king_inference_array_find(decoded, "model");
+    if (requested_model != NULL && Z_TYPE_P(requested_model) != IS_STRING) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            endpoint_name,
+            "invalid_request_error"
+        );
+    }
+    if ((requested_model == NULL || Z_STRLEN_P(requested_model) == 0)
+        && zend_hash_num_elements(Z_ARRVAL_P(models)) > 1) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Request must include model when multiple King models are registered.",
+            "invalid_request_error"
+        );
+    }
+
+    *model_out = king_inference_openai_find_model(models, decoded);
+    if (*model_out == NULL) {
+        return king_inference_openai_error_response(
+            return_value,
+            404,
+            "Requested model is not registered in the King inference router.",
+            "invalid_request_error"
+        );
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_openai_retrieve_model_response(
+    zval *models,
+    zend_string *model_id,
     zval *options,
     zval *return_value)
 {
-    zval *body;
-    zval decoded;
-    zval *model;
-    zval *requested_model;
+    zval *entry;
+    zend_string *json = NULL;
     zend_result result;
+    zval model_object;
+    zend_string *key;
+    zend_ulong index;
 
     if (!king_inference_openai_models_valid(models)) {
         return king_inference_openai_error_response(
@@ -224,6 +332,51 @@ static zend_result king_inference_openai_router_chat_response(
             "server_error"
         );
     }
+
+    entry = king_inference_openai_find_model_by_id(models, model_id);
+    if (entry == NULL) {
+        return king_inference_openai_error_response(
+            return_value,
+            404,
+            "Requested model is not registered in the King inference router.",
+            "invalid_request_error"
+        );
+    }
+
+    ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
+        if (king_inference_openai_is_model(entry)
+            && (zend_hash_find(Z_ARRVAL_P(models), model_id) == entry
+                || king_inference_openai_model_name_matches(entry, model_id))) {
+            king_inference_openai_model_object(&model_object, entry, key, index, options);
+            result = king_inference_openai_json_encode(&model_object, &json);
+            zval_ptr_dtor(&model_object);
+            if (result != SUCCESS) {
+                return FAILURE;
+            }
+            king_inference_openai_http_array_response(return_value, 200, "application/json", json, false);
+            zend_string_release(json);
+            return SUCCESS;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return king_inference_openai_error_response(
+        return_value,
+        404,
+        "Requested model is not registered in the King inference router.",
+        "invalid_request_error"
+    );
+}
+
+static zend_result king_inference_openai_router_chat_response(
+    zval *models,
+    zval *request,
+    zval *options,
+    zval *return_value)
+{
+    zval *body;
+    zval decoded;
+    zval *model;
+    zend_result result;
 
     if (!king_inference_openai_request_method_is(request, "POST")) {
         return king_inference_openai_error_response(
@@ -248,39 +401,70 @@ static zend_result king_inference_openai_router_chat_response(
         return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
     }
 
-    requested_model = king_inference_array_find(&decoded, "model");
-    if (requested_model != NULL && Z_TYPE_P(requested_model) != IS_STRING) {
+    result = king_inference_openai_require_model(
+        models,
+        &decoded,
+        "Chat completions request model must be a string when provided.",
+        return_value,
+        &model
+    );
+    if (result != SUCCESS || Z_TYPE_P(return_value) == IS_ARRAY) {
         zval_ptr_dtor(&decoded);
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Chat completions request model must be a string when provided.",
-            "invalid_request_error"
-        );
-    }
-    if ((requested_model == NULL || Z_STRLEN_P(requested_model) == 0)
-        && zend_hash_num_elements(Z_ARRVAL_P(models)) > 1) {
-        zval_ptr_dtor(&decoded);
-        return king_inference_openai_error_response(
-            return_value,
-            400,
-            "Chat completions request must include model when multiple King models are registered.",
-            "invalid_request_error"
-        );
-    }
-
-    model = king_inference_openai_find_model(models, &decoded);
-    if (model == NULL) {
-        zval_ptr_dtor(&decoded);
-        return king_inference_openai_error_response(
-            return_value,
-            404,
-            "Requested model is not registered in the King inference router.",
-            "invalid_request_error"
-        );
+        return result;
     }
 
     result = king_inference_openai_payload_response(return_value, model, &decoded, options);
+    zval_ptr_dtor(&decoded);
+    return result;
+}
+
+static zend_result king_inference_openai_router_responses_response(
+    zval *models,
+    zval *request,
+    zval *options,
+    zval *return_value)
+{
+    zval *body;
+    zval decoded;
+    zval *model;
+    zend_result result;
+
+    if (!king_inference_openai_request_method_is(request, "POST")) {
+        return king_inference_openai_error_response(
+            return_value,
+            405,
+            "Responses endpoint requires POST.",
+            "invalid_request_error"
+        );
+    }
+
+    body = king_inference_array_find(request, "body");
+    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Responses HTTP request requires a JSON string body.",
+            "invalid_request_error"
+        );
+    }
+
+    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
+        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    }
+
+    result = king_inference_openai_require_model(
+        models,
+        &decoded,
+        "Responses request model must be a string when provided.",
+        return_value,
+        &model
+    );
+    if (result != SUCCESS || Z_TYPE_P(return_value) == IS_ARRAY) {
+        zval_ptr_dtor(&decoded);
+        return result;
+    }
+
+    result = king_inference_openai_responses_payload_response(return_value, model, &decoded, options);
     zval_ptr_dtor(&decoded);
     return result;
 }
@@ -293,6 +477,7 @@ PHP_FUNCTION(king_inference_openai_http_response)
     zval empty_options;
     zval *effective_options;
     zend_result result;
+    zend_string *model_id = NULL;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_ARRAY(models)
@@ -308,6 +493,8 @@ PHP_FUNCTION(king_inference_openai_http_response)
         effective_options = options;
     }
 
+    model_id = king_inference_openai_request_path_suffix(request, "/v1/models/");
+
     if (king_inference_openai_request_path_is(request, "/v1/models")) {
         if (!king_inference_openai_request_method_is(request, "GET")) {
             result = king_inference_openai_error_response(
@@ -319,8 +506,21 @@ PHP_FUNCTION(king_inference_openai_http_response)
         } else {
             result = king_inference_openai_models_response(models, effective_options, return_value);
         }
+    } else if (model_id != NULL) {
+        if (!king_inference_openai_request_method_is(request, "GET")) {
+            result = king_inference_openai_error_response(
+                return_value,
+                405,
+                "Model retrieve endpoint requires GET.",
+                "invalid_request_error"
+            );
+        } else {
+            result = king_inference_openai_retrieve_model_response(models, model_id, effective_options, return_value);
+        }
     } else if (king_inference_openai_request_path_is(request, "/v1/chat/completions")) {
         result = king_inference_openai_router_chat_response(models, request, effective_options, return_value);
+    } else if (king_inference_openai_request_path_is(request, "/v1/responses")) {
+        result = king_inference_openai_router_responses_response(models, request, effective_options, return_value);
     } else {
         result = king_inference_openai_error_response(
             return_value,
@@ -332,6 +532,9 @@ PHP_FUNCTION(king_inference_openai_http_response)
 
     if (options == NULL) {
         zval_ptr_dtor(&empty_options);
+    }
+    if (model_id != NULL) {
+        zend_string_release(model_id);
     }
     if (result != SUCCESS) {
         if (EG(exception)) {

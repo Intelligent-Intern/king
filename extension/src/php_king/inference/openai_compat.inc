@@ -313,6 +313,29 @@ static void king_inference_openai_append_delta_content(zval *chunk, smart_str *c
     }
 }
 
+static zval *king_inference_openai_chunk_delta_content(zval *chunk)
+{
+    zval *choices = king_inference_array_find(chunk, "choices");
+    zval *choice;
+    zval *delta;
+
+    if (!king_inference_openai_array_is_list(choices)) {
+        return NULL;
+    }
+
+    choice = zend_hash_index_find(Z_ARRVAL_P(choices), 0);
+    if (choice == NULL || Z_TYPE_P(choice) != IS_ARRAY) {
+        return NULL;
+    }
+
+    delta = king_inference_array_find(choice, "delta");
+    if (delta == NULL || Z_TYPE_P(delta) != IS_ARRAY) {
+        return NULL;
+    }
+
+    return king_inference_array_find(delta, "content");
+}
+
 static zend_result king_inference_openai_drain_stream(
     king_inference_stream_object *stream,
     zval *stream_value,
