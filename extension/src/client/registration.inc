@@ -1,4 +1,8 @@
-#include "resource_destructors.inc"
+/*
+ * Client class/resource registration. The client runtime translation unit
+ * includes php_binding.inc first, so the resource destructors and object
+ * handler initializers are available without pulling binding leaves here.
+ */
 
 void king_client_register_resource_types(int module_number)
 {

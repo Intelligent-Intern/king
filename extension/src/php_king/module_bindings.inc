@@ -4,5 +4,4 @@
  * owning translation unit instead of being pulled in here.
  */
 
-#include "../client/php_binding.inc"
 #include "../server/php_binding.inc"

@@ -458,3 +458,7 @@ PHP_FUNCTION(king_receive_response)
 
     zval_ptr_dtor(&payload);
 }
+
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"
