@@ -6,10 +6,12 @@ touch the same local state.
 
 ## Internal Layout
 
-The public `king_db_ingest()` implementation lives in
+The public `king_db_ingest()` declaration lives in
+`extension/include/db_ingest/db_ingest.h` and is exported through
+`extension/include/db_ingest/index.h`. The implementation lives in
 `extension/src/db_ingest/api.inc`. Its arginfo and function-table entry live in
-the same directory, while the root extension bootstrap includes those fragments
-for the shared extension registration.
+the same source directory, while the root extension bootstrap includes those
+fragments for the shared extension registration.
 
 ## Function, Example 1: Append to a JSONL Ledger Atomically
 

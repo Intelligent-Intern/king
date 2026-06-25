@@ -1,1 +1,1 @@
-PHP_FUNCTION(king_db_ingest);
+#include "db_ingest/db_ingest.h"

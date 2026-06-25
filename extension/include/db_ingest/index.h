@@ -11,4 +11,6 @@
 #ifndef KING_DB_INGEST_INDEX_H
 #define KING_DB_INGEST_INDEX_H
 
+#include "db_ingest.h"
+
 #endif /* KING_DB_INGEST_INDEX_H */
