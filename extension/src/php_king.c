@@ -40,7 +40,7 @@
 #include "php_king/registration.h"
 #include "php_king/resources.h"
 #include "autoscaling/registration.h"
-#include "config/internal/registration.h"
+#include "config/registration.h"
 #include "media/registration.h"
 #include "object_store/registration.h"
 #include "pipeline_orchestrator/registration.h"

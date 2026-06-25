@@ -33,7 +33,7 @@ extern zend_class_entry
 #include "autoscaling/class_entries.h"
 #include "awaitable/class_entries.h"
 #include "client/class_entries.h"
-#include "config/internal/class_entries.h"
+#include "config/class_entries.h"
 #include "inference/class_entries.h"
 #include "mcp/class_entries.h"
 #include "media/class_entries.h"

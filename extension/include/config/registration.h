@@ -1,9 +1,9 @@
 /*
- * include/config/internal/registration.h - Config object MINIT hooks
+ * include/config/registration.h - Config object MINIT hooks
  */
 
-#ifndef KING_CONFIG_INTERNAL_REGISTRATION_H
-#define KING_CONFIG_INTERNAL_REGISTRATION_H
+#ifndef KING_CONFIG_REGISTRATION_H
+#define KING_CONFIG_REGISTRATION_H
 
 #include <php.h>
 #include "class_entries.h"
@@ -13,4 +13,4 @@ void king_config_register_resource_types(int module_number);
 void king_config_register_classes(void);
 void king_config_init_object_handlers(void);
 
-#endif /* KING_CONFIG_INTERNAL_REGISTRATION_H */
+#endif /* KING_CONFIG_REGISTRATION_H */

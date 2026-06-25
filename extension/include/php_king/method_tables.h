@@ -8,7 +8,7 @@
 #include "autoscaling/class_methods.h"
 #include "awaitable/class_methods.h"
 #include "client/class_methods.h"
-#include "config/internal/class_methods.h"
+#include "config/class_methods.h"
 #include "iibin/class_methods.h"
 #include "inference/class_methods.h"
 #include "mcp/class_methods.h"
