@@ -1,54 +1,6 @@
 /*
- * Local quantized model inference surface.
- *
- * The first King AI primitive owns model registration, safety policy and
- * streaming process lifecycle. The local backend is King-owned and the public
- * contract stays stable while its internals evolve.
+ * Inference PHP entry points and OO method glue.
  */
-
-#include "Zend/zend_smart_str.h"
-#include "ext/standard/base64.h"
-#include "ext/json/php_json.h"
-#include "config/high_perf_compute_and_ai/base_layer.h"
-
-#include <errno.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <strings.h>
-#include <sys/mman.h>
-#include <sys/select.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <unistd.h>
-
-#include "helpers.inc"
-#include "openai_messages.inc"
-#include "backend_contract.inc"
-#include "thermal_policy.inc"
-#include "resource_policy.inc"
-#include "gguf_loader.inc"
-#include "native_memory.inc"
-#include "tensor_view.inc"
-#include "tensor_math.inc"
-#include "tensor_graph.inc"
-#include "paged_kv_cache.inc"
-#include "backend_king_local.inc"
-#include "backend_king_native.inc"
-#include "backend_registry.inc"
-#include "model_config.inc"
-#include "tokenizer.inc"
-#include "openai_options.inc"
-#include "openai_usage.inc"
-#include "stream_events.inc"
-#include "object_handlers.inc"
-#include "openai_compat.inc"
-#include "openai_responses.inc"
-#include "openai_completions.inc"
-#include "openai_embeddings.inc"
-#include "openai_http_router.inc"
 
 static zend_result king_inference_next_async_runner(king_awaitable_object *intern, zval *result)
 {
@@ -692,5 +644,3 @@ PHP_METHOD(King_Inference_Stream, getMetrics)
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(ZEND_THIS));
     king_inference_stream_metrics(stream, return_value);
 }
-
-#include "inference/class_method_entries.h"
