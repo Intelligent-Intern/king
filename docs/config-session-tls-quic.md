@@ -22,6 +22,10 @@ owned by `extension/src/server/arginfo.inc` and
 `extension/src/server/function_entries.inc`, with the public include-side anchor
 at `extension/include/server/arginfo/index.h`.
 
+Core exception, class, and object-handler registration is factored into
+`extension/src/php_king/class_registration.inc`; `extension/src/php_king/lifecycle.inc`
+keeps the MINIT/MSHUTDOWN/RINIT/RSHUTDOWN ordering.
+
 ## Function, Example 1: Config Resource and Session Stats
 
 ```php

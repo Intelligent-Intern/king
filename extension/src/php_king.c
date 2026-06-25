@@ -57,5 +57,6 @@
 #include "client/websocket/object_handlers.inc"
 #include "server/http1/websocket_server_object_handlers.inc"
 #include "awaitable/awaitable.inc"
+#include "php_king/class_registration.inc"
 #include "php_king/lifecycle.inc"
 #include "php_king/module_entry.inc"
