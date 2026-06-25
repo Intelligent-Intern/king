@@ -10,7 +10,7 @@ The native config snapshot lives in `extension/include/config/config.h`; the
 PHP-visible `King\Config` object contract lives in
 `extension/include/config/object.h`. `King\CancelToken` is shared across
 client, awaitable, inference, MCP, and orchestrator paths, so its object
-contract lives in `extension/include/cancel_token.h`.
+contract lives in `extension/include/awaitable/cancel_token.h`.
 
 Client session, TLS, request, and polling function registrations are owned by
 `extension/src/client/arginfo.inc` and

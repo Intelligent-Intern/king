@@ -9,7 +9,7 @@
 #include <zend_exceptions.h>
 #include <stdio.h>
 
-#include "../cancel_token.h"
+#include "awaitable/cancel_token.h"
 #include "class_entries.h"
 #include "error_state.h"
 

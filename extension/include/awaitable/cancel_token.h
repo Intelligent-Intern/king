@@ -1,5 +1,5 @@
 /*
- * include/cancel_token.h - PHP-visible CancelToken object contract
+ * include/awaitable/cancel_token.h - PHP-visible CancelToken object contract
  */
 
 #ifndef KING_CANCEL_TOKEN_H

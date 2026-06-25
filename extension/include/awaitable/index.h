@@ -12,6 +12,7 @@
 #define KING_AWAITABLE_INDEX_H
 
 #include "awaitable.h"
+#include "cancel_token.h"
 #include "registration.h"
 
 #endif /* KING_AWAITABLE_INDEX_H */
