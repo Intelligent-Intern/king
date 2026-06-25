@@ -175,12 +175,15 @@ static void king_inference_openai_model_object(
     zval king_meta;
     zval capabilities;
     bool backend_config_valid = true;
+    bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
 
     array_init(return_value);
     add_assoc_str(return_value, "id", id);
     add_assoc_string(return_value, "object", "model");
-    if (created != NULL && Z_TYPE_P(created) == IS_LONG) {
+    if (created_config_valid && created != NULL) {
         add_assoc_long(return_value, "created", Z_LVAL_P(created));
+    } else {
+        add_assoc_long(return_value, "created", 0);
     }
     add_assoc_str(return_value, "owned_by", owner);
 
@@ -211,6 +214,7 @@ static void king_inference_openai_model_object(
     );
     add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
     add_assoc_bool(&king_meta, "gpu_enabled", backend_config_valid && king_inference_gpu_enabled(&model->config));
+    add_assoc_bool(&king_meta, "created_config_valid", created_config_valid);
     if (backend_config_valid) {
         king_inference_backend_capabilities_array(kind, &capabilities);
     } else {

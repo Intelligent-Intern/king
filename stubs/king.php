@@ -1364,7 +1364,9 @@ namespace {
      * `max_idle_events` default to `250`, `4096`, and `240` and must be
      * positive integers like the router limits. Model-listing option
      * `owned_by` overrides model config owners and must be a non-empty string
-     * when provided.
+     * when provided. Model listing responses always include integer
+     * `created`; `x_king.created_config_valid` reports whether model config
+     * provided a usable non-negative integer timestamp.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
