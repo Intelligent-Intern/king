@@ -12,5 +12,6 @@
 #define KING_OBJECT_STORE_INDEX_H
 
 #include "object_store.h"
+#include "registration.h"
 
 #endif /* KING_OBJECT_STORE_INDEX_H */

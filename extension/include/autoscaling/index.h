@@ -15,4 +15,6 @@
 #ifndef KING_AUTOSCALING_INDEX_H
 #define KING_AUTOSCALING_INDEX_H
 
+#include "registration.h"
+
 #endif /* KING_AUTOSCALING_INDEX_H */

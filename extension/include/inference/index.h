@@ -12,5 +12,6 @@
 #define KING_INFERENCE_INDEX_H
 
 #include "inference.h"
+#include "registration.h"
 
 #endif /* KING_INFERENCE_INDEX_H */

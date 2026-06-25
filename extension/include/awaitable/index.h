@@ -12,5 +12,6 @@
 #define KING_AWAITABLE_INDEX_H
 
 #include "awaitable.h"
+#include "registration.h"
 
 #endif /* KING_AWAITABLE_INDEX_H */

@@ -2,6 +2,7 @@
 #define KING_SERVER_INDEX_H
 
 #include <php.h>
+#include "registration.h"
 
 /**
  * @file extension/include/server/index.h

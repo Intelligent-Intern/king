@@ -12,5 +12,6 @@
 #define KING_XSLT_INDEX_H
 
 #include "xslt.h"
+#include "registration.h"
 
 #endif /* KING_XSLT_INDEX_H */

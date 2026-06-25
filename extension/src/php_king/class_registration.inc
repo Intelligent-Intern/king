@@ -77,157 +77,32 @@ static void king_register_exception_classes(void)
 
 static void king_register_userland_classes(void)
 {
-    king_ce_cancel_token = king_register_class_with_flags(
-        "King\\CancelToken",
-        NULL,
-        king_cancel_token_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_awaitable = king_register_class_with_flags(
-        "King\\Awaitable",
-        NULL,
-        king_awaitable_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_config = king_register_class_with_flags(
-        "King\\Config",
-        NULL,
-        king_config_class_methods,
-        ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_session = king_register_class_with_flags(
-        "King\\Session",
-        NULL,
-        king_session_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_stream = king_register_class_with_flags(
-        "King\\Stream",
-        NULL,
-        king_stream_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_response = king_register_class_with_flags(
-        "King\\Response",
-        NULL,
-        king_response_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_mcp = king_register_class_with_flags(
-        "King\\MCP",
-        NULL,
-        king_mcp_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_mcp_server = king_register_class_with_flags(
-        "King\\MCPServer",
-        NULL,
-        king_mcp_server_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_pipeline_orchestrator = king_register_class_with_flags(
-        "King\\PipelineOrchestrator",
-        NULL,
-        king_pipeline_orchestrator_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_object_store = king_register_class_with_flags(
-        "King\\ObjectStore",
-        NULL,
-        king_object_store_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_autoscaling = king_register_class_with_flags(
-        "King\\Autoscaling",
-        NULL,
-        king_autoscaling_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_rtp_socket = king_register_class_with_flags(
-        "King\\RTP\\Socket",
-        NULL,
-        king_rtp_socket_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_xslt_processor = king_register_class_with_flags(
-        "King\\XSLT\\Processor",
-        NULL,
-        king_xslt_processor_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_inference = king_register_class_with_flags(
-        "King\\Inference",
-        NULL,
-        king_inference_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_inference_model = king_register_class_with_flags(
-        "King\\Inference\\Model",
-        NULL,
-        king_inference_model_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_inference_stream = king_register_class_with_flags(
-        "King\\Inference\\Stream",
-        NULL,
-        king_inference_stream_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_client_http = king_register_class_with_flags(
-        "King\\Client\\HttpClient",
-        NULL,
-        king_http_client_class_methods,
-        ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_client_http1 = king_register_class_with_flags(
-        "King\\Client\\Http1Client",
-        king_ce_client_http,
-        NULL,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_client_http2 = king_register_class_with_flags(
-        "King\\Client\\Http2Client",
-        king_ce_client_http,
-        NULL,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_client_http3 = king_register_class_with_flags(
-        "King\\Client\\Http3Client",
-        king_ce_client_http,
-        NULL,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_ws_server = king_register_class_with_flags(
-        "King\\WebSocket\\Server",
-        NULL,
-        king_ws_server_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
-    king_ce_ws_connection = king_register_class_with_flags(
-        "King\\WebSocket\\Connection",
-        NULL,
-        king_ws_connection_class_methods,
-        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
-    );
+    king_awaitable_register_classes();
+    king_config_register_classes();
+    king_client_register_session_classes();
+    king_mcp_register_classes();
+    king_pipeline_orchestrator_register_classes();
+    king_object_store_register_classes();
+    king_autoscaling_register_classes();
+    king_media_register_classes();
+    king_xslt_register_classes();
+    king_inference_register_classes();
+    king_client_register_http_classes();
+    king_server_register_websocket_classes();
+    king_client_register_websocket_classes();
 }
 
 static void king_init_object_handlers(void)
 {
-    king_cancel_token_object_handlers_init();
-    king_awaitable_object_handlers_init();
-    king_config_object_handlers_init();
-    king_mcp_object_handlers_init();
-    king_mcp_server_object_handlers_init();
-    king_rtp_socket_object_handlers_init();
-    king_xslt_processor_object_handlers_init();
-    king_inference_model_object_handlers_init();
-    king_inference_stream_object_handlers_init();
-    king_stream_object_handlers_init();
-    king_response_object_handlers_init();
-    king_http_client_object_handlers_init();
-    king_ws_object_handlers_init();
-    king_ws_server_object_handlers_init();
-    king_session_object_handlers_init();
+    king_awaitable_init_object_handlers();
+    king_config_init_object_handlers();
+    king_mcp_init_object_handlers();
+    king_media_init_object_handlers();
+    king_xslt_init_object_handlers();
+    king_inference_init_object_handlers();
+    king_client_init_object_handlers();
+    king_server_init_object_handlers();
+    king_client_init_session_object_handlers();
 }
 
 static void king_register_php_classes_and_handlers(void)

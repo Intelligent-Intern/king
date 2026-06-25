@@ -13,6 +13,7 @@
 
 #include "orchestrator.h"
 #include "pipeline_orchestrator.h"
+#include "registration.h"
 #include "tool_handler_registry.h"
 
 #endif /* KING_PIPELINE_ORCHESTRATOR_INDEX_H */

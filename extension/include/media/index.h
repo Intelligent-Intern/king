@@ -12,5 +12,6 @@
 #define KING_MEDIA_INDEX_H
 
 #include "../rtp.h"
+#include "registration.h"
 
 #endif /* KING_MEDIA_INDEX_H */
