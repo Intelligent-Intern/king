@@ -109,8 +109,9 @@ internal `max_tokens` stream contract and carries `temperature`, `top_p`,
 
 For streamed Chat Completions, `stream_options.include_usage=true` appends a
 final OpenAI-shaped usage chunk with empty `choices` immediately before
-`data: [DONE]`. The usage chunk is computed through the same tokenizer-backed
-path as non-streaming Chat Completions.
+`data: [DONE]`. Other chunks carry `usage: null`, and the final usage chunk is
+computed through the same tokenizer-backed path as non-streaming Chat
+Completions.
 
 ## OO, Example 1: Static Facade
 

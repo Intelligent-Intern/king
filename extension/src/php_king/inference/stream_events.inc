@@ -125,6 +125,9 @@ static void king_inference_stream_openai_chunk(
     }
     add_next_index_zval(&choices, &choice);
     add_assoc_zval(return_value, "choices", &choices);
+    if (king_inference_openai_stream_usage_requested(&stream->request)) {
+        add_assoc_null(return_value, "usage");
+    }
 }
 
 static void king_inference_stream_openai_error(
