@@ -15,6 +15,7 @@
 #include <zend_hash.h>
 #include <zend_smart_str.h>
 #include "iibin/class_methods.h"
+#include "iibin/lifecycle.h"
 
 /* --- Wire Format Constants --- */
 #define KING_WIRETYPE_VARINT         0
@@ -87,9 +88,6 @@ extern HashTable king_proto_schema_registry;
 extern HashTable king_proto_enum_registry;
 extern bool king_proto_registries_initialized;
 
-/* --- Lifecycle / Registry Helpers --- */
-int king_proto_registry_minit(void);
-void king_proto_registry_mshutdown(void);
 zend_result king_iibin_define_enum(
     zend_string *enum_name,
     zval *enum_values
@@ -140,8 +138,6 @@ void king_proto_runtime_schema_free(king_proto_runtime_schema *schema);
 void king_proto_runtime_schema_zval_dtor(zval *zv);
 void king_proto_runtime_enum_free(king_proto_runtime_enum *runtime_enum);
 void king_proto_runtime_enum_zval_dtor(zval *zv);
-
-int king_iibin_minit(void);
 
 /* --- Wire Helpers --- */
 

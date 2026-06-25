@@ -13,5 +13,6 @@
 
 #include "class_methods.h"
 #include "iibin.h"
+#include "lifecycle.h"
 
 #endif /* KING_IIBIN_INDEX_H */

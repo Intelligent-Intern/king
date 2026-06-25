@@ -15,6 +15,7 @@
 #include "php_king.h"
 #include "config/smart_dns/base_layer.h"
 #include "semantic_dns/semantic_dns.h"
+#include "semantic_dns/lifecycle.h"
 #include <stdbool.h>
 #include <limits.h>
 #include <sys/types.h>
@@ -36,9 +37,6 @@ typedef struct _king_semantic_dns_runtime_state {
 
 extern king_semantic_dns_runtime_state king_semantic_dns_runtime;
 extern bool king_semantic_dns_registry_initialized;
-
-int king_semantic_dns_registry_minit(void);
-void king_semantic_dns_registry_mshutdown(void);
 
 /* Persisted state snapshot helpers */
 int king_semantic_dns_state_load(void);

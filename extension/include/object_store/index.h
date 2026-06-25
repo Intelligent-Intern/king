@@ -12,6 +12,7 @@
 #define KING_OBJECT_STORE_INDEX_H
 
 #include "class_entries.h"
+#include "lifecycle.h"
 #include "object_store.h"
 #include "registration.h"
 
