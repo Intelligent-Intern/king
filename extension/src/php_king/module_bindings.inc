@@ -4,16 +4,12 @@
  * must be available before the module registration hooks below are compiled.
  */
 
-#include "../db_ingest/api.inc"
-#include "../awaitable/cancel_token.inc"
-#include "../awaitable/cancel_token_object_handlers.inc"
-#include "../config/internal/object_handlers.inc"
+#include "../db_ingest/php_binding.inc"
+#include "../awaitable/php_binding.inc"
+#include "../config/internal/php_binding.inc"
 #include "../mcp/php_binding.inc"
 #include "../media/php_binding.inc"
 #include "../xslt/php_binding.inc"
-#include "../inference/api.inc"
-#include "../client/session/object_handlers.inc"
-#include "../client/object_handlers.inc"
-#include "../client/websocket/object_handlers.inc"
-#include "../server/http1/websocket_server_object_handlers.inc"
-#include "../awaitable/awaitable.inc"
+#include "../inference/php_binding.inc"
+#include "../client/php_binding.inc"
+#include "../server/php_binding.inc"
