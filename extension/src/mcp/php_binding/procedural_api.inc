@@ -6,6 +6,7 @@ PHP_FUNCTION(king_mcp_connect)
     zval *config;
     zval *options = NULL;
     king_mcp_state *state;
+    zend_long default_timeout_ms = 0;
 
     ZEND_PARSE_PARAMETERS_START(3, 4)
         Z_PARAM_STRING(host, host_len)
@@ -26,7 +27,16 @@ PHP_FUNCTION(king_mcp_connect)
         }
     }
 
-    (void) options;
+    if (
+        king_mcp_connection_options_parse(
+            options,
+            "king_mcp_connect",
+            NULL,
+            &default_timeout_ms
+        ) != SUCCESS
+    ) {
+        RETURN_FALSE;
+    }
 
     state = king_mcp_state_create(
         host,
@@ -37,6 +47,7 @@ PHP_FUNCTION(king_mcp_connect)
     if (state == NULL) {
         RETURN_FALSE;
     }
+    state->default_timeout_ms = default_timeout_ms;
 
     RETURN_RES(zend_register_resource(state, le_king_mcp));
 }
@@ -63,8 +74,6 @@ PHP_FUNCTION(king_mcp_request)
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    (void) options;
-
     state = king_mcp_fetch_state(connection, 1);
     if (state == NULL) {
         RETURN_THROWS();
@@ -75,7 +84,8 @@ PHP_FUNCTION(king_mcp_request)
         RETURN_FALSE;
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "king_mcp_request",
@@ -243,7 +253,8 @@ PHP_FUNCTION(king_mcp_request_iibin)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "king_mcp_request_iibin",
@@ -452,7 +463,8 @@ PHP_FUNCTION(king_mcp_upload_from_stream)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "king_mcp_upload_from_stream",
@@ -565,7 +577,8 @@ PHP_FUNCTION(king_mcp_download_to_stream)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "king_mcp_download_to_stream",

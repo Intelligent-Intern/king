@@ -188,7 +188,9 @@ $mcp = new MCP('127.0.0.1', 9091, new Config([
             'decode_as_object' => false,
         ],
     ],
-]));
+]), [
+    'default_timeout_ms' => 5000,
+]);
 
 $answer = $mcp->requestIibin('support.faq', 'answer', [
     'tenant_id' => 'tenant-42',
@@ -200,3 +202,9 @@ $answer = $mcp->requestIibin('support.faq', 'answer', [
 The IIBIN route contract is copied into the MCP connection state when the
 connection is created. Later changes to the `King\Config` object do not change
 the schemas used by that connection.
+
+Connection options are also copied into the MCP state. `default_timeout_ms`
+sets the timeout budget used by later request, IIBIN, upload, and download
+operations when the individual call does not pass `timeout_ms`. The procedural
+`king_mcp_connect()` API accepts the same connection option; `timeout_ms` is
+also accepted as a connection-time alias for `default_timeout_ms`.

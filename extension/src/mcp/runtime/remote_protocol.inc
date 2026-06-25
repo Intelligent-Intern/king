@@ -428,6 +428,7 @@ king_mcp_state *king_mcp_state_create(
 
     state->host = normalized_host;
     state->port = port;
+    state->default_timeout_ms = 0;
     ZVAL_UNDEF(&state->config);
     ZVAL_UNDEF(&state->iibin_routes);
     state->transport_stream = NULL;

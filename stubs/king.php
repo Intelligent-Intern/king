@@ -331,6 +331,10 @@ namespace {
      * Create an MCP connection-state resource for the active runtime.
      * This stores host, port, optional `King\Config`, and the explicit
      * open/closed lifecycle for the active remote peer socket.
+     * `options['default_timeout_ms']` sets the per-connection timeout default
+     * for later request, IIBIN, upload, and download operations. `timeout_ms`
+     * is accepted as an alias at connection creation time. Per-call
+     * `timeout_ms` overrides this default.
      * @param mixed $config
      * @param array<string,mixed>|null $options
      * @return resource|false
@@ -2391,10 +2395,12 @@ namespace King {
         /**
          * Materialize the MCP connection-state wrapper for host, port,
          * optional `King\Config`, and the explicit open/closed lifecycle over
-         * the active remote peer socket.
+         * the active remote peer socket. `options['default_timeout_ms']` sets
+         * the per-connection timeout default; per-call `timeout_ms` overrides
+         * it.
          * @throws ValidationException
          */
-        public function __construct(string $host, int $port, ?Config $config = null) {}
+        public function __construct(string $host, int $port, ?Config $config = null, ?array $options = null) {}
 
         /**
          * Unary RPC call over the MCP connection-state wrapper.

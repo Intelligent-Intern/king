@@ -4,15 +4,29 @@ PHP_METHOD(King_MCP, __construct)
     size_t host_len = 0;
     zend_long port;
     zval *config = NULL;
+    zval *options = NULL;
     king_mcp_state *state;
     king_mcp_object *intern;
+    zend_long default_timeout_ms = 0;
 
-    ZEND_PARSE_PARAMETERS_START(2, 3)
+    ZEND_PARSE_PARAMETERS_START(2, 4)
         Z_PARAM_STRING(host, host_len)
         Z_PARAM_LONG(port)
         Z_PARAM_OPTIONAL
         Z_PARAM_OBJECT_OF_CLASS_OR_NULL(config, king_ce_config)
+        Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
+
+    if (
+        king_mcp_connection_options_parse(
+            options,
+            "King\\MCP::__construct",
+            king_ce_validation_exception,
+            &default_timeout_ms
+        ) != SUCCESS
+    ) {
+        RETURN_THROWS();
+    }
 
     state = king_mcp_state_create(
         host,
@@ -31,6 +45,7 @@ PHP_METHOD(King_MCP, __construct)
         );
         RETURN_THROWS();
     }
+    state->default_timeout_ms = default_timeout_ms;
 
     intern = php_king_mcp_obj_from_zend(Z_OBJ_P(ZEND_THIS));
     if (!Z_ISUNDEF(intern->resource)) {
@@ -71,7 +86,8 @@ PHP_METHOD(King_MCP, request)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             cancel,
             "MCP::request",
@@ -253,7 +269,8 @@ PHP_METHOD(King_MCP, requestIibin)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             cancel,
             "MCP::requestIibin",
@@ -470,7 +487,8 @@ PHP_METHOD(King_MCP, uploadFromStream)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "MCP::uploadFromStream",
@@ -589,7 +607,8 @@ PHP_METHOD(King_MCP, downloadToStream)
         RETURN_THROWS();
     }
 
-    if (king_mcp_runtime_control_parse(
+    if (king_mcp_runtime_control_parse_for_state(
+            state,
             options,
             NULL,
             "MCP::downloadToStream",

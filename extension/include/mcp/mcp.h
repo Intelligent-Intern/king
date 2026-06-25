@@ -29,6 +29,7 @@ typedef enum _king_mcp_error_kind {
 typedef struct _king_mcp_state {
     zend_string *host;
     zend_long port;
+    zend_long default_timeout_ms;
     zval config; /* Optional config holder retained for the connection state. */
     zval iibin_routes; /* Immutable per-connection MCP IIBIN route snapshot. */
     php_stream *transport_stream;

@@ -51,6 +51,113 @@ static zend_result king_mcp_validate_runtime_control_option(
     return SUCCESS;
 }
 
+static zend_result king_mcp_connection_options_parse(
+    zval *options,
+    const char *function_name,
+    zend_class_entry *exception_ce,
+    zend_long *default_timeout_ms)
+{
+    zval *timeout_option;
+    zval *default_timeout_option;
+    zend_string *key;
+    zval *value;
+    char message[KING_ERR_LEN];
+
+    if (default_timeout_ms == NULL) {
+        return FAILURE;
+    }
+
+    *default_timeout_ms = 0;
+
+    if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
+        return SUCCESS;
+    }
+
+    if (Z_TYPE_P(options) != IS_ARRAY) {
+        snprintf(message, sizeof(message), "%s() options must be an array.", function_name);
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(options), key, value) {
+        if (key == NULL) {
+            snprintf(message, sizeof(message), "%s() options only accept string keys.", function_name);
+            return king_mcp_set_transfer_error(exception_ce, message);
+        }
+
+        if (
+            !zend_string_equals_literal(key, "timeout_ms")
+            && !zend_string_equals_literal(key, "default_timeout_ms")
+        ) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() option '%s' is not supported.",
+                function_name,
+                ZSTR_VAL(key)
+            );
+            return king_mcp_set_transfer_error(exception_ce, message);
+        }
+
+        (void) value;
+    } ZEND_HASH_FOREACH_END();
+
+    timeout_option = zend_hash_str_find(Z_ARRVAL_P(options), "timeout_ms", sizeof("timeout_ms") - 1);
+    default_timeout_option = zend_hash_str_find(
+        Z_ARRVAL_P(options),
+        "default_timeout_ms",
+        sizeof("default_timeout_ms") - 1
+    );
+
+    if (
+        timeout_option != NULL
+        && Z_TYPE_P(timeout_option) != IS_NULL
+        && default_timeout_option != NULL
+        && Z_TYPE_P(default_timeout_option) != IS_NULL
+    ) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() accepts either option 'timeout_ms' or 'default_timeout_ms', not both.",
+            function_name
+        );
+        return king_mcp_set_transfer_error(exception_ce, message);
+    }
+
+    if (default_timeout_option != NULL && Z_TYPE_P(default_timeout_option) != IS_NULL) {
+        return king_mcp_validate_runtime_control_option(
+            default_timeout_option,
+            "default_timeout_ms",
+            default_timeout_ms,
+            function_name,
+            exception_ce
+        );
+    }
+
+    if (timeout_option != NULL && Z_TYPE_P(timeout_option) != IS_NULL) {
+        return king_mcp_validate_runtime_control_option(
+            timeout_option,
+            "timeout_ms",
+            default_timeout_ms,
+            function_name,
+            exception_ce
+        );
+    }
+
+    return SUCCESS;
+}
+
+static bool king_mcp_runtime_options_has_timeout(zval *options)
+{
+    zval *timeout_option;
+
+    if (options == NULL || Z_TYPE_P(options) != IS_ARRAY) {
+        return false;
+    }
+
+    timeout_option = zend_hash_str_find(Z_ARRVAL_P(options), "timeout_ms", sizeof("timeout_ms") - 1);
+    return timeout_option != NULL && Z_TYPE_P(timeout_option) != IS_NULL;
+}
+
 
 static zend_result king_mcp_runtime_control_parse(
     zval *options,
@@ -148,6 +255,37 @@ static zend_result king_mcp_runtime_control_parse(
         control->cancel_token = explicit_cancel;
     } else {
         control->cancel_token = options_cancel;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_mcp_runtime_control_parse_for_state(
+    king_mcp_state *state,
+    zval *options,
+    zval *explicit_cancel,
+    const char *function_name,
+    zend_class_entry *exception_ce,
+    king_mcp_runtime_control_t *control)
+{
+    if (
+        king_mcp_runtime_control_parse(
+            options,
+            explicit_cancel,
+            function_name,
+            exception_ce,
+            control
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (
+        state != NULL
+        && state->default_timeout_ms > 0
+        && !king_mcp_runtime_options_has_timeout(options)
+    ) {
+        control->timeout_ms = state->default_timeout_ms;
     }
 
     return SUCCESS;
