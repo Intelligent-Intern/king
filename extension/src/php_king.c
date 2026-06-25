@@ -33,7 +33,6 @@
 
 #include "php_king/state.inc"
 #include "php_king/arginfo.h"
-#include "php_king/function_table.h"
 #include "php_king/init.h"
 #include "php_king/method_tables.h"
 #include "php_king/registration.h"
@@ -45,4 +44,5 @@
 #include "php_king/module_registrations.inc"
 #include "php_king/class_registration.inc"
 #include "php_king/lifecycle.inc"
+#include "php_king/function_table.inc"
 #include "php_king/module_entry.inc"
