@@ -32,6 +32,19 @@ backend is still available, but it must be selected intentionally with
 `backend => 'local'`, `backend.name => 'local'`, `backend.type => 'local'`, or
 a runner-bearing backend config.
 
+Native graph stream memory is opt-in. The compiled default is stateless and the
+system baseline can be changed in `php.ini`:
+
+```ini
+king.inference_with_memory=0
+```
+
+The effective order is built-in default, `php.ini`, model config
+`with_memory`, stream request, stream options, and finally `graph_options`.
+Use `with_memory => true` only when a later graph should inherit the previous
+graph result state. The alias `with-memory` is accepted for external payloads;
+do not provide both spellings in the same array.
+
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
 `king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
@@ -554,6 +567,7 @@ $model = king_inference_model_load([
     'name' => 'king-native-invoice',
     'artifact' => '/models/invoice-assistant-q4.gguf',
     'backend' => 'king_native_cpu',
+    'with_memory' => false,
 ]);
 
 $encoded = king_inference_tokenize($model, 'Explain invoice rejection HU-2026-0007.');

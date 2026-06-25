@@ -78,6 +78,8 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.dataframe_string_interning_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, dataframe_string_interning_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     STD_PHP_INI_ENTRY("king.dataframe_cpu_parallelism_default", "0", PHP_INI_SYSTEM, OnUpdateLong, dataframe_cpu_parallelism_default, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
 
+    STD_PHP_INI_ENTRY("king.inference_with_memory", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_with_memory, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+
     STD_PHP_INI_ENTRY("king.gpu_bindings_enable", "0", PHP_INI_SYSTEM, OnUpdateBool, gpu_bindings_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     ZEND_INI_ENTRY_EX("king.gpu_default_backend", "auto", PHP_INI_SYSTEM, OnUpdateGpuBackend, NULL)
     STD_PHP_INI_ENTRY("king.worker_gpu_affinity_map", "", PHP_INI_SYSTEM, OnUpdateString, worker_gpu_affinity_map, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)

@@ -129,7 +129,9 @@ selects a native graph backend without an explicit graph request, King returns a
 OpenAI-shaped `400` JSON error instead of falling through to a low-level stream
 exception. Native graph streams are stateless by default. Set `with_memory` or
 `with-memory` to `true` in the request, stream options, or `graph_options` only
-when the next graph should inherit the previous graph result state.
+when the next graph should inherit the previous graph result state. The system
+baseline is `king.inference_with_memory=0` in `php.ini`; a loaded model config
+can override that baseline before per-request values are applied.
 
 ## Function, Example 2: Embeddings
 

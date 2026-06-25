@@ -84,6 +84,8 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config(zval *config_arr)
             if (kg_high_perf_apply_bool_field(value, "dataframe_string_interning_enable", &king_high_perf_compute_ai_config.dataframe_string_interning_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "dataframe_cpu_parallelism_default")) {
             if (kg_validate_non_negative_long_local(value, &king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_with_memory")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_with_memory", &king_high_perf_compute_ai_config.inference_with_memory) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_bindings_enable")) {
             if (kg_high_perf_apply_bool_field(value, "gpu_bindings_enable", &king_high_perf_compute_ai_config.gpu_bindings_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_default_backend")) {

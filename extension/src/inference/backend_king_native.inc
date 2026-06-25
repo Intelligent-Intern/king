@@ -40,25 +40,30 @@ static zend_result king_inference_king_native_stream_token_limit(
 static zval *king_inference_king_native_find_memory_option(zval *source)
 {
     zval *value = king_inference_array_find(source, "with_memory");
+    zval *alias = king_inference_array_find(source, "with-memory");
 
-    return value != NULL ? value : king_inference_array_find(source, "with-memory");
+    if (value != NULL && alias != NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native stream memory config must use either with_memory or with-memory, not both."
+        );
+        return NULL;
+    }
+
+    return value != NULL ? value : alias;
 }
 
-static zend_result king_inference_king_native_stream_with_memory(
-    king_inference_stream_object *stream,
-    zval *graph_options,
+static zend_result king_inference_king_native_apply_memory_option(
+    zval *source,
     bool *with_memory)
 {
-    zval *value = king_inference_king_native_find_memory_option(&stream->options);
+    zval *value = king_inference_king_native_find_memory_option(source);
 
-    if (value == NULL) {
-        value = king_inference_king_native_find_memory_option(&stream->request);
-    }
-    if (value == NULL && graph_options != NULL) {
-        value = king_inference_king_native_find_memory_option(graph_options);
+    if (EG(exception)) {
+        return FAILURE;
     }
     if (value == NULL) {
-        *with_memory = false;
         return SUCCESS;
     }
     if (Z_TYPE_P(value) != IS_TRUE && Z_TYPE_P(value) != IS_FALSE) {
@@ -71,6 +76,27 @@ static zend_result king_inference_king_native_stream_with_memory(
     }
 
     *with_memory = Z_TYPE_P(value) == IS_TRUE;
+    return SUCCESS;
+}
+
+static zend_result king_inference_king_native_stream_with_memory(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream,
+    zval *graph_options,
+    bool *with_memory)
+{
+    *with_memory = king_high_perf_compute_ai_config.inference_with_memory;
+
+    if (king_inference_king_native_apply_memory_option(&model->config, with_memory) != SUCCESS
+        || king_inference_king_native_apply_memory_option(&stream->request, with_memory) != SUCCESS
+        || king_inference_king_native_apply_memory_option(&stream->options, with_memory) != SUCCESS) {
+        return FAILURE;
+    }
+    if (graph_options != NULL
+        && king_inference_king_native_apply_memory_option(graph_options, with_memory) != SUCCESS) {
+        return FAILURE;
+    }
+
     return SUCCESS;
 }
 
@@ -275,7 +301,7 @@ static zend_result king_inference_king_native_prepare_events(
         );
         return FAILURE;
     }
-    if (king_inference_king_native_stream_with_memory(stream, graph_options, &with_memory) != SUCCESS) {
+    if (king_inference_king_native_stream_with_memory(model, stream, graph_options, &with_memory) != SUCCESS) {
         return FAILURE;
     }
 

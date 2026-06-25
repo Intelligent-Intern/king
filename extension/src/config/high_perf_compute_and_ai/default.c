@@ -20,6 +20,7 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.dataframe_memory_limit_mb = 1024;
     king_high_perf_compute_ai_config.dataframe_string_interning_enable = true;
     king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default = 0;
+    king_high_perf_compute_ai_config.inference_with_memory = false;
 
     king_high_perf_compute_ai_config.gpu_bindings_enable = false;
     king_high_perf_compute_ai_config.gpu_default_backend = NULL;

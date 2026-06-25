@@ -371,8 +371,9 @@ The core programming model is:
   stack, softmax, weighted-sum context assembly, serializable KV state,
   range-based KV attention, token selection from logits, scale, add steps, and
   graph-backed native CPU token streaming without an external inference runtime.
-  Native graph streams are stateless by default; `with_memory` opts into
-  carrying graph result state between decode steps. The stream layer can emit
+  Native graph streams are stateless by default; `king.inference_with_memory`
+  sets the php.ini baseline and `with_memory` opts into carrying graph result
+  state between decode steps. The stream layer can emit
   explicit OpenAI-compatible Chat
   Completions chunks, and the HTTP helper can serve
   `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,

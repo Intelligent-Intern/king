@@ -72,6 +72,30 @@ static zend_result king_inference_validate_optional_positive_long_config(
     return SUCCESS;
 }
 
+static zend_result king_inference_validate_optional_bool_config(
+    zval *config,
+    const char *field_name,
+    const char *function_name
+) {
+    zval *value = king_inference_array_find(config, field_name);
+
+    if (value == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_TRUE && Z_TYPE_P(value) != IS_FALSE) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s must be a boolean when provided.",
+            function_name,
+            field_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_inference_validate_model_config(zval *config, const char *function_name)
 {
     if (king_inference_validate_optional_string_config(config, "name", function_name) != SUCCESS
@@ -80,6 +104,8 @@ static zend_result king_inference_validate_model_config(zval *config, const char
         || king_inference_validate_optional_string_config(config, "embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "token_embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS
+        || king_inference_validate_optional_bool_config(config, "with_memory", function_name) != SUCCESS
+        || king_inference_validate_optional_bool_config(config, "with-memory", function_name) != SUCCESS
         || king_inference_validate_gpu_config(config, function_name) != SUCCESS) {
         return FAILURE;
     }

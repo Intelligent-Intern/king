@@ -24,6 +24,8 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     bool dataframe_string_interning_enable;
     zend_long dataframe_cpu_parallelism_default;
 
+    bool inference_with_memory;
+
     /* --- General GPU Configuration --- */
     bool gpu_bindings_enable;
     char *gpu_default_backend;
