@@ -14,6 +14,7 @@
 #define KING_MCP_H
 
 #include "php.h"
+#include <zend_object_handlers.h>
 #include <stdbool.h>
 
 typedef enum _king_mcp_error_kind {
@@ -40,6 +41,30 @@ typedef struct _king_mcp_runtime_control {
     uint64_t started_at_ms;
     zval *cancel_token;    /* Optional King\CancelToken zval. */
 } king_mcp_runtime_control_t;
+
+typedef struct _king_mcp_object {
+    zval resource;
+    zend_object std;
+} king_mcp_object;
+
+typedef struct _king_mcp_server_object {
+    zval definition;
+    zend_object std;
+} king_mcp_server_object;
+
+static inline king_mcp_object *
+php_king_mcp_obj_from_zend(zend_object *obj)
+{
+    return (king_mcp_object *)
+        ((char*)obj - XtOffsetOf(king_mcp_object, std));
+}
+
+static inline king_mcp_server_object *
+php_king_mcp_server_obj_from_zend(zend_object *obj)
+{
+    return (king_mcp_server_object *)
+        ((char*)obj - XtOffsetOf(king_mcp_server_object, std));
+}
 
 /* Connection State Lifecycle */
 king_mcp_state *king_mcp_state_create(const char *host, size_t host_len, zend_long port, zval *config);

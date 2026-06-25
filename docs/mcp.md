@@ -14,10 +14,11 @@ accepts POST requests and can return either `application/json` or
 
 ## Internal Layout
 
-The native MCP runtime contract lives in `extension/include/mcp/mcp.h`.
-Runtime code lives under `extension/src/mcp/mcp/`; PHP userland binding code
-lives under `extension/src/mcp/php_binding/`. `extension/src/php_king/mcp.inc`
-is only the extension bootstrap bridge.
+The native MCP runtime and object contracts live in
+`extension/include/mcp/mcp.h`. Runtime code lives under
+`extension/src/mcp/mcp/`; PHP userland binding code lives under
+`extension/src/mcp/php_binding/`. `extension/src/php_king/mcp.inc` is only the
+extension bootstrap bridge.
 
 ## Public Server Definition
 

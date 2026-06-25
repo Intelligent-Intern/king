@@ -301,18 +301,6 @@ typedef struct _king_stream_object {
     zend_object std;
 } king_stream_object;
 
-/* king_mcp_state is now in include/mcp/mcp.h */
-
-typedef struct _king_mcp_object {
-    zval resource;
-    zend_object   std;
-} king_mcp_object;
-
-typedef struct _king_mcp_server_object {
-    zval definition;
-    zend_object std;
-} king_mcp_server_object;
-
 typedef struct _king_ws_object {
     zval resource;
     zend_object   std;
@@ -587,20 +575,6 @@ static inline void *king_obj_fetch(zval *zobj)
     }
 
     return Z_RES(intern->resource)->ptr;
-}
-
-static inline king_mcp_object *
-php_king_mcp_obj_from_zend(zend_object *obj)
-{
-    return (king_mcp_object *)
-        ((char*)obj - XtOffsetOf(king_mcp_object, std));
-}
-
-static inline king_mcp_server_object *
-php_king_mcp_server_obj_from_zend(zend_object *obj)
-{
-    return (king_mcp_server_object *)
-        ((char*)obj - XtOffsetOf(king_mcp_server_object, std));
 }
 
 static inline king_ws_object *
