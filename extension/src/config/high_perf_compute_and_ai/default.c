@@ -30,6 +30,13 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = 78.0;
     king_high_perf_compute_ai_config.inference_gpu_allow_unmonitored = false;
+    king_high_perf_compute_ai_config.inference_llm_cache_enable = true;
+    king_high_perf_compute_ai_config.inference_llm_cache_path = pestrdup("/tmp/king-llm-cache", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_min_free_mb = 5120;
+    king_high_perf_compute_ai_config.inference_llm_cache_fail_closed = true;
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_webhook = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_service = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_method = pestrdup("", 1);
 
     king_high_perf_compute_ai_config.gpu_bindings_enable = false;
     king_high_perf_compute_ai_config.gpu_default_backend = NULL;

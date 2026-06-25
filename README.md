@@ -383,8 +383,10 @@ The core programming model is:
   backend config selects `king_native_cpu`; the runtime model primitive can
   resolve the configured `auto|gpu|cpu` model profile, preferring
   `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
-  falling back to `gemma3:1b` for CPU. The process-runner path is explicit
-  `local` configuration.
+  falling back to `gemma3:1b` for CPU. Memory-enabled native graph streams also
+  enforce an LLM-cache admission policy with a configurable disk-free floor and
+  webhook/MCP alert metadata. The process-runner path is explicit `local`
+  configuration.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

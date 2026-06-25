@@ -67,6 +67,61 @@ $stateful = king_inference_stream($model, [
 ]);
 ```
 
+## GraphAttention Memory Cache
+
+PagedAttention is not the first target here. The practical first step is
+GraphAttention-style memory: native graph streams can carry state forward,
+and a later evaluation pipeline can label prompts, inference results, and graph
+paths as useful. A labelled "works well" path can then be promoted by
+application code into a smaller candidate set for the next run instead of
+forcing the model to see the full catalogue again.
+
+King now exposes the cache admission policy for that memory mode. The LLM cache
+is never active for stateless inference. It is checked only when effective
+`with_memory` is `true`.
+
+```ini
+king.inference_llm_cache_enable=1
+king.inference_llm_cache_path=/tmp/king-llm-cache
+king.inference_llm_cache_min_free_mb=5120
+king.inference_llm_cache_fail_closed=1
+king.inference_llm_cache_disk_alert_webhook=
+king.inference_llm_cache_disk_alert_mcp_service=
+king.inference_llm_cache_disk_alert_mcp_method=
+```
+
+When active, King checks the cache path and the configured free-disk floor
+before native graph streaming starts. With `fail_closed=1`, memory-enabled
+inference is refused when the disk floor cannot be satisfied. With
+`fail_closed=0`, a native King stream continues and emits a `llm_cache_status`
+event before token events so the application can notify the configured webhook
+or MCP target. OpenAI-compatible streams keep their response format pure; the
+same cache policy is still checked, but the status should be queried through
+`king_inference_llm_cache_status()` when an out-of-band preflight is needed.
+
+```php
+<?php
+$config = King\Config::new([
+    'inference.with_memory' => true,
+    'inference.llm_cache_path' => '/var/cache/king/llm',
+    'inference.llm_cache_min_free_mb' => 8192,
+    'inference.llm_cache_fail_closed' => true,
+    'inference.llm_cache_disk_alert_webhook' => 'https://ops.example/cache-alert',
+    'inference.llm_cache_disk_alert_mcp_service' => 'ops.cache',
+    'inference.llm_cache_disk_alert_mcp_method' => 'diskFloorWarning',
+]);
+
+$status = king_inference_llm_cache_status($config, ['with_memory' => true]);
+```
+
+Runtime-loaded models carry the same cache policy in their model config under
+`llm_cache`, so `king_inference_runtime_model_load($config)` is enough for the
+native stream to enforce the policy. Manual model configs may also provide a
+`llm_cache` array with `enabled`, `path`, `min_free_mb`, `fail_closed`,
+`disk_alert_webhook`, `disk_alert_mcp_service`, and
+`disk_alert_mcp_method`. Request, stream options, and `graph_options` may
+override that array for a single run.
+
 GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
 `king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
@@ -93,6 +148,10 @@ king.inference_gpu_max_gpu_layers=0
 king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
 king.inference_gpu_thermal_max_temperature_c=78
 king.inference_gpu_allow_unmonitored=0
+king.inference_llm_cache_enable=1
+king.inference_llm_cache_path=/tmp/king-llm-cache
+king.inference_llm_cache_min_free_mb=5120
+king.inference_llm_cache_fail_closed=1
 ```
 
 `auto` selects the GPU profile only when process-level GPU bindings are enabled
@@ -115,6 +174,8 @@ $config = King\Config::new([
     'inference.gpu_thermal_sensor_path' => '/sys/class/hwmon/hwmon0/temp1_input',
     'inference.gpu_thermal_max_temperature_c' => 78.0,
     'inference.gpu_allow_unmonitored' => false,
+    'inference.llm_cache_path' => '/var/cache/king/llm',
+    'inference.llm_cache_min_free_mb' => 5120,
 ]);
 
 $modelConfig = king_inference_runtime_model_config($config);

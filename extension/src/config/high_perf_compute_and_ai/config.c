@@ -153,6 +153,20 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_high_perf_apply_positive_double_field(value, "inference_gpu_thermal_max_temperature_c", &target->inference_gpu_thermal_max_temperature_c) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_allow_unmonitored")) {
             if (kg_high_perf_apply_bool_field(value, "inference_gpu_allow_unmonitored", &target->inference_gpu_allow_unmonitored) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_enable")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_llm_cache_enable", &target->inference_llm_cache_enable) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_path")) {
+            if (kg_high_perf_apply_string_field(value, "inference_llm_cache_path", &target->inference_llm_cache_path) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_min_free_mb")) {
+            if (kg_validate_non_negative_long_local(value, &target->inference_llm_cache_min_free_mb) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_fail_closed")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_llm_cache_fail_closed", &target->inference_llm_cache_fail_closed) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_disk_alert_webhook")) {
+            if (kg_high_perf_apply_string_field(value, "inference_llm_cache_disk_alert_webhook", &target->inference_llm_cache_disk_alert_webhook) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_disk_alert_mcp_service")) {
+            if (kg_high_perf_apply_string_field(value, "inference_llm_cache_disk_alert_mcp_service", &target->inference_llm_cache_disk_alert_mcp_service) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_llm_cache_disk_alert_mcp_method")) {
+            if (kg_high_perf_apply_string_field(value, "inference_llm_cache_disk_alert_mcp_method", &target->inference_llm_cache_disk_alert_mcp_method) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_bindings_enable")) {
             if (kg_high_perf_apply_bool_field(value, "gpu_bindings_enable", &target->gpu_bindings_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "gpu_default_backend")) {

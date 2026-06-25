@@ -67,6 +67,8 @@ static ZEND_INI_MH(OnUpdateAiNonNegativeLong)
 
     if (zend_string_equals_literal(entry->name, "king.inference_gpu_max_gpu_layers")) {
         king_high_perf_compute_ai_config.inference_gpu_max_gpu_layers = val;
+    } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_min_free_mb")) {
+        king_high_perf_compute_ai_config.inference_llm_cache_min_free_mb = val;
     }
 
     return SUCCESS;
@@ -139,6 +141,23 @@ static ZEND_INI_MH(OnUpdateInferenceString)
             &king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path,
             new_value
         );
+    } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_path")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_llm_cache_path, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_disk_alert_webhook")) {
+        high_perf_replace_string(
+            &king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_webhook,
+            new_value
+        );
+    } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_disk_alert_mcp_service")) {
+        high_perf_replace_string(
+            &king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_service,
+            new_value
+        );
+    } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_disk_alert_mcp_method")) {
+        high_perf_replace_string(
+            &king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_method,
+            new_value
+        );
     }
 
     return SUCCESS;
@@ -182,6 +201,13 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_path", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_max_temperature_c", "78", PHP_INI_SYSTEM, OnUpdateAiPositiveDouble, NULL)
     STD_PHP_INI_ENTRY("king.inference_gpu_allow_unmonitored", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_gpu_allow_unmonitored, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    STD_PHP_INI_ENTRY("king.inference_llm_cache_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, inference_llm_cache_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    ZEND_INI_ENTRY_EX("king.inference_llm_cache_path", "/tmp/king-llm-cache", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_llm_cache_min_free_mb", "5120", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
+    STD_PHP_INI_ENTRY("king.inference_llm_cache_fail_closed", "1", PHP_INI_SYSTEM, OnUpdateBool, inference_llm_cache_fail_closed, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    ZEND_INI_ENTRY_EX("king.inference_llm_cache_disk_alert_webhook", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_llm_cache_disk_alert_mcp_service", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_llm_cache_disk_alert_mcp_method", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
 
     STD_PHP_INI_ENTRY("king.gpu_bindings_enable", "0", PHP_INI_SYSTEM, OnUpdateBool, gpu_bindings_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     ZEND_INI_ENTRY_EX("king.gpu_default_backend", "auto", PHP_INI_SYSTEM, OnUpdateGpuBackend, NULL)

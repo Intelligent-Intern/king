@@ -34,6 +34,13 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     char *inference_gpu_thermal_sensor_path;
     double inference_gpu_thermal_max_temperature_c;
     bool inference_gpu_allow_unmonitored;
+    bool inference_llm_cache_enable;
+    char *inference_llm_cache_path;
+    zend_long inference_llm_cache_min_free_mb;
+    bool inference_llm_cache_fail_closed;
+    char *inference_llm_cache_disk_alert_webhook;
+    char *inference_llm_cache_disk_alert_mcp_service;
+    char *inference_llm_cache_disk_alert_mcp_method;
 
     /* --- General GPU Configuration --- */
     bool gpu_bindings_enable;

@@ -119,6 +119,7 @@ static zend_result king_inference_runtime_model_config_array(
     bool process_gpu_enabled = king_high_perf_compute_ai_config.gpu_bindings_enable;
     bool config_gpu_enabled = compute->gpu_bindings_enable;
     zval artifact;
+    zval llm_cache;
 
     if (king_inference_runtime_select_profile(compute, function_name, &selected_gpu) != SUCCESS) {
         return FAILURE;
@@ -160,6 +161,40 @@ static zend_result king_inference_runtime_model_config_array(
     array_init(&artifact);
     add_assoc_string(&artifact, "path", selected_artifact);
     add_assoc_zval(return_value, "artifact", &artifact);
+
+    array_init(&llm_cache);
+    add_assoc_bool(&llm_cache, "enabled", compute->inference_llm_cache_enable);
+    add_assoc_string(
+        &llm_cache,
+        "path",
+        king_inference_runtime_non_empty(compute->inference_llm_cache_path)
+            ? compute->inference_llm_cache_path
+            : "/tmp/king-llm-cache"
+    );
+    add_assoc_long(&llm_cache, "min_free_mb", compute->inference_llm_cache_min_free_mb);
+    add_assoc_bool(&llm_cache, "fail_closed", compute->inference_llm_cache_fail_closed);
+    add_assoc_string(
+        &llm_cache,
+        "disk_alert_webhook",
+        compute->inference_llm_cache_disk_alert_webhook != NULL
+            ? compute->inference_llm_cache_disk_alert_webhook
+            : ""
+    );
+    add_assoc_string(
+        &llm_cache,
+        "disk_alert_mcp_service",
+        compute->inference_llm_cache_disk_alert_mcp_service != NULL
+            ? compute->inference_llm_cache_disk_alert_mcp_service
+            : ""
+    );
+    add_assoc_string(
+        &llm_cache,
+        "disk_alert_mcp_method",
+        compute->inference_llm_cache_disk_alert_mcp_method != NULL
+            ? compute->inference_llm_cache_disk_alert_mcp_method
+            : ""
+    );
+    add_assoc_zval(return_value, "llm_cache", &llm_cache);
 
     if (selected_gpu) {
         zval gpu;

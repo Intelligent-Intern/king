@@ -1243,6 +1243,19 @@ namespace {
     function king_inference_runtime_model_load(mixed $config = null): \King\Inference\Model {}
 
     /**
+     * Return the effective LLM cache admission status for King inference.
+     * The cache is active only for memory-enabled native graph inference. When
+     * active, King checks the configured cache path and minimum free disk
+     * floor before admitting graph memory cache work. Options may override
+     * `with_memory` or `with-memory` for a preflight status check.
+     * @param mixed $config null, King\Config, or native King\Config resource
+     * @param array{with_memory?:bool,with-memory?:bool}|null $options
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_llm_cache_status(mixed $config = null, ?array $options = null): array {}
+
+    /**
      * Register a local quantized GGUF model artifact for King inference.
      * Artifacts are materialized filesystem paths supplied through `artifact`,
      * `artifact.path`, or `artifact_path`; the selected path must be a
@@ -2717,6 +2730,13 @@ namespace King {
          * @param mixed $config null, King\Config, or native King\Config resource
          */
         public static function runtimeModelLoad(mixed $config = null): Inference\Model {}
+
+        /**
+         * @param mixed $config null, King\Config, or native King\Config resource
+         * @param array{with_memory?:bool,with-memory?:bool}|null $options
+         * @return array<string,mixed>
+         */
+        public static function llmCacheStatus(mixed $config = null, ?array $options = null): array {}
 
         /** @param array<string,mixed> $config */
         public static function loadModel(array $config): Inference\Model {}

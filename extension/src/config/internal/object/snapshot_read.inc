@@ -306,6 +306,103 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.llm_cache_enable",
+            sizeof("inference.llm_cache_enable") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_llm_cache_enable);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_path",
+            sizeof("inference.llm_cache_path") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_llm_cache_path != NULL
+                ? cfg->compute_ai.inference_llm_cache_path
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_min_free_mb",
+            sizeof("inference.llm_cache_min_free_mb") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_llm_cache_min_free_mb);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_fail_closed",
+            sizeof("inference.llm_cache_fail_closed") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_llm_cache_fail_closed);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_disk_alert_webhook",
+            sizeof("inference.llm_cache_disk_alert_webhook") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_llm_cache_disk_alert_webhook != NULL
+                ? cfg->compute_ai.inference_llm_cache_disk_alert_webhook
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_disk_alert_mcp_service",
+            sizeof("inference.llm_cache_disk_alert_mcp_service") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service != NULL
+                ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.llm_cache_disk_alert_mcp_method",
+            sizeof("inference.llm_cache_disk_alert_mcp_method") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method != NULL
+                ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "mcp.enable_request_caching",
             sizeof("mcp.enable_request_caching") - 1
         )

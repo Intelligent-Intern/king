@@ -1,5 +1,6 @@
     PHP_FE(king_inference_runtime_model_config, arginfo_king_inference_runtime_model_config)
     PHP_FE(king_inference_runtime_model_load, arginfo_king_inference_runtime_model_load)
+    PHP_FE(king_inference_llm_cache_status, arginfo_king_inference_llm_cache_status)
     PHP_FE(king_inference_model_load, arginfo_king_inference_model_load)
     PHP_FE(king_inference_model_info, arginfo_king_inference_model_info)
     PHP_FE(king_inference_tokenize, arginfo_king_inference_tokenize)

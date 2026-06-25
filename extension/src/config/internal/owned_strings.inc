@@ -145,6 +145,10 @@ static void king_config_free_compute_ai_strings(kg_high_perf_compute_ai_config_t
     pefree(compute_ai->inference_gpu_model_name, 1);
     pefree(compute_ai->inference_gpu_model_artifact, 1);
     pefree(compute_ai->inference_gpu_thermal_sensor_path, 1);
+    pefree(compute_ai->inference_llm_cache_path, 1);
+    pefree(compute_ai->inference_llm_cache_disk_alert_webhook, 1);
+    pefree(compute_ai->inference_llm_cache_disk_alert_mcp_service, 1);
+    pefree(compute_ai->inference_llm_cache_disk_alert_mcp_method, 1);
     pefree(compute_ai->gpu_default_backend, 1);
     pefree(compute_ai->worker_gpu_affinity_map, 1);
 }
@@ -256,6 +260,10 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->compute_ai.inference_gpu_model_name = king_config_clone_persistent_string(cfg->compute_ai.inference_gpu_model_name);
     cfg->compute_ai.inference_gpu_model_artifact = king_config_clone_persistent_string(cfg->compute_ai.inference_gpu_model_artifact);
     cfg->compute_ai.inference_gpu_thermal_sensor_path = king_config_clone_persistent_string(cfg->compute_ai.inference_gpu_thermal_sensor_path);
+    cfg->compute_ai.inference_llm_cache_path = king_config_clone_persistent_string(cfg->compute_ai.inference_llm_cache_path);
+    cfg->compute_ai.inference_llm_cache_disk_alert_webhook = king_config_clone_persistent_string(cfg->compute_ai.inference_llm_cache_disk_alert_webhook);
+    cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service = king_config_clone_persistent_string(cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service);
+    cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method = king_config_clone_persistent_string(cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method);
     cfg->compute_ai.gpu_default_backend = king_config_clone_persistent_string(cfg->compute_ai.gpu_default_backend);
     cfg->compute_ai.worker_gpu_affinity_map = king_config_clone_persistent_string(cfg->compute_ai.worker_gpu_affinity_map);
     cfg->owns_compute_ai_strings = 1;

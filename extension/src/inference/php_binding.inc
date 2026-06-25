@@ -18,14 +18,24 @@
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <strings.h>
 #include <sys/mman.h>
 #include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+static zend_result king_inference_llm_cache_prepare_stream(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream,
+    zval *graph_options,
+    bool with_memory,
+    const char *function_name);
 
 #include "helpers.inc"
 #include "openai_messages.inc"
@@ -48,6 +58,7 @@
 #include "backend_registry.inc"
 #include "model_config.inc"
 #include "runtime_profile.inc"
+#include "llm_cache_policy.inc"
 #include "openai_usage.inc"
 #include "stream_events.inc"
 #include "object_handlers.inc"

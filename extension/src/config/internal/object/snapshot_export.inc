@@ -102,6 +102,45 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         "inference.gpu_allow_unmonitored",
         cfg->compute_ai.inference_gpu_allow_unmonitored
     );
+    add_assoc_bool(target, "inference.llm_cache_enable", cfg->compute_ai.inference_llm_cache_enable);
+    add_assoc_string(
+        target,
+        "inference.llm_cache_path",
+        cfg->compute_ai.inference_llm_cache_path != NULL
+            ? cfg->compute_ai.inference_llm_cache_path
+            : ""
+    );
+    add_assoc_long(
+        target,
+        "inference.llm_cache_min_free_mb",
+        cfg->compute_ai.inference_llm_cache_min_free_mb
+    );
+    add_assoc_bool(
+        target,
+        "inference.llm_cache_fail_closed",
+        cfg->compute_ai.inference_llm_cache_fail_closed
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_webhook",
+        cfg->compute_ai.inference_llm_cache_disk_alert_webhook != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_webhook
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_mcp_service",
+        cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_mcp_method",
+        cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method
+            : ""
+    );
     add_assoc_bool(target, "mcp.enable_request_caching", cfg->mcp.mcp_enable_request_caching);
     add_assoc_long(
         target,

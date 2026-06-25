@@ -312,6 +312,16 @@ static zend_result king_inference_king_native_prepare_events(
     stream->native_event_index = 0;
     ZVAL_UNDEF(&state);
 
+    if (king_inference_llm_cache_prepare_stream(
+            model,
+            stream,
+            graph_options,
+            with_memory,
+            "King native graph stream"
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
     if (graphs != NULL) {
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(graphs), entry) {
             if (emitted >= max_tokens) {
