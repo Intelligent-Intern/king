@@ -1,6 +1,7 @@
 /*
- * Config registration aggregation. Core bootstrap includes this module
- * boundary instead of config-internal registration leaves.
+ * Config registration aggregation. The config runtime translation unit includes
+ * this module boundary instead of reaching into config-internal registration
+ * leaves.
  */
 
 #include "internal/registration.inc"

@@ -1,6 +1,7 @@
 /*
- * Client PHP binding aggregation. Core bootstrap includes this module
- * boundary instead of session/client/websocket object-handler leaves.
+ * Client PHP binding aggregation. The client runtime translation unit includes
+ * this module boundary instead of session/client/websocket object-handler
+ * leaves directly.
  */
 
 #include "session/object_handlers.inc"

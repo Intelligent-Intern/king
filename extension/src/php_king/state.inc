@@ -1,7 +1,6 @@
 /*
  * Shared php_king module state. Declares core exception class pointers,
- * includes state storage for modules that still compile through the core
- * bootstrap, and owns the shared error buffer reused across bootstrap slices.
+ * and owns the shared error buffer reused across bootstrap slices.
  */
 
 zend_class_entry *king_ce_exception            = NULL;
