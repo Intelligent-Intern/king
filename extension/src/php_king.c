@@ -33,7 +33,6 @@
 
 #include "php_king/state.inc"
 #include "php_king/arginfo.h"
-#include "php_king/externals.h"
 #include "php_king/function_table.h"
 #include "php_king/init.h"
 #include "php_king/method_tables.h"
