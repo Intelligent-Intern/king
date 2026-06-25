@@ -6,8 +6,9 @@ RTP is available procedurally through `king_rtp_*`. The native OO surface is
 ## Internal Layout
 
 The native RTP socket and object contracts live in `extension/include/rtp.h`.
-Runtime code lives under `extension/src/media/`; `extension/src/php_king/rtp.inc`
-is the PHP userland binding and extension bootstrap bridge.
+Runtime code lives under `extension/src/media/`; `extension/src/media/php_binding.inc`
+is the PHP userland binding. `extension/src/php_king/rtp.inc` is only the
+extension bootstrap bridge.
 
 ## Function, Example 1: Bind Socket and Read ICE/DTLS Data
 

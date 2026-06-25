@@ -9,8 +9,8 @@ as SaxonC properties and can override them per transformation run.
 
 The native XSLT runtime and object contracts live in
 `extension/include/xslt/xslt.h`. Runtime code lives under `extension/src/xslt/`;
-`extension/src/php_king/xslt.inc` is the PHP userland binding and extension
-bootstrap bridge.
+`extension/src/xslt/php_binding.inc` is the PHP userland binding.
+`extension/src/php_king/xslt.inc` is only the extension bootstrap bridge.
 
 ## Function, Example 1: Check Engine
 

@@ -1,0 +1,201 @@
+/*
+ * King\XSLT\Processor PHP object surface. This object stores default SaxonC
+ * options and delegates transformations to the same native XSLT runtime used
+ * by king_xslt_*.
+ */
+
+#include "xslt/xslt.h"
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_XSLT_Processor___construct, 0, 0, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_getOptions, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_engineStatus, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_transformFile, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_transformToFile, 0, 3, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, output_path, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+static void king_xslt_processor_merge_nested_properties(
+    zval *merged,
+    zval *base_options,
+    zval *call_options
+)
+{
+    zval *base_properties;
+    zval *call_properties;
+    zval properties;
+
+    base_properties = zend_hash_str_find(
+        Z_ARRVAL_P(base_options),
+        "properties",
+        sizeof("properties") - 1
+    );
+    call_properties = zend_hash_str_find(
+        Z_ARRVAL_P(call_options),
+        "properties",
+        sizeof("properties") - 1
+    );
+
+    if (base_properties == NULL
+        || call_properties == NULL
+        || Z_TYPE_P(base_properties) != IS_ARRAY
+        || Z_TYPE_P(call_properties) != IS_ARRAY) {
+        return;
+    }
+
+    array_init(&properties);
+    zend_hash_copy(Z_ARRVAL(properties), Z_ARRVAL_P(base_properties), zval_add_ref);
+    zend_hash_merge(Z_ARRVAL(properties), Z_ARRVAL_P(call_properties), zval_add_ref, 1);
+    zend_hash_str_update(Z_ARRVAL_P(merged), "properties", sizeof("properties") - 1, &properties);
+}
+
+static zval *king_xslt_processor_effective_options(
+    king_xslt_processor_object *intern,
+    zval *options,
+    zval *merged
+)
+{
+    if (Z_ISUNDEF(intern->options)
+        || Z_TYPE(intern->options) != IS_ARRAY
+        || zend_hash_num_elements(Z_ARRVAL(intern->options)) == 0) {
+        return options;
+    }
+
+    if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
+        return &intern->options;
+    }
+
+    array_init(merged);
+    zend_hash_copy(Z_ARRVAL_P(merged), Z_ARRVAL(intern->options), zval_add_ref);
+    zend_hash_merge(Z_ARRVAL_P(merged), Z_ARRVAL_P(options), zval_add_ref, 1);
+    king_xslt_processor_merge_nested_properties(merged, &intern->options, options);
+
+    return merged;
+}
+
+PHP_METHOD(King_XSLT_Processor, __construct)
+{
+    zval *options = NULL;
+    king_xslt_processor_object *intern;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
+        return;
+    }
+
+    intern = php_king_xslt_processor_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    zval_ptr_dtor(&intern->options);
+    ZVAL_COPY(&intern->options, options);
+}
+
+PHP_METHOD(King_XSLT_Processor, getOptions)
+{
+    king_xslt_processor_object *intern;
+
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    intern = php_king_xslt_processor_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    RETURN_ZVAL(&intern->options, 1, 0);
+}
+
+PHP_METHOD(King_XSLT_Processor, engineStatus)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    king_xslt_engine_status_array(return_value);
+}
+
+PHP_METHOD(King_XSLT_Processor, transformFile)
+{
+    zend_string *source_path;
+    zend_string *stylesheet_path;
+    zval *options = NULL;
+    zval merged;
+    zval *effective_options;
+    king_xslt_processor_object *intern;
+
+    ZVAL_UNDEF(&merged);
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_STR(source_path)
+        Z_PARAM_STR(stylesheet_path)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    intern = php_king_xslt_processor_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    effective_options = king_xslt_processor_effective_options(intern, options, &merged);
+
+    if (king_xslt_transform_file_result(source_path, stylesheet_path, effective_options, return_value) != SUCCESS) {
+        if (effective_options == &merged) {
+            zval_ptr_dtor(&merged);
+        }
+        RETURN_THROWS();
+    }
+
+    if (effective_options == &merged) {
+        zval_ptr_dtor(&merged);
+    }
+}
+
+PHP_METHOD(King_XSLT_Processor, transformToFile)
+{
+    zend_string *source_path;
+    zend_string *stylesheet_path;
+    zend_string *output_path;
+    zval *options = NULL;
+    zval merged;
+    zval *effective_options;
+    king_xslt_processor_object *intern;
+
+    ZVAL_UNDEF(&merged);
+
+    ZEND_PARSE_PARAMETERS_START(3, 4)
+        Z_PARAM_STR(source_path)
+        Z_PARAM_STR(stylesheet_path)
+        Z_PARAM_STR(output_path)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    intern = php_king_xslt_processor_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    effective_options = king_xslt_processor_effective_options(intern, options, &merged);
+
+    if (king_xslt_transform_to_file_result(source_path, stylesheet_path, output_path, effective_options, return_value) != SUCCESS) {
+        if (effective_options == &merged) {
+            zval_ptr_dtor(&merged);
+        }
+        RETURN_THROWS();
+    }
+
+    if (effective_options == &merged) {
+        zval_ptr_dtor(&merged);
+    }
+}
+
+const zend_function_entry king_xslt_processor_class_methods[] = {
+    PHP_ME(King_XSLT_Processor, __construct, arginfo_class_King_XSLT_Processor___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
+    PHP_ME(King_XSLT_Processor, getOptions, arginfo_class_King_XSLT_Processor_getOptions, ZEND_ACC_PUBLIC)
+    PHP_ME(King_XSLT_Processor, engineStatus, arginfo_class_King_XSLT_Processor_engineStatus, ZEND_ACC_PUBLIC)
+    PHP_ME(King_XSLT_Processor, transformFile, arginfo_class_King_XSLT_Processor_transformFile, ZEND_ACC_PUBLIC)
+    PHP_ME(King_XSLT_Processor, transformToFile, arginfo_class_King_XSLT_Processor_transformToFile, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
