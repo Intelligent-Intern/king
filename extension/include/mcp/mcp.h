@@ -4,10 +4,12 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Native MCP runtime primitives shared by the PHP resource/object wrapper
- * and the subsystem-local transport helpers. The runtime keeps one normalized
- * remote peer target, one reusable socket stream, and the local persisted
- * transfer-state fallback used by upload/download acknowledgements.
+ * Native MCP runtime contracts shared by the public JSON-RPC/SSE/stdio server
+ * wrapper and the King-internal peer client. The public server surface is
+ * represented by King\MCPServer and king_mcp_server_*; the internal peer
+ * surface keeps one normalized remote target, one reusable socket stream, and
+ * the local persisted transfer-state fallback used by request/upload/download
+ * operations.
  * =========================================================================
  */
 #ifndef KING_MCP_H
