@@ -40,8 +40,14 @@ typedef struct _king_pipeline_exec_options_c {
 /* Runs one pipeline immediately on the configured backend. */
 PHP_FUNCTION(king_pipeline_orchestrator_run);
 
+/* Starts one pipeline immediately and returns an awaitable handle. */
+PHP_FUNCTION(king_pipeline_orchestrator_run_async);
+
 /* Queues one pipeline run for the file-worker backend. */
 PHP_FUNCTION(king_pipeline_orchestrator_dispatch);
+
+/* Queues one pipeline run and returns an awaitable handle for completion. */
+PHP_FUNCTION(king_pipeline_orchestrator_dispatch_async);
 
 /* Registers or replaces one persisted tool configuration. */
 PHP_FUNCTION(king_pipeline_orchestrator_register_tool);

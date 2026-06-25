@@ -20,6 +20,8 @@
 /* CDN cache registry state (defined in prelude/object_store_runtime.inc via types.inc) */
 extern HashTable king_cdn_cache_registry;
 extern bool king_cdn_cache_registry_initialized;
+int king_cdn_cache_registry_minit(void);
+void king_cdn_cache_registry_mshutdown(void);
 void king_cdn_sweep_expired(void);
 
 typedef enum _king_object_store_result_code {

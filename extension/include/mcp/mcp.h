@@ -66,6 +66,22 @@ php_king_mcp_server_obj_from_zend(zend_object *obj)
         ((char*)obj - XtOffsetOf(king_mcp_server_object, std));
 }
 
+/* --- PHP Function Prototypes --- */
+
+PHP_FUNCTION(king_mcp_get_error);
+PHP_FUNCTION(king_mcp_connect);
+PHP_FUNCTION(king_mcp_request);
+PHP_FUNCTION(king_mcp_request_async);
+PHP_FUNCTION(king_mcp_request_iibin);
+PHP_FUNCTION(king_mcp_request_iibin_async);
+PHP_FUNCTION(king_mcp_server_create);
+PHP_FUNCTION(king_mcp_server_handle_jsonrpc);
+PHP_FUNCTION(king_mcp_server_handle_http);
+PHP_FUNCTION(king_mcp_server_stdio);
+PHP_FUNCTION(king_mcp_upload_from_stream);
+PHP_FUNCTION(king_mcp_download_to_stream);
+PHP_FUNCTION(king_mcp_close);
+
 /* Connection State Lifecycle */
 king_mcp_state *king_mcp_state_create(const char *host, size_t host_len, zend_long port, zval *config);
 void king_mcp_state_close(king_mcp_state *state);

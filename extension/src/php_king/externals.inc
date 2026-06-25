@@ -1,14 +1,11 @@
 /*
  * External declarations shared across php_king bootstrap slices. Core entry
- * points stay here; module-owned lifecycle hooks and PHP functions are pulled
- * through module-local externals fragments.
+ * points and module-owned lifecycle hooks are pulled through include-owned
+ * subsystem headers.
  */
 
-PHP_FUNCTION(king_version);
-PHP_FUNCTION(king_health);
-PHP_FUNCTION(king_get_last_error);
-
-PHP_FUNCTION(king_new_config);
+#include "php_king/public_functions.h"
+#include "config/config.h"
 
 #include "../awaitable/externals.inc"
 #include "../client/externals.inc"

@@ -1,15 +1,1 @@
-PHP_FUNCTION(king_inference_model_load);
-PHP_FUNCTION(king_inference_model_info);
-PHP_FUNCTION(king_inference_tokenize);
-PHP_FUNCTION(king_inference_tensor_view);
-PHP_FUNCTION(king_inference_tensor_index);
-PHP_FUNCTION(king_inference_tensor_dequantize);
-PHP_FUNCTION(king_inference_tensor_matmul);
-PHP_FUNCTION(king_inference_graph_run);
-PHP_FUNCTION(king_inference_kv_cache_plan);
-PHP_FUNCTION(king_inference_stream);
-PHP_FUNCTION(king_inference_openai_chat_http_response);
-PHP_FUNCTION(king_inference_openai_http_response);
-PHP_FUNCTION(king_inference_next);
-PHP_FUNCTION(king_inference_next_async);
-PHP_FUNCTION(king_inference_cancel);
+#include "inference/index.h"

@@ -37,6 +37,9 @@ typedef struct _king_semantic_dns_runtime_state {
 extern king_semantic_dns_runtime_state king_semantic_dns_runtime;
 extern bool king_semantic_dns_registry_initialized;
 
+int king_semantic_dns_registry_minit(void);
+void king_semantic_dns_registry_mshutdown(void);
+
 /* Persisted state snapshot helpers */
 int king_semantic_dns_state_load(void);
 int king_semantic_dns_state_save(void);

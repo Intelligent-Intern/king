@@ -80,6 +80,24 @@ typedef struct _king_inference_stream_object {
     zend_object std;
 } king_inference_stream_object;
 
+/* --- PHP Function Prototypes --- */
+
+PHP_FUNCTION(king_inference_model_load);
+PHP_FUNCTION(king_inference_model_info);
+PHP_FUNCTION(king_inference_tokenize);
+PHP_FUNCTION(king_inference_tensor_view);
+PHP_FUNCTION(king_inference_tensor_index);
+PHP_FUNCTION(king_inference_tensor_dequantize);
+PHP_FUNCTION(king_inference_tensor_matmul);
+PHP_FUNCTION(king_inference_graph_run);
+PHP_FUNCTION(king_inference_kv_cache_plan);
+PHP_FUNCTION(king_inference_stream);
+PHP_FUNCTION(king_inference_openai_chat_http_response);
+PHP_FUNCTION(king_inference_openai_http_response);
+PHP_FUNCTION(king_inference_next);
+PHP_FUNCTION(king_inference_next_async);
+PHP_FUNCTION(king_inference_cancel);
+
 static inline king_inference_model_object *
 php_king_inference_model_obj_from_zend(zend_object *obj)
 {

@@ -1,13 +1,1 @@
-PHP_FUNCTION(king_mcp_get_error);
-PHP_FUNCTION(king_mcp_connect);
-PHP_FUNCTION(king_mcp_request);
-PHP_FUNCTION(king_mcp_request_async);
-PHP_FUNCTION(king_mcp_request_iibin);
-PHP_FUNCTION(king_mcp_request_iibin_async);
-PHP_FUNCTION(king_mcp_server_create);
-PHP_FUNCTION(king_mcp_server_handle_jsonrpc);
-PHP_FUNCTION(king_mcp_server_handle_http);
-PHP_FUNCTION(king_mcp_server_stdio);
-PHP_FUNCTION(king_mcp_upload_from_stream);
-PHP_FUNCTION(king_mcp_download_to_stream);
-PHP_FUNCTION(king_mcp_close);
+#include "mcp/index.h"
