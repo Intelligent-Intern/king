@@ -1,4 +1,4 @@
-#include "class_methods.inc"
+#include "object_store/class_method_entries.h"
 
 void king_object_store_register_classes(void)
 {

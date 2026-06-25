@@ -1,4 +1,4 @@
-#include "class_methods.inc"
+#include "autoscaling/class_method_entries.h"
 
 void king_autoscaling_register_classes(void)
 {

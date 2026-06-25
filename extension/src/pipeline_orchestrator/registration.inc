@@ -1,4 +1,4 @@
-#include "class_methods.inc"
+#include "pipeline_orchestrator/class_method_entries.h"
 
 void king_pipeline_orchestrator_register_classes(void)
 {
