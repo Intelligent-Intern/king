@@ -1,3 +1,5 @@
+#include "iibin/arginfo/index.h"
+
 const zend_function_entry king_iibin_class_methods[] = {
     ZEND_ME_MAPPING(defineEnum, king_proto_define_enum, arginfo_class_King_IIBIN_defineEnum, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(defineSchema, king_proto_define_schema, arginfo_class_King_IIBIN_defineSchema, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

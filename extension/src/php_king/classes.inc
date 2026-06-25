@@ -3,7 +3,7 @@
  * flag-aware wrappers used while registering core classes and facades.
  */
 
-static zend_class_entry *king_register_class_with_flags(
+zend_class_entry *king_register_class_with_flags(
     const char *name,
     zend_class_entry *parent,
     const zend_function_entry *functions,

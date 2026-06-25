@@ -7,3 +7,4 @@
 #include "session/object_handlers.inc"
 #include "object_handlers.inc"
 #include "websocket/object_handlers.inc"
+#include "resource_destructors.inc"

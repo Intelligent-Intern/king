@@ -9,6 +9,7 @@
 #include "constants.h"
 #include "globals.h"
 #include "public_functions.h"
+#include "registration.h"
 #include "resource_ids.h"
 #include "runtime_contracts.h"
 #include "runtime_helpers.h"
