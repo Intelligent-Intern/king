@@ -71,70 +71,12 @@
 #include "mcp/index.h"
 #include "php_king/class_entries.h"
 #include "php_king/method_tables.h"
+#include "php_king/public_functions.h"
 #include "php_king/registration.h"
 #include "php_king/resource_ids.h"
 #include "php_king/resources.h"
+#include "php_king/runtime_contracts.h"
 #include "php_king/runtime_helpers.h"
 #include "xslt/index.h"
-
-void king_http1_pool_request_shutdown(void);
-void king_http1_pool_module_shutdown(void);
-void king_http2_pool_request_shutdown(void);
-void king_http2_pool_module_shutdown(void);
-void king_http1_request_context_free(king_http1_request_context *context);
-zend_result king_http1_request_context_build_payload(
-    king_http1_request_context *context,
-    zval *payload,
-    const char *function_name
-);
-zend_result king_http1_request_context_read(
-    king_http1_request_context *context,
-    zend_long read_offset,
-    size_t length,
-    zend_string **chunk_out,
-    const char *function_name
-);
-zend_result king_http1_request_context_get_body(
-    king_http1_request_context *context,
-    zend_string **body_out,
-    const char *function_name
-);
-zend_result king_http1_request_context_append_early_hint(
-    king_http1_request_context *context,
-    zval *hint,
-    const char *function_name
-);
-zend_bool king_telemetry_build_trace_context_snapshot(zval *destination);
-zend_result king_http1_request_context_get_pending_early_hints(
-    king_http1_request_context *context,
-    zval *return_value
-);
-bool king_http1_request_context_is_end_of_body(
-    king_http1_request_context *context,
-    zend_long read_offset
-);
-zend_result king_server_cancel_invoke_if_registered(
-    king_client_session_t *session,
-    zend_long stream_id
-);
-
-/* -----------------------------------------------------------------------------
- * PHP_FUNCTION Prototypes: active public entry points
- */
-PHP_FUNCTION(king_connect);
-PHP_FUNCTION(king_close);
-PHP_FUNCTION(king_send_request);
-PHP_FUNCTION(king_receive_response);
-PHP_FUNCTION(king_poll);
-PHP_FUNCTION(king_cancel_stream);
-PHP_FUNCTION(king_export_session_ticket);
-PHP_FUNCTION(king_import_session_ticket);
-PHP_FUNCTION(king_set_ca_file);
-PHP_FUNCTION(king_set_client_cert);
-PHP_FUNCTION(king_get_last_error);
-PHP_FUNCTION(king_get_stats);
-PHP_FUNCTION(king_version);
-PHP_FUNCTION(king_health);
-PHP_FUNCTION(king_db_ingest);
 
 #endif /* PHP_KING_H */
