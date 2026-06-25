@@ -60,13 +60,16 @@ Router options include bounded drain controls (`read_timeout_ms`,
 `max_events`, `max_idle_events`), generation input limits
 (`max_chat_messages`, `max_response_input_items`, `max_completion_prompts`),
 and embedding limits (`max_embedding_inputs`, `max_embedding_tokens`,
-`max_embedding_dimensions`). The default generation input limits are
-`max_chat_messages=256`, `max_response_input_items=256`, and
-`max_completion_prompts=128`; set them lower for public or tenant-shared routes
-where one request must not fan out into excessive prompt construction or backend
-generation work. The default embedding limits are `max_embedding_inputs=2048`,
-`max_embedding_tokens=8192`, and `max_embedding_dimensions=8192`. Limit option
-values must be positive integers.
+`max_embedding_dimensions`). The default drain controls are
+`read_timeout_ms=250`, `max_events=4096`, and `max_idle_events=240`. The
+default generation input limits are `max_chat_messages=256`,
+`max_response_input_items=256`, and `max_completion_prompts=128`; set them lower
+for public or tenant-shared routes where one request must not fan out into
+excessive prompt construction or backend generation work. The default embedding
+limits are `max_embedding_inputs=2048`, `max_embedding_tokens=8192`, and
+`max_embedding_dimensions=8192`. Drain control and limit option values must be
+positive integers; invalid router options return a server error instead of being
+silently replaced by defaults.
 
 Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the

@@ -86,6 +86,7 @@ static zend_result king_inference_completion_run_prompt(
     zval *payload,
     zval *prompt,
     zval *options,
+    const king_inference_openai_drain_controls *drain_controls,
     zend_long choice_index,
     zval *choice_out)
 {
@@ -111,7 +112,7 @@ static zend_result king_inference_completion_run_prompt(
     }
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ(stream_value));
-    result = king_inference_openai_drain_stream(stream, &stream_value, options, &content, NULL, &finish_reason);
+    result = king_inference_openai_drain_stream(stream, &stream_value, drain_controls, &content, NULL, &finish_reason);
     if (content.s == NULL) {
         smart_str_appends(&content, "");
     }
@@ -135,16 +136,14 @@ static zend_result king_inference_completion_stream_response(
     zval *model,
     zval *payload,
     zval *prompt,
-    zval *options)
+    zval *options,
+    const king_inference_openai_drain_controls *drain_controls)
 {
     zval chat_payload;
     zval stream_value;
     king_inference_stream_object *stream;
     zend_string *completion_id;
     zend_string *model_name;
-    zend_long timeout_ms = king_inference_openai_option_long(options, "read_timeout_ms", 250);
-    zend_long max_events = king_inference_openai_option_long(options, "max_events", 4096);
-    zend_long max_idle_events = king_inference_openai_option_long(options, "max_idle_events", 240);
     zend_long events = 0;
     zend_long idle_events = 0;
     bool finished = false;
@@ -172,12 +171,12 @@ static zend_result king_inference_completion_stream_response(
     model_name = king_inference_stream_openai_model_name(stream);
     finish_reason = zend_string_init("stop", sizeof("stop") - 1, 0);
 
-    while (events < max_events && idle_events < max_idle_events) {
+    while (events < drain_controls->max_events && idle_events < drain_controls->max_idle_events) {
         zval chunk;
         zval *delta_text;
 
         ZVAL_UNDEF(&chunk);
-        if (king_inference_stream_next_event(stream, timeout_ms, &chunk) != SUCCESS) {
+        if (king_inference_stream_next_event(stream, drain_controls->read_timeout_ms, &chunk) != SUCCESS) {
             if (!Z_ISUNDEF(chunk)) {
                 zval_ptr_dtor(&chunk);
             }
@@ -338,6 +337,7 @@ static zend_result king_inference_openai_completions_payload_response(
     zend_string *json = NULL;
     zend_result result;
     zend_long max_completion_prompts = 0;
+    king_inference_openai_drain_controls drain_controls;
     bool stream_requested;
     const char *stop_error = NULL;
     bool has_error_response = false;
@@ -376,6 +376,14 @@ static zend_result king_inference_openai_completions_payload_response(
             return_value,
             500,
             limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
+            "server_error"
+        );
+    }
+    if (!king_inference_openai_drain_controls_from_options(options, &drain_controls, &limit_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            limit_error != NULL ? limit_error : "King OpenAI router drain controls are invalid.",
             "server_error"
         );
     }
@@ -449,7 +457,7 @@ static zend_result king_inference_openai_completions_payload_response(
         );
     }
     if (stream_requested) {
-        result = king_inference_completion_stream_response(return_value, model, payload, prompt, options);
+        result = king_inference_completion_stream_response(return_value, model, payload, prompt, options, &drain_controls);
         if (result != SUCCESS && !EG(exception)) {
             return king_inference_openai_error_response(
                 return_value,
@@ -464,7 +472,7 @@ static zend_result king_inference_openai_completions_payload_response(
     array_init(&choices);
     if (Z_TYPE_P(prompt) == IS_STRING) {
         zval choice;
-        result = king_inference_completion_run_prompt(model, payload, prompt, options, 0, &choice);
+        result = king_inference_completion_run_prompt(model, payload, prompt, options, &drain_controls, 0, &choice);
         if (result != SUCCESS) {
             zval_ptr_dtor(&choices);
             if (EG(exception)) {
@@ -512,7 +520,7 @@ static zend_result king_inference_openai_completions_payload_response(
                     "invalid_request_error"
                 );
             }
-            result = king_inference_completion_run_prompt(model, payload, entry, options, index++, &choice);
+            result = king_inference_completion_run_prompt(model, payload, entry, options, &drain_controls, index++, &choice);
             if (result != SUCCESS) {
                 zval_ptr_dtor(&choices);
                 if (EG(exception)) {

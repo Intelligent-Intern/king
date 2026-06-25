@@ -1323,7 +1323,9 @@ namespace {
      * hints, or logprob output are rejected by the local generation route
      * until those features have a real King execution path. Options include
      * `read_timeout_ms`, `max_events`, and `max_idle_events` for the bounded
-     * drain window plus `max_chat_messages`, defaulting to `256`.
+     * drain window, defaulting to `250`, `4096`, and `240`, plus
+     * `max_chat_messages`, defaulting to `256`. Router drain controls and
+     * limits must be positive integers.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @return array{status:int,headers:array<string,string>,body:string}
@@ -1355,7 +1357,9 @@ namespace {
      * defaulting to `256`. Responses input item lists are bounded by
      * `max_response_input_items`, defaulting to `256`.
      * Legacy Completions prompt arrays are bounded by `max_completion_prompts`
-     * in `$options`, defaulting to `128`.
+     * in `$options`, defaulting to `128`. `read_timeout_ms`, `max_events`, and
+     * `max_idle_events` default to `250`, `4096`, and `240` and must be
+     * positive integers like the router limits.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options

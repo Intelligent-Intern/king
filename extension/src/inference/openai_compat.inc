@@ -169,12 +169,11 @@ static zend_result king_inference_openai_validate_payload(
     return SUCCESS;
 }
 
-static zend_long king_inference_openai_option_long(zval *options, const char *key, zend_long fallback)
-{
-    zend_long value = king_inference_long_from_array(options, key, fallback);
-
-    return value > 0 ? value : fallback;
-}
+typedef struct _king_inference_openai_drain_controls {
+    zend_long read_timeout_ms;
+    zend_long max_events;
+    zend_long max_idle_events;
+} king_inference_openai_drain_controls;
 
 static bool king_inference_openai_positive_router_limit(
     zval *options,
@@ -197,13 +196,46 @@ static bool king_inference_openai_positive_router_limit(
     }
     if (Z_TYPE_P(field) != IS_LONG || Z_LVAL_P(field) <= 0) {
         if (message != NULL) {
-            *message = "King OpenAI router limit options must be positive integers.";
+            *message = "King OpenAI router limit and drain control options must be positive integers.";
         }
         return false;
     }
 
     *limit_out = Z_LVAL_P(field);
     return true;
+}
+
+static bool king_inference_openai_drain_controls_from_options(
+    zval *options,
+    king_inference_openai_drain_controls *controls,
+    const char **message)
+{
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (controls == NULL) {
+        return false;
+    }
+
+    return king_inference_openai_positive_router_limit(
+        options,
+        "read_timeout_ms",
+        250,
+        &controls->read_timeout_ms,
+        message
+    ) && king_inference_openai_positive_router_limit(
+        options,
+        "max_events",
+        4096,
+        &controls->max_events,
+        message
+    ) && king_inference_openai_positive_router_limit(
+        options,
+        "max_idle_events",
+        240,
+        &controls->max_idle_events,
+        message
+    );
 }
 
 #include "openai_backend.inc"
@@ -344,14 +376,11 @@ static zval *king_inference_openai_chunk_delta_content(zval *chunk)
 static zend_result king_inference_openai_drain_stream(
     king_inference_stream_object *stream,
     zval *stream_value,
-    zval *options,
+    const king_inference_openai_drain_controls *controls,
     smart_str *content,
     smart_str *sse_body,
     const char **finish_reason_out)
 {
-    zend_long timeout_ms = king_inference_openai_option_long(options, "read_timeout_ms", 250);
-    zend_long max_events = king_inference_openai_option_long(options, "max_events", 4096);
-    zend_long max_idle_events = king_inference_openai_option_long(options, "max_idle_events", 240);
     zend_long events = 0;
     zend_long idle_events = 0;
 
@@ -361,11 +390,11 @@ static zend_result king_inference_openai_drain_stream(
         *finish_reason_out = "stop";
     }
 
-    while (events < max_events && idle_events < max_idle_events) {
+    while (events < controls->max_events && idle_events < controls->max_idle_events) {
         zval event;
 
         ZVAL_UNDEF(&event);
-        if (king_inference_stream_next_event(stream, timeout_ms, &event) != SUCCESS) {
+        if (king_inference_stream_next_event(stream, controls->read_timeout_ms, &event) != SUCCESS) {
             if (!Z_ISUNDEF(event)) {
                 zval_ptr_dtor(&event);
             }
@@ -478,6 +507,7 @@ static zend_result king_inference_openai_payload_response(
     zend_string *json = NULL;
     zend_result result;
     zend_long max_chat_messages = 0;
+    king_inference_openai_drain_controls drain_controls;
     bool stream_requested;
     bool has_error_response = false;
     const char *finish_reason = "stop";
@@ -495,6 +525,14 @@ static zend_result king_inference_openai_payload_response(
             return_value,
             500,
             limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
+            "server_error"
+        );
+    }
+    if (!king_inference_openai_drain_controls_from_options(options, &drain_controls, &limit_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            limit_error != NULL ? limit_error : "King OpenAI router drain controls are invalid.",
             "server_error"
         );
     }
@@ -551,7 +589,7 @@ static zend_result king_inference_openai_payload_response(
         result = king_inference_openai_drain_stream(
             stream,
             &stream_value,
-            options,
+            &drain_controls,
             include_usage ? &content : NULL,
             &sse,
             &finish_reason
@@ -586,7 +624,7 @@ static zend_result king_inference_openai_payload_response(
 
     {
         smart_str content = {0};
-        result = king_inference_openai_drain_stream(stream, &stream_value, options, &content, NULL, &finish_reason);
+        result = king_inference_openai_drain_stream(stream, &stream_value, &drain_controls, &content, NULL, &finish_reason);
         smart_str_0(&content);
         if (result == SUCCESS) {
             king_inference_openai_completion_payload(stream, &content, finish_reason, &response_payload);

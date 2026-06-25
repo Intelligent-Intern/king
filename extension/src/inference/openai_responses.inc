@@ -198,11 +198,8 @@ static zend_result king_inference_responses_stream_response(
     king_inference_stream_object *stream,
     zend_string *response_id,
     zend_string *message_id,
-    zval *options)
+    const king_inference_openai_drain_controls *drain_controls)
 {
-    zend_long timeout_ms = king_inference_openai_option_long(options, "read_timeout_ms", 250);
-    zend_long max_events = king_inference_openai_option_long(options, "max_events", 4096);
-    zend_long max_idle_events = king_inference_openai_option_long(options, "max_idle_events", 240);
     zend_long events = 0;
     zend_long idle_events = 0;
     smart_str sse = {0};
@@ -220,12 +217,12 @@ static zend_result king_inference_responses_stream_response(
     }
     zval_ptr_dtor(&event);
 
-    while (events < max_events && idle_events < max_idle_events) {
+    while (events < drain_controls->max_events && idle_events < drain_controls->max_idle_events) {
         zval chunk;
         zval *delta_text;
 
         ZVAL_UNDEF(&chunk);
-        if (king_inference_stream_next_event(stream, timeout_ms, &chunk) != SUCCESS) {
+        if (king_inference_stream_next_event(stream, drain_controls->read_timeout_ms, &chunk) != SUCCESS) {
             if (!Z_ISUNDEF(chunk)) {
                 zval_ptr_dtor(&chunk);
             }
@@ -331,6 +328,7 @@ static zend_result king_inference_openai_responses_payload_response(
     bool stream_requested;
     zend_result result;
     zend_long max_response_input_items = 0;
+    king_inference_openai_drain_controls drain_controls;
     bool has_error_response = false;
     const char *generation_error = NULL;
     const char *stream_options_error = NULL;
@@ -374,6 +372,14 @@ static zend_result king_inference_openai_responses_payload_response(
             return_value,
             500,
             limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
+            "server_error"
+        );
+    }
+    if (!king_inference_openai_drain_controls_from_options(options, &drain_controls, &limit_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            limit_error != NULL ? limit_error : "King OpenAI router drain controls are invalid.",
             "server_error"
         );
     }
@@ -444,14 +450,14 @@ static zend_result king_inference_openai_responses_payload_response(
     message_id = king_inference_responses_message_id(stream);
 
     if (stream_requested) {
-        result = king_inference_responses_stream_response(return_value, stream, response_id, message_id, options);
+        result = king_inference_responses_stream_response(return_value, stream, response_id, message_id, &drain_controls);
     } else {
         smart_str content = {0};
         const char *finish_reason = "stop";
         zval response_payload;
         zend_string *json = NULL;
 
-        result = king_inference_openai_drain_stream(stream, &stream_value, options, &content, NULL, &finish_reason);
+        result = king_inference_openai_drain_stream(stream, &stream_value, &drain_controls, &content, NULL, &finish_reason);
         smart_str_0(&content);
         if (result == SUCCESS) {
             result = king_inference_responses_output_payload(
