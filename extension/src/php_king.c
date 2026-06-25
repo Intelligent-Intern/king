@@ -42,7 +42,7 @@
 #include "php_king/resources.inc"
 #include "php_king/exceptions.inc"
 #include "php_king/classes.inc"
-#include "php_king/cancel_token.inc"
+#include "awaitable/cancel_token.inc"
 #include "awaitable/cancel_token_object_handlers.inc"
 #include "config/internal/object_handlers.inc"
 #include "mcp/php_binding.inc"
