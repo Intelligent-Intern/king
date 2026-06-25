@@ -521,18 +521,18 @@ while (true) {
     );
 }
 ```
-`king_inference_openai_http_response()` is the higher-level OpenAI-compatible
-router for applications that want a single HTTP handler. It supports
+`king_inference_openai_http_response()` is the higher-level router for
 `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`, and
-`POST /v1/responses`; generation requests resolve the JSON `model` field
-against the `$models` array key first and then against the loaded model name.
-If exactly one model is registered, `model` may be omitted.
+`POST /v1/responses`, plus legacy `POST /v1/completions`; generation requests
+resolve the JSON `model` field against the `$models` key first and then against
+the loaded model name. If exactly one model is registered, `model` may be omitted.
 
 The Responses route accepts string or message-list `input`, top-level
 `instructions`, and maps into the same King model stream. Non-streaming calls
 return a `response` object with `output` and `output_text`; `stream=true`
 returns semantic SSE events such as `response.created`,
 `response.output_text.delta`, and `response.completed`.
+The legacy completions route accepts string prompts and returns `text_completion` objects.
 
 ## Function, Example 1b: Configured Model Path
 
