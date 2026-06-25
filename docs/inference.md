@@ -8,6 +8,8 @@ This primitive is local and concrete: it registers a materialized GGUF model
 artifact, parses the GGUF structure inside King, resolves an inference backend,
 and streams backend output as King events. Model artifacts are passed as direct
 filesystem paths through `artifact`, `artifact.path`, or `artifact_path`.
+Those fields must be non-empty strings; object-store references are rejected
+until they are materialized to a local GGUF path.
 
 The implemented token-streaming backends are `local` and `king_native_cpu`.
 `local` uses a King-owned process runner contract while the public backend name
@@ -625,10 +627,14 @@ $runner = getenv('KING_INFERENCE_RUNNER');
 if (!is_string($runner) || $runner === '') {
     throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
 }
+$modelPath = getenv('KING_INFERENCE_MODEL_PATH');
+if (!is_string($modelPath) || $modelPath === '') {
+    throw new RuntimeException('KING_INFERENCE_MODEL_PATH must point to a local GGUF model artifact.');
+}
 
 $model = king_inference_model_load([
     'name' => 'local-small-model',
-    'artifact_path' => getenv('KING_INFERENCE_MODEL_PATH'),
+    'artifact_path' => $modelPath,
     'backend' => [
         'name' => 'local',
         'runner_path' => $runner,
@@ -672,17 +678,25 @@ $runner = getenv('KING_INFERENCE_RUNNER');
 if (!is_string($runner) || $runner === '') {
     throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
 }
+$supportModelPath = getenv('KING_SUPPORT_MODEL_PATH');
+if (!is_string($supportModelPath) || $supportModelPath === '') {
+    throw new RuntimeException('KING_SUPPORT_MODEL_PATH must point to a local GGUF model artifact.');
+}
+$invoiceModelPath = getenv('KING_INVOICE_MODEL_PATH');
+if (!is_string($invoiceModelPath) || $invoiceModelPath === '') {
+    throw new RuntimeException('KING_INVOICE_MODEL_PATH must point to a local GGUF model artifact.');
+}
 
 $models = [
     'support-small' => king_inference_model_load([
         'name' => 'support-small',
-        'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
+        'artifact_path' => $supportModelPath,
         'backend' => ['name' => 'local', 'runner_path' => $runner],
         'owned_by' => 'internal-platform',
     ]),
     'invoice-checker' => king_inference_model_load([
         'name' => 'invoice-checker',
-        'artifact_path' => getenv('KING_INVOICE_MODEL_PATH'),
+        'artifact_path' => $invoiceModelPath,
         'backend' => ['name' => 'local', 'runner_path' => $runner],
         'owned_by' => 'internal-platform',
     ]),
@@ -715,10 +729,15 @@ The legacy completions route accepts string prompts; embeddings use the native t
 
 ```php
 <?php
+$modelPath = getenv('KING_INFERENCE_MODEL_PATH');
+if (!is_string($modelPath) || $modelPath === '') {
+    throw new RuntimeException('KING_INFERENCE_MODEL_PATH must point to a local GGUF model artifact.');
+}
+
 $model = king_inference_model_load([
     'name' => 'local-small-model',
     'artifact' => [
-        'path' => getenv('KING_INFERENCE_MODEL_PATH'),
+        'path' => $modelPath,
     ],
     'backend' => 'local',
 ]);

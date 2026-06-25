@@ -1,20 +1,70 @@
-static zend_result king_inference_resolve_artifact_path(zval *config, zend_string **path_out)
+static zend_result king_inference_config_path_string(
+    zval *value,
+    const char *field_name,
+    const char *function_name,
+    zend_string **path_out
+) {
+    *path_out = NULL;
+
+    if (value == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_STRING || Z_STRLEN_P(value) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s must be a non-empty string filesystem path.",
+            function_name,
+            field_name
+        );
+        return FAILURE;
+    }
+
+    *path_out = zend_string_copy(Z_STR_P(value));
+    return SUCCESS;
+}
+
+static zend_result king_inference_resolve_artifact_path(
+    zval *config,
+    const char *function_name,
+    zend_string **path_out
+)
 {
     zval *artifact = king_inference_array_find(config, "artifact");
     zval *path;
 
     *path_out = NULL;
 
-    if (artifact != NULL && Z_TYPE_P(artifact) == IS_STRING) {
-        *path_out = zend_string_copy(Z_STR_P(artifact));
-        return SUCCESS;
+    if (artifact != NULL) {
+        if (Z_TYPE_P(artifact) == IS_STRING) {
+            return king_inference_config_path_string(
+                artifact,
+                "artifact",
+                function_name,
+                path_out
+            );
+        }
+
+        if (Z_TYPE_P(artifact) != IS_ARRAY) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s() artifact must be a non-empty string path or an array with path.",
+                function_name
+            );
+            return FAILURE;
+        }
     }
 
-    if (artifact != NULL && Z_TYPE_P(artifact) == IS_ARRAY) {
+    if (artifact != NULL) {
         path = king_inference_array_find(artifact, "path");
-        if (path != NULL && Z_TYPE_P(path) == IS_STRING) {
-            *path_out = zend_string_copy(Z_STR_P(path));
-            return SUCCESS;
+        if (path != NULL) {
+            return king_inference_config_path_string(
+                path,
+                "artifact.path",
+                function_name,
+                path_out
+            );
         }
 
         if (king_inference_array_find(artifact, "store") != NULL
@@ -26,12 +76,24 @@ static zend_result king_inference_resolve_artifact_path(zval *config, zend_strin
             );
             return FAILURE;
         }
+
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() artifact array requires a non-empty path entry.",
+            function_name
+        );
+        return FAILURE;
     }
 
     path = king_inference_array_find(config, "artifact_path");
-    if (path != NULL && Z_TYPE_P(path) == IS_STRING) {
-        *path_out = zend_string_copy(Z_STR_P(path));
-        return SUCCESS;
+    if (path != NULL) {
+        return king_inference_config_path_string(
+            path,
+            "artifact_path",
+            function_name,
+            path_out
+        );
     }
 
     return SUCCESS;
@@ -56,7 +118,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
         return FAILURE;
     }
 
-    if (king_inference_resolve_artifact_path(config, &artifact_path) != SUCCESS) {
+    if (king_inference_resolve_artifact_path(config, function_name, &artifact_path) != SUCCESS) {
         return FAILURE;
     }
     if (artifact_path == NULL) {

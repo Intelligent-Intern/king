@@ -1219,7 +1219,8 @@ namespace {
     /**
      * Register a local quantized GGUF model artifact for King inference.
      * Artifacts are materialized filesystem paths supplied through `artifact`,
-     * `artifact.path`, or `artifact_path`. Backend selection is config-driven.
+     * `artifact.path`, or `artifact_path`; the selected path must be a
+     * non-empty string. Backend selection is config-driven.
      * Omitting `backend` selects `king_native_cpu`. The `local` backend
      * streams through the King runner contract; the
      * `king_native_cpu` backend exposes native GGUF metadata, an internal

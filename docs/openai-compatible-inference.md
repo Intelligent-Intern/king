@@ -14,11 +14,15 @@ $runner = getenv('KING_INFERENCE_RUNNER');
 if (!is_string($runner) || $runner === '') {
     throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
 }
+$supportModelPath = getenv('KING_SUPPORT_MODEL_PATH');
+if (!is_string($supportModelPath) || $supportModelPath === '') {
+    throw new RuntimeException('KING_SUPPORT_MODEL_PATH must point to a local GGUF model artifact.');
+}
 
 $models = [
     'support-small' => king_inference_model_load([
         'name' => 'support-small',
-        'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
+        'artifact_path' => $supportModelPath,
         'backend' => [
             'name' => 'local',
             'runner_path' => $runner,
@@ -27,7 +31,7 @@ $models = [
     ]),
     'support-embeddings' => king_inference_model_load([
         'name' => 'support-embeddings',
-        'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
+        'artifact_path' => $supportModelPath,
         'backend' => 'king_native_cpu',
         'embedding_tensor' => 'token_embd.weight',
         'owned_by' => 'internal-platform',
