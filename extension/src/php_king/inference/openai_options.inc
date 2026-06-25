@@ -87,3 +87,16 @@ static void king_inference_openai_copy_response_generation_options(zval *source,
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
 }
+
+static bool king_inference_openai_stream_usage_requested(zval *source)
+{
+    zval *stream_options = king_inference_array_find(source, "stream_options");
+    zval *include_usage;
+
+    if (stream_options == NULL || Z_TYPE_P(stream_options) != IS_ARRAY) {
+        return false;
+    }
+
+    include_usage = king_inference_array_find(stream_options, "include_usage");
+    return include_usage != NULL && zend_is_true(include_usage);
+}

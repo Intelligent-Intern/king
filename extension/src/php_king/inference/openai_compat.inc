@@ -441,6 +441,27 @@ static zend_result king_inference_openai_completion_payload(
     return SUCCESS;
 }
 
+static zend_result king_inference_openai_append_stream_usage_chunk(
+    king_inference_stream_object *stream,
+    smart_str *content,
+    smart_str *sse)
+{
+    zval chunk;
+    zend_result result;
+
+    king_inference_stream_openai_chunk_base(stream, &chunk);
+    add_assoc_empty_array(&chunk, "choices");
+    king_inference_openai_add_completion_usage(
+        &chunk,
+        &stream->model,
+        &stream->request,
+        content != NULL ? content->s : NULL
+    );
+    result = king_inference_openai_sse_append(sse, &chunk);
+    zval_ptr_dtor(&chunk);
+    return result;
+}
+
 static zend_result king_inference_openai_payload_response(
     zval *return_value,
     zval *model,
@@ -476,12 +497,29 @@ static zend_result king_inference_openai_payload_response(
 
     if (stream_requested) {
         smart_str sse = {0};
-        result = king_inference_openai_drain_stream(stream, &stream_value, options, NULL, &sse, &finish_reason);
-        smart_str_appends(&sse, "data: [DONE]\n\n");
+        smart_str content = {0};
+        bool include_usage = king_inference_openai_stream_usage_requested(payload);
+
+        result = king_inference_openai_drain_stream(
+            stream,
+            &stream_value,
+            options,
+            include_usage ? &content : NULL,
+            &sse,
+            &finish_reason
+        );
+        if (result == SUCCESS && include_usage) {
+            smart_str_0(&content);
+            result = king_inference_openai_append_stream_usage_chunk(stream, &content, &sse);
+        }
+        if (result == SUCCESS) {
+            smart_str_appends(&sse, "data: [DONE]\n\n");
+        }
         smart_str_0(&sse);
         zval_ptr_dtor(&stream_value);
         if (result != SUCCESS) {
             smart_str_free(&sse);
+            smart_str_free(&content);
             if (EG(exception)) {
                 return FAILURE;
             }
@@ -493,6 +531,7 @@ static zend_result king_inference_openai_payload_response(
             );
         }
         king_inference_openai_http_array_response(return_value, 200, "text/event-stream", sse.s, true);
+        smart_str_free(&content);
         smart_str_free(&sse);
         return SUCCESS;
     }

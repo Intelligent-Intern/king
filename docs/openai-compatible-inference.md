@@ -107,6 +107,11 @@ accept `max_completion_tokens` and legacy `max_tokens`; Responses accepts
 internal `max_tokens` stream contract and carries `temperature`, `top_p`,
 `seed`, and the King-specific `top_k` option through the same path.
 
+For streamed Chat Completions, `stream_options.include_usage=true` appends a
+final OpenAI-shaped usage chunk with empty `choices` immediately before
+`data: [DONE]`. The usage chunk is computed through the same tokenizer-backed
+path as non-streaming Chat Completions.
+
 ## OO, Example 1: Static Facade
 
 ```php
