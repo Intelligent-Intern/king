@@ -129,6 +129,10 @@ static void king_inference_openai_model_object(
     zend_string *owner = king_inference_openai_model_owner(model_value, options);
     king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ_P(model_value));
     zval *created = king_inference_array_find(&model->config, "created");
+    king_inference_backend_kind kind;
+    zval king_meta;
+    zval capabilities;
+    bool backend_config_valid = true;
 
     array_init(return_value);
     add_assoc_str(return_value, "id", id);
@@ -137,6 +141,28 @@ static void king_inference_openai_model_object(
         add_assoc_long(return_value, "created", Z_LVAL_P(created));
     }
     add_assoc_str(return_value, "owned_by", owner);
+
+    if (king_inference_backend_kind_from_config(
+        &model->config,
+        &kind,
+        "king_inference_openai_http_response"
+    ) != SUCCESS) {
+        if (EG(exception)) {
+            zend_clear_exception();
+        }
+        backend_config_valid = false;
+        kind = KING_INFERENCE_BACKEND_LOCAL;
+    }
+
+    array_init(&king_meta);
+    add_assoc_string(&king_meta, "backend", king_inference_backend_kind_name(kind));
+    add_assoc_bool(&king_meta, "backend_config_valid", backend_config_valid);
+    add_assoc_bool(&king_meta, "openai_generation", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(&king_meta, "native_graph_streaming", kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    add_assoc_bool(&king_meta, "embeddings", kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    king_inference_backend_capabilities_array(kind, &capabilities);
+    add_assoc_zval(&king_meta, "capabilities", &capabilities);
+    add_assoc_zval(return_value, "x_king", &king_meta);
 }
 
 static zend_result king_inference_openai_models_response(zval *models, zval *options, zval *return_value)
