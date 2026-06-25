@@ -473,7 +473,90 @@ sequence whose final output is a token vector produced by `argmax_token` or
 `sample_token`. King decodes those token ids through the model tokenizer and
 emits the same stream surface without creating a second inference runtime.
 
-## Function, Example 1a.1: OpenAI-Compatible HTTP Route
+## Function, Example 1b: Native Graph Streaming
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'king-native-invoice',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+]);
+
+$encoded = king_inference_tokenize($model, 'Explain invoice rejection HU-2026-0007.');
+$promptTokens = $encoded['tokens'];
+
+$decodeStep = static function (int $position, int $tokenId): array {
+    return [
+        'ops' => [
+            [
+                'id' => 'x',
+                'op' => 'embedding',
+                'tensor' => 'token_embd.weight',
+                'token_id' => $tokenId,
+            ],
+            [
+                'id' => 'norm',
+                'op' => 'rms_norm',
+                'input' => 'x',
+                'weight' => 'blk.0.attn_norm.weight',
+                'epsilon' => 1e-6,
+            ],
+            [
+                'id' => 'logits',
+                'op' => 'linear',
+                'input' => 'norm',
+                'weight' => 'output.weight',
+                'row_limit' => 32000,
+            ],
+            [
+                'id' => 'next_token',
+                'op' => 'sample_token',
+                'logits' => 'logits',
+                'temperature' => 0.4,
+                'top_k' => 40,
+                'top_p' => 0.95,
+                'seed' => 90210,
+                'sample_index' => $position,
+            ],
+        ],
+        'output' => 'next_token',
+    ];
+};
+
+$graphs = [];
+foreach (array_slice($promptTokens, -3, 3, true) as $position => $tokenId) {
+    $graphs[] = $decodeStep((int) $position, (int) $tokenId);
+}
+
+$stream = king_inference_stream($model, [
+    'graphs' => $graphs,
+], [
+    'graph_options' => [
+        'max_vector_values' => 65536,
+        'max_operations' => 524288,
+    ],
+]);
+
+while (($event = king_inference_next($stream, 0)) !== null) {
+    if (($event['type'] ?? '') === 'token') {
+        echo $event['text'];
+    }
+    if (($event['type'] ?? '') === 'done') {
+        break;
+    }
+}
+```
+
+The native stream path is intentionally graph-driven. A request can provide one
+`graph` repeated for a bounded token count or a `graphs` sequence for explicit
+decode steps. If a graph omits `state`, King carries the previous graph result
+state into the next graph, so KV cache entries written by `kv_write` can be read
+by later steps through `kv_read` or `kv_attention`. This is the current native
+handoff for token events; higher-level prompt-to-graph compilation is a later
+layer and does not need a second inference runtime.
+
+## Function, Example 1c: OpenAI-Compatible HTTP Route
 
 ```php
 <?php
@@ -510,7 +593,7 @@ For `stream=false`, the helper drains into one OpenAI-shaped `chat.completion`
 JSON response. For `stream=true`, it returns a bounded `text/event-stream` body
 with `data: {chunk}` events and a final `data: [DONE]` marker.
 
-## Function, Example 1a.2: OpenAI-Compatible Model Router
+## Function, Example 1d: OpenAI-Compatible Model Router
 
 ```php
 <?php
@@ -550,7 +633,7 @@ returns semantic SSE events such as `response.created`,
 `response.output_text.delta`, and `response.completed`.
 The legacy completions route accepts string prompts; embeddings use the native tokenizer plus the configured token embedding tensor.
 
-## Function, Example 1b: Configured Model Path
+## Function, Example 1e: Configured Model Path
 
 ```php
 <?php
