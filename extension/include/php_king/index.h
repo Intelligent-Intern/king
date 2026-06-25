@@ -6,6 +6,7 @@
 #define KING_PHP_KING_INDEX_H
 
 #include "class_entries.h"
+#include "constants.h"
 #include "externals.h"
 #include "method_tables.h"
 #include "registration.h"

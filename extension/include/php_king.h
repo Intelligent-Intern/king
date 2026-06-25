@@ -26,22 +26,8 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-/* -----------------------------------------------------------------------------
- * Extension Version and Global Constants
- */
-#ifndef PHP_KING_VERSION
-#  define PHP_KING_VERSION      "1.0.9"
-#endif
-
-#ifndef KING_MAX_TICKET_SIZE
-#  define KING_MAX_TICKET_SIZE  4096
-#endif
-
-#ifndef KING_TRANSPORT_INTERRUPT_SLICE_MS
-#  define KING_TRANSPORT_INTERRUPT_SLICE_MS 25L
-#endif
-
 /* Include core headers required in every build. */
+#include "php_king/constants.h"
 #include "king_globals.h"
 #include "king_init.h"
 #include "cancel_token.h"
