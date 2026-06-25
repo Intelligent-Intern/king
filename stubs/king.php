@@ -2685,6 +2685,9 @@ namespace King {
         public static function loadModel(array $config): Inference\Model {}
 
         /** @return array<string,mixed> */
+        public static function modelInfo(Inference\Model $model): array {}
+
+        /** @return array<string,mixed> */
         public static function tokenize(Inference\Model $model, string $text): array {}
 
         /** @return array<string,mixed> */
@@ -2746,6 +2749,13 @@ namespace King {
          * @return array{status:int,headers:array<string,string>,body:string}
          */
         public static function openaiHttpResponse(array $models, array $request, ?array $options = null): array {}
+
+        /** @return array<string,mixed>|null Native event or OpenAI-compatible chunk. */
+        public static function next(Inference\Stream $stream, ?int $timeout_ms = null): ?array {}
+
+        public static function nextAsync(Inference\Stream $stream, ?int $timeout_ms = null): \King\Awaitable {}
+
+        public static function cancel(Inference\Stream $stream): bool {}
     }
 
 }
