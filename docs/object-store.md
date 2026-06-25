@@ -8,9 +8,9 @@ uploads. The procedural API is `king_object_store_*`; the OO API is
 
 The runtime contracts live under `extension/include/object_store/`; the runtime
 implementation lives under `extension/src/object_store/`. The PHP arginfo,
-`King\ObjectStore` method table, and function-table entries live beside that
-runtime in `extension/src/object_store/` and are included by the extension
-bootstrap.
+`King\ObjectStore` method table, and function-table entries live under
+`extension/include/object_store/` and are consumed by the extension bootstrap
+through `extension/include/php_king/`.
 
 ## Function, Example 1: Store and Read
 

@@ -11,9 +11,9 @@ The native XSLT runtime and object contracts live in
 `extension/include/xslt/xslt.h` and are exported through
 `extension/include/xslt/index.h`. Runtime code lives under
 `extension/src/xslt/`; `extension/src/xslt/php_binding.inc` is the PHP userland
-binding, while `extension/src/xslt/arginfo.inc` and
-`extension/src/xslt/function_entries.inc` own the PHP registration surface
-included by the extension bootstrap through the public XSLT header surface.
+binding. PHP registration metadata lives under `extension/include/xslt/`,
+including `arginfo/`, `function_entries.h`, `class_method_entries.h`, and
+`class_methods.h`.
 
 ## Function, Example 1: Check Engine
 

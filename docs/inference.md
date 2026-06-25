@@ -33,8 +33,6 @@ at a time:
 ```text
 extension/src/inference/
 ├── api.inc
-├── arginfo.inc
-├── function_entries.inc
 ├── helpers.inc
 ├── backend_contract.inc
 ├── backend_registry.inc
@@ -67,8 +65,11 @@ extension/src/inference/
 ```
 
 The object and metadata contracts live in
-`extension/include/inference/inference.h`; the implementation is included
-directly from `extension/src/inference/` by the extension bootstrap.
+`extension/include/inference/inference.h`. PHP arginfo, function-table entries,
+and OO method-table entries live under `extension/include/inference/` and are
+consumed by the extension bootstrap through `extension/include/php_king/`. The
+runtime implementation remains under `extension/src/inference/` and is included
+directly by the extension bootstrap.
 
 `backend_contract.inc` owns backend names and capabilities.
 `backend_registry.inc` dispatches stream startup to the selected backend.

@@ -13,11 +13,13 @@ The shared WebSocket state and connection object contract live in
 `extension/src/client/websocket/`; server upgrade and `King\WebSocket\Server`
 runtime code live under `extension/src/server/`.
 
-Client-side WebSocket function registrations are owned by the client binding
-fragments in `extension/src/client/arginfo.inc` and
-`extension/src/client/function_entries.inc`. Server-side WebSocket upgrade and
-listener registrations are owned by `extension/src/server/arginfo.inc` and
-`extension/src/server/function_entries.inc`.
+Client-side WebSocket registration metadata is owned by the client include
+surface in `extension/include/client/`, including `websocket_arginfo.h`,
+`websocket_class_method_entries.h`, `arginfo/`, and `function_entries.h`.
+Server-side WebSocket upgrade and listener registration metadata is owned by
+`extension/include/server/`, including `websocket_server_arginfo.h`,
+`websocket_server_class_method_entries.h`, `arginfo/`, and
+`function_entries.h`.
 
 ## Function, Example 1: Client Echo
 

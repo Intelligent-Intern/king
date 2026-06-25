@@ -8,9 +8,11 @@ registered inside the executing process.
 
 The native orchestrator runtime lives under
 `extension/src/pipeline_orchestrator/` with public contracts in
-`extension/include/pipeline_orchestrator/`. The module owns its PHP arginfo,
-class-method table, function-table entries, runtime execution API, durable tool
-registry, and queue/state persistence helpers.
+`extension/include/pipeline_orchestrator/`. PHP-facing registration metadata,
+class-method table entries, and function-table entries live under
+`extension/include/pipeline_orchestrator/`; runtime execution API, durable tool
+registry, and queue/state persistence helpers remain under
+`extension/src/pipeline_orchestrator/`.
 
 ## Function, Example 1: Local Two-Step Run
 

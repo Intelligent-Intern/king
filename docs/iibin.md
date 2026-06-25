@@ -10,11 +10,11 @@ umbrella is `extension/include/iibin/index.h`, the procedural declarations are
 in `extension/include/iibin/iibin.h`, and the binding arginfo is pulled through
 `extension/include/iibin/arginfo/index.h`.
 
-The PHP binding metadata is owned by the module in
-`extension/src/iibin/arginfo.inc` and
-`extension/src/iibin/function_entries.inc`. `extension/src/php_king.c` consumes
-those declarations through `extension/include/php_king/arginfo.h` and only keeps
-the central extension bootstrap and shared function table assembly.
+The PHP binding metadata is owned by the module under `extension/include/iibin/`,
+including `arginfo/`, `function_entries.h`, `class_method_entries.h`, and
+`class_methods.h`. `extension/src/php_king.c` consumes those declarations
+through `extension/include/php_king/` and only keeps the central extension
+bootstrap and shared function table assembly.
 
 ## Function, Example 1: Schema, Encode, Decode
 

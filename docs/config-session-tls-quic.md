@@ -13,21 +13,20 @@ PHP-visible `King\Config` object contract lives in
 client, awaitable, inference, MCP, and orchestrator paths, so its object
 contract lives in `extension/include/awaitable/cancel_token.h`.
 
-Client session, TLS, request, and polling function registrations are owned by
-`extension/src/client/arginfo.inc` and
-`extension/src/client/function_entries.inc`. Public declarations for the
-original unprefixed client surface live in `extension/include/client/legacy.h`;
-protocol-specific sync and async declarations live under
-`extension/include/client/` and are exported through
-`extension/include/client/index.h`. Arginfo remains anchored at
-`extension/include/client/arginfo/index.h`.
+Client session, TLS, request, and polling registration metadata lives under
+`extension/include/client/`, including `arginfo/` and `function_entries.h`.
+Public declarations for the original unprefixed client surface live in
+`extension/include/client/legacy.h`; protocol-specific sync and async
+declarations live under `extension/include/client/` and are exported through
+`extension/include/client/index.h`. Client runtime implementation remains under
+`extension/src/client/`.
 
-Server session, TLS reload, cancellation, and admin listener registrations are
-owned by `extension/src/server/arginfo.inc` and
-`extension/src/server/function_entries.inc`. Public declarations live under
+Server session, TLS reload, cancellation, and admin listener registration
+metadata lives under `extension/include/server/`, including `arginfo/` and
+`function_entries.h`. Public declarations live under
 `extension/include/server/` and are exported through
-`extension/include/server/index.h`; arginfo remains anchored at
-`extension/include/server/arginfo/index.h`.
+`extension/include/server/index.h`; server runtime implementation remains under
+`extension/src/server/`.
 
 Core exception, class, and object-handler registration is factored into
 `extension/src/php_king/class_registration.inc`; `extension/src/php_king/lifecycle.inc`

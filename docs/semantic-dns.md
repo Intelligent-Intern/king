@@ -9,8 +9,8 @@ are userland adapters.
 
 The Semantic DNS runtime lives under `extension/src/semantic_dns/` with public
 contracts in `extension/include/semantic_dns/`. Its PHP arginfo and
-function-table entries live beside the runtime and are included by the
-extension bootstrap.
+function-table entries live under `extension/include/semantic_dns/` and are
+consumed by the extension bootstrap through `extension/include/php_king/`.
 
 ## Function, Example 1: Register and Discover a Service
 

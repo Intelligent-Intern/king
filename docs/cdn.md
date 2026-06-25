@@ -7,9 +7,10 @@ functions.
 
 ## Internal Layout
 
-CDN registration shares the object-store module registration fragments under
-`extension/src/object_store/`, because the CDN cache is backed by the same
-runtime state and public function table section.
+CDN registration shares the object-store module registration metadata under
+`extension/include/object_store/`, because the CDN cache is backed by the same
+runtime state and public function table section. Runtime implementation remains
+under `extension/src/object_store/`.
 
 ## Function, Example 1: Admit an Object into the CDN Cache
 

@@ -10,8 +10,8 @@ OO examples are userland adapters.
 The coordinated system runtime lives in
 `extension/src/integration/system_integration.c` with public contracts in
 `extension/include/integration/system_integration.h`. The integration module
-owns its PHP arginfo and function-table entries, while core status helpers also
-contribute system introspection leaves.
+owns PHP-facing registration metadata under `extension/include/integration/`,
+while core status helpers also contribute system introspection leaves.
 
 ## Function, Example 1: Init, Status, Shutdown
 

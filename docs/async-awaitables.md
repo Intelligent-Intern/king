@@ -17,9 +17,9 @@ children visible without losing the caller's original array keys.
 The native object contract and procedural declarations live in
 `extension/include/awaitable/awaitable.h` and are exported through
 `extension/include/awaitable/index.h`. The implementation lives under
-`extension/src/awaitable/`. The awaitable module owns its PHP arginfo,
-function-table entries, object implementation, and aggregate helpers, and is
-included directly by the extension bootstrap through the public header surface.
+`extension/src/awaitable/`. PHP-facing registration metadata, class-method
+entries, and object contracts live under `extension/include/awaitable/`; object
+implementation and aggregate helpers remain under `extension/src/awaitable/`.
 
 ## Function, Example 1: Await an HTTP Request
 
