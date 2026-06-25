@@ -5,7 +5,7 @@ RTP is available procedurally through `king_rtp_*`. The native OO surface is
 
 ## Internal Layout
 
-The native RTP socket and object contracts live in `extension/include/rtp.h`.
+The native RTP socket and object contracts live in `extension/include/media/rtp.h`.
 Runtime code lives under `extension/src/media/`. The media module owns its PHP
 arginfo, function-table entries, and RTP object binding, and is included
 directly by the extension bootstrap.

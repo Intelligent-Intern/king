@@ -57,7 +57,7 @@
 static int srtp_initialized = 0;
 #endif
 
-#include "rtp.h"
+#include "media/rtp.h"
 
 static king_rtp_peer_t *king_rtp_peer_by_addr_str(
     king_rtp_socket_t *sock,

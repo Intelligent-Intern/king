@@ -3,7 +3,7 @@
  * the same native RTP/ICE-lite/DTLS-SRTP socket runtime used by king_rtp_*.
  */
 
-#include "rtp.h"
+#include "media/rtp.h"
 
 static void king_rtp_socket_object_free(zend_object *object)
 {

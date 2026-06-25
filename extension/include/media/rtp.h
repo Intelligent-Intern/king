@@ -1,5 +1,5 @@
 /*
- * king_rtp — RTP/ICE-lite/DTLS-SRTP SFU layer for the King extension.
+ * include/media/rtp.h - RTP/ICE-lite/DTLS-SRTP SFU layer for King
  *
  * PHP surface:
  *   king_rtp_bind(host, port)                         → rtp_socket resource
