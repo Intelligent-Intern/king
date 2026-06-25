@@ -448,9 +448,6 @@ static bool king_inference_openai_response_instructions_valid(zval *source, cons
 static bool king_inference_openai_chat_feature_options_valid(zval *source, const char **message)
 {
     static const char * const unsupported_keys[] = {
-        "tools",
-        "tool_choice",
-        "parallel_tool_calls",
         "functions",
         "function_call",
         "modalities",
@@ -462,6 +459,9 @@ static bool king_inference_openai_chat_feature_options_valid(zval *source, const
     };
 
     if (!king_inference_openai_response_format_valid(source, message)) {
+        return false;
+    }
+    if (!king_inference_openai_tools_valid(source, message)) {
         return false;
     }
 

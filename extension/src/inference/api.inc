@@ -133,6 +133,32 @@ PHP_FUNCTION(king_inference_tokenize)
     }
 }
 
+PHP_FUNCTION(king_inference_token_decode)
+{
+    zval *model;
+    zend_long token_id;
+    zend_string *decoded;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(model, king_ce_inference_model)
+        Z_PARAM_LONG(token_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (token_id < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token id must be non-negative.");
+        RETURN_THROWS();
+    }
+
+    decoded = king_inference_tokenizer_decode_token(
+        php_king_inference_model_obj_from_zend(Z_OBJ_P(model)),
+        (zend_ulong) token_id
+    );
+    if (decoded == NULL) {
+        RETURN_THROWS();
+    }
+    RETURN_STR(decoded);
+}
+
 PHP_FUNCTION(king_inference_kv_cache_plan)
 {
     zval *model;
@@ -408,6 +434,30 @@ PHP_METHOD(King_Inference_Model, tokenize)
     ) != SUCCESS) {
         RETURN_THROWS();
     }
+}
+
+PHP_METHOD(King_Inference_Model, tokenDecode)
+{
+    zend_long token_id;
+    zend_string *decoded;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(token_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (token_id < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token id must be non-negative.");
+        RETURN_THROWS();
+    }
+
+    decoded = king_inference_tokenizer_decode_token(
+        php_king_inference_model_obj_from_zend(Z_OBJ_P(ZEND_THIS)),
+        (zend_ulong) token_id
+    );
+    if (decoded == NULL) {
+        RETURN_THROWS();
+    }
+    RETURN_STR(decoded);
 }
 
 PHP_METHOD(King_Inference_Model, kvCachePlan)

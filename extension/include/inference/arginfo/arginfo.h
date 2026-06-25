@@ -24,6 +24,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tokenize, 0, 2, I
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_token_decode, 0, 2, IS_STRING, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, token_id, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tensor_view, 0, 2, IS_ARRAY, 0)
     ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
     ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
@@ -99,6 +104,10 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Inference_Model_tokenize, 0, 1, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Inference_Model_tokenDecode, 0, 1, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, token_id, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Inference_Model_tensorView, 0, 1, IS_ARRAY, 0)

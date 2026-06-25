@@ -748,6 +748,8 @@ static void king_inference_add_gguf_metadata_array(
     add_assoc_long(&gguf, "attention_head_count_kv", (zend_long) metadata->architecture_params[KING_INFERENCE_ARCH_ATTENTION_HEAD_COUNT_KV]);
     add_assoc_long(&gguf, "attention_key_length", (zend_long) metadata->architecture_params[KING_INFERENCE_ARCH_ATTENTION_KEY_LENGTH]);
     add_assoc_long(&gguf, "attention_value_length", (zend_long) metadata->architecture_params[KING_INFERENCE_ARCH_ATTENTION_VALUE_LENGTH]);
+    add_assoc_long(&gguf, "feed_forward_length", (zend_long) metadata->architecture_params[KING_INFERENCE_ARCH_FEED_FORWARD_LENGTH]);
+    add_assoc_long(&gguf, "attention_sliding_window", (zend_long) metadata->architecture_params[KING_INFERENCE_ARCH_ATTENTION_SLIDING_WINDOW]);
     add_assoc_long(&gguf, "tokenizer_token_count", (zend_long) metadata->tokenizer_token_count);
     add_assoc_long(&gguf, "tokenizer_score_count", (zend_long) metadata->tokenizer_score_count);
     add_assoc_long(&gguf, "tokenizer_type_count", (zend_long) metadata->tokenizer_type_count);

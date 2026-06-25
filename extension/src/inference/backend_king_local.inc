@@ -175,8 +175,11 @@ static zend_string *king_inference_king_local_prompt_from_request(zval *request)
         role = king_inference_array_find(message, "role");
         content = king_inference_array_find(message, "content");
         if (king_inference_openai_append_content_text(content, &text) != SUCCESS) {
-            smart_str_free(&text);
-            continue;
+            if (!king_inference_openai_message_has_tool_calls(message)
+                || king_inference_openai_append_message_tool_calls_text(message, &text) != SUCCESS) {
+                smart_str_free(&text);
+                continue;
+            }
         }
         smart_str_0(&text);
 
@@ -191,6 +194,7 @@ static zend_string *king_inference_king_local_prompt_from_request(zval *request)
         smart_str_free(&text);
     } ZEND_HASH_FOREACH_END();
 
+    king_inference_openai_append_tool_prompt(request, &buffer);
     smart_str_appends(&buffer, "assistant: ");
     smart_str_0(&buffer);
     return buffer.s;

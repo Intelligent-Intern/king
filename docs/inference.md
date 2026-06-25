@@ -15,6 +15,10 @@ Optional public metadata fields are also strict: `name`, `quantization`,
 strings when provided, and `context_tokens` must be a positive integer. Invalid
 model metadata is rejected during model load instead of being silently ignored
 by later model listings, embedding routes, or runner argument mapping.
+`king_inference_token_decode()` and `King\Inference\Model::tokenDecode()`
+decode one native token id through the tokenizer loaded from the same GGUF
+artifact; local runners use that surface instead of reading tokenizer arrays
+directly.
 
 The implemented token-streaming backends are `local` and `king_native_cpu`.
 `local` uses a King-owned process runner contract while the public backend name
@@ -31,6 +35,11 @@ When `backend` is omitted, King selects `king_native_cpu`. The process-runner
 backend is still available, but it must be selected intentionally with
 `backend => 'local'`, `backend.name => 'local'`, `backend.type => 'local'`, or
 a runner-bearing backend config.
+
+The repository ships `bin/king-local-infer` as the default local runner. It
+loads the current King extension, materializes a Gemma3 GGUF model through the
+native loader, builds token-step graphs with KV state, and streams decoded token
+text on stdout for the OpenAI-compatible router.
 
 Native graph stream memory is opt-in. The compiled default is stateless and the
 system baseline can be changed in `php.ini`:
@@ -520,13 +529,17 @@ $nextState = $result['state'];
 ```
 
 The graph runner is a small native execution surface for layer-sized work. It
-does not schedule a whole transformer yet. It executes named operations in
-order, stores each vector by id, and feeds those vectors into later steps.
+does not decide a model topology by itself; the local runner builds the
+Gemma3 token-step graph on top of these operations. The graph runner executes
+named operations in order, stores each vector by id, and feeds those vectors
+into later steps.
 `embedding` gathers one row from a rank-2 tensor, `rms_norm` applies native
 RMSNorm with an optional weight tensor, and `linear` reuses the blockwise CPU
 matmul path. `rope` applies rotary position embedding to an even head slice
 using caller-supplied inverse frequencies or a previously produced frequency
-vector. `dot`, `stack`, `softmax`, and `weighted_sum` cover the first useful
+vector. `slice` isolates head-sized spans for per-head normalization, and
+`silu` plus `mul` cover the gated feed-forward path used by local decoder
+layers. `dot`, `stack`, `softmax`, and `weighted_sum` cover the first useful
 attention path: scores become probabilities and probabilities produce a context
 vector from value vectors. `scale` and `add` cover score scaling and
 residual-style vector composition. `kv_read` and `kv_write` make the KV cache a
@@ -543,6 +556,9 @@ RMS epsilon, and RoPE position scale must be finite numbers. Both
 token-selection ops return `[token_id, probability, logit, rank]`. This is still
 CPU-side vector state, but it matches the page-table contract that later native
 paged attention needs.
+
+Set graph option `return_outputs => false` for decoder loops that only need
+`final` and `state`; the default stays `true` for interactive inspection.
 
 ## Function, Paged KV-Cache Plan
 

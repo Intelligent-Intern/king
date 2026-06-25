@@ -24,7 +24,7 @@ typedef struct _king_inference_gguf_metadata {
     zend_ulong tokenizer_type_count;
     zend_ulong tokenizer_merge_count;
     zend_ulong tokenizer_max_token_bytes;
-    zend_ulong architecture_params[8];
+    zend_ulong architecture_params[10];
     zend_long tokenizer_bos_id;
     zend_long tokenizer_eos_id;
     zend_long tokenizer_unknown_id;
@@ -90,6 +90,7 @@ PHP_FUNCTION(king_inference_runtime_model_load);
 PHP_FUNCTION(king_inference_llm_cache_status);
 PHP_FUNCTION(king_inference_model_info);
 PHP_FUNCTION(king_inference_tokenize);
+PHP_FUNCTION(king_inference_token_decode);
 PHP_FUNCTION(king_inference_tensor_view);
 PHP_FUNCTION(king_inference_tensor_index);
 PHP_FUNCTION(king_inference_tensor_dequantize);

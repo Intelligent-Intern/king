@@ -5,6 +5,8 @@
 #define KING_INFERENCE_ARCH_ATTENTION_HEAD_COUNT_KV 4
 #define KING_INFERENCE_ARCH_ATTENTION_KEY_LENGTH 5
 #define KING_INFERENCE_ARCH_ATTENTION_VALUE_LENGTH 6
+#define KING_INFERENCE_ARCH_FEED_FORWARD_LENGTH 7
+#define KING_INFERENCE_ARCH_ATTENTION_SLIDING_WINDOW 8
 
 static bool king_inference_gguf_key_has_suffix(zend_string *key, const char *suffix)
 {
@@ -41,6 +43,10 @@ static zend_result king_inference_gguf_read_architecture_numeric(
         index = KING_INFERENCE_ARCH_ATTENTION_KEY_LENGTH;
     } else if (king_inference_gguf_key_has_suffix(key, ".attention.value_length")) {
         index = KING_INFERENCE_ARCH_ATTENTION_VALUE_LENGTH;
+    } else if (king_inference_gguf_key_has_suffix(key, ".feed_forward_length")) {
+        index = KING_INFERENCE_ARCH_FEED_FORWARD_LENGTH;
+    } else if (king_inference_gguf_key_has_suffix(key, ".attention.sliding_window")) {
+        index = KING_INFERENCE_ARCH_ATTENTION_SLIDING_WINDOW;
     } else {
         *handled = false;
         return SUCCESS;

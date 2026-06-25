@@ -1296,6 +1296,13 @@ namespace {
     function king_inference_tokenize(\King\Inference\Model $model, string $text): array {}
 
     /**
+     * Decode one native token id with the tokenizer loaded from the model
+     * artifact.
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_token_decode(\King\Inference\Model $model, int $token_id): string {}
+
+    /**
      * Return a read-only native tensor view descriptor for one tensor from the
      * loaded GGUF artifact. The descriptor includes shape, quantized block
      * format, byte range, bounds status, and native map readiness, but never
@@ -1339,9 +1346,9 @@ namespace {
 
     /**
      * Execute a bounded native tensor mini-graph on a loaded model. Supported
-     * ops are `embedding`, `rms_norm`, `linear`, `rope`, `dot`, `scale`, and
-     * `add`, plus `stack`, `softmax`, and `weighted_sum` for attention-score
-     * and context-vector assembly. `kv_read` and `kv_write` read and update
+     * ops are `embedding`, `rms_norm`, `linear`, `rope`, `dot`, `scale`, `mul`,
+     * `silu`, `slice`, and `add`, plus `stack`, `softmax`, and `weighted_sum` for
+     * attention-score and context-vector assembly. `kv_read` and `kv_write` read and update
      * the serializable `state.kv_cache` payload returned by the graph runner;
      * `kv_attention` consumes a strict slot range from that state and returns
      * the scaled QK-softmax context vector for token decoding. `argmax_token`
@@ -1349,7 +1356,7 @@ namespace {
      * accepts temperature, top-k, top-p, seed, sample_index, and token_offset,
      * then returns `[token_id, probability, logit, rank]`.
      * @param array<string,mixed> $graph
-     * @param array{max_vector_values?:int,max_operations?:int}|null $options
+     * @param array{max_vector_values?:int,max_operations?:int,return_outputs?:bool}|null $options
      * @return array<string,mixed>
      * @throws \King\ValidationException|\King\RuntimeException
      */
@@ -2747,6 +2754,8 @@ namespace King {
         /** @return array<string,mixed> */
         public static function tokenize(Inference\Model $model, string $text): array {}
 
+        public static function tokenDecode(Inference\Model $model, int $token_id): string {}
+
         /** @return array<string,mixed> */
         public static function tensorView(Inference\Model $model, string $name): array {}
 
@@ -2953,6 +2962,8 @@ namespace King\Inference {
 
         /** @return array<string,mixed> */
         public function tokenize(string $text): array {}
+
+        public function tokenDecode(int $token_id): string {}
 
         /** @return array<string,mixed> */
         public function tensorView(string $name): array {}

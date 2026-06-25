@@ -39,6 +39,7 @@ compat-artifacts/
 dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
+var/
 .cache/
 .vite/
 .codex

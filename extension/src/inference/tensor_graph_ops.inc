@@ -226,6 +226,105 @@ static zend_result king_inference_graph_op_scale(
     return SUCCESS;
 }
 
+static zend_result king_inference_graph_op_mul(
+    zval *op,
+    king_inference_graph_vector *vectors,
+    zend_ulong max_values,
+    double **values_out,
+    zend_ulong *length_out
+) {
+    king_inference_graph_vector *left;
+    king_inference_graph_vector *right;
+    double *values;
+    zend_ulong i;
+
+    if (king_inference_graph_lookup_vector(vectors, op, "left", &left) != SUCCESS
+        || king_inference_graph_lookup_vector(vectors, op, "right", &right) != SUCCESS) {
+        return FAILURE;
+    }
+    if (left->length == 0 || left->length != right->length || left->length > max_values) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph mul requires equal non-empty vector lengths.");
+        return FAILURE;
+    }
+
+    values = ecalloc((size_t) left->length, sizeof(double));
+    for (i = 0; i < left->length; i++) {
+        values[i] = left->values[i] * right->values[i];
+    }
+
+    *values_out = values;
+    *length_out = left->length;
+    return SUCCESS;
+}
+
+static zend_result king_inference_graph_op_silu(
+    zval *op,
+    king_inference_graph_vector *vectors,
+    zend_ulong max_values,
+    double **values_out,
+    zend_ulong *length_out
+) {
+    king_inference_graph_vector *input;
+    double *values;
+    zend_ulong i;
+
+    if (king_inference_graph_lookup_vector(vectors, op, "input", &input) != SUCCESS) {
+        return FAILURE;
+    }
+    if (input->length == 0 || input->length > max_values) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph silu input exceeds configured limits.");
+        return FAILURE;
+    }
+
+    values = ecalloc((size_t) input->length, sizeof(double));
+    for (i = 0; i < input->length; i++) {
+        double value = input->values[i];
+        double sigmoid = value >= 0.0
+            ? 1.0 / (1.0 + king_inference_graph_exp(-value))
+            : king_inference_graph_exp(value) / (1.0 + king_inference_graph_exp(value));
+        values[i] = value * sigmoid;
+    }
+
+    *values_out = values;
+    *length_out = input->length;
+    return SUCCESS;
+}
+
+static zend_result king_inference_graph_op_slice(
+    zval *op,
+    king_inference_graph_vector *vectors,
+    zend_ulong max_values,
+    double **values_out,
+    zend_ulong *length_out
+) {
+    king_inference_graph_vector *input;
+    zend_ulong offset = king_inference_tensor_option_ulong(op, "offset", 0);
+    zend_ulong count = king_inference_tensor_option_ulong(op, "count", 0);
+    double *values;
+
+    if (king_inference_graph_lookup_vector(vectors, op, "input", &input) != SUCCESS) {
+        return FAILURE;
+    }
+    if (count == 0) {
+        count = input->length > offset ? input->length - offset : 0;
+    }
+    if (input->length == 0
+        || offset > input->length
+        || count == 0
+        || count > input->length - offset
+        || count > max_values) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph slice range is outside input bounds or configured limits.");
+        return FAILURE;
+    }
+
+    values = ecalloc((size_t) count, sizeof(double));
+    memcpy(values, input->values + offset, (size_t) count * sizeof(double));
+
+    *values_out = values;
+    *length_out = count;
+    return SUCCESS;
+}
+
 static zend_result king_inference_graph_op_dot(
     zval *op,
     king_inference_graph_vector *vectors,

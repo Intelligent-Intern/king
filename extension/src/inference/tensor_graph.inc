@@ -464,6 +464,8 @@ static zend_result king_inference_graph_run_array(
     zend_ulong op_count = 0;
     zend_ulong max_values = king_inference_tensor_option_ulong(options, "max_vector_values", 65536);
     zend_ulong max_operations = king_inference_tensor_option_ulong(options, "max_operations", 16777216);
+    zval *return_outputs_option = king_inference_array_find(options, "return_outputs");
+    bool return_outputs = return_outputs_option == NULL || zend_is_true(return_outputs_option);
 
     if (graph == NULL || Z_TYPE_P(graph) != IS_ARRAY) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph requires a graph array.");
@@ -556,6 +558,24 @@ static zend_result king_inference_graph_run_array(
                 king_inference_graph_vectors_release(vectors);
                 return FAILURE;
             }
+        } else if (zend_string_equals_literal(op_name, "mul")) {
+            if (king_inference_graph_op_mul(entry, vectors, max_values, &values, &length) != SUCCESS) {
+                zval_ptr_dtor(&state);
+                king_inference_graph_vectors_release(vectors);
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(op_name, "silu")) {
+            if (king_inference_graph_op_silu(entry, vectors, max_values, &values, &length) != SUCCESS) {
+                zval_ptr_dtor(&state);
+                king_inference_graph_vectors_release(vectors);
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(op_name, "slice")) {
+            if (king_inference_graph_op_slice(entry, vectors, max_values, &values, &length) != SUCCESS) {
+                zval_ptr_dtor(&state);
+                king_inference_graph_vectors_release(vectors);
+                return FAILURE;
+            }
         } else if (zend_string_equals_literal(op_name, "dot")) {
             if (king_inference_graph_op_dot(entry, vectors, max_values, max_operations, &values, &length) != SUCCESS) {
                 zval_ptr_dtor(&state);
@@ -638,7 +658,7 @@ static zend_result king_inference_graph_run_array(
     add_assoc_long(return_value, "op_count", (zend_long) op_count);
     add_assoc_long(return_value, "max_vector_values", (zend_long) max_values);
     add_assoc_long(return_value, "max_operations", (zend_long) max_operations);
-    {
+    if (return_outputs) {
         zval outputs;
         array_init(&outputs);
         for (node = vectors; node != NULL; node = node->next) {

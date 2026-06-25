@@ -40,6 +40,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "helpers.inc"
 #include "openai_messages.inc"
 #include "openai_http_helpers.inc"
+#include "openai_tools.inc"
 #include "openai_http_request.inc"
 #include "openai_http_body.inc"
 #include "backend_contract.inc"
