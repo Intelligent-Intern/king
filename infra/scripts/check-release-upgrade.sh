@@ -263,11 +263,15 @@ install_archive_to_prefix() {
 prepare_previous_archive() {
     local candidate_ref="$1"
     local package_log=""
+    local verify_log=""
     local next_candidate=""
     local attempt=0
+    local short_ref=""
 
     while [[ -n "${candidate_ref}" ]]; do
-        package_log="${PREVIOUS_BUILD_DIR}/package-$(git -C "${ROOT_DIR}" rev-parse --short "${candidate_ref}").log"
+        short_ref="$(git -C "${ROOT_DIR}" rev-parse --short "${candidate_ref}")"
+        package_log="${PREVIOUS_BUILD_DIR}/package-${short_ref}.log"
+        verify_log="${PREVIOUS_BUILD_DIR}/verify-${short_ref}.log"
 
         printf 'Preparing previous release archive from %s\n' "${candidate_ref}"
         PREVIOUS_WORKTREE="$(mktemp -d)"
@@ -277,13 +281,21 @@ prepare_previous_archive() {
         prepare_legacy_packaging_tree "${PREVIOUS_WORKTREE}"
 
         if PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${package_log}")"; then
-            BASELINE_REF="${candidate_ref}"
-            return 0
-        fi
+            printf 'Verifying previous archive candidate from %s\n' "${candidate_ref}"
+            if verify_archive "${PREVIOUS_ARCHIVE}" "${verify_log}" "1"; then
+                BASELINE_REF="${candidate_ref}"
+                return 0
+            fi
 
-        echo "Failed to package from ${candidate_ref}. Last 40 log lines from ${package_log}:" >&2
-        if [[ -f "${package_log}" ]]; then
-            tail -n 40 "${package_log}" >&2
+            echo "Packaged baseline ${candidate_ref} failed release-package verification. Last 40 log lines from ${verify_log}:" >&2
+            if [[ -f "${verify_log}" ]]; then
+                tail -n 40 "${verify_log}" >&2
+            fi
+        else
+            echo "Failed to package from ${candidate_ref}. Last 40 log lines from ${package_log}:" >&2
+            if [[ -f "${package_log}" ]]; then
+                tail -n 40 "${package_log}" >&2
+            fi
         fi
 
         next_candidate="$(git -C "${ROOT_DIR}" rev-parse "${candidate_ref}^" 2>/dev/null || true)"
@@ -291,15 +303,15 @@ prepare_previous_archive() {
             break
         fi
 
-        echo "Packaging baseline ${candidate_ref} failed. Trying parent ${next_candidate} (attempt $((attempt + 1)))." >&2
+        echo "Compatibility baseline ${candidate_ref} is not package-smokeable. Trying parent ${next_candidate} (attempt $((attempt + 1)))." >&2
         attempt=$((attempt + 1))
 
-        rm -rf "${PREVIOUS_WORKTREE}"
+        git -C "${ROOT_DIR}" worktree remove --force "${PREVIOUS_WORKTREE}" >/dev/null 2>&1 || rm -rf "${PREVIOUS_WORKTREE}"
         PREVIOUS_WORKTREE=""
         candidate_ref="${next_candidate}"
     done
 
-    echo "Failed to build a package from ${FROM_REF} or any first-parent ancestor." >&2
+    echo "Failed to build and verify a package from ${FROM_REF} or any first-parent ancestor." >&2
     exit 1
 }
 
@@ -309,9 +321,6 @@ if [[ -z "${CURRENT_ARCHIVE}" ]]; then
     printf 'Preparing current release archive from working tree\n'
     CURRENT_ARCHIVE="$(package_tree "${ROOT_DIR}" "${CURRENT_BUILD_DIR}/dist" "${CURRENT_BUILD_DIR}/package.log")"
 fi
-
-printf 'Verifying previous archive\n'
-verify_archive "${PREVIOUS_ARCHIVE}" "${PREVIOUS_BUILD_DIR}/verify.log" "1"
 
 printf 'Verifying current archive\n'
 verify_archive "${CURRENT_ARCHIVE}" "${CURRENT_BUILD_DIR}/verify.log" "0"
