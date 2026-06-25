@@ -95,8 +95,8 @@ static zend_result king_inference_completion_payload(
     } else {
         add_assoc_string(return_value, "model", "king-native");
     }
+    king_inference_openai_add_text_completion_usage(return_value, model, payload, choices);
     add_assoc_zval(return_value, "choices", choices);
-    add_assoc_null(return_value, "usage");
     return SUCCESS;
 }
 

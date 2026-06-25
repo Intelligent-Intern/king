@@ -212,7 +212,12 @@ static zend_result king_inference_responses_output_payload(
         : zend_string_init("", 0, 0));
     add_assoc_null(return_value, "error");
     add_assoc_null(return_value, "incomplete_details");
-    add_assoc_null(return_value, "usage");
+    king_inference_openai_add_response_usage(
+        return_value,
+        &stream->model,
+        &stream->request,
+        content != NULL ? content->s : NULL
+    );
     return SUCCESS;
 }
 
@@ -348,6 +353,12 @@ static zend_result king_inference_responses_stream_response(
     } else {
         add_assoc_string(&event, "output_text", "");
     }
+    king_inference_openai_add_response_usage(
+        &event,
+        &stream->model,
+        &stream->request,
+        content.s
+    );
     if (king_inference_responses_sse_append(&sse, "response.completed", &event) != SUCCESS) {
         zval_ptr_dtor(&event);
         zend_string_release(model_name);

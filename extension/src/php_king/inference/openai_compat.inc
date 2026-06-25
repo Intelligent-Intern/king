@@ -431,7 +431,12 @@ static zend_result king_inference_openai_completion_payload(
     add_assoc_string(&choice, "finish_reason", finish_reason != NULL ? finish_reason : "stop");
     add_next_index_zval(&choices, &choice);
     add_assoc_zval(return_value, "choices", &choices);
-    add_assoc_null(return_value, "usage");
+    king_inference_openai_add_completion_usage(
+        return_value,
+        &stream->model,
+        &stream->request,
+        content != NULL ? content->s : NULL
+    );
     return SUCCESS;
 }
 

@@ -94,6 +94,13 @@ embedding width; the tensor row stride remains the native width internally.
 `encoding_format` supports `float` arrays and `base64` strings. The base64 form
 contains the same mean-pooled vector encoded as Float32 little-endian bytes.
 
+Generation responses include tokenizer-backed usage when the loaded model can
+count both the prompt and the produced text. Chat Completions and legacy
+Completions return `prompt_tokens`, `completion_tokens`, and `total_tokens`.
+Responses payloads return `input_tokens`, `output_tokens`, and `total_tokens`.
+If token counting is unavailable for the model, the router keeps `usage` as
+`null` instead of failing an otherwise completed inference request.
+
 ## OO, Example 1: Static Facade
 
 ```php
