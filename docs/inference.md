@@ -782,18 +782,22 @@ $model = Inference::loadModel([
     'artifact_path' => '/models/assistant-q4.gguf',
     'quantization' => 'q4',
 ]);
+$info = Inference::modelInfo($model);
 
 $stream = Inference::stream($model, [
     'prompt' => 'Write a short customer support answer.',
     'max_tokens' => 128,
 ]);
 
-while (($event = $stream->next(500)) !== null) {
+while (($event = Inference::next($stream, 500)) !== null) {
     if ($event['type'] === 'token') {
         echo $event['text'];
     }
 }
 ```
+
+The static facade mirrors the procedural surface: `Inference::nextAsync($stream)`
+returns a `King\Awaitable`, and `Inference::cancel($stream)` closes the stream.
 
 ## OO, Example 2: Explicit Model And Cancellation
 

@@ -1,5 +1,6 @@
 const zend_function_entry king_inference_class_methods[] = {
     ZEND_ME_MAPPING(loadModel, king_inference_model_load, arginfo_king_inference_model_load, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(modelInfo, king_inference_model_info, arginfo_king_inference_model_info, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(tokenize, king_inference_tokenize, arginfo_king_inference_tokenize, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(tensorView, king_inference_tensor_view, arginfo_king_inference_tensor_view, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(tensorIndex, king_inference_tensor_index, arginfo_king_inference_tensor_index, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
@@ -10,6 +11,9 @@ const zend_function_entry king_inference_class_methods[] = {
     ZEND_ME_MAPPING(stream, king_inference_stream, arginfo_king_inference_stream, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(openaiChatHttpResponse, king_inference_openai_chat_http_response, arginfo_king_inference_openai_chat_http_response, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(openaiHttpResponse, king_inference_openai_http_response, arginfo_king_inference_openai_http_response, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(next, king_inference_next, arginfo_king_inference_next, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(nextAsync, king_inference_next_async, arginfo_king_inference_next_async, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(cancel, king_inference_cancel, arginfo_king_inference_cancel, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };
 
