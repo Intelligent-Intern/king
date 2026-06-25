@@ -40,6 +40,8 @@
 
 #include <php.h>
 
+#include "include/config/object.h"
+
 typedef void king_quic_backend_config;
 
 /*

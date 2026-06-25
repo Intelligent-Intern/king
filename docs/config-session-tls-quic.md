@@ -4,6 +4,14 @@
 procedural variant. Low-level sessions are created with `king_connect()` or
 `new King\Session(...)`.
 
+## Internal Layout
+
+The native config snapshot lives in `extension/include/config/config.h`; the
+PHP-visible `King\Config` object contract lives in
+`extension/include/config/object.h`. `King\CancelToken` is shared across
+client, awaitable, inference, MCP, and orchestrator paths, so its object
+contract lives in `extension/include/cancel_token.h`.
+
 ## Function, Example 1: Config Resource and Session Stats
 
 ```php

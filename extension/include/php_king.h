@@ -51,9 +51,11 @@
 /* Include core headers required in every build. */
 #include "king_globals.h"
 #include "king_init.h"
+#include "cancel_token.h"
 #include "client/session.h"
 #include "client/objects.h"
 #include "client/websocket.h"
+#include "config/object.h"
 #include "server/websocket.h"
 
 /*
@@ -188,20 +190,6 @@ zend_result king_server_cancel_invoke_if_registered(
 );
 
 /* -----------------------------------------------------------------------------
- * Zend Object Wrappers for PHP Classes
- */
-typedef struct _king_config_object {
-    zval resource;
-    zval overrides;
-    zend_object std;
-} king_config_object;
-
-typedef struct _king_cancel_token_object {
-    bool cancelled;
-    zend_object std;
-} king_cancel_token_object;
-
-/* -----------------------------------------------------------------------------
  * Shared Error Buffer
  */
 #ifndef KING_ERR_LEN
@@ -230,20 +218,6 @@ static inline void king_secure_zero(void *v, size_t n)
     volatile unsigned char *p = (volatile unsigned char *) v;
     while (n--) *p++ = 0;
 }
-static inline king_config_object *
-php_king_config_obj_from_zend(zend_object *obj)
-{
-    return (king_config_object *)
-        ((char*)obj - XtOffsetOf(king_config_object, std));
-}
-
-static inline king_cancel_token_object *
-php_king_cancel_token_obj_from_zend(zend_object *obj)
-{
-    return (king_cancel_token_object *)
-        ((char*)obj - XtOffsetOf(king_cancel_token_object, std));
-}
-
 #if PHP_VERSION_ID < 80200
 static inline bool king_zend_string_equals_cstr_compat(
     const zend_string *value,
