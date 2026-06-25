@@ -421,7 +421,7 @@ if test "$PHP_KING" != "no"; then
     PHP_SUBST([KING_SHARED_LIBADD])
 
     dnl Signal to php_king.h that we are in runtime mode.
-    dnl This disables includes for component headers that don't exist yet.
+    dnl This keeps the public header on the lightweight runtime include surface.
     PHP_ADD_EXTENSION_DEP(king, standard)
     CFLAGS="$CFLAGS -DKING_RUNTIME_BUILD"
 

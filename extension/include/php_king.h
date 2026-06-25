@@ -45,10 +45,7 @@
 #  include "client/cancel.h"
 #  include "client/tls.h"
 #  include "config/config.h"
-#  include "connect/connect.h"
 #  include "client/http3.h"
-#  include "poll/poll.h"
-#  include "websocket/websocket.h"
 #endif /* KING_RUNTIME_BUILD */
 
 #include "awaitable/index.h"
