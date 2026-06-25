@@ -97,19 +97,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_proto_get_defined_schemas, arginfo_king_no_args)
     PHP_FE(king_proto_get_defined_enums, arginfo_king_no_args)
 
-    PHP_FE(king_mcp_connect, arginfo_king_mcp_connect)
-    PHP_FE(king_mcp_request, arginfo_king_mcp_request)
-    PHP_FE(king_mcp_request_async, arginfo_king_mcp_request_async)
-    PHP_FE(king_mcp_request_iibin, arginfo_king_mcp_request_iibin)
-    PHP_FE(king_mcp_request_iibin_async, arginfo_king_mcp_request_iibin_async)
-    PHP_FE(king_mcp_server_create, arginfo_king_mcp_server_create)
-    PHP_FE(king_mcp_server_handle_jsonrpc, arginfo_king_mcp_server_handle_jsonrpc)
-    PHP_FE(king_mcp_server_handle_http, arginfo_king_mcp_server_handle_http)
-    PHP_FE(king_mcp_server_stdio, arginfo_king_mcp_server_stdio)
-    PHP_FE(king_mcp_upload_from_stream, arginfo_king_mcp_upload_from_stream)
-    PHP_FE(king_mcp_download_to_stream, arginfo_king_mcp_download_to_stream)
-    PHP_FE(king_mcp_close, arginfo_king_mcp_close)
-    PHP_FE(king_mcp_get_error, arginfo_king_no_args)
+#include "../mcp/php_binding/function_entries.inc"
 
     PHP_FE(king_pipeline_orchestrator_run, arginfo_king_pipeline_run)
     PHP_FE(king_pipeline_orchestrator_run_async, arginfo_king_pipeline_run_async)

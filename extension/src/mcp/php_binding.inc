@@ -1,6 +1,6 @@
 /*
- * King\MCP userland surface. Carries the MCP class arginfo, object methods and
- * helper glue that bridge the native MCP runtime into userland.
+ * King\MCP userland surface. Carries the MCP object methods and helper glue
+ * that bridge the native MCP runtime into userland.
  */
 
 #include "main/php_streams.h"
