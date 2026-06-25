@@ -1328,6 +1328,10 @@ namespace {
      * a loaded model. Set `openai_compatible` or
      * `format=openai_chat_completions` in request/options to receive
      * Chat-Completions-style streaming chunks from `king_inference_next()`.
+     * `openai_compatible` must be a boolean and `format` must be one of
+     * `openai`, `openai_chat`, or `openai_chat_completions` when provided.
+     * Native graph streams require `graph` as an object array, `graphs` as a
+     * list array, and `graph_options` as an object array when provided.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException
@@ -2912,7 +2916,9 @@ namespace King\Inference {
          * @param array<string,mixed> $request
          * @param array<string,mixed>|null $options
          * Set `openai_compatible` or `format=openai_chat_completions` to emit
-         * Chat-Completions-style chunks from next().
+         * Chat-Completions-style chunks from next(). `openai_compatible` must
+         * be a boolean and native graph request shapes are validated before the
+         * backend starts.
          */
         public function __construct(Model $model, array $request, ?array $options = null) {}
 

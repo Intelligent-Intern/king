@@ -102,6 +102,126 @@ static bool king_inference_stream_openai_requested(zval *request, zval *options)
     return false;
 }
 
+static zend_result king_inference_stream_validate_openai_flag(
+    zval *source,
+    const char *source_name,
+    const char *function_name
+) {
+    zval *flag = king_inference_array_find(source, "openai_compatible");
+
+    if (flag == NULL || Z_TYPE_P(flag) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(flag) == IS_TRUE || Z_TYPE_P(flag) == IS_FALSE) {
+        return SUCCESS;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_validation_exception,
+        0,
+        "%s() %s.openai_compatible must be a boolean when provided.",
+        function_name,
+        source_name
+    );
+    return FAILURE;
+}
+
+static zend_result king_inference_stream_validate_format(
+    zval *source,
+    const char *source_name,
+    const char *function_name
+) {
+    zval *format = king_inference_array_find(source, "format");
+
+    if (format == NULL || Z_TYPE_P(format) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(format) != IS_STRING || Z_STRLEN_P(format) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s.format must be a non-empty string when provided.",
+            function_name,
+            source_name
+        );
+        return FAILURE;
+    }
+    if (zend_string_equals_literal(Z_STR_P(format), "openai")
+        || zend_string_equals_literal(Z_STR_P(format), "openai_chat")
+        || zend_string_equals_literal(Z_STR_P(format), "openai_chat_completions")) {
+        return SUCCESS;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_validation_exception,
+        0,
+        "%s() %s.format is not a supported inference stream format.",
+        function_name,
+        source_name
+    );
+    return FAILURE;
+}
+
+static zend_result king_inference_stream_validate_native_graph_shapes(
+    zval *source,
+    const char *source_name,
+    const char *function_name
+) {
+    zval *graph = king_inference_array_find(source, "graph");
+    zval *graphs = king_inference_array_find(source, "graphs");
+    zval *graph_options = king_inference_array_find(source, "graph_options");
+
+    if (graph != NULL && !king_inference_openai_array_is_object(graph)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s.graph must be an object array when provided.",
+            function_name,
+            source_name
+        );
+        return FAILURE;
+    }
+    if (graphs != NULL && !king_inference_openai_array_is_list(graphs)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s.graphs must be a list array when provided.",
+            function_name,
+            source_name
+        );
+        return FAILURE;
+    }
+    if (graph_options != NULL && !king_inference_openai_array_is_object(graph_options)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s.graph_options must be an object array when provided.",
+            function_name,
+            source_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_stream_validate_request_options(
+    zval *request,
+    zval *options,
+    const char *function_name
+) {
+    if (king_inference_stream_validate_openai_flag(request, "request", function_name) != SUCCESS
+        || king_inference_stream_validate_openai_flag(options, "options", function_name) != SUCCESS
+        || king_inference_stream_validate_format(request, "request", function_name) != SUCCESS
+        || king_inference_stream_validate_format(options, "options", function_name) != SUCCESS
+        || king_inference_stream_validate_native_graph_shapes(request, "request", function_name) != SUCCESS
+        || king_inference_stream_validate_native_graph_shapes(options, "options", function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static void king_inference_stream_prepare_openai(king_inference_stream_object *stream)
 {
     if (stream->response_id != NULL) {

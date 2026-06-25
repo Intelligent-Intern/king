@@ -536,10 +536,15 @@ The compatibility mode is explicit. Set `openai_compatible => true` or
 `format => openai_chat_completions` in the request/options and King returns
 Chat-Completions-style streaming chunks from `king_inference_next()`. The same
 stream object still supports King-native events when the mode is not enabled.
+`openai_compatible` must be a boolean when provided, and `format` must be one
+of `openai`, `openai_chat`, or `openai_chat_completions`.
 For `king_native_cpu`, the request must provide a native `graph` or `graphs`
 sequence whose final output is a token vector produced by `argmax_token` or
-`sample_token`. King decodes those token ids through the model tokenizer and
-emits the same stream surface without creating a second inference runtime.
+`sample_token`. Direct stream requests use the same native graph shape contract
+as the HTTP router: `graph` is an object array, `graphs` is a list array, and
+`graph_options` is an object array. King decodes those token ids through the
+model tokenizer and emits the same stream surface without creating a second
+inference runtime.
 
 ## Function, Example 1b: Native Graph Streaming
 

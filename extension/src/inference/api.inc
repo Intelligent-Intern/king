@@ -283,6 +283,14 @@ PHP_FUNCTION(king_inference_stream)
     } else {
         array_init(&stream->options);
     }
+    if (king_inference_stream_validate_request_options(
+        &stream->request,
+        &stream->options,
+        "king_inference_stream"
+    ) != SUCCESS) {
+        zval_ptr_dtor(return_value);
+        RETURN_THROWS();
+    }
     stream->openai_compatible = king_inference_stream_openai_requested(&stream->request, &stream->options);
     stream->created_at = (zend_long) time(NULL);
     stream->native_event_index = 0;

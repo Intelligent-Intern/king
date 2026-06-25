@@ -2,12 +2,12 @@ static zval *king_inference_king_native_graph_options(king_inference_stream_obje
 {
     zval *options = king_inference_array_find(&stream->request, "graph_options");
 
-    if (options != NULL && Z_TYPE_P(options) == IS_ARRAY) {
+    if (options != NULL && king_inference_openai_array_is_object(options)) {
         return options;
     }
 
     options = king_inference_array_find(&stream->options, "graph_options");
-    return options != NULL && Z_TYPE_P(options) == IS_ARRAY ? options : NULL;
+    return options != NULL && king_inference_openai_array_is_object(options) ? options : NULL;
 }
 
 static zend_result king_inference_king_native_stream_token_limit(
@@ -176,6 +176,8 @@ static zend_result king_inference_king_native_prepare_events(
 ) {
     zval *graph = king_inference_array_find(&stream->request, "graph");
     zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *request_graph_options = king_inference_array_find(&stream->request, "graph_options");
+    zval *option_graph_options = king_inference_array_find(&stream->options, "graph_options");
     zval *graph_options = king_inference_king_native_graph_options(stream);
     zval *max_tokens_value = king_inference_array_find(&stream->request, "max_tokens");
     zval state;
@@ -184,11 +186,20 @@ static zend_result king_inference_king_native_prepare_events(
     zend_long max_native_stream_tokens;
     zend_long emitted = 0;
 
-    if (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graphs must be an array.");
+    if (graph != NULL && !king_inference_openai_array_is_object(graph)) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graph must be an object array.");
         return FAILURE;
     }
-    if (graphs == NULL && (graph == NULL || Z_TYPE_P(graph) != IS_ARRAY)) {
+    if (graphs != NULL && !king_inference_openai_array_is_list(graphs)) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graphs must be a list array.");
+        return FAILURE;
+    }
+    if ((request_graph_options != NULL && !king_inference_openai_array_is_object(request_graph_options))
+        || (option_graph_options != NULL && !king_inference_openai_array_is_object(option_graph_options))) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graph_options must be an object array.");
+        return FAILURE;
+    }
+    if (graphs == NULL && graph == NULL) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
