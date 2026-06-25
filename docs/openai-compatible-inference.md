@@ -56,6 +56,13 @@ The router supports:
 - `POST /v1/completions`
 - `POST /v1/embeddings`
 
+Router options include bounded drain controls (`read_timeout_ms`,
+`max_events`, `max_idle_events`), embedding limits (`max_embedding_inputs`,
+`max_embedding_tokens`, `max_embedding_dimensions`), and the legacy
+Completions prompt-array limit `max_completion_prompts`. The default
+`max_completion_prompts` is `128`; set it lower for public or tenant-shared
+routes where one request must not fan out into many backend generation runs.
+
 Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the
 loaded model name. Direct helpers that already receive one loaded model may omit
@@ -160,6 +167,9 @@ multimodal/audio output, prediction hints, and logprob output; it accepts
 suffix, echo, best-of, and logprob output. Responses rejects tool calling,
 reasoning blocks, include filters, and continuation from a previous response.
 Neutral defaults such as `null`, `false`, or empty arrays are treated as absent.
+Legacy Completions prompt arrays are supported only up to
+`max_completion_prompts`; streaming legacy Completions still require a single
+string prompt.
 
 All OpenAI generation routes validate `stream` as a boolean when it is provided.
 They also validate `stream_options` as a JSON object, and

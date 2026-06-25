@@ -337,6 +337,7 @@ static zend_result king_inference_openai_completions_payload_response(
     zval response_payload;
     zend_string *json = NULL;
     zend_result result;
+    zend_long max_completion_prompts = king_inference_openai_option_long(options, "max_completion_prompts", 128);
     bool stream_requested;
     const char *stop_error = NULL;
     bool has_error_response = false;
@@ -361,6 +362,14 @@ static zend_result king_inference_openai_completions_payload_response(
             400,
             "Completions request requires prompt.",
             "invalid_request_error"
+        );
+    }
+    if (max_completion_prompts <= 0) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            "King completions router prompt limit must be positive.",
+            "server_error"
         );
     }
     if (!king_inference_openai_stop_option_valid(payload, &stop_error)) {
@@ -464,7 +473,27 @@ static zend_result king_inference_openai_completions_payload_response(
         add_next_index_zval(&choices, &choice);
     } else if (king_inference_openai_array_is_list(prompt)) {
         zval *entry;
+        zend_ulong prompt_count = (zend_ulong) zend_hash_num_elements(Z_ARRVAL_P(prompt));
         zend_long index = 0;
+
+        if (prompt_count == 0) {
+            zval_ptr_dtor(&choices);
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Completions prompt list must not be empty.",
+                "invalid_request_error"
+            );
+        }
+        if (prompt_count > (zend_ulong) max_completion_prompts) {
+            zval_ptr_dtor(&choices);
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "Completions prompt list exceeds configured router limits.",
+                "invalid_request_error"
+            );
+        }
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(prompt), entry) {
             zval choice;
             if (Z_TYPE_P(entry) != IS_STRING) {

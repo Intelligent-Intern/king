@@ -1348,6 +1348,8 @@ namespace {
      * Active tool, multimodal, prediction, reasoning, best-of, echo, suffix,
      * continuation, include-filter, and logprob feature requests are rejected
      * by local generation routes instead of being silently ignored.
+     * Legacy Completions prompt arrays are bounded by `max_completion_prompts`
+     * in `$options`, defaulting to `128`.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
