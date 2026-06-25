@@ -10,13 +10,18 @@ through the same model registry.
 ```php
 <?php
 
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $models = [
     'support-small' => king_inference_model_load([
         'name' => 'support-small',
         'artifact_path' => getenv('KING_SUPPORT_MODEL_PATH'),
         'backend' => [
             'name' => 'local',
-            'runner_path' => getenv('KING_INFERENCE_RUNNER'),
+            'runner_path' => $runner,
         ],
         'owned_by' => 'internal-platform',
     ]),

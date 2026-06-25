@@ -1224,7 +1224,8 @@ namespace {
      * `king_native_cpu` backend exposes native GGUF metadata, an internal
      * tensor index, native tokenizer lookup, paged KV-cache planning, native
      * graph-backed token streaming, and read-only model mapping without an
-     * external inference runtime. GPU use is disabled by default and requires
+     * external inference runtime. Local runner streams preflight the runner
+     * executable before fork/exec. GPU use is disabled by default and requires
      * explicit config plus thermal policy when enabled.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\RuntimeException
@@ -1233,7 +1234,8 @@ namespace {
 
     /**
      * Return the normalized metadata for a loaded King inference model,
-     * including backend name and backend capabilities.
+     * including backend name, backend capabilities, and local runner
+     * executable status when the local backend is selected.
      * @return array<string,mixed>
      */
     function king_inference_model_info(\King\Inference\Model $model): array {}

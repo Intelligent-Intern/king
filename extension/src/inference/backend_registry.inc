@@ -17,6 +17,11 @@ static zend_result king_inference_backend_validate_model_config(zval *config, co
         return FAILURE;
     }
 
+    if (kind == KING_INFERENCE_BACKEND_LOCAL
+        && king_inference_king_local_validate_model_config(config, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
     return SUCCESS;
 }
 
@@ -65,9 +70,11 @@ static void king_inference_backend_model_info(king_inference_model_object *inter
 
     if (kind == KING_INFERENCE_BACKEND_LOCAL) {
         zend_string *runner = king_inference_king_local_runner_path(intern);
+        bool runner_executable = king_inference_king_local_runner_path_is_executable(runner);
         add_assoc_str(return_value, "runner_path", runner);
         add_assoc_string(return_value, "engine", "king_local_process");
         add_assoc_string(return_value, "runner_protocol", "king-local-argv");
+        add_assoc_bool(return_value, "runner_executable", runner_executable);
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
         king_inference_king_native_model_info(intern, return_value);
     }

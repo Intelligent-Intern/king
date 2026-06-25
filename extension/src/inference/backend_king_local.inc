@@ -27,6 +27,126 @@ static zend_string *king_inference_king_local_runner_path(king_inference_model_o
     return zend_string_init("king-local-infer", sizeof("king-local-infer") - 1, 0);
 }
 
+static zend_result king_inference_king_local_validate_model_config(
+    zval *config,
+    const char *function_name
+) {
+    zval *backend = king_inference_array_find(config, "backend");
+    zval *runner_config;
+    zval *runner_path;
+
+    if (backend == NULL || Z_TYPE_P(backend) != IS_ARRAY) {
+        return SUCCESS;
+    }
+
+    runner_config = king_inference_array_find(backend, "runner");
+    if (runner_config != NULL && Z_TYPE_P(runner_config) != IS_ARRAY) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() local inference backend.runner must be an array when provided.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (runner_config != NULL) {
+        runner_path = king_inference_array_find(runner_config, "path");
+        if (runner_path != NULL
+            && (Z_TYPE_P(runner_path) != IS_STRING || Z_STRLEN_P(runner_path) == 0)) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s() local inference backend.runner.path must be a non-empty string when provided.",
+                function_name
+            );
+            return FAILURE;
+        }
+    }
+
+    runner_path = king_inference_array_find(backend, "runner_path");
+    if (runner_path != NULL
+        && (Z_TYPE_P(runner_path) != IS_STRING || Z_STRLEN_P(runner_path) == 0)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() local inference backend.runner_path must be a non-empty string when provided.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static bool king_inference_king_local_runner_has_slash(zend_string *runner)
+{
+    return memchr(ZSTR_VAL(runner), '/', ZSTR_LEN(runner)) != NULL;
+}
+
+static bool king_inference_king_local_runner_path_is_executable(zend_string *runner)
+{
+    if (ZSTR_LEN(runner) == 0) {
+        return false;
+    }
+
+    if (king_inference_king_local_runner_has_slash(runner)) {
+        return access(ZSTR_VAL(runner), X_OK) == 0;
+    }
+
+    {
+        const char *path_env = getenv("PATH");
+        char *paths;
+        char *saveptr = NULL;
+        char *entry;
+        bool found = false;
+
+        if (path_env == NULL || path_env[0] == '\0') {
+            return false;
+        }
+
+        paths = estrdup(path_env);
+        entry = strtok_r(paths, ":", &saveptr);
+        while (entry != NULL) {
+            zend_string *candidate = strpprintf(
+                0,
+                "%s/%s",
+                entry[0] != '\0' ? entry : ".",
+                ZSTR_VAL(runner)
+            );
+
+            if (access(ZSTR_VAL(candidate), X_OK) == 0) {
+                found = true;
+                zend_string_release(candidate);
+                break;
+            }
+
+            zend_string_release(candidate);
+            entry = strtok_r(NULL, ":", &saveptr);
+        }
+        efree(paths);
+        return found;
+    }
+}
+
+static zend_result king_inference_king_local_require_runner(
+    zend_string *runner,
+    const char *function_name
+) {
+    if (king_inference_king_local_runner_path_is_executable(runner)) {
+        return SUCCESS;
+    }
+
+    zend_throw_exception_ex(
+        king_ce_runtime_exception,
+        0,
+        "%s() local inference runner '%s' is not executable or could not be found in PATH.",
+        function_name,
+        ZSTR_VAL(runner)
+    );
+    return FAILURE;
+}
+
 static zend_string *king_inference_king_local_prompt_from_request(zval *request)
 {
     zval *prompt = king_inference_array_find(request, "prompt");
@@ -269,12 +389,18 @@ static zend_result king_inference_king_local_stream_start(
         return FAILURE;
     }
 
-    prompt = king_inference_king_local_prompt_from_request(&stream->request);
-    if (prompt == NULL) {
+    runner = king_inference_king_local_runner_path(model);
+    if (king_inference_king_local_require_runner(runner, function_name) != SUCCESS) {
+        zend_string_release(runner);
         return FAILURE;
     }
 
-    runner = king_inference_king_local_runner_path(model);
+    prompt = king_inference_king_local_prompt_from_request(&stream->request);
+    if (prompt == NULL) {
+        zend_string_release(runner);
+        return FAILURE;
+    }
+
     max_tokens = strpprintf(0, ZEND_LONG_FMT, king_inference_long_from_array(&stream->request, "max_tokens", 256));
     temperature = strpprintf(0, "%.3f", king_inference_double_from_array(&stream->request, "temperature", 0.8));
     gpu_layers = strpprintf(0, ZEND_LONG_FMT, king_inference_max_gpu_layers(&model->config));

@@ -83,10 +83,13 @@ directly by the extension bootstrap.
 
 `backend_contract.inc` owns backend names and capabilities.
 `backend_registry.inc` dispatches stream startup to the selected backend.
-`backend_king_local.inc` owns the current process runner path, argument
-mapping, fork/exec handoff, and prompt normalization. Resource and thermal
-policy are intentionally separate so CPU/GPU scheduling, VRAM limits, and
-temperature behavior can evolve without changing userland code.
+`backend_king_local.inc` owns the current process runner path, executable
+preflight, argument mapping, fork/exec handoff, and prompt normalization. If a
+configured local runner path is not executable, or a PATH-based runner name
+cannot be resolved before `fork()`, King raises a runtime error before stream
+startup instead of returning an empty stream with a child-process exit code.
+Resource and thermal policy are intentionally separate so CPU/GPU scheduling,
+VRAM limits, and temperature behavior can evolve without changing userland code.
 `openai_http_router.inc` owns route selection only. Request extraction,
 response helpers, body decoding, model registry handling, route generation
 helpers, and endpoint-specific payloads live in the focused `openai_*`
@@ -119,7 +122,8 @@ without handing the model to an external runtime.
 
 `King\Inference\Model::info()` and `king_inference_model_info()` expose backend
 metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
-`runner_path`, `runner_protocol`, `gpu_enabled`, and `backend_capabilities`.
+`runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
+`backend_capabilities`.
 The `gguf` entry contains `architecture`, `tokenizer_model`,
 `tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
 status fields when the source artifact provides them. Native backend info
@@ -594,12 +598,17 @@ be set as a stream option or graph option. If it is not set, King allows up to
 
 ```php
 <?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = king_inference_model_load([
     'name' => 'local-small-model',
     'artifact_path' => getenv('KING_INFERENCE_MODEL_PATH'),
     'backend' => [
         'name' => 'local',
-        'runner_path' => getenv('KING_INFERENCE_RUNNER'),
+        'runner_path' => $runner,
     ],
 ]);
 
@@ -844,6 +853,11 @@ returns a `King\Awaitable`, and `Inference::cancel($stream)` closes the stream.
 use King\Inference\Model;
 use King\Inference\Stream;
 
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
 $model = new Model([
     'name' => 'procurement-assistant',
     'artifact' => '/models/procurement-q4.gguf',
@@ -851,7 +865,7 @@ $model = new Model([
     'backend' => [
         'type' => 'local',
         'runner' => [
-            'path' => getenv('KING_INFERENCE_RUNNER') ?: 'king-local-infer',
+            'path' => $runner,
         ],
     ],
 ]);
