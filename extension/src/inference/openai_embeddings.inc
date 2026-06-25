@@ -125,13 +125,12 @@ static zend_result king_inference_openai_embeddings_resolve_view(
 
 static zend_result king_inference_openai_embeddings_output_dimensions(
     zval *payload,
-    zval *options,
+    zend_long max_dimensions,
     zend_ulong native_dimensions,
     zval *return_value,
     zend_ulong *output_dimensions)
 {
     zval *requested = king_inference_array_find(payload, "dimensions");
-    zend_long max_dimensions = king_inference_openai_option_long(options, "max_embedding_dimensions", 8192);
 
     *output_dimensions = native_dimensions;
 
@@ -152,7 +151,7 @@ static zend_result king_inference_openai_embeddings_output_dimensions(
                 "invalid_request_error"
             );
         }
-        if (max_dimensions > 0 && (zend_ulong) Z_LVAL_P(requested) > (zend_ulong) max_dimensions) {
+        if ((zend_ulong) Z_LVAL_P(requested) > (zend_ulong) max_dimensions) {
             return king_inference_openai_error_response(
                 return_value,
                 400,
@@ -165,7 +164,7 @@ static zend_result king_inference_openai_embeddings_output_dimensions(
         return SUCCESS;
     }
 
-    if (max_dimensions > 0 && native_dimensions > (zend_ulong) max_dimensions) {
+    if (native_dimensions > (zend_ulong) max_dimensions) {
         return king_inference_openai_error_response(
             return_value,
             500,
@@ -506,8 +505,9 @@ static zend_result king_inference_openai_embeddings_payload_response(
 {
     king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ_P(model_value));
     zval *input = king_inference_array_find(payload, "input");
-    zend_long max_inputs = king_inference_openai_option_long(options, "max_embedding_inputs", 2048);
-    zend_long max_tokens = king_inference_openai_option_long(options, "max_embedding_tokens", 8192);
+    zend_long max_inputs = 0;
+    zend_long max_tokens = 0;
+    zend_long max_dimensions = 0;
     king_inference_tensor_native_view view;
     zend_string *tensor_name = NULL;
     zend_string *model_name = NULL;
@@ -522,6 +522,7 @@ static zend_result king_inference_openai_embeddings_payload_response(
     zval usage;
     zend_result result;
     const char *model_error = NULL;
+    const char *limit_error = NULL;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -542,11 +543,29 @@ static zend_result king_inference_openai_embeddings_payload_response(
     if (king_inference_openai_embeddings_encoding_format(payload, return_value, &base64_encoding) != SUCCESS) {
         return Z_TYPE_P(return_value) == IS_ARRAY ? SUCCESS : FAILURE;
     }
-    if (max_inputs <= 0 || max_tokens <= 0) {
+    if (!king_inference_openai_positive_router_limit(
+        options,
+        "max_embedding_inputs",
+        2048,
+        &max_inputs,
+        &limit_error
+    ) || !king_inference_openai_positive_router_limit(
+        options,
+        "max_embedding_tokens",
+        8192,
+        &max_tokens,
+        &limit_error
+    ) || !king_inference_openai_positive_router_limit(
+        options,
+        "max_embedding_dimensions",
+        8192,
+        &max_dimensions,
+        &limit_error
+    )) {
         return king_inference_openai_error_response(
             return_value,
             500,
-            "King embedding router limits must be positive.",
+            limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
             "server_error"
         );
     }
@@ -563,7 +582,7 @@ static zend_result king_inference_openai_embeddings_payload_response(
     }
     if (king_inference_openai_embeddings_output_dimensions(
         payload,
-        options,
+        max_dimensions,
         dimensions,
         return_value,
         &output_dimensions

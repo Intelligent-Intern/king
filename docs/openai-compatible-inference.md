@@ -64,7 +64,9 @@ and embedding limits (`max_embedding_inputs`, `max_embedding_tokens`,
 `max_chat_messages=256`, `max_response_input_items=256`, and
 `max_completion_prompts=128`; set them lower for public or tenant-shared routes
 where one request must not fan out into excessive prompt construction or backend
-generation work. Limit option values must be positive integers.
+generation work. The default embedding limits are `max_embedding_inputs=2048`,
+`max_embedding_tokens=8192`, and `max_embedding_dimensions=8192`. Limit option
+values must be positive integers.
 
 Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the
@@ -139,6 +141,9 @@ token-id lists. `dimensions` can request a bounded prefix of the native
 embedding width; the tensor row stride remains the native width internally.
 `encoding_format` supports `float` arrays and `base64` strings. The base64 form
 contains the same mean-pooled vector encoded as Float32 little-endian bytes.
+Embedding input count, token count, and output dimensions are bounded by the
+positive router options `max_embedding_inputs`, `max_embedding_tokens`, and
+`max_embedding_dimensions`.
 
 Generation responses include tokenizer-backed usage when the loaded model can
 count both the prompt and the produced text. Chat Completions and legacy

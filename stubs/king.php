@@ -1343,7 +1343,10 @@ namespace {
      * be omitted. Embeddings use the configured `embedding_tensor` or a known
      * GGUF token embedding tensor and return float vectors or base64-encoded
      * Float32LE vectors. Embedding requests may set `dimensions` when a
-     * bounded prefix of the native embedding width is required.
+     * bounded prefix of the native embedding width is required. Embedding
+     * inputs, tokens, and dimensions are bounded by `max_embedding_inputs`,
+     * `max_embedding_tokens`, and `max_embedding_dimensions`, defaulting to
+     * `2048`, `8192`, and `8192`.
      * Chat Completions and legacy Completions accept `n` only when it is `1`.
      * Active tool, multimodal, prediction, reasoning, best-of, echo, suffix,
      * continuation, include-filter, and logprob feature requests are rejected
