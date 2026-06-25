@@ -1,9 +1,9 @@
 /*
  * Aggregates the arginfo sets used by the extension entry unit.
  *
- * The concrete arginfo declarations stay owned by their module-local binding
- * fragments under extension/src. This header is the public include-side anchor
- * that keeps php_king.c from reaching into every module directly.
+ * The concrete arginfo declarations live under extension/include in each
+ * owning subsystem. This header keeps php_king.c from reaching into every
+ * module directly.
  */
 #ifndef KING_PHP_KING_ARGINFO_H
 #define KING_PHP_KING_ARGINFO_H
@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#include "../../src/php_king/arginfo.inc"
+#include "core_arginfo.h"
 #include "client/arginfo/index.h"
 #include "awaitable/arginfo/index.h"
 #include "db_ingest/arginfo/index.h"

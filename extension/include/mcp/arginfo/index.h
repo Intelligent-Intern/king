@@ -4,15 +4,13 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Arginfo aggregation point for MCP PHP entry points. The declarations stay
- * beside the native binding fragments and are pulled through this include-side
- * module anchor.
+ * Arginfo aggregation point for MCP PHP entry points.
  * =========================================================================
  */
 
 #ifndef KING_MCP_ARGINFO_INDEX_H
 #define KING_MCP_ARGINFO_INDEX_H
 
-#include "../../../src/mcp/php_binding/arginfo.inc"
+#include "arginfo.h"
 
 #endif /* KING_MCP_ARGINFO_INDEX_H */

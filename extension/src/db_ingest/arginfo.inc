@@ -1,5 +1,1 @@
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_db_ingest, 0, 2, IS_MIXED, 0)
-    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-    ZEND_ARG_CALLABLE_INFO(0, writer, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
+#include "../../include/db_ingest/arginfo/arginfo.h"

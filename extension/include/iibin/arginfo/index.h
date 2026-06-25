@@ -4,15 +4,13 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Arginfo aggregation point for IIBIN/proto PHP entry points. The declarations
- * stay beside the native binding fragments and are pulled through this
- * include-side module anchor.
+ * Arginfo aggregation point for IIBIN/proto PHP entry points.
  * =========================================================================
  */
 
 #ifndef KING_IIBIN_ARGINFO_INDEX_H
 #define KING_IIBIN_ARGINFO_INDEX_H
 
-#include "../../../src/iibin/arginfo.inc"
+#include "arginfo.h"
 
 #endif /* KING_IIBIN_ARGINFO_INDEX_H */
