@@ -15,6 +15,7 @@
 #include "Zend/zend_exceptions.h"
 #include <dlfcn.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -115,6 +116,100 @@ static zend_string *king_xslt_cwd_from_options(zval *options, zend_string *style
     return king_xslt_dirname_from_path(stylesheet_path);
 }
 
+static bool king_xslt_option_value_is_stringable(zval *value)
+{
+    if (value == NULL) {
+        return false;
+    }
+
+    switch (Z_TYPE_P(value)) {
+        case IS_NULL:
+        case IS_FALSE:
+        case IS_TRUE:
+        case IS_LONG:
+        case IS_DOUBLE:
+        case IS_STRING:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static zend_result king_xslt_validate_properties_option(zval *properties_value)
+{
+    zend_string *key;
+    zval *entry;
+
+    if (properties_value == NULL || Z_TYPE_P(properties_value) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(properties_value) != IS_ARRAY) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT properties option must be an associative array.", 0);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(properties_value), key, entry) {
+        if (key == NULL) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT property names must be strings.", 0);
+            return FAILURE;
+        }
+        if (!king_xslt_option_value_is_stringable(entry)) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT property values must be scalar or null.", 0);
+            return FAILURE;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
+zend_result king_xslt_validate_options(zval *options)
+{
+    zend_string *key;
+    zval *entry;
+    char message[256];
+
+    if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(options) != IS_ARRAY) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT options must be an array.", 0);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(options), key, entry) {
+        if (key == NULL) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT option names must be strings.", 0);
+            return FAILURE;
+        }
+
+        if (zend_string_equals_literal(key, "cwd")) {
+            if (entry != NULL && Z_TYPE_P(entry) != IS_NULL && Z_TYPE_P(entry) != IS_STRING) {
+                zend_throw_exception(king_ce_validation_exception, "XSLT cwd option must be a string or null.", 0);
+                return FAILURE;
+            }
+            continue;
+        }
+
+        if (zend_string_equals_literal(key, "properties")) {
+            if (king_xslt_validate_properties_option(entry) != SUCCESS) {
+                return FAILURE;
+            }
+            continue;
+        }
+
+        snprintf(
+            message,
+            sizeof(message),
+            "XSLT option '%s' is not supported. Supported options are 'cwd' and 'properties'.",
+            ZSTR_VAL(key)
+        );
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return FAILURE;
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
 static zend_result king_xslt_apply_properties_from_options(
     sxnc_property **properties,
     int *property_len,
@@ -135,16 +230,8 @@ static zend_result king_xslt_apply_properties_from_options(
     if (properties_value == NULL || Z_TYPE_P(properties_value) == IS_NULL) {
         return SUCCESS;
     }
-    if (Z_TYPE_P(properties_value) != IS_ARRAY) {
-        zend_throw_exception(king_ce_validation_exception, "XSLT properties option must be an associative array.", 0);
-        return FAILURE;
-    }
 
     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(properties_value), key, entry) {
-        if (key == NULL) {
-            zend_throw_exception(king_ce_validation_exception, "XSLT property names must be strings.", 0);
-            return FAILURE;
-        }
         value = zval_get_string(entry);
         king_saxonc.setProperty_fn(
             properties,
@@ -282,6 +369,10 @@ zend_result king_xslt_transform_file_result(
         return FAILURE;
     }
 
+    if (king_xslt_validate_options(options) != SUCCESS) {
+        return FAILURE;
+    }
+
     if (king_xslt_prepare_context(source_path, stylesheet_path, options, &source_abs, &stylesheet_abs, &cwd) != SUCCESS) {
         return FAILURE;
     }
@@ -369,6 +460,10 @@ zend_result king_xslt_transform_to_file_result(
 
     if (king_saxonc_ensure_ready() != SUCCESS) {
         zend_throw_exception(king_ce_runtime_exception, king_saxonc.load_error, 0);
+        return FAILURE;
+    }
+
+    if (king_xslt_validate_options(options) != SUCCESS) {
         return FAILURE;
     }
 

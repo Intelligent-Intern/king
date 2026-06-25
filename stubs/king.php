@@ -1197,6 +1197,8 @@ namespace {
     /**
      * Transform one source XML file with one stylesheet and return the
      * materialized result string plus runtime metadata.
+     * Supported options are `cwd` and `properties`; unknown options are
+     * rejected.
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>
      * @throws \King\RuntimeException|\King\ValidationException
@@ -1206,6 +1208,8 @@ namespace {
     /**
      * Transform one source XML file with one stylesheet and write the result
      * to `output_path`.
+     * Supported options are `cwd` and `properties`; unknown options are
+     * rejected.
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>
      * @throws \King\RuntimeException|\King\ValidationException
@@ -2804,6 +2808,8 @@ namespace King\WebSocket {
 namespace King\XSLT {
     final class Processor {
         /**
+         * Supported options are `cwd` and `properties`; unknown options are
+         * rejected.
          * @param array<string,mixed>|null $options
          */
         public function __construct(?array $options = null) {}
@@ -2819,12 +2825,16 @@ namespace King\XSLT {
         public function engineStatus(): array {}
 
         /**
+         * Supported options are `cwd` and `properties`; unknown options are
+         * rejected.
          * @param array<string,mixed>|null $options
          * @return array<string,mixed>
          */
         public function transformFile(string $source_path, string $stylesheet_path, ?array $options = null): array {}
 
         /**
+         * Supported options are `cwd` and `properties`; unknown options are
+         * rejected.
          * @param array<string,mixed>|null $options
          * @return array<string,mixed>
          */

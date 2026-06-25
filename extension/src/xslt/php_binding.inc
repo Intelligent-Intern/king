@@ -117,6 +117,9 @@ PHP_METHOD(King_XSLT_Processor, __construct)
     if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
         return;
     }
+    if (king_xslt_validate_options(options) != SUCCESS) {
+        RETURN_THROWS();
+    }
 
     intern = php_king_xslt_processor_obj_from_zend(Z_OBJ_P(ZEND_THIS));
     zval_ptr_dtor(&intern->options);

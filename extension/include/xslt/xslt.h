@@ -43,6 +43,7 @@ zend_result king_xslt_transform_to_file_result(
     zval *options,
     zval *return_value
 );
+zend_result king_xslt_validate_options(zval *options);
 void king_xslt_shutdown_system(void);
 void king_xslt_add_component_info(zval *configuration);
 
