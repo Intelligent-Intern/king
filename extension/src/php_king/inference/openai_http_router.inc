@@ -520,6 +520,57 @@ static zend_result king_inference_openai_router_completions_response(
     return result;
 }
 
+static zend_result king_inference_openai_router_embeddings_response(
+    zval *models,
+    zval *request,
+    zval *options,
+    zval *return_value)
+{
+    zval *body;
+    zval decoded;
+    zval *model;
+    zend_result result;
+
+    if (!king_inference_openai_request_method_is(request, "POST")) {
+        return king_inference_openai_error_response(
+            return_value,
+            405,
+            "Embeddings endpoint requires POST.",
+            "invalid_request_error"
+        );
+    }
+
+    body = king_inference_array_find(request, "body");
+    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Embeddings HTTP request requires a JSON string body.",
+            "invalid_request_error"
+        );
+    }
+
+    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
+        return king_inference_openai_error_response(return_value, 400, king_get_error(), "invalid_request_error");
+    }
+
+    result = king_inference_openai_require_model(
+        models,
+        &decoded,
+        "Embeddings request model must be a string when provided.",
+        return_value,
+        &model
+    );
+    if (result != SUCCESS || Z_TYPE_P(return_value) == IS_ARRAY) {
+        zval_ptr_dtor(&decoded);
+        return result;
+    }
+
+    result = king_inference_openai_embeddings_payload_response(return_value, model, &decoded, options);
+    zval_ptr_dtor(&decoded);
+    return result;
+}
+
 PHP_FUNCTION(king_inference_openai_http_response)
 {
     zval *models;
@@ -574,6 +625,8 @@ PHP_FUNCTION(king_inference_openai_http_response)
         result = king_inference_openai_router_responses_response(models, request, effective_options, return_value);
     } else if (king_inference_openai_request_path_is(request, "/v1/completions")) {
         result = king_inference_openai_router_completions_response(models, request, effective_options, return_value);
+    } else if (king_inference_openai_request_path_is(request, "/v1/embeddings")) {
+        result = king_inference_openai_router_embeddings_response(models, request, effective_options, return_value);
     } else {
         result = king_inference_openai_error_response(
             return_value,

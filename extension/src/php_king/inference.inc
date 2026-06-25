@@ -104,6 +104,7 @@ ZEND_END_ARG_INFO()
 #include "inference/openai_compat.inc"
 #include "inference/openai_responses.inc"
 #include "inference/openai_completions.inc"
+#include "inference/openai_embeddings.inc"
 #include "inference/openai_http_router.inc"
 
 static zend_result king_inference_next_async_runner(king_awaitable_object *intern, zval *result)

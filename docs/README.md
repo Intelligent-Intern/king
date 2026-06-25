@@ -33,6 +33,7 @@ adapters around the real `king_*` functions.
 - [RTP](rtp.md)
 - [DB Ingest](db-ingest.md)
 - [Local Quantized Inference](inference.md)
+- [OpenAI-Compatible Inference Router](openai-compatible-inference.md)
 - [E-Invoicing, EDI, and B2B Commerce Platform](e-invoicing-commerce-platform.md)
 - [E-Invoicing, EDI, and B2B Commerce Platform: OO Implementation](e-invoicing-commerce-platform-oo.md)
 
