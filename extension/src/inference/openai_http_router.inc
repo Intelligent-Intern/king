@@ -65,23 +65,6 @@ static bool king_inference_openai_is_model(zval *value)
         && instanceof_function(Z_OBJCE_P(value), king_ce_inference_model);
 }
 
-static bool king_inference_openai_models_valid(zval *models)
-{
-    zval *entry;
-
-    if (models == NULL || Z_TYPE_P(models) != IS_ARRAY || zend_hash_num_elements(Z_ARRVAL_P(models)) == 0) {
-        return false;
-    }
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(models), entry) {
-        if (!king_inference_openai_is_model(entry)) {
-            return false;
-        }
-    } ZEND_HASH_FOREACH_END();
-
-    return true;
-}
-
 static zend_string *king_inference_openai_model_entry_id(
     zval *model_value,
     zend_string *key,
@@ -99,6 +82,40 @@ static zend_string *king_inference_openai_model_entry_id(
     }
 
     return strpprintf(0, "king-model-%lu", index);
+}
+
+static bool king_inference_openai_models_valid(zval *models)
+{
+    zval *entry;
+    zend_string *key;
+    zend_ulong index;
+    zend_string *listed_id;
+    HashTable listed_ids;
+    bool valid = true;
+
+    if (models == NULL || Z_TYPE_P(models) != IS_ARRAY || zend_hash_num_elements(Z_ARRVAL_P(models)) == 0) {
+        return false;
+    }
+
+    zend_hash_init(&listed_ids, 0, NULL, NULL, 0);
+    ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
+        if (!king_inference_openai_is_model(entry)) {
+            valid = false;
+            break;
+        }
+
+        listed_id = king_inference_openai_model_entry_id(entry, key, index);
+        if (zend_hash_exists(&listed_ids, listed_id)
+            || zend_hash_add_empty_element(&listed_ids, listed_id) == NULL) {
+            zend_string_release(listed_id);
+            valid = false;
+            break;
+        }
+        zend_string_release(listed_id);
+    } ZEND_HASH_FOREACH_END();
+    zend_hash_destroy(&listed_ids);
+
+    return valid;
 }
 
 static zend_string *king_inference_openai_model_owner(zval *model_value, zval *options)
@@ -239,7 +256,7 @@ static zend_result king_inference_openai_models_response(zval *models, zval *opt
         return king_inference_openai_error_response(
             return_value,
             500,
-            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models with unique listed ids.",
             "server_error"
         );
     }
@@ -382,7 +399,7 @@ static zend_result king_inference_openai_require_model(
         return king_inference_openai_error_response(
             return_value,
             500,
-            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models with unique listed ids.",
             "server_error"
         );
     }
@@ -436,7 +453,7 @@ static zend_result king_inference_openai_retrieve_model_response(
         return king_inference_openai_error_response(
             return_value,
             500,
-            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models with unique listed ids.",
             "server_error"
         );
     }

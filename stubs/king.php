@@ -1345,7 +1345,8 @@ namespace {
      * For generation requests, the JSON `model` field selects a string key
      * from `$models`, the model name stored in the loaded King model, or the
      * listed OpenAI model id. If exactly one model is registered, `model` may
-     * be omitted. Embeddings use the configured `embedding_tensor` or a known
+     * be omitted. Registered models must resolve to unique listed OpenAI model
+     * ids. Embeddings use the configured `embedding_tensor` or a known
      * GGUF token embedding tensor and return float vectors or base64-encoded
      * Float32LE vectors. Embedding requests may set `dimensions` when a
      * bounded prefix of the native embedding width is required. Embedding

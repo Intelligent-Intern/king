@@ -80,7 +80,9 @@ Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the
 loaded model name and the listed OpenAI model id. Direct helpers that already
 receive one loaded model may omit `model`, but any provided `model` field must
-be a non-empty string.
+be a non-empty string. The registered models must resolve to unique listed
+OpenAI model ids; duplicate listed ids are rejected as router configuration
+errors.
 
 `GET /v1/models` and `GET /v1/models/{model}` return normal OpenAI model
 objects plus an `x_king` extension object. Model objects always include integer
