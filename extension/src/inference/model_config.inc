@@ -79,7 +79,8 @@ static zend_result king_inference_validate_model_config(zval *config, const char
         || king_inference_validate_optional_string_config(config, "owned_by", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "token_embedding_tensor", function_name) != SUCCESS
-        || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS) {
+        || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS
+        || king_inference_validate_gpu_config(config, function_name) != SUCCESS) {
         return FAILURE;
     }
 

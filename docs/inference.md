@@ -36,6 +36,11 @@ GPU execution is conservative. CPU-only execution is the default. GPU use must
 be explicitly enabled in the model config, the global
 `king.gpu_bindings_enable` setting must allow it, and a thermal sensor path is
 required unless the operator explicitly accepts unmonitored GPU execution.
+The `gpu` config itself is strict: `gpu.enabled` must be a boolean,
+`gpu.max_gpu_layers` must be a non-negative integer, `gpu.thermal` must be an
+array when provided, `gpu.thermal.sensor_path` must be a non-empty string,
+`gpu.thermal.max_temperature_c` must be a positive finite number, and
+`gpu.thermal.allow_unmonitored_gpu` must be a boolean.
 
 ## Internal Backend Layout
 

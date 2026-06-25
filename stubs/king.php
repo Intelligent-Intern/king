@@ -1231,7 +1231,11 @@ namespace {
      * graph-backed token streaming, and read-only model mapping without an
      * external inference runtime. Local runner streams preflight the runner
      * executable before fork/exec. GPU use is disabled by default and requires
-     * explicit config plus thermal policy when enabled.
+     * explicit config plus thermal policy when enabled. GPU config is strict:
+     * `gpu.enabled` and `gpu.thermal.allow_unmonitored_gpu` must be booleans,
+     * `gpu.max_gpu_layers` must be a non-negative integer,
+     * `gpu.thermal.sensor_path` must be a non-empty string, and
+     * `gpu.thermal.max_temperature_c` must be a positive finite number.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\RuntimeException
      */
