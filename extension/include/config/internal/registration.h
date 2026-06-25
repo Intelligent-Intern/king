@@ -6,6 +6,7 @@
 #define KING_CONFIG_INTERNAL_REGISTRATION_H
 
 #include <php.h>
+#include "class_entries.h"
 #include "class_methods.h"
 
 void king_config_register_classes(void);

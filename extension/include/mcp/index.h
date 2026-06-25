@@ -11,6 +11,7 @@
 #ifndef KING_MCP_INDEX_H
 #define KING_MCP_INDEX_H
 
+#include "class_entries.h"
 #include "mcp.h"
 #include "registration.h"
 

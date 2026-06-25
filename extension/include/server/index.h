@@ -4,6 +4,7 @@
 #include <php.h>
 #include "admin_api.h"
 #include "cancel.h"
+#include "class_entries.h"
 #include "cors.h"
 #include "early_hints.h"
 #include "http1.h"

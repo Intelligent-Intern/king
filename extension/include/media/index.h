@@ -11,6 +11,7 @@
 #ifndef KING_MEDIA_INDEX_H
 #define KING_MEDIA_INDEX_H
 
+#include "class_entries.h"
 #include "rtp.h"
 #include "registration.h"
 

@@ -1,6 +1,6 @@
 /*
  * Shared php_king module state. Declares resource ids, core exception class
- * pointers, PHP-visible class entries, and the shared error buffer reused
+ * pointers, module class-entry storage, and the shared error buffer reused
  * across the bootstrap slices.
  */
 
@@ -42,28 +42,18 @@ zend_class_entry *king_ce_ws_connection_error  = NULL;
 zend_class_entry *king_ce_ws_protocol_error    = NULL;
 zend_class_entry *king_ce_ws_timeout           = NULL;
 zend_class_entry *king_ce_ws_closed            = NULL;
-zend_class_entry *king_ce_cancel_token         = NULL;
-zend_class_entry *king_ce_awaitable            = NULL;
-zend_class_entry *king_ce_config               = NULL;
-zend_class_entry *king_ce_session              = NULL;
-zend_class_entry *king_ce_stream               = NULL;
-zend_class_entry *king_ce_response             = NULL;
-zend_class_entry *king_ce_mcp                  = NULL;
-zend_class_entry *king_ce_mcp_server           = NULL;
-zend_class_entry *king_ce_pipeline_orchestrator = NULL;
-zend_class_entry *king_ce_object_store         = NULL;
-zend_class_entry *king_ce_autoscaling          = NULL;
-zend_class_entry *king_ce_rtp_socket           = NULL;
-zend_class_entry *king_ce_xslt_processor       = NULL;
-zend_class_entry *king_ce_inference            = NULL;
-zend_class_entry *king_ce_inference_model      = NULL;
-zend_class_entry *king_ce_inference_stream     = NULL;
-zend_class_entry *king_ce_client_http          = NULL;
-zend_class_entry *king_ce_client_http1         = NULL;
-zend_class_entry *king_ce_client_http2         = NULL;
-zend_class_entry *king_ce_client_http3         = NULL;
-zend_class_entry *king_ce_ws_server            = NULL;
-zend_class_entry *king_ce_ws_connection        = NULL;
+
+#include "../autoscaling/class_entries.inc"
+#include "../awaitable/class_entries.inc"
+#include "../client/class_entries.inc"
+#include "../config/internal/class_entries.inc"
+#include "../inference/class_entries.inc"
+#include "../mcp/php_binding/class_entries.inc"
+#include "../media/class_entries.inc"
+#include "../object_store/class_entries.inc"
+#include "../pipeline_orchestrator/class_entries.inc"
+#include "../server/class_entries.inc"
+#include "../xslt/class_entries.inc"
 
 char king_last_error[KING_ERR_LEN] = {0};
 

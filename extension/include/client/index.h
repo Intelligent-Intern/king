@@ -3,6 +3,7 @@
 
 #include <php.h>
 #include "cancel.h"
+#include "class_entries.h"
 #include "early_hints.h"
 #include "http1.h"
 #include "http2.h"

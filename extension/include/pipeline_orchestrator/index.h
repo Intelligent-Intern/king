@@ -11,6 +11,7 @@
 #ifndef KING_PIPELINE_ORCHESTRATOR_INDEX_H
 #define KING_PIPELINE_ORCHESTRATOR_INDEX_H
 
+#include "class_entries.h"
 #include "orchestrator.h"
 #include "pipeline_orchestrator.h"
 #include "registration.h"

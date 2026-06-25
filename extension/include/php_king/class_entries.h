@@ -1,5 +1,5 @@
 /*
- * include/php_king/class_entries.h - Core Zend class-entry externs
+ * include/php_king/class_entries.h - Core class-entry externs and module aggregation
  */
 
 #ifndef KING_PHP_KING_CLASS_ENTRIES_H
@@ -40,28 +40,16 @@ extern zend_class_entry
     *king_ce_ws_timeout,
     *king_ce_ws_closed;
 
-extern zend_class_entry
-    *king_ce_cancel_token,
-    *king_ce_awaitable,
-    *king_ce_config,
-    *king_ce_session,
-    *king_ce_stream,
-    *king_ce_response,
-    *king_ce_mcp,
-    *king_ce_mcp_server,
-    *king_ce_pipeline_orchestrator,
-    *king_ce_object_store,
-    *king_ce_autoscaling,
-    *king_ce_rtp_socket,
-    *king_ce_xslt_processor,
-    *king_ce_inference,
-    *king_ce_inference_model,
-    *king_ce_inference_stream,
-    *king_ce_client_http,
-    *king_ce_client_http1,
-    *king_ce_client_http2,
-    *king_ce_client_http3,
-    *king_ce_ws_server,
-    *king_ce_ws_connection;
+#include "autoscaling/class_entries.h"
+#include "awaitable/class_entries.h"
+#include "client/class_entries.h"
+#include "config/internal/class_entries.h"
+#include "inference/class_entries.h"
+#include "mcp/class_entries.h"
+#include "media/class_entries.h"
+#include "object_store/class_entries.h"
+#include "pipeline_orchestrator/class_entries.h"
+#include "server/class_entries.h"
+#include "xslt/class_entries.h"
 
 #endif /* KING_PHP_KING_CLASS_ENTRIES_H */

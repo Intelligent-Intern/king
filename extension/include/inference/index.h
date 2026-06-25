@@ -11,6 +11,7 @@
 #ifndef KING_INFERENCE_INDEX_H
 #define KING_INFERENCE_INDEX_H
 
+#include "class_entries.h"
 #include "inference.h"
 #include "registration.h"
 
