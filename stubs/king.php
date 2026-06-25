@@ -1198,7 +1198,8 @@ namespace {
      * Transform one source XML file with one stylesheet and return the
      * materialized result string plus runtime metadata.
      * Supported options are `cwd` and `properties`; unknown options are
-     * rejected.
+     * rejected. Source and stylesheet paths must resolve to readable local
+     * files; `cwd` must resolve to a readable and searchable local directory.
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>
      * @throws \King\RuntimeException|\King\ValidationException
@@ -1209,7 +1210,8 @@ namespace {
      * Transform one source XML file with one stylesheet and write the result
      * to `output_path`.
      * Supported options are `cwd` and `properties`; unknown options are
-     * rejected.
+     * rejected. Source and stylesheet paths must resolve to readable local
+     * files; `cwd` must resolve to a readable and searchable local directory.
      * @param array<string,mixed>|null $options
      * @return array<string,mixed>
      * @throws \King\RuntimeException|\King\ValidationException
@@ -2842,7 +2844,9 @@ namespace King\XSLT {
     final class Processor {
         /**
          * Supported options are `cwd` and `properties`; unknown options are
-         * rejected.
+         * rejected. Source and stylesheet paths must resolve to readable local
+         * files; `cwd` must resolve to a readable and searchable local
+         * directory.
          * @param array<string,mixed>|null $options
          */
         public function __construct(?array $options = null) {}
@@ -2859,7 +2863,9 @@ namespace King\XSLT {
 
         /**
          * Supported options are `cwd` and `properties`; unknown options are
-         * rejected.
+         * rejected. Source and stylesheet paths must resolve to readable local
+         * files; `cwd` must resolve to a readable and searchable local
+         * directory.
          * @param array<string,mixed>|null $options
          * @return array<string,mixed>
          */
@@ -2867,7 +2873,9 @@ namespace King\XSLT {
 
         /**
          * Supported options are `cwd` and `properties`; unknown options are
-         * rejected.
+         * rejected. Source and stylesheet paths must resolve to readable local
+         * files; `cwd` must resolve to a readable and searchable local
+         * directory.
          * @param array<string,mixed>|null $options
          * @return array<string,mixed>
          */

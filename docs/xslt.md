@@ -19,10 +19,13 @@ including `arginfo/`, `function_entries.h`, `class_method_entries.h`, and
 
 Supported transformation options are deliberately explicit:
 
-- `cwd`: readable local directory used as the SaxonC working directory. When it
-  is omitted, King uses the stylesheet directory.
+- `cwd`: readable and searchable local directory used as the SaxonC working
+  directory. When it is omitted, King uses the stylesheet directory.
 - `properties`: associative array of SaxonC string properties. Scalar values
   and null are accepted and converted to strings before the native call.
+
+The source XML and stylesheet paths must resolve to readable local files.
+Directories are rejected before SaxonC is invoked.
 
 Unknown options are rejected instead of being silently ignored. Stylesheet
 parameters require SaxonC XDM values and are not accepted by this PHP-visible

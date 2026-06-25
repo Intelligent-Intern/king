@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef PATH_MAX
@@ -26,30 +27,81 @@
 
 #include "saxonc_loader.inc"
 
-static zend_string *king_xslt_realpath_or_throw(zend_string *path, const char *label)
+static zend_string *king_xslt_realpath_checked_or_throw(
+    zend_string *path,
+    const char *label,
+    bool require_directory
+)
 {
     char resolved[PATH_MAX];
+    struct stat path_stat;
 
     if (ZSTR_LEN(path) == 0) {
-        zend_throw_exception(king_ce_validation_exception, label, 0);
+        char message[256];
+        snprintf(message, sizeof(message), "%s must not be empty.", label);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
     if (realpath(ZSTR_VAL(path), resolved) == NULL) {
         char message[512];
-        snprintf(message, sizeof(message), "%s is not a readable local file: %s", label, ZSTR_VAL(path));
+        snprintf(
+            message,
+            sizeof(message),
+            "%s is not a readable local %s: %s",
+            label,
+            require_directory ? "directory" : "file",
+            ZSTR_VAL(path)
+        );
         zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
-    if (access(resolved, R_OK) != 0) {
+    if (stat(resolved, &path_stat) != 0) {
         char message[512];
-        snprintf(message, sizeof(message), "%s is not readable: %s", label, resolved);
+        snprintf(message, sizeof(message), "%s could not be inspected: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+
+    if (require_directory && !S_ISDIR(path_stat.st_mode)) {
+        char message[512];
+        snprintf(message, sizeof(message), "%s must be a local directory: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+    if (!require_directory && !S_ISREG(path_stat.st_mode)) {
+        char message[512];
+        snprintf(message, sizeof(message), "%s must be a local file: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+
+    if (access(resolved, require_directory ? (R_OK | X_OK) : R_OK) != 0) {
+        char message[512];
+        snprintf(
+            message,
+            sizeof(message),
+            "%s is not %s: %s",
+            label,
+            require_directory ? "accessible" : "readable",
+            resolved
+        );
         zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
     return zend_string_init(resolved, strlen(resolved), 0);
+}
+
+static zend_string *king_xslt_realpath_file_or_throw(zend_string *path, const char *label)
+{
+    return king_xslt_realpath_checked_or_throw(path, label, false);
+}
+
+static zend_string *king_xslt_realpath_directory_or_throw(zend_string *path, const char *label)
+{
+    return king_xslt_realpath_checked_or_throw(path, label, true);
 }
 
 static zend_string *king_xslt_dirname_from_path(zend_string *path)
@@ -108,7 +160,7 @@ static zend_string *king_xslt_cwd_from_options(zval *options, zend_string *style
         && (cwd_value = zend_hash_str_find(Z_ARRVAL_P(options), "cwd", sizeof("cwd") - 1)) != NULL
         && Z_TYPE_P(cwd_value) != IS_NULL) {
         cwd_string = zval_get_string(cwd_value);
-        resolved = king_xslt_realpath_or_throw(cwd_string, "XSLT cwd");
+        resolved = king_xslt_realpath_directory_or_throw(cwd_string, "XSLT cwd");
         zend_string_release(cwd_string);
         return resolved;
     }
@@ -255,12 +307,12 @@ static zend_result king_xslt_prepare_context(
     zend_string **cwd
 )
 {
-    *source_abs = king_xslt_realpath_or_throw(source_path, "XSLT source XML");
+    *source_abs = king_xslt_realpath_file_or_throw(source_path, "XSLT source XML");
     if (*source_abs == NULL) {
         return FAILURE;
     }
 
-    *stylesheet_abs = king_xslt_realpath_or_throw(stylesheet_path, "XSLT stylesheet");
+    *stylesheet_abs = king_xslt_realpath_file_or_throw(stylesheet_path, "XSLT stylesheet");
     if (*stylesheet_abs == NULL) {
         zend_string_release(*source_abs);
         *source_abs = NULL;
