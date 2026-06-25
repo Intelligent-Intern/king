@@ -154,6 +154,12 @@ static bool king_inference_openai_numeric_option_value(
     if (Z_TYPE_P(field) == IS_DOUBLE) {
         *present = true;
         *value = Z_DVAL_P(field);
+        if (!isfinite(*value)) {
+            if (message != NULL) {
+                *message = "Generation numeric options must be finite numbers.";
+            }
+            return false;
+        }
         return true;
     }
     if (Z_TYPE_P(field) == IS_LONG) {

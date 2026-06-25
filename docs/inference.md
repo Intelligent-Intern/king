@@ -120,11 +120,11 @@ graph finishers such as `argmax_token` and `sample_token`, not to local runner
 text generation.
 
 Generation stream options are validated before the local runner process starts.
-`max_tokens` must be a positive integer, `temperature` must be non-negative,
-`top_p` must be greater than zero and at most one, and `top_k` must be a
-non-negative integer. `stop` can be one non-empty string or one to four
-non-empty strings; invalid stop sequences are rejected before runner arguments
-are built.
+`max_tokens` must be a positive integer, numeric generation options must be
+finite numbers, `temperature` must be non-negative, `top_p` must be greater than
+zero and at most one, and `top_k` must be a non-negative integer. `stop` can be
+one non-empty string or one to four non-empty strings; invalid stop sequences are
+rejected before runner arguments are built.
 
 ## Function, Tensor Index and Tensor View
 
@@ -348,9 +348,12 @@ scaled QK softmax, and returns the weighted context vector from the cached value
 vectors. `argmax_token` and `sample_token` are the native token-selection
 finishers for logits. `sample_token` supports temperature, top-k, top-p, optional
 seeded deterministic sampling, `sample_index` as a per-step seed salt, and
-`token_offset` for sharded vocab projections. Both token-selection ops return
-`[token_id, probability, logit, rank]`. This is still CPU-side vector state, but
-it matches the page-table contract that later native paged attention needs.
+`token_offset` for sharded vocab projections. Graph numeric options such as
+sampling temperature, top-p, vector scales, softmax scale, KV-attention scale,
+RMS epsilon, and RoPE position scale must be finite numbers. Both
+token-selection ops return `[token_id, probability, logit, rank]`. This is still
+CPU-side vector state, but it matches the page-table contract that later native
+paged attention needs.
 
 ## Function, Paged KV-Cache Plan
 

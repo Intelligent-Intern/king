@@ -139,14 +139,18 @@ static zend_result king_inference_graph_op_sample_token(
     zend_ulong active_count;
     zend_ulong selected_rank = 0;
     zend_ulong i;
-    double temperature = king_inference_graph_double_option(op, "temperature", 1.0);
-    double top_p = king_inference_graph_double_option(op, "top_p", 1.0);
+    double temperature;
+    double top_p;
     double max_score = 0.0;
     double probability_sum = 0.0;
     double active_sum = 0.0;
     bool has_seed;
     zend_long seed;
 
+    if (king_inference_graph_finite_double_option(op, "temperature", 1.0, &temperature) != SUCCESS
+        || king_inference_graph_finite_double_option(op, "top_p", 1.0, &top_p) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "logits", &logits) != SUCCESS
         || king_inference_graph_sampling_seed(op, &has_seed, &seed) != SUCCESS) {
         return FAILURE;

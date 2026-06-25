@@ -163,11 +163,15 @@ static zend_result king_inference_graph_op_add(
 ) {
     king_inference_graph_vector *left;
     king_inference_graph_vector *right;
-    double left_scale = king_inference_graph_double_option(op, "left_scale", 1.0);
-    double right_scale = king_inference_graph_double_option(op, "right_scale", 1.0);
+    double left_scale;
+    double right_scale;
     double *values;
     zend_ulong i;
 
+    if (king_inference_graph_finite_double_option(op, "left_scale", 1.0, &left_scale) != SUCCESS
+        || king_inference_graph_finite_double_option(op, "right_scale", 1.0, &right_scale) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "left", &left) != SUCCESS
         || king_inference_graph_lookup_vector(vectors, op, "right", &right) != SUCCESS) {
         return FAILURE;
@@ -195,10 +199,15 @@ static zend_result king_inference_graph_op_scale(
     zend_ulong *length_out
 ) {
     king_inference_graph_vector *input;
-    double factor = king_inference_graph_double_option(op, "factor", king_inference_graph_double_option(op, "scale", 1.0));
+    double scale;
+    double factor;
     double *values;
     zend_ulong i;
 
+    if (king_inference_graph_finite_double_option(op, "scale", 1.0, &scale) != SUCCESS
+        || king_inference_graph_finite_double_option(op, "factor", scale, &factor) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "input", &input) != SUCCESS) {
         return FAILURE;
     }
@@ -227,11 +236,14 @@ static zend_result king_inference_graph_op_dot(
 ) {
     king_inference_graph_vector *left;
     king_inference_graph_vector *right;
-    double scale = king_inference_graph_double_option(op, "scale", 1.0);
+    double scale;
     double sum = 0.0;
     double *values;
     zend_ulong i;
 
+    if (king_inference_graph_finite_double_option(op, "scale", 1.0, &scale) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "left", &left) != SUCCESS
         || king_inference_graph_lookup_vector(vectors, op, "right", &right) != SUCCESS) {
         return FAILURE;
@@ -311,10 +323,14 @@ static zend_result king_inference_graph_op_softmax(
     bool any_active = false;
     double max_score = 0.0;
     double sum = 0.0;
-    double temperature = king_inference_graph_double_option(op, "temperature", 1.0);
-    double scale = king_inference_graph_double_option(op, "scale", 1.0);
+    double temperature;
+    double scale;
     zend_ulong i;
 
+    if (king_inference_graph_finite_double_option(op, "temperature", 1.0, &temperature) != SUCCESS
+        || king_inference_graph_finite_double_option(op, "scale", 1.0, &scale) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "input", &input) != SUCCESS) {
         return FAILURE;
     }
@@ -481,11 +497,14 @@ static zend_result king_inference_graph_op_rope(
     zend_ulong offset = king_inference_tensor_option_ulong(op, "offset", 0);
     zend_ulong head_dim;
     zend_ulong position = king_inference_tensor_option_ulong(op, "position", 0);
-    double position_scale = king_inference_graph_double_option(op, "position_scale", 1.0);
+    double position_scale;
     zval *frequency_input;
     zval *frequency_values;
     zend_ulong pair;
 
+    if (king_inference_graph_finite_double_option(op, "position_scale", 1.0, &position_scale) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "input", &input) != SUCCESS) {
         return FAILURE;
     }

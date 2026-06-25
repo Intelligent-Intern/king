@@ -103,6 +103,31 @@ static double king_inference_graph_double_option(zval *array, const char *key, d
     return fallback;
 }
 
+static zend_result king_inference_graph_finite_double_option(
+    zval *array,
+    const char *key,
+    double fallback,
+    double *value
+) {
+    zval *field = king_inference_array_find(array, key);
+
+    *value = king_inference_graph_double_option(array, key, fallback);
+    if (field == NULL || (Z_TYPE_P(field) != IS_DOUBLE && Z_TYPE_P(field) != IS_LONG)) {
+        return SUCCESS;
+    }
+    if (!isfinite(*value)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King inference graph option '%s' must be a finite number.",
+            key
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static double king_inference_graph_sqrt(double value)
 {
     double guess;
@@ -233,10 +258,13 @@ static zend_result king_inference_graph_op_rms_norm(
     king_inference_tensor_native_view weight;
     zend_ulong i;
     double sumsq = 0.0;
-    double epsilon = king_inference_graph_double_option(op, "epsilon", 0.000001);
+    double epsilon;
     double scale;
     double *values;
 
+    if (king_inference_graph_finite_double_option(op, "epsilon", 0.000001, &epsilon) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_required_string(op, "input", &input_id) != SUCCESS) {
         return FAILURE;
     }

@@ -329,8 +329,8 @@ static zend_result king_inference_graph_op_kv_attention(
     zend_ulong slot_count;
     zend_ulong value_width = 0;
     zend_ulong i;
-    double temperature = king_inference_graph_double_option(op, "temperature", 1.0);
-    double scale = king_inference_graph_double_option(op, "scale", 1.0);
+    double temperature;
+    double scale;
     double max_score = 0.0;
     double probability_sum = 0.0;
     double *scores = NULL;
@@ -338,6 +338,10 @@ static zend_result king_inference_graph_op_kv_attention(
 
     *values_out = NULL;
     *length_out = 0;
+    if (king_inference_graph_finite_double_option(op, "temperature", 1.0, &temperature) != SUCCESS
+        || king_inference_graph_finite_double_option(op, "scale", 1.0, &scale) != SUCCESS) {
+        return FAILURE;
+    }
     if (king_inference_graph_lookup_vector(vectors, op, "query", &query) != SUCCESS
         || king_inference_graph_kv_range(op, &slot_start, &slot_count) != SUCCESS) {
         return FAILURE;

@@ -139,10 +139,11 @@ accept `max_completion_tokens` and legacy `max_tokens`; Responses accepts
 `max_output_tokens` and legacy `max_tokens`. King maps those fields to the
 internal `max_tokens` stream contract and carries `temperature`, `top_p`,
 `seed`, and the King-specific `top_k` option through the same path. Max-token
-options must be positive integers, `temperature` must be non-negative, `top_p`
-must be greater than zero and at most one, and `top_k` must be a non-negative
-integer. Invalid generation controls return an OpenAI-shaped `400` response
-before any backend process is started.
+options must be positive integers, numeric generation options must be finite
+numbers, `temperature` must be non-negative, `top_p` must be greater than zero
+and at most one, and `top_k` must be a non-negative integer. Invalid generation
+controls return an OpenAI-shaped `400` response before any backend process is
+started.
 Chat Completions and legacy Completions also validate OpenAI `stop` as a
 string or an array of one to four non-empty strings and pass those stop
 sequences to the local generation runner.
