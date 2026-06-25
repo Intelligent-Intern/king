@@ -40,8 +40,6 @@
 #include "php_king/resources.inc"
 #include "php_king/exceptions.inc"
 #include "php_king/classes.inc"
-#include "php_king/module_bindings.inc"
-#include "php_king/module_registrations.inc"
 #include "php_king/class_registration.inc"
 #include "php_king/lifecycle.inc"
 #include "php_king/function_table.inc"

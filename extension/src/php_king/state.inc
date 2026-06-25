@@ -26,8 +26,6 @@ zend_class_entry *king_ce_network_exception    = NULL;
 zend_class_entry *king_ce_tls_exception        = NULL;
 zend_class_entry *king_ce_protocol_exception   = NULL;
 
-#include "../server/state.inc"
-
 char king_last_error[KING_ERR_LEN] = {0};
 
 void king_set_error(const char *msg)

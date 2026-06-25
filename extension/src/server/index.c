@@ -211,3 +211,7 @@ PHP_FUNCTION(king_server_listen)
     zval_ptr_dtor(&listener_result);
     RETURN_FALSE;
 }
+
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"
