@@ -122,7 +122,9 @@ text generation.
 Generation stream options are validated before the local runner process starts.
 `max_tokens` must be a positive integer, `temperature` must be non-negative,
 `top_p` must be greater than zero and at most one, and `top_k` must be a
-non-negative integer.
+non-negative integer. `stop` can be one non-empty string or one to four
+non-empty strings; invalid stop sequences are rejected before runner arguments
+are built.
 
 ## Function, Tensor Index and Tensor View
 

@@ -242,6 +242,7 @@ static zend_result king_inference_king_local_stream_start(
     zend_string *argv[56];
     size_t argc = 0;
     const char *generation_error = NULL;
+    const char *stop_error = NULL;
 
     model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
     if (king_inference_check_gpu_policy(&model->config, function_name) != SUCCESS) {
@@ -254,6 +255,16 @@ static zend_result king_inference_king_local_stream_start(
             "%s() %s",
             function_name,
             generation_error != NULL ? generation_error : "generation options are invalid."
+        );
+        return FAILURE;
+    }
+    if (!king_inference_openai_stop_option_valid(&stream->request, &stop_error)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s",
+            function_name,
+            stop_error != NULL ? stop_error : "stop options are invalid."
         );
         return FAILURE;
     }
