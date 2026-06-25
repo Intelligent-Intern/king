@@ -37,6 +37,7 @@
 #include "php_king/state.inc"
 #include "php_king/externals.inc"
 #include "php_king/arginfo.inc"
+#include "db_ingest/arginfo.inc"
 #include "db_ingest/api.inc"
 #include "php_king/function_table.inc"
 #include "php_king/resources.inc"

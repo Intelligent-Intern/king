@@ -7,9 +7,9 @@ touch the same local state.
 ## Internal Layout
 
 The public `king_db_ingest()` implementation lives in
-`extension/src/db_ingest/api.inc`. The root extension bootstrap includes that
-file directly, while the function remains registered in the shared extension
-function table.
+`extension/src/db_ingest/api.inc`. Its arginfo and function-table entry live in
+the same directory, while the root extension bootstrap includes those fragments
+for the shared extension registration.
 
 ## Function, Example 1: Append to a JSONL Ledger Atomically
 

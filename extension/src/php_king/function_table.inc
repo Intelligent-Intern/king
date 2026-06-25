@@ -27,7 +27,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_set_client_cert, arginfo_king_set_client_cert)
     PHP_FE(king_get_last_error, arginfo_king_no_args)
     PHP_FE(king_get_stats, arginfo_king_session_resource)
-    PHP_FE(king_db_ingest, arginfo_king_db_ingest)
+#include "../db_ingest/function_entry.inc"
 
     PHP_FE(king_client_send_request, arginfo_king_request_send)
     PHP_FE(king_client_send_request_async, arginfo_king_request_send_async)

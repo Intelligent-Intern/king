@@ -137,12 +137,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_config_array, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, config, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_db_ingest, 0, 2, IS_MIXED, 0)
-    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
-    ZEND_ARG_CALLABLE_INFO(0, writer, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_service_discovery, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, service_type, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, criteria, IS_ARRAY, 1, "null")

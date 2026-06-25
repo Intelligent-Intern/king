@@ -27,7 +27,6 @@ PHP_FUNCTION(king_awaitable_status);
 PHP_FUNCTION(king_awaitable_any);
 PHP_FUNCTION(king_awaitable_all);
 PHP_FUNCTION(king_get_last_error);
-PHP_FUNCTION(king_db_ingest);
 PHP_FUNCTION(king_client_websocket_get_last_error);
 PHP_FUNCTION(king_mcp_get_error);
 PHP_FUNCTION(king_telemetry_get_metrics);
