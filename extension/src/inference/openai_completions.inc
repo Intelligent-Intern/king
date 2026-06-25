@@ -337,7 +337,7 @@ static zend_result king_inference_openai_completions_payload_response(
     zval response_payload;
     zend_string *json = NULL;
     zend_result result;
-    zend_long max_completion_prompts = king_inference_openai_option_long(options, "max_completion_prompts", 128);
+    zend_long max_completion_prompts = 0;
     bool stream_requested;
     const char *stop_error = NULL;
     bool has_error_response = false;
@@ -347,6 +347,7 @@ static zend_result king_inference_openai_completions_payload_response(
     const char *model_error = NULL;
     const char *choice_count_error = NULL;
     const char *feature_error = NULL;
+    const char *limit_error = NULL;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -364,11 +365,17 @@ static zend_result king_inference_openai_completions_payload_response(
             "invalid_request_error"
         );
     }
-    if (max_completion_prompts <= 0) {
+    if (!king_inference_openai_positive_router_limit(
+        options,
+        "max_completion_prompts",
+        128,
+        &max_completion_prompts,
+        &limit_error
+    )) {
         return king_inference_openai_error_response(
             return_value,
             500,
-            "King completions router prompt limit must be positive.",
+            limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
             "server_error"
         );
     }

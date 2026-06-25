@@ -57,11 +57,14 @@ The router supports:
 - `POST /v1/embeddings`
 
 Router options include bounded drain controls (`read_timeout_ms`,
-`max_events`, `max_idle_events`), embedding limits (`max_embedding_inputs`,
-`max_embedding_tokens`, `max_embedding_dimensions`), and the legacy
-Completions prompt-array limit `max_completion_prompts`. The default
-`max_completion_prompts` is `128`; set it lower for public or tenant-shared
-routes where one request must not fan out into many backend generation runs.
+`max_events`, `max_idle_events`), generation input limits
+(`max_chat_messages`, `max_response_input_items`, `max_completion_prompts`),
+and embedding limits (`max_embedding_inputs`, `max_embedding_tokens`,
+`max_embedding_dimensions`). The default generation input limits are
+`max_chat_messages=256`, `max_response_input_items=256`, and
+`max_completion_prompts=128`; set them lower for public or tenant-shared routes
+where one request must not fan out into excessive prompt construction or backend
+generation work. Limit option values must be positive integers.
 
 Model selection is explicit when more than one model is registered. The JSON
 `model` field is matched against the registry key first and then against the
@@ -167,6 +170,9 @@ multimodal/audio output, prediction hints, and logprob output; it accepts
 suffix, echo, best-of, and logprob output. Responses rejects tool calling,
 reasoning blocks, include filters, and continuation from a previous response.
 Neutral defaults such as `null`, `false`, or empty arrays are treated as absent.
+Chat Completions `messages` arrays are supported only up to
+`max_chat_messages`. Responses input item lists are supported only up to
+`max_response_input_items`.
 Legacy Completions prompt arrays are supported only up to
 `max_completion_prompts`; streaming legacy Completions still require a single
 string prompt.

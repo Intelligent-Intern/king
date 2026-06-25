@@ -1323,7 +1323,7 @@ namespace {
      * hints, or logprob output are rejected by the local generation route
      * until those features have a real King execution path. Options include
      * `read_timeout_ms`, `max_events`, and `max_idle_events` for the bounded
-     * drain window.
+     * drain window plus `max_chat_messages`, defaulting to `256`.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @return array{status:int,headers:array<string,string>,body:string}
@@ -1348,6 +1348,9 @@ namespace {
      * Active tool, multimodal, prediction, reasoning, best-of, echo, suffix,
      * continuation, include-filter, and logprob feature requests are rejected
      * by local generation routes instead of being silently ignored.
+     * Chat Completions message arrays are bounded by `max_chat_messages`,
+     * defaulting to `256`. Responses input item lists are bounded by
+     * `max_response_input_items`, defaulting to `256`.
      * Legacy Completions prompt arrays are bounded by `max_completion_prompts`
      * in `$options`, defaulting to `128`.
      * @param array<string|int,\King\Inference\Model> $models

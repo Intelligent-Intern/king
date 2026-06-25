@@ -327,14 +327,17 @@ static zend_result king_inference_openai_responses_payload_response(
     king_inference_stream_object *stream;
     zend_string *response_id;
     zend_string *message_id;
+    zval *input;
     bool stream_requested;
     zend_result result;
+    zend_long max_response_input_items = 0;
     bool has_error_response = false;
     const char *generation_error = NULL;
     const char *stream_options_error = NULL;
     const char *stream_error = NULL;
     const char *model_error = NULL;
     const char *feature_error = NULL;
+    const char *limit_error = NULL;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -357,6 +360,30 @@ static zend_result king_inference_openai_responses_payload_response(
             return_value,
             400,
             feature_error != NULL ? feature_error : "OpenAI requested feature is unsupported.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_positive_router_limit(
+        options,
+        "max_response_input_items",
+        256,
+        &max_response_input_items,
+        &limit_error
+    )) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            limit_error != NULL ? limit_error : "King OpenAI router limit is invalid.",
+            "server_error"
+        );
+    }
+    input = king_inference_array_find(payload, "input");
+    if (king_inference_openai_array_is_list(input)
+        && (zend_ulong) zend_hash_num_elements(Z_ARRVAL_P(input)) > (zend_ulong) max_response_input_items) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Responses input list exceeds configured router limits.",
             "invalid_request_error"
         );
     }

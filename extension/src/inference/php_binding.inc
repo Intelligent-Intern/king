@@ -26,6 +26,7 @@
 
 #include "helpers.inc"
 #include "openai_messages.inc"
+#include "openai_http_helpers.inc"
 #include "backend_contract.inc"
 #include "thermal_policy.inc"
 #include "resource_policy.inc"
