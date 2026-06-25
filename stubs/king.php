@@ -1381,7 +1381,8 @@ namespace {
      * by local generation routes instead of being silently ignored.
      * Chat Completions message arrays are bounded by `max_chat_messages`,
      * defaulting to `256`. Responses input item lists are bounded by
-     * `max_response_input_items`, defaulting to `256`.
+     * `max_response_input_items`, defaulting to `256`; Responses
+     * `instructions` must be a non-empty string when provided.
      * Legacy Completions prompt arrays are bounded by `max_completion_prompts`
      * in `$options`, defaulting to `128`. `read_timeout_ms`, `max_events`, and
      * `max_idle_events` default to `250`, `4096`, and `240` and must be

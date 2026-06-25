@@ -112,10 +112,11 @@ model-listing responses and must be a non-empty string when provided; invalid
 listing options return a server error instead of being ignored.
 
 Chat message `content` and Responses input item `content` may be a string or an
-array of text content parts. King extracts text from `text`, `content`, or
-`refusal` fields and feeds that into the local text-generation prompt. Non-text
-parts such as image, audio, or file payloads are rejected for this local text
-inference route instead of being silently ignored.
+array of text content parts. Responses `instructions` must be a non-empty string
+when provided. King extracts text from `text`, `content`, or `refusal` fields
+and feeds that into the local text-generation prompt. Non-text parts such as
+image, audio, or file payloads are rejected for this local text inference route
+instead of being silently ignored.
 
 The generic OpenAI HTTP generation routes accept either a text-generation stream
 backend or a `king_native_cpu` request that explicitly carries `graph` or

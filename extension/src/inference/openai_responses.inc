@@ -334,6 +334,7 @@ static zend_result king_inference_openai_responses_payload_response(
     const char *stream_options_error = NULL;
     const char *stream_error = NULL;
     const char *model_error = NULL;
+    const char *instructions_error = NULL;
     const char *feature_error = NULL;
     const char *limit_error = NULL;
 
@@ -350,6 +351,14 @@ static zend_result king_inference_openai_responses_payload_response(
             return_value,
             400,
             stream_error != NULL ? stream_error : "OpenAI stream is invalid.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_response_instructions_valid(payload, &instructions_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            instructions_error != NULL ? instructions_error : "Responses instructions are invalid.",
             "invalid_request_error"
         );
     }

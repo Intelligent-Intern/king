@@ -426,6 +426,25 @@ static bool king_inference_openai_response_format_valid(zval *source, const char
     return false;
 }
 
+static bool king_inference_openai_response_instructions_valid(zval *source, const char **message)
+{
+    zval *instructions = king_inference_array_find(source, "instructions");
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (instructions == NULL || Z_TYPE_P(instructions) == IS_NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(instructions) == IS_STRING && Z_STRLEN_P(instructions) > 0) {
+        return true;
+    }
+    if (message != NULL) {
+        *message = "Responses instructions must be a non-empty string when provided.";
+    }
+    return false;
+}
+
 static bool king_inference_openai_chat_feature_options_valid(zval *source, const char **message)
 {
     static const char * const unsupported_keys[] = {
