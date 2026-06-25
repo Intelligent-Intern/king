@@ -115,7 +115,9 @@ additionally exposes `native_model_mapped`, `native_map_bytes`,
 `paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`.
 `backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
 selected backend kind; configured GPU use remains visible through
-`gpu_enabled`.
+`gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
+graph finishers such as `argmax_token` and `sample_token`, not to local runner
+text generation.
 
 ## Function, Tensor Index and Tensor View
 
