@@ -1,3 +1,18 @@
+#include "resource_destructors.inc"
+
+void king_client_register_resource_types(int module_number)
+{
+    le_king_session = zend_register_list_destructors_ex(
+        king_client_session_resource_dtor, NULL, "King\\Session", module_number);
+    le_king_ws = zend_register_list_destructors_ex(
+        king_client_websocket_resource_dtor, NULL, "King\\WebSocket", module_number);
+    le_king_request_context = zend_register_list_destructors_ex(
+        king_client_http1_request_context_resource_dtor,
+        NULL,
+        "King\\HttpRequestContext",
+        module_number);
+}
+
 void king_client_register_websocket_exception_classes(void)
 {
     king_ce_ws_exception = king_register_exception(

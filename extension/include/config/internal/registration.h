@@ -9,6 +9,7 @@
 #include "class_entries.h"
 #include "class_methods.h"
 
+void king_config_register_resource_types(int module_number);
 void king_config_register_classes(void);
 void king_config_init_object_handlers(void);
 

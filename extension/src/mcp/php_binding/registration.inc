@@ -1,3 +1,11 @@
+#include "resource_destructors.inc"
+
+void king_mcp_register_resource_types(int module_number)
+{
+    le_king_mcp = zend_register_list_destructors_ex(
+        king_mcp_resource_dtor, NULL, "King\\MCP", module_number);
+}
+
 void king_mcp_register_exception_classes(void)
 {
     king_ce_mcp_exception = king_register_exception(
