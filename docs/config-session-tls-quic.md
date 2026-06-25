@@ -24,8 +24,10 @@ protocol-specific sync and async declarations live under
 
 Server session, TLS reload, cancellation, and admin listener registrations are
 owned by `extension/src/server/arginfo.inc` and
-`extension/src/server/function_entries.inc`, with the public include-side anchor
-at `extension/include/server/arginfo/index.h`.
+`extension/src/server/function_entries.inc`. Public declarations live under
+`extension/include/server/` and are exported through
+`extension/include/server/index.h`; arginfo remains anchored at
+`extension/include/server/arginfo/index.h`.
 
 Core exception, class, and object-handler registration is factored into
 `extension/src/php_king/class_registration.inc`; `extension/src/php_king/lifecycle.inc`
