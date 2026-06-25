@@ -7,12 +7,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_version, arginfo_king_no_args)
     PHP_FE(king_health, arginfo_king_no_args)
     PHP_FE(king_new_config, arginfo_king_new_config)
-    PHP_FE(king_await, arginfo_king_await)
-    PHP_FE(king_awaitable_poll, arginfo_king_awaitable_poll)
-    PHP_FE(king_awaitable_cancel, arginfo_king_awaitable_cancel)
-    PHP_FE(king_awaitable_status, arginfo_king_awaitable_status)
-    PHP_FE(king_awaitable_any, arginfo_king_awaitable_any)
-    PHP_FE(king_awaitable_all, arginfo_king_awaitable_all)
+#include "../awaitable/function_entries.inc"
 
     PHP_FE(king_connect, arginfo_king_connect)
     PHP_FE(king_close, arginfo_king_session_resource)

@@ -15,8 +15,9 @@ children visible without losing the caller's original array keys.
 ## Internal Layout
 
 The native object contract lives in `extension/include/awaitable/awaitable.h`.
-The implementation lives under `extension/src/awaitable/` and is included
-directly by the extension bootstrap.
+The implementation lives under `extension/src/awaitable/`. The awaitable
+module owns its PHP arginfo, function-table entries, object implementation,
+and aggregate helpers, and is included directly by the extension bootstrap.
 
 ## Function, Example 1: Await an HTTP Request
 

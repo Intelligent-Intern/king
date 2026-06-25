@@ -37,6 +37,7 @@
 #include "php_king/state.inc"
 #include "php_king/externals.inc"
 #include "php_king/arginfo.inc"
+#include "awaitable/arginfo.inc"
 #include "db_ingest/arginfo.inc"
 #include "object_store/arginfo.inc"
 #include "object_store/class_methods.inc"
