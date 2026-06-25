@@ -25,3 +25,4 @@
 #include "php_binding/object_api.inc"
 #include "php_binding/public_server_api.inc"
 #include "php_binding/public_server_object_api.inc"
+#include "mcp/class_method_entries.h"

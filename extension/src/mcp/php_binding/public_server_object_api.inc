@@ -187,5 +187,3 @@ PHP_METHOD(King_MCPServer, runStdio)
 
     RETURN_ZVAL(&result, 0, 1);
 }
-
-#include "mcp/class_method_entries.h"
