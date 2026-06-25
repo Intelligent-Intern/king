@@ -256,16 +256,18 @@ static zend_result king_inference_openai_require_generation_backend(
     if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
         zval *graph = king_inference_array_find(payload, "graph");
         zval *graphs = king_inference_array_find(payload, "graphs");
+        zval *graph_options = king_inference_array_find(payload, "graph_options");
 
         if ((graph != NULL && Z_TYPE_P(graph) != IS_ARRAY)
-            || (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY)) {
+            || (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY)
+            || (graph_options != NULL && Z_TYPE_P(graph_options) != IS_ARRAY)) {
             if (has_error_response != NULL) {
                 *has_error_response = true;
             }
             return king_inference_openai_error_response(
                 return_value,
                 400,
-                "Native graph generation requires graph and graphs to be arrays when provided.",
+                "Native graph generation requires graph, graphs, and graph_options to be arrays when provided.",
                 "invalid_request_error"
             );
         }
