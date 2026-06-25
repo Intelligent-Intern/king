@@ -4,6 +4,13 @@
 lock. This is useful for small local write paths where multiple processes may
 touch the same local state.
 
+## Internal Layout
+
+The public `king_db_ingest()` implementation lives in
+`extension/src/db_ingest/api.inc`. The root extension bootstrap includes that
+file directly, while the function remains registered in the shared extension
+function table.
+
 ## Function, Example 1: Append to a JSONL Ledger Atomically
 
 ```php
