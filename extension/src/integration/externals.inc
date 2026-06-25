@@ -1,0 +1,11 @@
+PHP_FUNCTION(king_system_init);
+PHP_FUNCTION(king_system_health_check);
+PHP_FUNCTION(king_system_get_status);
+PHP_FUNCTION(king_system_get_metrics);
+PHP_FUNCTION(king_system_get_performance_report);
+PHP_FUNCTION(king_system_get_component_info);
+PHP_FUNCTION(king_system_process_request);
+PHP_FUNCTION(king_system_restart_component);
+PHP_FUNCTION(king_system_fail_component);
+PHP_FUNCTION(king_system_recover);
+PHP_FUNCTION(king_system_shutdown);

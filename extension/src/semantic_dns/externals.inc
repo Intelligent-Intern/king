@@ -1,0 +1,14 @@
+int king_semantic_dns_registry_minit(void);
+void king_semantic_dns_registry_mshutdown(void);
+void king_semantic_dns_shutdown_system(void);
+void king_semantic_dns_request_shutdown(void);
+
+PHP_FUNCTION(king_semantic_dns_init);
+PHP_FUNCTION(king_semantic_dns_start_server);
+PHP_FUNCTION(king_semantic_dns_query);
+PHP_FUNCTION(king_semantic_dns_register_service);
+PHP_FUNCTION(king_semantic_dns_discover_service);
+PHP_FUNCTION(king_semantic_dns_register_mother_node);
+PHP_FUNCTION(king_semantic_dns_get_optimal_route);
+PHP_FUNCTION(king_semantic_dns_update_service_status);
+PHP_FUNCTION(king_semantic_dns_get_service_topology);
