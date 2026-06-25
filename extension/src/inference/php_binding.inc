@@ -1,8 +1,9 @@
 /*
  * Inference PHP binding aggregation.
  *
- * Keep leaf implementation fragments in this module boundary. The public
- * entry-point file below should stay focused on PHP_FUNCTION/PHP_METHOD glue.
+ * Keep leaf implementation fragments in this module boundary. The owning
+ * inference.c entrypoint stays focused on module state, binding, and
+ * registration ownership.
  */
 
 #include "Zend/zend_smart_str.h"

@@ -12,7 +12,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "php_king/arginfo.h"
+#include "inference/arginfo/index.h"
 
 #include "state.inc"
 #include "php_binding.inc"

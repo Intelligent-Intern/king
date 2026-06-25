@@ -6,7 +6,7 @@
  */
 #include "mcp/mcp.h"
 #include "php_king.h"
-#include "php_king/arginfo.h"
+#include "mcp/arginfo/index.h"
 #include "config/mcp_and_orchestrator/base_layer.h"
 #include "king_hrtime.h"
 
