@@ -116,11 +116,11 @@ Chat Completions and legacy Completions also validate OpenAI `stop` as a
 string or an array of one to four non-empty strings and pass those stop
 sequences to the local generation runner.
 
-For streamed Chat Completions, `stream_options.include_usage=true` appends a
-final OpenAI-shaped usage chunk with empty `choices` immediately before
-`data: [DONE]`. Other chunks carry `usage: null`, and the final usage chunk is
-computed through the same tokenizer-backed path as non-streaming Chat
-Completions.
+For streamed Chat Completions and legacy Completions,
+`stream_options.include_usage=true` appends a final OpenAI-shaped usage chunk
+with empty `choices` immediately before `data: [DONE]`. Other chunks carry
+`usage: null`, and the final usage chunk is computed through the same
+tokenizer-backed path as non-streaming generation responses.
 
 ## OO, Example 1: Static Facade
 

@@ -214,3 +214,27 @@ static void king_inference_openai_add_text_completion_usage(
     add_assoc_long(&usage, "total_tokens", prompt_tokens + completion_tokens);
     add_assoc_zval(target, "usage", &usage);
 }
+
+static void king_inference_openai_add_text_completion_stream_usage(
+    zval *target,
+    zval *model,
+    zval *payload,
+    zend_string *completion)
+{
+    zval *prompt = king_inference_array_find(payload, "prompt");
+    zend_long prompt_tokens;
+    zend_long completion_tokens;
+    zval usage;
+
+    if (!king_inference_openai_text_prompt_token_count(model, prompt, &prompt_tokens)
+        || !king_inference_openai_token_count_from_text(model, completion, &completion_tokens)) {
+        add_assoc_null(target, "usage");
+        return;
+    }
+
+    array_init(&usage);
+    add_assoc_long(&usage, "prompt_tokens", prompt_tokens);
+    add_assoc_long(&usage, "completion_tokens", completion_tokens);
+    add_assoc_long(&usage, "total_tokens", prompt_tokens + completion_tokens);
+    add_assoc_zval(target, "usage", &usage);
+}

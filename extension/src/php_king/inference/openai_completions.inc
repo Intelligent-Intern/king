@@ -148,7 +148,9 @@ static zend_result king_inference_completion_stream_response(
     zend_long events = 0;
     zend_long idle_events = 0;
     bool finished = false;
+    bool include_usage = king_inference_openai_stream_usage_requested(payload);
     smart_str sse = {0};
+    smart_str content = {0};
 
     if (king_inference_completion_prompt_to_chat_payload(payload, prompt, &chat_payload) != SUCCESS) {
         return FAILURE;
@@ -181,6 +183,7 @@ static zend_result king_inference_completion_stream_response(
             zend_string_release(model_name);
             zval_ptr_dtor(&stream_value);
             zval_ptr_dtor(&chat_payload);
+            smart_str_free(&content);
             smart_str_free(&sse);
             return FAILURE;
         }
@@ -210,6 +213,10 @@ static zend_result king_inference_completion_stream_response(
             king_inference_completion_choice(&choice, 0, Z_STR_P(delta_text), NULL);
             add_next_index_zval(&choices, &choice);
             add_assoc_zval(&event, "choices", &choices);
+            if (include_usage) {
+                add_assoc_null(&event, "usage");
+            }
+            smart_str_append(&content, Z_STR_P(delta_text));
             if (king_inference_openai_sse_append(&sse, &event) != SUCCESS) {
                 zval_ptr_dtor(&event);
                 zval_ptr_dtor(&chunk);
@@ -217,6 +224,7 @@ static zend_result king_inference_completion_stream_response(
                 zend_string_release(model_name);
                 zval_ptr_dtor(&stream_value);
                 zval_ptr_dtor(&chat_payload);
+                smart_str_free(&content);
                 smart_str_free(&sse);
                 return FAILURE;
             }
@@ -235,6 +243,7 @@ static zend_result king_inference_completion_stream_response(
     if (!finished) {
         zval_ptr_dtor(&stream_value);
         zval_ptr_dtor(&chat_payload);
+        smart_str_free(&content);
         smart_str_free(&sse);
         return FAILURE;
     }
@@ -252,10 +261,40 @@ static zend_result king_inference_completion_stream_response(
         king_inference_completion_choice(&choice, 0, NULL, "stop");
         add_next_index_zval(&choices, &choice);
         add_assoc_zval(&event, "choices", &choices);
+        if (include_usage) {
+            add_assoc_null(&event, "usage");
+        }
         if (king_inference_openai_sse_append(&sse, &event) != SUCCESS) {
             zval_ptr_dtor(&event);
             zval_ptr_dtor(&stream_value);
             zval_ptr_dtor(&chat_payload);
+            smart_str_free(&content);
+            smart_str_free(&sse);
+            return FAILURE;
+        }
+        zval_ptr_dtor(&event);
+    }
+
+    if (include_usage) {
+        zval event;
+        smart_str_0(&content);
+        array_init(&event);
+        add_assoc_str(&event, "id", king_inference_completion_id(stream));
+        add_assoc_string(&event, "object", "text_completion");
+        add_assoc_long(&event, "created", stream->created_at);
+        add_assoc_str(&event, "model", king_inference_stream_openai_model_name(stream));
+        add_assoc_empty_array(&event, "choices");
+        king_inference_openai_add_text_completion_stream_usage(
+            &event,
+            model,
+            payload,
+            content.s
+        );
+        if (king_inference_openai_sse_append(&sse, &event) != SUCCESS) {
+            zval_ptr_dtor(&event);
+            zval_ptr_dtor(&stream_value);
+            zval_ptr_dtor(&chat_payload);
+            smart_str_free(&content);
             smart_str_free(&sse);
             return FAILURE;
         }
@@ -264,6 +303,7 @@ static zend_result king_inference_completion_stream_response(
 
     zval_ptr_dtor(&stream_value);
     zval_ptr_dtor(&chat_payload);
+    smart_str_free(&content);
     smart_str_appends(&sse, "data: [DONE]\n\n");
     smart_str_0(&sse);
     king_inference_openai_http_array_response(return_value, 200, "text/event-stream", sse.s, true);
