@@ -13,6 +13,11 @@ The shared WebSocket state and connection object contract live in
 `extension/src/client/websocket/`; server upgrade and `King\WebSocket\Server`
 runtime code live under `extension/src/server/`.
 
+Client-side WebSocket function registrations are owned by the client binding
+fragments in `extension/src/client/arginfo.inc` and
+`extension/src/client/function_entries.inc`. Server-side WebSocket upgrade and
+listener registrations remain with the server binding surface.
+
 ## Function, Example 1: Client Echo
 
 ```php

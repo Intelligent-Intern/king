@@ -12,6 +12,11 @@ PHP-visible `King\Config` object contract lives in
 client, awaitable, inference, MCP, and orchestrator paths, so its object
 contract lives in `extension/include/cancel_token.h`.
 
+Client session, TLS, request, and polling function registrations are owned by
+`extension/src/client/arginfo.inc` and
+`extension/src/client/function_entries.inc`, with the public include-side anchor
+at `extension/include/client/arginfo/index.h`.
+
 ## Function, Example 1: Config Resource and Session Stats
 
 ```php

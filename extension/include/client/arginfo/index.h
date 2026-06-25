@@ -4,15 +4,15 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Reserved arginfo aggregation point for client-side PHP entry points.
- *
- * The current runtime relies on shared arginfo emitted through the central
- * php_king arginfo table, so this header intentionally carries no
- * declarations yet.
+ * Arginfo aggregation point for client-side PHP entry points. The declarations
+ * stay beside the native binding fragments and are pulled through this
+ * include-side module anchor.
  * =========================================================================
  */
 
 #ifndef KING_CLIENT_ARGINFO_INDEX_H
 #define KING_CLIENT_ARGINFO_INDEX_H
+
+#include "../../../src/client/arginfo.inc"
 
 #endif /* KING_CLIENT_ARGINFO_INDEX_H */

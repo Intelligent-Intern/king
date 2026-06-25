@@ -10,6 +10,12 @@ The PHP-visible client/session/stream/response object contracts live in
 `extension/src/client/http1/`; shared client object glue lives in
 `extension/src/client/object.inc`.
 
+The client module owns its PHP binding metadata in
+`extension/src/client/arginfo.inc` and
+`extension/src/client/function_entries.inc`. Those declarations are aggregated
+through `extension/include/client/arginfo/index.h` and then consumed by the
+root extension bootstrap.
+
 ## Function, Example 1: Simple GET
 
 ```php
