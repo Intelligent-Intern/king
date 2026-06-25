@@ -269,7 +269,7 @@ static bool king_inference_openai_stream_options_valid(zval *source, const char 
     if (stream_options == NULL) {
         return true;
     }
-    if (Z_TYPE_P(stream_options) != IS_ARRAY) {
+    if (!king_inference_openai_array_is_object(stream_options)) {
         if (message != NULL) {
             *message = "OpenAI stream_options must be an object when provided.";
         }
@@ -402,7 +402,7 @@ static bool king_inference_openai_response_format_valid(zval *source, const char
     if (format == NULL || Z_TYPE_P(format) == IS_NULL) {
         return true;
     }
-    if (Z_TYPE_P(format) != IS_ARRAY) {
+    if (!king_inference_openai_array_is_object(format)) {
         if (message != NULL) {
             *message = "OpenAI response_format must be an object when provided.";
         }

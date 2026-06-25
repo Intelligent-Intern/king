@@ -671,10 +671,10 @@ The helper accepts the normalized King HTTP request array and owns the
 OpenAI-compatible endpoint contract for `POST /v1/chat/completions`. The request
 body is decoded as a Chat Completions JSON payload, `messages` are validated,
 and the loaded King model is used for both normal and streaming responses. For
-`king_native_cpu` models, the same route accepts explicit `graph` or `graphs`
-arrays in the JSON payload and emits OpenAI-shaped responses from the native
-graph-selected token stream. `graph_options` is accepted with the same strict
-array/object requirement as the direct native stream API.
+`king_native_cpu` models, the same route accepts an explicit `graph` object or
+`graphs` array in the JSON payload and emits OpenAI-shaped responses from the
+native graph-selected token stream. `graph_options` must be a JSON object when
+provided.
 
 For `stream=false`, the helper drains into one OpenAI-shaped `chat.completion`
 JSON response. For `stream=true`, it returns a bounded `text/event-stream` body

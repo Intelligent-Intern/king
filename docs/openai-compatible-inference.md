@@ -119,9 +119,10 @@ inference route instead of being silently ignored.
 
 The generic OpenAI HTTP generation routes accept either a text-generation stream
 backend or a `king_native_cpu` request that explicitly carries `graph` or
-`graphs`. `graph`, `graphs`, and `graph_options` must be JSON objects or arrays
-where provided. Native graph requests still return OpenAI-compatible Chat
-Completions chunks or JSON responses, but the router does not synthesize a
+`graphs`. `graph` must be a JSON object, `graphs` must be a JSON array, and
+`graph_options` must be a JSON object where provided. Native graph requests
+still return OpenAI-compatible Chat Completions chunks or JSON responses, but
+the router does not synthesize a
 native graph from arbitrary Chat Completions payloads. When a generation route
 selects a native graph backend without an explicit graph request, King returns an
 OpenAI-shaped `400` JSON error instead of falling through to a low-level stream

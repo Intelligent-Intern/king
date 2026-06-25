@@ -3,6 +3,13 @@ static bool king_inference_openai_array_is_list(zval *value)
     return value != NULL && Z_TYPE_P(value) == IS_ARRAY && zend_array_is_list(Z_ARRVAL_P(value));
 }
 
+static bool king_inference_openai_array_is_object(zval *value)
+{
+    return value != NULL
+        && Z_TYPE_P(value) == IS_ARRAY
+        && (zend_hash_num_elements(Z_ARRVAL_P(value)) == 0 || !zend_array_is_list(Z_ARRVAL_P(value)));
+}
+
 static zend_result king_inference_openai_append_content_part_text(zval *part, smart_str *buffer)
 {
     zval *text;
