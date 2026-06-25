@@ -24,7 +24,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "arginfo.inc"
 #include "helpers.inc"
 #include "openai_messages.inc"
 #include "backend_contract.inc"

@@ -34,6 +34,7 @@ at a time:
 extension/src/inference/
 ├── api.inc
 ├── arginfo.inc
+├── function_entries.inc
 ├── helpers.inc
 ├── backend_contract.inc
 ├── backend_registry.inc

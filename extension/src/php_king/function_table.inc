@@ -130,21 +130,7 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_xslt_engine_status, arginfo_king_no_args)
     PHP_FE(king_xslt_transform_file, arginfo_king_xslt_transform_file)
     PHP_FE(king_xslt_transform_to_file, arginfo_king_xslt_transform_to_file)
-    PHP_FE(king_inference_model_load, arginfo_king_inference_model_load)
-    PHP_FE(king_inference_model_info, arginfo_king_inference_model_info)
-    PHP_FE(king_inference_tokenize, arginfo_king_inference_tokenize)
-    PHP_FE(king_inference_tensor_view, arginfo_king_inference_tensor_view)
-    PHP_FE(king_inference_tensor_index, arginfo_king_inference_tensor_index)
-    PHP_FE(king_inference_tensor_dequantize, arginfo_king_inference_tensor_dequantize)
-    PHP_FE(king_inference_tensor_matmul, arginfo_king_inference_tensor_matmul)
-    PHP_FE(king_inference_graph_run, arginfo_king_inference_graph_run)
-    PHP_FE(king_inference_kv_cache_plan, arginfo_king_inference_kv_cache_plan)
-    PHP_FE(king_inference_stream, arginfo_king_inference_stream)
-    PHP_FE(king_inference_openai_chat_http_response, arginfo_king_inference_openai_chat_http_response)
-    PHP_FE(king_inference_openai_http_response, arginfo_king_inference_openai_http_response)
-    PHP_FE(king_inference_next, arginfo_king_inference_next)
-    PHP_FE(king_inference_next_async, arginfo_king_inference_next_async)
-    PHP_FE(king_inference_cancel, arginfo_king_inference_cancel)
+#include "../inference/function_entries.inc"
 
 #include "../telemetry/function_entries.inc"
 

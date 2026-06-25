@@ -44,6 +44,7 @@
 #include "autoscaling/class_methods.inc"
 #include "telemetry/arginfo.inc"
 #include "semantic_dns/arginfo.inc"
+#include "inference/arginfo.inc"
 #include "db_ingest/api.inc"
 #include "php_king/function_table.inc"
 #include "php_king/resources.inc"
