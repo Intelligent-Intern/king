@@ -352,7 +352,7 @@ static zend_result king_inference_openai_responses_payload_response(
     if (king_inference_openai_require_generation_backend(
         return_value,
         model,
-        &chat_payload,
+        payload,
         "Responses endpoint",
         &has_error_response
     ) != SUCCESS) {
