@@ -1,3 +1,8 @@
+/*
+ * Media registration aggregation. The media translation unit includes this
+ * module boundary instead of leaving registration in the core bootstrap.
+ */
+
 void king_media_register_classes(void)
 {
     king_ce_rtp_socket = king_register_class_with_flags(

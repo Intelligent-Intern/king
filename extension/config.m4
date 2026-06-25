@@ -412,6 +412,7 @@ if test "$PHP_KING" != "no"; then
         src/server/tls.c \
         src/server/websocket.c \
         src/xslt/xslt.c \
+        src/media/media.c \
         src/media/rtp.c \
         src/core/version.c       \
         src/core/health.c        \

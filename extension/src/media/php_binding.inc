@@ -1,6 +1,7 @@
 /*
- * King\RTP\Socket userland surface. This is a resource-backed OO facade over
- * the same native RTP/ICE-lite/DTLS-SRTP socket runtime used by king_rtp_*.
+ * King\RTP\Socket userland surface. The media translation unit includes this
+ * object boundary over the native RTP/ICE-lite/DTLS-SRTP socket runtime used
+ * by king_rtp_*.
  */
 
 #include "media/rtp.h"

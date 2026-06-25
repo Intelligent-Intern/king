@@ -29,7 +29,6 @@ zend_class_entry *king_ce_protocol_exception   = NULL;
 #include "../autoscaling/state.inc"
 #include "../client/state.inc"
 #include "../config/state.inc"
-#include "../media/state.inc"
 #include "../object_store/state.inc"
 #include "../pipeline_orchestrator/state.inc"
 #include "../server/state.inc"
