@@ -30,25 +30,19 @@
 #include "php_king/constants.h"
 #include "king_globals.h"
 #include "king_init.h"
-#include "awaitable/cancel_token.h"
-#include "client/session.h"
-#include "client/objects.h"
-#include "client/websocket.h"
+#include "awaitable/index.h"
+#include "client/index.h"
 #include "config/object.h"
-#include "server/websocket.h"
+#include "server/index.h"
 
 /*
  * Keep this header lightweight for the current v1 runtime surface so the
  * extension can compile without pulling in the full native dependency graph.
  */
 #ifndef KING_RUNTIME_BUILD
-#  include "client/cancel.h"
-#  include "client/tls.h"
 #  include "config/config.h"
-#  include "client/http3.h"
 #endif /* KING_RUNTIME_BUILD */
 
-#include "awaitable/index.h"
 #include "iibin/index.h"
 #include "inference/index.h"
 #include "mcp/index.h"
