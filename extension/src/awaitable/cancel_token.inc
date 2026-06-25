@@ -3,11 +3,7 @@
  * top of the internal cancel-token object state.
  */
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_CancelToken_cancel, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_CancelToken_isCancelled, 0, 0, _IS_BOOL, 0)
-ZEND_END_ARG_INFO()
+#include "awaitable/cancel_token_arginfo.h"
 
 PHP_METHOD(King_CancelToken, cancel)
 {

@@ -5,32 +5,13 @@
  *
  * PURPOSE:
  * `King\\Config` object surface on top of the native config resource. This
- * file declares arginfo, resolves object/resource handles, canonicalizes and
- * tracks namespaced override keys, enforces freeze and policy gates, and
- * implements the OO `new/get/set/toArray` behavior for runtime config
+ * file resolves object/resource handles, canonicalizes and tracks namespaced
+ * override keys, and enforces freeze and policy gates for runtime config
  * snapshots.
  * =========================================================================
  */
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Config___construct, 0, 0, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Config_new, 0, 0, King\\Config, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 0, "[]")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Config_get, 0, 0, 1)
-    ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Config_set, 0, 2, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Config_toArray, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
+#include "config/internal/object_arginfo.h"
 
 static void king_config_object_throw_unsupported_key(
     const char *function_name,
@@ -295,4 +276,3 @@ static void king_config_object_sync_override_meta(
     cfg->override_count = override_count;
     cfg->userland_overrides_applied = override_count > 0 ? 1 : 0;
 }
-

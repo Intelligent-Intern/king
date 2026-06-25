@@ -1,11 +1,4 @@
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_WebSocket_Server___construct, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, host, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, port, IS_LONG, 0)
-    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, config, King\\Config, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_WebSocket_Server_accept, 0, 0, King\\WebSocket\\Connection, 0)
-ZEND_END_ARG_INFO()
+#include "server/websocket_server_arginfo.h"
 
 static void king_websocket_server_set_errorf(
     const char *format,
