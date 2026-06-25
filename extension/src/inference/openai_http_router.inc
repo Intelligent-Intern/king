@@ -289,6 +289,21 @@ static bool king_inference_openai_model_name_matches(zval *model_value, zend_str
     return model->name != NULL && zend_string_equals(model->name, name);
 }
 
+static bool king_inference_openai_model_listed_id_matches(
+    zval *model_value,
+    zend_string *key,
+    zend_ulong index,
+    zend_string *requested)
+{
+    zend_string *listed_id;
+    bool matches;
+
+    listed_id = king_inference_openai_model_entry_id(model_value, key, index);
+    matches = zend_string_equals(listed_id, requested);
+    zend_string_release(listed_id);
+    return matches;
+}
+
 static zval *king_inference_openai_find_model(zval *models, zval *payload)
 {
     zval *requested = king_inference_array_find(payload, "model");
@@ -312,10 +327,9 @@ static zval *king_inference_openai_find_model(zval *models, zval *payload)
     }
 
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
-        (void) index;
-        (void) key;
         if (king_inference_openai_is_model(entry)
-            && king_inference_openai_model_name_matches(entry, Z_STR_P(requested))) {
+            && (king_inference_openai_model_name_matches(entry, Z_STR_P(requested))
+                || king_inference_openai_model_listed_id_matches(entry, key, index, Z_STR_P(requested)))) {
             return entry;
         }
     } ZEND_HASH_FOREACH_END();
@@ -339,10 +353,9 @@ static zval *king_inference_openai_find_model_by_id(zval *models, zend_string *r
     }
 
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
-        (void) index;
-        (void) key;
         if (king_inference_openai_is_model(entry)
-            && king_inference_openai_model_name_matches(entry, requested)) {
+            && (king_inference_openai_model_name_matches(entry, requested)
+                || king_inference_openai_model_listed_id_matches(entry, key, index, requested))) {
             return entry;
         }
     } ZEND_HASH_FOREACH_END();
@@ -445,7 +458,8 @@ static zend_result king_inference_openai_retrieve_model_response(
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
         if (king_inference_openai_is_model(entry)
             && (zend_hash_find(Z_ARRVAL_P(models), model_id) == entry
-                || king_inference_openai_model_name_matches(entry, model_id))) {
+                || king_inference_openai_model_name_matches(entry, model_id)
+                || king_inference_openai_model_listed_id_matches(entry, key, index, model_id))) {
             king_inference_openai_model_object(&model_object, entry, key, index, options);
             result = king_inference_openai_json_encode(&model_object, &json);
             zval_ptr_dtor(&model_object);

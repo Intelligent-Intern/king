@@ -1342,9 +1342,9 @@ namespace {
      * `POST /v1/embeddings`. POST routes require `body` to be a JSON string
      * containing a JSON object; missing, empty, array, or scalar request bodies
      * are rejected before model selection.
-     * For generation requests, the JSON `model` field
-     * selects either a string key from `$models` or the model name stored in
-     * the loaded King model. If exactly one model is registered, `model` may
+     * For generation requests, the JSON `model` field selects a string key
+     * from `$models`, the model name stored in the loaded King model, or the
+     * listed OpenAI model id. If exactly one model is registered, `model` may
      * be omitted. Embeddings use the configured `embedding_tensor` or a known
      * GGUF token embedding tensor and return float vectors or base64-encoded
      * Float32LE vectors. Embedding requests may set `dimensions` when a
