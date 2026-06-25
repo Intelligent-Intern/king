@@ -10,5 +10,4 @@
 #include "../object_store/registration.inc"
 #include "../autoscaling/registration.inc"
 #include "../media/registration.inc"
-#include "../xslt/registration.inc"
 #include "../server/registration.inc"

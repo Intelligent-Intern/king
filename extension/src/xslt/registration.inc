@@ -1,3 +1,8 @@
+/*
+ * XSLT registration aggregation. The XSLT translation unit includes this
+ * module boundary instead of leaving registration in the core bootstrap.
+ */
+
 void king_xslt_register_classes(void)
 {
     king_ce_xslt_processor = king_register_class_with_flags(

@@ -33,7 +33,6 @@ zend_class_entry *king_ce_protocol_exception   = NULL;
 #include "../object_store/state.inc"
 #include "../pipeline_orchestrator/state.inc"
 #include "../server/state.inc"
-#include "../xslt/state.inc"
 
 char king_last_error[KING_ERR_LEN] = {0};
 

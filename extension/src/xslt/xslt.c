@@ -11,6 +11,7 @@
 #include "php.h"
 #include "php_king.h"
 #include "runtime/saxonc_candidates.h"
+#include "xslt/arginfo/index.h"
 #include "xslt/xslt.h"
 #include "Zend/zend_exceptions.h"
 #include <dlfcn.h>
@@ -26,6 +27,9 @@
 #endif
 
 #include "saxonc_loader.inc"
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"
 
 static zend_string *king_xslt_realpath_checked_or_throw(
     zend_string *path,

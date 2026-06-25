@@ -1,7 +1,6 @@
 /*
- * King\XSLT\Processor PHP object surface. This object stores default SaxonC
- * options and delegates transformations to the same native XSLT runtime used
- * by king_xslt_*.
+ * King\XSLT\Processor PHP object surface. The XSLT translation unit includes
+ * this object boundary beside the native SaxonC runtime used by king_xslt_*.
  */
 
 #include "xslt/xslt.h"
