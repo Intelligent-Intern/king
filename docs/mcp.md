@@ -16,7 +16,7 @@ accepts POST requests and can return either `application/json` or
 
 The native MCP runtime and object contracts live in
 `extension/include/mcp/mcp.h`. Runtime code lives under
-`extension/src/mcp/mcp/`; PHP userland binding code lives under
+`extension/src/mcp/runtime/`; PHP userland binding code lives under
 `extension/src/mcp/php_binding/`. The binding directory owns its PHP arginfo,
 function-table entries, object API, procedural API, public server API, and
 transfer helpers, and is included directly by the extension bootstrap.

@@ -32,8 +32,8 @@
 #define KING_MCP_TRANSFER_STATE_VERSION 1
 
 
-#include "mcp/state_and_validation.inc"
-#include "mcp/transfer_state.inc"
-#include "mcp/transport_control.inc"
-#include "mcp/remote_protocol.inc"
-#include "mcp/lifecycle_and_api.inc"
+#include "runtime/state_and_validation.inc"
+#include "runtime/transfer_state.inc"
+#include "runtime/transport_control.inc"
+#include "runtime/remote_protocol.inc"
+#include "runtime/lifecycle_and_api.inc"
