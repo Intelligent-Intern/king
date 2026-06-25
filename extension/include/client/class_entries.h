@@ -15,5 +15,10 @@ extern zend_class_entry *king_ce_client_http1;
 extern zend_class_entry *king_ce_client_http2;
 extern zend_class_entry *king_ce_client_http3;
 extern zend_class_entry *king_ce_ws_connection;
+extern zend_class_entry *king_ce_ws_exception;
+extern zend_class_entry *king_ce_ws_connection_error;
+extern zend_class_entry *king_ce_ws_protocol_error;
+extern zend_class_entry *king_ce_ws_timeout;
+extern zend_class_entry *king_ce_ws_closed;
 
 #endif /* KING_CLIENT_CLASS_ENTRIES_H */

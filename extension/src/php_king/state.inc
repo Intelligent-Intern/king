@@ -32,16 +32,6 @@ zend_class_entry *king_ce_timeout_exception    = NULL;
 zend_class_entry *king_ce_network_exception    = NULL;
 zend_class_entry *king_ce_tls_exception        = NULL;
 zend_class_entry *king_ce_protocol_exception   = NULL;
-zend_class_entry *king_ce_mcp_exception        = NULL;
-zend_class_entry *king_ce_mcp_connection_error = NULL;
-zend_class_entry *king_ce_mcp_protocol_error   = NULL;
-zend_class_entry *king_ce_mcp_timeout          = NULL;
-zend_class_entry *king_ce_mcp_data_error       = NULL;
-zend_class_entry *king_ce_ws_exception         = NULL;
-zend_class_entry *king_ce_ws_connection_error  = NULL;
-zend_class_entry *king_ce_ws_protocol_error    = NULL;
-zend_class_entry *king_ce_ws_timeout           = NULL;
-zend_class_entry *king_ce_ws_closed            = NULL;
 
 #include "../autoscaling/class_entries.inc"
 #include "../awaitable/class_entries.inc"

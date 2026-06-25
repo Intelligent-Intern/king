@@ -28,17 +28,7 @@ extern zend_class_entry
     *king_ce_timeout_exception,
     *king_ce_network_exception,
     *king_ce_tls_exception,
-    *king_ce_protocol_exception,
-    *king_ce_mcp_exception,
-    *king_ce_mcp_connection_error,
-    *king_ce_mcp_protocol_error,
-    *king_ce_mcp_timeout,
-    *king_ce_mcp_data_error,
-    *king_ce_ws_exception,
-    *king_ce_ws_connection_error,
-    *king_ce_ws_protocol_error,
-    *king_ce_ws_timeout,
-    *king_ce_ws_closed;
+    *king_ce_protocol_exception;
 
 #include "autoscaling/class_entries.h"
 #include "awaitable/class_entries.h"
