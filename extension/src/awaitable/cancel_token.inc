@@ -25,9 +25,3 @@ PHP_METHOD(King_CancelToken, isCancelled)
     intern = php_king_cancel_token_obj_from_zend(Z_OBJ_P(ZEND_THIS));
     RETURN_BOOL(intern->cancelled);
 }
-
-const zend_function_entry king_cancel_token_class_methods[] = {
-    PHP_ME(King_CancelToken, cancel, arginfo_class_King_CancelToken_cancel, ZEND_ACC_PUBLIC)
-    PHP_ME(King_CancelToken, isCancelled, arginfo_class_King_CancelToken_isCancelled, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};

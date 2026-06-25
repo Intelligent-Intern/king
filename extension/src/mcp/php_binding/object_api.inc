@@ -677,15 +677,3 @@ PHP_METHOD(King_MCP, downloadToStream)
     zend_string_release(payload);
     king_set_error("");
 }
-
-const zend_function_entry king_mcp_class_methods[] = {
-    PHP_ME(King_MCP, __construct, arginfo_class_King_MCP___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(King_MCP, request, arginfo_class_King_MCP_request, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, requestAsync, arginfo_class_King_MCP_requestAsync, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, requestIibin, arginfo_class_King_MCP_requestIibin, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, requestIibinAsync, arginfo_class_King_MCP_requestIibinAsync, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, uploadFromStream, arginfo_class_King_MCP_uploadFromStream, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, downloadToStream, arginfo_class_King_MCP_downloadToStream, ZEND_ACC_PUBLIC)
-    PHP_ME(King_MCP, close, arginfo_class_King_MCP_close, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
