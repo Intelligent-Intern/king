@@ -4,13 +4,15 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Reserved arginfo aggregation point for database ingest PHP entry points.
- * The active declarations currently live beside the native binding fragments
- * under extension/src/db_ingest/.
+ * Arginfo aggregation point for database ingest PHP entry points. The
+ * declarations stay beside the native binding fragments and are pulled through
+ * this include-side module anchor.
  * =========================================================================
  */
 
 #ifndef KING_DB_INGEST_ARGINFO_INDEX_H
 #define KING_DB_INGEST_ARGINFO_INDEX_H
+
+#include "../../../src/db_ingest/arginfo.inc"
 
 #endif /* KING_DB_INGEST_ARGINFO_INDEX_H */

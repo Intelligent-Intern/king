@@ -72,10 +72,11 @@
 #  include "websocket/websocket.h"
 #endif /* KING_RUNTIME_BUILD */
 
-#include "mcp/mcp.h"
-#include "xslt/xslt.h"
-#include "awaitable/awaitable.h"
-#include "inference/inference.h"
+#include "awaitable/index.h"
+#include "iibin/index.h"
+#include "inference/index.h"
+#include "mcp/index.h"
+#include "xslt/index.h"
 
 
 /* -----------------------------------------------------------------------------

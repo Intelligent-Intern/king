@@ -4,13 +4,15 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Reserved arginfo aggregation point for media and RTP PHP entry points. The
- * active declarations currently live beside the native binding fragments
- * under extension/src/media/.
+ * Arginfo aggregation point for media and RTP PHP entry points. The
+ * declarations stay beside the native binding fragments and are pulled through
+ * this include-side module anchor.
  * =========================================================================
  */
 
 #ifndef KING_MEDIA_ARGINFO_INDEX_H
 #define KING_MEDIA_ARGINFO_INDEX_H
+
+#include "../../../src/media/arginfo.inc"
 
 #endif /* KING_MEDIA_ARGINFO_INDEX_H */

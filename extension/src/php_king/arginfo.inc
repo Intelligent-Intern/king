@@ -94,38 +94,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_update_service_status, 0, 0, 2)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, metrics, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_encode, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, data, IS_MIXED, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_encode_batch, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, records, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_decode, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, binary_data, IS_STRING, 0)
-    ZEND_ARG_TYPE_MASK(0, decode_as_object, MAY_BE_BOOL|MAY_BE_STRING|MAY_BE_ARRAY, "false")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_decode_batch, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, binary_records, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_MASK(0, decode_as_object, MAY_BE_BOOL|MAY_BE_STRING|MAY_BE_ARRAY, "false")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_define_enum, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, enum_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, enum_values, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_proto_define_schema, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, schema_name, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, schema_definition, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_request_send, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, method, IS_STRING, 1, "\"GET\"")

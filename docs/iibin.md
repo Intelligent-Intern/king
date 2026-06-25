@@ -3,6 +3,19 @@
 IIBIN is King's native binary serialization format. The procedural API is
 `king_proto_*`; the native OO facade is `King\IIBIN`.
 
+## Internal Layout
+
+The public C contract lives under `extension/include/iibin/`. The module
+umbrella is `extension/include/iibin/index.h`, the procedural declarations are
+in `extension/include/iibin/iibin.h`, and the binding arginfo is pulled through
+`extension/include/iibin/arginfo/index.h`.
+
+The PHP binding metadata is owned by the module in
+`extension/src/iibin/arginfo.inc` and
+`extension/src/iibin/function_entries.inc`. `extension/src/php_king.c` consumes
+those declarations through `extension/include/php_king_arginfo.h` and only keeps
+the central extension bootstrap and shared function table assembly.
+
 ## Function, Example 1: Schema, Encode, Decode
 
 ```php
