@@ -351,6 +351,132 @@ static bool king_inference_openai_single_choice_option_valid(zval *source, const
     return true;
 }
 
+static bool king_inference_openai_unsupported_feature_active(zval *field)
+{
+    if (field == NULL || Z_TYPE_P(field) == IS_NULL || Z_TYPE_P(field) == IS_FALSE) {
+        return false;
+    }
+    if (Z_TYPE_P(field) == IS_ARRAY && zend_hash_num_elements(Z_ARRVAL_P(field)) == 0) {
+        return false;
+    }
+    if (Z_TYPE_P(field) == IS_STRING && Z_STRLEN_P(field) == 0) {
+        return false;
+    }
+    if (Z_TYPE_P(field) == IS_LONG && Z_LVAL_P(field) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool king_inference_openai_no_unsupported_features(
+    zval *source,
+    const char * const *keys,
+    const char **message)
+{
+    size_t i;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    for (i = 0; keys[i] != NULL; i++) {
+        if (king_inference_openai_unsupported_feature_active(king_inference_array_find(source, keys[i]))) {
+            if (message != NULL) {
+                *message = "OpenAI request uses a feature this King local inference route does not support.";
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool king_inference_openai_response_format_valid(zval *source, const char **message)
+{
+    zval *format = king_inference_array_find(source, "response_format");
+    zval *type;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (format == NULL || Z_TYPE_P(format) == IS_NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(format) != IS_ARRAY) {
+        if (message != NULL) {
+            *message = "OpenAI response_format must be an object when provided.";
+        }
+        return false;
+    }
+
+    type = king_inference_array_find(format, "type");
+    if (type == NULL || Z_TYPE_P(type) != IS_STRING || Z_STRLEN_P(type) == 0) {
+        if (message != NULL) {
+            *message = "OpenAI response_format.type must be a non-empty string.";
+        }
+        return false;
+    }
+    if (zend_string_equals_literal(Z_STR_P(type), "text")) {
+        return true;
+    }
+
+    if (message != NULL) {
+        *message = "King local inference supports only response_format.type=text.";
+    }
+    return false;
+}
+
+static bool king_inference_openai_chat_feature_options_valid(zval *source, const char **message)
+{
+    static const char * const unsupported_keys[] = {
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "functions",
+        "function_call",
+        "modalities",
+        "audio",
+        "prediction",
+        "logprobs",
+        "top_logprobs",
+        NULL
+    };
+
+    if (!king_inference_openai_response_format_valid(source, message)) {
+        return false;
+    }
+
+    return king_inference_openai_no_unsupported_features(source, unsupported_keys, message);
+}
+
+static bool king_inference_openai_completion_feature_options_valid(zval *source, const char **message)
+{
+    static const char * const unsupported_keys[] = {
+        "suffix",
+        "echo",
+        "best_of",
+        "logprobs",
+        NULL
+    };
+
+    return king_inference_openai_no_unsupported_features(source, unsupported_keys, message);
+}
+
+static bool king_inference_openai_response_feature_options_valid(zval *source, const char **message)
+{
+    static const char * const unsupported_keys[] = {
+        "tools",
+        "tool_choice",
+        "parallel_tool_calls",
+        "reasoning",
+        "include",
+        "previous_response_id",
+        NULL
+    };
+
+    return king_inference_openai_no_unsupported_features(source, unsupported_keys, message);
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");

@@ -1319,8 +1319,11 @@ namespace {
      * bounded `text/event-stream` body, otherwise an OpenAI-shaped
      * `chat.completion` JSON body. `n` may be omitted or set to `1`; higher
      * choice counts are rejected instead of being silently collapsed. Options
-     * include `read_timeout_ms`, `max_events`, and `max_idle_events` for the
-     * bounded drain window.
+     * that request tool/function calls, multimodal/audio output, prediction
+     * hints, or logprob output are rejected by the local generation route
+     * until those features have a real King execution path. Options include
+     * `read_timeout_ms`, `max_events`, and `max_idle_events` for the bounded
+     * drain window.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @return array{status:int,headers:array<string,string>,body:string}
@@ -1342,6 +1345,9 @@ namespace {
      * Float32LE vectors. Embedding requests may set `dimensions` when a
      * bounded prefix of the native embedding width is required.
      * Chat Completions and legacy Completions accept `n` only when it is `1`.
+     * Active tool, multimodal, prediction, reasoning, best-of, echo, suffix,
+     * continuation, include-filter, and logprob feature requests are rejected
+     * by local generation routes instead of being silently ignored.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options

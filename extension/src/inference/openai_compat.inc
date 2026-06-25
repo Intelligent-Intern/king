@@ -122,6 +122,7 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
     const char *stream_error = NULL;
     const char *model_error = NULL;
     const char *choice_count_error = NULL;
+    const char *feature_error = NULL;
 
     if (has_error_response != NULL) {
         *has_error_response = false;
@@ -203,6 +204,17 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
             return_value,
             400,
             choice_count_error != NULL ? choice_count_error : "OpenAI n is invalid.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_chat_feature_options_valid(payload, &feature_error)) {
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            feature_error != NULL ? feature_error : "OpenAI requested feature is unsupported.",
             "invalid_request_error"
         );
     }

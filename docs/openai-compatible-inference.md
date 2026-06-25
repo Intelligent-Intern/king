@@ -153,6 +153,14 @@ sequences to the local generation runner. They accept `n` only when it is the
 integer `1`; requests for multiple independent choices return an OpenAI-shaped
 `400` instead of silently returning fewer choices than requested.
 
+The local generation routes also reject active requests for features that this
+runtime does not yet execute. Chat Completions rejects tool/function calling,
+multimodal/audio output, prediction hints, and logprob output; it accepts
+`response_format` only when `type` is `text`. Legacy Completions rejects
+suffix, echo, best-of, and logprob output. Responses rejects tool calling,
+reasoning blocks, include filters, and continuation from a previous response.
+Neutral defaults such as `null`, `false`, or empty arrays are treated as absent.
+
 All OpenAI generation routes validate `stream` as a boolean when it is provided.
 They also validate `stream_options` as a JSON object, and
 `stream_options.include_usage` must be a boolean. For streamed Chat Completions

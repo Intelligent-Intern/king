@@ -345,6 +345,7 @@ static zend_result king_inference_openai_completions_payload_response(
     const char *stream_error = NULL;
     const char *model_error = NULL;
     const char *choice_count_error = NULL;
+    const char *feature_error = NULL;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -399,6 +400,14 @@ static zend_result king_inference_openai_completions_payload_response(
             return_value,
             400,
             choice_count_error != NULL ? choice_count_error : "OpenAI n is invalid.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_completion_feature_options_valid(payload, &feature_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            feature_error != NULL ? feature_error : "OpenAI requested feature is unsupported.",
             "invalid_request_error"
         );
     }
