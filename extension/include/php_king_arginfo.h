@@ -7,8 +7,12 @@ extern "C" {
 #endif
 
 #include "client/arginfo/index.h"
+#include "awaitable/arginfo/index.h"
+#include "db_ingest/arginfo/index.h"
 #include "iibin/arginfo/index.h"
+#include "inference/arginfo/index.h"
 #include "integration/arginfo/index.h"
+#include "media/arginfo/index.h"
 #include "mcp/arginfo/index.h"
 #include "object_store/arginfo/index.h"
 #include "pipeline_orchestrator/arginfo/index.h"
@@ -16,6 +20,7 @@ extern "C" {
 #include "server/arginfo/index.h"
 #include "telemetry/arginfo/index.h"
 #include "autoscaling/arginfo/index.h"
+#include "xslt/arginfo/index.h"
 
 #ifdef __cplusplus
 }
