@@ -5,6 +5,14 @@ store, CDN, telemetry, autoscaling, MCP, IIBIN, and orchestrator. The native
 API is procedural `king_system_*`. A native OO class is not exported yet; the
 OO examples are userland adapters.
 
+## Internal Layout
+
+The coordinated system runtime lives in
+`extension/src/integration/system_integration.c` with public contracts in
+`extension/include/integration/system_integration.h`. The integration module
+owns its PHP arginfo and function-table entries, while core status helpers also
+contribute system introspection leaves.
+
 ## Function, Example 1: Init, Status, Shutdown
 
 ```php

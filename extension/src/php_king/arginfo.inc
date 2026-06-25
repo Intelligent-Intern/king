@@ -342,7 +342,3 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_admin_api_listen, 0, 0, 2)
     ZEND_ARG_TYPE_INFO(0, target_server, IS_MIXED, 0)
     ZEND_ARG_TYPE_INFO(0, config, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_system_process_request, 0, 0, 1)
-    ZEND_ARG_TYPE_INFO(0, request_data, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()

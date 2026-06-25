@@ -50,6 +50,7 @@
 #include "pipeline_orchestrator/arginfo.inc"
 #include "pipeline_orchestrator/class_methods.inc"
 #include "media/arginfo.inc"
+#include "integration/arginfo.inc"
 #include "db_ingest/api.inc"
 #include "php_king/function_table.inc"
 #include "php_king/resources.inc"
