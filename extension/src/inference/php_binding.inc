@@ -51,6 +51,7 @@
 #include "openai_responses.inc"
 #include "openai_completions.inc"
 #include "openai_embeddings.inc"
+#include "openai_models.inc"
 #include "openai_http_router.inc"
 #include "api.inc"
 #include "inference/class_method_entries.h"
