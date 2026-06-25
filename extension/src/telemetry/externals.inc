@@ -1,11 +1,1 @@
-PHP_FUNCTION(king_telemetry_init);
-PHP_FUNCTION(king_telemetry_start_span);
-PHP_FUNCTION(king_telemetry_end_span);
-PHP_FUNCTION(king_telemetry_record_metric);
-PHP_FUNCTION(king_telemetry_log);
-PHP_FUNCTION(king_telemetry_flush);
-PHP_FUNCTION(king_telemetry_get_metrics);
-PHP_FUNCTION(king_telemetry_get_status);
-PHP_FUNCTION(king_telemetry_get_trace_context);
-PHP_FUNCTION(king_telemetry_inject_context);
-PHP_FUNCTION(king_telemetry_extract_context);
+#include "telemetry/index.h"
