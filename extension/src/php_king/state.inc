@@ -1,7 +1,7 @@
 /*
  * Shared php_king module state. Declares core exception class pointers,
- * module-owned entry/resource storage, and the shared error buffer reused
- * across the bootstrap slices.
+ * includes module-owned state storage aggregators, and owns the shared error
+ * buffer reused across the bootstrap slices.
  */
 
 zend_class_entry *king_ce_exception            = NULL;
@@ -26,20 +26,17 @@ zend_class_entry *king_ce_network_exception    = NULL;
 zend_class_entry *king_ce_tls_exception        = NULL;
 zend_class_entry *king_ce_protocol_exception   = NULL;
 
-#include "../autoscaling/class_entries.inc"
-#include "../awaitable/class_entries.inc"
-#include "../client/class_entries.inc"
-#include "../client/resource_ids.inc"
-#include "../config/internal/class_entries.inc"
-#include "../config/internal/resource_ids.inc"
-#include "../inference/class_entries.inc"
-#include "../mcp/php_binding/class_entries.inc"
-#include "../mcp/php_binding/resource_ids.inc"
-#include "../media/class_entries.inc"
-#include "../object_store/class_entries.inc"
-#include "../pipeline_orchestrator/class_entries.inc"
-#include "../server/class_entries.inc"
-#include "../xslt/class_entries.inc"
+#include "../autoscaling/state.inc"
+#include "../awaitable/state.inc"
+#include "../client/state.inc"
+#include "../config/internal/state.inc"
+#include "../inference/state.inc"
+#include "../mcp/php_binding/state.inc"
+#include "../media/state.inc"
+#include "../object_store/state.inc"
+#include "../pipeline_orchestrator/state.inc"
+#include "../server/state.inc"
+#include "../xslt/state.inc"
 
 char king_last_error[KING_ERR_LEN] = {0};
 
