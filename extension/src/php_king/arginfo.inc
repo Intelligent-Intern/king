@@ -492,19 +492,6 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_system_process_request, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, request_data, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_xslt_transform_file, 0, 0, 2)
-    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_king_xslt_transform_to_file, 0, 0, 3)
-    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, output_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
 const zend_function_entry king_pipeline_orchestrator_class_methods[] = {
     ZEND_ME_MAPPING(run, king_pipeline_orchestrator_run, arginfo_king_pipeline_run, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(runAsync, king_pipeline_orchestrator_run_async, arginfo_king_pipeline_run_async, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

@@ -44,29 +44,6 @@ static void king_xslt_processor_object_handlers_init(void)
     king_ce_xslt_processor->create_object = king_xslt_processor_object_create;
 }
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_XSLT_Processor___construct, 0, 0, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_getOptions, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_engineStatus, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_transformFile, 0, 2, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_XSLT_Processor_transformToFile, 0, 3, IS_ARRAY, 0)
-    ZEND_ARG_TYPE_INFO(0, source_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, output_path, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
-ZEND_END_ARG_INFO()
-
 static void king_xslt_processor_merge_nested_properties(
     zval *merged,
     zval *base_options,
