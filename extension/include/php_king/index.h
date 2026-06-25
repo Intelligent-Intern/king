@@ -11,5 +11,6 @@
 #include "registration.h"
 #include "resource_ids.h"
 #include "resources.h"
+#include "runtime_helpers.h"
 
 #endif /* KING_PHP_KING_INDEX_H */
