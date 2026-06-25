@@ -118,6 +118,7 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
     zval *messages;
     zval *message;
     const char *stop_error = NULL;
+    const char *stream_options_error = NULL;
 
     if (has_error_response != NULL) {
         *has_error_response = false;
@@ -155,6 +156,17 @@ static zend_result king_inference_openai_validate_payload(zval *payload, zval *r
             return_value,
             400,
             stop_error != NULL ? stop_error : "OpenAI stop is invalid.",
+            "invalid_request_error"
+        );
+    }
+    if (!king_inference_openai_stream_options_valid(payload, &stream_options_error)) {
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            stream_options_error != NULL ? stream_options_error : "OpenAI stream_options is invalid.",
             "invalid_request_error"
         );
     }

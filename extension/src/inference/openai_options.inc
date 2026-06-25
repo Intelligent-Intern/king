@@ -258,6 +258,35 @@ static bool king_inference_openai_stream_generation_options_valid(zval *source, 
     return king_inference_openai_generation_options_valid(source, max_token_keys, message);
 }
 
+static bool king_inference_openai_stream_options_valid(zval *source, const char **message)
+{
+    zval *stream_options = king_inference_array_find(source, "stream_options");
+    zval *include_usage;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (stream_options == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(stream_options) != IS_ARRAY) {
+        if (message != NULL) {
+            *message = "OpenAI stream_options must be an object when provided.";
+        }
+        return false;
+    }
+
+    include_usage = king_inference_array_find(stream_options, "include_usage");
+    if (include_usage != NULL && Z_TYPE_P(include_usage) != IS_TRUE && Z_TYPE_P(include_usage) != IS_FALSE) {
+        if (message != NULL) {
+            *message = "OpenAI stream_options.include_usage must be a boolean when provided.";
+        }
+        return false;
+    }
+
+    return true;
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");
