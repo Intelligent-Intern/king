@@ -2,6 +2,9 @@
  * King inference PHP object handlers.
  */
 
+static zend_object_handlers king_inference_model_object_handlers;
+static zend_object_handlers king_inference_stream_object_handlers;
+
 static void king_inference_model_object_free(zend_object *object)
 {
     king_inference_model_object *intern = php_king_inference_model_obj_from_zend(object);

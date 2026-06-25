@@ -2,6 +2,8 @@
  * King cancel token PHP object handlers.
  */
 
+static zend_object_handlers king_cancel_token_object_handlers;
+
 static void king_cancel_token_object_free(zend_object *object)
 {
     king_cancel_token_object *intern = php_king_cancel_token_obj_from_zend(object);

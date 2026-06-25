@@ -2,6 +2,8 @@
  * King config PHP object handlers.
  */
 
+static zend_object_handlers king_config_object_handlers;
+
 static void king_config_object_free(zend_object *object)
 {
     king_config_object *intern = php_king_config_obj_from_zend(object);

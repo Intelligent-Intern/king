@@ -2,6 +2,9 @@
  * King response and HTTP client PHP object handlers.
  */
 
+static zend_object_handlers king_response_object_handlers;
+static zend_object_handlers king_http_client_object_handlers;
+
 static void king_response_object_free(zend_object *object)
 {
     king_response_object *intern = php_king_response_obj_from_zend(object);

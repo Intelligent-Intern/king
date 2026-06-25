@@ -2,6 +2,9 @@
  * King MCP PHP object handlers.
  */
 
+static zend_object_handlers king_mcp_object_handlers;
+static zend_object_handlers king_mcp_server_object_handlers;
+
 static void king_mcp_object_free(zend_object *object)
 {
     king_mcp_object *intern = php_king_mcp_obj_from_zend(object);

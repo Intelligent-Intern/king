@@ -2,6 +2,8 @@
  * King WebSocket client connection PHP object handlers.
  */
 
+static zend_object_handlers king_ws_object_handlers;
+
 static void king_ws_object_free(zend_object *object)
 {
     king_ws_object *intern = php_king_ws_obj_from_zend(object);

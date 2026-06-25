@@ -2,6 +2,9 @@
  * King client session and stream PHP object handlers.
  */
 
+static zend_object_handlers king_stream_object_handlers;
+static zend_object_handlers king_session_object_handlers;
+
 static void king_stream_object_free(zend_object *object)
 {
     king_stream_object *intern = php_king_stream_obj_from_zend(object);

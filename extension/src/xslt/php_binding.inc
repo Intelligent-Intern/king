@@ -6,6 +6,8 @@
 
 #include "xslt/xslt.h"
 
+static zend_object_handlers king_xslt_processor_object_handlers;
+
 static void king_xslt_processor_object_free(zend_object *object)
 {
     king_xslt_processor_object *intern = php_king_xslt_processor_obj_from_zend(object);

@@ -5,6 +5,8 @@
  * scheduler backend.
  */
 
+static zend_object_handlers king_awaitable_object_handlers;
+
 static const char *king_awaitable_status_name(king_awaitable_status_t status)
 {
     switch (status) {

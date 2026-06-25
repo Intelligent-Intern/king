@@ -5,6 +5,8 @@
 
 #include "media/rtp.h"
 
+static zend_object_handlers king_rtp_socket_object_handlers;
+
 static void king_rtp_socket_object_free(zend_object *object)
 {
     king_rtp_socket_object *intern = php_king_rtp_socket_obj_from_zend(object);

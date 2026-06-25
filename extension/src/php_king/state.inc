@@ -1,6 +1,7 @@
 /*
- * Shared php_king module state. Declares the resource ids, exception class
- * pointers and forward declarations reused across the bootstrap slices.
+ * Shared php_king module state. Declares resource ids, core exception class
+ * pointers, PHP-visible class entries, and the shared error buffer reused
+ * across the bootstrap slices.
  */
 
 int le_king_session = -1;
@@ -63,21 +64,6 @@ zend_class_entry *king_ce_client_http2         = NULL;
 zend_class_entry *king_ce_client_http3         = NULL;
 zend_class_entry *king_ce_ws_server            = NULL;
 zend_class_entry *king_ce_ws_connection        = NULL;
-static zend_object_handlers king_cancel_token_object_handlers;
-static zend_object_handlers king_awaitable_object_handlers;
-static zend_object_handlers king_config_object_handlers;
-static zend_object_handlers king_stream_object_handlers;
-static zend_object_handlers king_response_object_handlers;
-static zend_object_handlers king_mcp_object_handlers;
-static zend_object_handlers king_mcp_server_object_handlers;
-static zend_object_handlers king_rtp_socket_object_handlers;
-static zend_object_handlers king_xslt_processor_object_handlers;
-static zend_object_handlers king_inference_model_object_handlers;
-static zend_object_handlers king_inference_stream_object_handlers;
-static zend_object_handlers king_http_client_object_handlers;
-static zend_object_handlers king_session_object_handlers;
-static zend_object_handlers king_ws_object_handlers;
-static zend_object_handlers king_ws_server_object_handlers;
 
 char king_last_error[KING_ERR_LEN] = {0};
 
