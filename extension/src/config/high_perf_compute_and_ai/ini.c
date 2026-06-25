@@ -14,6 +14,7 @@
 #include "config/high_perf_compute_and_ai/ini.h"
 #include "config/high_perf_compute_and_ai/base_layer.h"
 #include "php_king/init.h"
+#include "validation/config_param/validate_cpu_affinity_map_string.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -185,6 +186,20 @@ static ZEND_INI_MH(OnUpdateGpuBackend)
     return SUCCESS;
 }
 
+static ZEND_INI_MH(OnUpdateWorkerGpuAffinityString)
+{
+    zval zv;
+
+    ZVAL_STR_COPY(&zv, new_value);
+    if (kg_validate_cpu_affinity_map_string(&zv, &king_high_perf_compute_ai_config.worker_gpu_affinity_map) != SUCCESS) {
+        zval_ptr_dtor(&zv);
+        return FAILURE;
+    }
+
+    zval_ptr_dtor(&zv);
+    return SUCCESS;
+}
+
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.dataframe_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, dataframe_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     ZEND_INI_ENTRY_EX("king.dataframe_memory_limit_mb", "1024", PHP_INI_SYSTEM, OnUpdateAiPositiveLong, NULL)
@@ -211,7 +226,7 @@ PHP_INI_BEGIN()
 
     STD_PHP_INI_ENTRY("king.gpu_bindings_enable", "0", PHP_INI_SYSTEM, OnUpdateBool, gpu_bindings_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     ZEND_INI_ENTRY_EX("king.gpu_default_backend", "auto", PHP_INI_SYSTEM, OnUpdateGpuBackend, NULL)
-    STD_PHP_INI_ENTRY("king.worker_gpu_affinity_map", "", PHP_INI_SYSTEM, OnUpdateString, worker_gpu_affinity_map, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    ZEND_INI_ENTRY_EX("king.worker_gpu_affinity_map", "", PHP_INI_SYSTEM, OnUpdateWorkerGpuAffinityString, NULL)
     ZEND_INI_ENTRY_EX("king.gpu_memory_preallocation_mb", "2048", PHP_INI_SYSTEM, OnUpdateAiPositiveLong, NULL)
     STD_PHP_INI_ENTRY("king.gpu_p2p_enable", "1", PHP_INI_SYSTEM, OnUpdateBool, gpu_p2p_enable, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
     STD_PHP_INI_ENTRY("king.gpu_storage_enable_directstorage", "0", PHP_INI_SYSTEM, OnUpdateBool, storage_enable_directstorage, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
