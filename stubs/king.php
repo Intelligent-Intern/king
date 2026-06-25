@@ -1315,13 +1315,14 @@ namespace {
     /**
      * Handle one OpenAI-compatible `POST /v1/chat/completions` HTTP request
      * and return a King HTTP server response array. The request body must be a
-     * JSON Chat Completions payload with `messages`; `stream=true` returns a
-     * bounded `text/event-stream` body, otherwise an OpenAI-shaped
-     * `chat.completion` JSON body. `n` may be omitted or set to `1`; higher
-     * choice counts are rejected instead of being silently collapsed. Options
-     * that request tool/function calls, multimodal/audio output, prediction
-     * hints, or logprob output are rejected by the local generation route
-     * until those features have a real King execution path. Options include
+     * JSON string containing a Chat Completions object with `messages`;
+     * `stream=true` returns a bounded `text/event-stream` body, otherwise an
+     * OpenAI-shaped `chat.completion` JSON body. `n` may be omitted or set to
+     * `1`; higher choice counts are rejected instead of being silently
+     * collapsed. Options that request tool/function calls, multimodal/audio
+     * output, prediction hints, or logprob output are rejected by the local
+     * generation route until those features have a real King execution path.
+     * Options include
      * `read_timeout_ms`, `max_events`, and `max_idle_events` for the bounded
      * drain window, defaulting to `250`, `4096`, and `240`, plus
      * `max_chat_messages`, defaulting to `256`. Router drain controls and

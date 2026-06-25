@@ -656,8 +656,9 @@ PHP_FUNCTION(king_inference_openai_chat_http_response)
     zval *model;
     zval *request;
     zval *options = NULL;
-    zval *body;
     zval decoded;
+    zend_result result;
+    bool has_error_response = false;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_OBJECT_OF_CLASS(model, king_ce_inference_model)
@@ -701,40 +702,24 @@ PHP_FUNCTION(king_inference_openai_chat_http_response)
         return;
     }
 
-    body = king_inference_array_find(request, "body");
-    if (body == NULL || Z_TYPE_P(body) != IS_STRING) {
-        if (king_inference_openai_error_response(
-            return_value,
-            400,
-            "Chat completions HTTP request requires a JSON string body.",
-            "invalid_request_error"
-        ) != SUCCESS) {
-            zend_throw_exception_ex(
-                king_ce_runtime_exception,
-                0,
-                "%s",
-                king_get_error()[0] != '\0' ? king_get_error() : "OpenAI-compatible inference HTTP response failed."
-            );
-            RETURN_THROWS();
-        }
-        return;
+    result = king_inference_openai_decode_object_body(
+        request,
+        "Chat completions HTTP request requires a JSON string body.",
+        "Chat completions HTTP request body must be a JSON object.",
+        return_value,
+        &decoded,
+        &has_error_response
+    );
+    if (result != SUCCESS) {
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "%s",
+            king_get_error()[0] != '\0' ? king_get_error() : "OpenAI-compatible inference HTTP response failed."
+        );
+        RETURN_THROWS();
     }
-
-    if (king_inference_openai_json_decode(Z_STR_P(body), &decoded) != SUCCESS) {
-        if (king_inference_openai_error_response(
-            return_value,
-            400,
-            king_get_error(),
-            "invalid_request_error"
-        ) != SUCCESS) {
-            zend_throw_exception_ex(
-                king_ce_runtime_exception,
-                0,
-                "%s",
-                king_get_error()[0] != '\0' ? king_get_error() : "OpenAI-compatible inference HTTP response failed."
-            );
-            RETURN_THROWS();
-        }
+    if (has_error_response) {
         return;
     }
 
