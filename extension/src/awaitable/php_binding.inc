@@ -6,3 +6,6 @@
 #include "cancel_token.inc"
 #include "cancel_token_object_handlers.inc"
 #include "awaitable.inc"
+#include "aggregate.inc"
+#include "aggregate_api.inc"
+#include "awaitable/class_method_entries.h"

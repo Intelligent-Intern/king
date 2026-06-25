@@ -448,8 +448,6 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
     return SUCCESS;
 }
 
-#include "aggregate.inc"
-
 static void king_awaitable_return_or_throw(king_awaitable_object *intern, zval *return_value)
 {
     if (intern->status == KING_AWAITABLE_RESOLVED) {
@@ -701,7 +699,3 @@ PHP_FUNCTION(king_awaitable_status)
     intern = php_king_awaitable_obj_from_zend(Z_OBJ_P(awaitable));
     RETURN_STRING(king_awaitable_status_name(intern->status));
 }
-
-#include "aggregate_api.inc"
-
-#include "awaitable/class_method_entries.h"
