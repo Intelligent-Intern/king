@@ -70,7 +70,9 @@ The generic OpenAI HTTP generation routes expect a text-generation stream
 backend. `king_native_cpu` can stream graph-selected tokens through
 `king_inference_stream()` when the request carries `graph` or `graphs`, and it
 serves native embeddings through the router, but the router does not synthesize
-a native graph from arbitrary Chat Completions payloads.
+a native graph from arbitrary Chat Completions payloads. When a generation
+route selects a native graph-only backend, King returns an OpenAI-shaped `400`
+JSON error instead of falling through to a low-level stream exception.
 
 ## Function, Example 2: Embeddings
 

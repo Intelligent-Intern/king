@@ -339,6 +339,7 @@ static zend_result king_inference_openai_completions_payload_response(
     zend_result result;
     bool stream_requested = king_inference_bool_from_array(payload, "stream", false);
     const char *stop_error = NULL;
+    bool has_error_response = false;
 
     if (prompt == NULL) {
         return king_inference_openai_error_response(
@@ -355,6 +356,17 @@ static zend_result king_inference_openai_completions_payload_response(
             stop_error != NULL ? stop_error : "OpenAI stop is invalid.",
             "invalid_request_error"
         );
+    }
+    if (king_inference_openai_require_generation_backend(
+        return_value,
+        model,
+        "Completions endpoint",
+        &has_error_response
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (has_error_response) {
+        return SUCCESS;
     }
     if (stream_requested && Z_TYPE_P(prompt) != IS_STRING) {
         return king_inference_openai_error_response(

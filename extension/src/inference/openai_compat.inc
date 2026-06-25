@@ -216,6 +216,64 @@ static zend_long king_inference_openai_option_long(zval *options, const char *ke
     return value > 0 ? value : fallback;
 }
 
+static zend_result king_inference_openai_require_generation_backend(
+    zval *return_value,
+    zval *model,
+    const char *endpoint_name,
+    bool *has_error_response)
+{
+    king_inference_model_object *model_object;
+    king_inference_backend_kind kind;
+    const char *kind_name;
+    zend_string *message;
+    zend_result result;
+
+    if (has_error_response != NULL) {
+        *has_error_response = false;
+    }
+
+    model_object = php_king_inference_model_obj_from_zend(Z_OBJ_P(model));
+    if (king_inference_backend_kind_from_config(&model_object->config, &kind, endpoint_name) != SUCCESS) {
+        if (EG(exception)) {
+            zend_clear_exception();
+        }
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            "Selected King model has an invalid inference backend configuration.",
+            "invalid_request_error"
+        );
+    }
+
+    if (kind == KING_INFERENCE_BACKEND_LOCAL) {
+        return SUCCESS;
+    }
+
+    kind_name = king_inference_backend_kind_name(kind);
+    message = strpprintf(
+        0,
+        "%s requires a text-generation stream backend. "
+        "The selected King model uses '%s'; native graph streaming must use "
+        "king_inference_stream() with an explicit graph or graphs request.",
+        endpoint_name,
+        kind_name
+    );
+    if (has_error_response != NULL) {
+        *has_error_response = true;
+    }
+    result = king_inference_openai_error_response(
+        return_value,
+        400,
+        ZSTR_VAL(message),
+        "invalid_request_error"
+    );
+    zend_string_release(message);
+    return result;
+}
+
 static zend_result king_inference_openai_create_stream(
     zval *stream_value,
     zval *model,
@@ -490,6 +548,18 @@ static zend_result king_inference_openai_payload_response(
     const char *finish_reason = "stop";
 
     if (king_inference_openai_validate_payload(payload, return_value, &has_error_response) != SUCCESS) {
+        return FAILURE;
+    }
+    if (has_error_response) {
+        return SUCCESS;
+    }
+
+    if (king_inference_openai_require_generation_backend(
+        return_value,
+        model,
+        "Chat completions endpoint",
+        &has_error_response
+    ) != SUCCESS) {
         return FAILURE;
     }
     if (has_error_response) {
