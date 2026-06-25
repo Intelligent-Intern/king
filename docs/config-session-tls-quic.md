@@ -17,6 +17,11 @@ Client session, TLS, request, and polling function registrations are owned by
 `extension/src/client/function_entries.inc`, with the public include-side anchor
 at `extension/include/client/arginfo/index.h`.
 
+Server session, TLS reload, cancellation, and admin listener registrations are
+owned by `extension/src/server/arginfo.inc` and
+`extension/src/server/function_entries.inc`, with the public include-side anchor
+at `extension/include/server/arginfo/index.h`.
+
 ## Function, Example 1: Config Resource and Session Stats
 
 ```php

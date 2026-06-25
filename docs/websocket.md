@@ -16,7 +16,8 @@ runtime code live under `extension/src/server/`.
 Client-side WebSocket function registrations are owned by the client binding
 fragments in `extension/src/client/arginfo.inc` and
 `extension/src/client/function_entries.inc`. Server-side WebSocket upgrade and
-listener registrations remain with the server binding surface.
+listener registrations are owned by `extension/src/server/arginfo.inc` and
+`extension/src/server/function_entries.inc`.
 
 ## Function, Example 1: Client Echo
 

@@ -1,6 +1,6 @@
 /*
  * Root function table for the King extension. Maps the public procedural
- * surface onto the shared arginfo blocks declared in this module.
+ * surface onto shared and module-local binding fragments.
  */
 
 static const zend_function_entry king_functions[] = {
@@ -10,23 +10,8 @@ static const zend_function_entry king_functions[] = {
 #include "../awaitable/function_entries.inc"
 #include "../client/function_entries.inc"
 #include "../db_ingest/function_entry.inc"
-
-    PHP_FE(king_http1_server_listen, arginfo_king_server_listen)
-    PHP_FE(king_http1_server_listen_once, arginfo_king_server_listen)
-    PHP_FE(king_http2_server_listen, arginfo_king_server_listen)
-    PHP_FE(king_http2_server_listen_once, arginfo_king_server_listen)
-    PHP_FE(king_http3_server_listen, arginfo_king_server_listen)
-    PHP_FE(king_http3_server_listen_once, arginfo_king_server_listen)
-    PHP_FE(king_server_listen, arginfo_king_server_listen)
-    PHP_FE(king_server_on_cancel, arginfo_king_server_on_cancel)
-    PHP_FE(king_server_send_early_hints, arginfo_king_server_send_early_hints)
-    PHP_FE(king_server_upgrade_to_websocket, arginfo_king_server_upgrade_to_websocket)
+#include "../server/function_entries.inc"
 #include "../media/function_entries.inc"
-    PHP_FE(king_server_reload_tls_config, arginfo_king_server_reload_tls_config)
-    PHP_FE(king_server_init_telemetry, arginfo_king_server_init_telemetry)
-    PHP_FE(king_session_get_peer_cert_subject, arginfo_king_session_capability)
-    PHP_FE(king_session_close_server_initiated, arginfo_king_session_close_server_initiated)
-    PHP_FE(king_admin_api_listen, arginfo_king_admin_api_listen)
 
 #include "../iibin/function_entries.inc"
 

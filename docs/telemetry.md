@@ -9,6 +9,9 @@ exported yet; the OO examples are userland adapters.
 The telemetry runtime lives under `extension/src/telemetry/` with public
 contracts in `extension/include/telemetry/`. Its PHP arginfo and function-table
 entries live beside the runtime and are included by the extension bootstrap.
+Server-side telemetry bootstrap entry points such as
+`king_server_init_telemetry()` are registered through the server binding
+fragments in `extension/src/server/`.
 
 ## Function, Example 1: Span, Metric, Log
 

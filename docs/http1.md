@@ -16,6 +16,10 @@ The client module owns its PHP binding metadata in
 through `extension/include/client/arginfo/index.h` and then consumed by the
 root extension bootstrap.
 
+Server listener bindings are owned by `extension/src/server/arginfo.inc` and
+`extension/src/server/function_entries.inc`, with public declarations anchored
+under `extension/include/server/`.
+
 ## Function, Example 1: Simple GET
 
 ```php
