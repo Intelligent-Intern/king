@@ -24,6 +24,68 @@ static zend_result king_inference_config_path_string(
     return SUCCESS;
 }
 
+static zend_result king_inference_validate_optional_string_config(
+    zval *config,
+    const char *field_name,
+    const char *function_name
+) {
+    zval *value = king_inference_array_find(config, field_name);
+
+    if (value == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_STRING || Z_STRLEN_P(value) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s must be a non-empty string when provided.",
+            function_name,
+            field_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_validate_optional_positive_long_config(
+    zval *config,
+    const char *field_name,
+    const char *function_name
+) {
+    zval *value = king_inference_array_find(config, field_name);
+
+    if (value == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) <= 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() %s must be a positive integer when provided.",
+            function_name,
+            field_name
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_validate_model_config(zval *config, const char *function_name)
+{
+    if (king_inference_validate_optional_string_config(config, "name", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "quantization", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "owned_by", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "embedding_tensor", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "token_embedding_tensor", function_name) != SUCCESS
+        || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static zend_result king_inference_resolve_artifact_path(
     zval *config,
     const char *function_name,
@@ -115,6 +177,10 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
 
     if (config == NULL || Z_TYPE_P(config) != IS_ARRAY) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "%s() requires a model config array.", function_name);
+        return FAILURE;
+    }
+
+    if (king_inference_validate_model_config(config, function_name) != SUCCESS) {
         return FAILURE;
     }
 

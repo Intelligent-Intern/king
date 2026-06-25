@@ -1221,6 +1221,9 @@ namespace {
      * Artifacts are materialized filesystem paths supplied through `artifact`,
      * `artifact.path`, or `artifact_path`; the selected path must be a
      * non-empty string. Backend selection is config-driven.
+     * Optional `name`, `quantization`, `owned_by`, `embedding_tensor`, and
+     * `token_embedding_tensor` must be non-empty strings when provided;
+     * `context_tokens` must be a positive integer when provided.
      * Omitting `backend` selects `king_native_cpu`. The `local` backend
      * streams through the King runner contract; the
      * `king_native_cpu` backend exposes native GGUF metadata, an internal

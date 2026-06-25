@@ -92,6 +92,9 @@ receive one loaded model may omit `model`, but any provided `model` field must
 be a non-empty string. The registered models must resolve to unique listed
 OpenAI model ids; duplicate listed ids are rejected as router configuration
 errors.
+Loaded model metadata is strict before the router sees it: model `name`,
+`owned_by`, `embedding_tensor`, and `token_embedding_tensor` must be non-empty
+strings when provided.
 
 `GET /v1/models` and `GET /v1/models/{model}` return normal OpenAI model
 objects plus an `x_king` extension object. Model objects always include integer

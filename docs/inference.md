@@ -10,6 +10,11 @@ and streams backend output as King events. Model artifacts are passed as direct
 filesystem paths through `artifact`, `artifact.path`, or `artifact_path`.
 Those fields must be non-empty strings; object-store references are rejected
 until they are materialized to a local GGUF path.
+Optional public metadata fields are also strict: `name`, `quantization`,
+`owned_by`, `embedding_tensor`, and `token_embedding_tensor` must be non-empty
+strings when provided, and `context_tokens` must be a positive integer. Invalid
+model metadata is rejected during model load instead of being silently ignored
+by later model listings, embedding routes, or runner argument mapping.
 
 The implemented token-streaming backends are `local` and `king_native_cpu`.
 `local` uses a King-owned process runner contract while the public backend name
