@@ -188,6 +188,46 @@ static void king_inference_king_local_append_double_arg(
     argv[(*argc)++] = strpprintf(0, "%.6f", numeric);
 }
 
+static void king_inference_king_local_append_string_arg(
+    zend_string **argv,
+    size_t *argc,
+    zend_string *value,
+    const char *arg_name)
+{
+    if (value == NULL || ZSTR_LEN(value) == 0) {
+        return;
+    }
+
+    argv[(*argc)++] = zend_string_init(arg_name, strlen(arg_name), 0);
+    argv[(*argc)++] = zend_string_copy(value);
+}
+
+static void king_inference_king_local_append_stop_args(
+    zend_string **argv,
+    size_t *argc,
+    zval *request)
+{
+    zval *stop = king_inference_array_find(request, "stop");
+    zval *entry;
+
+    if (stop == NULL) {
+        return;
+    }
+    if (Z_TYPE_P(stop) == IS_STRING) {
+        king_inference_king_local_append_string_arg(argv, argc, Z_STR_P(stop), "--reverse-prompt");
+        return;
+    }
+    if (!king_inference_openai_array_is_list(stop)) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(stop), entry) {
+        if (Z_TYPE_P(entry) == IS_STRING) {
+            king_inference_king_local_append_string_arg(argv, argc, Z_STR_P(entry), "--reverse-prompt");
+        }
+    } ZEND_HASH_FOREACH_END();
+}
+
 static zend_result king_inference_king_local_stream_start(
     king_inference_stream_object *stream,
     const char *function_name
@@ -199,7 +239,7 @@ static zend_result king_inference_king_local_stream_start(
     zend_string *temperature;
     zend_string *context_tokens = NULL;
     zend_string *gpu_layers;
-    zend_string *argv[40];
+    zend_string *argv[56];
     size_t argc = 0;
 
     model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
@@ -240,6 +280,7 @@ static zend_result king_inference_king_local_stream_start(
     king_inference_king_local_append_long_arg(argv, &argc, &stream->request, "seed", "--seed");
     king_inference_king_local_append_long_arg(argv, &argc, &stream->request, "top_k", "--top-k");
     king_inference_king_local_append_double_arg(argv, &argc, &stream->request, "top_p", "--top-p");
+    king_inference_king_local_append_stop_args(argv, &argc, &stream->request);
 
     if (king_inference_king_local_spawn_argv(stream, argv, argc) != SUCCESS) {
         king_inference_king_local_argv_release(argv, argc);

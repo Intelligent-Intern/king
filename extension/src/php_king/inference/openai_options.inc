@@ -40,6 +40,64 @@ static void king_inference_openai_copy_long_option(
     }
 }
 
+static bool king_inference_openai_stop_option_valid(zval *source, const char **message)
+{
+    zval *stop = king_inference_array_find(source, "stop");
+    zval *entry;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (stop == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(stop) == IS_STRING) {
+        if (Z_STRLEN_P(stop) > 0) {
+            return true;
+        }
+        if (message != NULL) {
+            *message = "OpenAI stop must not be an empty string.";
+        }
+        return false;
+    }
+    if (!king_inference_openai_array_is_list(stop)) {
+        if (message != NULL) {
+            *message = "OpenAI stop must be a string or an array of strings.";
+        }
+        return false;
+    }
+    if (zend_hash_num_elements(Z_ARRVAL_P(stop)) == 0 || zend_hash_num_elements(Z_ARRVAL_P(stop)) > 4) {
+        if (message != NULL) {
+            *message = "OpenAI stop arrays must contain between 1 and 4 strings.";
+        }
+        return false;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(stop), entry) {
+        if (Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+            if (message != NULL) {
+                *message = "OpenAI stop arrays must contain only non-empty strings.";
+            }
+            return false;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return true;
+}
+
+static void king_inference_openai_copy_stop_option(zval *source, zval *target)
+{
+    zval *stop = king_inference_array_find(source, "stop");
+    zval copy;
+
+    if (stop == NULL || !king_inference_openai_stop_option_valid(source, NULL)) {
+        return;
+    }
+
+    ZVAL_COPY(&copy, stop);
+    add_assoc_zval(target, "stop", &copy);
+}
+
 static void king_inference_openai_copy_generation_options(
     zval *source,
     zval *target,
@@ -65,6 +123,7 @@ static void king_inference_openai_copy_chat_generation_options(zval *source, zva
     };
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
+    king_inference_openai_copy_stop_option(source, target);
 }
 
 static void king_inference_openai_copy_completion_generation_options(zval *source, zval *target)
@@ -75,6 +134,7 @@ static void king_inference_openai_copy_completion_generation_options(zval *sourc
     };
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
+    king_inference_openai_copy_stop_option(source, target);
 }
 
 static void king_inference_openai_copy_response_generation_options(zval *source, zval *target)
