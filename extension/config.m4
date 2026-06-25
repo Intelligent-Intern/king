@@ -368,6 +368,7 @@ if test "$PHP_KING" != "no"; then
         src/validation/config_param/validate_scheduler_policy.c \
         src/validation/config_param/validate_string.c \
         src/validation/config_param/validate_string_from_allowlist.c \
+        src/awaitable/awaitable.c \
         src/client/session.c \
         src/client/cancel.c \
         src/client/tls.c \
@@ -381,6 +382,7 @@ if test "$PHP_KING" != "no"; then
         src/iibin/iibin_api.c \
         src/autoscaling/autoscaling.c \
         src/autoscaling/provisioning.c \
+        src/inference/inference.c \
         src/integration/system_integration.c \
         src/iibin/iibin_registry.c \
         src/iibin/iibin_schema.c \

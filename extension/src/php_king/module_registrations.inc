@@ -1,17 +1,14 @@
 /*
- * Module-owned class/object-handler registration implementations. The
- * registration call order lives in class_registration.inc; this file only
- * makes those registration functions available to the core bootstrap.
+ * Module-owned class/object-handler registration implementations still
+ * compiled into the core bootstrap. Migrated subsystems export their
+ * registration hooks from their owning translation unit.
  */
 
-#include "../awaitable/registration.inc"
 #include "../config/registration.inc"
 #include "../client/registration.inc"
-#include "../mcp/registration.inc"
 #include "../pipeline_orchestrator/registration.inc"
 #include "../object_store/registration.inc"
 #include "../autoscaling/registration.inc"
 #include "../media/registration.inc"
 #include "../xslt/registration.inc"
-#include "../inference/registration.inc"
 #include "../server/registration.inc"

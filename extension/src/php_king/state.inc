@@ -1,7 +1,7 @@
 /*
  * Shared php_king module state. Declares core exception class pointers,
- * includes module-owned state storage aggregators, and owns the shared error
- * buffer reused across the bootstrap slices.
+ * includes state storage for modules that still compile through the core
+ * bootstrap, and owns the shared error buffer reused across bootstrap slices.
  */
 
 zend_class_entry *king_ce_exception            = NULL;
@@ -27,11 +27,8 @@ zend_class_entry *king_ce_tls_exception        = NULL;
 zend_class_entry *king_ce_protocol_exception   = NULL;
 
 #include "../autoscaling/state.inc"
-#include "../awaitable/state.inc"
 #include "../client/state.inc"
 #include "../config/state.inc"
-#include "../inference/state.inc"
-#include "../mcp/state.inc"
 #include "../media/state.inc"
 #include "../object_store/state.inc"
 #include "../pipeline_orchestrator/state.inc"

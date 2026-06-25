@@ -6,6 +6,7 @@
  */
 #include "mcp/mcp.h"
 #include "php_king.h"
+#include "php_king/arginfo.h"
 #include "config/mcp_and_orchestrator/base_layer.h"
 #include "king_hrtime.h"
 
@@ -32,8 +33,12 @@
 #define KING_MCP_TRANSFER_STATE_VERSION 1
 
 
+#include "state.inc"
 #include "runtime/state_and_validation.inc"
 #include "runtime/transfer_state.inc"
 #include "runtime/transport_control.inc"
 #include "runtime/remote_protocol.inc"
 #include "runtime/lifecycle_and_api.inc"
+
+#include "php_binding.inc"
+#include "registration.inc"

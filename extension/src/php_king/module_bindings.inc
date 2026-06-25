@@ -1,15 +1,12 @@
 /*
- * Module implementation bindings included by the single php_king extension
- * translation unit. Keep this order stable: runtime/object binding fragments
- * must be available before the module registration hooks below are compiled.
+ * Module implementation bindings still owned by the core php_king extension
+ * translation unit. Migrated subsystems compile their PHP bindings in their
+ * owning translation unit instead of being pulled in here.
  */
 
 #include "../db_ingest/php_binding.inc"
-#include "../awaitable/php_binding.inc"
 #include "../config/php_binding.inc"
-#include "../mcp/php_binding.inc"
 #include "../media/php_binding.inc"
 #include "../xslt/php_binding.inc"
-#include "../inference/php_binding.inc"
 #include "../client/php_binding.inc"
 #include "../server/php_binding.inc"
