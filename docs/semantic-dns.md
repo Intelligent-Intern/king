@@ -5,6 +5,13 @@ discovery and routing decisions. The native API is procedural
 `king_semantic_dns_*`. A native OO class is not exported yet; the OO examples
 are userland adapters.
 
+## Internal Layout
+
+The Semantic DNS runtime lives under `extension/src/semantic_dns/` with public
+contracts in `extension/include/semantic_dns/`. Its PHP arginfo and
+function-table entries live beside the runtime and are included by the
+extension bootstrap.
+
 ## Function, Example 1: Register and Discover a Service
 
 ```php
