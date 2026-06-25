@@ -1,3 +1,8 @@
+/*
+ * Object-store registration aggregation. The object-store runtime translation
+ * unit includes this module boundary beside the storage runtime.
+ */
+
 #include "object_store/class_method_entries.h"
 
 void king_object_store_register_classes(void)
