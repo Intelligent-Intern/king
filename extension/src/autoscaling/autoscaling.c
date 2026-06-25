@@ -9,6 +9,8 @@
  * =========================================================================
  */
 #include "php_king.h"
+#include "php_king/core_arginfo.h"
+#include "autoscaling/arginfo/index.h"
 #include "autoscaling/autoscaling.h"
 #include "config/cloud_autoscale/base_layer.h"
 #include "config/cloud_autoscale/config.h"
@@ -62,7 +64,9 @@ king_autoscaling_runtime_state_t king_autoscaling_runtime = {0};
 uint32_t king_current_instances = 1;
 
 
+#include "state.inc"
 #include "runtime/runtime_config.inc"
 #include "runtime/signal_and_monitoring.inc"
 #include "runtime/runtime_state.inc"
 #include "runtime/public_api.inc"
+#include "registration.inc"

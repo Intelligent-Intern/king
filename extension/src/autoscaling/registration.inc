@@ -1,3 +1,8 @@
+/*
+ * Autoscaling registration aggregation. The autoscaling runtime translation
+ * unit includes this module boundary beside the controller runtime.
+ */
+
 #include "autoscaling/class_method_entries.h"
 
 void king_autoscaling_register_classes(void)

@@ -8,5 +8,4 @@
 #include "../client/registration.inc"
 #include "../pipeline_orchestrator/registration.inc"
 #include "../object_store/registration.inc"
-#include "../autoscaling/registration.inc"
 #include "../server/registration.inc"

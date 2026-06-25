@@ -26,7 +26,6 @@ zend_class_entry *king_ce_network_exception    = NULL;
 zend_class_entry *king_ce_tls_exception        = NULL;
 zend_class_entry *king_ce_protocol_exception   = NULL;
 
-#include "../autoscaling/state.inc"
 #include "../client/state.inc"
 #include "../config/state.inc"
 #include "../object_store/state.inc"
