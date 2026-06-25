@@ -544,6 +544,7 @@ foreach (array_slice($promptTokens, -3, 3, true) as $position => $tokenId) {
 $stream = king_inference_stream($model, [
     'graphs' => $graphs,
 ], [
+    'max_native_stream_tokens' => 64,
     'graph_options' => [
         'max_vector_values' => 65536,
         'max_operations' => 524288,
@@ -567,6 +568,10 @@ state into the next graph, so KV cache entries written by `kv_write` can be read
 by later steps through `kv_read` or `kv_attention`. This is the current native
 handoff for token events; higher-level prompt-to-graph compilation is a later
 layer and does not need a second inference runtime.
+
+Native graph stream startup is bounded by `max_native_stream_tokens`, which can
+be set as a stream option or graph option. If it is not set, King allows up to
+4096 native token steps before rejecting the stream request.
 
 ## Function, Example 1c: OpenAI-Compatible HTTP Route
 

@@ -10,6 +10,33 @@ static zval *king_inference_king_native_graph_options(king_inference_stream_obje
     return options != NULL && Z_TYPE_P(options) == IS_ARRAY ? options : NULL;
 }
 
+static zend_result king_inference_king_native_stream_token_limit(
+    king_inference_stream_object *stream,
+    zval *graph_options,
+    zend_long *limit)
+{
+    zval *value = king_inference_array_find(&stream->options, "max_native_stream_tokens");
+
+    if (value == NULL && graph_options != NULL) {
+        value = king_inference_array_find(graph_options, "max_native_stream_tokens");
+    }
+    if (value == NULL) {
+        *limit = 4096;
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) <= 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native stream max_native_stream_tokens must be a positive integer."
+        );
+        return FAILURE;
+    }
+
+    *limit = Z_LVAL_P(value);
+    return SUCCESS;
+}
+
 static zval *king_inference_king_native_graph_token_payload(zval *graph_result, zval *graph)
 {
     zval *final = king_inference_array_find(graph_result, "final");
@@ -154,6 +181,7 @@ static zend_result king_inference_king_native_prepare_events(
     zval state;
     zval *entry;
     zend_long max_tokens = 1;
+    zend_long max_native_stream_tokens;
     zend_long emitted = 0;
 
     if (graphs != NULL && Z_TYPE_P(graphs) != IS_ARRAY) {
@@ -179,6 +207,21 @@ static zend_result king_inference_king_native_prepare_events(
     }
     if (max_tokens <= 0) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream max_tokens must be positive.");
+        return FAILURE;
+    }
+    if (king_inference_king_native_stream_token_limit(
+        stream,
+        graph_options,
+        &max_native_stream_tokens
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (max_tokens > max_native_stream_tokens) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native stream max_tokens exceeds configured max_native_stream_tokens."
+        );
         return FAILURE;
     }
 
