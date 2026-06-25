@@ -424,6 +424,10 @@ It is supposed to look like one native system with a PHP-facing control surface.
 Core source areas:
 
 - [`extension/`](extension/): PHP extension source, tests, headers, and build glue.
+  The public native header root is [`extension/include/`](extension/include/)
+  and the active runtime source root is [`extension/src/`](extension/src/).
+  See [`docs/source-layout.md`](docs/source-layout.md) for the subsystem layout
+  and bootstrap boundaries.
 - [`infra/scripts/`](infra/scripts/): build, package, release, and local install scripts.
 - [`libcurl/`](libcurl/): vendored curl headers used by the extension build.
 - [`userland/flow-php/`](userland/flow-php/): repository-local PHP adapters for streaming ETL, checkpointing, and King-backed pipeline orchestration.

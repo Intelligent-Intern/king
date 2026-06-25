@@ -14,6 +14,7 @@ adapters around the real `king_*` functions.
 
 ## Table of Contents
 
+- [Source Layout](source-layout.md)
 - [Async and Awaitables](async-awaitables.md)
 - [Config, Session, TLS, and QUIC](config-session-tls-quic.md)
 - [HTTP/1](http1.md)
