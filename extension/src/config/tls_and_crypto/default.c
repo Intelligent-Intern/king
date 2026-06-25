@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Default-value loader for the TLS and crypto config family. This slice
- * seeds the baseline verification depth, trust and identity placeholders,
+ * seeds the baseline verification depth, trust and identity fields,
  * cipher and curve policy, ticket / 0-RTT settings, OCSP behavior, and the
  * disabled-at-rest / MCP encryption flags before INI and any allowed
  * userland overrides refine the live crypto snapshot.

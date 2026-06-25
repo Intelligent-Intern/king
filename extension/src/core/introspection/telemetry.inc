@@ -1,7 +1,7 @@
 /*
  * Root telemetry introspection slice: exposes shared last-error helpers, the
  * live current-span snapshot, finalized outgoing trace-context injection, and
- * the still-conservative userland extract placeholder.
+ * the still-conservative userland extraction boundary.
  */
 
 PHP_FUNCTION(king_get_last_error)

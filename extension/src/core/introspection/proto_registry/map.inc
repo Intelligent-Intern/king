@@ -34,7 +34,7 @@ static bool king_proto_runtime_parse_map_input_key(
 )
 {
     zend_long numeric_key = 0;
-    double dummy_double = 0.0;
+    double ignored_double = 0.0;
 
     switch (field->map_key_kind) {
         case KING_PROTO_RUNTIME_FIELD_STRING:
@@ -58,7 +58,7 @@ static bool king_proto_runtime_parse_map_input_key(
                     ZSTR_VAL(entry_key),
                     ZSTR_LEN(entry_key),
                     &numeric_key,
-                    &dummy_double,
+                    &ignored_double,
                     false
                 )) {
                     zend_throw_exception_ex(
@@ -96,7 +96,7 @@ static bool king_proto_runtime_parse_map_input_key(
                     ZSTR_VAL(entry_key),
                     ZSTR_LEN(entry_key),
                     &numeric_key,
-                    &dummy_double,
+                    &ignored_double,
                     false
                 )) {
                     zend_throw_exception_ex(
@@ -133,7 +133,7 @@ static bool king_proto_runtime_parse_map_input_key(
                     ZSTR_VAL(entry_key),
                     ZSTR_LEN(entry_key),
                     &numeric_key,
-                    &dummy_double,
+                    &ignored_double,
                     false
                 )) {
                     zend_throw_exception_ex(

@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Default-value loader for the state-management config family. This slice
- * seeds the baseline backend and URI placeholders before INI and any
+ * seeds the baseline backend and URI fields before INI and any
  * allowed userland overrides refine the live state-management snapshot.
  * =========================================================================
  */

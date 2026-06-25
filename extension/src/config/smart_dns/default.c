@@ -7,7 +7,7 @@
  * Default-value loader for the Smart-DNS config family. This slice seeds
  * the baseline server-disabled state, bind/port, TTL, service-discovery
  * fan-out limit, semantic-mode toggle, and mothernode / live-probe
- * placeholders before INI and any allowed userland overrides refine the
+ * fields before INI and any allowed userland overrides refine the
  * live DNS snapshot.
  * =========================================================================
  */

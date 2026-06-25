@@ -6,7 +6,7 @@
  * PURPOSE:
  * Default-value loader for the smart-contracts config family. This slice
  * seeds the baseline module-disabled state, chain and gas defaults, wallet
- * and HSM placeholders, ABI location placeholder, and event-listener flag
+ * and HSM fields, ABI location field, and event-listener flag
  * before INI and any allowed userland overrides refine the live snapshot.
  * =========================================================================
  */

@@ -5,7 +5,7 @@
  *
  * PURPOSE:
  * Default-value loader for the semantic geometry config family. This slice
- * seeds the baseline vector dimensionality, algorithm placeholders, and
+ * seeds the baseline vector dimensionality, deferred algorithm fields, and
  * bounded search/consolidation thresholds before INI and any allowed
  * userland overrides refine the live geometry snapshot.
  * =========================================================================

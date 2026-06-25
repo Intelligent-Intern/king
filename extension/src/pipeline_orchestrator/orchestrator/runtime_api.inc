@@ -114,7 +114,7 @@ static int king_orchestrator_execute_existing_run(
     }
 
     if (!use_registered_tool_handlers) {
-        /* Runs without a registered-handler execution boundary still use the placeholder path. */
+        /* Runs without a registered-handler execution boundary pass initial data through. */
         ZVAL_COPY(return_value, initial_data);
     }
 
