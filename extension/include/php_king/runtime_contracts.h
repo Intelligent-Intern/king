@@ -8,8 +8,8 @@
 #include <php.h>
 #include <stdbool.h>
 
-#include "../client/objects.h"
-#include "../client/session.h"
+#include "client/objects.h"
+#include "client/session.h"
 
 void king_http1_pool_request_shutdown(void);
 void king_http1_pool_module_shutdown(void);

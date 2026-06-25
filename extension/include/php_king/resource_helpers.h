@@ -8,7 +8,7 @@
 #include <php.h>
 #include <stdint.h>
 
-#include "../client/objects.h"
+#include "client/objects.h"
 
 extern void *king_fetch_config(zval *zcfg);
 extern void king_ticket_ring_put(const uint8_t *ticket, size_t len);
