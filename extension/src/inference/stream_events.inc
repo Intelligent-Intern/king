@@ -207,6 +207,10 @@ static void king_inference_stream_openai_error(
 
 static void king_inference_stream_metrics(king_inference_stream_object *stream, zval *return_value)
 {
+    zend_long native_event_count = king_inference_stream_has_native_events(stream)
+        ? (zend_long) zend_hash_num_elements(Z_ARRVAL(stream->native_events))
+        : 0;
+
     array_init(return_value);
     add_assoc_long(return_value, "chunks", stream->chunk_count);
     add_assoc_long(return_value, "stderr_chunks", stream->stderr_count);
@@ -215,6 +219,9 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_bool(return_value, "openai_compatible", stream->openai_compatible);
+    add_assoc_bool(return_value, "native_stream", native_event_count > 0);
+    add_assoc_long(return_value, "native_event_count", native_event_count);
+    add_assoc_long(return_value, "native_event_index", (zend_long) stream->native_event_index);
 }
 
 static void king_inference_stream_done_event(king_inference_stream_object *stream, zval *return_value)
@@ -264,6 +271,12 @@ static zend_result king_inference_stream_next_event(
         }
         array_init(return_value);
         add_assoc_string(return_value, "type", "start");
+        add_assoc_string(
+            return_value,
+            "backend",
+            king_inference_stream_has_native_events(stream) ? "king_native_cpu" : "local"
+        );
+        add_assoc_bool(return_value, "native_stream", king_inference_stream_has_native_events(stream));
         add_assoc_long(return_value, "pid", stream->child_pid);
         return SUCCESS;
     }

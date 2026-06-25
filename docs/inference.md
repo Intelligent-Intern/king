@@ -751,6 +751,11 @@ while (!$stream->isDone()) {
 $metrics = $stream->getMetrics();
 ```
 
+`Stream::getMetrics()` reports emitted token chunks, stderr chunks, bytes,
+terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
+native graph streams also `native_stream`, `native_event_count`, and
+`native_event_index`.
+
 ## OO, Example 3: Parallel Inference Streams
 
 ```php

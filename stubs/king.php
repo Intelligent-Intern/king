@@ -1350,7 +1350,8 @@ namespace {
     /**
      * Read the next inference stream event. Native events use `type=start`,
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
-     * return `chat.completion.chunk`-style arrays.
+     * return `chat.completion.chunk`-style arrays. The start event carries
+     * `backend`, `native_stream`, and `pid` where applicable.
      * @return array<string,mixed>|null
      */
     function king_inference_next(\King\Inference\Stream $stream, ?int $timeout_ms = null): ?array {}
@@ -2858,7 +2859,11 @@ namespace King\Inference {
 
         public function isDone(): bool {}
 
-        /** @return array<string,mixed> */
+        /**
+         * @return array<string,mixed> Includes chunk/error counters plus
+         * `native_stream`, `native_event_count`, and `native_event_index` for
+         * graph-backed native CPU streams.
+         */
         public function getMetrics(): array {}
     }
 }
