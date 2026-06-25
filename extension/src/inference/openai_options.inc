@@ -287,6 +287,25 @@ static bool king_inference_openai_stream_options_valid(zval *source, const char 
     return true;
 }
 
+static bool king_inference_openai_stream_field_valid(zval *source, const char **message)
+{
+    zval *stream = king_inference_array_find(source, "stream");
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (stream == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(stream) == IS_TRUE || Z_TYPE_P(stream) == IS_FALSE) {
+        return true;
+    }
+    if (message != NULL) {
+        *message = "OpenAI stream must be a boolean when provided.";
+    }
+    return false;
+}
+
 static void king_inference_openai_copy_stop_option(zval *source, zval *target)
 {
     zval *stop = king_inference_array_find(source, "stop");

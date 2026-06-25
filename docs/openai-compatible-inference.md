@@ -150,13 +150,13 @@ Chat Completions and legacy Completions also validate OpenAI `stop` as a
 string or an array of one to four non-empty strings and pass those stop
 sequences to the local generation runner.
 
-All OpenAI generation routes validate `stream_options` as a JSON object when it
-is provided, and `stream_options.include_usage` must be a boolean. For streamed
-Chat Completions and legacy Completions, `include_usage=true` appends a final
-OpenAI-shaped usage chunk with empty `choices` immediately before the final
-`data: [DONE]` marker. Other chunks carry `usage: null`, and the final usage
-chunk is computed through the same tokenizer-backed path as non-streaming
-generation responses.
+All OpenAI generation routes validate `stream` as a boolean when it is provided.
+They also validate `stream_options` as a JSON object, and
+`stream_options.include_usage` must be a boolean. For streamed Chat Completions
+and legacy Completions, `include_usage=true` appends a final OpenAI-shaped usage
+chunk with empty `choices` immediately before the final `data: [DONE]` marker.
+Other chunks carry `usage: null`, and the final usage chunk is computed through
+the same tokenizer-backed path as non-streaming generation responses.
 
 ## OO, Example 1: Static Facade
 

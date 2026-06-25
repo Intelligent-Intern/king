@@ -337,11 +337,12 @@ static zend_result king_inference_openai_completions_payload_response(
     zval response_payload;
     zend_string *json = NULL;
     zend_result result;
-    bool stream_requested = king_inference_bool_from_array(payload, "stream", false);
+    bool stream_requested;
     const char *stop_error = NULL;
     bool has_error_response = false;
     const char *generation_error = NULL;
     const char *stream_options_error = NULL;
+    const char *stream_error = NULL;
 
     if (prompt == NULL) {
         return king_inference_openai_error_response(
@@ -375,6 +376,15 @@ static zend_result king_inference_openai_completions_payload_response(
             "invalid_request_error"
         );
     }
+    if (!king_inference_openai_stream_field_valid(payload, &stream_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            400,
+            stream_error != NULL ? stream_error : "OpenAI stream is invalid.",
+            "invalid_request_error"
+        );
+    }
+    stream_requested = king_inference_bool_from_array(payload, "stream", false);
     if (king_inference_openai_require_generation_backend(
         return_value,
         model,
