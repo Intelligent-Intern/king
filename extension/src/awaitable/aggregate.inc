@@ -78,7 +78,10 @@ static void king_awaitable_build_envelope(
     }
 }
 
-static zend_result king_awaitable_any_runner(king_awaitable_object *intern, zval *result)
+static zend_result king_awaitable_any_runner(
+    king_awaitable_object *intern,
+    zend_long timeout_ms,
+    zval *result)
 {
     zval *awaitables = king_awaitable_aggregate_items(intern);
     zval *awaitable;
@@ -101,7 +104,7 @@ static zend_result king_awaitable_any_runner(king_awaitable_object *intern, zval
 
         child = php_king_awaitable_obj_from_zend(Z_OBJ_P(awaitable));
         if (child->status == KING_AWAITABLE_PENDING
-            && king_awaitable_drive(child, 0) != SUCCESS) {
+            && king_awaitable_drive(child, timeout_ms) != SUCCESS) {
             return FAILURE;
         }
 
@@ -115,7 +118,10 @@ static zend_result king_awaitable_any_runner(king_awaitable_object *intern, zval
     return SUCCESS;
 }
 
-static zend_result king_awaitable_all_runner(king_awaitable_object *intern, zval *result)
+static zend_result king_awaitable_all_runner(
+    king_awaitable_object *intern,
+    zend_long timeout_ms,
+    zval *result)
 {
     zval *awaitables = king_awaitable_aggregate_items(intern);
     zval *awaitable;
@@ -139,7 +145,7 @@ static zend_result king_awaitable_all_runner(king_awaitable_object *intern, zval
 
         child = php_king_awaitable_obj_from_zend(Z_OBJ_P(awaitable));
         if (child->status == KING_AWAITABLE_PENDING
-            && king_awaitable_drive(child, 0) != SUCCESS) {
+            && king_awaitable_drive(child, timeout_ms) != SUCCESS) {
             return FAILURE;
         }
         if (child->status == KING_AWAITABLE_PENDING) {

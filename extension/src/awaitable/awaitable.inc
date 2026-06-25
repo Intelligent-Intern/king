@@ -139,6 +139,7 @@ static void king_awaitable_release_params(zval *params, uint32_t param_count)
 
 static zend_result king_awaitable_function_call_runner(
     king_awaitable_object *intern,
+    zend_long timeout_ms,
     zval *result)
 {
     zval *function_name;
@@ -146,6 +147,11 @@ static zend_result king_awaitable_function_call_runner(
     zval *params = NULL;
     uint32_t param_count = 0;
     zend_result status;
+
+    if (timeout_ms == 0) {
+        ZVAL_UNDEF(result);
+        return SUCCESS;
+    }
 
     function_name = zend_hash_str_find(
         Z_ARRVAL(intern->payload),
@@ -183,6 +189,7 @@ static zend_result king_awaitable_function_call_runner(
 
 static zend_result king_awaitable_method_call_runner(
     king_awaitable_object *intern,
+    zend_long timeout_ms,
     zval *result)
 {
     zval *object;
@@ -192,6 +199,11 @@ static zend_result king_awaitable_method_call_runner(
     zval *params = NULL;
     uint32_t param_count = 0;
     zend_result status;
+
+    if (timeout_ms == 0) {
+        ZVAL_UNDEF(result);
+        return SUCCESS;
+    }
 
     object = zend_hash_str_find(
         Z_ARRVAL(intern->payload),
@@ -395,8 +407,6 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
     zval result;
     zend_result status;
 
-    (void) timeout_ms;
-
     if (intern->status != KING_AWAITABLE_PENDING) {
         return SUCCESS;
     }
@@ -413,6 +423,10 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
         return SUCCESS;
     }
 
+    if (timeout_ms == 0) {
+        return SUCCESS;
+    }
+
     if (intern->runner == NULL) {
         king_set_error("King\\Awaitable has no native runner.");
         return king_awaitable_reject_current_error(intern);
@@ -420,7 +434,7 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
 
     intern->started = true;
     ZVAL_UNDEF(&result);
-    status = intern->runner(intern, &result);
+    status = intern->runner(intern, timeout_ms, &result);
     if (status != SUCCESS) {
         if (!Z_ISUNDEF(result)) {
             zval_ptr_dtor(&result);

@@ -2,12 +2,15 @@
  * Inference PHP entry points and OO method glue.
  */
 
-static zend_result king_inference_next_async_runner(king_awaitable_object *intern, zval *result)
+static zend_result king_inference_next_async_runner(
+    king_awaitable_object *intern,
+    zend_long timeout_ms,
+    zval *result)
 {
     zval *stream_object;
     zval *timeout;
     zval event;
-    zend_long timeout_ms = 0;
+    zend_long read_timeout_ms = timeout_ms > 0 ? timeout_ms : 0;
     king_inference_stream_object *stream;
     zend_result status;
 
@@ -33,12 +36,12 @@ static zend_result king_inference_next_async_runner(king_awaitable_object *inter
         return FAILURE;
     }
     if (timeout != NULL && Z_TYPE_P(timeout) == IS_LONG) {
-        timeout_ms = Z_LVAL_P(timeout);
+        read_timeout_ms = Z_LVAL_P(timeout);
     }
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(stream_object));
     ZVAL_UNDEF(&event);
-    status = king_inference_stream_next_event(stream, timeout_ms, &event);
+    status = king_inference_stream_next_event(stream, read_timeout_ms, &event);
     if (status != SUCCESS) {
         if (!Z_ISUNDEF(event)) {
             zval_ptr_dtor(&event);

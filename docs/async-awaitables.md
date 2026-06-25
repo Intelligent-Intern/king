@@ -12,6 +12,12 @@ Aggregate awaitables resolve to status envelopes with `key`, `status`,
 `operation`, `value`, and, for rejected children, `error`. This keeps failed
 children visible without losing the caller's original array keys.
 
+`poll(0)` is a non-blocking state check. A positive poll timeout or an
+unbounded `await()` call is allowed to drive deferred native work once. On the
+current deferred backend, hard IO deadlines still belong in the async operation
+options such as HTTP, MCP, or orchestrator `timeout_ms`; the await timeout
+controls whether pending work may be started by the awaitable layer.
+
 ## Internal Layout
 
 The native object contract and procedural declarations live in

@@ -18,7 +18,11 @@ typedef enum _king_awaitable_status {
 } king_awaitable_status_t;
 
 typedef struct _king_awaitable_object king_awaitable_object;
-typedef zend_result (*king_awaitable_runner)(king_awaitable_object *intern, zval *result);
+typedef zend_result (*king_awaitable_runner)(
+    king_awaitable_object *intern,
+    zend_long timeout_ms,
+    zval *result
+);
 
 struct _king_awaitable_object {
     king_awaitable_status_t status;
