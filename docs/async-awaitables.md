@@ -12,6 +12,12 @@ Aggregate awaitables resolve to status envelopes with `key`, `status`,
 `operation`, `value`, and, for rejected children, `error`. This keeps failed
 children visible without losing the caller's original array keys.
 
+## Internal Layout
+
+The native object contract lives in `extension/include/awaitable/awaitable.h`.
+The implementation lives under `extension/src/awaitable/`, while
+`extension/src/php_king/awaitable.inc` is only the extension bootstrap bridge.
+
 ## Function, Example 1: Await an HTTP Request
 
 ```php

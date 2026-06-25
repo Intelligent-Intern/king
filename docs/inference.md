@@ -31,7 +31,9 @@ The public API stays stable while backend internals can be optimized one module
 at a time:
 
 ```text
-extension/src/php_king/inference/
+extension/src/inference/
+├── api.inc
+├── arginfo.inc
 ├── helpers.inc
 ├── backend_contract.inc
 ├── backend_registry.inc
@@ -49,11 +51,22 @@ extension/src/php_king/inference/
 ├── tensor_graph_sampling.inc
 ├── paged_kv_cache.inc
 ├── model_config.inc
+├── openai_compat.inc
+├── openai_completions.inc
+├── openai_embeddings.inc
+├── openai_http_router.inc
+├── openai_messages.inc
+├── openai_options.inc
+├── openai_responses.inc
+├── openai_usage.inc
 ├── resource_policy.inc
 ├── thermal_policy.inc
 ├── tokenizer.inc
 └── stream_events.inc
 ```
+
+The object and metadata contracts live in `extension/include/inference/inference.h`;
+`extension/src/php_king/inference.inc` is only the extension bootstrap bridge.
 
 `backend_contract.inc` owns backend names and capabilities.
 `backend_registry.inc` dispatches stream startup to the selected backend.
