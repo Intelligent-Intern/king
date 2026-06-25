@@ -157,6 +157,12 @@ PHP_MINIT_FUNCTION(king)
         king_mcp_class_methods,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
+    king_ce_mcp_server = king_register_class_with_flags(
+        "King\\MCPServer",
+        NULL,
+        king_mcp_server_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
     king_ce_pipeline_orchestrator = king_register_class_with_flags(
         "King\\PipelineOrchestrator",
         NULL,
@@ -185,6 +191,24 @@ PHP_MINIT_FUNCTION(king)
         "King\\XSLT\\Processor",
         NULL,
         king_xslt_processor_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
+    king_ce_inference = king_register_class_with_flags(
+        "King\\Inference",
+        NULL,
+        king_inference_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
+    king_ce_inference_model = king_register_class_with_flags(
+        "King\\Inference\\Model",
+        NULL,
+        king_inference_model_class_methods,
+        ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
+    );
+    king_ce_inference_stream = king_register_class_with_flags(
+        "King\\Inference\\Stream",
+        NULL,
+        king_inference_stream_class_methods,
         ZEND_ACC_FINAL | ZEND_ACC_NO_DYNAMIC_PROPERTIES
     );
     king_ce_client_http = king_register_class_with_flags(
@@ -227,8 +251,11 @@ PHP_MINIT_FUNCTION(king)
     king_awaitable_object_handlers_init();
     king_config_object_handlers_init();
     king_mcp_object_handlers_init();
+    king_mcp_server_object_handlers_init();
     king_rtp_socket_object_handlers_init();
     king_xslt_processor_object_handlers_init();
+    king_inference_model_object_handlers_init();
+    king_inference_stream_object_handlers_init();
     king_stream_object_handlers_init();
     king_response_object_handlers_init();
     king_http_client_object_handlers_init();

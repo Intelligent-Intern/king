@@ -47,6 +47,9 @@ dist/
 .env.local
 *.env.local
 
+# Local planning notes that are not part of the public docs set.
+docs/future-plan.md
+
 # Model weights MUST NEVER be checked in (they are large and provenance
 # belongs on a model registry / object store, not in git). Catch-all
 # patterns repo-wide — if you actually need a tiny test fixture that

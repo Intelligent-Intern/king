@@ -126,7 +126,7 @@ PHP_METHOD(King_RTP_Socket, __construct)
         zend_throw_exception_ex(
             king_ce_runtime_exception,
             0,
-            "King\\RTP\\Socket could not bind %s:%" ZEND_LONG_FMT ": %s",
+            "King\\RTP\\Socket could not bind %s:" ZEND_LONG_FMT ": %s",
             host,
             port,
             errbuf[0] != '\0' ? errbuf : "unknown RTP bind failure"

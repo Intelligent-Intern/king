@@ -15,6 +15,10 @@ namespace {
     function king_awaitable_poll(\King\Awaitable $awaitable, int $timeout_ms = 0): bool {}
     function king_awaitable_cancel(\King\Awaitable $awaitable): bool {}
     function king_awaitable_status(\King\Awaitable $awaitable): string {}
+    /** @param array<array-key,\King\Awaitable> $awaitables */
+    function king_awaitable_any(array $awaitables, ?\King\CancelToken $cancel = null): \King\Awaitable {}
+    /** @param array<array-key,\King\Awaitable> $awaitables */
+    function king_awaitable_all(array $awaitables, ?\King\CancelToken $cancel = null): \King\Awaitable {}
 
     /**
      * Establish a local runtime QUIC session handle backed by a real
@@ -346,6 +350,62 @@ namespace {
     function king_mcp_request(mixed $connection, string $service_name, string $method_name, string $request_payload, ?array $options = null): string|false {}
 
     function king_mcp_request_async(mixed $connection, string $service_name, string $method_name, string $request_payload, ?array $options = null): \King\Awaitable {}
+
+    /**
+     * Encode request data with the `request_schema` configured under
+     * `mcp.iibin_routes` for this connection's `(service, method)` route,
+     * exchange it over King's internal line-framed MCP peer transport, and
+     * decode the response when that route defines `response_schema`.
+     *
+     * Schemas are fixed by the `King\Config` snapshot used at connect time;
+     * they cannot be overridden per request.
+     *
+     * @param mixed $connection
+     * @param mixed $data
+     * @param array<string,mixed>|null $options
+     * @return array<string,mixed>|object|string|false
+     */
+    function king_mcp_request_iibin(mixed $connection, string $service_name, string $method_name, mixed $data, ?array $options = null): array|object|string|false {}
+
+    function king_mcp_request_iibin_async(mixed $connection, string $service_name, string $method_name, mixed $data, ?array $options = null): \King\Awaitable {}
+
+    /**
+     * Normalize a public MCP server definition for JSON-RPC stdio and
+     * Streamable HTTP transports.
+     *
+     * @param array<string,mixed> $definition
+     * @param array<string,mixed>|null $options
+     * @return array<string,mixed>|false
+     */
+    function king_mcp_server_create(array $definition, ?array $options = null): array|false {}
+
+    /**
+     * Handle one public MCP JSON-RPC message. Requests return a JSON-encoded
+     * JSON-RPC response; notifications return null.
+     *
+     * @param array<string,mixed> $server
+     * @param string|array<string,mixed> $message
+     * @param array<string,mixed>|null $context
+     */
+    function king_mcp_server_handle_jsonrpc(array $server, mixed $message, ?array $context = null): ?string {}
+
+    /**
+     * Adapt a King HTTP request array to the MCP Streamable HTTP transport.
+     *
+     * @param array<string,mixed> $server
+     * @param array<string,mixed> $request
+     * @param array<string,mixed>|null $context
+     * @return array{status:int,headers:array<string,string>,body:string}
+     */
+    function king_mcp_server_handle_http(array $server, array $request, ?array $context = null): array {}
+
+    /**
+     * Run the public MCP stdio transport until EOF.
+     *
+     * @param array<string,mixed> $server
+     * @param array<string,mixed>|null $options
+     */
+    function king_mcp_server_stdio(array $server, ?array $options = null): bool {}
 
     /**
      * Drain a PHP stream and upload the bytes to the active remote MCP peer
@@ -1144,6 +1204,132 @@ namespace {
      * @throws \King\RuntimeException|\King\ValidationException
      */
     function king_xslt_transform_to_file(string $source_path, string $stylesheet_path, string $output_path, ?array $options = null): array {}
+
+    /**
+     * Register a local quantized GGUF model artifact for King inference.
+     * Artifacts are materialized filesystem paths supplied through `artifact`,
+     * `artifact.path`, or `artifact_path`. Backend selection is config-driven.
+     * The `local` backend streams through the King runner contract; the
+     * `king_native_cpu` backend exposes native GGUF metadata, an internal
+     * tensor index, native tokenizer lookup, paged KV-cache planning, and
+     * read-only model mapping without an external inference runtime. GPU use is
+     * disabled by default and requires explicit config plus thermal policy when
+     * enabled.
+     * @param array<string,mixed> $config
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_model_load(array $config): \King\Inference\Model {}
+
+    /**
+     * Return the normalized metadata for a loaded King inference model,
+     * including backend name and backend capabilities.
+     * @return array<string,mixed>
+     */
+    function king_inference_model_info(\King\Inference\Model $model): array {}
+
+    /**
+     * Encode text with the native tokenizer loaded from the model artifact.
+     * @return array<string,mixed>
+     * @throws \King\RuntimeException
+     */
+    function king_inference_tokenize(\King\Inference\Model $model, string $text): array {}
+
+    /**
+     * Return a read-only native tensor view descriptor for one tensor from the
+     * loaded GGUF artifact. The descriptor includes shape, quantized block
+     * format, byte range, bounds status, and native map readiness, but never
+     * exposes raw process addresses to PHP.
+     * @return array<string,mixed>
+     * @throws \King\RuntimeException
+     */
+    function king_inference_tensor_view(\King\Inference\Model $model, string $name): array {}
+
+    /**
+     * Return tensor view descriptors from the loaded GGUF artifact.
+     * Options: `prefix` filters tensor names and `limit` limits returned
+     * descriptors. Use `limit <= 0` when the complete index is required.
+     * @param array{prefix?:string,limit?:int}|null $options
+     * @return array<string,mixed>
+     */
+    function king_inference_tensor_index(\King\Inference\Model $model, ?array $options = null): array {}
+
+    /**
+     * Dequantize a bounded element range from one native tensor into PHP
+     * floats. Supported tensor formats are scalar F32/F16/BF16/I* types plus
+     * Q4_0, Q4_1, Q8_0, Q4_K, Q5_K, and Q6_K block formats.
+     * @param array{offset?:int,count?:int,max_values?:int}|null $options
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_tensor_dequantize(\King\Inference\Model $model, string $name, ?array $options = null): array {}
+
+    /**
+     * Multiply a rank-1 or rank-2 native tensor by a PHP vector on CPU.
+     * Quantized rows use blockwise dot decoding where supported. Rank-2
+     * tensors use GGUF order: dimension 0 is columns/input width and dimension
+     * 1 is rows/output width. Limits are explicit options so large matrices
+     * fail safely instead of accidentally burning the host.
+     * @param list<int|float> $input
+     * @param array{row_offset?:int,row_limit?:int,max_output_values?:int,max_input_values?:int,max_operations?:int}|null $options
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_tensor_matmul(\King\Inference\Model $model, string $name, array $input, ?array $options = null): array {}
+
+    /**
+     * Execute a bounded native tensor mini-graph on a loaded model. Supported
+     * ops are `embedding`, `rms_norm`, `linear`, `rope`, `dot`, `scale`, and
+     * `add`, plus `stack`, `softmax`, and `weighted_sum` for attention-score
+     * and context-vector assembly. `kv_read` and `kv_write` read and update
+     * the serializable `state.kv_cache` payload returned by the graph runner;
+     * `kv_attention` consumes a strict slot range from that state and returns
+     * the scaled QK-softmax context vector for token decoding. `argmax_token`
+     * and `sample_token` select the next token from logits; `sample_token`
+     * accepts temperature, top-k, top-p, seed, sample_index, and token_offset,
+     * then returns `[token_id, probability, logit, rank]`.
+     * @param array<string,mixed> $graph
+     * @param array{max_vector_values?:int,max_operations?:int}|null $options
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_graph_run(\King\Inference\Model $model, array $graph, ?array $options = null): array {}
+
+    /**
+     * Return the native paged KV-cache layout plan for a loaded model.
+     * @param array<string,mixed>|null $request
+     * @return array<string,mixed>
+     */
+    function king_inference_kv_cache_plan(\King\Inference\Model $model, ?array $request = null): array {}
+
+    /**
+     * Start token streaming through the configured King inference backend for
+     * a loaded model. Set `openai_compatible` or
+     * `format=openai_chat_completions` in request/options to receive
+     * Chat-Completions-style streaming chunks from `king_inference_next()`.
+     * @param array<string,mixed> $request
+     * @param array<string,mixed>|null $options
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_stream(\King\Inference\Model $model, array $request, ?array $options = null): \King\Inference\Stream {}
+
+    /**
+     * Read the next inference stream event. Native events use `type=start`,
+     * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
+     * return `chat.completion.chunk`-style arrays.
+     * @return array<string,mixed>|null
+     */
+    function king_inference_next(\King\Inference\Stream $stream, ?int $timeout_ms = null): ?array {}
+
+    /**
+     * Start one asynchronous read against an inference stream. The awaitable
+     * resolves with the next event or terminal null when the stream is done.
+     */
+    function king_inference_next_async(\King\Inference\Stream $stream, ?int $timeout_ms = null): \King\Awaitable {}
+
+    /**
+     * Cancel an active inference stream and release backend resources.
+     */
+    function king_inference_cancel(\King\Inference\Stream $stream): bool {}
 
     /**
      * Telemetry runtime status, queue pressure, and self-observation counters.
@@ -2002,6 +2188,18 @@ namespace King {
         public function isCancelled(): bool {}
         public function getStatus(): string {}
         public function getOperation(): string {}
+
+        /**
+         * Resolve when the first child awaitable reaches a terminal state.
+         * @param array<array-key,Awaitable> $awaitables
+         */
+        public static function any(array $awaitables, ?CancelToken $cancel = null): Awaitable {}
+
+        /**
+         * Resolve when all child awaitables reach a terminal state.
+         * @param array<array-key,Awaitable> $awaitables
+         */
+        public static function all(array $awaitables, ?CancelToken $cancel = null): Awaitable {}
     }
 
     /* ===========================
@@ -2118,9 +2316,9 @@ namespace King {
         public function isEndOfBody(): bool {}
     }
 
-    /* ===========================
-     * MCP (Model Context Protocol)
-     * =========================== */
+    /* ==================================
+     * MCP (King internal peer transport)
+     * ================================== */
     final class MCP {
         /**
          * Materialize the MCP connection-state wrapper for host, port,
@@ -2142,6 +2340,19 @@ namespace King {
         public function requestAsync(string $service, string $method, string $payload, ?CancelToken $cancel = null, ?array $options = null): Awaitable {}
 
         /**
+         * IIBIN-aware unary call over King's internal line-framed MCP peer
+         * transport. The route contract is read from the connection's
+         * `King\Config` snapshot under `mcp.iibin_routes`; callers pass only
+         * the structured data for the configured request schema.
+         *
+         * @return array<string,mixed>|object|string
+         * @throws RuntimeException|ValidationException|MCPConnectionException|MCPProtocolException|MCPTimeoutException
+         */
+        public function requestIibin(string $service, string $method, mixed $data, ?CancelToken $cancel = null, ?array $options = null): array|object|string {}
+
+        public function requestIibinAsync(string $service, string $method, mixed $data, ?CancelToken $cancel = null, ?array $options = null): Awaitable {}
+
+        /**
          * Drain a source stream into the remote MCP transfer store keyed by
          * `(service, method, streamIdentifier)`. The tuple is encoded
          * internally so binary-safe identifiers stay collision-free.
@@ -2161,6 +2372,35 @@ namespace King {
 
         /** Close the MCP connection state and active remote peer socket. */
         public function close(): void {}
+    }
+
+    /**
+     * Public MCP server surface for JSON-RPC stdio and Streamable HTTP.
+     */
+    final class MCPServer {
+        /**
+         * @param array<string,mixed> $definition
+         * @param array<string,mixed>|null $options
+         */
+        public function __construct(array $definition, ?array $options = null) {}
+
+        /**
+         * @param string|array<string,mixed> $message
+         * @param array<string,mixed>|null $context
+         */
+        public function handleJsonRpc(mixed $message, ?array $context = null): ?string {}
+
+        /**
+         * @param array<string,mixed> $request
+         * @param array<string,mixed>|null $context
+         * @return array{status:int,headers:array<string,string>,body:string}
+         */
+        public function handleHttp(array $request, ?array $context = null): array {}
+
+        /**
+         * @param array<string,mixed>|null $options
+         */
+        public function runStdio(?array $options = null): bool {}
     }
 
     /* ===========================
@@ -2337,6 +2577,58 @@ namespace King {
         public static function drainNode(int $server_id): bool {}
     }
 
+    /* ===========================
+     * Inference
+     * =========================== */
+    final class Inference {
+        /** @param array<string,mixed> $config */
+        public static function loadModel(array $config): Inference\Model {}
+
+        /** @return array<string,mixed> */
+        public static function tokenize(Inference\Model $model, string $text): array {}
+
+        /** @return array<string,mixed> */
+        public static function tensorView(Inference\Model $model, string $name): array {}
+
+        /**
+         * @param array{prefix?:string,limit?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public static function tensorIndex(Inference\Model $model, ?array $options = null): array {}
+
+        /**
+         * @param array{offset?:int,count?:int,max_values?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public static function tensorDequantize(Inference\Model $model, string $name, ?array $options = null): array {}
+
+        /**
+         * @param list<int|float> $input
+         * @param array{row_offset?:int,row_limit?:int,max_output_values?:int,max_input_values?:int,max_operations?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public static function tensorMatmul(Inference\Model $model, string $name, array $input, ?array $options = null): array {}
+
+        /**
+         * @param array<string,mixed> $graph
+         * @param array{max_vector_values?:int,max_operations?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public static function graphRun(Inference\Model $model, array $graph, ?array $options = null): array {}
+
+        /**
+         * @param array<string,mixed>|null $request
+         * @return array<string,mixed>
+         */
+        public static function kvCachePlan(Inference\Model $model, ?array $request = null): array {}
+
+        /**
+         * @param array<string,mixed> $request
+         * @param array<string,mixed>|null $options
+         */
+        public static function stream(Inference\Model $model, array $request, ?array $options = null): Inference\Stream {}
+    }
+
 }
 
 /* ===========================
@@ -2445,6 +2737,79 @@ namespace King\XSLT {
          * @return array<string,mixed>
          */
         public function transformToFile(string $source_path, string $stylesheet_path, string $output_path, ?array $options = null): array {}
+    }
+}
+
+/* ===========================
+ * Local Quantized Inference
+ * =========================== */
+namespace King\Inference {
+    final class Model {
+        /** @param array<string,mixed> $config */
+        public function __construct(array $config) {}
+
+        /** @return array<string,mixed> */
+        public function info(): array {}
+
+        /** @return array<string,mixed> */
+        public function tokenize(string $text): array {}
+
+        /** @return array<string,mixed> */
+        public function tensorView(string $name): array {}
+
+        /**
+         * @param array{prefix?:string,limit?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public function tensorIndex(?array $options = null): array {}
+
+        /**
+         * @param array{offset?:int,count?:int,max_values?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public function tensorDequantize(string $name, ?array $options = null): array {}
+
+        /**
+         * @param list<int|float> $input
+         * @param array{row_offset?:int,row_limit?:int,max_output_values?:int,max_input_values?:int,max_operations?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public function tensorMatmul(string $name, array $input, ?array $options = null): array {}
+
+        /**
+         * @param array<string,mixed> $graph
+         * @param array{max_vector_values?:int,max_operations?:int}|null $options
+         * @return array<string,mixed>
+         */
+        public function graphRun(array $graph, ?array $options = null): array {}
+
+        /**
+         * @param array<string,mixed>|null $request
+         * @return array<string,mixed>
+         */
+        public function kvCachePlan(?array $request = null): array {}
+    }
+
+    final class Stream {
+        /**
+         * @param array<string,mixed> $request
+         * @param array<string,mixed>|null $options
+         * Set `openai_compatible` or `format=openai_chat_completions` to emit
+         * Chat-Completions-style chunks from next().
+         */
+        public function __construct(Model $model, array $request, ?array $options = null) {}
+
+        /** @return array<string,mixed>|null Native event or OpenAI-compatible chunk. */
+        public function next(?int $timeout_ms = null): ?array {}
+
+        public function nextAsync(?int $timeout_ms = null): \King\Awaitable {}
+
+        public function cancel(): bool {}
+
+        public function isDone(): bool {}
+
+        /** @return array<string,mixed> */
+        public function getMetrics(): array {}
     }
 }
 

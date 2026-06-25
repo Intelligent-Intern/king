@@ -186,7 +186,8 @@ King brings the following into one extension:
 - Smart DNS / Semantic DNS for service discovery and routing
 - router and load-balancer control-plane configuration and policy
 - IIBIN for schema-defined native binary encoding and decoding
-- MCP for agent and tool protocol integration
+- MCP public server handling over JSON-RPC stdio and Streamable HTTP
+- King-internal MCP peer calls, transfers, deadlines, and configured IIBIN payload contracts
 - XSLT 2.0/3.0 transformation hooks for XML standards and Schematron/SVRL pipelines through optional SaxonC runtime loading
 - real multi-backend object-store and CDN primitives
 - telemetry, metrics, tracing, and admin control surfaces
@@ -229,9 +230,12 @@ the application logic.
 ### 3. Control Plane
 
 The control plane is for remote work that is not just "serve one response now".
-This is where MCP and the pipeline orchestrator live.
-MCP moves structured requests, uploads, downloads, deadlines, and cancellation
-between peers.
+This is where MCP and the pipeline orchestrator live. King's public MCP server
+surface handles JSON-RPC stdio and Streamable HTTP requests for tools,
+resources, prompts, initialization, and ping. The internal MCP peer surface
+moves structured requests, uploads, downloads, deadlines, and cancellation
+between trusted King peers. IIBIN schemas for internal MCP calls are fixed on
+the connection config, not passed as mutable request-time switches.
 The orchestrator manages multi-step work, queue-backed execution, remote-worker
 execution, run snapshots, and restart-aware control flow.
 If work needs to continue beyond one request, move to another process, or be
@@ -323,7 +327,7 @@ King includes a native control-plane model around:
 King is also a data and protocol runtime:
 
 - IIBIN for schema-defined binary serialization
-- MCP for tool and agent protocol traffic
+- MCP for public JSON-RPC tool/resource/prompt servers and King-internal peer traffic
 - XSLT-backed XML transformation and validation pipelines for standards-heavy payloads
 - real multi-backend object-store primitives
 - CDN-oriented cache distribution hooks
@@ -356,6 +360,19 @@ The core programming model is:
   resource-backed OO surface.
 - `King\XSLT\Processor` and the procedural `king_xslt_*` functions expose the
   SaxonC-backed XSLT runtime status and file transformation primitives.
+- `King\Inference`, `King\Inference\Model`, `King\Inference\Stream`, and the
+  procedural `king_inference_*` functions expose local quantized GGUF model
+  registration through a backend contract. King parses GGUF metadata and tensor
+  directories natively, `local` provides the current token-streaming runner
+  contract, and `king_native_cpu` exposes model structure, native tokenizer
+  lookup, paged KV-cache planning, public tensor views, bounded
+  dequantization, K-quant block decoding, first CPU tensor/vector math, and
+  a native mini-graph for embedding, RMSNorm, linear projection, RoPE, dot,
+  stack, softmax, weighted-sum context assembly, serializable KV state,
+  range-based KV attention, token selection from logits, scale, and add steps
+  without an external inference runtime. The stream layer can emit explicit
+  OpenAI-compatible Chat Completions chunks while full graph execution and
+  quantized kernels are added.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.

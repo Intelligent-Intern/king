@@ -1,9 +1,16 @@
 # Async and Awaitables
 
-King uses `King\Awaitable` for asynchronous HTTP, MCP, and orchestrator calls.
+King uses `King\Awaitable` for asynchronous HTTP, MCP, orchestrator, and
+inference calls.
 Procedural code can use `king_await()`, `king_awaitable_poll()`,
-`king_awaitable_cancel()`, and `king_awaitable_status()`. OO code calls the
-methods directly on the awaitable.
+`king_awaitable_cancel()`, `king_awaitable_status()`,
+`king_awaitable_any()`, and `king_awaitable_all()`. OO code calls the methods
+directly on the awaitable or uses `King\Awaitable::any()` and
+`King\Awaitable::all()` for aggregate waits.
+
+Aggregate awaitables resolve to status envelopes with `key`, `status`,
+`operation`, `value`, and, for rejected children, `error`. This keeps failed
+children visible without losing the caller's original array keys.
 
 ## Function, Example 1: Await an HTTP Request
 
@@ -54,6 +61,36 @@ if (!king_awaitable_poll($awaitable, 50)) {
 if (king_awaitable_status($awaitable) !== 'cancelled') {
     $result = king_await($awaitable, 2000);
     var_dump($result);
+}
+```
+
+## Function, Example 3: Wait for the First Completed Operation
+
+```php
+<?php
+$tenantProfile = king_client_send_request_async(
+    'http://127.0.0.1:8080/api/tenants/42',
+    'GET',
+    ['accept' => 'application/json']
+);
+$invoiceStatus = king_client_send_request_async(
+    'http://127.0.0.1:8080/api/invoices/INV-1001/status',
+    'GET',
+    ['accept' => 'application/json']
+);
+
+$first = king_awaitable_any([
+    'tenant' => $tenantProfile,
+    'invoice' => $invoiceStatus,
+]);
+
+if ($first->poll(25)) {
+    $ready = king_await($first);
+
+    if ($ready['status'] === 'resolved') {
+        printf("%s finished first\n", $ready['key']);
+        var_dump($ready['value']);
+    }
 }
 ```
 
@@ -114,4 +151,32 @@ final class AsyncWork
         return $results;
     }
 }
+```
+
+## OO, Example 3: Collect All Results with Status Envelopes
+
+```php
+<?php
+use King\Awaitable;
+use King\Client\HttpClient;
+
+$client = new HttpClient();
+
+$aggregate = Awaitable::all([
+    'catalog' => $client->requestAsync('GET', 'http://127.0.0.1:8080/catalog/import/status'),
+    'stock' => $client->requestAsync('GET', 'http://127.0.0.1:8080/stock/sync/status'),
+]);
+
+if ($aggregate->poll(50)) {
+    foreach ($aggregate->await() as $name => $ready) {
+        if ($ready['status'] !== 'resolved') {
+            error_log($name . ' failed: ' . ($ready['error'] ?? $ready['status']));
+            continue;
+        }
+
+        echo $name . ': ' . $ready['value']->getStatusCode() . PHP_EOL;
+    }
+}
+
+$client->close();
 ```

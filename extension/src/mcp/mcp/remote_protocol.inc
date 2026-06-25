@@ -429,9 +429,18 @@ king_mcp_state *king_mcp_state_create(
     state->host = normalized_host;
     state->port = port;
     ZVAL_UNDEF(&state->config);
+    ZVAL_UNDEF(&state->iibin_routes);
     state->transport_stream = NULL;
     if (config != NULL && Z_TYPE_P(config) != IS_NULL) {
         ZVAL_COPY(&state->config, config);
+    }
+    if (king_mcp_state_snapshot_iibin_routes(state, config) != SUCCESS) {
+        if (!Z_ISUNDEF(state->config)) {
+            zval_ptr_dtor(&state->config);
+        }
+        zend_string_release(state->host);
+        efree(state);
+        return NULL;
     }
     state->closed = false;
     state->operation_active = false;
@@ -439,4 +448,3 @@ king_mcp_state *king_mcp_state_create(
 
     return state;
 }
-

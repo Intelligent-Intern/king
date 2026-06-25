@@ -198,6 +198,209 @@ PHP_METHOD(King_MCP, requestAsync)
     }
 }
 
+PHP_METHOD(King_MCP, requestIibin)
+{
+    char *service = NULL;
+    char *method = NULL;
+    size_t service_len = 0;
+    size_t method_len = 0;
+    zval *request_data;
+    zval *cancel = NULL;
+    zval *options = NULL;
+    zval decoded_response;
+    zend_string *request_payload = NULL;
+    zend_string *response_payload = NULL;
+    king_mcp_state *state;
+    king_mcp_runtime_control_t control;
+    king_mcp_iibin_route_t route;
+
+    ZEND_PARSE_PARAMETERS_START(3, 5)
+        Z_PARAM_STRING(service, service_len)
+        Z_PARAM_STRING(method, method_len)
+        Z_PARAM_ZVAL(request_data)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_OBJECT_OF_CLASS_OR_NULL(cancel, king_ce_cancel_token)
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    state = king_mcp_object_fetch_state(ZEND_THIS, "MCP::requestIibin");
+    if (state == NULL) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_state_require_open(state, "MCP::requestIibin") != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_iibin_route_resolve(
+            state,
+            service,
+            service_len,
+            method,
+            method_len,
+            "MCP::requestIibin",
+            king_ce_validation_exception,
+            &route
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_iibin_encode_request_payload(
+            route.request_schema,
+            request_data,
+            &request_payload
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_parse(
+            options,
+            cancel,
+            "MCP::requestIibin",
+            king_ce_validation_exception,
+            &control
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::requestIibin",
+            king_ce_mcp_timeout,
+            king_ce_runtime_exception
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_request(
+            state,
+            service,
+            service_len,
+            method,
+            method_len,
+            request_payload,
+            &response_payload,
+            &control
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        if (king_mcp_runtime_control_check(
+                &control,
+                "MCP::requestIibin",
+                king_ce_mcp_timeout,
+                king_ce_runtime_exception
+            ) != SUCCESS) {
+            RETURN_THROWS();
+        }
+        king_mcp_throw_state_error(
+            state,
+            king_ce_mcp_connection_error,
+            "MCP::requestIibin() failed to exchange the remote MCP request."
+        );
+        RETURN_THROWS();
+    }
+
+    zend_string_release(request_payload);
+
+    if (response_payload == NULL) {
+        state->last_error_kind = KING_MCP_ERROR_PROTOCOL;
+        king_set_error("MCP::requestIibin() received an invalid empty response payload from the remote MCP peer.");
+        king_mcp_throw_state_error(
+            state,
+            king_ce_mcp_protocol_error,
+            "MCP::requestIibin() received an invalid empty response payload from the remote MCP peer."
+        );
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "MCP::requestIibin",
+            king_ce_mcp_timeout,
+            king_ce_runtime_exception
+        ) != SUCCESS) {
+        zend_string_release(response_payload);
+        RETURN_THROWS();
+    }
+
+    if (route.response_schema != NULL) {
+        ZVAL_UNDEF(&decoded_response);
+        if (king_mcp_iibin_decode_response_payload(
+                route.response_schema,
+                response_payload,
+                route.decode_as_object,
+                &decoded_response
+            ) != SUCCESS) {
+            zend_string_release(response_payload);
+            RETURN_THROWS();
+        }
+        zend_string_release(response_payload);
+        king_set_error("");
+        RETURN_ZVAL(&decoded_response, 0, 1);
+    }
+
+    king_set_error("");
+    RETURN_STR(response_payload);
+}
+
+PHP_METHOD(King_MCP, requestIibinAsync)
+{
+    char *service = NULL;
+    char *method = NULL;
+    size_t service_len = 0;
+    size_t method_len = 0;
+    zval *request_data;
+    zval *cancel = NULL;
+    zval *options = NULL;
+    zval params[5];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(3, 5)
+        Z_PARAM_STRING(service, service_len)
+        Z_PARAM_STRING(method, method_len)
+        Z_PARAM_ZVAL(request_data)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_OBJECT_OF_CLASS_OR_NULL(cancel, king_ce_cancel_token)
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_STRINGL(&params[0], service, service_len);
+    ZVAL_STRINGL(&params[1], method, method_len);
+    ZVAL_COPY(&params[2], request_data);
+    if (cancel != NULL) {
+        ZVAL_COPY(&params[3], cancel);
+    } else {
+        ZVAL_NULL(&params[3]);
+    }
+    if (options != NULL) {
+        ZVAL_COPY(&params[4], options);
+    } else {
+        ZVAL_NULL(&params[4]);
+    }
+
+    if (king_awaitable_create_method_call(
+            return_value,
+            "King\\MCP::requestIibinAsync",
+            sizeof("King\\MCP::requestIibinAsync") - 1,
+            ZEND_THIS,
+            "requestIibin",
+            sizeof("requestIibin") - 1,
+            params,
+            5,
+            cancel
+        ) != SUCCESS) {
+        for (index = 0; index < 5; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 5; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_METHOD(King_MCP, close)
 {
     king_mcp_state *state;
@@ -479,6 +682,8 @@ const zend_function_entry king_mcp_class_methods[] = {
     PHP_ME(King_MCP, __construct, arginfo_class_King_MCP___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
     PHP_ME(King_MCP, request, arginfo_class_King_MCP_request, ZEND_ACC_PUBLIC)
     PHP_ME(King_MCP, requestAsync, arginfo_class_King_MCP_requestAsync, ZEND_ACC_PUBLIC)
+    PHP_ME(King_MCP, requestIibin, arginfo_class_King_MCP_requestIibin, ZEND_ACC_PUBLIC)
+    PHP_ME(King_MCP, requestIibinAsync, arginfo_class_King_MCP_requestIibinAsync, ZEND_ACC_PUBLIC)
     PHP_ME(King_MCP, uploadFromStream, arginfo_class_King_MCP_uploadFromStream, ZEND_ACC_PUBLIC)
     PHP_ME(King_MCP, downloadToStream, arginfo_class_King_MCP_downloadToStream, ZEND_ACC_PUBLIC)
     PHP_ME(King_MCP, close, arginfo_class_King_MCP_close, ZEND_ACC_PUBLIC)

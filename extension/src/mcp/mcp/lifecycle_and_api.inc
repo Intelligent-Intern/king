@@ -19,6 +19,9 @@ void king_mcp_state_free(king_mcp_state *state)
     if (state->host != NULL) {
         zend_string_release(state->host);
     }
+    if (!Z_ISUNDEF(state->iibin_routes)) {
+        zval_ptr_dtor(&state->iibin_routes);
+    }
     zval_ptr_dtor(&state->config);
     king_mcp_state_close(state);
     efree(state);

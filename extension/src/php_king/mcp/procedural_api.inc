@@ -187,6 +187,195 @@ PHP_FUNCTION(king_mcp_request_async)
     }
 }
 
+PHP_FUNCTION(king_mcp_request_iibin)
+{
+    zval *connection;
+    char *service_name = NULL;
+    char *method_name = NULL;
+    size_t service_name_len = 0;
+    size_t method_name_len = 0;
+    zval *request_data;
+    zval *options = NULL;
+    zval decoded_response;
+    zend_string *request_payload = NULL;
+    zend_string *response_payload = NULL;
+    king_mcp_state *state;
+    king_mcp_runtime_control_t control;
+    king_mcp_iibin_route_t route;
+
+    ZEND_PARSE_PARAMETERS_START(4, 5)
+        Z_PARAM_ZVAL(connection)
+        Z_PARAM_STRING(service_name, service_name_len)
+        Z_PARAM_STRING(method_name, method_name_len)
+        Z_PARAM_ZVAL(request_data)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    state = king_mcp_fetch_state(connection, 1);
+    if (state == NULL) {
+        RETURN_THROWS();
+    }
+
+    if (state->closed) {
+        king_set_error("king_mcp_request_iibin() cannot run on a closed MCP connection.");
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_iibin_route_resolve(
+            state,
+            service_name,
+            service_name_len,
+            method_name,
+            method_name_len,
+            "king_mcp_request_iibin",
+            NULL,
+            &route
+        ) != SUCCESS) {
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_iibin_encode_request_payload(
+            route.request_schema,
+            request_data,
+            &request_payload
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    if (king_mcp_runtime_control_parse(
+            options,
+            NULL,
+            "king_mcp_request_iibin",
+            NULL,
+            &control
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_request_iibin",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_request(
+            state,
+            service_name,
+            service_name_len,
+            method_name,
+            method_name_len,
+            request_payload,
+            &response_payload,
+            &control
+        ) != SUCCESS) {
+        zend_string_release(request_payload);
+        if (king_mcp_runtime_control_check(
+                &control,
+                "king_mcp_request_iibin",
+                NULL,
+                NULL
+            ) != SUCCESS) {
+            RETURN_FALSE;
+        }
+        RETURN_FALSE;
+    }
+
+    zend_string_release(request_payload);
+
+    if (response_payload == NULL) {
+        state->last_error_kind = KING_MCP_ERROR_PROTOCOL;
+        king_set_error("king_mcp_request_iibin() received an invalid empty response payload from the remote MCP peer.");
+        RETURN_FALSE;
+    }
+
+    if (king_mcp_runtime_control_check(
+            &control,
+            "king_mcp_request_iibin",
+            NULL,
+            NULL
+        ) != SUCCESS) {
+        zend_string_release(response_payload);
+        RETURN_FALSE;
+    }
+
+    if (route.response_schema != NULL) {
+        ZVAL_UNDEF(&decoded_response);
+        if (king_mcp_iibin_decode_response_payload(
+                route.response_schema,
+                response_payload,
+                route.decode_as_object,
+                &decoded_response
+            ) != SUCCESS) {
+            zend_string_release(response_payload);
+            RETURN_THROWS();
+        }
+        zend_string_release(response_payload);
+        king_set_error("");
+        RETURN_ZVAL(&decoded_response, 0, 1);
+    }
+
+    king_set_error("");
+    RETURN_STR(response_payload);
+}
+
+PHP_FUNCTION(king_mcp_request_iibin_async)
+{
+    zval *connection;
+    char *service_name = NULL;
+    char *method_name = NULL;
+    size_t service_name_len = 0;
+    size_t method_name_len = 0;
+    zval *request_data;
+    zval *options = NULL;
+    zval params[5];
+    uint32_t index;
+
+    ZEND_PARSE_PARAMETERS_START(4, 5)
+        Z_PARAM_ZVAL(connection)
+        Z_PARAM_STRING(service_name, service_name_len)
+        Z_PARAM_STRING(method_name, method_name_len)
+        Z_PARAM_ZVAL(request_data)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_COPY(&params[0], connection);
+    ZVAL_STRINGL(&params[1], service_name, service_name_len);
+    ZVAL_STRINGL(&params[2], method_name, method_name_len);
+    ZVAL_COPY(&params[3], request_data);
+    if (options != NULL) {
+        ZVAL_COPY(&params[4], options);
+    } else {
+        ZVAL_NULL(&params[4]);
+    }
+
+    if (king_awaitable_create_function_call(
+            return_value,
+            "king_mcp_request_iibin_async",
+            sizeof("king_mcp_request_iibin_async") - 1,
+            "king_mcp_request_iibin",
+            sizeof("king_mcp_request_iibin") - 1,
+            params,
+            5,
+            NULL
+        ) != SUCCESS) {
+        for (index = 0; index < 5; index++) {
+            zval_ptr_dtor(&params[index]);
+        }
+        RETURN_FALSE;
+    }
+
+    for (index = 0; index < 5; index++) {
+        zval_ptr_dtor(&params[index]);
+    }
+}
+
 PHP_FUNCTION(king_mcp_close)
 {
     zval *connection;

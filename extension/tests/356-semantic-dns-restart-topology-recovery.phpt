@@ -126,13 +126,13 @@ PHP
 );
 
 $writer_cmd = sprintf(
-    '%s -d king.security_allow_config_override=1 -d %s %s',
+    '%s -n -d king.security_allow_config_override=1 -d %s %s',
     escapeshellarg(PHP_BINARY),
     escapeshellarg('extension=' . $extension_path),
     escapeshellarg($writer_script)
 );
 $reader_cmd = sprintf(
-    '%s -d king.security_allow_config_override=1 -d %s %s',
+    '%s -n -d king.security_allow_config_override=1 -d %s %s',
     escapeshellarg(PHP_BINARY),
     escapeshellarg('extension=' . $extension_path),
     escapeshellarg($reader_script)

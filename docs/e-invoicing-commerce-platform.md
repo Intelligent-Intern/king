@@ -1,115 +1,168 @@
 # E-Invoicing, EDI, and B2B Commerce Platform
 
-This document shows how King primitives can be composed into a serious
-e-invoicing, EDI, and B2B commerce platform. The example covers AS4-based
-e-invoice exchange, EDIFACT flows, an e-commerce catalog and availability
-surface, procurement price comparison across supplier APIs, cached payloads in
-the object store, XSLT validation for incoming invoices, and MCP-backed support
-FAQ tooling.
+This page documents a production-grade King architecture for a B2B commerce
+and e-invoicing platform. It covers AS4 invoice exchange, EDIFACT processing,
+XSLT validation, catalog import, live availability, procurement across
+supplier APIs, privacy-safe MCP support, JSON event contracts, and the next
+level IIBIN representation for internal platform events.
 
-The architecture is intentionally split into bounded blocks. Each block owns a
-clear runtime responsibility, publishes explicit events, and persists durable
-state before fanout. Real deployments still need country-specific regulatory
-profiles, tax authority credentials, certificate policies, retention rules,
-and tenant-level access controls, but the technical composition below is the
-shape King is meant to support.
+The companion page shows the same design as OO service composition:
+[E-Invoicing, EDI, and B2B Commerce Platform: OO Implementation](e-invoicing-commerce-platform-oo.md).
 
-## Overall System
+## Event Strategy
+
+External protocols keep their mandated formats: AS4/SOAP, UBL, CII, EDIFACT,
+supplier JSON/XML, and authority payloads are stored as immutable evidence.
+Inside the platform, every meaningful state transition is first shaped as a
+readable JSON event. The next level is the same event encoded as IIBIN for
+compact internal handoff, stable schemas, and fast worker communication.
+
+JSON is the review and troubleshooting format. IIBIN is the runtime event
+format once the contract is stable. Both reference durable object IDs instead
+of copying full invoices, PDFs, buyer addresses, payment data, or chat text
+into every event.
+
+## Overall Architecture
 
 ```mermaid
 flowchart LR
-    Buyer[Buyer Systems]
-    Supplier[Supplier Systems]
-    Tax[Tax Authority / Network AP]
+    Buyers[Buyer ERP / AP Platforms]
+    Suppliers[Supplier Systems]
+    Authority[Tax Authority / Network AP]
     Shop[B2B Shop]
-    Support[Support Chat]
+    Support[Support Desk]
     Ops[Operations Console]
 
     subgraph Edge["King Edge Runtime"]
-        H1[HTTP/1 + QUERY APIs]
+        H1[HTTP/1 APIs + QUERY]
         H2[HTTP/2 Supplier APIs]
         H3[HTTP/3 Low Latency APIs]
-        WS[WebSocket Events]
+        WS[WebSocket Live Events]
         AS4[AS4 Gateway]
     end
 
-    subgraph Core["Platform Core"]
-        EDI[EDI / EDIFACT Processor]
-        INV[Invoice Intake]
-        XSLT[XSLT Validation]
-        CAT[Catalog Import]
-        AVAIL[Availability Service]
-        PROC[Procurement Compare]
-        FAQ[MCP FAQ Tools]
-        ORCH[Pipeline Orchestrator]
+    subgraph Core["Business Core"]
+        Policy[Tenant + Partner Policy]
+        EDI[EDIFACT Processor]
+        Intake[Invoice Intake]
+        Validation[XSLT Validation]
+        Catalog[Catalog Import]
+        Availability[Availability Publisher]
+        Procurement[Procurement Comparator]
+        SupportTools[Privacy-Safe MCP Tools]
+        Orchestrator[Pipeline Orchestrator]
     end
 
-    subgraph State["State and Data"]
-        DBI[DB Ingest Locks]
-        OBJ[Object Store]
+    subgraph State["Durable State"]
+        Objects[Object Store]
+        Locks[DB Ingest Locks]
+        JsonEvents[JSON Event Evidence]
+        IibinEvents[IIBIN Event Store]
         CDN[CDN Cache]
-        IIBIN[IIBIN Event Payloads]
-        TEL[Telemetry]
+        Telemetry[Telemetry]
     end
 
-    Buyer -->|EDIFACT ORDERS / INVOIC| EDI
-    Buyer -->|UBL / CII invoices via AS4| AS4
-    Supplier -->|Catalog files / APIs| CAT
-    Supplier -->|Price and stock APIs| PROC
-    Tax <-->|AS4 receipts and reports| AS4
-    Shop <-->|catalog, stock, orders| H1
-    Shop <-->|live availability| WS
-    Support <-->|FAQ and case tools| FAQ
-    Ops -->|admin actions| H1
+    Buyers -->|AS4 UBL / CII| AS4
+    Buyers -->|EDIFACT ORDERS / INVOIC| EDI
+    Suppliers -->|catalog feeds| Catalog
+    Suppliers -->|price + stock APIs| H2
+    Authority <-->|AS4 receipts / reports| AS4
+    Shop <-->|search, orders, account data| H1
+    Shop <-->|stock and order events| WS
+    Support --> SupportTools
+    Ops --> H1
 
-    AS4 --> INV
-    EDI --> ORCH
-    INV --> XSLT
-    XSLT --> ORCH
-    CAT --> DBI
-    AVAIL --> WS
-    PROC --> OBJ
-    FAQ --> H1
-    ORCH --> IIBIN
-    ORCH --> OBJ
-    DBI --> OBJ
-    OBJ --> CDN
-    Core --> TEL
-    Edge --> TEL
+    AS4 --> Policy --> Intake --> Validation --> Orchestrator
+    EDI --> Orchestrator
+    Catalog --> Locks --> Objects --> CDN
+    H2 --> Procurement --> Objects
+    Availability --> WS
+    SupportTools --> Objects
+    Orchestrator --> JsonEvents --> IibinEvents
+    Orchestrator --> Objects
+    Edge --> Telemetry
+    Core --> Telemetry
 ```
 
-The edge runtime owns network-facing protocol work. HTTP/1 handles classic
-control APIs and the `QUERY` method for search-like requests, HTTP/2 and
-HTTP/3 cover supplier and partner APIs, WebSocket carries live shop updates,
-and AS4 terminates document exchange with access points or tax authority
-gateways.
+The edge runtime owns protocol work and does not decide business acceptance.
+AS4 handles signed and encrypted exchange, HTTP handles platform APIs,
+WebSocket delivers committed live changes, and supplier integrations use
+bounded HTTP awaitables. The core normalizes every external message into a
+workflow state with object-store evidence and a typed event.
 
-The platform core keeps business flows explicit. EDIFACT and e-invoice intake
-do not write directly into every downstream system. They normalize, validate,
-store, and publish events through the orchestrator. State is split by purpose:
-object store for durable payloads and cacheable artifacts, DB ingest for
-small locked write paths, CDN for public catalog/media delivery, IIBIN for
-compact internal event payloads, and telemetry for traceable operation.
+## End-to-End Process
 
-## Block 1: AS4 and E-Invoice Intake
+```mermaid
+sequenceDiagram
+    participant Partner as Partner / Access Point
+    participant Edge as King Edge Runtime
+    participant Policy as Tenant Policy
+    participant Store as Object Store
+    participant Pipe as Pipeline Orchestrator
+    participant Json as JSON Event Evidence
+    participant Iibin as IIBIN Event Store
+    participant Ops as Operations
+
+    Partner->>Edge: AS4 / EDIFACT / Supplier API payload
+    Edge->>Policy: authenticate tenant, partner, certificate, role
+    Policy-->>Edge: policy context
+    Edge->>Store: store immutable raw payload
+    Edge->>Json: write readable platform event
+    Edge->>Iibin: write Next Level IIBIN event
+    Edge->>Pipe: dispatch workflow with event object id
+    Pipe->>Store: persist normalized document, report, or decision
+    Pipe-->>Partner: receipt, rejection, or pending response
+    Pipe-->>Ops: status, trace id, failure category
+```
+
+Transport success is not business acceptance. Between receipt and final
+acceptance the platform uses explicit states: `received`, `duplicate`,
+`validated`, `rejected`, `authority_pending`, `accepted`, `manual_review`, or
+`aborted`.
+
+## AS4 Invoice Intake
+
+### Architecture
 
 ```mermaid
 flowchart TB
     AP[External Access Point]
-    AS4[AS4 Gateway]
-    Auth[Certificate and Partner Policy]
-    Raw[Raw Message Object]
-    Intake[Invoice Intake Handler]
-    Ack[Receipt / Error Signal]
-    Queue[Validation Pipeline Run]
+    Gateway[AS4 Gateway]
+    Certs[Certificate Store]
+    Policy[Partner Policy]
+    Idem[Idempotency Ledger]
+    Raw[Raw AS4 Envelope]
+    Json[JSON InvoiceIntakeEvent]
+    Iibin[Next Level IIBIN]
+    Workflow[Invoice Workflow]
+    Receipt[Signed AS4 Receipt]
 
-    AP -->|signed + encrypted AS4 message| AS4
-    AS4 --> Auth
-    Auth -->|accepted partner| Raw
-    Auth -->|rejected partner| Ack
-    Raw --> Intake
-    Intake --> Queue
-    Queue --> Ack
+    AP --> Gateway
+    Gateway --> Certs --> Policy --> Idem
+    Idem -->|new| Raw --> Json --> Iibin --> Workflow --> Receipt
+    Idem -->|duplicate| Receipt
+```
+
+### Process
+
+```mermaid
+sequenceDiagram
+    participant AP as Access Point
+    participant AS4 as AS4 Gateway
+    participant Policy as Policy Engine
+    participant Store as Object Store
+    participant Events as Event Store
+    participant Pipe as Pipeline
+
+    AP->>AS4: submit signed/encrypted envelope
+    AS4->>Policy: validate cert, tenant, partner, role
+    Policy-->>AS4: allowed context
+    AS4->>Store: store raw AS4 envelope
+    AS4->>Events: store JSON event
+    AS4->>Events: store IIBIN event
+    AS4->>Pipe: dispatch workflow
+    Pipe-->>AS4: accepted for processing
+    AS4-->>AP: signed receipt
 ```
 
 ```php
@@ -117,108 +170,112 @@ flowchart TB
 use King\ObjectStore;
 use King\PipelineOrchestrator;
 
-ObjectStore::putFromStream($objectId, $as4PayloadStream, [
+$idempotencyKey = hash('sha256', $tenantId . ':' . $messageId);
+if (!partner_policy_allows($tenantId, $partnerId, 'invoice.receive')) {
+    throw new RuntimeException('partner_policy_denied');
+}
+if (message_already_processed($idempotencyKey)) {
+    return signed_as4_receipt($messageId, 'duplicate');
+}
+
+$rawObjectId = 'inbound/as4/' . $tenantId . '/' . $messageId . '.xml';
+ObjectStore::putFromStream($rawObjectId, $as4EnvelopeStream, [
     'content_type' => 'application/soap+xml',
     'object_type' => 'as4-inbound-envelope',
     'tenant_id' => $tenantId,
     'partner_id' => $partnerId,
+    'idempotency_key' => $idempotencyKey,
 ]);
-
-$run = PipelineOrchestrator::dispatch(
-    [
-        'tenant_id' => $tenantId,
-        'partner_id' => $partnerId,
-        'object_id' => $objectId,
-        'transport' => 'as4',
-    ],
-    [
-        ['tool' => 'verify-as4-envelope'],
-        ['tool' => 'extract-business-document'],
-        ['tool' => 'validate-invoice-profile'],
-        ['tool' => 'persist-invoice-ledger'],
-    ],
-    ['trace_id' => 'as4-invoice-' . $messageId]
-);
 ```
 
-The AS4 block accepts signed and encrypted envelopes from a partner access
-point. Certificate validation, partner routing, message ID deduplication, and
-receipt generation belong here because they are transport concerns and must be
-settled before the business document is trusted.
-
-The raw envelope is stored before extraction. That gives operations a durable
-audit object for non-repudiation, replay, and legal traceability. The business
-document is then passed into a pipeline run where XML validation, profile
-checks, and tenant ledger persistence are separate steps with their own
-failure categories.
-
-## Block 2: EDIFACT Processing
-
-```mermaid
-flowchart LR
-    Partner[EDI Partner]
-    Inbox[EDI Inbox]
-    Parser[EDIFACT Parser]
-    Mapper[Canonical Mapper]
-    Events[IIBIN Business Events]
-    Orders[Order Workflow]
-    Invoices[Invoice Workflow]
-
-    Partner -->|ORDERS / DESADV / INVOIC| Inbox
-    Inbox --> Parser
-    Parser --> Mapper
-    Mapper --> Events
-    Events --> Orders
-    Events --> Invoices
-```
+#### Event Payload: JSON
 
 ```php
 <?php
-king_proto_define_schema('BusinessDocumentEvent', [
-    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
-    'document_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
-    'document_type' => ['tag' => 3, 'type' => 'string', 'required' => true],
-    'source_protocol' => ['tag' => 4, 'type' => 'string', 'default' => 'edifact'],
-]);
-
-$event = king_proto_encode('BusinessDocumentEvent', [
+$eventPayload = [
     'tenant_id' => $tenantId,
-    'document_id' => $messageReference,
-    'document_type' => $messageType,
-    'source_protocol' => 'edifact',
-]);
+    'message_id' => $messageId,
+    'partner_id' => $partnerId,
+    'raw_object_id' => $rawObjectId,
+    'transport' => 'as4',
+    'state' => 'received',
+    'trace_id' => 'as4-' . $messageId,
+];
 
-king_object_store_put('events/' . $messageReference . '.iibin', $event, [
-    'content_type' => 'application/x-king-iibin',
+ObjectStore::put('events/invoice-intake/' . $messageId . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
+    'object_type' => 'invoice-intake-event-json',
 ]);
 ```
 
-EDIFACT traffic is usually partner-specific even when message names look
-standard. The EDI block should therefore parse interchange envelopes, validate
-partner agreements, and map messages into canonical business events before the
-order, despatch, or invoice workflow sees them.
+#### Next Level: IIBIN
 
-IIBIN is useful between internal blocks because it keeps event contracts
-schema-defined and compact. The original EDIFACT interchange remains in object
-storage for audit and replay; the canonical event is what downstream services
-consume.
+```php
+<?php
+king_proto_define_schema('InvoiceIntakeEvent', [
+    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'message_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'partner_id' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'raw_object_id' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'transport' => ['tag' => 5, 'type' => 'string', 'default' => 'as4'],
+    'state' => ['tag' => 6, 'type' => 'string', 'required' => true],
+    'trace_id' => ['tag' => 7, 'type' => 'string', 'required' => true],
+]);
 
-## Block 3: XSLT Invoice Validation
+$eventObjectId = 'events/invoice-intake/' . $messageId . '.iibin';
+ObjectStore::put($eventObjectId, king_proto_encode('InvoiceIntakeEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
+    'object_type' => 'invoice-intake-event',
+]);
+
+PipelineOrchestrator::dispatch(
+    ['event_object_id' => $eventObjectId],
+    [['tool' => 'verify-as4-envelope'], ['tool' => 'extract-business-document'], ['tool' => 'validate-invoice-profile']],
+    ['trace_id' => $eventPayload['trace_id']]
+);
+```
+
+The AS4 gateway is a trust boundary. It validates certificates, partner
+policy, tenant ownership, and idempotency before the business workflow sees
+anything. The event references the raw envelope instead of duplicating invoice
+content into the event stream.
+
+## Invoice Validation
+
+### Architecture
 
 ```mermaid
-flowchart TB
-    Extracted[Extracted XML Invoice]
+flowchart LR
+    XML[Extracted XML Invoice]
     Detect[Profile Detection]
-    Xslt[XSLT 2.0/3.0 Processor]
-    Report[SVRL / Validation Report]
+    XSLT[XSLT Processor]
+    Report[SVRL Report Object]
     Ledger[Invoice Ledger]
     Reject[Structured Rejection]
+    Json[JSON Validation Event]
+    Iibin[Next Level IIBIN]
 
-    Extracted --> Detect
-    Detect -->|UBL / CII / XRechnung / PINT| Xslt
-    Xslt --> Report
+    XML --> Detect --> XSLT --> Report
     Report -->|valid| Ledger
     Report -->|invalid| Reject
+    Report --> Json --> Iibin
+```
+
+### Process
+
+```mermaid
+sequenceDiagram
+    participant Pipe as Pipeline
+    participant XSLT as King XSLT Processor
+    participant Store as Object Store
+    participant Ledger as Invoice Ledger
+    participant Events as Event Store
+
+    Pipe->>XSLT: run profile ruleset
+    XSLT->>Store: store SVRL report
+    Pipe->>Ledger: persist accepted/rejected state
+    Pipe->>Events: JSON validation event
+    Pipe->>Events: IIBIN validation event
 ```
 
 ```php
@@ -227,152 +284,100 @@ use King\XSLT\Processor;
 
 $processor = new Processor([
     'cwd' => __DIR__ . '/rules',
-    'properties' => [
-        'http://saxon.sf.net/feature/version-warning' => 'false',
-    ],
+    'properties' => ['http://saxon.sf.net/feature/version-warning' => 'false'],
 ]);
 
-$report = $processor->transformToFile(
-    $invoiceXmlPath,
-    __DIR__ . '/rules/peppol-bis-billing-3-svrl.xsl',
-    $reportPath,
-    ['properties' => ['indent' => 'yes']]
-);
+$processor->transformToFile($invoiceXmlPath, profile_ruleset_path($profile), $svrlPath, [
+    'properties' => ['indent' => 'yes'],
+]);
+
+$errorCount = count_svrl_failed_asserts($svrlPath);
+$status = $errorCount === 0 ? 'valid' : 'invalid';
+$reportObjectId = 'validation/' . $tenantId . '/' . $invoiceId . '.svrl.xml';
+
+king_object_store_put($reportObjectId, file_get_contents($svrlPath), [
+    'content_type' => 'application/xml',
+    'object_type' => 'invoice-validation-report',
+    'tenant_id' => $tenantId,
+]);
 ```
 
-Incoming e-invoices should be validated in layers. XML well-formedness,
-schema validation, profile detection, Schematron/SVRL execution, and business
-rule classification should be separate enough that the platform can explain
-exactly what failed and where.
-
-`King\XSLT\Processor` is the correct primitive for XSLT 2.0/3.0 rule chains
-such as Schematron-generated stylesheets. The validation report should be
-stored as its own object, linked from the invoice ledger, and turned into a
-structured rejection when the profile-specific checks fail.
-
-## Block 4: Catalog Import and CDN Publication
-
-```mermaid
-flowchart LR
-    SupplierFiles[Supplier Catalog Files]
-    SupplierAPI[Supplier Catalog APIs]
-    Import[Catalog Import Pipeline]
-    Lock[DB Ingest Lock]
-    Store[Object Store]
-    Media[Product Media]
-    CDN[CDN Edge Cache]
-    Shop[B2B Shop]
-
-    SupplierFiles --> Import
-    SupplierAPI --> Import
-    Import --> Lock
-    Lock --> Store
-    Media --> Store
-    Store --> CDN
-    CDN --> Shop
-```
+#### Event Payload: JSON
 
 ```php
 <?php
-king_db_ingest('catalog-import-' . $supplierId, static function () use ($rows): array {
-    $db = new PDO('sqlite:' . __DIR__ . '/var/catalog.sqlite');
-    $db->beginTransaction();
-
-    foreach ($rows as $row) {
-        $stmt = $db->prepare(
-            'INSERT OR REPLACE INTO products (sku, name, price_cents, updated_at) VALUES (?, ?, ?, ?)'
-        );
-        $stmt->execute([$row['sku'], $row['name'], $row['price_cents'], date(DATE_ATOM)]);
-    }
-
-    $db->commit();
-    return ['imported' => count($rows)];
-}, [
-    'lock_path' => __DIR__ . '/var/catalog-import.lock',
-    'timeout_ms' => 5000,
-]);
-
-king_cdn_cache_object('catalog/latest.json', ['ttl_sec' => 300]);
-```
-
-Catalog imports are write-heavy and often arrive as mixed file and API feeds.
-The import block should normalize supplier records, write under an explicit
-ingest lock, and publish versioned catalog objects only after a complete
-transaction succeeds.
-
-The CDN is not the source of truth. It is the delivery layer for read-heavy
-shop artifacts such as product JSON, images, and generated search indexes.
-The object store remains the durable source for catalog snapshots, media, and
-rollback candidates.
-
-## Block 5: Live Availability for the B2B Shop
-
-```mermaid
-flowchart TB
-    ERP[ERP / Warehouse]
-    Availability[Availability Service]
-    Store[Object Store Snapshot]
-    Topic[WebSocket Topic]
-    Shop[B2B Shop Clients]
-    Search[QUERY Search API]
-
-    ERP -->|stock delta| Availability
-    Availability --> Store
-    Availability --> Topic
-    Topic --> Shop
-    Shop --> Search
-    Search --> Store
-```
-
-```php
-<?php
-$event = [
-    'type' => 'availability.changed',
-    'sku' => $sku,
-    'available' => $available,
-    'warehouse' => $warehouse,
-    'changed_at' => date(DATE_ATOM),
+$eventPayload = [
+    'tenant_id' => $tenantId,
+    'invoice_id' => $invoiceId,
+    'profile' => $profile,
+    'status' => $status,
+    'report_object_id' => $reportObjectId,
+    'error_count' => $errorCount,
 ];
 
-king_object_store_put('availability/' . $sku . '.json', json_encode($event, JSON_THROW_ON_ERROR), [
+king_object_store_put('events/invoice-validation/' . $invoiceId . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
     'content_type' => 'application/json',
-    'cache_ttl_sec' => 30,
 ]);
-
-foreach ($subscribers[$sku] ?? [] as $connection) {
-    king_websocket_send($connection, json_encode($event, JSON_THROW_ON_ERROR));
-}
 ```
 
-Live availability is a realtime concern, but it still needs a durable snapshot
-path. Every stock delta should update a latest-known state object before the
-WebSocket fanout is emitted, so reconnecting shop clients and search APIs can
-recover the current value.
+#### Next Level: IIBIN
 
-HTTP `QUERY` fits product and availability search because it allows a request
-body without pretending the operation is a state-changing POST. WebSocket is
-then used only for push updates and subscriptions, not for ad-hoc database
-queries from the browser.
+```php
+<?php
+king_proto_define_schema('InvoiceValidationEvent', [
+    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'invoice_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'profile' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'status' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'report_object_id' => ['tag' => 5, 'type' => 'string', 'required' => true],
+    'error_count' => ['tag' => 6, 'type' => 'int32', 'default' => 0],
+]);
 
-## Block 6: Procurement Price Comparison
+king_object_store_put('events/invoice-validation/' . $invoiceId . '.iibin', king_proto_encode('InvoiceValidationEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
+]);
+```
+
+Validation failures are not generic runtime failures. XML parse errors,
+schema violations, Schematron assertions, duplicate documents, profile
+mismatches, and external authority rejections should become separate states
+that can be shown to support, customers, and operations.
+
+## EDIFACT and Procurement
 
 ```mermaid
 flowchart LR
-    Request[Procurement Request]
-    Suppliers[Supplier API Set]
-    Await[King Awaitables]
-    Compare[Price Comparator]
-    Cache[Object Store Cache]
-    Decision[Buying Recommendation]
-    Audit[Procurement Audit]
+    EDI[EDIFACT Inbox]
+    Parser[Interchange Parser]
+    Mapper[Canonical Mapper]
+    Procurement[Procurement Comparator]
+    Suppliers[Supplier APIs]
+    Offers[Offer Cache]
+    Decision[Purchase Decision]
+    Json[JSON Decision Event]
+    Iibin[Next Level IIBIN]
 
-    Request --> Suppliers
-    Suppliers --> Await
-    Await --> Compare
-    Cache --> Compare
-    Compare --> Cache
-    Compare --> Decision
-    Decision --> Audit
+    EDI --> Parser --> Mapper --> Procurement
+    Procurement --> Suppliers --> Procurement
+    Procurement --> Offers
+    Procurement --> Decision --> Json --> Iibin
+```
+
+```mermaid
+sequenceDiagram
+    participant Buyer as Buyer ERP
+    participant EDI as EDIFACT Processor
+    participant Proc as Procurement
+    participant Suppliers as Supplier APIs
+    participant Store as Object Store
+    participant Events as Event Store
+
+    Buyer->>EDI: ORDERS
+    EDI->>Proc: canonical purchase request
+    Proc->>Suppliers: concurrent QUERY requests
+    Suppliers-->>Proc: price, stock, lead time
+    Proc->>Store: cache offer set
+    Proc->>Events: JSON + IIBIN decision event
 ```
 
 ```php
@@ -383,101 +388,286 @@ foreach ($supplierEndpoints as $supplierId => $url) {
         $url,
         'QUERY',
         ['accept' => 'application/json', 'content-type' => 'application/query'],
-        'sku = "' . addslashes($sku) . '" AND quantity >= ' . (int) $quantity,
+        build_supplier_query($sku, $quantity, $deliveryCountry),
         ['timeout_ms' => 1500]
     );
 }
 
-$offers = [];
-foreach ($awaitables as $supplierId => $awaitable) {
-    $response = king_await($awaitable, 2000);
-    $offers[$supplierId] = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
-}
+$offers = collect_supplier_offers($awaitables, 2000);
+$decision = choose_supplier_offer($offers, [
+    'quantity' => $quantity,
+    'currency' => 'EUR',
+    'required_delivery_date' => $requiredDeliveryDate,
+]);
 
-king_object_store_put('procurement/offers/' . $sku . '.json', json_encode($offers, JSON_THROW_ON_ERROR), [
+$offerObjectId = 'procurement/offers/' . $decision['request_id'] . '.json';
+king_object_store_put($offerObjectId, json_encode($offers, JSON_THROW_ON_ERROR), [
     'content_type' => 'application/json',
     'cache_ttl_sec' => 120,
 ]);
 ```
 
-Procurement comparison is a natural async workload. The platform can call
-multiple supplier APIs concurrently, wait with bounded timeouts, and combine
-fresh responses with cached object-store offers when a supplier is slow or
-temporarily unavailable.
+#### Event Payload: JSON
 
-The comparator should not only pick the lowest unit price. Real procurement
-decisions include lead time, minimum order quantity, contract terms, currency,
-delivery address, tax treatment, and reliability history. The audit object
-captures the candidate set and the decision rationale.
+```php
+<?php
+$eventPayload = [
+    'tenant_id' => $tenantId,
+    'sku' => $sku,
+    'quantity' => $quantity,
+    'chosen_supplier_id' => $decision['supplier_id'],
+    'currency' => $decision['currency'],
+    'total_cents' => $decision['total_cents'],
+    'offer_cache_object_id' => $offerObjectId,
+];
 
-## Block 7: MCP FAQ and Support Chat
+king_object_store_put('events/procurement/' . $decision['request_id'] . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
+]);
+```
+
+#### Next Level: IIBIN
+
+```php
+<?php
+king_proto_define_schema('ProcurementDecisionEvent', [
+    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'sku' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'quantity' => ['tag' => 3, 'type' => 'int32', 'required' => true],
+    'chosen_supplier_id' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'currency' => ['tag' => 5, 'type' => 'string', 'default' => 'EUR'],
+    'total_cents' => ['tag' => 6, 'type' => 'int32', 'required' => true],
+    'offer_cache_object_id' => ['tag' => 7, 'type' => 'string', 'required' => true],
+]);
+
+king_object_store_put('events/procurement/' . $decision['request_id'] . '.iibin', king_proto_encode('ProcurementDecisionEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
+]);
+```
+
+Procurement decisions include price, lead time, stock, minimum order quantity,
+currency, tax handling, delivery constraints, reliability, and cached fallback
+policy. The event references the full offer set instead of embedding it.
+
+## Catalog and Live Availability
+
+```mermaid
+flowchart TB
+    Feeds[Supplier Catalog Feeds]
+    Import[Catalog Import]
+    Lock[DB Ingest Lock]
+    Snapshot[Catalog Snapshot]
+    CDN[CDN Publication]
+    ERP[ERP / Warehouse]
+    Availability[Availability Publisher]
+    WS[WebSocket Topic]
+    Shop[B2B Shop]
+    Json[JSON Catalog Event]
+    Iibin[Next Level IIBIN]
+
+    Feeds --> Import --> Lock --> Snapshot --> CDN --> Shop
+    ERP --> Availability --> Snapshot
+    Availability --> WS --> Shop
+    Import --> Json --> Iibin
+```
+
+```php
+<?php
+$result = king_db_ingest('catalog-' . $tenantId . '-' . $supplierId, function () use ($rows): array {
+    return write_catalog_rows_transactionally($rows);
+}, [
+    'lock_path' => __DIR__ . '/var/catalog-' . $tenantId . '.lock',
+    'timeout_ms' => 5000,
+]);
+
+$snapshotObjectId = 'catalog/snapshots/' . $tenantId . '/' . $importId . '.json';
+king_object_store_put($snapshotObjectId, json_encode($result['snapshot'], JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
+    'object_type' => 'catalog-snapshot',
+    'cache_ttl_sec' => 300,
+]);
+
+king_cdn_cache_object($snapshotObjectId, ['ttl_sec' => 300]);
+```
+
+#### Event Payload: JSON
+
+```php
+<?php
+$eventPayload = [
+    'tenant_id' => $tenantId,
+    'supplier_id' => $supplierId,
+    'snapshot_object_id' => $snapshotObjectId,
+    'changed_count' => count($result['changed_skus']),
+];
+
+king_object_store_put('events/catalog/' . $importId . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
+]);
+```
+
+#### Next Level: IIBIN
+
+```php
+<?php
+king_proto_define_schema('CatalogPublishedEvent', [
+    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'supplier_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'snapshot_object_id' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'changed_count' => ['tag' => 4, 'type' => 'int32', 'required' => true],
+]);
+
+king_object_store_put('events/catalog/' . $importId . '.iibin', king_proto_encode('CatalogPublishedEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
+]);
+```
+
+Catalog publication is two-phase: commit the new state first, then publish
+cacheable objects and live notifications. WebSocket clients can always recover
+from the latest snapshot after reconnect.
+
+## Privacy-Safe MCP Support
 
 ```mermaid
 flowchart TB
     Chat[Support Chat UI]
-    SupportAPI[Support API]
-    MCP[MCP Tool Peer]
-    FAQ[FAQ Knowledge Tool]
-    Cases[Case Lookup Tool]
-    Invoice[Invoice Status Tool]
+    API[Support API]
+    Authz[Tenant Authorization]
+    Purpose[Purpose Check]
+    Redact[PII Redaction]
+    Policy[Tool Allowlist]
+    MCP[In-Region King MCP Peer]
+    Audit[Support Audit]
     Human[Human Agent]
 
-    Chat --> SupportAPI
-    SupportAPI --> MCP
-    MCP --> FAQ
-    MCP --> Cases
-    MCP --> Invoice
-    SupportAPI --> Human
+    Chat --> API --> Authz --> Purpose --> Redact --> Policy --> MCP
+    MCP --> Audit
+    API --> Human
+```
+
+```mermaid
+sequenceDiagram
+    participant Agent as Support Agent
+    participant API as Support API
+    participant Privacy as Privacy Gate
+    participant MCP as King MCP Peer
+    participant Events as Event Store
+
+    Agent->>API: ask invoice support question
+    API->>Privacy: authorize tenant, purpose, role, data class
+    Privacy-->>API: redacted tool input
+    API->>MCP: call allowlisted internal IIBIN route
+    MCP-->>API: answer with source metadata
+    API->>Events: JSON + IIBIN audit event
 ```
 
 ```php
 <?php
 use King\MCP;
+use King\Config;
 
-$mcp = new MCP('127.0.0.1', 9090, [
-    'mcp.timeout_ms' => 1500,
+king_proto_define_schema('SupportToolRequest', [
+    'tenant_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'support_case_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'purpose' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'question' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'invoice_ref' => ['tag' => 5, 'type' => 'string', 'required' => true],
+    'allowed_fields' => ['tag' => 6, 'type' => 'string', 'repeated' => true],
 ]);
 
-$answer = $mcp->request(
-    'support.faq',
-    'answer',
-    json_encode([
-        'tenant_id' => $tenantId,
-        'question' => $customerQuestion,
-        'context' => ['invoice_id' => $invoiceId],
-    ], JSON_THROW_ON_ERROR)
+king_proto_define_schema('SupportToolResponse', [
+    'answer' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'confidence' => ['tag' => 2, 'type' => 'double'],
+    'source_count' => ['tag' => 3, 'type' => 'uint32'],
+]);
+
+$toolInput = build_redacted_support_context(
+    tenantId: $tenantId,
+    caseId: $caseId,
+    question: $customerQuestion,
+    invoiceId: $invoiceId,
+    allowedFields: ['status', 'received_at', 'rejection_code']
 );
+
+assert_support_tool_allowed($currentUser, $tenantId, 'support.faq', $toolInput);
+
+$mcpConfig = new Config([
+    'mcp.default_request_timeout_ms' => 1500,
+    'mcp.iibin_routes' => [
+        'support.faq/answer' => [
+            'request_schema' => 'SupportToolRequest',
+            'response_schema' => 'SupportToolResponse',
+            'decode_as_object' => false,
+        ],
+    ],
+]);
+
+$mcp = new MCP('127.0.0.1', 9090, $mcpConfig);
+$answer = $mcp->requestIibin('support.faq', 'answer', $toolInput);
 ```
 
-MCP is useful for support workflows because it gives the platform a structured
-tool boundary. FAQ answers, case lookups, and invoice status queries can be
-exposed as named tools instead of embedding one-off chat logic inside the
-support UI.
+#### Event Payload: JSON
 
-The support API should still own authorization and tenant boundaries. MCP
-tools receive only the context they are allowed to see. When confidence is
-low, the chat can attach the tool trace and route the case to a human agent
-instead of inventing an unsupported answer.
+```php
+<?php
+$eventPayload = [
+    'tenant_id' => $tenantId,
+    'support_case_id' => $caseId,
+    'tool' => 'support.faq',
+    'purpose' => 'support_case_answer',
+    'input_classification' => 'redacted-support-context',
+    'retention_policy' => 'support-audit-180d',
+];
 
-## Block 8: Runtime Operations and Telemetry
+king_object_store_put('events/support-tools/' . $caseId . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
+]);
+```
+
+#### Next Level: IIBIN
+
+```php
+<?php
+king_proto_define_schema('SupportToolAuditEvent', [
+    'tenant_id' => ['tag' => 1, 'type' => 'int32', 'required' => true],
+    'support_case_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'tool' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'purpose' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'input_classification' => ['tag' => 5, 'type' => 'string', 'required' => true],
+    'retention_policy' => ['tag' => 6, 'type' => 'string', 'required' => true],
+]);
+
+king_object_store_put('events/support-tools/' . $caseId . '.iibin', king_proto_encode('SupportToolAuditEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
+]);
+```
+
+The King MCP peer receives a pseudonymous invoice reference and an allowlist
+of fields, not raw invoice XML, PDFs, addresses, VAT numbers, payment data,
+private-person identifiers, or full chat transcripts. The IIBIN schemas are
+fixed on the connection config and cannot be changed per support call. Broader
+access requires manual review and an explicit access request.
+
+## Runtime Operations
 
 ```mermaid
 flowchart LR
     Runtime[King System Runtime]
-    Telemetry[Telemetry Spans / Metrics / Logs]
-    Autoscaling[Autoscaling Controller]
+    Telemetry[Telemetry]
     DNS[Semantic DNS]
+    Scale[Autoscaling]
     Workers[Pipeline Workers]
     Ops[Operations Console]
+    Json[JSON Runtime Event]
+    Iibin[Next Level IIBIN]
 
-    Runtime --> Telemetry
-    Telemetry --> Ops
-    Runtime --> Autoscaling
-    Autoscaling --> Workers
-    Runtime --> DNS
-    DNS --> Ops
-    Ops --> Runtime
+    Runtime --> Telemetry --> Ops
+    Runtime --> DNS --> Ops
+    Runtime --> Scale --> Workers
+    Runtime --> Json --> Iibin --> Ops
 ```
+
+#### Event Payload: JSON
 
 ```php
 <?php
@@ -485,80 +675,40 @@ king_system_init([
     'cluster_id' => 'b2b-einvoice-platform',
     'node_id' => getenv('KING_NODE_ID') ?: 'node-1',
     'state_root_path' => __DIR__ . '/var/system',
-    'components' => [
-        'client',
-        'server',
-        'object_store',
-        'pipeline_orchestrator',
-        'telemetry',
-        'autoscaling',
-        'mcp',
-        'iibin',
-    ],
+    'components' => ['client', 'server', 'object_store', 'pipeline_orchestrator', 'telemetry', 'mcp', 'iibin'],
 ]);
 
-$span = king_telemetry_start_span('invoice.intake', [
-    'tenant_id' => (string) $tenantId,
-    'source' => 'as4',
+$eventPayload = [
+    'cluster_id' => 'b2b-einvoice-platform',
+    'node_id' => getenv('KING_NODE_ID') ?: 'node-1',
+    'component' => 'pipeline_orchestrator',
+    'status' => 'ready',
+    'blocker_count' => 0,
+];
+
+king_object_store_put('events/runtime/' . date('YmdHis') . '.json', json_encode($eventPayload, JSON_THROW_ON_ERROR), [
+    'content_type' => 'application/json',
 ]);
 ```
 
-Operations need the same level of structure as business flows. System runtime
-status, telemetry, autoscaling decisions, worker health, and semantic DNS
-routing should be visible as first-class control-plane data, not inferred from
-log scraping after something has already failed.
-
-The operations console should expose lifecycle state and admission decisions:
-which components are ready, which pipelines are blocked, which services are
-degraded, and whether autoscaling is adding capacity. That keeps the platform
-operable when document volume spikes or external supplier/tax endpoints become
-slow.
-
-## Event and Storage Boundaries
-
-```mermaid
-flowchart TB
-    RawDocs[Raw Documents]
-    Canonical[Canonical Events]
-    Reports[Validation Reports]
-    Snapshots[Shop Snapshots]
-    Audit[Audit Records]
-
-    RawDocs -->|Object Store, immutable| Audit
-    Canonical -->|IIBIN, versioned schema| Audit
-    Reports -->|Object Store, linked by invoice id| Audit
-    Snapshots -->|Object Store + CDN| Audit
-```
+#### Next Level: IIBIN
 
 ```php
 <?php
-$auditKey = sprintf(
-    'audit/%s/%s/%s.json',
-    $tenantId,
-    $documentType,
-    $documentId
-);
+king_proto_define_schema('RuntimeComponentEvent', [
+    'cluster_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
+    'node_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
+    'component' => ['tag' => 3, 'type' => 'string', 'required' => true],
+    'status' => ['tag' => 4, 'type' => 'string', 'required' => true],
+    'blocker_count' => ['tag' => 5, 'type' => 'int32', 'default' => 0],
+]);
 
-king_object_store_put($auditKey, json_encode([
-    'tenant_id' => $tenantId,
-    'document_id' => $documentId,
-    'raw_object_id' => $rawObjectId,
-    'canonical_event_id' => $eventObjectId,
-    'validation_report_id' => $reportObjectId,
-    'created_at' => date(DATE_ATOM),
-], JSON_THROW_ON_ERROR), [
-    'content_type' => 'application/json',
-    'object_type' => 'audit-record',
+king_object_store_put('events/runtime/' . date('YmdHis') . '.iibin', king_proto_encode('RuntimeComponentEvent', $eventPayload), [
+    'content_type' => 'application/x-king-iibin',
 ]);
 ```
 
-The boundary rule is simple: raw external documents are immutable objects,
-canonical events are schema-defined internal messages, validation reports are
-stored artifacts, and operational snapshots are cacheable views. Mixing those
-categories makes replay, legal audit, and support investigation much harder.
-
-The object store is therefore more than a blob bucket. It is the durable
-contract between protocol intake, validation, commerce surfaces, procurement,
-and support tooling. DB ingest protects the small local write paths that need
-transactional locking, while the object store keeps the long-lived payloads
-and reports that other blocks reference.
+Operations must expose lifecycle state, admission decisions, blocked pipeline
+runs, degraded dependencies, and autoscaling decisions as first-class data.
+Deep diagnostics belong in telemetry and object-store reports; JSON/IIBIN
+events keep the control plane fast and readable.

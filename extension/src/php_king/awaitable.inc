@@ -165,6 +165,10 @@ static zend_result king_awaitable_function_call_runner(
     zval_ptr_dtor(&callable);
     king_awaitable_release_params(params, param_count);
 
+    if (status == SUCCESS && Z_ISUNDEF_P(result)) {
+        ZVAL_NULL(result);
+    }
+
     if (status != SUCCESS) {
         if (king_get_error()[0] == '\0') {
             king_set_error("King\\Awaitable could not invoke its deferred function.");
@@ -214,6 +218,10 @@ static zend_result king_awaitable_method_call_runner(
     zval_ptr_dtor(&method);
     zval_ptr_dtor(&object_copy);
     king_awaitable_release_params(params, param_count);
+
+    if (status == SUCCESS && Z_ISUNDEF_P(result)) {
+        ZVAL_NULL(result);
+    }
 
     if (status != SUCCESS) {
         if (king_get_error()[0] == '\0') {
@@ -395,6 +403,13 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
         king_awaitable_cancel_native(intern);
         return SUCCESS;
     }
+    if (!Z_ISUNDEF(intern->cancel_token)
+        && Z_TYPE(intern->cancel_token) == IS_OBJECT
+        && instanceof_function(Z_OBJCE(intern->cancel_token), king_ce_cancel_token)
+        && php_king_cancel_token_obj_from_zend(Z_OBJ(intern->cancel_token))->cancelled) {
+        king_awaitable_cancel_native(intern);
+        return SUCCESS;
+    }
 
     if (intern->runner == NULL) {
         king_set_error("King\\Awaitable has no native runner.");
@@ -422,7 +437,7 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
     }
 
     if (Z_ISUNDEF(result)) {
-        ZVAL_NULL(&result);
+        return SUCCESS;
     }
     ZVAL_COPY(&intern->result, &result);
     zval_ptr_dtor(&result);
@@ -430,6 +445,8 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
 
     return SUCCESS;
 }
+
+#include "awaitable/aggregate.inc"
 
 static void king_awaitable_return_or_throw(king_awaitable_object *intern, zval *return_value)
 {
@@ -683,6 +700,8 @@ PHP_FUNCTION(king_awaitable_status)
     RETURN_STRING(king_awaitable_status_name(intern->status));
 }
 
+#include "awaitable/aggregate_api.inc"
+
 const zend_function_entry king_awaitable_class_methods[] = {
     PHP_ME(King_Awaitable, __construct, arginfo_class_King_Awaitable___construct, ZEND_ACC_PRIVATE | ZEND_ACC_CTOR)
     PHP_ME(King_Awaitable, await, arginfo_class_King_Awaitable_await, ZEND_ACC_PUBLIC)
@@ -693,5 +712,7 @@ const zend_function_entry king_awaitable_class_methods[] = {
     PHP_ME(King_Awaitable, isCancelled, arginfo_class_King_Awaitable_isCancelled, ZEND_ACC_PUBLIC)
     PHP_ME(King_Awaitable, getStatus, arginfo_class_King_Awaitable_getStatus, ZEND_ACC_PUBLIC)
     PHP_ME(King_Awaitable, getOperation, arginfo_class_King_Awaitable_getOperation, ZEND_ACC_PUBLIC)
+    PHP_ME(King_Awaitable, any, arginfo_class_King_Awaitable_any, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_ME(King_Awaitable, all, arginfo_class_King_Awaitable_all, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     PHP_FE_END
 };

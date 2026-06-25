@@ -52,6 +52,226 @@ static void king_mcp_state_set_errorf(
     king_mcp_state_set_error_message(state, kind, message);
 }
 
+static zval *king_mcp_config_find_key(zval *config, const char *key, size_t key_len)
+{
+    king_config_object *intern;
+
+    if (config == NULL || Z_TYPE_P(config) == IS_NULL) {
+        return NULL;
+    }
+
+    if (Z_TYPE_P(config) == IS_ARRAY) {
+        return zend_hash_str_find(Z_ARRVAL_P(config), key, key_len);
+    }
+
+    if (
+        Z_TYPE_P(config) == IS_OBJECT
+        && king_ce_config != NULL
+        && instanceof_function(Z_OBJCE_P(config), king_ce_config)
+    ) {
+        intern = php_king_config_obj_from_zend(Z_OBJ_P(config));
+        if (!Z_ISUNDEF(intern->overrides) && Z_TYPE(intern->overrides) == IS_ARRAY) {
+            return zend_hash_str_find(Z_ARRVAL(intern->overrides), key, key_len);
+        }
+    }
+
+    return NULL;
+}
+
+static zval *king_mcp_config_find_iibin_routes(zval *config)
+{
+    zval *routes;
+
+    routes = king_mcp_config_find_key(
+        config,
+        "mcp.iibin_routes",
+        sizeof("mcp.iibin_routes") - 1
+    );
+    if (routes != NULL) {
+        return routes;
+    }
+
+    routes = king_mcp_config_find_key(
+        config,
+        "mcp.iibin.routes",
+        sizeof("mcp.iibin.routes") - 1
+    );
+    if (routes != NULL) {
+        return routes;
+    }
+
+    return king_mcp_config_find_key(
+        config,
+        "mcp_iibin_routes",
+        sizeof("mcp_iibin_routes") - 1
+    );
+}
+
+static zend_result king_mcp_validate_iibin_route_definition(
+    zval *route,
+    const char *route_key
+)
+{
+    zval *request_schema;
+    zval *response_schema;
+
+    if (Z_TYPE_P(route) != IS_ARRAY) {
+        king_mcp_set_errorf(
+            "MCP IIBIN route '%s' must be configured as an array.",
+            route_key
+        );
+        return FAILURE;
+    }
+
+    request_schema = zend_hash_str_find(
+        Z_ARRVAL_P(route),
+        "request_schema",
+        sizeof("request_schema") - 1
+    );
+    if (
+        request_schema == NULL
+        || Z_TYPE_P(request_schema) != IS_STRING
+        || Z_STRLEN_P(request_schema) == 0
+    ) {
+        king_mcp_set_errorf(
+            "MCP IIBIN route '%s' requires a non-empty request_schema.",
+            route_key
+        );
+        return FAILURE;
+    }
+
+    response_schema = zend_hash_str_find(
+        Z_ARRVAL_P(route),
+        "response_schema",
+        sizeof("response_schema") - 1
+    );
+    if (
+        response_schema != NULL
+        && Z_TYPE_P(response_schema) != IS_NULL
+        && Z_TYPE_P(response_schema) != IS_STRING
+    ) {
+        king_mcp_set_errorf(
+            "MCP IIBIN route '%s' response_schema must be null or string.",
+            route_key
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_mcp_validate_iibin_routes(zval *routes)
+{
+    zend_string *service_or_route_key;
+    zval *route_or_methods;
+
+    if (routes == NULL || Z_TYPE_P(routes) == IS_NULL) {
+        return SUCCESS;
+    }
+
+    if (Z_TYPE_P(routes) != IS_ARRAY) {
+        king_mcp_set_errorf("MCP config key mcp.iibin_routes must be an array.");
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(routes), service_or_route_key, route_or_methods) {
+        zend_string *method_key;
+        zval *nested_route;
+
+        if (service_or_route_key == NULL) {
+            king_mcp_set_errorf("MCP IIBIN route keys must be strings.");
+            return FAILURE;
+        }
+
+        if (Z_TYPE_P(route_or_methods) != IS_ARRAY) {
+            king_mcp_set_errorf(
+                "MCP IIBIN route '%s' must be configured as an array.",
+                ZSTR_VAL(service_or_route_key)
+            );
+            return FAILURE;
+        }
+
+        if (
+            zend_hash_str_exists(
+                Z_ARRVAL_P(route_or_methods),
+                "request_schema",
+                sizeof("request_schema") - 1
+            )
+        ) {
+            if (
+                king_mcp_validate_iibin_route_definition(
+                    route_or_methods,
+                    ZSTR_VAL(service_or_route_key)
+                ) != SUCCESS
+            ) {
+                return FAILURE;
+            }
+            continue;
+        }
+
+        ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(route_or_methods), method_key, nested_route) {
+            zend_string *full_key;
+
+            if (method_key == NULL) {
+                king_mcp_set_errorf(
+                    "MCP IIBIN methods under service '%s' must use string keys.",
+                    ZSTR_VAL(service_or_route_key)
+                );
+                return FAILURE;
+            }
+
+            full_key = zend_string_alloc(
+                ZSTR_LEN(service_or_route_key) + 1 + ZSTR_LEN(method_key),
+                0
+            );
+            memcpy(ZSTR_VAL(full_key), ZSTR_VAL(service_or_route_key), ZSTR_LEN(service_or_route_key));
+            ZSTR_VAL(full_key)[ZSTR_LEN(service_or_route_key)] = '/';
+            memcpy(
+                ZSTR_VAL(full_key) + ZSTR_LEN(service_or_route_key) + 1,
+                ZSTR_VAL(method_key),
+                ZSTR_LEN(method_key)
+            );
+            ZSTR_VAL(full_key)[ZSTR_LEN(service_or_route_key) + 1 + ZSTR_LEN(method_key)] = '\0';
+
+            if (
+                king_mcp_validate_iibin_route_definition(
+                    nested_route,
+                    ZSTR_VAL(full_key)
+                ) != SUCCESS
+            ) {
+                zend_string_release(full_key);
+                return FAILURE;
+            }
+
+            zend_string_release(full_key);
+        } ZEND_HASH_FOREACH_END();
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
+static zend_result king_mcp_state_snapshot_iibin_routes(
+    king_mcp_state *state,
+    zval *config
+)
+{
+    zval *routes = king_mcp_config_find_iibin_routes(config);
+
+    ZVAL_UNDEF(&state->iibin_routes);
+
+    if (routes == NULL || Z_TYPE_P(routes) == IS_NULL) {
+        array_init(&state->iibin_routes);
+        return SUCCESS;
+    }
+
+    if (king_mcp_validate_iibin_routes(routes) != SUCCESS) {
+        return FAILURE;
+    }
+
+    ZVAL_DUP(&state->iibin_routes, routes);
+    return SUCCESS;
+}
+
 static zend_string *king_mcp_base64url_encode_bytes(
     const unsigned char *value,
     size_t value_len
@@ -403,4 +623,3 @@ static zend_result king_mcp_validate_peer_target(
 
     return SUCCESS;
 }
-

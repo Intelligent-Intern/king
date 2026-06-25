@@ -1,0 +1,128 @@
+typedef enum _king_inference_backend_kind {
+    KING_INFERENCE_BACKEND_LOCAL = 1,
+    KING_INFERENCE_BACKEND_KING_NATIVE_CPU = 2,
+    KING_INFERENCE_BACKEND_KING_NATIVE_GPU = 3
+} king_inference_backend_kind;
+
+static const char *king_inference_backend_kind_name(king_inference_backend_kind kind)
+{
+    switch (kind) {
+        case KING_INFERENCE_BACKEND_LOCAL:
+            return "local";
+        case KING_INFERENCE_BACKEND_KING_NATIVE_CPU:
+            return "king_native_cpu";
+        case KING_INFERENCE_BACKEND_KING_NATIVE_GPU:
+            return "king_native_gpu";
+    }
+
+    return "unknown";
+}
+
+static zend_result king_inference_backend_kind_from_string(
+    zend_string *name,
+    king_inference_backend_kind *kind
+) {
+    if (zend_string_equals_literal(name, "local")) {
+        *kind = KING_INFERENCE_BACKEND_LOCAL;
+        return SUCCESS;
+    }
+
+    if (zend_string_equals_literal(name, "king_native_cpu")) {
+        *kind = KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+        return SUCCESS;
+    }
+
+    if (zend_string_equals_literal(name, "king_native_gpu")) {
+        *kind = KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+        return SUCCESS;
+    }
+
+    return FAILURE;
+}
+
+static zval *king_inference_backend_config_value(zval *config)
+{
+    zval *backend = king_inference_array_find(config, "backend");
+
+    if (backend == NULL) {
+        return NULL;
+    }
+
+    if (Z_TYPE_P(backend) == IS_STRING) {
+        return backend;
+    }
+
+    if (Z_TYPE_P(backend) == IS_ARRAY) {
+        zval *name = king_inference_array_find(backend, "name");
+        if (name != NULL) {
+            return name;
+        }
+        return king_inference_array_find(backend, "type");
+    }
+
+    return backend;
+}
+
+static zend_result king_inference_backend_kind_from_config(
+    zval *config,
+    king_inference_backend_kind *kind,
+    const char *function_name
+) {
+    zval *backend_name = king_inference_backend_config_value(config);
+
+    *kind = KING_INFERENCE_BACKEND_LOCAL;
+
+    if (backend_name == NULL) {
+        return SUCCESS;
+    }
+
+    if (Z_TYPE_P(backend_name) != IS_STRING || Z_STRLEN_P(backend_name) == 0) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() backend name must be a non-empty string when configured.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (king_inference_backend_kind_from_string(Z_STR_P(backend_name), kind) != SUCCESS) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() does not support inference backend '%s'.",
+            function_name,
+            Z_STRVAL_P(backend_name)
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static bool king_inference_backend_kind_is_available(king_inference_backend_kind kind)
+{
+    return kind == KING_INFERENCE_BACKEND_LOCAL
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+}
+
+static void king_inference_backend_capabilities_array(king_inference_backend_kind kind, zval *return_value)
+{
+    array_init(return_value);
+    add_assoc_bool(return_value, "implemented", king_inference_backend_kind_is_available(kind));
+    add_assoc_bool(return_value, "local", true);
+    add_assoc_bool(return_value, "streaming", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "openai_chat_completions_stream", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "cancellable", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "model_registration", true);
+    add_assoc_bool(return_value, "process_runner", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "native_runtime", kind != KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "native_model_loader", true);
+    add_assoc_bool(return_value, "native_tensor_directory", true);
+    add_assoc_bool(return_value, "native_tokenization", true);
+    add_assoc_bool(return_value, "paged_kv_cache", true);
+    add_assoc_bool(return_value, "native_token_selection", true);
+    add_assoc_bool(return_value, "token_generation", kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "gpu", kind != KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    add_assoc_string(return_value, "model_format", "gguf");
+}

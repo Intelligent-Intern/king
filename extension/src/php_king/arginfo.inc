@@ -25,6 +25,16 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_awaitable_status, 0, 1, IS_
     ZEND_ARG_OBJ_INFO(0, awaitable, King\\Awaitable, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_awaitable_any, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, awaitables, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_awaitable_all, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, awaitables, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Awaitable___construct, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
@@ -52,6 +62,16 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_getStatus, 
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Awaitable_getOperation, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Awaitable_any, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, awaitables, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Awaitable_all, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, awaitables, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_one_string, 0, 0, 1)
@@ -454,6 +474,44 @@ ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_mcp_request_async, 0, 4, Kin
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_request_iibin, 0, 0, 4)
+    ZEND_ARG_TYPE_INFO(0, connection, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, service_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, method_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, data, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_mcp_request_iibin_async, 0, 4, King\\Awaitable, 0)
+    ZEND_ARG_TYPE_INFO(0, connection, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO(0, service_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, method_name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, data, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_server_create, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, definition, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_mcp_server_handle_jsonrpc, 0, 2, IS_STRING, 1)
+    ZEND_ARG_TYPE_INFO(0, server, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, message, IS_MIXED, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, context, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_mcp_server_handle_http, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, server, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, request, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, context, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_mcp_server_stdio, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, server, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_INFO_EX(arginfo_king_mcp_close, 0, 0, 1)
     ZEND_ARG_TYPE_INFO(0, connection, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
@@ -550,6 +608,73 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_king_xslt_transform_to_file, 0, 0, 3)
     ZEND_ARG_TYPE_INFO(0, stylesheet_path, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, output_path, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_inference_model_load, 0, 1, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, config, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_model_info, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tokenize, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tensor_view, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tensor_index, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tensor_dequantize, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_tensor_matmul, 0, 3, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, input, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_graph_run, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, graph, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_kv_cache_plan, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, request, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_inference_stream, 0, 2, King\\Inference\\Stream, 0)
+    ZEND_ARG_OBJ_INFO(0, model, King\\Inference\\Model, 0)
+    ZEND_ARG_TYPE_INFO(0, request, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_next, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_OBJ_INFO(0, stream, King\\Inference\\Stream, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_inference_next_async, 0, 1, King\\Awaitable, 0)
+    ZEND_ARG_OBJ_INFO(0, stream, King\\Inference\\Stream, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, timeout_ms, IS_LONG, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_cancel, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_OBJ_INFO(0, stream, King\\Inference\\Stream, 0)
 ZEND_END_ARG_INFO()
 
 const zend_function_entry king_object_store_class_methods[] = {
