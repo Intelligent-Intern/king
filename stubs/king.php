@@ -1359,7 +1359,9 @@ namespace {
      * Legacy Completions prompt arrays are bounded by `max_completion_prompts`
      * in `$options`, defaulting to `128`. `read_timeout_ms`, `max_events`, and
      * `max_idle_events` default to `250`, `4096`, and `240` and must be
-     * positive integers like the router limits.
+     * positive integers like the router limits. Model-listing option
+     * `owned_by` overrides model config owners and must be a non-empty string
+     * when provided.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options

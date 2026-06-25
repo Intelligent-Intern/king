@@ -84,7 +84,10 @@ native graph streaming, whether it can serve embeddings, whether configured GPU
 use is enabled for the model, and the backend capability map from the loaded
 model. If a backend configuration cannot be resolved, `x_king.backend` is
 `invalid`, `x_king.backend_config_valid` is `false`, and all executable
-capability flags are reported as unavailable.
+capability flags are reported as unavailable. The router-level `owned_by`
+option overrides the model config owner for model-listing responses and must be
+a non-empty string when provided; invalid listing options return a server error
+instead of being ignored.
 
 Chat message `content` and Responses input item `content` may be a string or an
 array of text content parts. King extracts text from `text`, `content`, or

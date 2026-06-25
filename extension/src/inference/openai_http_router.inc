@@ -118,6 +118,25 @@ static zend_string *king_inference_openai_model_owner(zval *model_value, zval *o
     return zend_string_init("king", sizeof("king") - 1, 0);
 }
 
+static bool king_inference_openai_model_listing_options_valid(zval *options, const char **message)
+{
+    zval *owner = king_inference_array_find(options, "owned_by");
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (owner == NULL) {
+        return true;
+    }
+    if (Z_TYPE_P(owner) == IS_STRING && Z_STRLEN_P(owner) > 0) {
+        return true;
+    }
+    if (message != NULL) {
+        *message = "OpenAI model listing option owned_by must be a non-empty string when provided.";
+    }
+    return false;
+}
+
 static void king_inference_openai_invalid_backend_capabilities(zval *return_value)
 {
     array_init(return_value);
@@ -210,12 +229,21 @@ static zend_result king_inference_openai_models_response(zval *models, zval *opt
     zend_ulong index;
     zend_string *json = NULL;
     zend_result result;
+    const char *options_error = NULL;
 
     if (!king_inference_openai_models_valid(models)) {
         return king_inference_openai_error_response(
             return_value,
             500,
             "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "server_error"
+        );
+    }
+    if (!king_inference_openai_model_listing_options_valid(options, &options_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            options_error != NULL ? options_error : "OpenAI model listing options are invalid.",
             "server_error"
         );
     }
@@ -385,12 +413,21 @@ static zend_result king_inference_openai_retrieve_model_response(
     zval model_object;
     zend_string *key;
     zend_ulong index;
+    const char *options_error = NULL;
 
     if (!king_inference_openai_models_valid(models)) {
         return king_inference_openai_error_response(
             return_value,
             500,
             "OpenAI-compatible inference router requires a non-empty model registry containing only loaded models.",
+            "server_error"
+        );
+    }
+    if (!king_inference_openai_model_listing_options_valid(options, &options_error)) {
+        return king_inference_openai_error_response(
+            return_value,
+            500,
+            options_error != NULL ? options_error : "OpenAI model listing options are invalid.",
             "server_error"
         );
     }
