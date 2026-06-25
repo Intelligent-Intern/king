@@ -34,6 +34,7 @@ zend_result king_http3_request_dispatch(
  * @return A PHP array on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http3_request_send);
+PHP_FUNCTION(king_http3_request_send_async);
 
 /**
  * @brief Sends one multiplexed HTTP/3 batch over one active QUIC connection.
@@ -44,5 +45,6 @@ PHP_FUNCTION(king_http3_request_send);
  * honest HTTP/3 session.
  */
 PHP_FUNCTION(king_http3_request_send_multi);
+PHP_FUNCTION(king_http3_request_send_multi_async);
 
 #endif // KING_CLIENT_HTTP3_H

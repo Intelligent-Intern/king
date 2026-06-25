@@ -15,8 +15,12 @@ contract lives in `extension/include/awaitable/cancel_token.h`.
 
 Client session, TLS, request, and polling function registrations are owned by
 `extension/src/client/arginfo.inc` and
-`extension/src/client/function_entries.inc`, with the public include-side anchor
-at `extension/include/client/arginfo/index.h`.
+`extension/src/client/function_entries.inc`. Public declarations for the
+original unprefixed client surface live in `extension/include/client/legacy.h`;
+protocol-specific sync and async declarations live under
+`extension/include/client/` and are exported through
+`extension/include/client/index.h`. Arginfo remains anchored at
+`extension/include/client/arginfo/index.h`.
 
 Server session, TLS reload, cancellation, and admin listener registrations are
 owned by `extension/src/server/arginfo.inc` and

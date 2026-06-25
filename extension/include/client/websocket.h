@@ -86,6 +86,7 @@ php_king_ws_obj_from_zend(zend_object *obj)
  * @return A `King\WebSocket` resource on success, FALSE on failure.
  */
 PHP_FUNCTION(king_client_websocket_connect);
+PHP_FUNCTION(king_client_websocket_connect_async);
 
 /**
  * @brief Sends a WebSocket message.
@@ -97,6 +98,7 @@ PHP_FUNCTION(king_client_websocket_connect);
  * @return TRUE on success, FALSE on failure.
  */
 PHP_FUNCTION(king_client_websocket_send);
+PHP_FUNCTION(king_client_websocket_send_async);
 
 /**
  * @brief Receives a WebSocket message.
@@ -108,6 +110,7 @@ PHP_FUNCTION(king_client_websocket_send);
  * empty and the connection remains open, or FALSE on close or error.
  */
 PHP_FUNCTION(king_client_websocket_receive);
+PHP_FUNCTION(king_client_websocket_receive_async);
 
 /**
  * @brief Sends a WebSocket PING frame.

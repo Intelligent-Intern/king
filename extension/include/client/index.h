@@ -7,6 +7,7 @@
 #include "http1.h"
 #include "http2.h"
 #include "http3.h"
+#include "legacy.h"
 #include "objects.h"
 #include "registration.h"
 #include "session.h"
@@ -42,5 +43,6 @@
  * protocol-specific `King\Exception` subclass.
  */
 PHP_FUNCTION(king_client_send_request);
+PHP_FUNCTION(king_client_send_request_async);
 
 #endif // KING_CLIENT_INDEX_H

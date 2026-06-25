@@ -6,6 +6,7 @@
 static const zend_function_entry king_functions[] = {
     PHP_FE(king_version, arginfo_king_no_args)
     PHP_FE(king_health, arginfo_king_no_args)
+    PHP_FE(king_get_last_error, arginfo_king_no_args)
     PHP_FE(king_new_config, arginfo_king_new_config)
 #include "../awaitable/function_entries.inc"
 #include "../client/function_entries.inc"
