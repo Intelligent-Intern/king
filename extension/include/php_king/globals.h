@@ -1,6 +1,6 @@
 /*
  * =========================================================================
- * FILENAME:   include/king_globals.h
+ * FILENAME:   include/php_king/globals.h
  * PROJECT:    king
  *
  * PURPOSE:
@@ -9,8 +9,8 @@
  * =========================================================================
  */
 
-#ifndef KING_GLOBALS_H
-#define KING_GLOBALS_H
+#ifndef KING_PHP_KING_GLOBALS_H
+#define KING_PHP_KING_GLOBALS_H
 
 #include <php.h>
 #include <stdbool.h>
@@ -36,4 +36,4 @@ typedef struct _king_globals_t {
 /* The single global state instance is defined in src/king_globals.c. */
 extern ZEND_API king_globals_t king_globals;
 
-#endif /* KING_GLOBALS_H */
+#endif /* KING_PHP_KING_GLOBALS_H */

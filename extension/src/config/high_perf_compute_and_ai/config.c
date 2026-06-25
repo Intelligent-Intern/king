@@ -13,7 +13,7 @@
 
 #include "config/high_perf_compute_and_ai/config.h"
 #include "config/high_perf_compute_and_ai/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_cpu_affinity_map_string.h"

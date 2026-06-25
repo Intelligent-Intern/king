@@ -35,7 +35,7 @@
 #include "config/ssh_over_quic/config.h"
 #include "config/tcp_transport/config.h"
 #include "config/tls_and_crypto/config.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 #include <ext/spl/spl_exceptions.h>
 #include "zend_exceptions.h"
 

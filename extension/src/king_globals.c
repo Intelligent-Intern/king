@@ -6,12 +6,12 @@
  *
  * PURPOSE:
  * Defines the single global state instance for the king extension.
- * This file must be compiled exactly once. Including king_globals.h
+ * This file must be compiled exactly once. Including php_king/globals.h
  * anywhere else only provides an extern declaration.
  * =========================================================================
  */
 
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 /*
  * The single authoritative instance of the extension's global state.

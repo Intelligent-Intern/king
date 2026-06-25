@@ -1,4 +1,4 @@
-#include "king_init.h"
+#include "php_king/init.h"
 #include "config/security_and_traffic/index.h"
 #include "config/tls_and_crypto/index.h"
 #include "config/tcp_transport/index.h"
@@ -22,7 +22,7 @@
 #include "config/smart_contracts/index.h"
 #include "config/ssh_over_quic/index.h"
 #include "config/tls_and_crypto/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 #include "php_king.h"
 
 #include <errno.h>

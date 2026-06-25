@@ -13,7 +13,7 @@
 
 #include "config/bare_metal_tuning/config.h"
 #include "config/bare_metal_tuning/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_generic_string.h"

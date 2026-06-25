@@ -442,4 +442,4 @@ int king_telemetry_log_internal(king_telemetry_level_t level, const char *logger
 
 /* --- PHP Entry Points --- */
 
-#include "king_globals.h"
+#include "php_king/globals.h"

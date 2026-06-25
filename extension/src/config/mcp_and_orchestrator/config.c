@@ -14,7 +14,7 @@
 
 #include "config/mcp_and_orchestrator/config.h"
 #include "config/mcp_and_orchestrator/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_generic_string.h"

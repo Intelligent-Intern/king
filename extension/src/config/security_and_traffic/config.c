@@ -13,7 +13,7 @@
 
 #include "config/security_and_traffic/config.h"
 #include "config/security_and_traffic/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

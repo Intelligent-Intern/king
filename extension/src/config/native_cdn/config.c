@@ -13,7 +13,7 @@
 
 #include "config/native_cdn/config.h"
 #include "config/native_cdn/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_positive_long.h"

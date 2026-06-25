@@ -1,6 +1,6 @@
 /*
  * =========================================================================
- * FILENAME:   include/king_init.h
+ * FILENAME:   include/php_king/init.h
  * PROJECT:    king
  *
  * PURPOSE:
@@ -9,8 +9,8 @@
  * =========================================================================
  */
 
-#ifndef KING_INIT_H
-#define KING_INIT_H
+#ifndef KING_PHP_KING_INIT_H
+#define KING_PHP_KING_INIT_H
 
 #include <php.h>
 
@@ -45,4 +45,4 @@ int king_request_init(int type, int module_number);
  */
 int king_request_shutdown(int type, int module_number);
 
-#endif /* KING_INIT_H */
+#endif /* KING_PHP_KING_INIT_H */

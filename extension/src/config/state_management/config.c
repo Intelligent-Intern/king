@@ -13,7 +13,7 @@
 
 #include "config/state_management/config.h"
 #include "config/state_management/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_string_from_allowlist.h"
 #include "validation/config_param/validate_string.h"

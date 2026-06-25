@@ -13,7 +13,7 @@
 
 #include "config/router_and_loadbalancer/config.h"
 #include "config/router_and_loadbalancer/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

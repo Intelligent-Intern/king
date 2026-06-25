@@ -14,7 +14,7 @@
 #include <zend_hash.h>
 #include <zend_smart_str.h>
 
-#include "king_globals.h"
+#include "php_king/globals.h"
 #include "config/cloud_autoscale/base_layer.h"
 #include "config/iibin/base_layer.h"
 #include "config/mcp_and_orchestrator/base_layer.h"

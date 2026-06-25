@@ -13,7 +13,7 @@
 
 #include "config/cluster_and_process/config.h"
 #include "config/cluster_and_process/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

@@ -14,7 +14,7 @@
 
 #include "config/open_telemetry/config.h"
 #include "config/open_telemetry/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_positive_long.h"

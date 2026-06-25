@@ -12,7 +12,7 @@
 #include "autoscaling/autoscaling.h"
 #include "config/cloud_autoscale/base_layer.h"
 #include "config/cloud_autoscale/config.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 #include "telemetry/telemetry.h"
 #include "autoscaling/autoscaling_internal.h"
 

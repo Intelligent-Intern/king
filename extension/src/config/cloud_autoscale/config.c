@@ -13,7 +13,7 @@
 
 #include "config/cloud_autoscale/config.h"
 #include "config/cloud_autoscale/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_generic_string.h"
 #include "validation/config_param/validate_long_range.h"

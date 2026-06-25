@@ -8,6 +8,8 @@
 #include "class_entries.h"
 #include "constants.h"
 #include "externals.h"
+#include "globals.h"
+#include "init.h"
 #include "method_tables.h"
 #include "registration.h"
 #include "resource_ids.h"

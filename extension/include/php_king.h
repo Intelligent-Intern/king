@@ -28,8 +28,8 @@
 
 /* Include core headers required in every build. */
 #include "php_king/constants.h"
-#include "king_globals.h"
-#include "king_init.h"
+#include "php_king/globals.h"
+#include "php_king/init.h"
 #include "awaitable/index.h"
 #include "client/index.h"
 #include "config/object.h"

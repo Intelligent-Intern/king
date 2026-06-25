@@ -14,7 +14,7 @@
 
 #include "config/smart_contracts/config.h"
 #include "config/smart_contracts/base_layer.h"
-#include "king_globals.h"
+#include "php_king/globals.h"
 
 #include "validation/config_param/validate_bool.h"
 #include "validation/config_param/validate_generic_string.h"
