@@ -379,6 +379,12 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
         add_assoc_zval(return_value, "paged_kv_cache", &plan);
     }
     add_assoc_bool(return_value, "gpu_enabled", king_inference_gpu_enabled(&intern->config));
+    if (king_inference_gpu_enabled(&intern->config)) {
+        zval gpu_runtime;
+
+        king_inference_gpu_runtime_status_from_model(intern, &gpu_runtime);
+        add_assoc_zval(return_value, "gpu_runtime", &gpu_runtime);
+    }
     king_inference_backend_model_info(intern, return_value);
 
     if (quantization != NULL && Z_TYPE_P(quantization) == IS_STRING) {

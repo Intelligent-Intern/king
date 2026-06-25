@@ -1243,6 +1243,16 @@ namespace {
     function king_inference_runtime_model_load(mixed $config = null): \King\Inference\Model {}
 
     /**
+     * Return the effective GPU inference readiness for the current process or
+     * a provided King\Config snapshot. This reports configuration, artifact,
+     * driver/thermal visibility, and the current decoder-kernel readiness.
+     * @param mixed $config null, King\Config, or native King\Config resource
+     * @return array<string,mixed>
+     * @throws \King\ValidationException
+     */
+    function king_inference_gpu_runtime_status(mixed $config = null): array {}
+
+    /**
      * Return the effective LLM cache admission status for King inference.
      * The cache is active only for memory-enabled native graph inference. When
      * active, King checks the configured cache path and minimum free disk
@@ -2738,6 +2748,12 @@ namespace King {
          * @param mixed $config null, King\Config, or native King\Config resource
          */
         public static function runtimeModelLoad(mixed $config = null): Inference\Model {}
+
+        /**
+         * @param mixed $config null, King\Config, or native King\Config resource
+         * @return array<string,mixed>
+         */
+        public static function gpuRuntimeStatus(mixed $config = null): array {}
 
         /**
          * @param mixed $config null, King\Config, or native King\Config resource

@@ -163,7 +163,7 @@ king.inference_cpu_model_name=gemma3:1b
 king.inference_cpu_model_artifact=/models/gemma3-1b.gguf
 king.inference_gpu_model_name=gemma4:12b
 king.inference_gpu_model_artifact=/models/gemma4-12b.gguf
-king.inference_gpu_max_gpu_layers=0
+king.inference_gpu_max_gpu_layers=99
 king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
 king.inference_gpu_thermal_sensor_command=
 king.inference_gpu_thermal_max_temperature_c=78
@@ -174,11 +174,12 @@ king.inference_llm_cache_min_free_mb=5120
 king.inference_llm_cache_fail_closed=1
 ```
 
-`auto` selects the GPU profile only when process-level GPU bindings are enabled
-and `inference_gpu_model_artifact` points to a materialized local GGUF file.
+`auto` selects the GPU profile only when process-level GPU bindings are enabled,
+the config-level GPU bindings are enabled, and
+`inference_gpu_model_artifact` points to a materialized local GGUF file.
 Otherwise it selects the CPU profile. `gpu` requires the GPU profile and fails
-fast when the GPU artifact or process-level GPU allowance is missing. `cpu`
-always selects the CPU profile.
+fast when the GPU artifact, config-level GPU allowance, or process-level GPU
+allowance is missing. `cpu` always selects the CPU profile.
 
 The same settings can be scoped to a `King\Config` snapshot:
 
@@ -211,11 +212,33 @@ $modelConfig = King\Inference::runtimeModelConfig($config);
 $model = King\Inference::runtimeModelLoad($config);
 ```
 
-The resolved config still loads through the implemented King backend contract.
-Today that means `king_native_cpu` is the backend that can load and inspect the
-GGUF artifact; the GPU profile carries the selected Gemma4 artifact and the
-strict GPU thermal policy so the native GPU backend can take over without
-changing application code when that backend is completed.
+GPU readiness is inspectable before model load:
+
+```php
+<?php
+$status = king_inference_gpu_runtime_status($config);
+
+if (!$status['generation_ready']) {
+    error_log('King GPU inference is not ready: ' . $status['reason']);
+}
+
+$sameStatus = King\Inference::gpuRuntimeStatus($config);
+```
+
+The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
+configured for GPU execution must not silently fall back to CPU. Current status
+fields separate the layers:
+
+- `config_ready` means King can see the GPU-facing configuration, artifact,
+  driver signal, and thermal policy.
+- `decoder_kernel_ready` means the native GPU decoder kernel is implemented.
+- `generation_ready` means both are true and token generation may run.
+
+In the current implementation, `decoder_kernel_ready` and `generation_ready`
+remain `false` for the native GPU backend. The local OpenAI-compatible router
+therefore exposes the configured large model with explicit
+`x_king.gpu_runtime` metadata, but refuses GPU generation instead of burning the
+CPU accidentally.
 
 ## Internal Backend Layout
 

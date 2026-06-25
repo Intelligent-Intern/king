@@ -133,6 +133,7 @@ static void king_inference_openai_model_object(
     zval capabilities;
     bool backend_config_valid = true;
     bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
+    bool gpu_enabled = false;
 
     array_init(return_value);
     add_assoc_str(return_value, "id", id);
@@ -157,20 +158,31 @@ static void king_inference_openai_model_object(
     }
 
     array_init(&king_meta);
+    gpu_enabled = backend_config_valid && king_inference_gpu_enabled(&model->config);
     add_assoc_string(
         &king_meta,
         "backend",
         backend_config_valid ? king_inference_backend_kind_name(kind) : "invalid"
     );
     add_assoc_bool(&king_meta, "backend_config_valid", backend_config_valid);
-    add_assoc_bool(&king_meta, "openai_generation", backend_config_valid && kind == KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(
+        &king_meta,
+        "openai_generation",
+        backend_config_valid && kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled
+    );
     add_assoc_bool(
         &king_meta,
         "native_graph_streaming",
         backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
     );
     add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
-    add_assoc_bool(&king_meta, "gpu_enabled", backend_config_valid && king_inference_gpu_enabled(&model->config));
+    add_assoc_bool(&king_meta, "gpu_enabled", gpu_enabled);
+    if (gpu_enabled) {
+        zval gpu_runtime;
+
+        king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
+        add_assoc_zval(&king_meta, "gpu_runtime", &gpu_runtime);
+    }
     add_assoc_bool(&king_meta, "created_config_valid", created_config_valid);
     if (backend_config_valid) {
         king_inference_backend_capabilities_array(kind, &capabilities);

@@ -143,7 +143,7 @@ static zend_result king_inference_runtime_model_config_array(
 
     array_init(return_value);
     add_assoc_string(return_value, "name", selected_name);
-    add_assoc_string(return_value, "backend", "king_native_cpu");
+    add_assoc_string(return_value, "backend", selected_gpu ? "king_native_gpu" : "king_native_cpu");
     add_assoc_string(return_value, "owned_by", "king-runtime");
     add_assoc_bool(return_value, "with_memory", compute->inference_with_memory);
     add_assoc_string(return_value, "runtime_profile", selected_gpu ? "gpu" : "cpu");
@@ -199,6 +199,7 @@ static zend_result king_inference_runtime_model_config_array(
     if (selected_gpu) {
         zval gpu;
         zval thermal;
+        zval gpu_runtime;
 
         array_init(&gpu);
         add_assoc_bool(&gpu, "enabled", true);
@@ -231,9 +232,33 @@ static zend_result king_inference_runtime_model_config_array(
         );
         add_assoc_zval(&gpu, "thermal", &thermal);
         add_assoc_zval(return_value, "gpu", &gpu);
+
+        king_inference_gpu_runtime_status_from_compute(compute, &gpu_runtime);
+        add_assoc_zval(return_value, "gpu_runtime", &gpu_runtime);
     }
 
     return SUCCESS;
+}
+
+PHP_FUNCTION(king_inference_gpu_runtime_status)
+{
+    zval *zconfig = NULL;
+    const kg_high_perf_compute_ai_config_t *compute;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ZVAL_OR_NULL(zconfig)
+    ZEND_PARSE_PARAMETERS_END();
+
+    compute = king_inference_runtime_compute_config(
+        zconfig,
+        "king_inference_gpu_runtime_status"
+    );
+    if (compute == NULL) {
+        RETURN_THROWS();
+    }
+
+    king_inference_gpu_runtime_status_from_compute(compute, return_value);
 }
 
 PHP_FUNCTION(king_inference_runtime_model_config)
