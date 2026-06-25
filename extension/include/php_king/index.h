@@ -10,7 +10,6 @@
 #include "globals.h"
 #include "public_functions.h"
 #include "resource_ids.h"
-#include "resources.h"
 #include "runtime_contracts.h"
 #include "runtime_helpers.h"
 

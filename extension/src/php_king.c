@@ -38,6 +38,7 @@
 #include "php_king/init.h"
 #include "php_king/method_tables.h"
 #include "php_king/registration.h"
+#include "php_king/resources.h"
 #include "autoscaling/registration.h"
 #include "config/internal/registration.h"
 #include "media/registration.h"
