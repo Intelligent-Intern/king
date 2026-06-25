@@ -70,4 +70,11 @@ zend_result king_awaitable_create_method_call(
     zval *cancel_token
 );
 
+PHP_FUNCTION(king_await);
+PHP_FUNCTION(king_awaitable_poll);
+PHP_FUNCTION(king_awaitable_cancel);
+PHP_FUNCTION(king_awaitable_status);
+PHP_FUNCTION(king_awaitable_any);
+PHP_FUNCTION(king_awaitable_all);
+
 #endif /* KING_AWAITABLE_H */
