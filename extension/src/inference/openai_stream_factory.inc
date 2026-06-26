@@ -109,6 +109,26 @@ static zend_result king_inference_openai_prepare_native_cpu_prompt_request(
     return SUCCESS;
 }
 
+static zend_result king_inference_openai_prepare_native_gpu_prompt_request(zval *request)
+{
+    zval prompt;
+
+    if (king_inference_array_find(request, "graph") != NULL
+        || king_inference_array_find(request, "graphs") != NULL
+        || king_inference_array_find(request, "native_prompt_text") != NULL) {
+        return SUCCESS;
+    }
+    if (king_inference_openai_render_messages_prompt(request, &prompt) != SUCCESS) {
+        return SUCCESS;
+    }
+
+    add_assoc_zval(request, "native_prompt_text", &prompt);
+    if (king_inference_array_find(request, "max_tokens") == NULL) {
+        add_assoc_long(request, "max_tokens", 128);
+    }
+    return SUCCESS;
+}
+
 static zend_result king_inference_openai_create_stream(
     zval *stream_value,
     zval *model,
@@ -144,6 +164,12 @@ static zend_result king_inference_openai_create_stream(
     }
     if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
         && king_inference_openai_prepare_native_cpu_prompt_request(model_object, &stream->request) != SUCCESS) {
+        zval_ptr_dtor(stream_value);
+        ZVAL_UNDEF(stream_value);
+        return FAILURE;
+    }
+    if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU
+        && king_inference_openai_prepare_native_gpu_prompt_request(&stream->request) != SUCCESS) {
         zval_ptr_dtor(stream_value);
         ZVAL_UNDEF(stream_value);
         return FAILURE;

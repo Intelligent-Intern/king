@@ -15,14 +15,25 @@ static zend_result king_inference_king_native_gpu_validate_stream_request(
     *max_tokens = 1;
 
     if (stream->openai_compatible) {
-        zend_throw_exception_ex(
-            king_ce_validation_exception,
-            0,
-            "%s() backend 'king_native_gpu' exposes the native event stream contract; "
-            "OpenAI-compatible GPU text generation is not ready in this build.",
-            function_name
-        );
-        return FAILURE;
+        if (graph != NULL || graphs != NULL) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s() OpenAI-compatible King native GPU generation accepts native_prompt_text only; "
+                "use the native stream contract for graph payloads.",
+                function_name
+            );
+            return FAILURE;
+        }
+        if (prompt_text == NULL) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "%s() OpenAI-compatible King native GPU generation requires native_prompt_text.",
+                function_name
+            );
+            return FAILURE;
+        }
     }
     if (graph != NULL && !king_inference_openai_array_is_object(graph)) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graph must be an object array.");
@@ -259,11 +270,11 @@ static void king_inference_king_native_gpu_add_contract_event(
         model->cuda_decoder_graph_executor_logits_projection_execution_available
     );
     add_assoc_bool(&event, "decoder_prompt_loop_ready", model->cuda_decoder_prompt_loop_available);
-    add_assoc_bool(&event, "decoder_kernel_ready", false);
-    add_assoc_bool(&event, "generation_ready", false);
-    add_assoc_bool(&event, "plain_text_chat_ready", false);
-    add_assoc_bool(&event, "token_generation", false);
-    add_assoc_bool(&event, "openai_generation", false);
+    add_assoc_bool(&event, "decoder_kernel_ready", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(&event, "generation_ready", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(&event, "plain_text_chat_ready", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(&event, "token_generation", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(&event, "openai_generation", model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(&event, "silent_cpu_fallback", false);
     add_assoc_long(&event, "accepted_max_tokens", max_tokens);
     king_inference_gpu_decoder_blockers(model, &decoder_blockers);
@@ -446,9 +457,11 @@ static void king_inference_king_native_gpu_model_info(
         intern->cuda_decoder_graph_executor_logits_projection_execution_available
     );
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
-    add_assoc_bool(return_value, "decoder_kernel_ready", false);
-    add_assoc_bool(return_value, "generation_ready", false);
-    add_assoc_bool(return_value, "plain_text_chat_ready", false);
+    add_assoc_bool(return_value, "decoder_kernel_ready", intern->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "generation_ready", intern->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "plain_text_chat_ready", intern->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "token_generation", intern->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "openai_generation", intern->cuda_decoder_prompt_loop_available);
     king_inference_gpu_decoder_blockers(intern, &decoder_blockers);
     add_assoc_zval(return_value, "decoder_blockers", &decoder_blockers);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);

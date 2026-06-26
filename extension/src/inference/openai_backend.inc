@@ -97,22 +97,75 @@ static zend_result king_inference_openai_require_generation_backend(
     if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
         zend_string *blockers;
         zval gpu_runtime;
+        zval *graph = king_inference_array_find(payload, "graph");
+        zval *graphs = king_inference_array_find(payload, "graphs");
+        zval *messages = king_inference_array_find(payload, "messages");
+        zval *prompt = king_inference_array_find(payload, "prompt");
+        zval *native_prompt_text = king_inference_array_find(payload, "native_prompt_text");
+        bool stream_requested = king_inference_bool_from_array(payload, "stream", false);
         zval *reason_value;
+        zval *generation_ready;
         const char *reason = "gpu_decoder_kernel_not_implemented";
 
         king_inference_gpu_runtime_status_from_model(model_object, &gpu_runtime);
         blockers = king_inference_openai_gpu_decoder_blockers_message(&gpu_runtime);
+        generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
         reason_value = king_inference_array_find(&gpu_runtime, "reason");
         if (reason_value != NULL && Z_TYPE_P(reason_value) == IS_STRING && Z_STRLEN_P(reason_value) > 0) {
             reason = Z_STRVAL_P(reason_value);
+        }
+        if (stream_requested) {
+            message = strpprintf(
+                0,
+                "%s does not support streaming with the selected King GPU model yet. "
+                "Use stream=false for native GPU plain text generation. "
+                "King will not silently fall back to CPU for a GPU profile.",
+                endpoint_name
+            );
+            zend_string_release(blockers);
+            zval_ptr_dtor(&gpu_runtime);
+            if (has_error_response != NULL) {
+                *has_error_response = true;
+            }
+            result = king_inference_openai_error_response(
+                return_value,
+                400,
+                ZSTR_VAL(message),
+                "invalid_request_error"
+            );
+            zend_string_release(message);
+            return result;
+        }
+        if (graph != NULL || graphs != NULL) {
+            zend_string_release(blockers);
+            zval_ptr_dtor(&gpu_runtime);
+            if (has_error_response != NULL) {
+                *has_error_response = true;
+            }
+            return king_inference_openai_error_response(
+                return_value,
+                400,
+                "OpenAI-compatible King GPU generation accepts plain text messages only; use the native stream contract for GPU graph payloads.",
+                "invalid_request_error"
+            );
+        }
+        if ((messages != NULL && king_inference_openai_array_is_list(messages))
+            || (prompt != NULL && Z_TYPE_P(prompt) == IS_STRING)
+            || (native_prompt_text != NULL && Z_TYPE_P(native_prompt_text) == IS_STRING && Z_STRLEN_P(native_prompt_text) > 0)) {
+            if (zend_string_equals_literal(blockers, "none")
+                && generation_ready != NULL
+                && zend_is_true(generation_ready)) {
+                zend_string_release(blockers);
+                zval_ptr_dtor(&gpu_runtime);
+                return SUCCESS;
+            }
         }
 
         message = strpprintf(
             0,
             "%s cannot generate with the selected King GPU model yet. "
             "The model is registered for metadata and readiness inspection, "
-            "but gpu_runtime.generation_ready=false and "
-            "gpu_runtime.decoder_kernel_ready=false. "
+            "but the native GPU plain text decoder or runtime policy is not ready. "
             "Primary gpu_runtime.reason=%s. "
             "Decoder blockers=%s. "
             "King will not silently fall back to CPU for a GPU profile.",

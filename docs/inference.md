@@ -400,30 +400,29 @@ fields separate the layers:
 
 - `config_ready` means King can see the GPU-facing configuration, artifact,
   driver signal, and thermal policy.
-- `decoder_kernel_ready` means the native GPU decoder kernel is implemented.
-- `generation_ready` means both are true and token generation may run.
+- `decoder_kernel_ready` means the native GPU decoder graph and prompt loop can
+  execute token generation from bounded logits.
+- `generation_ready` means both are true and plain-text token generation may
+  run without CPU fallback.
 
-In the current implementation, `decoder_kernel_ready` and `generation_ready`
-remain `false` for the native GPU backend. The local OpenAI-compatible router
-therefore exposes the configured large model with explicit
-`x_king.gpu_runtime` metadata, but refuses GPU generation instead of burning the
-CPU accidentally.
+The local OpenAI-compatible router exposes the configured large model with
+explicit `x_king.gpu_runtime` metadata and accepts `stream=false` plain-text
+chat completions when `gpu_runtime.generation_ready=true`. King still refuses
+GPU generation if runtime policy or decoder blockers are present, and it still
+does not burn the CPU accidentally for a GPU profile.
 The refusal is not a generic placeholder: `gpu_runtime.decoder_blockers`
-identifies the missing runtime layers between the available CUDA leaves and
-plain-text chat generation. When the GPU model has initialized the embedding
-row loader, device vector ops, device KV-cache, decoder graph executor, and
-prompt-loop admission path, the remaining gap is that the graph executor still
-needs the remaining logits device ops plus bounded logits results before the
-prompt loop can emit decoded tokens.
+identifies missing runtime layers between the available CUDA leaves and
+plain-text chat generation.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
 indexes, map the file for native access, and expose the model through
-`/v1/models`. It does not mean GPU token generation is available. The backend
-capabilities keep `model_registration=true`, `implemented=true`,
+`/v1/models`. Runtime status still decides whether GPU token generation is
+currently admitted. The backend capabilities keep `model_registration=true`,
+`implemented=true`,
 `streaming=true`, `native_stream_contract=true`, and
-`gpu_decoder_stream_contract=true`, while `token_generation=false` until the
-GPU decoder kernel is present.
+`gpu_decoder_stream_contract=true`, with `token_generation=true` and
+`openai_generation=true` for the GPU backend.
 The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
 `gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
@@ -455,8 +454,7 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
-`gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
-`silent_cpu_fallback` remain false.
+`openai_chat_completions_stream` and `silent_cpu_fallback` remain false.
 The GPU model info, native GPU stream contract event, and `/v1/models`
 metadata expose the same boundary with `embedding_row_loader_ready`,
 `device_vector_ops_ready`, `device_kv_cache_ready`,
@@ -467,7 +465,7 @@ metadata expose the same boundary with `embedding_row_loader_ready`,
 `decoder_graph_kv_head_prepare_execution_ready`,
 `decoder_graph_kv_write_execution_ready`,
 `decoder_graph_kv_attention_execution_ready`, `decoder_prompt_loop_ready`,
-`plain_text_chat_ready=false`, and `gpu_plain_text_chat_generation=false`.
+`plain_text_chat_ready`, and `gpu_plain_text_chat_generation`.
 The embedding row loader resolves the selected token embedding tensor, uses the
 uploaded GPU weight cache, and writes one token row into a device-side `float`
 vector. The current kernel supports `F32`, `F16`, `BF16`, and row-aligned
@@ -525,8 +523,8 @@ graph until `max_tokens` is reached, applies the same argmax/temperature/top-k/
 top-p/seed sampling policy on CPU over those bounded candidates, writes a
 CPU-compatible `final.next_token.values` token vector into each graph result,
 and emits the decoded token text pieces in the native event stream after the
-structured prompt-loop event. OpenAI-compatible GPU chat remains refused until
-the route is explicitly enabled without CPU fallback.
+structured prompt-loop event. OpenAI-compatible `stream=false` GPU chat uses
+that prompt loop directly and does not fall back to CPU.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
@@ -535,9 +533,11 @@ through `king_inference_next()`, cancellation moves the stream to a terminal
 state, and stream metrics expose native event indexes plus GPU thermal
 preflight/abort metadata. The first GPU native event is a structured
 `gpu_decoder_stream_contract` event with `stream_contract=king_native_events`,
-`decoder_stream_contract_ready=true`, `generation_ready=false`, and the current
-`gpu_runtime` object. OpenAI-compatible GPU chat remains refused until the
-later token-generation path is ready.
+`decoder_stream_contract_ready=true`, `generation_ready` mirroring prompt-loop
+readiness, and the current `gpu_runtime` object. OpenAI-compatible `stream=false`
+GPU chat is admitted only through plain text prompt generation; GPU streaming
+and OpenAI graph payloads stay refused until their separate runtime paths are
+implemented.
 
 ## GPU Sampling Decision
 
@@ -717,9 +717,9 @@ metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `backend_capabilities`. For `king_native_gpu`, model info also exposes
 `gpu_runtime.cuda_context`, `gpu_runtime.device_memory_allocator`,
 `gpu_runtime.required_weight_upload`, `decoder_stream_contract_ready=true`,
-`decoder_kernel_ready=false`, and `generation_ready=false` directly, so clients
-do not need to infer decoder or generation state from model registration or
-backend name.
+`decoder_kernel_ready`, `plain_text_chat_ready`, and `generation_ready`
+directly, so clients do not need to infer decoder or generation state from
+model registration or backend name.
 The `gguf` entry contains `architecture`, `architecture_supported`,
 `architecture_family`, `architecture_generation`, `decoder_profile`,
 `decoder_shape_ready`, `decoder_ready`, `architecture_support_status`,
@@ -1358,16 +1358,18 @@ Decoder text is treated as assistant content unless the request explicitly
 activates tools. For `stream=true`, it returns a bounded `text/event-stream`
 body with `data: {chunk}` events and a final `data: [DONE]` marker.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
-returns a precise OpenAI error while the GPU decoder kernel is not ready. The
-message states that the model is registered for metadata/readiness inspection,
-reports `gpu_runtime.generation_ready=false`,
-`gpu_runtime.decoder_kernel_ready=false`, includes the primary
-`gpu_runtime.reason`, lists `gpu_runtime.decoder_blockers`, and makes the
-no-silent-CPU-fallback rule explicit.
+accepts `stream=false` plain-text `messages` when the native GPU prompt loop is
+ready. The route renders those messages into `native_prompt_text`, runs bounded
+GPU token generation, drains the native OpenAI deltas into one response, and
+does not fall back to CPU. GPU `stream=true` requests still return a precise
+OpenAI error until the streaming checkbox is implemented. GPU graph payloads
+remain on the native stream contract instead of being mixed into the OpenAI
+chat route.
 Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
-authoritative readiness source for GPU models. A registered `king_native_gpu`
-model can be listed and selected for inspection, but UI and autodetect flows
-must not infer generation readiness from the model id or backend name.
+authoritative runtime readiness source for GPU models. A registered
+`king_native_gpu` model can be listed and selected for inspection, but UI and
+autodetect flows must not infer current generation readiness from the model id
+or backend name.
 
 ## Function, Example 1d: OpenAI-Compatible Model Router
 

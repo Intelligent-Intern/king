@@ -191,9 +191,13 @@ static void king_inference_openai_model_object(
     king_inference_backend_kind kind;
     zval king_meta;
     zval capabilities;
+    zval gpu_runtime;
     bool backend_config_valid = true;
     bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
     bool gpu_enabled = false;
+    bool gpu_openai_generation_ready = false;
+
+    ZVAL_UNDEF(&gpu_runtime);
 
     array_init(return_value);
     add_assoc_str(return_value, "id", id);
@@ -219,6 +223,13 @@ static void king_inference_openai_model_object(
 
     array_init(&king_meta);
     gpu_enabled = backend_config_valid && king_inference_gpu_enabled(&model->config);
+    if (gpu_enabled) {
+        zval *generation_ready;
+
+        king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
+        generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
+        gpu_openai_generation_ready = generation_ready != NULL && zend_is_true(generation_ready);
+    }
     add_assoc_string(
         &king_meta,
         "backend",
@@ -230,7 +241,8 @@ static void king_inference_openai_model_object(
         "openai_generation",
         backend_config_valid
             && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
-                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU)
+                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+                || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready))
     );
     add_assoc_bool(
         &king_meta,
@@ -247,9 +259,6 @@ static void king_inference_openai_model_object(
     add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
     add_assoc_bool(&king_meta, "gpu_enabled", gpu_enabled);
     if (gpu_enabled) {
-        zval gpu_runtime;
-
-        king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
         add_assoc_zval(&king_meta, "gpu_runtime", &gpu_runtime);
     }
     add_assoc_bool(&king_meta, "created_config_valid", created_config_valid);

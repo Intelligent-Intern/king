@@ -448,6 +448,9 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
     zval *return_value
 ) {
     zval loop;
+    zval *config_ready = king_inference_array_find(return_value, "config_ready");
+    bool runtime_ready = config_ready != NULL && zend_is_true(config_ready);
+    bool prompt_generation_ready = runtime_ready && model->cuda_decoder_prompt_loop_available;
 
     array_init(&loop);
     add_assoc_bool(&loop, "attempted", model->cuda_decoder_prompt_loop_attempted);
@@ -588,6 +591,12 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
     add_assoc_string(&loop, "error", model->cuda_decoder_prompt_loop_error);
     add_assoc_zval(return_value, "decoder_prompt_loop", &loop);
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "plain_text_chat_ready", prompt_generation_ready);
+    add_assoc_bool(return_value, "decoder_kernel_ready", model->cuda_decoder_prompt_loop_available);
+    add_assoc_bool(return_value, "generation_ready", prompt_generation_ready);
+    add_assoc_bool(return_value, "token_generation", prompt_generation_ready);
+    add_assoc_bool(return_value, "openai_generation", prompt_generation_ready);
+    add_assoc_bool(return_value, "gpu_plain_text_chat_generation", prompt_generation_ready);
 }
 
 static void king_inference_cuda_decoder_prompt_loop_apply_status(

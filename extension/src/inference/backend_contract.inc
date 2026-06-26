@@ -158,8 +158,8 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "native_stream_contract", native_stream_backend);
     add_assoc_bool(return_value, "native_graph_streaming", native_cpu_backend);
     add_assoc_bool(return_value, "native_token_selection", native_cpu_backend);
-    add_assoc_bool(return_value, "token_generation", !gpu_backend);
-    add_assoc_bool(return_value, "openai_generation", local_backend || native_cpu_backend);
+    add_assoc_bool(return_value, "token_generation", local_backend || native_cpu_backend || gpu_backend);
+    add_assoc_bool(return_value, "openai_generation", local_backend || native_cpu_backend || gpu_backend);
     add_assoc_bool(return_value, "embeddings", native_cpu_backend);
     add_assoc_bool(return_value, "gpu", gpu_backend);
     add_assoc_bool(return_value, "gpu_backend", gpu_backend);
