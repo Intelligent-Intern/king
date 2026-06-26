@@ -14,11 +14,12 @@ Optional public metadata fields are also strict: `name`, `quantization`,
 `owned_by`, `embedding_tensor`, `token_embedding_tensor`, `output_tensor`,
 `output_projection_tensor`, `lm_head_tensor`,
 `attention_query_tensor_pattern`, `attention_key_tensor_pattern`,
-`attention_value_tensor_pattern`, and `attention_output_tensor_pattern` must be
-non-empty strings when provided, and `context_tokens` must be a positive
-integer. Invalid model metadata is rejected during model load instead of being
-silently ignored by later model listings, embedding routes, decoder graph
-construction, or runner argument mapping.
+`attention_value_tensor_pattern`, `attention_output_tensor_pattern`,
+`rms_norm_attention_tensor_pattern`, `rms_norm_ffn_tensor_pattern`, and
+`rms_norm_final_tensor` must be non-empty strings when provided, and
+`context_tokens` must be a positive integer. Invalid model metadata is rejected
+during model load instead of being silently ignored by later model listings,
+embedding routes, decoder graph construction, or runner argument mapping.
 `king_inference_token_decode()` and `King\Inference\Model::tokenDecode()`
 decode one native token id through the tokenizer loaded from the same GGUF
 artifact; local runners use that surface instead of reading tokenizer arrays
@@ -345,9 +346,11 @@ extension/src/inference/
 ├── resource_policy.inc
 ├── state.inc
 ├── stream_events.inc
+├── tensor_attention_resolver.inc
 ├── tensor_graph.inc
 ├── tensor_graph_kv.inc
 ├── tensor_resolver.inc
+├── tensor_rms_norm_resolver.inc
 ├── tensor_graph_ops.inc
 ├── tensor_graph_sampling.inc
 ├── tensor_math.inc
@@ -410,7 +413,12 @@ configured `{layer}` patterns first, then known GGUF layer-name patterns, and
 finally a guarded layer/name/shape scan. Shape validation uses the loaded
 embedding length, attention head count, KV head count, and key/value head
 dimensions, so grouped-query attention tensors are not mistaken for full-width
-query projections.
+query projections. `tensor_rms_norm_resolver.inc` resolves per-layer
+attention/feed-forward RMSNorm tensors and the final output RMSNorm tensor. It
+checks configured `{layer}` patterns first for layer norms, direct configured
+final tensor names first for the final norm, then known GGUF/HF-style names,
+and finally guarded name/shape scans. Shape validation requires rank-1 tensors
+whose width matches the loaded embedding length.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
@@ -441,13 +449,16 @@ additionally exposes `native_model_mapped`, `native_map_bytes`,
 `native_tokenizer_merge_count`, `tokenization_ready`, and
 `paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`
 and `resolved_tensors.token_embedding` plus
-`resolved_tensors.output_projection` plus `resolved_tensors.attention`, so
-callers can inspect the selected embedding, logits projection, and per-layer
-attention tensors before building decoder graphs. The output projection entry
-includes `tied_token_embedding=true` when the model uses the token embedding
-matrix for logits projection. The attention entry exposes one layer record per
-GGUF block with `query`, `key`, `value`, and `output` entries, including the
-resolved tensor name, source, status, and expected matrix dimensions.
+`resolved_tensors.output_projection` plus `resolved_tensors.attention` plus
+`resolved_tensors.rms_norm`, so callers can inspect the selected embedding,
+logits projection, per-layer attention tensors, and RMSNorm weights before
+building decoder graphs. The output projection entry includes
+`tied_token_embedding=true` when the model uses the token embedding matrix for
+logits projection. The attention entry exposes one layer record per GGUF block
+with `query`, `key`, `value`, and `output` entries, including the resolved
+tensor name, source, status, and expected matrix dimensions. The RMSNorm entry
+exposes one layer record per GGUF block with `attention` and `feed_forward`
+entries plus a `final` entry for the output norm.
 `backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
 selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King

@@ -139,6 +139,9 @@ static zend_result king_inference_validate_model_config(zval *config, const char
         || king_inference_validate_optional_string_config(config, "attention_key_tensor_pattern", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "attention_value_tensor_pattern", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "attention_output_tensor_pattern", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "rms_norm_attention_tensor_pattern", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "rms_norm_ffn_tensor_pattern", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "rms_norm_final_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS
         || king_inference_validate_optional_bool_alias_config(config, "with_memory", "with-memory", function_name) != SUCCESS
         || king_inference_validate_gpu_config(config, function_name) != SUCCESS) {
