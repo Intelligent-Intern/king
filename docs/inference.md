@@ -232,9 +232,11 @@ exposes it. King also compares the configured model artifact size with the
 reported free VRAM and reports `model_vram_admitted=false` when the artifact
 alone cannot fit. Once a model is loaded, the same `gpu_runtime` payload also
 includes the paged KV-cache estimate from context length, layer count, KV heads,
-key/value dimensions, and element size. Thermal guardrails still come from the
-configured sensor path or command, because operators may prefer platform-specific
-sensor files over driver-level telemetry.
+key/value dimensions, and element size. Loaded-model readiness then compares
+`artifact_bytes + kv_cache_estimated_bytes` against `free_vram_bytes` and reports
+the result through `runtime_vram_fits_free`. Thermal guardrails still come from
+the configured sensor path or command, because operators may prefer
+platform-specific sensor files over driver-level telemetry.
 
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status

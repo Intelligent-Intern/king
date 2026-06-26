@@ -460,7 +460,13 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "artifact_readable", artifact_readable);
     add_assoc_bool(return_value, "artifact_size_available", artifact_size_available);
     add_assoc_long(return_value, "artifact_bytes", (zend_long) artifact_bytes);
+    add_assoc_bool(return_value, "free_vram_available", cuda_status.memory_info_available);
+    add_assoc_long(return_value, "free_vram_bytes", (zend_long) cuda_status.first_device_free_memory_bytes);
     add_assoc_long(return_value, "model_vram_required_bytes", (zend_long) artifact_bytes);
+    add_assoc_long(return_value, "runtime_vram_required_bytes", (zend_long) artifact_bytes);
+    add_assoc_string(return_value, "runtime_vram_required_source", "artifact_only");
+    add_assoc_bool(return_value, "runtime_vram_compared_to_free", vram_admission_checked);
+    add_assoc_bool(return_value, "runtime_vram_fits_free", model_vram_admitted);
     add_assoc_bool(return_value, "kv_cache_estimate_available", false);
     add_assoc_long(return_value, "kv_cache_estimated_bytes", 0);
     add_assoc_long(return_value, "kv_cache_context_tokens", 0);
@@ -538,8 +544,18 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     zval *layers;
     zval *page_tokens;
     zval *element_bytes;
+    zval *artifact_bytes_value;
+    zval *free_vram_bytes_value;
+    zval *previous_model_vram_admitted;
     bool estimate_available = false;
+    bool compared_to_free = false;
+    bool fits_free = false;
+    bool overflow = false;
+    bool previous_model_vram_admitted_bool = false;
+    zend_long artifact_bytes = 0;
     zend_long estimated_bytes = 0;
+    zend_long free_vram_bytes = 0;
+    zend_long runtime_required_bytes = 0;
 
     if (Z_ISUNDEF(model->paged_kv_cache_plan) || Z_TYPE(model->paged_kv_cache_plan) != IS_ARRAY) {
         return;
@@ -564,6 +580,38 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
         estimate_available = true;
         estimated_bytes = Z_LVAL_P(max_sequence_bytes);
     }
+
+    artifact_bytes_value = zend_hash_str_find(
+        Z_ARRVAL_P(return_value),
+        "artifact_bytes",
+        sizeof("artifact_bytes") - 1
+    );
+    free_vram_bytes_value = zend_hash_str_find(
+        Z_ARRVAL_P(return_value),
+        "free_vram_bytes",
+        sizeof("free_vram_bytes") - 1
+    );
+    previous_model_vram_admitted = zend_hash_str_find(
+        Z_ARRVAL_P(return_value),
+        "model_vram_admitted",
+        sizeof("model_vram_admitted") - 1
+    );
+    if (artifact_bytes_value != NULL && Z_TYPE_P(artifact_bytes_value) == IS_LONG && Z_LVAL_P(artifact_bytes_value) > 0) {
+        artifact_bytes = Z_LVAL_P(artifact_bytes_value);
+    }
+    if (free_vram_bytes_value != NULL && Z_TYPE_P(free_vram_bytes_value) == IS_LONG && Z_LVAL_P(free_vram_bytes_value) > 0) {
+        free_vram_bytes = Z_LVAL_P(free_vram_bytes_value);
+    }
+    previous_model_vram_admitted_bool = previous_model_vram_admitted != NULL
+        && zend_is_true(previous_model_vram_admitted);
+    if (estimate_available && estimated_bytes > ZEND_LONG_MAX - artifact_bytes) {
+        overflow = true;
+        runtime_required_bytes = ZEND_LONG_MAX;
+    } else {
+        runtime_required_bytes = artifact_bytes + (estimate_available ? estimated_bytes : 0);
+    }
+    compared_to_free = runtime_required_bytes > 0 && free_vram_bytes > 0;
+    fits_free = compared_to_free && !overflow && runtime_required_bytes <= free_vram_bytes;
 
     add_assoc_bool(return_value, "kv_cache_estimate_available", estimate_available);
     add_assoc_long(return_value, "kv_cache_estimated_bytes", estimate_available ? estimated_bytes : 0);
@@ -592,6 +640,27 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
         "kv_cache_estimate_source",
         estimate_available ? "paged_kv_cache_plan" : "paged_kv_cache_plan_incomplete"
     );
+    add_assoc_long(return_value, "model_vram_required_bytes", runtime_required_bytes);
+    add_assoc_long(return_value, "runtime_vram_required_bytes", runtime_required_bytes);
+    add_assoc_string(
+        return_value,
+        "runtime_vram_required_source",
+        estimate_available ? "artifact_plus_kv_cache" : "artifact_only"
+    );
+    add_assoc_bool(return_value, "runtime_vram_compared_to_free", compared_to_free);
+    add_assoc_bool(return_value, "runtime_vram_fits_free", fits_free);
+    if (estimate_available) {
+        add_assoc_bool(return_value, "model_vram_admitted", fits_free);
+    }
+    if (previous_model_vram_admitted_bool
+        && compared_to_free
+        && !fits_free) {
+        add_assoc_string(
+            return_value,
+            "reason",
+            overflow ? "gpu_required_vram_overflow" : "gpu_required_vram_exceeds_free_vram"
+        );
+    }
 }
 
 static void king_inference_gpu_runtime_status_from_compute(
