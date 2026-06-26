@@ -230,9 +230,11 @@ available, checks driver initialization and device visibility, and reports the
 first CUDA device name, total memory, and current free memory where the driver
 exposes it. King also compares the configured model artifact size with the
 reported free VRAM and reports `model_vram_admitted=false` when the artifact
-alone cannot fit. Thermal guardrails still come from the configured sensor path
-or command, because operators may prefer platform-specific sensor files over
-driver-level telemetry.
+alone cannot fit. Once a model is loaded, the same `gpu_runtime` payload also
+includes the paged KV-cache estimate from context length, layer count, KV heads,
+key/value dimensions, and element size. Thermal guardrails still come from the
+configured sensor path or command, because operators may prefer platform-specific
+sensor files over driver-level telemetry.
 
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status

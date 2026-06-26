@@ -461,6 +461,13 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "artifact_size_available", artifact_size_available);
     add_assoc_long(return_value, "artifact_bytes", (zend_long) artifact_bytes);
     add_assoc_long(return_value, "model_vram_required_bytes", (zend_long) artifact_bytes);
+    add_assoc_bool(return_value, "kv_cache_estimate_available", false);
+    add_assoc_long(return_value, "kv_cache_estimated_bytes", 0);
+    add_assoc_long(return_value, "kv_cache_context_tokens", 0);
+    add_assoc_long(return_value, "kv_cache_layers", 0);
+    add_assoc_long(return_value, "kv_cache_page_tokens", 0);
+    add_assoc_long(return_value, "kv_cache_element_bytes", 0);
+    add_assoc_string(return_value, "kv_cache_estimate_source", "unavailable");
     add_assoc_bool(return_value, "vram_admission_checked", vram_admission_checked);
     add_assoc_bool(return_value, "model_vram_admitted", model_vram_admitted);
     add_assoc_long(return_value, "max_gpu_layers", max_gpu_layers);
@@ -519,6 +526,72 @@ static void king_inference_gpu_runtime_status_array(
     }
     add_assoc_bool(&thermal, "temperature_ok", temperature_available && temperature_ok);
     add_assoc_zval(return_value, "thermal", &thermal);
+}
+
+static void king_inference_gpu_runtime_add_kv_cache_estimate(
+    zval *return_value,
+    king_inference_model_object *model
+) {
+    zval *plan;
+    zval *max_sequence_bytes;
+    zval *max_context_tokens;
+    zval *layers;
+    zval *page_tokens;
+    zval *element_bytes;
+    bool estimate_available = false;
+    zend_long estimated_bytes = 0;
+
+    if (Z_ISUNDEF(model->paged_kv_cache_plan) || Z_TYPE(model->paged_kv_cache_plan) != IS_ARRAY) {
+        return;
+    }
+
+    plan = &model->paged_kv_cache_plan;
+    max_sequence_bytes = zend_hash_str_find(
+        Z_ARRVAL_P(plan),
+        "max_sequence_bytes",
+        sizeof("max_sequence_bytes") - 1
+    );
+    max_context_tokens = zend_hash_str_find(
+        Z_ARRVAL_P(plan),
+        "max_context_tokens",
+        sizeof("max_context_tokens") - 1
+    );
+    layers = zend_hash_str_find(Z_ARRVAL_P(plan), "layers", sizeof("layers") - 1);
+    page_tokens = zend_hash_str_find(Z_ARRVAL_P(plan), "page_tokens", sizeof("page_tokens") - 1);
+    element_bytes = zend_hash_str_find(Z_ARRVAL_P(plan), "element_bytes", sizeof("element_bytes") - 1);
+
+    if (max_sequence_bytes != NULL && Z_TYPE_P(max_sequence_bytes) == IS_LONG && Z_LVAL_P(max_sequence_bytes) > 0) {
+        estimate_available = true;
+        estimated_bytes = Z_LVAL_P(max_sequence_bytes);
+    }
+
+    add_assoc_bool(return_value, "kv_cache_estimate_available", estimate_available);
+    add_assoc_long(return_value, "kv_cache_estimated_bytes", estimate_available ? estimated_bytes : 0);
+    add_assoc_long(
+        return_value,
+        "kv_cache_context_tokens",
+        max_context_tokens != NULL && Z_TYPE_P(max_context_tokens) == IS_LONG ? Z_LVAL_P(max_context_tokens) : 0
+    );
+    add_assoc_long(
+        return_value,
+        "kv_cache_layers",
+        layers != NULL && Z_TYPE_P(layers) == IS_LONG ? Z_LVAL_P(layers) : 0
+    );
+    add_assoc_long(
+        return_value,
+        "kv_cache_page_tokens",
+        page_tokens != NULL && Z_TYPE_P(page_tokens) == IS_LONG ? Z_LVAL_P(page_tokens) : 0
+    );
+    add_assoc_long(
+        return_value,
+        "kv_cache_element_bytes",
+        element_bytes != NULL && Z_TYPE_P(element_bytes) == IS_LONG ? Z_LVAL_P(element_bytes) : 0
+    );
+    add_assoc_string(
+        return_value,
+        "kv_cache_estimate_source",
+        estimate_available ? "paged_kv_cache_plan" : "paged_kv_cache_plan_incomplete"
+    );
 }
 
 static void king_inference_gpu_runtime_status_from_compute(
@@ -586,4 +659,5 @@ static void king_inference_gpu_runtime_status_from_model(
         max_temperature_c,
         allow_unmonitored
     );
+    king_inference_gpu_runtime_add_kv_cache_estimate(return_value, model);
 }
