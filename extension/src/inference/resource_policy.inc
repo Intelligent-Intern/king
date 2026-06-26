@@ -33,6 +33,21 @@ static zend_long king_inference_vram_reserve_mb(zval *config)
     );
 }
 
+static zend_long king_inference_min_free_vram_mb(zval *config)
+{
+    zval *gpu = king_inference_array_find(config, "gpu");
+
+    if (gpu == NULL || Z_TYPE_P(gpu) != IS_ARRAY) {
+        return king_high_perf_compute_ai_config.inference_gpu_min_free_vram_mb;
+    }
+
+    return king_inference_long_from_array(
+        gpu,
+        "min_free_vram_mb",
+        king_high_perf_compute_ai_config.inference_gpu_min_free_vram_mb
+    );
+}
+
 static zend_result king_inference_validate_gpu_bool_field(
     zval *config,
     const char *field_name,
@@ -178,6 +193,12 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
             gpu,
             "vram_reserve_mb",
             "gpu.vram_reserve_mb",
+            function_name
+        ) != SUCCESS
+        || king_inference_validate_gpu_non_negative_long_field(
+            gpu,
+            "min_free_vram_mb",
+            "gpu.min_free_vram_mb",
             function_name
         ) != SUCCESS) {
         return FAILURE;

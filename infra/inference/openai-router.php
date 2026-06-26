@@ -59,6 +59,7 @@ $backend = is_string($runner) && $runner !== '' && is_executable($runner)
 
 $gpuLayers = (int) (getenv('KING_INFERENCE_GPU_LAYERS') ?: king_local_ini_int('king.inference_gpu_max_gpu_layers', 0));
 $gpuVramReserveMb = king_local_ini_int('king.inference_gpu_vram_reserve_mb', 2048);
+$gpuMinFreeVramMb = king_local_ini_int('king.inference_gpu_min_free_vram_mb', 4096);
 $gpuEnabled = king_local_ini_bool('king.gpu_bindings_enable') && $gpuLayers > 0;
 $gpuThermal = [
     'max_temperature_c' => king_local_ini_float('king.inference_gpu_thermal_max_temperature_c', 78.0),
@@ -73,7 +74,7 @@ if ($gpuSensorCommand !== '') {
     $gpuThermal['sensor_command'] = $gpuSensorCommand;
 }
 
-$loadModel = static function (string $name, string $modelPath, bool $useGpu = false) use ($backend, $gpuLayers, $gpuVramReserveMb, $gpuThermal): object {
+$loadModel = static function (string $name, string $modelPath, bool $useGpu = false) use ($backend, $gpuLayers, $gpuVramReserveMb, $gpuMinFreeVramMb, $gpuThermal): object {
     $config = [
         'name' => $name,
         'artifact_path' => $modelPath,
@@ -86,6 +87,7 @@ $loadModel = static function (string $name, string $modelPath, bool $useGpu = fa
             'enabled' => true,
             'max_gpu_layers' => $gpuLayers,
             'vram_reserve_mb' => $gpuVramReserveMb,
+            'min_free_vram_mb' => $gpuMinFreeVramMb,
             'thermal' => $gpuThermal,
         ];
     }
@@ -105,6 +107,7 @@ if (isset($models[$gpuModelName])) {
     fwrite(STDERR, "GPU/large model artifact: {$gpuModelPath}\n");
     fwrite(STDERR, "GPU layers: {$gpuLayers}\n");
     fwrite(STDERR, "GPU VRAM reserve: {$gpuVramReserveMb} MB\n");
+    fwrite(STDERR, "GPU minimum free VRAM: {$gpuMinFreeVramMb} MB\n");
     fwrite(STDERR, 'GPU thermal source: ' . ($gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand) . "\n");
 } else if (is_file($gpuModelPath) && is_readable($gpuModelPath)) {
     fwrite(STDERR, "GPU/large model not registered because GPU bindings or GPU layers are disabled.\n");

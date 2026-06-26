@@ -294,18 +294,6 @@ static bool king_inference_gpu_status_backend_supported(const char *backend)
         || strcasecmp(backend, "cuda") == 0;
 }
 
-static zend_long king_inference_gpu_status_reserve_bytes(zend_long reserve_mb)
-{
-    if (reserve_mb <= 0) {
-        return 0;
-    }
-    if (reserve_mb > ZEND_LONG_MAX / 1048576) {
-        return ZEND_LONG_MAX;
-    }
-
-    return reserve_mb * 1048576;
-}
-
 static const char *king_inference_gpu_status_reason(
     bool gpu_enabled,
     bool process_bindings_enabled,
@@ -320,6 +308,7 @@ static const char *king_inference_gpu_status_reason(
     bool temperature_ok,
     bool driver_visible,
     bool vram_admission_checked,
+    bool free_vram_floor_met,
     bool model_vram_admitted,
     bool model_vram_fits_without_reserve
 ) {
@@ -346,6 +335,9 @@ static const char *king_inference_gpu_status_reason(
     }
     if (!vram_admission_checked) {
         return "gpu_vram_status_unavailable";
+    }
+    if (!free_vram_floor_met) {
+        return "gpu_free_vram_below_configured_floor";
     }
     if (!model_vram_admitted) {
         if (model_vram_fits_without_reserve) {
@@ -378,6 +370,7 @@ static void king_inference_gpu_runtime_status_array(
     const char *artifact_path,
     zend_long max_gpu_layers,
     zend_long vram_reserve_mb,
+    zend_long min_free_vram_mb,
     const char *thermal_sensor_path,
     const char *thermal_sensor_command,
     double max_temperature_c,
@@ -401,9 +394,7 @@ static void king_inference_gpu_runtime_status_array(
     bool model_vram_fits_without_reserve;
     bool driver_visible;
     bool config_ready;
-    zend_long free_vram_bytes = 0;
-    zend_long vram_reserve_bytes = king_inference_gpu_status_reserve_bytes(vram_reserve_mb);
-    zend_long free_vram_after_reserve_bytes = 0;
+    king_inference_gpu_vram_policy vram_policy;
     double temperature_c = 0.0;
     const char *reason;
 
@@ -411,19 +402,18 @@ static void king_inference_gpu_runtime_status_array(
     driver_visible = (cuda_status.initialized && cuda_status.device_count > 0)
         || king_inference_gpu_status_driver_visible();
     artifact_size_available = king_inference_gpu_status_artifact_size(artifact_path, &artifact_bytes);
-    if (cuda_status.memory_info_available) {
-        free_vram_bytes = cuda_status.first_device_free_memory_bytes > (size_t) ZEND_LONG_MAX
-            ? ZEND_LONG_MAX
-            : (zend_long) cuda_status.first_device_free_memory_bytes;
-        free_vram_after_reserve_bytes = free_vram_bytes > vram_reserve_bytes
-            ? free_vram_bytes - vram_reserve_bytes
-            : 0;
-    }
+    vram_policy = king_inference_gpu_vram_policy_from_free(
+        cuda_status.memory_info_available,
+        cuda_status.first_device_free_memory_bytes,
+        vram_reserve_mb,
+        min_free_vram_mb
+    );
     vram_admission_checked = artifact_size_available && cuda_status.memory_info_available;
     model_vram_fits_without_reserve = vram_admission_checked
-        && artifact_bytes <= (size_t) free_vram_bytes;
+        && artifact_bytes <= (size_t) vram_policy.free_bytes;
     model_vram_admitted = vram_admission_checked
-        && artifact_bytes <= (size_t) free_vram_after_reserve_bytes;
+        && vram_policy.floor_met
+        && artifact_bytes <= (size_t) vram_policy.free_after_reserve_bytes;
 
     if (thermal_path_configured) {
         temperature_available = king_inference_gpu_status_read_temperature_path(
@@ -450,6 +440,7 @@ static void king_inference_gpu_runtime_status_array(
         && artifact_readable
         && max_gpu_layers > 0
         && vram_admission_checked
+        && vram_policy.floor_met
         && model_vram_admitted
         && driver_visible
         && ((thermal_monitored && temperature_available && temperature_ok)
@@ -469,6 +460,7 @@ static void king_inference_gpu_runtime_status_array(
         temperature_ok,
         driver_visible,
         vram_admission_checked,
+        vram_policy.floor_met,
         model_vram_admitted,
         model_vram_fits_without_reserve
     );
@@ -493,10 +485,13 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "artifact_size_available", artifact_size_available);
     add_assoc_long(return_value, "artifact_bytes", (zend_long) artifact_bytes);
     add_assoc_bool(return_value, "free_vram_available", cuda_status.memory_info_available);
-    add_assoc_long(return_value, "free_vram_bytes", free_vram_bytes);
-    add_assoc_long(return_value, "vram_reserve_mb", vram_reserve_mb);
-    add_assoc_long(return_value, "vram_reserve_bytes", vram_reserve_bytes);
-    add_assoc_long(return_value, "free_vram_after_reserve_bytes", free_vram_after_reserve_bytes);
+    add_assoc_long(return_value, "free_vram_bytes", vram_policy.free_bytes);
+    add_assoc_long(return_value, "vram_reserve_mb", vram_policy.reserve_mb);
+    add_assoc_long(return_value, "vram_reserve_bytes", vram_policy.reserve_bytes);
+    add_assoc_long(return_value, "min_free_vram_mb", vram_policy.min_free_mb);
+    add_assoc_long(return_value, "min_free_vram_bytes", vram_policy.min_free_bytes);
+    add_assoc_bool(return_value, "free_vram_floor_met", vram_policy.floor_met);
+    add_assoc_long(return_value, "free_vram_after_reserve_bytes", vram_policy.free_after_reserve_bytes);
     add_assoc_long(return_value, "model_vram_required_bytes", (zend_long) artifact_bytes);
     add_assoc_long(return_value, "runtime_vram_required_bytes", (zend_long) artifact_bytes);
     add_assoc_string(return_value, "runtime_vram_required_source", "artifact_only");
@@ -582,11 +577,13 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     zval *artifact_bytes_value;
     zval *free_vram_bytes_value;
     zval *free_vram_after_reserve_bytes_value;
+    zval *free_vram_floor_met_value;
     zval *previous_model_vram_admitted;
     bool estimate_available = false;
     bool compared_to_free = false;
     bool fits_free = false;
     bool fits_without_reserve = false;
+    bool free_vram_floor_met = false;
     bool overflow = false;
     bool previous_model_vram_admitted_bool = false;
     zend_long artifact_bytes = 0;
@@ -634,6 +631,11 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
         "free_vram_after_reserve_bytes",
         sizeof("free_vram_after_reserve_bytes") - 1
     );
+    free_vram_floor_met_value = zend_hash_str_find(
+        Z_ARRVAL_P(return_value),
+        "free_vram_floor_met",
+        sizeof("free_vram_floor_met") - 1
+    );
     previous_model_vram_admitted = zend_hash_str_find(
         Z_ARRVAL_P(return_value),
         "model_vram_admitted",
@@ -654,6 +656,7 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     }
     previous_model_vram_admitted_bool = previous_model_vram_admitted != NULL
         && zend_is_true(previous_model_vram_admitted);
+    free_vram_floor_met = free_vram_floor_met_value != NULL && zend_is_true(free_vram_floor_met_value);
     if (estimate_available && estimated_bytes > ZEND_LONG_MAX - artifact_bytes) {
         overflow = true;
         runtime_required_bytes = ZEND_LONG_MAX;
@@ -661,7 +664,7 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
         runtime_required_bytes = artifact_bytes + (estimate_available ? estimated_bytes : 0);
     }
     compared_to_free = runtime_required_bytes > 0 && effective_free_vram_bytes > 0;
-    fits_free = compared_to_free && !overflow && runtime_required_bytes <= effective_free_vram_bytes;
+    fits_free = free_vram_floor_met && compared_to_free && !overflow && runtime_required_bytes <= effective_free_vram_bytes;
     fits_without_reserve = free_vram_bytes > 0 && !overflow && runtime_required_bytes <= free_vram_bytes;
 
     add_assoc_bool(return_value, "kv_cache_estimate_available", estimate_available);
@@ -737,6 +740,7 @@ static void king_inference_gpu_runtime_status_from_compute(
         compute->inference_gpu_model_artifact,
         compute->inference_gpu_max_gpu_layers,
         compute->inference_gpu_vram_reserve_mb,
+        compute->inference_gpu_min_free_vram_mb,
         compute->inference_gpu_thermal_sensor_path,
         compute->inference_gpu_thermal_sensor_command,
         compute->inference_gpu_thermal_max_temperature_c,
@@ -768,6 +772,7 @@ static void king_inference_gpu_runtime_status_from_model(
         ? king_inference_double_from_array(thermal, "max_temperature_c", 80.0)
         : 80.0;
     zend_long vram_reserve_mb = king_inference_vram_reserve_mb(&model->config);
+    zend_long min_free_vram_mb = king_inference_min_free_vram_mb(&model->config);
     bool allow_unmonitored = thermal != NULL
         && Z_TYPE_P(thermal) == IS_ARRAY
         && king_inference_bool_from_array(thermal, "allow_unmonitored_gpu", false);
@@ -781,6 +786,7 @@ static void king_inference_gpu_runtime_status_from_model(
         model->artifact_path != NULL ? ZSTR_VAL(model->artifact_path) : "",
         king_inference_max_gpu_layers(&model->config),
         vram_reserve_mb,
+        min_free_vram_mb,
         thermal_sensor_path,
         thermal_sensor_command,
         max_temperature_c,

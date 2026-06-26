@@ -90,6 +90,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         "inference.gpu_vram_reserve_mb",
         cfg->compute_ai.inference_gpu_vram_reserve_mb
     );
+    add_assoc_long(
+        target,
+        "inference.gpu_min_free_vram_mb",
+        cfg->compute_ai.inference_gpu_min_free_vram_mb
+    );
     add_assoc_string(
         target,
         "inference.gpu_thermal_sensor_path",

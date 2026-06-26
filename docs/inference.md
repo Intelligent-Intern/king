@@ -145,7 +145,8 @@ be explicitly enabled in the model config, the global
 path or a thermal sensor command is required unless the operator explicitly
 accepts unmonitored GPU execution.
 The `gpu` config itself is strict: `gpu.enabled` must be a boolean,
-`gpu.max_gpu_layers` and `gpu.vram_reserve_mb` must be non-negative integers,
+`gpu.max_gpu_layers`, `gpu.vram_reserve_mb`, and `gpu.min_free_vram_mb` must be
+non-negative integers,
 `gpu.thermal` must be an array when provided, `gpu.thermal.sensor_path` and
 `gpu.thermal.sensor_command` must be non-empty strings when provided,
 `gpu.thermal.max_temperature_c` must be a positive finite number, and
@@ -165,6 +166,7 @@ king.inference_gpu_model_name=gemma4:12b
 king.inference_gpu_model_artifact=/models/gemma4-12b.gguf
 king.inference_gpu_max_gpu_layers=99
 king.inference_gpu_vram_reserve_mb=2048
+king.inference_gpu_min_free_vram_mb=4096
 king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
 king.inference_gpu_thermal_sensor_command=
 king.inference_gpu_thermal_max_temperature_c=78
@@ -194,6 +196,7 @@ $config = King\Config::new([
     'inference.gpu_model_artifact' => '/models/gemma4-12b.gguf',
     'inference.gpu_max_gpu_layers' => 48,
     'inference.gpu_vram_reserve_mb' => 2048,
+    'inference.gpu_min_free_vram_mb' => 4096,
     'inference.gpu_thermal_sensor_path' => '/sys/class/hwmon/hwmon0/temp1_input',
     'inference.gpu_thermal_sensor_command' => '',
     'inference.gpu_thermal_max_temperature_c' => 78.0,
@@ -239,9 +242,13 @@ key/value dimensions, and element size. Loaded-model readiness then compares
 `free_vram_after_reserve_bytes`, which is the raw `free_vram_bytes` minus the
 configured `inference_gpu_vram_reserve_mb`. This keeps desktop VRAM available
 for the compositor and other operator work while still exposing both raw and
-reserved admission values through `gpu_runtime`. Thermal guardrails still come
-from the configured sensor path or command, because operators may prefer
-platform-specific sensor files over driver-level telemetry.
+reserved admission values through `gpu_runtime`. King also enforces
+`inference_gpu_min_free_vram_mb` as a hard floor: when the driver reports less
+free VRAM than that configured minimum, GPU readiness fails closed with
+`gpu_free_vram_below_configured_floor` before model execution is considered.
+Thermal guardrails still come from the configured sensor path or command,
+because operators may prefer platform-specific sensor files over driver-level
+telemetry.
 
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status
@@ -1049,6 +1056,7 @@ $model = king_inference_model_load([
         'enabled' => true,
         'max_gpu_layers' => 24,
         'vram_reserve_mb' => 2048,
+        'min_free_vram_mb' => 4096,
         'thermal' => [
             'sensor_path' => '/sys/class/hwmon/hwmon2/temp1_input',
             'max_temperature_c' => 78.0,
