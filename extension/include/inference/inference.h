@@ -96,6 +96,7 @@ typedef struct _king_inference_model_object {
     int cuda_attention_softmax_result;
     int cuda_attention_values_result;
     int cuda_ffn_swiglu_result;
+    int cuda_output_projection_result;
     char cuda_context_error[160];
     char cuda_device_allocator_error[160];
     char cuda_weight_upload_error[160];
@@ -106,6 +107,7 @@ typedef struct _king_inference_model_object {
     char cuda_attention_softmax_error[160];
     char cuda_attention_values_error[160];
     char cuda_ffn_swiglu_error[160];
+    char cuda_output_projection_error[160];
     size_t cuda_device_bytes_allocated;
     size_t cuda_device_peak_bytes_allocated;
     size_t cuda_device_allocation_count;
@@ -125,6 +127,7 @@ typedef struct _king_inference_model_object {
     size_t cuda_attention_softmax_launch_count;
     size_t cuda_attention_values_launch_count;
     size_t cuda_ffn_swiglu_launch_count;
+    size_t cuda_output_projection_launch_count;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
@@ -173,6 +176,12 @@ typedef struct _king_inference_model_object {
     bool cuda_ffn_swiglu_module_loaded;
     bool cuda_ffn_swiglu_f32_available;
     bool cuda_ffn_swiglu_path_available;
+    bool cuda_output_projection_attempted;
+    bool cuda_output_projection_available;
+    bool cuda_output_projection_resolved;
+    bool cuda_output_projection_uploaded;
+    bool cuda_output_projection_tied_token_embedding;
+    bool cuda_output_projection_q8_0_available;
     zend_object std;
 } king_inference_model_object;
 

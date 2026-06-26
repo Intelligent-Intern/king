@@ -339,6 +339,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     if (intern->artifact_path != NULL) {
         zend_string_release(intern->artifact_path);
     }
+    king_inference_cuda_output_projection_release(intern);
     king_inference_cuda_ffn_swiglu_release(intern);
     king_inference_cuda_attention_values_release(intern);
     king_inference_cuda_attention_softmax_release(intern);
@@ -376,6 +377,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     king_inference_cuda_attention_softmax_init(intern, backend_kind);
     king_inference_cuda_attention_values_init(intern, backend_kind);
     king_inference_cuda_ffn_swiglu_init(intern, backend_kind);
+    king_inference_cuda_output_projection_init(intern, backend_kind);
 
     king_set_error("");
     return SUCCESS;

@@ -69,6 +69,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "cuda_attention_softmax.inc"
 #include "cuda_attention_values.inc"
 #include "cuda_ffn_swiglu.inc"
+#include "cuda_output_projection.inc"
 #include "token_decode_graph_builder.inc"
 #include "tensor_graph.inc"
 #include "paged_kv_cache.inc"
