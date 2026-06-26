@@ -125,206 +125,22 @@ function graph_options(array $gguf): array
     ];
 }
 
-function inv_freqs(int $headDim, float $base): array
-{
-    $freqs = [];
-    for ($i = 0; $i < intdiv($headDim, 2); $i++) {
-        $freqs[] = 1.0 / ($base ** (($i * 2.0) / $headDim));
-    }
-    return $freqs;
-}
-
-function op(array &$ops, string $id, string $name, array $fields): string
-{
-    $ops[] = ['id' => $id, 'op' => $name] + $fields;
-    return $id;
-}
-
-function build_step_graph(
-    int $tokenId,
-    int $position,
-    ?array $state,
-    array $gguf,
-    array $sample,
-    bool $emitToken
-): array {
-    $layers = (int) ($gguf['block_count'] ?? 0);
-    $heads = (int) ($gguf['attention_head_count'] ?? 0);
-    $headDim = (int) ($gguf['attention_key_length'] ?? 0);
-    $slidingWindow = (int) ($gguf['attention_sliding_window'] ?? 0);
-    $vocab = (int) ($gguf['tokenizer_token_count'] ?? 0);
-
-    if (($gguf['architecture'] ?? '') !== 'gemma3') {
-        fail('only gemma3 GGUF artifacts are supported by this native runner right now');
-    }
-    if ($layers <= 0 || $heads <= 0 || $headDim <= 0 || $vocab <= 0) {
-        fail('model is missing required Gemma3 architecture metadata');
-    }
-
-    $ops = [];
-    $hidden = op($ops, 'x', 'embedding', [
-        'tensor' => 'token_embd.weight',
-        'token_id' => $tokenId,
-    ]);
-    $rope = inv_freqs($headDim, 10000.0);
-    $slotStart = $slidingWindow > 0 ? max(0, $position - $slidingWindow + 1) : 0;
-    $slotCount = $position - $slotStart + 1;
-    $attentionScale = 1.0 / sqrt((float) $headDim);
-
-    for ($layer = 0; $layer < $layers; $layer++) {
-        $prefix = "blk.{$layer}";
-        $attnNorm = op($ops, "l{$layer}_attn_norm", 'rms_norm', [
-            'input' => $hidden,
-            'weight' => "{$prefix}.attn_norm.weight",
-            'epsilon' => 1e-6,
-        ]);
-        $query = op($ops, "l{$layer}_q", 'linear', [
-            'input' => $attnNorm,
-            'weight' => "{$prefix}.attn_q.weight",
-        ]);
-        $key = op($ops, "l{$layer}_k", 'linear', [
-            'input' => $attnNorm,
-            'weight' => "{$prefix}.attn_k.weight",
-        ]);
-        $value = op($ops, "l{$layer}_v", 'linear', [
-            'input' => $attnNorm,
-            'weight' => "{$prefix}.attn_v.weight",
-        ]);
-        $keyNorm = op($ops, "l{$layer}_k_norm", 'rms_norm', [
-            'input' => $key,
-            'weight' => "{$prefix}.attn_k_norm.weight",
-            'epsilon' => 1e-6,
-        ]);
-        $keyRope = op($ops, "l{$layer}_k_rope", 'rope', [
-            'input' => $keyNorm,
-            'position' => $position,
-            'head_dim' => $headDim,
-            'inv_freqs' => $rope,
-        ]);
-
-        $contexts = [];
-        for ($head = 0; $head < $heads; $head++) {
-            $qSlice = op($ops, "l{$layer}_h{$head}_q_slice", 'slice', [
-                'input' => $query,
-                'offset' => $head * $headDim,
-                'count' => $headDim,
-            ]);
-            $qNorm = op($ops, "l{$layer}_h{$head}_q_norm", 'rms_norm', [
-                'input' => $qSlice,
-                'weight' => "{$prefix}.attn_q_norm.weight",
-                'epsilon' => 1e-6,
-            ]);
-            $qRope = op($ops, "l{$layer}_h{$head}_q_rope", 'rope', [
-                'input' => $qNorm,
-                'position' => $position,
-                'head_dim' => $headDim,
-                'inv_freqs' => $rope,
-            ]);
-            op($ops, "l{$layer}_h{$head}_kv_write", 'kv_write', [
-                'cache' => "l{$layer}.h{$head}",
-                'slot' => $position,
-                'key' => $keyRope,
-                'value' => $value,
-            ]);
-            $contexts[] = op($ops, "l{$layer}_h{$head}_ctx", 'kv_attention', [
-                'cache' => "l{$layer}.h{$head}",
-                'query' => $qRope,
-                'slot_start' => $slotStart,
-                'slot_count' => $slotCount,
-                'scale' => $attentionScale,
-            ]);
-        }
-
-        $context = op($ops, "l{$layer}_context", 'stack', ['inputs' => $contexts]);
-        $attnOut = op($ops, "l{$layer}_attn_out", 'linear', [
-            'input' => $context,
-            'weight' => "{$prefix}.attn_output.weight",
-        ]);
-        $attnPost = op($ops, "l{$layer}_attn_post", 'rms_norm', [
-            'input' => $attnOut,
-            'weight' => "{$prefix}.post_attention_norm.weight",
-            'epsilon' => 1e-6,
-        ]);
-        $attnResidual = op($ops, "l{$layer}_attn_residual", 'add', [
-            'left' => $hidden,
-            'right' => $attnPost,
-        ]);
-        $ffnNorm = op($ops, "l{$layer}_ffn_norm", 'rms_norm', [
-            'input' => $attnResidual,
-            'weight' => "{$prefix}.ffn_norm.weight",
-            'epsilon' => 1e-6,
-        ]);
-        $gate = op($ops, "l{$layer}_ffn_gate", 'linear', [
-            'input' => $ffnNorm,
-            'weight' => "{$prefix}.ffn_gate.weight",
-        ]);
-        $up = op($ops, "l{$layer}_ffn_up", 'linear', [
-            'input' => $ffnNorm,
-            'weight' => "{$prefix}.ffn_up.weight",
-        ]);
-        $gateAct = op($ops, "l{$layer}_ffn_gate_silu", 'silu', ['input' => $gate]);
-        $gated = op($ops, "l{$layer}_ffn_gated", 'mul', [
-            'left' => $gateAct,
-            'right' => $up,
-        ]);
-        $down = op($ops, "l{$layer}_ffn_down", 'linear', [
-            'input' => $gated,
-            'weight' => "{$prefix}.ffn_down.weight",
-        ]);
-        $ffnPost = op($ops, "l{$layer}_ffn_post", 'rms_norm', [
-            'input' => $down,
-            'weight' => "{$prefix}.post_ffw_norm.weight",
-            'epsilon' => 1e-6,
-        ]);
-        $hidden = op($ops, "l{$layer}_output", 'add', [
-            'left' => $attnResidual,
-            'right' => $ffnPost,
-        ]);
-    }
-
-    $final = op($ops, 'final_norm', 'rms_norm', [
-        'input' => $hidden,
-        'weight' => 'output_norm.weight',
-        'epsilon' => 1e-6,
-    ]);
-    if ($emitToken) {
-        $logits = op($ops, 'logits', 'linear', [
-            'input' => $final,
-            'weight' => 'token_embd.weight',
-            'row_limit' => $vocab,
-        ]);
-        op($ops, 'next_token', 'sample_token', [
-            'logits' => $logits,
-            'temperature' => (float) $sample['temperature'],
-            'top_k' => (int) $sample['top_k'],
-            'top_p' => (float) $sample['top_p'],
-            'seed' => (int) $sample['seed'],
-            'sample_index' => $position,
-        ]);
-    }
-
-    $graph = [
-        'ops' => $ops,
-        'output' => $emitToken ? 'next_token' : $hidden,
-    ];
-    if ($state !== null) {
-        $graph['state'] = $state;
-    }
-
-    return $graph;
-}
-
 function run_step(
     King\Inference\Model $model,
-    int $tokenId,
+    int|array $token,
     int $position,
     ?array $state,
-    array $gguf,
     array $sample,
     bool $emitToken,
     array $options
 ): array {
-    $graph = build_step_graph($tokenId, $position, $state, $gguf, $sample, $emitToken);
+    $decodeOptions = $sample;
+    $decodeOptions['emit_token'] = $emitToken;
+    if ($state !== null) {
+        $decodeOptions['state'] = $state;
+    }
+
+    $graph = king_inference_token_decode_graph($model, $token, $position, $decodeOptions);
     $result = king_inference_graph_run($model, $graph, $options);
     $nextState = isset($result['state']) && is_array($result['state']) ? $result['state'] : null;
 
@@ -380,6 +196,7 @@ if ((int) $args['context'] > 0 && count($tokens) > (int) $args['context']) {
 $graphOptions = graph_options($gguf);
 $state = null;
 $nextToken = null;
+$tokenizedPrompt = ['tokens' => $tokens];
 $sample = [
     'temperature' => (float) $args['temperature'],
     'top_k' => (int) $args['top_k'],
@@ -387,13 +204,12 @@ $sample = [
     'seed' => (int) $args['seed'],
 ];
 
-foreach ($tokens as $index => $token) {
+foreach (array_keys($tokens) as $index) {
     [$nextToken, $state] = run_step(
         $model,
-        (int) $token,
+        $tokenizedPrompt,
         $index,
         $state,
-        $gguf,
         $sample,
         $index === count($tokens) - 1,
         $graphOptions
@@ -423,7 +239,6 @@ while ($nextToken !== null && $generated < (int) $args['tokens']) {
         $nextToken,
         $position,
         $state,
-        $gguf,
         $sample,
         true,
         $graphOptions

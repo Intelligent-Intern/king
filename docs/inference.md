@@ -47,9 +47,12 @@ backend is still available, but it must be selected intentionally with
 a runner-bearing backend config.
 
 The repository ships `bin/king-local-infer` as the default local runner. It
-loads the current King extension, materializes a Gemma3 GGUF model through the
-native loader, builds token-step graphs with KV state, and streams decoded token
-text on stdout for the OpenAI-compatible router.
+loads the current King extension, materializes a GGUF model through the native
+loader, builds token-step graphs through `king_inference_token_decode_graph()`,
+keeps KV state between steps, and streams decoded token text on stdout for the
+OpenAI-compatible router. Prompt processing passes the tokenizer output into the
+graph builder, so each `tokens[position]` value enters the embedding operation
+and then flows through every resolved transformer layer in the native graph.
 
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
 `infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
