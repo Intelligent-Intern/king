@@ -366,9 +366,9 @@ therefore exposes the configured large model with explicit
 CPU accidentally.
 The refusal is not a generic placeholder: `gpu_runtime.decoder_blockers`
 identifies the missing runtime layers between the available CUDA leaves and
-plain-text chat generation. Those blockers currently are device KV cache,
-decoder graph executor, and prompt decoder loop for a loaded GPU model whose
-embedding row loader and device vector ops initialized successfully.
+plain-text chat generation. Those blockers currently are decoder graph executor
+and prompt decoder loop for a loaded GPU model whose embedding row loader,
+device vector ops, and device KV-cache initialized successfully.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -386,7 +386,8 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_attention_scores_kernel`, `gpu_attention_softmax_kernel`,
 `gpu_attention_value_aggregation_kernel`, `gpu_ffn_swiglu_path`,
 `gpu_output_projection_path`, `gpu_embedding_row_loader`,
-`gpu_device_vector_ops`, `gpu_minimized_logits_readback`,
+`gpu_device_vector_ops`, `gpu_device_kv_cache`,
+`gpu_minimized_logits_readback`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
@@ -394,17 +395,21 @@ GPU backend.
 `silent_cpu_fallback` remain false.
 The GPU model info, native GPU stream contract event, and `/v1/models`
 metadata expose the same boundary with `embedding_row_loader_ready`,
-`device_vector_ops_ready`, `decoder_graph_executor_ready=false`,
-`decoder_prompt_loop_ready=false`, `plain_text_chat_ready=false`, and
-`gpu_plain_text_chat_generation=false`.
+`device_vector_ops_ready`, `device_kv_cache_ready`,
+`decoder_graph_executor_ready=false`, `decoder_prompt_loop_ready=false`,
+`plain_text_chat_ready=false`, and `gpu_plain_text_chat_generation=false`.
 The embedding row loader resolves the selected token embedding tensor, uses the
 uploaded GPU weight cache, and writes one token row into a device-side `float`
 vector. The current kernel supports `F32`, `F16`, `BF16`, and row-aligned
 `Q8_0` embedding tensors.
 The device vector ops leaf provides GPU kernels for `add`, `mul`, `scale`,
 `silu`, `slice`, and `copy_to_offset`; those cover the simple vector operations
-the decoder graph needs before attention and KV-cache execution can be
-orchestrated fully on device.
+the decoder graph needs before attention execution can be orchestrated fully on
+device. The device KV-cache leaf derives its shape from GGUF metadata and the
+paged KV-cache plan, exposes contiguous per-layer/per-head key and value cache
+pointers, and writes key/value vectors with CUDA device-to-device copies. It is
+lazy-allocated: registration reports the runtime surface and byte requirements,
+while the actual key/value buffers are reserved on the first cache write.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,

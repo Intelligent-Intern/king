@@ -90,6 +90,7 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_bool(&event, "decoder_stream_contract_ready", true);
     add_assoc_bool(&event, "embedding_row_loader_ready", model->cuda_embedding_row_available);
     add_assoc_bool(&event, "device_vector_ops_ready", model->cuda_device_vector_ops_available);
+    add_assoc_bool(&event, "device_kv_cache_ready", model->cuda_device_kv_cache_available);
     add_assoc_bool(&event, "decoder_graph_executor_ready", false);
     add_assoc_bool(&event, "decoder_prompt_loop_ready", false);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
@@ -150,6 +151,7 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_bool(return_value, "decoder_stream_contract_ready", true);
     add_assoc_bool(return_value, "embedding_row_loader_ready", intern->cuda_embedding_row_available);
     add_assoc_bool(return_value, "device_vector_ops_ready", intern->cuda_device_vector_ops_available);
+    add_assoc_bool(return_value, "device_kv_cache_ready", intern->cuda_device_kv_cache_available);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);

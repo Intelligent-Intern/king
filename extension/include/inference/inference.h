@@ -82,6 +82,8 @@ typedef struct _king_inference_model_object {
     void *cuda_vector_silu_function;
     void *cuda_vector_slice_function;
     void *cuda_vector_copy_to_offset_function;
+    king_inference_cuda_device_ptr cuda_device_kv_cache_keys;
+    king_inference_cuda_device_ptr cuda_device_kv_cache_values;
     void *cuda_attention_scores_nvrtc_handle;
     void *cuda_attention_scores_module;
     void *cuda_attention_scores_function;
@@ -108,6 +110,7 @@ typedef struct _king_inference_model_object {
     int cuda_rope_result;
     int cuda_embedding_row_result;
     int cuda_device_vector_ops_result;
+    int cuda_device_kv_cache_result;
     int cuda_attention_scores_result;
     int cuda_attention_softmax_result;
     int cuda_attention_values_result;
@@ -122,6 +125,7 @@ typedef struct _king_inference_model_object {
     char cuda_rope_error[160];
     char cuda_embedding_row_error[160];
     char cuda_device_vector_ops_error[160];
+    char cuda_device_kv_cache_error[160];
     char cuda_attention_scores_error[160];
     char cuda_attention_softmax_error[160];
     char cuda_attention_values_error[160];
@@ -148,6 +152,18 @@ typedef struct _king_inference_model_object {
     zend_ulong cuda_embedding_row_last_width;
     size_t cuda_device_vector_ops_launch_count;
     zend_ulong cuda_device_vector_ops_last_length;
+    size_t cuda_device_kv_cache_bytes;
+    size_t cuda_device_kv_cache_key_bytes;
+    size_t cuda_device_kv_cache_value_bytes;
+    size_t cuda_device_kv_cache_write_count;
+    zend_ulong cuda_device_kv_cache_layers;
+    zend_ulong cuda_device_kv_cache_kv_heads;
+    zend_ulong cuda_device_kv_cache_context_tokens;
+    zend_ulong cuda_device_kv_cache_key_length;
+    zend_ulong cuda_device_kv_cache_value_length;
+    zend_ulong cuda_device_kv_cache_last_layer;
+    zend_ulong cuda_device_kv_cache_last_head;
+    zend_ulong cuda_device_kv_cache_last_position;
     size_t cuda_attention_scores_launch_count;
     size_t cuda_attention_softmax_launch_count;
     size_t cuda_attention_values_launch_count;
@@ -204,6 +220,12 @@ typedef struct _king_inference_model_object {
     bool cuda_vector_silu_available;
     bool cuda_vector_slice_available;
     bool cuda_vector_copy_to_offset_available;
+    bool cuda_device_kv_cache_attempted;
+    bool cuda_device_kv_cache_available;
+    bool cuda_device_kv_cache_shape_ready;
+    bool cuda_device_kv_cache_allocated;
+    bool cuda_device_kv_cache_f32;
+    bool cuda_device_kv_cache_dtod_available;
     bool cuda_attention_scores_attempted;
     bool cuda_attention_scores_available;
     bool cuda_attention_scores_nvrtc_available;
