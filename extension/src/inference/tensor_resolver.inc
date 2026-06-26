@@ -31,6 +31,11 @@ static const char *king_inference_output_projection_candidates[] = {
     NULL
 };
 
+static void king_inference_add_attention_resolution_info(
+    king_inference_model_object *model,
+    zval *resolved
+);
+
 static bool king_inference_tensor_descriptor_dimension(
     zval *descriptor,
     zend_ulong index,
@@ -654,5 +659,6 @@ static void king_inference_add_tensor_resolution_info(
     array_init(&resolved);
     add_assoc_zval(&resolved, "token_embedding", &token_embedding);
     add_assoc_zval(&resolved, "output_projection", &output_projection);
+    king_inference_add_attention_resolution_info(model, &resolved);
     add_assoc_zval(target, "resolved_tensors", &resolved);
 }
