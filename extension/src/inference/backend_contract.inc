@@ -166,6 +166,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_device_memory_allocator", gpu_backend);
     add_assoc_bool(return_value, "gpu_host_to_device_weight_upload", gpu_backend);
     add_assoc_bool(return_value, "gpu_uploaded_weight_cache", gpu_backend);
+    add_assoc_bool(return_value, "gpu_quantized_matvec_kernel", gpu_backend);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);
     add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", gpu_backend);
     add_assoc_bool(return_value, "gpu_thermal_policy", gpu_backend);

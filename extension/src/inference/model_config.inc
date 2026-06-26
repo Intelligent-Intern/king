@@ -339,6 +339,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     if (intern->artifact_path != NULL) {
         zend_string_release(intern->artifact_path);
     }
+    king_inference_cuda_quantized_matvec_release(intern);
     king_inference_cuda_weight_upload_release(intern);
     king_inference_cuda_device_allocator_release(intern);
     king_inference_cuda_context_release(intern);
@@ -362,6 +363,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     king_inference_cuda_context_open(intern, backend_kind);
     king_inference_cuda_device_allocator_init(intern, backend_kind);
     king_inference_cuda_weight_upload_required(intern, backend_kind);
+    king_inference_cuda_quantized_matvec_init(intern, backend_kind);
 
     king_set_error("");
     return SUCCESS;

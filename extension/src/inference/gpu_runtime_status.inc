@@ -734,4 +734,5 @@ static void king_inference_gpu_runtime_status_from_model(
     king_inference_cuda_context_apply_status(model, return_value);
     king_inference_cuda_device_allocator_apply_status(model, return_value);
     king_inference_cuda_weight_upload_apply_status(model, return_value);
+    king_inference_cuda_quantized_matvec_apply_status(model, return_value);
 }

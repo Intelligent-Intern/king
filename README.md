@@ -383,7 +383,10 @@ The core programming model is:
   backend config selects `king_native_cpu`; the runtime model primitive can
   resolve the configured `auto|gpu|cpu` model profile, preferring
   `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
-  falling back to `gemma3:1b` for CPU. Memory-enabled native graph streams also
+  falling back to `gemma3:1b` for CPU. The GPU path owns a CUDA context,
+  allocates device memory, uploads required weights, caches uploaded tensors,
+  and exposes a native Q8_0 quantized matrix/vector kernel as the first decoder
+  compute leaf. Memory-enabled native graph streams also
   enforce an LLM-cache admission policy with a configurable disk-free floor and
   webhook/MCP alert metadata. The process-runner path is explicit `local`
   configuration.

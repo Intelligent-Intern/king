@@ -62,15 +62,20 @@ typedef struct _king_inference_model_object {
     size_t native_map_size;
     void *cuda_driver_handle;
     void *cuda_context;
+    void *cuda_nvrtc_handle;
+    void *cuda_quantized_matvec_module;
+    void *cuda_q8_0_matvec_function;
     king_inference_cuda_device_allocation *cuda_device_allocations;
     king_inference_cuda_weight_upload *cuda_weight_uploads;
     int cuda_device;
     int cuda_context_result;
     int cuda_device_allocator_result;
     int cuda_weight_upload_result;
+    int cuda_quantized_matvec_result;
     char cuda_context_error[160];
     char cuda_device_allocator_error[160];
     char cuda_weight_upload_error[160];
+    char cuda_quantized_matvec_error[160];
     size_t cuda_device_bytes_allocated;
     size_t cuda_device_peak_bytes_allocated;
     size_t cuda_device_allocation_count;
@@ -83,6 +88,7 @@ typedef struct _king_inference_model_object {
     size_t cuda_weight_cache_hits;
     size_t cuda_weight_cache_misses;
     size_t cuda_weight_cache_stores;
+    size_t cuda_quantized_matvec_launch_count;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
@@ -95,6 +101,11 @@ typedef struct _king_inference_model_object {
     bool cuda_weight_upload_complete;
     bool cuda_weight_cache_initialized;
     bool cuda_weight_cache_ready;
+    bool cuda_quantized_matvec_attempted;
+    bool cuda_quantized_matvec_available;
+    bool cuda_quantized_matvec_nvrtc_available;
+    bool cuda_quantized_matvec_module_loaded;
+    bool cuda_quantized_matvec_q8_0_available;
     zend_object std;
 } king_inference_model_object;
 
