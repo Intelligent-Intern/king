@@ -68,6 +68,9 @@ typedef struct _king_inference_model_object {
     void *cuda_rms_norm_nvrtc_handle;
     void *cuda_rms_norm_module;
     void *cuda_rms_norm_function;
+    void *cuda_rope_nvrtc_handle;
+    void *cuda_rope_module;
+    void *cuda_rope_function;
     king_inference_cuda_device_allocation *cuda_device_allocations;
     king_inference_cuda_weight_upload *cuda_weight_uploads;
     int cuda_device;
@@ -76,11 +79,13 @@ typedef struct _king_inference_model_object {
     int cuda_weight_upload_result;
     int cuda_quantized_matvec_result;
     int cuda_rms_norm_result;
+    int cuda_rope_result;
     char cuda_context_error[160];
     char cuda_device_allocator_error[160];
     char cuda_weight_upload_error[160];
     char cuda_quantized_matvec_error[160];
     char cuda_rms_norm_error[160];
+    char cuda_rope_error[160];
     size_t cuda_device_bytes_allocated;
     size_t cuda_device_peak_bytes_allocated;
     size_t cuda_device_allocation_count;
@@ -95,6 +100,7 @@ typedef struct _king_inference_model_object {
     size_t cuda_weight_cache_stores;
     size_t cuda_quantized_matvec_launch_count;
     size_t cuda_rms_norm_launch_count;
+    size_t cuda_rope_launch_count;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
@@ -117,6 +123,11 @@ typedef struct _king_inference_model_object {
     bool cuda_rms_norm_nvrtc_available;
     bool cuda_rms_norm_module_loaded;
     bool cuda_rms_norm_f32_available;
+    bool cuda_rope_attempted;
+    bool cuda_rope_available;
+    bool cuda_rope_nvrtc_available;
+    bool cuda_rope_module_loaded;
+    bool cuda_rope_f32_available;
     zend_object std;
 } king_inference_model_object;
 

@@ -131,6 +131,7 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "gpu_uploaded_weight_cache", false);
     add_assoc_bool(return_value, "gpu_quantized_matvec_kernel", false);
     add_assoc_bool(return_value, "gpu_rms_norm_kernel", false);
+    add_assoc_bool(return_value, "gpu_rope_kernel", false);
     add_assoc_bool(return_value, "gpu_vram_admission", false);
     add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", false);
     add_assoc_bool(return_value, "gpu_thermal_policy", false);
