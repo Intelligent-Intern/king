@@ -292,6 +292,12 @@ indexes, map the file for native access, and expose the model through
 capabilities keep `model_registration=true`, while `implemented=false`,
 `streaming=false`, and `token_generation=false` until the GPU decoder kernel is
 present.
+The same capabilities explicitly describe the ready GPU support surfaces:
+`gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_vram_admission`,
+`gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`,
+`gpu_thermal_preflight`, and `gpu_thermal_stream_abort` are true for the GPU
+backend. `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
+`silent_cpu_fallback` remain false.
 
 ## Internal Backend Layout
 
@@ -406,7 +412,9 @@ additionally exposes `native_model_mapped`, `native_map_bytes`,
 selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
 graph finishers such as `argmax_token` and `sample_token`, not to local runner
-text generation.
+text generation. GPU-specific capability flags separate registration,
+metadata, CUDA probing, VRAM admission, thermal enforcement, and decoder
+generation so clients do not infer generation readiness from model presence.
 
 Generation stream options are validated before the local runner process starts.
 `max_tokens` must be a positive integer, numeric generation options must be

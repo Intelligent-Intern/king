@@ -128,23 +128,45 @@ static bool king_inference_backend_kind_allows_model_registration(king_inference
 
 static void king_inference_backend_capabilities_array(king_inference_backend_kind kind, zval *return_value)
 {
+    bool native_backend = kind != KING_INFERENCE_BACKEND_LOCAL;
+    bool gpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+    bool native_cpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    bool local_backend = kind == KING_INFERENCE_BACKEND_LOCAL;
+
     array_init(return_value);
     add_assoc_bool(return_value, "implemented", king_inference_backend_kind_is_available(kind));
     add_assoc_bool(return_value, "local", true);
-    add_assoc_bool(return_value, "streaming", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
-    add_assoc_bool(return_value, "openai_chat_completions_stream", kind == KING_INFERENCE_BACKEND_LOCAL);
-    add_assoc_bool(return_value, "cancellable", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+    add_assoc_bool(return_value, "streaming", !gpu_backend);
+    add_assoc_bool(return_value, "openai_chat_completions_stream", local_backend);
+    add_assoc_bool(return_value, "cancellable", !gpu_backend);
     add_assoc_bool(return_value, "model_registration", king_inference_backend_kind_allows_model_registration(kind));
-    add_assoc_bool(return_value, "process_runner", kind == KING_INFERENCE_BACKEND_LOCAL);
-    add_assoc_bool(return_value, "native_runtime", kind != KING_INFERENCE_BACKEND_LOCAL);
+    add_assoc_bool(return_value, "model_metadata", true);
+    add_assoc_bool(return_value, "gguf_metadata", true);
+    add_assoc_bool(return_value, "process_runner", local_backend);
+    add_assoc_bool(return_value, "native_runtime", native_backend);
     add_assoc_bool(return_value, "native_model_loader", true);
     add_assoc_bool(return_value, "native_tensor_directory", true);
+    add_assoc_bool(return_value, "native_tensor_views", true);
+    add_assoc_bool(return_value, "native_model_mapping", native_backend);
     add_assoc_bool(return_value, "native_tokenization", true);
+    add_assoc_bool(return_value, "native_token_decode", true);
     add_assoc_bool(return_value, "paged_kv_cache", true);
-    add_assoc_bool(return_value, "native_graph_streaming", kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
-    add_assoc_bool(return_value, "native_token_selection", kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
-    add_assoc_bool(return_value, "token_generation", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
-    add_assoc_bool(return_value, "gpu", kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
-    add_assoc_bool(return_value, "gpu_backend", kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+    add_assoc_bool(return_value, "native_graph_streaming", native_cpu_backend);
+    add_assoc_bool(return_value, "native_token_selection", native_cpu_backend);
+    add_assoc_bool(return_value, "token_generation", !gpu_backend);
+    add_assoc_bool(return_value, "openai_generation", local_backend);
+    add_assoc_bool(return_value, "embeddings", native_cpu_backend);
+    add_assoc_bool(return_value, "gpu", gpu_backend);
+    add_assoc_bool(return_value, "gpu_backend", gpu_backend);
+    add_assoc_bool(return_value, "gpu_runtime_status", gpu_backend);
+    add_assoc_bool(return_value, "gpu_cuda_driver_probe", gpu_backend);
+    add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);
+    add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", gpu_backend);
+    add_assoc_bool(return_value, "gpu_thermal_policy", gpu_backend);
+    add_assoc_bool(return_value, "gpu_thermal_preflight", gpu_backend);
+    add_assoc_bool(return_value, "gpu_thermal_stream_abort", gpu_backend);
+    add_assoc_bool(return_value, "gpu_decoder_kernel", false);
+    add_assoc_bool(return_value, "gpu_generation", false);
+    add_assoc_bool(return_value, "silent_cpu_fallback", false);
     add_assoc_string(return_value, "model_format", "gguf");
 }

@@ -103,17 +103,34 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "openai_chat_completions_stream", false);
     add_assoc_bool(return_value, "cancellable", false);
     add_assoc_bool(return_value, "model_registration", true);
+    add_assoc_bool(return_value, "model_metadata", false);
+    add_assoc_bool(return_value, "gguf_metadata", false);
     add_assoc_bool(return_value, "process_runner", false);
     add_assoc_bool(return_value, "native_runtime", false);
     add_assoc_bool(return_value, "native_model_loader", false);
     add_assoc_bool(return_value, "native_tensor_directory", false);
+    add_assoc_bool(return_value, "native_tensor_views", false);
+    add_assoc_bool(return_value, "native_model_mapping", false);
     add_assoc_bool(return_value, "native_tokenization", false);
+    add_assoc_bool(return_value, "native_token_decode", false);
     add_assoc_bool(return_value, "paged_kv_cache", false);
     add_assoc_bool(return_value, "native_graph_streaming", false);
     add_assoc_bool(return_value, "native_token_selection", false);
     add_assoc_bool(return_value, "token_generation", false);
+    add_assoc_bool(return_value, "openai_generation", false);
+    add_assoc_bool(return_value, "embeddings", false);
     add_assoc_bool(return_value, "gpu", false);
     add_assoc_bool(return_value, "gpu_backend", false);
+    add_assoc_bool(return_value, "gpu_runtime_status", false);
+    add_assoc_bool(return_value, "gpu_cuda_driver_probe", false);
+    add_assoc_bool(return_value, "gpu_vram_admission", false);
+    add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", false);
+    add_assoc_bool(return_value, "gpu_thermal_policy", false);
+    add_assoc_bool(return_value, "gpu_thermal_preflight", false);
+    add_assoc_bool(return_value, "gpu_thermal_stream_abort", false);
+    add_assoc_bool(return_value, "gpu_decoder_kernel", false);
+    add_assoc_bool(return_value, "gpu_generation", false);
+    add_assoc_bool(return_value, "silent_cpu_fallback", false);
     add_assoc_string(return_value, "model_format", "gguf");
 }
 
