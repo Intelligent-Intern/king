@@ -949,6 +949,11 @@ Chat-Completions-style streaming chunks from `king_inference_next()`. The same
 stream object still supports King-native events when the mode is not enabled.
 `openai_compatible` must be a boolean when provided, and `format` must be one
 of `openai`, `openai_chat`, or `openai_chat_completions`.
+For native decoder streams, generated token text is emitted as
+`chat.completion.chunk` content deltas with the same id, created timestamp, and
+model name. The first read emits the assistant role chunk and the terminal read
+emits `finish_reason=stop`; structured King-native status events are not leaked
+raw into OpenAI-compatible streams.
 For `king_native_cpu`, the request must provide a native `graph` or `graphs`
 sequence whose final output is a token vector produced by `argmax_token` or
 `sample_token`. Direct stream requests use the same native graph shape contract

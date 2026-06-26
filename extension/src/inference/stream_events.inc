@@ -31,7 +31,44 @@ static void king_inference_stream_openai_chunk(
     zval *return_value
 );
 
+static void king_inference_stream_openai_error(
+    king_inference_stream_object *stream,
+    const char *message,
+    size_t message_len,
+    zval *return_value
+);
+
 static void king_inference_stream_done_event(king_inference_stream_object *stream, zval *return_value);
+
+static bool king_inference_stream_openai_array_event(
+    king_inference_stream_object *stream,
+    zval *event,
+    zval *return_value
+) {
+    zval *type = king_inference_array_find(event, "type");
+    zval *text = king_inference_array_find(event, "text");
+    zval *message = king_inference_array_find(event, "message");
+    const char *type_name = type != NULL && Z_TYPE_P(type) == IS_STRING ? Z_STRVAL_P(type) : "";
+
+    if (strcmp(type_name, "token") == 0 && text != NULL && Z_TYPE_P(text) == IS_STRING) {
+        stream->chunk_count++;
+        stream->bytes_emitted += (zend_long) Z_STRLEN_P(text);
+        king_inference_stream_openai_chunk(stream, NULL, Z_STRVAL_P(text), Z_STRLEN_P(text), NULL, return_value);
+        return true;
+    }
+    if ((strcmp(type_name, "stderr") == 0 || strcmp(type_name, "error") == 0)
+        && ((text != NULL && Z_TYPE_P(text) == IS_STRING) || (message != NULL && Z_TYPE_P(message) == IS_STRING))) {
+        zval *error_text = text != NULL && Z_TYPE_P(text) == IS_STRING ? text : message;
+        king_inference_stream_openai_error(stream, Z_STRVAL_P(error_text), Z_STRLEN_P(error_text), return_value);
+        return true;
+    }
+    if (strcmp(type_name, "done") == 0 || strcmp(type_name, "cancelled") == 0) {
+        king_inference_stream_done_event(stream, return_value);
+        return true;
+    }
+
+    return false;
+}
 
 static zend_result king_inference_stream_next_native_event(
     king_inference_stream_object *stream,
@@ -43,37 +80,38 @@ static zend_result king_inference_stream_next_native_event(
         return FAILURE;
     }
 
-    event = zend_hash_index_find(Z_ARRVAL(stream->native_events), stream->native_event_index);
-    if (event == NULL) {
-        stream->exit_code = 0;
-        king_inference_stream_done_event(stream, return_value);
-        return SUCCESS;
-    }
-
-    stream->native_event_index++;
-    if (Z_TYPE_P(event) == IS_STRING) {
-        stream->chunk_count++;
-        stream->bytes_emitted += (zend_long) Z_STRLEN_P(event);
-        if (stream->openai_compatible) {
-            king_inference_stream_openai_chunk(
-                stream,
-                NULL,
-                Z_STRVAL_P(event),
-                Z_STRLEN_P(event),
-                NULL,
-                return_value
-            );
+    while (true) {
+        event = zend_hash_index_find(Z_ARRVAL(stream->native_events), stream->native_event_index);
+        if (event == NULL) {
+            stream->exit_code = 0;
+            king_inference_stream_done_event(stream, return_value);
             return SUCCESS;
         }
 
-        array_init(return_value);
-        add_assoc_string(return_value, "type", "token");
-        add_assoc_str(return_value, "text", zend_string_copy(Z_STR_P(event)));
+        stream->native_event_index++;
+        if (Z_TYPE_P(event) == IS_STRING) {
+            stream->chunk_count++;
+            stream->bytes_emitted += (zend_long) Z_STRLEN_P(event);
+            if (stream->openai_compatible) {
+                king_inference_stream_openai_chunk(stream, NULL, Z_STRVAL_P(event), Z_STRLEN_P(event), NULL, return_value);
+                return SUCCESS;
+            }
+
+            array_init(return_value);
+            add_assoc_string(return_value, "type", "token");
+            add_assoc_str(return_value, "text", zend_string_copy(Z_STR_P(event)));
+            return SUCCESS;
+        }
+        if (stream->openai_compatible) {
+            if (Z_TYPE_P(event) == IS_ARRAY && king_inference_stream_openai_array_event(stream, event, return_value)) {
+                return SUCCESS;
+            }
+            continue;
+        }
+
+        ZVAL_COPY(return_value, event);
         return SUCCESS;
     }
-
-    ZVAL_COPY(return_value, event);
-    return SUCCESS;
 }
 
 static bool king_inference_stream_openai_requested(zval *request, zval *options)
