@@ -140,7 +140,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "implemented", king_inference_backend_kind_is_available(kind));
     add_assoc_bool(return_value, "local", true);
     add_assoc_bool(return_value, "streaming", true);
-    add_assoc_bool(return_value, "openai_chat_completions_stream", local_backend || native_cpu_backend);
+    add_assoc_bool(return_value, "openai_chat_completions_stream", local_backend || native_cpu_backend || gpu_backend);
     add_assoc_bool(return_value, "cancellable", true);
     add_assoc_bool(return_value, "model_registration", king_inference_backend_kind_allows_model_registration(kind));
     add_assoc_bool(return_value, "model_metadata", true);

@@ -102,7 +102,6 @@ static zend_result king_inference_openai_require_generation_backend(
         zval *messages = king_inference_array_find(payload, "messages");
         zval *prompt = king_inference_array_find(payload, "prompt");
         zval *native_prompt_text = king_inference_array_find(payload, "native_prompt_text");
-        bool stream_requested = king_inference_bool_from_array(payload, "stream", false);
         zval *reason_value;
         zval *generation_ready;
         const char *reason = "gpu_decoder_kernel_not_implemented";
@@ -113,28 +112,6 @@ static zend_result king_inference_openai_require_generation_backend(
         reason_value = king_inference_array_find(&gpu_runtime, "reason");
         if (reason_value != NULL && Z_TYPE_P(reason_value) == IS_STRING && Z_STRLEN_P(reason_value) > 0) {
             reason = Z_STRVAL_P(reason_value);
-        }
-        if (stream_requested) {
-            message = strpprintf(
-                0,
-                "%s does not support streaming with the selected King GPU model yet. "
-                "Use stream=false for native GPU plain text generation. "
-                "King will not silently fall back to CPU for a GPU profile.",
-                endpoint_name
-            );
-            zend_string_release(blockers);
-            zval_ptr_dtor(&gpu_runtime);
-            if (has_error_response != NULL) {
-                *has_error_response = true;
-            }
-            result = king_inference_openai_error_response(
-                return_value,
-                400,
-                ZSTR_VAL(message),
-                "invalid_request_error"
-            );
-            zend_string_release(message);
-            return result;
         }
         if (graph != NULL || graphs != NULL) {
             zend_string_release(blockers);

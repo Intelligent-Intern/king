@@ -249,7 +249,8 @@ static void king_inference_openai_model_object(
         "openai_chat_completions_stream",
         backend_config_valid
             && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
-                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU)
+                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+                || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready))
     );
     add_assoc_bool(
         &king_meta,

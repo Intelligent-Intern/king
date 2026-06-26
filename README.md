@@ -376,6 +376,9 @@ The core programming model is:
   of requiring callers to provide `graph` or `graphs` manually, and
   `stream=true` returns OpenAI-compatible Chat Completions SSE chunks from the
   same native event stream.
+  `king_native_gpu` uses the same OpenAI streaming surface when GPU runtime
+  readiness admits the native prompt loop, while graph payloads stay on the
+  native stream contract.
   Native graph streams are stateless by default; `king.inference_with_memory`
   sets the php.ini baseline and `with_memory` opts into carrying graph result
   state between decode steps. The stream layer can emit

@@ -458,7 +458,8 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
-`openai_chat_completions_stream` and `silent_cpu_fallback` remain false.
+`openai_chat_completions_stream` is true for the GPU backend when runtime
+readiness admits prompt generation. `silent_cpu_fallback` remains false.
 The GPU model info, native GPU stream contract event, and `/v1/models`
 metadata expose the same boundary with `embedding_row_loader_ready`,
 `device_vector_ops_ready`, `device_kv_cache_ready`,
@@ -527,8 +528,8 @@ graph until `max_tokens` is reached, applies the same argmax/temperature/top-k/
 top-p/seed sampling policy on CPU over those bounded candidates, writes a
 CPU-compatible `final.next_token.values` token vector into each graph result,
 and emits the decoded token text pieces in the native event stream after the
-structured prompt-loop event. OpenAI-compatible `stream=false` GPU chat uses
-that prompt loop directly and does not fall back to CPU.
+structured prompt-loop event. OpenAI-compatible GPU chat uses that prompt loop
+for both `stream=false` and `stream=true`, and does not fall back to CPU.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
@@ -538,10 +539,9 @@ state, and stream metrics expose native event indexes plus GPU thermal
 preflight/abort metadata. The first GPU native event is a structured
 `gpu_decoder_stream_contract` event with `stream_contract=king_native_events`,
 `decoder_stream_contract_ready=true`, `generation_ready` mirroring prompt-loop
-readiness, and the current `gpu_runtime` object. OpenAI-compatible `stream=false`
-GPU chat is admitted only through plain text prompt generation; GPU streaming
-and OpenAI graph payloads stay refused until their separate runtime paths are
-implemented.
+readiness, and the current `gpu_runtime` object. OpenAI-compatible GPU chat is
+admitted only through plain text prompt generation; OpenAI graph payloads stay
+on the native stream contract.
 
 ## GPU Sampling Decision
 
@@ -1364,13 +1364,12 @@ body with `data: {chunk}` events and a final `data: [DONE]` marker.
 For `king_native_cpu`, that streaming response is backed by native decoder
 events rather than the external process runner.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
-accepts `stream=false` plain-text `messages` when the native GPU prompt loop is
-ready. The route renders those messages into `native_prompt_text`, runs bounded
-GPU token generation, drains the native OpenAI deltas into one response, and
-does not fall back to CPU. GPU `stream=true` requests still return a precise
-OpenAI error until the streaming checkbox is implemented. GPU graph payloads
-remain on the native stream contract instead of being mixed into the OpenAI
-chat route.
+accepts plain-text `messages` when the native GPU prompt loop is ready. The
+route renders those messages into `native_prompt_text`, runs bounded GPU token
+generation, drains the native OpenAI deltas into one response for
+`stream=false`, or writes the same deltas as SSE chunks for `stream=true`. GPU
+graph payloads remain on the native stream contract instead of being mixed into
+the OpenAI chat route.
 Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
 authoritative runtime readiness source for GPU models. A registered
 `king_native_gpu` model can be listed and selected for inspection, but UI and
