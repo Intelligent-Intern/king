@@ -115,9 +115,158 @@ static zend_string *king_inference_attention_layer_pattern_name(
     return name;
 }
 
+static bool king_inference_attention_descriptor_dimensions(
+    zval *descriptor,
+    zend_ulong *columns_out,
+    zend_ulong *rows_out
+) {
+    zend_ulong rank;
+
+    if (!king_inference_tensor_descriptor_rank(descriptor, &rank)
+        || rank != 2
+        || !king_inference_tensor_descriptor_dimension(descriptor, 0, columns_out)
+        || !king_inference_tensor_descriptor_dimension(descriptor, 1, rows_out)) {
+        return false;
+    }
+
+    return *columns_out > 0 && *rows_out > 0;
+}
+
+static bool king_inference_attention_norm_width(
+    king_inference_model_object *model,
+    const char *name,
+    zend_ulong *width_out
+) {
+    zend_string *tensor_name;
+    zval *descriptor;
+    zend_ulong rank;
+
+    tensor_name = zend_string_init(name, strlen(name), 0);
+    descriptor = king_inference_tensor_index_descriptor(model, tensor_name);
+    zend_string_release(tensor_name);
+    if (descriptor == NULL
+        || !king_inference_tensor_descriptor_rank(descriptor, &rank)
+        || rank != 1
+        || !king_inference_tensor_descriptor_dimension(descriptor, 0, width_out)) {
+        return false;
+    }
+
+    return *width_out > 0;
+}
+
+static bool king_inference_attention_layer_norm_width(
+    king_inference_model_object *model,
+    zend_ulong layer,
+    const char *suffix,
+    zend_ulong *width_out
+) {
+    char name[96];
+
+    if (snprintf(name, sizeof(name), "blk.%lu.%s", (unsigned long) layer, suffix) >= (int) sizeof(name)) {
+        return false;
+    }
+
+    return king_inference_attention_norm_width(model, name, width_out);
+}
+
+static bool king_inference_attention_layer_dimensions(
+    king_inference_model_object *model,
+    king_inference_attention_role role,
+    zend_ulong layer,
+    zend_ulong *columns_out,
+    zend_ulong *rows_out
+) {
+    const char **patterns = king_inference_attention_role_patterns(role);
+    size_t i;
+
+    if (Z_ISUNDEF(model->tensor_index) || Z_TYPE(model->tensor_index) != IS_ARRAY) {
+        return false;
+    }
+
+    for (i = 0; patterns[i] != NULL; i++) {
+        zend_string *name = king_inference_attention_layer_pattern_name(patterns[i], layer);
+        zval *descriptor;
+        bool valid;
+
+        if (name == NULL) {
+            continue;
+        }
+        descriptor = king_inference_tensor_index_descriptor(model, name);
+        valid = king_inference_attention_descriptor_dimensions(descriptor, columns_out, rows_out);
+        zend_string_release(name);
+        if (valid) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool king_inference_attention_gemma4_expected_dimensions(
+    king_inference_model_object *model,
+    king_inference_attention_role role,
+    zend_ulong layer,
+    zend_ulong *columns_out,
+    zend_ulong *rows_out
+) {
+    zend_ulong embedding = model->gguf.architecture_params[KING_INFERENCE_ARCH_EMBEDDING_LENGTH];
+    zend_ulong head_count = model->gguf.architecture_params[KING_INFERENCE_ARCH_ATTENTION_HEAD_COUNT];
+    zend_ulong q_norm_width;
+    zend_ulong k_norm_width;
+    zend_ulong columns;
+    zend_ulong rows;
+    zend_ulong query_rows;
+    zend_ulong max_kv_rows;
+    king_inference_attention_role dimension_role = role;
+
+    if (!king_inference_gguf_architecture_is_gemma4(&model->gguf)
+        || embedding == 0
+        || head_count == 0
+        || !king_inference_attention_layer_norm_width(model, layer, "attn_q_norm.weight", &q_norm_width)
+        || !king_inference_attention_layer_norm_width(model, layer, "attn_k_norm.weight", &k_norm_width)
+        || head_count > ZEND_ULONG_MAX / q_norm_width
+        || head_count > ZEND_ULONG_MAX / k_norm_width) {
+        return false;
+    }
+
+    query_rows = head_count * q_norm_width;
+    max_kv_rows = head_count * k_norm_width;
+    if (role == KING_INFERENCE_ATTENTION_VALUE
+        && !king_inference_attention_layer_dimensions(model, role, layer, &columns, &rows)) {
+        dimension_role = KING_INFERENCE_ATTENTION_KEY;
+    }
+    if (!king_inference_attention_layer_dimensions(model, dimension_role, layer, &columns, &rows)) {
+        return false;
+    }
+
+    switch (role) {
+        case KING_INFERENCE_ATTENTION_QUERY:
+            if (columns != embedding || rows != query_rows) {
+                return false;
+            }
+            break;
+        case KING_INFERENCE_ATTENTION_KEY:
+        case KING_INFERENCE_ATTENTION_VALUE:
+            if (columns != embedding || rows == 0 || rows > max_kv_rows || rows % k_norm_width != 0) {
+                return false;
+            }
+            break;
+        case KING_INFERENCE_ATTENTION_OUTPUT:
+            if (columns != query_rows || rows != embedding) {
+                return false;
+            }
+            break;
+    }
+
+    *columns_out = columns;
+    *rows_out = rows;
+    return true;
+}
+
 static bool king_inference_attention_expected_dimensions(
     king_inference_model_object *model,
     king_inference_attention_role role,
+    zend_ulong layer,
     zend_ulong *columns_out,
     zend_ulong *rows_out
 ) {
@@ -129,6 +278,9 @@ static bool king_inference_attention_expected_dimensions(
 
     *columns_out = 0;
     *rows_out = 0;
+    if (king_inference_attention_gemma4_expected_dimensions(model, role, layer, columns_out, rows_out)) {
+        return true;
+    }
     if (embedding == 0 || head_count == 0) {
         return false;
     }
@@ -183,6 +335,7 @@ static bool king_inference_attention_expected_dimensions(
 static bool king_inference_attention_descriptor_valid(
     king_inference_model_object *model,
     king_inference_attention_role role,
+    zend_ulong layer,
     zval *descriptor
 ) {
     zend_ulong rank;
@@ -191,7 +344,7 @@ static bool king_inference_attention_descriptor_valid(
     zend_ulong expected_columns;
     zend_ulong expected_rows;
 
-    if (!king_inference_attention_expected_dimensions(model, role, &expected_columns, &expected_rows)
+    if (!king_inference_attention_expected_dimensions(model, role, layer, &expected_columns, &expected_rows)
         || !king_inference_tensor_descriptor_rank(descriptor, &rank)
         || rank != 2
         || !king_inference_tensor_descriptor_dimension(descriptor, 0, &columns)
@@ -200,6 +353,36 @@ static bool king_inference_attention_descriptor_valid(
     }
 
     return columns == expected_columns && rows == expected_rows;
+}
+
+static zend_string *king_inference_attention_gemma4_value_tied_key_name(
+    king_inference_model_object *model,
+    zend_ulong layer
+) {
+    zend_string *name;
+    zval *descriptor;
+
+    if (!king_inference_gguf_architecture_is_gemma4(&model->gguf)) {
+        return NULL;
+    }
+
+    name = king_inference_attention_layer_pattern_name("blk.{layer}.attn_k.weight", layer);
+    if (name == NULL) {
+        return NULL;
+    }
+    descriptor = king_inference_tensor_index_descriptor(model, name);
+    if (descriptor != NULL
+        && king_inference_attention_descriptor_valid(
+            model,
+            KING_INFERENCE_ATTENTION_VALUE,
+            layer,
+            descriptor
+        )) {
+        return name;
+    }
+
+    zend_string_release(name);
+    return NULL;
 }
 
 static bool king_inference_attention_name_matches_layer(zend_string *name, zend_ulong layer)
@@ -285,10 +468,14 @@ static zend_string *king_inference_attention_known_name(
             continue;
         }
         descriptor = king_inference_tensor_index_descriptor(model, name);
-        if (descriptor != NULL && king_inference_attention_descriptor_valid(model, role, descriptor)) {
+        if (descriptor != NULL && king_inference_attention_descriptor_valid(model, role, layer, descriptor)) {
             return name;
         }
         zend_string_release(name);
+    }
+
+    if (role == KING_INFERENCE_ATTENTION_VALUE) {
+        return king_inference_attention_gemma4_value_tied_key_name(model, layer);
     }
 
     return NULL;
@@ -307,7 +494,7 @@ static zend_string *king_inference_attention_shape_scan(
     zend_ulong columns;
     zend_ulong rows;
 
-    if (!king_inference_attention_expected_dimensions(model, role, &columns, &rows)
+    if (!king_inference_attention_expected_dimensions(model, role, layer, &columns, &rows)
         || Z_ISUNDEF(model->tensor_index)
         || Z_TYPE(model->tensor_index) != IS_ARRAY) {
         if (status != NULL) {
@@ -319,7 +506,7 @@ static zend_string *king_inference_attention_shape_scan(
     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL(model->tensor_index), name, descriptor) {
         if (name == NULL
             || !king_inference_attention_name_hint(name, role, layer)
-            || !king_inference_attention_descriptor_valid(model, role, descriptor)) {
+            || !king_inference_attention_descriptor_valid(model, role, layer, descriptor)) {
             continue;
         }
         matches++;
@@ -433,7 +620,7 @@ static zend_result king_inference_resolve_attention_tensor_name(
             }
             return FAILURE;
         }
-        if (!king_inference_attention_descriptor_valid(model, role, descriptor)) {
+        if (!king_inference_attention_descriptor_valid(model, role, layer, descriptor)) {
             zend_string_release(configured);
             if (status_out != NULL) {
                 *status_out = "configured_tensor_invalid_shape";
@@ -537,7 +724,7 @@ static bool king_inference_add_attention_role_entry(
         &status
     );
 
-    king_inference_attention_expected_dimensions(model, role, &expected_columns, &expected_rows);
+    king_inference_attention_expected_dimensions(model, role, layer, &expected_columns, &expected_rows);
     array_init(&entry);
     add_assoc_bool(&entry, "resolved", result == SUCCESS && name != NULL);
     add_assoc_string(&entry, "status", status != NULL ? status : "not_found");
