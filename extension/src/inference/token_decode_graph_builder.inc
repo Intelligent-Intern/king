@@ -75,7 +75,7 @@ static zend_result king_inference_decode_graph_token_id_from_source(
 
 static zend_result king_inference_decode_graph_required_shape(
     king_inference_model_object *model,
-    bool emit_token,
+    bool needs_logits,
     zend_ulong *layers_out,
     zend_ulong *heads_out,
     zend_ulong *kv_heads_out,
@@ -117,8 +117,8 @@ static zend_result king_inference_decode_graph_required_shape(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph requires an even attention key length for RoPE.");
         return FAILURE;
     }
-    if (emit_token && vocab == 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph requires tokenizer vocabulary metadata when token emission is enabled.");
+    if (needs_logits && vocab == 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph requires tokenizer vocabulary metadata when logits output is enabled.");
         return FAILURE;
     }
 
@@ -388,13 +388,15 @@ static zend_result king_inference_token_decode_graph_array(
     const char *output_projection_status = NULL;
     bool output_projection_tied = false;
     bool emit_token = king_inference_decode_graph_bool_option(options, "emit_token", true);
+    bool emit_logits = king_inference_decode_graph_bool_option(options, "emit_logits", false);
+    bool needs_logits = emit_token || emit_logits;
     double epsilon;
     double rope_base;
     char final_hidden_id[64];
     zval ops;
     zval *state;
 
-    if (king_inference_decode_graph_required_shape(model, emit_token, &layers, &heads, &kv_heads, &key_length, &value_length, &vocab) != SUCCESS
+    if (king_inference_decode_graph_required_shape(model, needs_logits, &layers, &heads, &kv_heads, &key_length, &value_length, &vocab) != SUCCESS
         || king_inference_decode_graph_double_option(options, "epsilon", 0.000001, &epsilon) != SUCCESS
         || king_inference_decode_graph_double_option(options, "rope_base", 10000.0, &rope_base) != SUCCESS
         || king_inference_decode_graph_token_id_from_source(model, token_source, position, &token_id) != SUCCESS) {
@@ -416,7 +418,7 @@ static zend_result king_inference_token_decode_graph_array(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve final RMSNorm tensor: %s.", final_norm_status != NULL ? final_norm_status : "not_found");
         return FAILURE;
     }
-    if (emit_token
+    if (needs_logits
         && (king_inference_resolve_output_projection_tensor_name(model, NULL, &output_projection, &output_projection_source, &output_projection_status, &output_projection_tied) != SUCCESS
             || output_projection == NULL)) {
         zend_string_release(token_embedding);
@@ -584,8 +586,10 @@ static zend_result king_inference_token_decode_graph_array(
         king_inference_decode_graph_add_rms_norm(&ops, "final_norm", final_hidden_id, final_norm, epsilon);
     }
 
-    if (emit_token) {
+    if (needs_logits) {
         king_inference_decode_graph_add_linear(&ops, "logits", "final_norm", output_projection, vocab);
+    }
+    if (emit_token) {
         king_inference_decode_graph_add_sampler(&ops, "logits", position, options);
     }
 
@@ -599,7 +603,7 @@ static zend_result king_inference_token_decode_graph_array(
     add_assoc_long(return_value, "attention_key_length", (zend_long) key_length);
     add_assoc_long(return_value, "attention_value_length", (zend_long) value_length);
     add_assoc_zval(return_value, "ops", &ops);
-    add_assoc_string(return_value, "output", emit_token ? "next_token" : "final_norm");
+    add_assoc_string(return_value, "output", emit_token ? "next_token" : (emit_logits ? "logits" : "final_norm"));
     {
         zval terminal;
 
@@ -614,7 +618,8 @@ static zend_result king_inference_token_decode_graph_array(
             add_assoc_string(&terminal, "final_norm_status", final_norm_status);
         }
         add_assoc_bool(&terminal, "emits_token", emit_token);
-        if (emit_token) {
+        add_assoc_bool(&terminal, "emits_logits", needs_logits);
+        if (needs_logits) {
             add_assoc_string(&terminal, "logits", "logits");
             add_assoc_str(&terminal, "output_projection_tensor", zend_string_copy(output_projection));
             add_assoc_bool(&terminal, "output_projection_tied_token_embedding", output_projection_tied);

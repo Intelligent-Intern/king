@@ -1326,7 +1326,7 @@ namespace {
      * embedding step. The return payload includes a `terminal` descriptor for
      * final norm and output projection wiring.
      * @param int|array{tokens:array<int,int>} $token
-     * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+     * @param array{emit_token?:bool,emit_logits?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
      * @return array<string,mixed>
      * @throws \King\ValidationException|\King\RuntimeException
      */
@@ -2804,7 +2804,7 @@ namespace King {
          * The return payload includes a `terminal` descriptor for final norm
          * and output projection wiring.
          * @param int|array{tokens:array<int,int>} $token
-         * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+         * @param array{emit_token?:bool,emit_logits?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
          */
         public static function tokenDecodeGraph(Inference\Model $model, int|array $token, int $position, ?array $options = null): array {}
@@ -3022,7 +3022,7 @@ namespace King\Inference {
          * The return payload includes a `terminal` descriptor for final norm
          * and output projection wiring.
          * @param int|array{tokens:array<int,int>} $token
-         * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+         * @param array{emit_token?:bool,emit_logits?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
          */
         public function tokenDecodeGraph(int|array $token, int $position, ?array $options = null): array {}

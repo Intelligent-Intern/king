@@ -441,7 +441,10 @@ SwiGLU, final norm, output projection, and token sampling/argmax. The returned
 graph includes a `terminal` descriptor that names the final hidden node,
 `final_norm`, the resolved final RMSNorm tensor, and, when token emission is
 enabled, the `logits` node plus the resolved output projection tensor and
-tied-token-embedding status.
+tied-token-embedding status. Set `emit_token => false` and
+`emit_logits => true` to make a single decode graph return the next-token
+logits as its primary `final` output without running `sample_token` or
+`argmax_token`.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
