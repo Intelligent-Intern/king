@@ -758,9 +758,15 @@ vectors. `argmax_token` and `sample_token` are the native token-selection
 finishers for logits. `king_inference_token_decode_graph()` emits
 `argmax_token` directly when options contain `sampler => 'argmax'` or
 `temperature => 0`; the returned graph and `terminal` metadata expose
-`token_selection=argmax` and `token_selection_op=argmax_token` for that path.
+`token_selection=argmax`, `token_selection_op=argmax_token`, and
+`token_selection_temperature=0` for that path.
 Argmax selection is deterministic: the highest logit wins, and equal logits
 keep the lowest token index.
+For positive finite temperatures, the graph emits `sample_token`, forwards the
+temperature value unchanged into the sampling op, and exposes the same effective
+temperature through `token_selection_temperature`. The process-runner backend
+passes temperature to `bin/king-local-infer` with double round-trip precision
+instead of rounding it for display.
 `sample_token` supports temperature, top-k, top-p, optional
 seeded deterministic sampling, `sample_index` as a per-step seed salt, and
 `token_offset` for sharded vocab projections. Graph numeric options such as
@@ -773,7 +779,10 @@ paged attention needs.
 Set graph option `return_outputs => false` for decoder loops that only need
 `final` and `state`; the default stays `true` for interactive inspection.
 Use `sampler => 'sample'` to force the sampling finalizer when temperature is
-positive. Any other sampler name is rejected while the graph is built.
+positive. Non-finite or negative temperature values are rejected while the graph
+is built, and the local runner applies the same validation to CLI input before
+it builds a decode graph. Any other sampler name is rejected while the graph is
+built.
 
 ## Function, Paged KV-Cache Plan
 

@@ -45,6 +45,13 @@ static zend_result king_inference_decode_graph_sampler_mode(
 
     *mode_out = "sample";
     *temperature_out = temperature;
+    if (king_inference_decode_graph_double_option(options, "temperature", 0.7, &temperature) != SUCCESS) {
+        return FAILURE;
+    }
+    if (temperature < 0.0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph temperature must be non-negative.");
+        return FAILURE;
+    }
     if (sampler != NULL) {
         if (Z_TYPE_P(sampler) != IS_STRING || Z_STRLEN_P(sampler) == 0) {
             zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph sampler must be 'argmax' or 'sample'.");
@@ -64,13 +71,6 @@ static zend_result king_inference_decode_graph_sampler_mode(
             );
             return FAILURE;
         }
-    }
-    if (king_inference_decode_graph_double_option(options, "temperature", 0.7, &temperature) != SUCCESS) {
-        return FAILURE;
-    }
-    if (temperature < 0.0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph temperature must be non-negative.");
-        return FAILURE;
     }
 
     *temperature_out = temperature;
@@ -372,16 +372,21 @@ static zend_result king_inference_decode_graph_add_sampler(
     zend_ulong position,
     zval *options,
     const char **mode_out,
-    const char **op_out
+    const char **op_out,
+    double *temperature_out
 ) {
     zval op;
     const char *mode;
     double temperature;
 
+    *mode_out = "sample";
+    *op_out = NULL;
+    *temperature_out = 0.7;
     if (king_inference_decode_graph_sampler_mode(options, &mode, &temperature) != SUCCESS) {
         return FAILURE;
     }
     *mode_out = mode;
+    *temperature_out = temperature;
     if (strcmp(mode, "argmax") == 0) {
         king_inference_decode_graph_start_op(&op, "next_token", "argmax_token");
         add_assoc_string(&op, "logits", logits);
@@ -445,6 +450,7 @@ static zend_result king_inference_token_decode_graph_array(
     bool needs_logits = emit_token || emit_logits;
     const char *token_selection = "none";
     const char *token_selection_op = NULL;
+    double token_selection_temperature = 0.0;
     double epsilon;
     double rope_base;
     char final_hidden_id[64];
@@ -645,7 +651,15 @@ static zend_result king_inference_token_decode_graph_array(
         king_inference_decode_graph_add_linear(&ops, "logits", "final_norm", output_projection, vocab);
     }
     if (emit_token) {
-        if (king_inference_decode_graph_add_sampler(&ops, "logits", position, options, &token_selection, &token_selection_op) != SUCCESS) {
+        if (king_inference_decode_graph_add_sampler(
+            &ops,
+            "logits",
+            position,
+            options,
+            &token_selection,
+            &token_selection_op,
+            &token_selection_temperature
+        ) != SUCCESS) {
             zval_ptr_dtor(&ops);
             if (output_projection != NULL) {
                 zend_string_release(output_projection);
@@ -668,6 +682,9 @@ static zend_result king_inference_token_decode_graph_array(
     if (token_selection_op != NULL) {
         add_assoc_string(return_value, "token_selection_op", token_selection_op);
     }
+    if (emit_token) {
+        add_assoc_double(return_value, "token_selection_temperature", token_selection_temperature);
+    }
     add_assoc_zval(return_value, "ops", &ops);
     add_assoc_string(return_value, "output", emit_token ? "next_token" : (emit_logits ? "logits" : "final_norm"));
     {
@@ -688,6 +705,9 @@ static zend_result king_inference_token_decode_graph_array(
         add_assoc_string(&terminal, "token_selection", token_selection);
         if (token_selection_op != NULL) {
             add_assoc_string(&terminal, "token_selection_op", token_selection_op);
+        }
+        if (emit_token) {
+            add_assoc_double(&terminal, "token_selection_temperature", token_selection_temperature);
         }
         if (needs_logits) {
             add_assoc_string(&terminal, "logits", "logits");

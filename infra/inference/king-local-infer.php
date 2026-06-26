@@ -30,6 +30,17 @@ function parse_args(array $argv): array
         'stops' => [],
     ];
 
+    $float = static function (string $value, string $arg): float {
+        if (!is_numeric($value)) {
+            fail("{$arg} must be a finite number");
+        }
+        $number = (float) $value;
+        if (!is_finite($number)) {
+            fail("{$arg} must be a finite number");
+        }
+        return $number;
+    };
+
     for ($i = 1; $i < count($argv); $i++) {
         $arg = $argv[$i];
         $next = static function () use ($argv, &$i, $arg): string {
@@ -54,7 +65,10 @@ function parse_args(array $argv): array
                 break;
             case '--temp':
             case '--temperature':
-                $options['temperature'] = max(0.0, (float) $next());
+                $options['temperature'] = $float($next(), $arg);
+                if ($options['temperature'] < 0.0) {
+                    fail("{$arg} must be non-negative");
+                }
                 break;
             case '--top-k':
                 $options['top_k'] = max(0, (int) $next());

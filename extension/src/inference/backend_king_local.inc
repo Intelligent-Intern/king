@@ -403,7 +403,7 @@ static zend_result king_inference_king_local_stream_start(
     }
 
     max_tokens = strpprintf(0, ZEND_LONG_FMT, king_inference_long_from_array(&stream->request, "max_tokens", 256));
-    temperature = strpprintf(0, "%.3f", king_inference_double_from_array(&stream->request, "temperature", 0.8));
+    temperature = strpprintf(0, "%.17g", king_inference_double_from_array(&stream->request, "temperature", 0.8));
     gpu_layers = strpprintf(0, ZEND_LONG_FMT, king_inference_max_gpu_layers(&model->config));
 
     argv[argc++] = runner;
