@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODEL="${KING_INFERENCE_HELLO_MODEL_PATH:-}"
+
+if [[ -z "$MODEL" ]]; then
+  for candidate in \
+    "${KING_INFERENCE_CPU_MODEL_PATH:-}" \
+    "${KING_INFERENCE_MODEL_PATH:-}" \
+    "${KING_INFERENCE_TEST_MODEL_PATH:-}" \
+    "$ROOT/var/inference-models/gemma3-1b.gguf"; do
+    if [[ -n "$candidate" ]]; then
+      MODEL="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ ! -r "$MODEL" ]]; then
+  echo "king-native-hello-world: model artifact is not readable: $MODEL" >&2
+  echo "king-native-hello-world: set KING_INFERENCE_HELLO_MODEL_PATH" >&2
+  echo "king-native-hello-world: or place gemma3-1b.gguf under var/inference-models/" >&2
+  exit 1
+fi
+
+PROMPT="${KING_INFERENCE_HELLO_PROMPT:-Reply with exactly this text and nothing else: Hello world}"
+TOKENS="${KING_INFERENCE_HELLO_TOKENS:-24}"
+EXPECTED="${KING_INFERENCE_HELLO_EXPECT:-Hello world}"
+
+if [[ -z "$EXPECTED" ]]; then
+  echo "king-native-hello-world: KING_INFERENCE_HELLO_EXPECT must not be empty" >&2
+  exit 1
+fi
+
+OUTPUT="$(
+  "$ROOT/bin/king-local-infer" \
+    -m "$MODEL" \
+    -p "$PROMPT" \
+    -n "$TOKENS" \
+    --temperature 0 \
+    --top-k 1 \
+    --top-p 1 \
+    --seed 1 \
+    --stop $'\n' \
+    --stop '<|end_of_text|>' \
+    --stop '</s>'
+)"
+
+printf '%s\n' "$OUTPUT"
+
+OUTPUT_LOWER="$(printf '%s' "$OUTPUT" | tr '[:upper:]' '[:lower:]')"
+EXPECTED_LOWER="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
+
+case "$OUTPUT_LOWER" in
+  *"$EXPECTED_LOWER"*)
+    ;;
+  *)
+    echo "king-native-hello-world: generated output did not contain expected text: $EXPECTED" >&2
+    exit 2
+    ;;
+esac

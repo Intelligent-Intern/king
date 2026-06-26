@@ -61,6 +61,21 @@ model metadata exposes one, generated BOS/EOS tokens stop generation before
 they are decoded to text, and configured stop strings are withheld from stdout
 instead of being emitted and recognized afterwards.
 
+`bin/king-native-hello-world` is the first direct King-only generation command.
+It resolves a local GGUF artifact from `KING_INFERENCE_HELLO_MODEL_PATH`,
+`KING_INFERENCE_CPU_MODEL_PATH`, `KING_INFERENCE_MODEL_PATH`,
+`KING_INFERENCE_TEST_MODEL_PATH`, or
+`var/inference-models/gemma3-1b.gguf`, then calls `bin/king-local-infer` with
+temperature `0`, `top_k=1`, `top_p=1`, and a fixed seed. The command captures
+the generated text, prints it, and exits non-zero unless the model output
+contains `Hello world`. It does not contact Ollama, vLLM, or another model
+server; the only model runtime in that path is the King extension plus the local
+GGUF artifact.
+
+```bash
+KING_INFERENCE_HELLO_MODEL_PATH=/models/gemma3-1b.gguf bin/king-native-hello-world
+```
+
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
 `infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
 `gemma4:12b` for the GPU profile, configures GPU layers, and uses
