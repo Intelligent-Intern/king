@@ -98,7 +98,8 @@ Loaded model metadata is strict before the router sees it: model `name`,
 `attention_query_tensor_pattern`, `attention_key_tensor_pattern`,
 `attention_value_tensor_pattern`, `attention_output_tensor_pattern`,
 `rms_norm_attention_tensor_pattern`, `rms_norm_ffn_tensor_pattern`, and
-`rms_norm_final_tensor` must be non-empty strings when provided.
+`rms_norm_final_tensor`, `ffn_gate_tensor_pattern`, `ffn_up_tensor_pattern`,
+and `ffn_down_tensor_pattern` must be non-empty strings when provided.
 
 `GET /v1/models` and `GET /v1/models/{model}` return normal OpenAI model
 objects plus an `x_king` extension object. Model objects always include integer

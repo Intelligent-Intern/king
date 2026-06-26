@@ -41,6 +41,11 @@ static void king_inference_add_rms_norm_resolution_info(
     zval *resolved
 );
 
+static void king_inference_add_ffn_resolution_info(
+    king_inference_model_object *model,
+    zval *resolved
+);
+
 static bool king_inference_tensor_descriptor_dimension(
     zval *descriptor,
     zend_ulong index,
@@ -666,5 +671,6 @@ static void king_inference_add_tensor_resolution_info(
     add_assoc_zval(&resolved, "output_projection", &output_projection);
     king_inference_add_attention_resolution_info(model, &resolved);
     king_inference_add_rms_norm_resolution_info(model, &resolved);
+    king_inference_add_ffn_resolution_info(model, &resolved);
     add_assoc_zval(target, "resolved_tensors", &resolved);
 }

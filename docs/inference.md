@@ -16,7 +16,8 @@ Optional public metadata fields are also strict: `name`, `quantization`,
 `attention_query_tensor_pattern`, `attention_key_tensor_pattern`,
 `attention_value_tensor_pattern`, `attention_output_tensor_pattern`,
 `rms_norm_attention_tensor_pattern`, `rms_norm_ffn_tensor_pattern`, and
-`rms_norm_final_tensor` must be non-empty strings when provided, and
+`rms_norm_final_tensor`, `ffn_gate_tensor_pattern`, `ffn_up_tensor_pattern`,
+and `ffn_down_tensor_pattern` must be non-empty strings when provided, and
 `context_tokens` must be a positive integer. Invalid model metadata is rejected
 during model load instead of being silently ignored by later model listings,
 embedding routes, decoder graph construction, or runner argument mapping.
@@ -347,6 +348,7 @@ extension/src/inference/
 ├── state.inc
 ├── stream_events.inc
 ├── tensor_attention_resolver.inc
+├── tensor_ffn_resolver.inc
 ├── tensor_graph.inc
 ├── tensor_graph_kv.inc
 ├── tensor_resolver.inc
@@ -418,7 +420,12 @@ attention/feed-forward RMSNorm tensors and the final output RMSNorm tensor. It
 checks configured `{layer}` patterns first for layer norms, direct configured
 final tensor names first for the final norm, then known GGUF/HF-style names,
 and finally guarded name/shape scans. Shape validation requires rank-1 tensors
-whose width matches the loaded embedding length.
+whose width matches the loaded embedding length. `tensor_ffn_resolver.inc`
+resolves per-layer FFN gate, up, and down projection tensors. It checks
+configured `{layer}` patterns first, then known GGUF/HF-style names, and
+finally guarded layer/name/shape scans. Shape validation requires `gate` and
+`up` matrices to project from embedding width to feed-forward width, and
+`down` matrices to project from feed-forward width back to embedding width.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
@@ -450,15 +457,18 @@ additionally exposes `native_model_mapped`, `native_map_bytes`,
 `paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`
 and `resolved_tensors.token_embedding` plus
 `resolved_tensors.output_projection` plus `resolved_tensors.attention` plus
-`resolved_tensors.rms_norm`, so callers can inspect the selected embedding,
-logits projection, per-layer attention tensors, and RMSNorm weights before
-building decoder graphs. The output projection entry includes
+`resolved_tensors.rms_norm` plus `resolved_tensors.ffn`, so callers can inspect
+the selected embedding, logits projection, per-layer attention tensors, RMSNorm
+weights, and FFN projection tensors before building decoder graphs. The output
+projection entry includes
 `tied_token_embedding=true` when the model uses the token embedding matrix for
 logits projection. The attention entry exposes one layer record per GGUF block
 with `query`, `key`, `value`, and `output` entries, including the resolved
 tensor name, source, status, and expected matrix dimensions. The RMSNorm entry
 exposes one layer record per GGUF block with `attention` and `feed_forward`
-entries plus a `final` entry for the output norm.
+entries plus a `final` entry for the output norm. The FFN entry exposes one
+layer record per GGUF block with `gate`, `up`, and `down` entries, including
+the resolved tensor name, source, status, and expected matrix dimensions.
 `backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
 selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
