@@ -396,9 +396,11 @@ The core programming model is:
   token-decode op set. The executor also exposes a graph result envelope for
   native GPU graph streams, carrying graph, terminal, and token-selection
   metadata plus a graph execution plan that separates CUDA-device work from
-  host sampling after bounded logits readback while explicitly refusing to
-  claim decoded token output before device execution results exist. The native
-  GPU prompt-loop admission path can
+  host sampling after bounded logits readback. The first graph device op,
+  token embedding row loading, now executes through the CUDA embedding kernel
+  and frees its temporary device buffer again; the contract still refuses to
+  claim decoded token output before full device execution results exist. The
+  native GPU prompt-loop admission path can
   tokenize prompt text, build token-decode graphs, and validate those graphs
   into result envelopes against the GPU executor without falling back to CPU
   execution. The GPU
@@ -406,9 +408,9 @@ The core programming model is:
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes the remaining bridge explicitly: the execution plans
-  still need device graph execution results before the prompt loop may emit
-  decoded tokens.
+  GPU metadata exposes the remaining bridge explicitly: the remaining device
+  graph ops still need execution and bounded logits results before the prompt
+  loop may emit decoded tokens.
   Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and

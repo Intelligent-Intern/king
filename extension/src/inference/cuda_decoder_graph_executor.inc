@@ -15,12 +15,17 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_last_plan_op_count = 0;
     model->cuda_decoder_graph_executor_last_plan_device_ops = 0;
     model->cuda_decoder_graph_executor_last_plan_host_sampling_ops = 0;
+    model->cuda_decoder_graph_executor_embedding_execution_count = 0;
+    model->cuda_decoder_graph_executor_last_embedding_width = 0;
+    model->cuda_decoder_graph_executor_last_embedding_token_id = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
     model->cuda_decoder_graph_executor_sampling_readback_available = false;
     model->cuda_decoder_graph_executor_result_contract_available = false;
     model->cuda_decoder_graph_executor_execution_plan_available = false;
+    model->cuda_decoder_graph_executor_embedding_execution_available = false;
+    model->cuda_decoder_graph_executor_last_embedding_token_available = false;
 }
 
 static void king_inference_cuda_decoder_graph_executor_set_error(
@@ -282,6 +287,150 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
     return SUCCESS;
 }
 
+static zval *king_inference_cuda_decoder_graph_executor_first_op(
+    zval *graph,
+    const char *name
+) {
+    zval *ops = king_inference_array_find(graph, "ops");
+    zval *entry;
+    size_t name_length = strlen(name);
+
+    if (ops == NULL) {
+        ops = king_inference_array_find(graph, "steps");
+    }
+    if (ops == NULL || Z_TYPE_P(ops) != IS_ARRAY) {
+        return NULL;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(ops), entry) {
+        zval *op_name;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+        op_name = king_inference_array_find(entry, "op");
+        if (op_name != NULL
+            && Z_TYPE_P(op_name) == IS_STRING
+            && Z_STRLEN_P(op_name) == name_length
+            && memcmp(Z_STRVAL_P(op_name), name, name_length) == 0) {
+            return entry;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_execute_embedding_probe(
+    king_inference_model_object *model,
+    zval *graph,
+    zval *result
+) {
+    zval *op = king_inference_cuda_decoder_graph_executor_first_op(graph, "embedding");
+    zval *token_value;
+    zval probe;
+    zend_ulong width = model->gguf.architecture_params[KING_INFERENCE_ARCH_EMBEDDING_LENGTH];
+    zend_ulong token_id;
+    size_t bytes;
+    king_inference_cuda_device_ptr output = 0;
+
+    array_init(&probe);
+    add_assoc_string(&probe, "type", "gpu_decoder_embedding_device_execution");
+    add_assoc_bool(&probe, "attempted", op != NULL);
+    add_assoc_bool(&probe, "available", model->cuda_decoder_graph_executor_embedding_execution_available);
+    add_assoc_bool(&probe, "executed", false);
+    add_assoc_bool(&probe, "retained_device_output", false);
+
+    if (op == NULL) {
+        add_assoc_zval(result, "embedding_device_execution", &probe);
+        add_assoc_bool(result, "embedding_device_execution_ready", false);
+        return SUCCESS;
+    }
+    if (!model->cuda_decoder_graph_executor_embedding_execution_available) {
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            "cuda_decoder_graph_embedding_execution_unavailable"
+        );
+        return FAILURE;
+    }
+
+    token_value = king_inference_array_find(op, "token_id");
+    if (token_value == NULL) {
+        token_value = king_inference_array_find(op, "token");
+    }
+    if (token_value == NULL || Z_TYPE_P(token_value) != IS_LONG || Z_LVAL_P(token_value) < 0) {
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            "cuda_decoder_graph_embedding_token_invalid"
+        );
+        return FAILURE;
+    }
+    if (width == 0 || width > (zend_ulong) (SIZE_MAX / sizeof(float))) {
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            "cuda_decoder_graph_embedding_width_invalid"
+        );
+        return FAILURE;
+    }
+
+    token_id = (zend_ulong) Z_LVAL_P(token_value);
+    bytes = (size_t) width * sizeof(float);
+    if (king_inference_cuda_device_allocator_alloc(model, bytes, &output) != SUCCESS) {
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : "cuda_decoder_graph_embedding_allocation_failed"
+        );
+        return FAILURE;
+    }
+
+    if (king_inference_cuda_embedding_row_load(model, token_id, output, width) != SUCCESS) {
+        (void) king_inference_cuda_device_allocator_free(model, output);
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_embedding_row_result,
+            model->cuda_embedding_row_error[0] != '\0'
+                ? model->cuda_embedding_row_error
+                : "cuda_decoder_graph_embedding_execution_failed"
+        );
+        return FAILURE;
+    }
+    if (king_inference_cuda_device_allocator_free(model, output) != SUCCESS) {
+        zval_ptr_dtor(&probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : "cuda_decoder_graph_embedding_free_failed"
+        );
+        return FAILURE;
+    }
+
+    model->cuda_decoder_graph_executor_embedding_execution_count++;
+    model->cuda_decoder_graph_executor_last_embedding_width = width;
+    model->cuda_decoder_graph_executor_last_embedding_token_id = token_id;
+    model->cuda_decoder_graph_executor_last_embedding_token_available = true;
+
+    add_assoc_bool(&probe, "executed", true);
+    add_assoc_long(&probe, "token_id", (zend_long) token_id);
+    add_assoc_long(&probe, "width", (zend_long) width);
+    add_assoc_long(&probe, "bytes", (zend_long) bytes);
+    add_assoc_zval(result, "embedding_device_execution", &probe);
+    add_assoc_bool(result, "embedding_device_execution_ready", true);
+    add_assoc_bool(result, "first_device_op_executed", true);
+    return SUCCESS;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_prepare_result(
     king_inference_model_object *model,
     zval *graph,
@@ -304,6 +453,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_result(
     add_assoc_bool(result, "token_result_ready", false);
     add_assoc_bool(result, "decoded_token_ready", false);
     add_assoc_bool(result, "execution_plan_ready", false);
+    add_assoc_bool(result, "embedding_device_execution_ready", false);
+    add_assoc_bool(result, "first_device_op_executed", false);
     add_assoc_bool(result, "silent_cpu_fallback", false);
     add_assoc_long(result, "op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
     add_assoc_long(
@@ -338,6 +489,11 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_result(
     add_assoc_bool(result, "terminal_present", has_terminal);
     add_assoc_zval(result, "terminal", &terminal);
     if (king_inference_cuda_decoder_graph_executor_prepare_plan(model, graph, result) != SUCCESS) {
+        zval_ptr_dtor(result);
+        ZVAL_UNDEF(result);
+        return FAILURE;
+    }
+    if (king_inference_cuda_decoder_graph_executor_execute_embedding_probe(model, graph, result) != SUCCESS) {
         zval_ptr_dtor(result);
         ZVAL_UNDEF(result);
         return FAILURE;
@@ -379,6 +535,8 @@ static void king_inference_cuda_decoder_graph_executor_init(
     model->cuda_decoder_graph_executor_sampling_readback_available = true;
     model->cuda_decoder_graph_executor_result_contract_available = true;
     model->cuda_decoder_graph_executor_execution_plan_available = true;
+    model->cuda_decoder_graph_executor_embedding_execution_available =
+        model->cuda_embedding_row_available && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -409,6 +567,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "execution_plan_available",
         model->cuda_decoder_graph_executor_execution_plan_available
     );
+    add_assoc_bool(
+        &executor,
+        "embedding_execution_available",
+        model->cuda_decoder_graph_executor_embedding_execution_available
+    );
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
     add_assoc_long(
@@ -438,6 +601,26 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "last_plan_host_sampling_ops",
         (zend_long) model->cuda_decoder_graph_executor_last_plan_host_sampling_ops
     );
+    add_assoc_long(
+        &executor,
+        "embedding_device_executions",
+        (zend_long) model->cuda_decoder_graph_executor_embedding_execution_count
+    );
+    add_assoc_long(
+        &executor,
+        "last_embedding_width",
+        (zend_long) model->cuda_decoder_graph_executor_last_embedding_width
+    );
+    if (model->cuda_decoder_graph_executor_last_embedding_token_available
+        && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
+        add_assoc_long(
+            &executor,
+            "last_embedding_token_id",
+            (zend_long) model->cuda_decoder_graph_executor_last_embedding_token_id
+        );
+    } else {
+        add_assoc_null(&executor, "last_embedding_token_id");
+    }
     add_assoc_bool(&executor, "device_execution_result_ready", false);
     add_assoc_long(&executor, "result", model->cuda_decoder_graph_executor_result);
     add_assoc_string(&executor, "error", model->cuda_decoder_graph_executor_error);
@@ -470,6 +653,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         return_value,
         "decoder_graph_execution_plan_ready",
         model->cuda_decoder_graph_executor_execution_plan_available
+    );
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_embedding_execution_ready",
+        model->cuda_decoder_graph_executor_embedding_execution_available
     );
 }
 
