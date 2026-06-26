@@ -1001,16 +1001,21 @@ while (($event = king_inference_next($stream, 0)) !== null) {
 }
 ```
 
-The native stream path is intentionally graph-driven. A request can provide one
-`graph` repeated for a bounded token count or a `graphs` sequence for explicit
-decode steps. Streams are stateless by default: King does not carry graph
-result state into the next graph unless `with_memory => true` is set in the
-stream options, request, or `graph_options`. When memory is enabled and a graph
-omits `state`, King carries the previous graph result state into the next graph,
-so KV cache entries written by `kv_write` can be read by later steps through
-`kv_read` or `kv_attention`. This is the current native handoff for token
-events; higher-level prompt-to-graph compilation is a later layer and does not
-need a second inference runtime.
+The native stream path is intentionally graph-driven. A request can provide a
+`graphs` sequence for explicit decode steps. When a single `graph` is a
+`king_native_cpu_token_decode` graph, King runs it once, decodes the selected
+token, builds the next token-decode graph from that token id at the next
+position, carries the original token-selection settings, and continues until
+`max_tokens` is reached. Other single graphs keep the bounded repeat behavior
+for custom graph finishers. Streams are stateless by default: King does not
+carry graph result state into the next graph unless
+`with_memory => true` is set in the stream options, request, or `graph_options`.
+When memory is enabled and a graph omits `state`, King carries the previous
+graph result state into the next graph, so KV cache entries written by
+`kv_write` can be read by later steps through `kv_read` or `kv_attention`. This
+is the current native handoff for generated token events; higher-level
+prompt-to-graph compilation is a later layer and does not need a second
+inference runtime.
 
 Native graph stream startup is bounded by `max_native_stream_tokens`, which can
 be set as a stream option or graph option. If it is not set, King allows up to
