@@ -1359,7 +1359,11 @@ payload or options set `with_memory` or `with-memory` to `true`.
 For `stream=false`, the helper drains native decoder content deltas into one
 OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
 Decoder text is treated as assistant content. Tool-call request fields remain
-rejected until a real King tool execution path exists. For `stream=true`, it
+rejected until a real King tool execution path exists. Requests containing
+`tools`, `tool_choice`, `parallel_tool_calls`, legacy `functions` /
+`function_call`, or assistant-message `tool_calls` return an
+`invalid_request_error` that names the missing King tool execution path instead
+of pretending model text is executable tool output. For `stream=true`, it
 returns a bounded `text/event-stream` body with `data: {chunk}` events and a
 final `data: [DONE]` marker.
 For `king_native_cpu`, that streaming response is backed by native decoder

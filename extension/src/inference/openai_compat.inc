@@ -137,25 +137,14 @@ static zend_result king_inference_openai_validate_payload(
 
         role = king_inference_array_find(message, "role");
         content = king_inference_array_find(message, "content");
-        if (king_inference_openai_message_has_tool_calls(message)) {
+        if (king_inference_openai_message_has_tool_call_request(message)) {
             if (has_error_response != NULL) {
                 *has_error_response = true;
             }
             return king_inference_openai_error_response(
                 return_value,
                 400,
-                "OpenAI request uses a feature this King local inference route does not support.",
-                "invalid_request_error"
-            );
-        }
-        if (!king_inference_openai_message_tool_calls_valid(message, &feature_error)) {
-            if (has_error_response != NULL) {
-                *has_error_response = true;
-            }
-            return king_inference_openai_error_response(
-                return_value,
-                400,
-                feature_error != NULL ? feature_error : "Assistant tool_calls are invalid.",
+                king_inference_openai_tool_calls_unsupported_message(),
                 "invalid_request_error"
             );
         }

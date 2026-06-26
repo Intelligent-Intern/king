@@ -6,200 +6,9 @@ static bool king_inference_openai_tools_active(zval *source)
         && zend_hash_num_elements(Z_ARRVAL_P(tools)) > 0;
 }
 
-static bool king_inference_openai_tool_choice_valid(zval *source, const char **message)
+static const char *king_inference_openai_tool_calls_unsupported_message(void)
 {
-    zval *choice = king_inference_array_find(source, "tool_choice");
-    zval *type;
-    zval *function;
-    zval *name;
-
-    if (choice == NULL || Z_TYPE_P(choice) == IS_NULL || Z_TYPE_P(choice) == IS_FALSE) {
-        return true;
-    }
-    if (Z_TYPE_P(choice) == IS_STRING) {
-        return zend_string_equals_literal(Z_STR_P(choice), "auto")
-            || zend_string_equals_literal(Z_STR_P(choice), "none")
-            || zend_string_equals_literal(Z_STR_P(choice), "required");
-    }
-    if (!king_inference_openai_array_is_object(choice)) {
-        if (message != NULL) {
-            *message = "OpenAI tool_choice must be auto, none, required, or a function tool-choice object.";
-        }
-        return false;
-    }
-
-    type = king_inference_array_find(choice, "type");
-    function = king_inference_array_find(choice, "function");
-    name = function != NULL && king_inference_openai_array_is_object(function)
-        ? king_inference_array_find(function, "name")
-        : NULL;
-
-    if (type == NULL
-        || Z_TYPE_P(type) != IS_STRING
-        || !zend_string_equals_literal(Z_STR_P(type), "function")
-        || name == NULL
-        || Z_TYPE_P(name) != IS_STRING
-        || Z_STRLEN_P(name) == 0) {
-        if (message != NULL) {
-            *message = "OpenAI function tool_choice requires type=function and function.name.";
-        }
-        return false;
-    }
-
-    return true;
-}
-
-static bool king_inference_openai_tools_valid(zval *source, const char **message)
-{
-    zval *tools = king_inference_array_find(source, "tools");
-    zval *parallel = king_inference_array_find(source, "parallel_tool_calls");
-    zval *tool;
-
-    if (message != NULL) {
-        *message = NULL;
-    }
-    if (parallel != NULL && Z_TYPE_P(parallel) != IS_TRUE && Z_TYPE_P(parallel) != IS_FALSE && Z_TYPE_P(parallel) != IS_NULL) {
-        if (message != NULL) {
-            *message = "OpenAI parallel_tool_calls must be a boolean when provided.";
-        }
-        return false;
-    }
-    if (!king_inference_openai_tool_choice_valid(source, message)) {
-        return false;
-    }
-    if (tools == NULL || Z_TYPE_P(tools) == IS_NULL) {
-        return true;
-    }
-    if (!king_inference_openai_array_is_list(tools)) {
-        if (message != NULL) {
-            *message = "OpenAI tools must be an array when provided.";
-        }
-        return false;
-    }
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(tools), tool) {
-        zval *type;
-        zval *function;
-        zval *name;
-        zval *description;
-        zval *parameters;
-        zval *strict;
-
-        if (!king_inference_openai_array_is_object(tool)) {
-            if (message != NULL) {
-                *message = "Each OpenAI tool must be an object.";
-            }
-            return false;
-        }
-
-        type = king_inference_array_find(tool, "type");
-        function = king_inference_array_find(tool, "function");
-        if (type == NULL
-            || Z_TYPE_P(type) != IS_STRING
-            || !zend_string_equals_literal(Z_STR_P(type), "function")
-            || !king_inference_openai_array_is_object(function)) {
-            if (message != NULL) {
-                *message = "King local inference currently accepts OpenAI function tools only.";
-            }
-            return false;
-        }
-
-        name = king_inference_array_find(function, "name");
-        description = king_inference_array_find(function, "description");
-        parameters = king_inference_array_find(function, "parameters");
-        strict = king_inference_array_find(function, "strict");
-        if (name == NULL || Z_TYPE_P(name) != IS_STRING || Z_STRLEN_P(name) == 0) {
-            if (message != NULL) {
-                *message = "OpenAI function tools require a non-empty function.name.";
-            }
-            return false;
-        }
-        if (description != NULL && Z_TYPE_P(description) != IS_STRING && Z_TYPE_P(description) != IS_NULL) {
-            if (message != NULL) {
-                *message = "OpenAI function tool description must be a string when provided.";
-            }
-            return false;
-        }
-        if (parameters != NULL && !king_inference_openai_array_is_object(parameters) && Z_TYPE_P(parameters) != IS_NULL) {
-            if (message != NULL) {
-                *message = "OpenAI function tool parameters must be a JSON object when provided.";
-            }
-            return false;
-        }
-        if (strict != NULL && Z_TYPE_P(strict) != IS_TRUE && Z_TYPE_P(strict) != IS_FALSE && Z_TYPE_P(strict) != IS_NULL) {
-            if (message != NULL) {
-                *message = "OpenAI function tool strict must be a boolean when provided.";
-            }
-            return false;
-        }
-    } ZEND_HASH_FOREACH_END();
-
-    return true;
-}
-
-static bool king_inference_openai_message_tool_calls_valid(zval *message, const char **error)
-{
-    zval *tool_calls = king_inference_array_find(message, "tool_calls");
-    zval *call;
-
-    if (error != NULL) {
-        *error = NULL;
-    }
-    if (tool_calls == NULL || Z_TYPE_P(tool_calls) == IS_NULL) {
-        return true;
-    }
-    if (!king_inference_openai_array_is_list(tool_calls)) {
-        if (error != NULL) {
-            *error = "Assistant tool_calls must be an array when provided.";
-        }
-        return false;
-    }
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(tool_calls), call) {
-        zval *id;
-        zval *type;
-        zval *function;
-        zval *name;
-        zval *arguments;
-
-        if (!king_inference_openai_array_is_object(call)) {
-            if (error != NULL) {
-                *error = "Each assistant tool_call must be an object.";
-            }
-            return false;
-        }
-        id = king_inference_array_find(call, "id");
-        type = king_inference_array_find(call, "type");
-        function = king_inference_array_find(call, "function");
-        name = function != NULL && king_inference_openai_array_is_object(function)
-            ? king_inference_array_find(function, "name")
-            : NULL;
-        arguments = function != NULL && king_inference_openai_array_is_object(function)
-            ? king_inference_array_find(function, "arguments")
-            : NULL;
-
-        if (id != NULL && Z_TYPE_P(id) != IS_STRING) {
-            if (error != NULL) {
-                *error = "Assistant tool_call id must be a string when provided.";
-            }
-            return false;
-        }
-        if (type == NULL
-            || Z_TYPE_P(type) != IS_STRING
-            || !zend_string_equals_literal(Z_STR_P(type), "function")
-            || name == NULL
-            || Z_TYPE_P(name) != IS_STRING
-            || Z_STRLEN_P(name) == 0
-            || arguments == NULL
-            || (Z_TYPE_P(arguments) != IS_STRING && !king_inference_openai_array_is_object(arguments))) {
-            if (error != NULL) {
-                *error = "Assistant tool_calls require type=function, function.name, and function.arguments.";
-            }
-            return false;
-        }
-    } ZEND_HASH_FOREACH_END();
-
-    return true;
+    return "OpenAI tool calls require a real King tool execution path; this route rejects tools, tool_choice, parallel_tool_calls, functions, function_call, and assistant tool_calls until that path exists.";
 }
 
 static bool king_inference_openai_message_has_tool_calls(zval *message)
@@ -208,6 +17,13 @@ static bool king_inference_openai_message_has_tool_calls(zval *message)
 
     return king_inference_openai_array_is_list(tool_calls)
         && zend_hash_num_elements(Z_ARRVAL_P(tool_calls)) > 0;
+}
+
+static bool king_inference_openai_message_has_tool_call_request(zval *message)
+{
+    zval *tool_calls = king_inference_array_find(message, "tool_calls");
+
+    return tool_calls != NULL && Z_TYPE_P(tool_calls) != IS_NULL;
 }
 
 static zend_result king_inference_openai_append_message_tool_calls_text(zval *message, smart_str *buffer)

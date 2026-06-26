@@ -447,12 +447,15 @@ static bool king_inference_openai_response_instructions_valid(zval *source, cons
 
 static bool king_inference_openai_chat_feature_options_valid(zval *source, const char **message)
 {
-    static const char * const unsupported_keys[] = {
+    static const char * const unsupported_tool_keys[] = {
         "tools",
         "tool_choice",
         "parallel_tool_calls",
         "functions",
         "function_call",
+        NULL
+    };
+    static const char * const unsupported_keys[] = {
         "modalities",
         "audio",
         "prediction",
@@ -462,6 +465,12 @@ static bool king_inference_openai_chat_feature_options_valid(zval *source, const
     };
 
     if (!king_inference_openai_response_format_valid(source, message)) {
+        return false;
+    }
+    if (!king_inference_openai_no_unsupported_features(source, unsupported_tool_keys, message)) {
+        if (message != NULL) {
+            *message = king_inference_openai_tool_calls_unsupported_message();
+        }
         return false;
     }
 
