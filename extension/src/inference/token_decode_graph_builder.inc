@@ -35,6 +35,44 @@ static bool king_inference_decode_graph_bool_option(zval *options, const char *k
     return zend_is_true(value);
 }
 
+static zend_result king_inference_decode_graph_token_id_from_source(
+    king_inference_model_object *model,
+    zval *source,
+    zend_ulong position,
+    zend_ulong *token_id_out
+) {
+    zval *token = source;
+
+    if (source != NULL && Z_TYPE_P(source) == IS_ARRAY) {
+        zval *tokens = king_inference_array_find(source, "tokens");
+
+        if (tokens == NULL) {
+            tokens = source;
+        }
+        if (Z_TYPE_P(tokens) != IS_ARRAY) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph tokenizer output must contain a tokens array.");
+            return FAILURE;
+        }
+        token = zend_hash_index_find(Z_ARRVAL_P(tokens), position);
+        if (token == NULL) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph tokenizer output does not contain tokens[%lu].", (unsigned long) position);
+            return FAILURE;
+        }
+    }
+    if (token == NULL || Z_TYPE_P(token) != IS_LONG || Z_LVAL_P(token) < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token must be a non-negative integer or tokenizer output containing tokens[position].");
+        return FAILURE;
+    }
+    if (model->gguf.tokenizer_token_count > 0
+        && (zend_ulong) Z_LVAL_P(token) >= model->gguf.tokenizer_token_count) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token id exceeds the loaded tokenizer vocabulary.");
+        return FAILURE;
+    }
+
+    *token_id_out = (zend_ulong) Z_LVAL_P(token);
+    return SUCCESS;
+}
+
 static zend_result king_inference_decode_graph_required_shape(
     king_inference_model_object *model,
     bool emit_token,
@@ -324,7 +362,7 @@ static zend_ulong king_inference_decode_graph_kv_head(zend_ulong head, zend_ulon
 
 static zend_result king_inference_token_decode_graph_array(
     king_inference_model_object *model,
-    zend_ulong token_id,
+    zval *token_source,
     zend_ulong position,
     zval *options,
     zval *return_value
@@ -339,6 +377,7 @@ static zend_result king_inference_token_decode_graph_array(
     zend_ulong slot_start;
     zend_ulong slot_count;
     zend_ulong layer;
+    zend_ulong token_id;
     zend_string *token_embedding = NULL;
     zend_string *output_projection = NULL;
     zend_string *final_norm = NULL;
@@ -351,7 +390,8 @@ static zend_result king_inference_token_decode_graph_array(
 
     if (king_inference_decode_graph_required_shape(model, emit_token, &layers, &heads, &kv_heads, &key_length, &value_length, &vocab) != SUCCESS
         || king_inference_decode_graph_double_option(options, "epsilon", 0.000001, &epsilon) != SUCCESS
-        || king_inference_decode_graph_double_option(options, "rope_base", 10000.0, &rope_base) != SUCCESS) {
+        || king_inference_decode_graph_double_option(options, "rope_base", 10000.0, &rope_base) != SUCCESS
+        || king_inference_decode_graph_token_id_from_source(model, token_source, position, &token_id) != SUCCESS) {
         return FAILURE;
     }
     if (epsilon <= 0.0 || rope_base <= 0.0) {

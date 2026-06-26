@@ -26,7 +26,9 @@ decode one native token id through the tokenizer loaded from the same GGUF
 artifact. `king_inference_token_decode_graph()` and
 `King\Inference\Model::tokenDecodeGraph()` build the complete native CPU
 decode graph for one token position from the loaded model metadata and tensor
-resolvers.
+resolvers. The graph builder accepts either a direct token id or the tokenizer
+output returned by `king_inference_tokenize()`; in the tokenizer-output form,
+`tokens[position]` is validated and wired into the embedding operation.
 
 The implemented token-streaming backends are `local` and `king_native_cpu`.
 `local` uses a King-owned process runner contract while the public backend name
@@ -898,11 +900,10 @@ $model = king_inference_model_load([
 ]);
 
 $encoded = king_inference_tokenize($model, 'Explain invoice rejection HU-2026-0007.');
-$promptTokens = $encoded['tokens'];
 
 $graphs = [];
-foreach (array_slice($promptTokens, -3, 3, true) as $position => $tokenId) {
-    $graphs[] = king_inference_token_decode_graph($model, (int) $tokenId, (int) $position, [
+for ($position = 0; $position < $encoded['token_count']; $position++) {
+    $graphs[] = king_inference_token_decode_graph($model, $encoded, $position, [
         'temperature' => 0.4,
         'top_k' => 40,
         'top_p' => 0.95,

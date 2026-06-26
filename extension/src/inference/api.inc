@@ -161,22 +161,22 @@ PHP_FUNCTION(king_inference_token_decode)
 
 PHP_FUNCTION(king_inference_token_decode_graph)
 {
-    zval *model, *options = NULL;
-    zend_long token_id, position;
+    zval *model, *token, *options = NULL;
+    zend_long position;
     ZEND_PARSE_PARAMETERS_START(3, 4)
         Z_PARAM_OBJECT_OF_CLASS(model, king_ce_inference_model)
-        Z_PARAM_LONG(token_id)
+        Z_PARAM_ZVAL(token)
         Z_PARAM_LONG(position)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
-    if (token_id < 0 || position < 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token_id and position must be non-negative.");
+    if (position < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph position must be non-negative.");
         RETURN_THROWS();
     }
     if (king_inference_token_decode_graph_array(
         php_king_inference_model_obj_from_zend(Z_OBJ_P(model)),
-        (zend_ulong) token_id,
+        token,
         (zend_ulong) position,
         options,
         return_value
@@ -488,21 +488,21 @@ PHP_METHOD(King_Inference_Model, tokenDecode)
 
 PHP_METHOD(King_Inference_Model, tokenDecodeGraph)
 {
-    zval *options = NULL;
-    zend_long token_id, position;
+    zval *token, *options = NULL;
+    zend_long position;
     ZEND_PARSE_PARAMETERS_START(2, 3)
-        Z_PARAM_LONG(token_id)
+        Z_PARAM_ZVAL(token)
         Z_PARAM_LONG(position)
         Z_PARAM_OPTIONAL
         Z_PARAM_ARRAY_OR_NULL(options)
     ZEND_PARSE_PARAMETERS_END();
-    if (token_id < 0 || position < 0) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token_id and position must be non-negative.");
+    if (position < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph position must be non-negative.");
         RETURN_THROWS();
     }
     if (king_inference_token_decode_graph_array(
         php_king_inference_model_obj_from_zend(Z_OBJ_P(ZEND_THIS)),
-        (zend_ulong) token_id,
+        token,
         (zend_ulong) position,
         options,
         return_value

@@ -1321,11 +1321,15 @@ namespace {
 
     /**
      * Build the complete native CPU token decode graph for one token position.
+     * `$token` may be a non-negative token id or the array returned by
+     * `king_inference_tokenize()`, in which case `tokens[$position]` feeds the
+     * embedding step.
+     * @param int|array{tokens:array<int,int>} $token
      * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
      * @return array<string,mixed>
      * @throws \King\ValidationException|\King\RuntimeException
      */
-    function king_inference_token_decode_graph(\King\Inference\Model $model, int $token_id, int $position, ?array $options = null): array {}
+    function king_inference_token_decode_graph(\King\Inference\Model $model, int|array $token, int $position, ?array $options = null): array {}
 
     /**
      * Return a read-only native tensor view descriptor for one tensor from the
@@ -2796,10 +2800,11 @@ namespace King {
         public static function tokenDecode(Inference\Model $model, int $token_id): string {}
 
         /**
+         * @param int|array{tokens:array<int,int>} $token
          * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
          */
-        public static function tokenDecodeGraph(Inference\Model $model, int $token_id, int $position, ?array $options = null): array {}
+        public static function tokenDecodeGraph(Inference\Model $model, int|array $token, int $position, ?array $options = null): array {}
 
         /** @return array<string,mixed> */
         public static function tensorView(Inference\Model $model, string $name): array {}
@@ -3011,10 +3016,11 @@ namespace King\Inference {
         public function tokenDecode(int $token_id): string {}
 
         /**
+         * @param int|array{tokens:array<int,int>} $token
          * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
          */
-        public function tokenDecodeGraph(int $token_id, int $position, ?array $options = null): array {}
+        public function tokenDecodeGraph(int|array $token, int $position, ?array $options = null): array {}
 
         /** @return array<string,mixed> */
         public function tensorView(string $name): array {}
