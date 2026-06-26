@@ -172,6 +172,54 @@ static zend_result king_inference_king_native_token_id_from_result(
     return SUCCESS;
 }
 
+static bool king_inference_king_native_metric_double(zval *values, zend_ulong index, double *value)
+{
+    zval *field = zend_hash_index_find(Z_ARRVAL_P(values), index);
+
+    if (field == NULL) {
+        return false;
+    }
+    if (Z_TYPE_P(field) == IS_LONG) {
+        *value = (double) Z_LVAL_P(field);
+        return true;
+    }
+    if (Z_TYPE_P(field) == IS_DOUBLE) {
+        *value = Z_DVAL_P(field);
+        return true;
+    }
+
+    return false;
+}
+
+static void king_inference_king_native_update_decoder_metrics(
+    king_inference_stream_object *stream,
+    zval *graph_result,
+    zval *graph,
+    zend_ulong token_id
+) {
+    zval *payload = king_inference_king_native_graph_token_payload(graph_result, graph);
+    zval *values = payload != NULL && Z_TYPE_P(payload) == IS_ARRAY ? king_inference_array_find(payload, "values") : NULL;
+    double probability;
+    double logit;
+    double rank;
+
+    stream->native_decoder_token_count++;
+    stream->native_decoder_last_token_id = token_id;
+    stream->native_decoder_last_token_available = true;
+    stream->native_decoder_last_score_available = false;
+    if (values == NULL || Z_TYPE_P(values) != IS_ARRAY) {
+        return;
+    }
+    if (king_inference_king_native_metric_double(values, 1, &probability)
+        && king_inference_king_native_metric_double(values, 2, &logit)
+        && king_inference_king_native_metric_double(values, 3, &rank)) {
+        stream->native_decoder_last_probability = probability;
+        stream->native_decoder_last_logit = logit;
+        stream->native_decoder_last_rank = rank;
+        stream->native_decoder_last_score_available = true;
+    }
+}
+
 static bool king_inference_king_native_is_token_decode_graph(zval *graph)
 {
     zval *type = king_inference_array_find(graph, "graph_type");
@@ -315,6 +363,7 @@ static zend_result king_inference_king_native_append_graph_token(
         zval_ptr_dtor(&working_graph);
         return FAILURE;
     }
+    king_inference_king_native_update_decoder_metrics(stream, &graph_result, &working_graph, token_id);
     add_next_index_str(&stream->native_events, token_text);
     if (token_id_out != NULL) {
         *token_id_out = token_id;

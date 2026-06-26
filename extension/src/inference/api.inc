@@ -690,6 +690,7 @@ PHP_METHOD(King_Inference_Stream, __construct)
     stream->chunk_count = 0;
     stream->stderr_count = 0;
     stream->bytes_emitted = 0;
+    king_inference_stream_reset_decoder_metrics(stream);
     stream->native_event_index = 0;
     stream->gpu_thermal_preflight_at = 0;
     stream->gpu_thermal_abort_at = 0;

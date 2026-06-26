@@ -122,6 +122,7 @@ static zend_object *king_inference_stream_object_create(zend_class_entry *ce)
     intern->chunk_count = 0;
     intern->stderr_count = 0;
     intern->bytes_emitted = 0;
+    king_inference_stream_reset_decoder_metrics(intern);
     intern->created_at = 0;
     intern->gpu_thermal_preflight_at = 0;
     intern->gpu_thermal_abort_at = 0;

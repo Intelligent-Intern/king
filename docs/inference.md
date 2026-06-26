@@ -1428,11 +1428,15 @@ $metrics = $stream->getMetrics();
 
 `Stream::getMetrics()` reports emitted token chunks, stderr chunks, bytes,
 terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
-native graph streams also `native_stream`, `native_event_count`, and
-`native_event_index`. After native stream cancellation, `native_event_index`
-points at the end of the prepared native event buffer. GPU-enabled streams also
-report the last run preflight through `gpu_thermal_preflight_checked`,
-`gpu_thermal_preflight_at`, and the optional
+native graph streams also `native_stream`, `native_event_count`,
+`native_event_index`, `native_decoder_tokens`,
+`native_decoder_last_token_id`, `native_decoder_last_probability`,
+`native_decoder_last_logit`, and `native_decoder_last_rank`. After native
+stream cancellation, `native_event_index` points at the end of the prepared
+native event buffer. `native_decoder_tokens` counts native token selections
+prepared by the decoder; `chunks` remains the count of emitted stream reads.
+GPU-enabled streams also report the last run preflight through
+`gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and the optional
 `gpu_thermal_preflight_temperature_c`. If a running GPU stream is
 aborted at the configured thermal ceiling, metrics include
 `gpu_thermal_aborted`, `gpu_thermal_abort_at`,

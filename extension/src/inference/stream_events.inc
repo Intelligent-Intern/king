@@ -22,6 +22,17 @@ static bool king_inference_stream_has_native_events(king_inference_stream_object
     return !Z_ISUNDEF(stream->native_events) && Z_TYPE(stream->native_events) == IS_ARRAY;
 }
 
+static void king_inference_stream_reset_decoder_metrics(king_inference_stream_object *stream)
+{
+    stream->native_decoder_token_count = 0;
+    stream->native_decoder_last_token_id = 0;
+    stream->native_decoder_last_probability = 0.0;
+    stream->native_decoder_last_logit = 0.0;
+    stream->native_decoder_last_rank = 0.0;
+    stream->native_decoder_last_token_available = false;
+    stream->native_decoder_last_score_available = false;
+}
+
 static void king_inference_stream_cancel_state(king_inference_stream_object *stream)
 {
     stream->cancelled = true;
@@ -416,6 +427,25 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_bool(return_value, "native_stream", native_event_count > 0);
     add_assoc_long(return_value, "native_event_count", native_event_count);
     add_assoc_long(return_value, "native_event_index", (zend_long) stream->native_event_index);
+    add_assoc_long(return_value, "native_decoder_tokens", stream->native_decoder_token_count);
+    if (stream->native_decoder_last_token_available) {
+        if (stream->native_decoder_last_token_id <= (zend_ulong) ZEND_LONG_MAX) {
+            add_assoc_long(return_value, "native_decoder_last_token_id", (zend_long) stream->native_decoder_last_token_id);
+        } else {
+            add_assoc_double(return_value, "native_decoder_last_token_id", (double) stream->native_decoder_last_token_id);
+        }
+    } else {
+        add_assoc_null(return_value, "native_decoder_last_token_id");
+    }
+    if (stream->native_decoder_last_score_available) {
+        add_assoc_double(return_value, "native_decoder_last_probability", stream->native_decoder_last_probability);
+        add_assoc_double(return_value, "native_decoder_last_logit", stream->native_decoder_last_logit);
+        add_assoc_double(return_value, "native_decoder_last_rank", stream->native_decoder_last_rank);
+    } else {
+        add_assoc_null(return_value, "native_decoder_last_probability");
+        add_assoc_null(return_value, "native_decoder_last_logit");
+        add_assoc_null(return_value, "native_decoder_last_rank");
+    }
 }
 
 static void king_inference_stream_done_event(king_inference_stream_object *stream, zval *return_value)
