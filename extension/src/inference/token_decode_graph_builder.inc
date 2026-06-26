@@ -330,6 +330,7 @@ static void king_inference_decode_graph_add_rope(
     add_assoc_string(&op, "input", input);
     add_assoc_long(&op, "position", (zend_long) position);
     add_assoc_long(&op, "head_dim", (zend_long) head_dim);
+    add_assoc_double(&op, "rope_base", rope_base);
     array_init(&inv_freqs);
     for (i = 0; i < head_dim / 2; i++) {
         add_next_index_double(&inv_freqs, 1.0 / pow(rope_base, ((double) i * 2.0) / (double) head_dim));
@@ -514,7 +515,6 @@ static zend_result king_inference_token_decode_graph_array(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph epsilon and rope_base must be positive.");
         return FAILURE;
     }
-
     if (king_inference_resolve_token_embedding_tensor_name(model, NULL, &token_embedding, NULL, &status) != SUCCESS
         || token_embedding == NULL) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve token embedding tensor: %s.", status != NULL ? status : "not_found");
