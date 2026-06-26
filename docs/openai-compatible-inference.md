@@ -109,12 +109,19 @@ The `x_king` object also contains the resolved King backend, whether the backend
 configuration resolved cleanly, whether the model can serve the generic OpenAI
 generation routes, whether it supports native graph streaming, whether it can
 serve embeddings, whether configured GPU use is enabled for the model, and the
-backend capability map from the loaded model. If a backend configuration cannot
+backend capability map from the loaded model. Frontends should prefer
+`x_king.client_capabilities` for UI decisions because it is a versioned,
+runtime-ready contract: `openai_chat_completions`,
+`openai_chat_completions_stream`, `openai_responses`,
+`openai_completions`, `openai_embeddings`, `native_graph_streaming`,
+`requires_gpu`, `gpu_runtime_required`, and `gpu_generation_ready` are direct
+booleans, and unsupported OpenAI tool-call surfaces are explicitly reported as
+`false` with `tool_call_status=unsupported`. If a backend configuration cannot
 be resolved, `x_king.backend` is `invalid`, `x_king.backend_config_valid` is
-`false`, and all executable capability flags are reported as unavailable. The
-router-level `owned_by` option overrides the model config owner for
-model-listing responses and must be a non-empty string when provided; invalid
-listing options return a server error instead of being ignored.
+`false`, and all executable client capability flags are reported as
+unavailable. The router-level `owned_by` option overrides the model config
+owner for model-listing responses and must be a non-empty string when provided;
+invalid listing options return a server error instead of being ignored.
 
 Chat message `content` and Responses input item `content` may be a string or an
 array of text content parts. Responses `instructions` must be a non-empty string

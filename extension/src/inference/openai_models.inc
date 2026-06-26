@@ -177,6 +177,47 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_string(return_value, "model_format", "gguf");
 }
 
+static void king_inference_openai_client_capabilities_array(
+    zval *return_value,
+    bool backend_config_valid,
+    king_inference_backend_kind kind,
+    bool gpu_enabled,
+    bool gpu_generation_ready)
+{
+    bool local_backend = kind == KING_INFERENCE_BACKEND_LOCAL;
+    bool native_cpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    bool native_gpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+    bool openai_text_generation = backend_config_valid
+        && ((local_backend && !gpu_enabled)
+            || native_cpu_backend
+            || (native_gpu_backend && gpu_generation_ready));
+    bool native_stream_contract = backend_config_valid
+        && (native_cpu_backend || native_gpu_backend);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "version", 1);
+    add_assoc_bool(return_value, "model_selectable", backend_config_valid);
+    add_assoc_bool(return_value, "generation_ready", openai_text_generation);
+    add_assoc_bool(return_value, "plain_text_chat", openai_text_generation);
+    add_assoc_bool(return_value, "openai_chat_completions", openai_text_generation);
+    add_assoc_bool(return_value, "openai_chat_completions_stream", openai_text_generation);
+    add_assoc_bool(return_value, "openai_responses", openai_text_generation);
+    add_assoc_bool(return_value, "openai_completions", openai_text_generation);
+    add_assoc_bool(return_value, "openai_embeddings", backend_config_valid && native_cpu_backend);
+    add_assoc_bool(return_value, "native_graph_streaming", backend_config_valid && native_cpu_backend);
+    add_assoc_bool(return_value, "native_stream_contract", native_stream_contract);
+    add_assoc_bool(return_value, "requires_gpu", gpu_enabled || native_gpu_backend);
+    add_assoc_bool(return_value, "gpu_runtime_required", gpu_enabled || native_gpu_backend);
+    add_assoc_bool(return_value, "gpu_generation_ready", backend_config_valid && native_gpu_backend && gpu_generation_ready);
+    add_assoc_bool(return_value, "openai_tools", false);
+    add_assoc_bool(return_value, "openai_tool_calls", false);
+    add_assoc_bool(return_value, "openai_function_calling", false);
+    add_assoc_bool(return_value, "openai_parallel_tool_calls", false);
+    add_assoc_bool(return_value, "openai_vision", false);
+    add_assoc_bool(return_value, "openai_audio", false);
+    add_assoc_string(return_value, "tool_call_status", "unsupported");
+}
+
 static void king_inference_openai_model_object(
     zval *return_value,
     zval *model_value,
@@ -191,11 +232,16 @@ static void king_inference_openai_model_object(
     king_inference_backend_kind kind;
     zval king_meta;
     zval capabilities;
+    zval client_capabilities;
     zval gpu_runtime;
     bool backend_config_valid = true;
     bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
     bool gpu_enabled = false;
     bool gpu_openai_generation_ready = false;
+    bool openai_generation_ready = false;
+    bool native_graph_streaming_ready = false;
+    bool native_stream_contract_ready = false;
+    bool embeddings_ready = false;
 
     ZVAL_UNDEF(&gpu_runtime);
 
@@ -230,46 +276,41 @@ static void king_inference_openai_model_object(
         generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
         gpu_openai_generation_ready = generation_ready != NULL && zend_is_true(generation_ready);
     }
+    openai_generation_ready = backend_config_valid
+        && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
+            || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+            || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready));
+    native_graph_streaming_ready = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    native_stream_contract_ready = backend_config_valid
+        && (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+            || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+    embeddings_ready = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+
     add_assoc_string(
         &king_meta,
         "backend",
         backend_config_valid ? king_inference_backend_kind_name(kind) : "invalid"
     );
     add_assoc_bool(&king_meta, "backend_config_valid", backend_config_valid);
-    add_assoc_bool(
-        &king_meta,
-        "openai_generation",
-        backend_config_valid
-            && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
-                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-                || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready))
-    );
-    add_assoc_bool(
-        &king_meta,
-        "openai_chat_completions_stream",
-        backend_config_valid
-            && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
-                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-                || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready))
-    );
-    add_assoc_bool(
-        &king_meta,
-        "native_graph_streaming",
-        backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-    );
-    add_assoc_bool(
-        &king_meta,
-        "native_stream_contract",
-        backend_config_valid
-            && (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU)
-    );
-    add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
+    add_assoc_bool(&king_meta, "openai_generation", openai_generation_ready);
+    add_assoc_bool(&king_meta, "openai_chat_completions_stream", openai_generation_ready);
+    add_assoc_bool(&king_meta, "native_graph_streaming", native_graph_streaming_ready);
+    add_assoc_bool(&king_meta, "native_stream_contract", native_stream_contract_ready);
+    add_assoc_bool(&king_meta, "embeddings", embeddings_ready);
     add_assoc_bool(&king_meta, "gpu_enabled", gpu_enabled);
     if (gpu_enabled) {
         add_assoc_zval(&king_meta, "gpu_runtime", &gpu_runtime);
     }
     add_assoc_bool(&king_meta, "created_config_valid", created_config_valid);
+    add_assoc_long(&king_meta, "capability_schema_version", 1);
+    king_inference_openai_client_capabilities_array(
+        &client_capabilities,
+        backend_config_valid,
+        kind,
+        gpu_enabled,
+        gpu_openai_generation_ready
+    );
+    add_assoc_zval(&king_meta, "client_capabilities", &client_capabilities);
     if (backend_config_valid) {
         king_inference_backend_capabilities_array(kind, &capabilities);
     } else {

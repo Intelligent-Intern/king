@@ -48,7 +48,9 @@ without enabling persistent graph memory.
 For `stream=true`, the same native CPU prompt path emits OpenAI-compatible SSE
 chunks from native token events, and `/v1/models` advertises that with
 `x_king.openai_chat_completions_stream=true` plus
-`x_king.capabilities.openai_chat_completions_stream=true`.
+`x_king.capabilities.openai_chat_completions_stream=true`. UI integrations
+should read the versioned `x_king.client_capabilities` object for selection and
+button state instead of inferring support from the backend name.
 
 When `backend` is omitted, King selects `king_native_cpu`. The process-runner
 backend is still available, but it must be selected intentionally with
@@ -1379,7 +1381,13 @@ Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
 authoritative runtime readiness source for GPU models. A registered
 `king_native_gpu` model can be listed and selected for inspection, but UI and
 autodetect flows must not infer current generation readiness from the model id
-or backend name.
+or backend name. For direct UI wiring, `x_king.client_capabilities` mirrors the
+effective runtime contract with plain booleans for
+`openai_chat_completions`, `openai_chat_completions_stream`,
+`openai_responses`, `openai_completions`, `openai_embeddings`,
+`native_graph_streaming`, `requires_gpu`, `gpu_runtime_required`, and
+`gpu_generation_ready`. Tool-call related flags stay false until King has a
+real tool execution path behind the OpenAI-compatible route.
 
 ## Function, Example 1d: OpenAI-Compatible Model Router
 
