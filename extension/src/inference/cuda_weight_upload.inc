@@ -29,8 +29,13 @@ static void king_inference_cuda_weight_upload_reset_fields(king_inference_model_
     model->cuda_weight_duplicate_count = 0;
     model->cuda_weight_failed_count = 0;
     model->cuda_weight_uploaded_bytes = 0;
+    model->cuda_weight_cache_hits = 0;
+    model->cuda_weight_cache_misses = 0;
+    model->cuda_weight_cache_stores = 0;
     model->cuda_weight_upload_attempted = false;
     model->cuda_weight_upload_complete = false;
+    model->cuda_weight_cache_initialized = false;
+    model->cuda_weight_cache_ready = false;
 }
 
 static void king_inference_cuda_weight_upload_set_error(
@@ -51,6 +56,11 @@ static void king_inference_cuda_weight_upload_release(king_inference_model_objec
     king_inference_cuda_weight_upload *upload = model->cuda_weight_uploads;
     king_inference_cuda_weight_upload *next;
 
+    if (model->cuda_weight_cache_initialized) {
+        zend_hash_destroy(&model->cuda_weight_cache);
+        model->cuda_weight_cache_initialized = false;
+    }
+
     while (upload != NULL) {
         next = upload->next;
         if (upload->name != NULL) {
@@ -61,6 +71,66 @@ static void king_inference_cuda_weight_upload_release(king_inference_model_objec
     }
 
     king_inference_cuda_weight_upload_reset_fields(model);
+}
+
+static void king_inference_cuda_weight_cache_ensure(king_inference_model_object *model)
+{
+    if (model->cuda_weight_cache_initialized) {
+        return;
+    }
+
+    zend_hash_init(&model->cuda_weight_cache, 128, NULL, NULL, 0);
+    model->cuda_weight_cache_initialized = true;
+}
+
+static king_inference_cuda_weight_upload *king_inference_cuda_weight_cache_find(
+    king_inference_model_object *model,
+    zend_string *name,
+    bool count_access
+) {
+    zval *entry;
+
+    if (!model->cuda_weight_cache_initialized) {
+        if (count_access) {
+            model->cuda_weight_cache_misses++;
+        }
+        return NULL;
+    }
+
+    entry = zend_hash_find(&model->cuda_weight_cache, name);
+    if (entry == NULL || Z_TYPE_P(entry) != IS_PTR) {
+        if (count_access) {
+            model->cuda_weight_cache_misses++;
+        }
+        return NULL;
+    }
+
+    if (count_access) {
+        model->cuda_weight_cache_hits++;
+    }
+    return (king_inference_cuda_weight_upload *) Z_PTR_P(entry);
+}
+
+static bool king_inference_cuda_weight_cache_store(
+    king_inference_model_object *model,
+    king_inference_cuda_weight_upload *upload
+) {
+    zval entry;
+
+    if (upload == NULL || upload->name == NULL) {
+        king_inference_cuda_weight_upload_set_error(model, -1, "cuda_weight_cache_entry_invalid");
+        return false;
+    }
+
+    king_inference_cuda_weight_cache_ensure(model);
+    ZVAL_PTR(&entry, upload);
+    if (zend_hash_update(&model->cuda_weight_cache, upload->name, &entry) == NULL) {
+        king_inference_cuda_weight_upload_set_error(model, -1, "cuda_weight_cache_store_failed");
+        return false;
+    }
+
+    model->cuda_weight_cache_stores++;
+    return true;
 }
 
 static bool king_inference_cuda_weight_upload_symbol(
@@ -97,16 +167,7 @@ static bool king_inference_cuda_weight_already_uploaded(
     king_inference_model_object *model,
     zend_string *name
 ) {
-    king_inference_cuda_weight_upload *upload = model->cuda_weight_uploads;
-
-    while (upload != NULL) {
-        if (upload->name != NULL && zend_string_equals(upload->name, name)) {
-            return true;
-        }
-        upload = upload->next;
-    }
-
-    return false;
+    return king_inference_cuda_weight_cache_find(model, name, true) != NULL;
 }
 
 static bool king_inference_cuda_weight_tensor_source(
@@ -238,6 +299,13 @@ static bool king_inference_cuda_weight_upload_tensor(
     upload->layer = layer;
     upload->has_layer = has_layer;
     snprintf(upload->role, sizeof(upload->role), "%s", role != NULL ? role : "weight");
+    if (!king_inference_cuda_weight_cache_store(model, upload)) {
+        (void) king_inference_cuda_device_allocator_free(model, device_ptr);
+        zend_string_release(upload->name);
+        efree(upload);
+        model->cuda_weight_failed_count++;
+        return false;
+    }
     upload->next = model->cuda_weight_uploads;
     model->cuda_weight_uploads = upload;
     model->cuda_weight_uploaded_count++;
@@ -399,6 +467,9 @@ static void king_inference_cuda_weight_upload_required(
         && model->cuda_weight_failed_count == 0
         && model->cuda_weight_required_count
             == model->cuda_weight_uploaded_count + model->cuda_weight_duplicate_count;
+    model->cuda_weight_cache_ready = model->cuda_weight_upload_complete
+        && model->cuda_weight_cache_initialized
+        && model->cuda_weight_cache_stores == model->cuda_weight_uploaded_count;
 }
 
 static void king_inference_cuda_weight_upload_add_status(
@@ -416,6 +487,10 @@ static void king_inference_cuda_weight_upload_add_status(
     add_assoc_long(&upload, "duplicate_tensors", (zend_long) model->cuda_weight_duplicate_count);
     add_assoc_long(&upload, "failed_tensors", (zend_long) model->cuda_weight_failed_count);
     add_assoc_long(&upload, "uploaded_bytes", (zend_long) model->cuda_weight_uploaded_bytes);
+    add_assoc_bool(&upload, "cache_ready", model->cuda_weight_cache_ready);
+    add_assoc_long(&upload, "cache_entries", (zend_long) model->cuda_weight_cache_stores);
+    add_assoc_long(&upload, "cache_hits", (zend_long) model->cuda_weight_cache_hits);
+    add_assoc_long(&upload, "cache_misses", (zend_long) model->cuda_weight_cache_misses);
     add_assoc_long(&upload, "result", model->cuda_weight_upload_result);
     add_assoc_string(&upload, "error", model->cuda_weight_upload_error);
     add_assoc_zval(return_value, "required_weight_upload", &upload);

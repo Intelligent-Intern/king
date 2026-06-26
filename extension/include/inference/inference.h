@@ -80,6 +80,10 @@ typedef struct _king_inference_model_object {
     size_t cuda_weight_duplicate_count;
     size_t cuda_weight_failed_count;
     size_t cuda_weight_uploaded_bytes;
+    size_t cuda_weight_cache_hits;
+    size_t cuda_weight_cache_misses;
+    size_t cuda_weight_cache_stores;
+    HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
     bool cuda_context_available;
@@ -89,6 +93,8 @@ typedef struct _king_inference_model_object {
     bool cuda_device_allocator_available;
     bool cuda_weight_upload_attempted;
     bool cuda_weight_upload_complete;
+    bool cuda_weight_cache_initialized;
+    bool cuda_weight_cache_ready;
     zend_object std;
 } king_inference_model_object;
 

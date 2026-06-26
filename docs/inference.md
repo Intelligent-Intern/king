@@ -318,10 +318,13 @@ attention RMSNorm, Q/K/V/output projections, feed-forward RMSNorm, and
 gate/up/down FFN projections. Tied output projection tensors are detected and
 not uploaded twice. `gpu_runtime.required_weight_upload` exposes attempted,
 complete, required/resolved/uploaded/duplicate/failed tensor counts, uploaded
-bytes, the last CUDA result, and the last upload error. If allocator setup
-succeeds but required weights cannot be resolved or copied, `config_ready` is
-false and `gpu_required_weight_upload_incomplete` is included in
-`refusal_reasons`.
+bytes, cache readiness, cache entries, cache hits, cache misses, the last CUDA
+result, and the last upload error. Uploaded tensors are cached per loaded model
+by tensor name, and later GPU decoder leaves can resolve the cached device
+pointer and byte length without scanning the upload list or copying the same
+tied tensor twice. If allocator setup succeeds but required weights cannot be
+resolved, copied, or cached, `config_ready` is false and
+`gpu_required_weight_upload_incomplete` is included in `refusal_reasons`.
 
 `reason` is the primary refusal reason, ordered by the first gate King would
 need an operator to fix. `refusal_reasons` contains the complete ordered list of
@@ -367,9 +370,9 @@ present.
 The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
 `gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
-`gpu_host_to_device_weight_upload`, `gpu_kv_cache_vram_estimate`,
-`gpu_thermal_policy`, `gpu_thermal_preflight`, and `gpu_thermal_stream_abort`
-are true for the GPU backend.
+`gpu_host_to_device_weight_upload`, `gpu_uploaded_weight_cache`,
+`gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
+and `gpu_thermal_stream_abort` are true for the GPU backend.
 `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
 `silent_cpu_fallback` remain false.
 
@@ -559,8 +562,9 @@ selected backend kind; configured GPU use remains visible through
 graph finishers such as `argmax_token` and `sample_token`, not to local runner
 text generation. GPU-specific capability flags separate registration,
 metadata, CUDA probing, CUDA context ownership, device-memory allocation, VRAM
-admission, host-to-device weight upload, thermal enforcement, and decoder
-generation so clients do not infer generation readiness from model presence.
+admission, host-to-device weight upload, uploaded-weight caching, thermal
+enforcement, and decoder generation so clients do not infer generation readiness
+from model presence.
 
 Generation stream options are validated before the local runner process starts.
 `max_tokens` must be a positive integer, numeric generation options must be
