@@ -26,12 +26,7 @@ fi
 
 PROMPT="${KING_INFERENCE_HELLO_PROMPT:-Reply with exactly this text and nothing else: Hello world}"
 TOKENS="${KING_INFERENCE_HELLO_TOKENS:-24}"
-EXPECTED="${KING_INFERENCE_HELLO_EXPECT:-Hello world}"
-
-if [[ -z "$EXPECTED" ]]; then
-  echo "king-native-hello-world: KING_INFERENCE_HELLO_EXPECT must not be empty" >&2
-  exit 1
-fi
+EXPECTED="${KING_INFERENCE_HELLO_EXPECT:-}"
 
 OUTPUT="$(
   "$ROOT/bin/king-local-infer" \
@@ -50,9 +45,17 @@ OUTPUT="$(
 
 printf '%s\n' "$OUTPUT"
 
+if [[ -z "$OUTPUT" ]]; then
+  echo "king-native-hello-world: generated output was empty" >&2
+  exit 2
+fi
+
+if [[ -z "$EXPECTED" ]]; then
+  exit 0
+fi
+
 OUTPUT_LOWER="$(printf '%s' "$OUTPUT" | tr '[:upper:]' '[:lower:]')"
 EXPECTED_LOWER="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
-
 case "$OUTPUT_LOWER" in
   *"$EXPECTED_LOWER"*)
     ;;

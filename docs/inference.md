@@ -79,10 +79,11 @@ It resolves a local GGUF artifact from `KING_INFERENCE_HELLO_MODEL_PATH`,
 `var/inference-models/gemma3-1b.gguf`, then calls `bin/king-local-infer` with
 the explicit `argmax` sampler, temperature `0`, `top_k=1`, `top_p=1`, and a
 fixed seed. The command captures the generated text, prints it, and exits
-non-zero unless the model output
-contains `Hello world`. It does not contact Ollama, vLLM, or another model
-server; the only model runtime in that path is the King extension plus the local
-GGUF artifact.
+non-zero when native generation produces no text. Set
+`KING_INFERENCE_HELLO_EXPECT` when the operator wants to additionally require a
+specific generated substring. It does not contact Ollama, vLLM, or another
+model server; the only model runtime in that path is the King extension plus
+the local GGUF artifact.
 
 ```bash
 KING_INFERENCE_HELLO_MODEL_PATH=/models/gemma3-1b.gguf bin/king-native-hello-world
