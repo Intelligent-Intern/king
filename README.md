@@ -386,8 +386,8 @@ The core programming model is:
   falling back to `gemma3:1b` for CPU. The GPU path owns a CUDA context,
   allocates device memory, uploads required weights, caches uploaded tensors,
   and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, attention
-  score, attention softmax, and attention value aggregation kernels as the
-  first decoder compute leaves. Memory-enabled native graph streams also
+  score, attention softmax, attention value aggregation, and FFN/SwiGLU kernels
+  as the first decoder compute leaves. Memory-enabled native graph streams also
   enforce an LLM-cache admission policy with a configurable disk-free floor and
   webhook/MCP alert metadata. The process-runner path is explicit `local`
   configuration.
