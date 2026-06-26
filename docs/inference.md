@@ -437,7 +437,11 @@ finally guarded layer/name/shape scans. Shape validation requires `gate` and
 `token_decode_graph_builder.inc` uses those resolvers to create the full
 single-position CPU decode graph: token embedding, per-layer attention norm,
 Q/K/V projections, RoPE, KV write/read attention, attention residual, FFN
-SwiGLU, final norm, output projection, and token sampling/argmax.
+SwiGLU, final norm, output projection, and token sampling/argmax. The returned
+graph includes a `terminal` descriptor that names the final hidden node,
+`final_norm`, the resolved final RMSNorm tensor, and, when token emission is
+enabled, the `logits` node plus the resolved output projection tensor and
+tied-token-embedding status.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against

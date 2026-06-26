@@ -382,9 +382,15 @@ static zend_result king_inference_token_decode_graph_array(
     zend_string *output_projection = NULL;
     zend_string *final_norm = NULL;
     const char *status = NULL;
+    const char *final_norm_source = NULL;
+    const char *final_norm_status = NULL;
+    const char *output_projection_source = NULL;
+    const char *output_projection_status = NULL;
+    bool output_projection_tied = false;
     bool emit_token = king_inference_decode_graph_bool_option(options, "emit_token", true);
     double epsilon;
     double rope_base;
+    char final_hidden_id[64];
     zval ops;
     zval *state;
 
@@ -404,18 +410,18 @@ static zend_result king_inference_token_decode_graph_array(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve token embedding tensor: %s.", status != NULL ? status : "not_found");
         return FAILURE;
     }
-    if (king_inference_resolve_rms_norm_final_name(model, &final_norm, NULL, &status) != SUCCESS
+    if (king_inference_resolve_rms_norm_final_name(model, &final_norm, &final_norm_source, &final_norm_status) != SUCCESS
         || final_norm == NULL) {
         zend_string_release(token_embedding);
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve final RMSNorm tensor: %s.", status != NULL ? status : "not_found");
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve final RMSNorm tensor: %s.", final_norm_status != NULL ? final_norm_status : "not_found");
         return FAILURE;
     }
     if (emit_token
-        && (king_inference_resolve_output_projection_tensor_name(model, NULL, &output_projection, NULL, &status, NULL) != SUCCESS
+        && (king_inference_resolve_output_projection_tensor_name(model, NULL, &output_projection, &output_projection_source, &output_projection_status, &output_projection_tied) != SUCCESS
             || output_projection == NULL)) {
         zend_string_release(token_embedding);
         zend_string_release(final_norm);
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve output projection tensor: %s.", status != NULL ? status : "not_found");
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph could not resolve output projection tensor: %s.", output_projection_status != NULL ? output_projection_status : "not_found");
         return FAILURE;
     }
 
@@ -569,20 +575,17 @@ static zend_result king_inference_token_decode_graph_array(
     }
 
     {
-        char final_input[64];
-        if (king_inference_decode_graph_format_id(final_input, sizeof(final_input), layers == 0 ? "x" : "l%lu_output", layers == 0 ? 0 : layers - 1, 0) != SUCCESS) {
+        if (king_inference_decode_graph_format_id(final_hidden_id, sizeof(final_hidden_id), layers == 0 ? "x" : "l%lu_output", layers == 0 ? 0 : layers - 1, 0) != SUCCESS) {
             zval_ptr_dtor(&ops);
             if (output_projection != NULL) zend_string_release(output_projection);
             zend_string_release(final_norm);
             return FAILURE;
         }
-        king_inference_decode_graph_add_rms_norm(&ops, "final_norm", final_input, final_norm, epsilon);
+        king_inference_decode_graph_add_rms_norm(&ops, "final_norm", final_hidden_id, final_norm, epsilon);
     }
-    zend_string_release(final_norm);
 
     if (emit_token) {
         king_inference_decode_graph_add_linear(&ops, "logits", "final_norm", output_projection, vocab);
-        zend_string_release(output_projection);
         king_inference_decode_graph_add_sampler(&ops, "logits", position, options);
     }
 
@@ -597,6 +600,37 @@ static zend_result king_inference_token_decode_graph_array(
     add_assoc_long(return_value, "attention_value_length", (zend_long) value_length);
     add_assoc_zval(return_value, "ops", &ops);
     add_assoc_string(return_value, "output", emit_token ? "next_token" : "final_norm");
+    {
+        zval terminal;
+
+        array_init(&terminal);
+        add_assoc_string(&terminal, "hidden_output", final_hidden_id);
+        add_assoc_string(&terminal, "final_norm", "final_norm");
+        add_assoc_str(&terminal, "final_norm_tensor", zend_string_copy(final_norm));
+        if (final_norm_source != NULL) {
+            add_assoc_string(&terminal, "final_norm_source", final_norm_source);
+        }
+        if (final_norm_status != NULL) {
+            add_assoc_string(&terminal, "final_norm_status", final_norm_status);
+        }
+        add_assoc_bool(&terminal, "emits_token", emit_token);
+        if (emit_token) {
+            add_assoc_string(&terminal, "logits", "logits");
+            add_assoc_str(&terminal, "output_projection_tensor", zend_string_copy(output_projection));
+            add_assoc_bool(&terminal, "output_projection_tied_token_embedding", output_projection_tied);
+            if (output_projection_source != NULL) {
+                add_assoc_string(&terminal, "output_projection_source", output_projection_source);
+            }
+            if (output_projection_status != NULL) {
+                add_assoc_string(&terminal, "output_projection_status", output_projection_status);
+            }
+        }
+        add_assoc_zval(return_value, "terminal", &terminal);
+    }
+    zend_string_release(final_norm);
+    if (output_projection != NULL) {
+        zend_string_release(output_projection);
+    }
     state = king_inference_array_find(options, "state");
     if (state != NULL) {
         if (Z_TYPE_P(state) != IS_ARRAY) {

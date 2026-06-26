@@ -1323,7 +1323,8 @@ namespace {
      * Build the complete native CPU token decode graph for one token position.
      * `$token` may be a non-negative token id or the array returned by
      * `king_inference_tokenize()`, in which case `tokens[$position]` feeds the
-     * embedding step.
+     * embedding step. The return payload includes a `terminal` descriptor for
+     * final norm and output projection wiring.
      * @param int|array{tokens:array<int,int>} $token
      * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
      * @return array<string,mixed>
@@ -2800,6 +2801,8 @@ namespace King {
         public static function tokenDecode(Inference\Model $model, int $token_id): string {}
 
         /**
+         * The return payload includes a `terminal` descriptor for final norm
+         * and output projection wiring.
          * @param int|array{tokens:array<int,int>} $token
          * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
@@ -3016,6 +3019,8 @@ namespace King\Inference {
         public function tokenDecode(int $token_id): string {}
 
         /**
+         * The return payload includes a `terminal` descriptor for final norm
+         * and output projection wiring.
          * @param int|array{tokens:array<int,int>} $token
          * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
          * @return array<string,mixed>
