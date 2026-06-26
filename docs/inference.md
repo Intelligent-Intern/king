@@ -276,11 +276,14 @@ through the attention output projection linear op; that bridge is exposed as
 `attention_output_projection_device_execution_ready`. The projected attention
 output is then added to the retained hidden state through the CUDA vector-add
 path, exposed as `decoder_graph_attention_residual_execution_ready` and
-`attention_residual_device_execution_ready`.
+`attention_residual_device_execution_ready`. The feed-forward RMSNorm is now
+executed directly from that attention residual bridge, exposed as
+`decoder_graph_ffn_norm_execution_ready` and
+`ffn_norm_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King finishes the FFN path and returns bounded logits to
-the sampler.
+remains blocked until King finishes the FFN Gate/Up/SwiGLU/Down path and
+returns bounded logits to the sampler.
 
 GPU readiness is inspectable before model load:
 
@@ -393,8 +396,8 @@ identifies the missing runtime layers between the available CUDA leaves and
 plain-text chat generation. When the GPU model has initialized the embedding
 row loader, device vector ops, device KV-cache, decoder graph executor, and
 prompt-loop admission path, the remaining gap is that the graph executor still
-needs the remaining residual, FFN, and logits device ops plus bounded logits
-results before the prompt loop can emit decoded tokens.
+needs the remaining FFN Gate/Up/SwiGLU/Down and logits device ops plus bounded
+logits results before the prompt loop can emit decoded tokens.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -471,11 +474,12 @@ device KV cache through the graph's `kv_write` op, then executing the first
 `kv_attention` op by running attention scores, softmax, and value aggregation
 against the device KV cache. The resulting context vector is retained inside
 the K/V helper until the downstream residual bridge can consume it, then
-released during the helper cleanup path. Other temporary buffers are released
-after the admitted initial device chain. It keeps
+released during the helper cleanup path. The attention residual now feeds the
+feed-forward RMSNorm on device before that temporary buffer is released. Other
+temporary buffers are released after the admitted initial device chain. It keeps
 `device_execution_result_ready=false` until the CUDA executor carries the
-remaining residual, FFN, and logits ops through bounded logits and writes real
-token results back into the stream contract. The GPU
+remaining FFN Gate/Up/SwiGLU/Down and logits ops through bounded logits and
+writes real token results back into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against

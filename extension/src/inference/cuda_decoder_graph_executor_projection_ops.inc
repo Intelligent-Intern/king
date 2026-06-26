@@ -136,6 +136,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zval *residual_probe,
     king_inference_cuda_device_ptr *residual_output,
     zend_ulong *residual_width,
+    zend_string **residual_id_out,
     zend_ulong *executed_device_ops
 ) {
     zval *residual_op = king_inference_cuda_decoder_graph_executor_add_op_for_inputs(graph, hidden_id, projection_id);
@@ -201,89 +202,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     model->cuda_decoder_graph_executor_attention_residual_execution_count++;
     model->cuda_decoder_graph_executor_last_attention_residual_width = hidden_width;
     *residual_width = hidden_width;
+    if (residual_id_out != NULL) {
+        *residual_id_out = residual_id;
+    }
     (*executed_device_ops)++;
 
     add_assoc_str(residual_probe, "residual", zend_string_copy(residual_id));
     add_assoc_bool(residual_probe, "executed", true);
     add_assoc_bool(residual_probe, "retained_device_output", true);
     add_assoc_long(residual_probe, "width", (zend_long) hidden_width);
-    return SUCCESS;
-}
-
-static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_projection_and_residual(
-    king_inference_model_object *model,
-    zval *graph,
-    zend_string *hidden_id,
-    king_inference_cuda_device_ptr hidden_output,
-    zend_ulong hidden_width,
-    zend_string *stack_id,
-    king_inference_cuda_device_ptr stack_output,
-    zend_ulong stack_width,
-    zval *projection_probe,
-    zval *residual_probe,
-    zend_ulong *executed_device_ops,
-    bool *projection_executed,
-    bool *residual_executed
-) {
-    zend_string *projection_id = NULL;
-    king_inference_cuda_device_ptr projection_output = 0;
-    king_inference_cuda_device_ptr residual_output = 0;
-    zend_ulong projection_width = 0;
-    zend_ulong residual_width = 0;
-
-    *projection_executed = false;
-    *residual_executed = false;
-    if (king_inference_cuda_decoder_graph_executor_execute_attention_output_projection(
-            model,
-            graph,
-            stack_id,
-            stack_output,
-            stack_width,
-            projection_probe,
-            &projection_output,
-            &projection_width,
-            &projection_id,
-            executed_device_ops
-    ) != SUCCESS) {
-        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &projection_output);
-        return FAILURE;
-    }
-    *projection_executed = true;
-    if (king_inference_cuda_decoder_graph_executor_execute_attention_residual_add(
-            model,
-            graph,
-            hidden_id,
-            hidden_output,
-            hidden_width,
-            projection_id,
-            projection_output,
-            projection_width,
-            residual_probe,
-            &residual_output,
-            &residual_width,
-            executed_device_ops
-    ) != SUCCESS) {
-        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &residual_output);
-        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &projection_output);
-        return FAILURE;
-    }
-    *residual_executed = true;
-    if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &residual_output) != SUCCESS
-        || king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &projection_output) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_set_error(
-            model,
-            model->cuda_device_allocator_result,
-            model->cuda_device_allocator_error[0] != '\0'
-                ? model->cuda_device_allocator_error
-                : "cuda_decoder_graph_attention_projection_residual_free_failed"
-        );
-        return FAILURE;
-    }
-    add_assoc_bool(projection_probe, "retained_device_output", false);
-    add_assoc_bool(projection_probe, "projection_output_released", true);
-    add_assoc_bool(residual_probe, "retained_device_output", false);
-    add_assoc_bool(residual_probe, "residual_output_released", true);
-    add_assoc_long(residual_probe, "projection_width", (zend_long) projection_width);
-    add_assoc_long(residual_probe, "residual_width", (zend_long) residual_width);
     return SUCCESS;
 }

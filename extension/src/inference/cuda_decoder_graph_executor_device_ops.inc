@@ -282,6 +282,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_release_device_ptr
 #include "cuda_decoder_graph_executor_kv_ops.inc"
 #include "cuda_decoder_graph_executor_query_ops.inc"
 #include "cuda_decoder_graph_executor_projection_ops.inc"
+#include "cuda_decoder_graph_executor_ffn_ops.inc"
 #include "cuda_decoder_graph_executor_probe_ops.inc"
 
 static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_device_ops(
@@ -300,6 +301,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     zval kv_head_prepare_probe;
     zval attention_projection_probe;
     zval attention_residual_probe;
+    zval ffn_norm_probe;
     zend_string *embedding_id = NULL;
     zend_string *rms_norm_id = NULL;
     zend_string *rms_weight = NULL;
@@ -321,8 +323,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     bool kv_head_prepared = false;
     bool attention_projection_probe_initialized = false;
     bool attention_residual_probe_initialized = false;
+    bool ffn_norm_probe_initialized = false;
     bool attention_projection_executed = false;
     bool attention_residual_executed = false;
+    bool ffn_norm_executed = false;
     double epsilon = 0.000001;
 
     array_init(&embedding_probe);
@@ -391,6 +395,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         add_assoc_bool(result, "attention_stack_device_execution_ready", false);
         add_assoc_bool(result, "attention_output_projection_device_execution_ready", false);
         add_assoc_bool(result, "attention_residual_device_execution_ready", false);
+        add_assoc_bool(result, "ffn_norm_device_execution_ready", false);
         add_assoc_long(result, "executed_device_ops", 0);
         return SUCCESS;
     }
@@ -647,9 +652,11 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             if (attention_stack_output != 0 && attention_stack_id != NULL) {
                 array_init(&attention_projection_probe);
                 array_init(&attention_residual_probe);
+                array_init(&ffn_norm_probe);
                 attention_projection_probe_initialized = true;
                 attention_residual_probe_initialized = true;
-                if (king_inference_cuda_decoder_graph_executor_execute_attention_projection_and_residual(
+                ffn_norm_probe_initialized = true;
+                if (king_inference_cuda_decoder_graph_executor_execute_attention_projection_residual_and_ffn_norm(
                         model,
                         graph,
                         embedding_id,
@@ -660,12 +667,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                         attention_stack_width,
                         &attention_projection_probe,
                         &attention_residual_probe,
+                        &ffn_norm_probe,
                         &executed_device_ops,
                         &attention_projection_executed,
-                        &attention_residual_executed
+                        &attention_residual_executed,
+                        &ffn_norm_executed
                 ) != SUCCESS) {
-                    zval_ptr_dtor(&attention_projection_probe);
-                    zval_ptr_dtor(&attention_residual_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(true, &attention_projection_probe, true, &attention_residual_probe, true, &ffn_norm_probe);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &attention_stack_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
@@ -679,12 +687,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     model,
                     &attention_stack_output
             ) != SUCCESS) {
-                if (attention_projection_probe_initialized) {
-                    zval_ptr_dtor(&attention_projection_probe);
-                }
-                if (attention_residual_probe_initialized) {
-                    zval_ptr_dtor(&attention_residual_probe);
-                }
+                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
@@ -701,12 +704,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             add_assoc_bool(&kv_head_prepare_probe, "attention_stack_released", true);
             add_assoc_long(&kv_head_prepare_probe, "attention_stack_width", (zend_long) attention_stack_width);
             if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output) != SUCCESS) {
-                if (attention_projection_probe_initialized) {
-                    zval_ptr_dtor(&attention_projection_probe);
-                }
-                if (attention_residual_probe_initialized) {
-                    zval_ptr_dtor(&attention_residual_probe);
-                }
+                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
                 king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
@@ -722,12 +720,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         }
 
         if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output) != SUCCESS) {
-            if (attention_projection_probe_initialized) {
-                zval_ptr_dtor(&attention_projection_probe);
-            }
-            if (attention_residual_probe_initialized) {
-                zval_ptr_dtor(&attention_residual_probe);
-            }
+            king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe);
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
@@ -742,12 +735,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     }
 
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output) != SUCCESS) {
-        if (attention_projection_probe_initialized) {
-            zval_ptr_dtor(&attention_projection_probe);
-        }
-        if (attention_residual_probe_initialized) {
-            zval_ptr_dtor(&attention_residual_probe);
-        }
+        king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe);
         king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
@@ -770,6 +758,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     if (attention_residual_probe_initialized) {
         add_assoc_zval(result, "attention_residual_device_execution", &attention_residual_probe);
     }
+    if (ffn_norm_probe_initialized) {
+        add_assoc_zval(result, "ffn_norm_device_execution", &ffn_norm_probe);
+    }
     add_assoc_bool(result, "embedding_device_execution_ready", true);
     add_assoc_bool(result, "rms_norm_device_execution_ready", rms_norm_op != NULL);
     add_assoc_bool(result, "linear_device_execution_ready", linear_rows > 0);
@@ -783,6 +774,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(result, "attention_stack_device_execution_ready", kv_head_prepared && attention_stack_width > 0);
     add_assoc_bool(result, "attention_output_projection_device_execution_ready", attention_projection_executed);
     add_assoc_bool(result, "attention_residual_device_execution_ready", attention_residual_executed);
+    add_assoc_bool(result, "ffn_norm_device_execution_ready", ffn_norm_executed);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);
