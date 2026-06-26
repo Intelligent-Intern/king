@@ -311,6 +311,9 @@ remains blocked until King finishes bounded logits readback into the sampler.
 
 GPU readiness is inspectable before model load:
 
+For an operator-facing startup gate that uses the same fields and explains the
+expected refusal reasons, see the [GPU Readiness Runbook](gpu-readiness.md).
+
 ```php
 <?php
 $status = king_inference_gpu_runtime_status($config);
