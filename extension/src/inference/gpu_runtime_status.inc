@@ -454,6 +454,7 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "gpu_device_kv_cache_ready", false);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
     add_assoc_bool(return_value, "decoder_graph_result_contract_ready", false);
+    add_assoc_bool(return_value, "decoder_graph_execution_plan_ready", false);
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
     add_assoc_bool(return_value, "plain_text_chat_ready", false);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);

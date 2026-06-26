@@ -196,6 +196,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     add_assoc_bool(&event, "prompt_loop_ready", true);
     add_assoc_bool(&event, "prompt_graphs_validated", true);
     add_assoc_bool(&event, "graph_result_contract_ready", true);
+    add_assoc_bool(&event, "graph_execution_plan_ready", true);
     add_assoc_bool(&event, "device_execution_result_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
     add_assoc_long(&event, "prompt_tokens", (zend_long) token_count);
@@ -229,6 +230,11 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
         &loop,
         "result_contract_ready",
         model->cuda_decoder_prompt_loop_result_contract_ready
+    );
+    add_assoc_bool(
+        &loop,
+        "execution_plan_ready",
+        model->cuda_decoder_graph_executor_execution_plan_available
     );
     add_assoc_bool(&loop, "device_execution_result_ready", false);
     add_assoc_long(&loop, "runs", (zend_long) model->cuda_decoder_prompt_loop_count);

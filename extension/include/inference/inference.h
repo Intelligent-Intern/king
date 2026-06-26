@@ -184,6 +184,10 @@ typedef struct _king_inference_model_object {
     size_t cuda_decoder_graph_executor_last_supported_op_count;
     size_t cuda_decoder_graph_executor_result_count;
     size_t cuda_decoder_graph_executor_last_result_op_count;
+    size_t cuda_decoder_graph_executor_plan_count;
+    size_t cuda_decoder_graph_executor_last_plan_op_count;
+    size_t cuda_decoder_graph_executor_last_plan_device_ops;
+    size_t cuda_decoder_graph_executor_last_plan_host_sampling_ops;
     size_t cuda_decoder_prompt_loop_count;
     size_t cuda_decoder_prompt_loop_last_prompt_tokens;
     size_t cuda_decoder_prompt_loop_last_validated_graphs;
@@ -278,6 +282,7 @@ typedef struct _king_inference_model_object {
     bool cuda_decoder_graph_executor_token_decode_available;
     bool cuda_decoder_graph_executor_sampling_readback_available;
     bool cuda_decoder_graph_executor_result_contract_available;
+    bool cuda_decoder_graph_executor_execution_plan_available;
     bool cuda_decoder_prompt_loop_attempted;
     bool cuda_decoder_prompt_loop_available;
     bool cuda_decoder_prompt_loop_tokenizer_ready;
