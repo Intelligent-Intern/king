@@ -516,15 +516,16 @@ device execution probe records the row count. The executor then runs the
 bounded Top-K readback kernel against that GPU logits buffer, returns candidate
 token ids and logits in `logits_projection_device_execution.candidates`, and
 marks `bounded_logits_result_ready=true` plus
-`device_execution_result_ready=true`. It still keeps token generation blocked
-until the prompt loop consumes those candidates through the sampler and writes
-real token results back into the stream contract. The GPU
-prompt-loop admission path
+`device_execution_result_ready=true`. The GPU prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against
-the GPU executor without CPU execution fallback. It does not yet emit decoded
-tokens: OpenAI-compatible GPU chat remains refused until device graph execution
-returns token results to that loop.
+the GPU executor without CPU execution fallback. It now consumes the bounded
+candidate set for the final prompt graph, applies the same argmax/temperature/
+top-k/top-p/seed sampling policy on CPU over those bounded candidates, writes a
+CPU-compatible `final.next_token.values` token vector into the graph result, and
+emits the decoded token text in the native event stream. OpenAI-compatible GPU
+chat remains refused until the prompt loop continues generation for
+`max_tokens` beyond that first decoded token and the route is explicitly enabled.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
