@@ -68,6 +68,8 @@ static ZEND_INI_MH(OnUpdateAiNonNegativeLong)
 
     if (zend_string_equals_literal(entry->name, "king.inference_gpu_max_gpu_layers")) {
         king_high_perf_compute_ai_config.inference_gpu_max_gpu_layers = val;
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_vram_reserve_mb")) {
+        king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb = val;
     } else if (zend_string_equals_literal(entry->name, "king.inference_llm_cache_min_free_mb")) {
         king_high_perf_compute_ai_config.inference_llm_cache_min_free_mb = val;
     }
@@ -218,6 +220,7 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.inference_gpu_model_name", "gemma4:12b", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_model_artifact", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_max_gpu_layers", "0", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_vram_reserve_mb", "2048", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_path", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_command", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_max_temperature_c", "78", PHP_INI_SYSTEM, OnUpdateAiPositiveDouble, NULL)

@@ -31,6 +31,7 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     char *inference_gpu_model_name;
     char *inference_gpu_model_artifact;
     zend_long inference_gpu_max_gpu_layers;
+    zend_long inference_gpu_vram_reserve_mb;
     char *inference_gpu_thermal_sensor_path;
     char *inference_gpu_thermal_sensor_command;
     double inference_gpu_thermal_max_temperature_c;

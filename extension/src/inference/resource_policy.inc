@@ -18,6 +18,21 @@ static zend_long king_inference_max_gpu_layers(zval *config)
     return king_inference_long_from_array(gpu, "max_gpu_layers", 0);
 }
 
+static zend_long king_inference_vram_reserve_mb(zval *config)
+{
+    zval *gpu = king_inference_array_find(config, "gpu");
+
+    if (gpu == NULL || Z_TYPE_P(gpu) != IS_ARRAY) {
+        return king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb;
+    }
+
+    return king_inference_long_from_array(
+        gpu,
+        "vram_reserve_mb",
+        king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb
+    );
+}
+
 static zend_result king_inference_validate_gpu_bool_field(
     zval *config,
     const char *field_name,
@@ -157,6 +172,12 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
             gpu,
             "max_gpu_layers",
             "gpu.max_gpu_layers",
+            function_name
+        ) != SUCCESS
+        || king_inference_validate_gpu_non_negative_long_field(
+            gpu,
+            "vram_reserve_mb",
+            "gpu.vram_reserve_mb",
             function_name
         ) != SUCCESS) {
         return FAILURE;

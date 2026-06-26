@@ -268,6 +268,17 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.gpu_vram_reserve_mb",
+            sizeof("inference.gpu_vram_reserve_mb") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_vram_reserve_mb);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.gpu_thermal_sensor_path",
             sizeof("inference.gpu_thermal_sensor_path") - 1
         )
