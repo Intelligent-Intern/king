@@ -41,6 +41,7 @@ static void king_inference_model_object_free(zend_object *object)
         zend_string_release(intern->artifact_path);
         intern->artifact_path = NULL;
     }
+    king_inference_cuda_attention_scores_release(intern);
     king_inference_cuda_rope_release(intern);
     king_inference_cuda_rms_norm_release(intern);
     king_inference_cuda_quantized_matvec_release(intern);
@@ -80,6 +81,7 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     king_inference_cuda_quantized_matvec_reset_fields(intern);
     king_inference_cuda_rms_norm_reset_fields(intern);
     king_inference_cuda_rope_reset_fields(intern);
+    king_inference_cuda_attention_scores_reset_fields(intern);
     memset(&intern->gguf, 0, sizeof(intern->gguf));
     zend_object_std_init(&intern->std, ce);
     object_properties_init(&intern->std, ce);

@@ -737,4 +737,5 @@ static void king_inference_gpu_runtime_status_from_model(
     king_inference_cuda_quantized_matvec_apply_status(model, return_value);
     king_inference_cuda_rms_norm_apply_status(model, return_value);
     king_inference_cuda_rope_apply_status(model, return_value);
+    king_inference_cuda_attention_scores_apply_status(model, return_value);
 }
