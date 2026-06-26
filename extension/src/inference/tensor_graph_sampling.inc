@@ -56,6 +56,23 @@ static double king_inference_graph_sampling_unit(zend_long seed, zend_ulong salt
     return (double) (state % 1000000UL) / 1000000.0;
 }
 
+static zend_result king_inference_graph_sampling_top_k(zval *op, zend_ulong *top_k)
+{
+    zval *field = king_inference_array_find(op, "top_k");
+
+    *top_k = 0;
+    if (field == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(field) != IS_LONG || Z_LVAL_P(field) < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph sample_token top_k must be a non-negative integer.");
+        return FAILURE;
+    }
+
+    *top_k = (zend_ulong) Z_LVAL_P(field);
+    return SUCCESS;
+}
+
 static zend_result king_inference_graph_token_output(
     zend_ulong token_offset,
     zend_ulong token_index,
@@ -134,7 +151,7 @@ static zend_result king_inference_graph_op_sample_token(
     king_inference_graph_vector *logits;
     king_inference_graph_token_candidate *candidates;
     zend_ulong token_offset = king_inference_tensor_option_ulong(op, "token_offset", 0);
-    zend_ulong top_k = king_inference_tensor_option_ulong(op, "top_k", 0);
+    zend_ulong top_k;
     zend_ulong sample_index = king_inference_tensor_option_ulong(op, "sample_index", 0);
     zend_ulong active_count;
     zend_ulong selected_rank = 0;
@@ -152,7 +169,8 @@ static zend_result king_inference_graph_op_sample_token(
         return FAILURE;
     }
     if (king_inference_graph_lookup_vector(vectors, op, "logits", &logits) != SUCCESS
-        || king_inference_graph_sampling_seed(op, &has_seed, &seed) != SUCCESS) {
+        || king_inference_graph_sampling_seed(op, &has_seed, &seed) != SUCCESS
+        || king_inference_graph_sampling_top_k(op, &top_k) != SUCCESS) {
         return FAILURE;
     }
     if (logits->length == 0

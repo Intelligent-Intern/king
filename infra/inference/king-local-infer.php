@@ -40,6 +40,12 @@ function parse_args(array $argv): array
         }
         return $number;
     };
+    $int = static function (string $value, string $arg): int {
+        if (!preg_match('/^-?[0-9]+$/', $value)) {
+            fail("{$arg} must be an integer");
+        }
+        return (int) $value;
+    };
 
     for ($i = 1; $i < count($argv); $i++) {
         $arg = $argv[$i];
@@ -71,7 +77,10 @@ function parse_args(array $argv): array
                 }
                 break;
             case '--top-k':
-                $options['top_k'] = max(0, (int) $next());
+                $options['top_k'] = $int($next(), $arg);
+                if ($options['top_k'] < 0) {
+                    fail("{$arg} must be non-negative");
+                }
                 break;
             case '--top-p':
                 $options['top_p'] = min(1.0, max(0.001, (float) $next()));

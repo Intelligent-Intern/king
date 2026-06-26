@@ -25,6 +25,31 @@ static zend_result king_inference_decode_graph_double_option(
     return SUCCESS;
 }
 
+static zend_result king_inference_decode_graph_non_negative_long_option(
+    zval *options,
+    const char *key,
+    zend_long fallback,
+    zend_long *value_out
+) {
+    zval *value = king_inference_array_find(options, key);
+
+    *value_out = fallback;
+    if (value == NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(value) != IS_LONG) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph option '%s' must be a non-negative integer.", key);
+        return FAILURE;
+    }
+    if (Z_LVAL_P(value) < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph option '%s' must be a non-negative integer.", key);
+        return FAILURE;
+    }
+
+    *value_out = Z_LVAL_P(value);
+    return SUCCESS;
+}
+
 static bool king_inference_decode_graph_bool_option(zval *options, const char *key, bool fallback)
 {
     zval *value = king_inference_array_find(options, key);
@@ -373,16 +398,22 @@ static zend_result king_inference_decode_graph_add_sampler(
     zval *options,
     const char **mode_out,
     const char **op_out,
-    double *temperature_out
+    double *temperature_out,
+    zend_long *top_k_out
 ) {
     zval op;
     const char *mode;
     double temperature;
+    zend_long top_k;
 
     *mode_out = "sample";
     *op_out = NULL;
     *temperature_out = 0.7;
+    *top_k_out = 0;
     if (king_inference_decode_graph_sampler_mode(options, &mode, &temperature) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_inference_decode_graph_non_negative_long_option(options, "top_k", 40, &top_k) != SUCCESS) {
         return FAILURE;
     }
     *mode_out = mode;
@@ -392,18 +423,20 @@ static zend_result king_inference_decode_graph_add_sampler(
         add_assoc_string(&op, "logits", logits);
         king_inference_decode_graph_push_op(ops, &op);
         *op_out = "argmax_token";
+        *top_k_out = 1;
         return SUCCESS;
     }
 
     king_inference_decode_graph_start_op(&op, "next_token", "sample_token");
     add_assoc_string(&op, "logits", logits);
     add_assoc_double(&op, "temperature", temperature);
-    add_assoc_long(&op, "top_k", king_inference_long_from_array(options, "top_k", 40));
+    add_assoc_long(&op, "top_k", top_k);
     add_assoc_double(&op, "top_p", king_inference_double_from_array(options, "top_p", 0.95));
     add_assoc_long(&op, "seed", king_inference_long_from_array(options, "seed", 0));
     add_assoc_long(&op, "sample_index", (zend_long) position);
     king_inference_decode_graph_push_op(ops, &op);
     *op_out = "sample_token";
+    *top_k_out = top_k;
     return SUCCESS;
 }
 
@@ -451,6 +484,7 @@ static zend_result king_inference_token_decode_graph_array(
     const char *token_selection = "none";
     const char *token_selection_op = NULL;
     double token_selection_temperature = 0.0;
+    zend_long token_selection_top_k = 0;
     double epsilon;
     double rope_base;
     char final_hidden_id[64];
@@ -658,7 +692,8 @@ static zend_result king_inference_token_decode_graph_array(
             options,
             &token_selection,
             &token_selection_op,
-            &token_selection_temperature
+            &token_selection_temperature,
+            &token_selection_top_k
         ) != SUCCESS) {
             zval_ptr_dtor(&ops);
             if (output_projection != NULL) {
@@ -666,6 +701,11 @@ static zend_result king_inference_token_decode_graph_array(
             }
             zend_string_release(final_norm);
             return FAILURE;
+        }
+        if (strcmp(token_selection, "sample") == 0
+            && token_selection_top_k > 0
+            && (zend_ulong) token_selection_top_k > vocab) {
+            token_selection_top_k = (zend_long) vocab;
         }
     }
 
@@ -684,6 +724,7 @@ static zend_result king_inference_token_decode_graph_array(
     }
     if (emit_token) {
         add_assoc_double(return_value, "token_selection_temperature", token_selection_temperature);
+        add_assoc_long(return_value, "token_selection_top_k", token_selection_top_k);
     }
     add_assoc_zval(return_value, "ops", &ops);
     add_assoc_string(return_value, "output", emit_token ? "next_token" : (emit_logits ? "logits" : "final_norm"));
@@ -708,6 +749,7 @@ static zend_result king_inference_token_decode_graph_array(
         }
         if (emit_token) {
             add_assoc_double(&terminal, "token_selection_temperature", token_selection_temperature);
+            add_assoc_long(&terminal, "token_selection_top_k", token_selection_top_k);
         }
         if (needs_logits) {
             add_assoc_string(&terminal, "logits", "logits");

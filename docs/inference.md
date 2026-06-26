@@ -759,7 +759,8 @@ finishers for logits. `king_inference_token_decode_graph()` emits
 `argmax_token` directly when options contain `sampler => 'argmax'` or
 `temperature => 0`; the returned graph and `terminal` metadata expose
 `token_selection=argmax`, `token_selection_op=argmax_token`, and
-`token_selection_temperature=0` for that path.
+`token_selection_temperature=0` for that path; `token_selection_top_k=1`
+describes the effective single-token selection.
 Argmax selection is deterministic: the highest logit wins, and equal logits
 keep the lowest token index.
 For positive finite temperatures, the graph emits `sample_token`, forwards the
@@ -771,7 +772,11 @@ instead of rounding it for display.
 seeded deterministic sampling, `sample_index` as a per-step seed salt, and
 `token_offset` for sharded vocab projections. Graph numeric options such as
 sampling temperature, top-p, vector scales, softmax scale, KV-attention scale,
-RMS epsilon, and RoPE position scale must be finite numbers. Both
+RMS epsilon, and RoPE position scale must be finite numbers. `top_k` must be a
+non-negative integer. `top_k=0` means no top-k cap; positive values cap the
+candidate set after logits are converted to probabilities and sorted by
+probability with token id as the deterministic tie-breaker. The graph and
+`terminal` metadata expose the effective `token_selection_top_k` value. Both
 token-selection ops return `[token_id, probability, logit, rank]`. This is still
 CPU-side vector state, but it matches the page-table contract that later native
 paged attention needs.
