@@ -408,6 +408,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zval *ffn_down_probe,
     zval *ffn_output_probe,
     zval *final_norm_probe,
+    zval *logits_probe,
     zend_ulong *executed_device_ops,
     bool *projection_executed,
     bool *residual_executed,
@@ -416,7 +417,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     bool *ffn_swiglu_executed,
     bool *ffn_down_executed,
     bool *ffn_output_executed,
-    bool *final_norm_executed
+    bool *final_norm_executed,
+    bool *logits_executed
 ) {
     zend_string *projection_id = NULL;
     zend_string *residual_id = NULL;
@@ -426,6 +428,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zend_string *ffn_gated_id = NULL;
     zend_string *ffn_down_id = NULL;
     zend_string *ffn_output_id = NULL;
+    zend_string *final_norm_id = NULL;
+    zend_string *logits_id = NULL;
     king_inference_cuda_device_ptr projection_output = 0;
     king_inference_cuda_device_ptr residual_output = 0;
     king_inference_cuda_device_ptr ffn_norm_output = 0;
@@ -435,6 +439,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     king_inference_cuda_device_ptr ffn_down_output = 0;
     king_inference_cuda_device_ptr ffn_output_residual = 0;
     king_inference_cuda_device_ptr final_norm_output = 0;
+    king_inference_cuda_device_ptr logits_output = 0;
     zend_ulong projection_width = 0;
     zend_ulong residual_width = 0;
     zend_ulong ffn_norm_width = 0;
@@ -444,6 +449,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zend_ulong ffn_down_width = 0;
     zend_ulong ffn_output_width = 0;
     zend_ulong final_norm_width = 0;
+    zend_ulong logits_rows = 0;
     zend_result release_result = SUCCESS;
 
     *projection_executed = false;
@@ -454,6 +460,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     *ffn_down_executed = false;
     *ffn_output_executed = false;
     *final_norm_executed = false;
+    *logits_executed = false;
     add_assoc_string(ffn_gate_up_probe, "type", "gpu_decoder_ffn_gate_up_projection_device_execution");
     add_assoc_bool(ffn_gate_up_probe, "attempted", false);
     add_assoc_bool(ffn_gate_up_probe, "available", model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available);
@@ -479,6 +486,11 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_bool(final_norm_probe, "available", model->cuda_decoder_graph_executor_final_norm_execution_available);
     add_assoc_bool(final_norm_probe, "executed", false);
     add_assoc_bool(final_norm_probe, "retained_device_output", false);
+    add_assoc_string(logits_probe, "type", "gpu_decoder_logits_projection_device_execution");
+    add_assoc_bool(logits_probe, "attempted", false);
+    add_assoc_bool(logits_probe, "available", model->cuda_decoder_graph_executor_logits_projection_execution_available);
+    add_assoc_bool(logits_probe, "executed", false);
+    add_assoc_bool(logits_probe, "retained_device_output", false);
     if (king_inference_cuda_decoder_graph_executor_execute_attention_output_projection(
             model,
             graph,
@@ -642,7 +654,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
             final_norm_probe,
             &final_norm_output,
             &final_norm_width,
-            NULL,
+            &final_norm_id,
             executed_device_ops
     ) != SUCCESS) {
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &final_norm_output);
@@ -657,6 +669,35 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
         return FAILURE;
     }
     *final_norm_executed = final_norm_output != 0 && final_norm_width > 0;
+    if (*final_norm_executed
+        && king_inference_cuda_decoder_graph_executor_execute_logits_projection(
+            model,
+            graph,
+            final_norm_id,
+            final_norm_output,
+            final_norm_width,
+            logits_probe,
+            &logits_output,
+            &logits_rows,
+            &logits_id,
+            executed_device_ops
+    ) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &logits_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &final_norm_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_output_residual);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_down_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_swiglu_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_up_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_gate_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_norm_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &residual_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &projection_output);
+        return FAILURE;
+    }
+    *logits_executed = logits_output != 0 && logits_rows > 0 && logits_id != NULL;
+    if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &logits_output) != SUCCESS) {
+        release_result = FAILURE;
+    }
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &final_norm_output) != SUCCESS) {
         release_result = FAILURE;
     }
@@ -710,6 +751,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_bool(ffn_output_probe, "output_residual_released", *ffn_output_executed);
     add_assoc_bool(final_norm_probe, "retained_device_output", false);
     add_assoc_bool(final_norm_probe, "final_norm_output_released", *final_norm_executed);
+    add_assoc_bool(logits_probe, "retained_device_output", false);
+    add_assoc_bool(logits_probe, "logits_output_released", *logits_executed);
     add_assoc_long(residual_probe, "projection_width", (zend_long) projection_width);
     add_assoc_long(residual_probe, "residual_width", (zend_long) residual_width);
     add_assoc_long(ffn_norm_probe, "residual_width", (zend_long) residual_width);
@@ -724,5 +767,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_long(ffn_output_probe, "output_width", (zend_long) ffn_output_width);
     add_assoc_long(final_norm_probe, "input_width", (zend_long) ffn_output_width);
     add_assoc_long(final_norm_probe, "final_norm_width", (zend_long) final_norm_width);
+    add_assoc_long(logits_probe, "final_norm_width", (zend_long) final_norm_width);
+    add_assoc_long(logits_probe, "logits_rows", (zend_long) logits_rows);
     return SUCCESS;
 }

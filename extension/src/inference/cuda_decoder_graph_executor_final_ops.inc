@@ -208,3 +208,107 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_final_norm
     add_assoc_double(final_norm_probe, "epsilon", epsilon);
     return SUCCESS;
 }
+
+static zend_result king_inference_cuda_decoder_graph_executor_execute_logits_projection(
+    king_inference_model_object *model,
+    zval *graph,
+    zend_string *final_norm_id,
+    king_inference_cuda_device_ptr final_norm_output,
+    zend_ulong final_norm_width,
+    zval *logits_probe,
+    king_inference_cuda_device_ptr *logits_output,
+    zend_ulong *logits_rows,
+    zend_string **logits_id_out,
+    zend_ulong *executed_device_ops
+) {
+    zval *logits_op = king_inference_cuda_decoder_graph_executor_op_for_input(graph, final_norm_id, "linear");
+    zend_string *logits_id = NULL;
+    zend_string *weight = NULL;
+    zend_string *resolved_weight = NULL;
+    const char *projection_status = NULL;
+    size_t bytes;
+
+    *logits_output = 0;
+    *logits_rows = 0;
+    if (logits_id_out != NULL) {
+        *logits_id_out = NULL;
+    }
+    add_assoc_string(logits_probe, "type", "gpu_decoder_logits_projection_device_execution");
+    add_assoc_bool(logits_probe, "attempted", logits_op != NULL);
+    add_assoc_bool(logits_probe, "available", model->cuda_decoder_graph_executor_logits_projection_execution_available);
+    add_assoc_bool(logits_probe, "executed", false);
+    add_assoc_bool(logits_probe, "retained_device_output", false);
+    if (logits_op == NULL) {
+        return SUCCESS;
+    }
+    if (!model->cuda_decoder_graph_executor_logits_projection_execution_available) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_logits_projection_execution_unavailable");
+        return FAILURE;
+    }
+    if (final_norm_output == 0
+        || final_norm_width == 0
+        || final_norm_width > (zend_ulong) (SIZE_MAX / sizeof(float))
+        || king_inference_graph_required_string(logits_op, "id", &logits_id) != SUCCESS
+        || !zend_string_equals_literal(logits_id, "logits")
+        || king_inference_cuda_decoder_graph_executor_linear_shape(model, logits_op, final_norm_width, &weight, logits_rows) != SUCCESS
+        || *logits_rows == 0
+        || *logits_rows > (zend_ulong) (SIZE_MAX / sizeof(float))) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_logits_projection_contract_invalid");
+        return FAILURE;
+    }
+    if (king_inference_cuda_output_projection_resolve(model, &resolved_weight, NULL, &projection_status, NULL) != SUCCESS
+        || resolved_weight == NULL) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_output_projection_result,
+            projection_status != NULL ? projection_status : "cuda_decoder_graph_logits_projection_weight_unresolved"
+        );
+        return FAILURE;
+    }
+    if (!zend_string_equals(resolved_weight, weight)) {
+        zend_string_release(resolved_weight);
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_logits_projection_weight_mismatch");
+        return FAILURE;
+    }
+    zend_string_release(resolved_weight);
+
+    bytes = (size_t) *logits_rows * sizeof(float);
+    if (king_inference_cuda_device_allocator_alloc(model, bytes, logits_output) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : "cuda_decoder_graph_logits_projection_allocation_failed"
+        );
+        return FAILURE;
+    }
+    if (king_inference_cuda_output_projection_q8_0(model, final_norm_output, final_norm_width, *logits_output, *logits_rows) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, logits_output);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_output_projection_result,
+            model->cuda_output_projection_error[0] != '\0'
+                ? model->cuda_output_projection_error
+                : "cuda_decoder_graph_logits_projection_execution_failed"
+        );
+        return FAILURE;
+    }
+
+    model->cuda_decoder_graph_executor_logits_projection_execution_count++;
+    model->cuda_decoder_graph_executor_last_logits_rows = *logits_rows;
+    if (logits_id_out != NULL) {
+        *logits_id_out = logits_id;
+    }
+    (*executed_device_ops)++;
+
+    add_assoc_str(logits_probe, "input", zend_string_copy(final_norm_id));
+    add_assoc_str(logits_probe, "logits", zend_string_copy(logits_id));
+    add_assoc_str(logits_probe, "weight", zend_string_copy(weight));
+    add_assoc_bool(logits_probe, "executed", true);
+    add_assoc_bool(logits_probe, "retained_device_output", true);
+    add_assoc_long(logits_probe, "input_width", (zend_long) final_norm_width);
+    add_assoc_long(logits_probe, "rows", (zend_long) *logits_rows);
+    add_assoc_long(logits_probe, "bytes", (zend_long) bytes);
+    return SUCCESS;
+}

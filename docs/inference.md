@@ -294,10 +294,13 @@ back to the retained attention residual on device, exposed as
 `ffn_output_residual_device_execution_ready`. When that residual is the graph's
 terminal hidden state, King runs the final RMSNorm on device, exposed as
 `decoder_graph_final_norm_execution_ready` and
-`final_norm_device_execution_ready`.
+`final_norm_device_execution_ready`. When logits are requested, that final norm
+output is projected through the output projection tensor on device, exposed as
+`decoder_graph_logits_projection_execution_ready` and
+`logits_projection_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King finishes the bounded logits path to the sampler.
+remains blocked until King finishes bounded logits readback into the sampler.
 
 GPU readiness is inspectable before model load:
 
@@ -507,9 +510,11 @@ then feeds the FFN Down projection, and the Down output is added back to the
 retained attention residual before those temporary buffers are released after
 the admitted initial device chain. When that residual is the terminal hidden
 state, the final RMSNorm runs on device before its temporary buffer is released.
-It keeps
+If the graph requests logits, King now projects that final norm buffer into a
+GPU logits buffer through the output projection tensor and releases it after the
+device execution probe records the row count. It keeps
 `device_execution_result_ready=false` until the CUDA executor carries the
-remaining logits ops through bounded logits and writes real token results back
+bounded logits result back into the sampler and writes real token results back
 into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
