@@ -44,6 +44,9 @@ typedef struct _king_inference_gguf_metadata {
     bool tensor_directory_parsed;
 } king_inference_gguf_metadata;
 
+typedef unsigned long long king_inference_cuda_device_ptr;
+typedef struct _king_inference_cuda_device_allocation king_inference_cuda_device_allocation;
+
 typedef struct _king_inference_model_object {
     zval config;
     zval tensor_index;
@@ -58,13 +61,22 @@ typedef struct _king_inference_model_object {
     size_t native_map_size;
     void *cuda_driver_handle;
     void *cuda_context;
+    king_inference_cuda_device_allocation *cuda_device_allocations;
     int cuda_device;
     int cuda_context_result;
+    int cuda_device_allocator_result;
     char cuda_context_error[160];
+    char cuda_device_allocator_error[160];
+    size_t cuda_device_bytes_allocated;
+    size_t cuda_device_peak_bytes_allocated;
+    size_t cuda_device_allocation_count;
     bool native_map_loaded;
     bool cuda_context_attempted;
     bool cuda_context_available;
     bool cuda_context_owned;
+    bool cuda_device_allocator_attempted;
+    bool cuda_device_allocator_symbols_available;
+    bool cuda_device_allocator_available;
     zend_object std;
 } king_inference_model_object;
 

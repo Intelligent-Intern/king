@@ -339,6 +339,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     if (intern->artifact_path != NULL) {
         zend_string_release(intern->artifact_path);
     }
+    king_inference_cuda_device_allocator_release(intern);
     king_inference_cuda_context_release(intern);
     king_inference_native_mapping_release(intern);
     king_inference_gguf_metadata_release(&intern->gguf);
@@ -358,6 +359,7 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
         : zend_string_init("local-quantized-model", sizeof("local-quantized-model") - 1, 0);
     king_inference_paged_kv_cache_plan(intern, NULL, &intern->paged_kv_cache_plan);
     king_inference_cuda_context_open(intern, backend_kind);
+    king_inference_cuda_device_allocator_init(intern, backend_kind);
 
     king_set_error("");
     return SUCCESS;

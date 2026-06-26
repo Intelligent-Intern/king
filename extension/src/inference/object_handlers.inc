@@ -41,6 +41,7 @@ static void king_inference_model_object_free(zend_object *object)
         zend_string_release(intern->artifact_path);
         intern->artifact_path = NULL;
     }
+    king_inference_cuda_device_allocator_release(intern);
     king_inference_cuda_context_release(intern);
     king_inference_native_mapping_release(intern);
     king_inference_gguf_metadata_release(&intern->gguf);
@@ -70,6 +71,7 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     intern->native_map_size = 0;
     intern->native_map_loaded = false;
     king_inference_cuda_context_reset_fields(intern);
+    king_inference_cuda_device_allocator_reset_fields(intern);
     memset(&intern->gguf, 0, sizeof(intern->gguf));
     zend_object_std_init(&intern->std, ce);
     object_properties_init(&intern->std, ce);

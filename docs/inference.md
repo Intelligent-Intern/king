@@ -297,6 +297,18 @@ device ordinal, the raw CUDA result code, and the last context error. When the
 loaded GPU model cannot own a context, `config_ready` is false and
 `gpu_cuda_context_unavailable` is included in `refusal_reasons`.
 
+Once the CUDA context is available, King initializes a model-owned device-memory
+allocator on top of the CUDA driver API. The allocator resolves `cuMemAlloc` /
+`cuMemAlloc_v2` and `cuMemFree` / `cuMemFree_v2`, keeps the model context
+current before allocations, tracks every active device pointer, and frees
+remaining tracked allocations before the CUDA context is released. The
+`gpu_runtime.device_memory_allocator` status object exposes whether allocator
+initialization was attempted, whether the required symbols are available,
+whether allocation is ready, active allocation count, active bytes, peak bytes,
+the last CUDA result, and the last allocator error. If a loaded GPU model has a
+CUDA context but cannot initialize the allocator, `config_ready` is false and
+`gpu_device_memory_allocator_unavailable` is included in `refusal_reasons`.
+
 `reason` is the primary refusal reason, ordered by the first gate King would
 need an operator to fix. `refusal_reasons` contains the complete ordered list of
 currently active refusal reasons, so a broken setup can show, for example, a
@@ -340,10 +352,11 @@ capabilities keep `model_registration=true`, while `implemented=false`,
 present.
 The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
-`gpu_cuda_context_owned`, `gpu_vram_admission`, `gpu_kv_cache_vram_estimate`,
-`gpu_thermal_policy`, `gpu_thermal_preflight`, and
-`gpu_thermal_stream_abort` are true for the GPU backend. `gpu_decoder_kernel`,
-`gpu_generation`, `token_generation`, and `silent_cpu_fallback` remain false.
+`gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
+`gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
+and `gpu_thermal_stream_abort` are true for the GPU backend.
+`gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
+`silent_cpu_fallback` remain false.
 
 ## Internal Backend Layout
 
@@ -359,6 +372,7 @@ extension/src/inference/
 ├── backend_registry.inc
 ├── class_entries.inc
 ├── cuda_context.inc
+├── cuda_device_memory.inc
 ├── gguf_architecture_metadata.inc
 ├── gguf_loader.inc
 ├── gguf_metadata_helpers.inc
@@ -495,7 +509,8 @@ without handing the model to an external runtime.
 metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
 `backend_capabilities`. For `king_native_gpu`, model info also exposes
-`decoder_kernel_ready=false` and `generation_ready=false` directly, so clients
+`gpu_runtime.cuda_context`, `gpu_runtime.device_memory_allocator`,
+`decoder_kernel_ready=false`, and `generation_ready=false` directly, so clients
 do not need to infer decoder or generation state from model registration or
 backend name.
 The `gguf` entry contains `architecture`, `architecture_supported`,
@@ -527,8 +542,9 @@ selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
 graph finishers such as `argmax_token` and `sample_token`, not to local runner
 text generation. GPU-specific capability flags separate registration,
-metadata, CUDA probing, VRAM admission, thermal enforcement, and decoder
-generation so clients do not infer generation readiness from model presence.
+metadata, CUDA probing, CUDA context ownership, device-memory allocation, VRAM
+admission, thermal enforcement, and decoder generation so clients do not infer
+generation readiness from model presence.
 
 Generation stream options are validated before the local runner process starts.
 `max_tokens` must be a positive integer, numeric generation options must be
