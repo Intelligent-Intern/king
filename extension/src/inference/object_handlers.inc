@@ -42,6 +42,7 @@ static void king_inference_model_object_free(zend_object *object)
         intern->artifact_path = NULL;
     }
     king_inference_cuda_logits_readback_release(intern);
+    king_inference_cuda_decoder_graph_executor_release(intern);
     king_inference_cuda_output_projection_release(intern);
     king_inference_cuda_ffn_swiglu_release(intern);
     king_inference_cuda_attention_values_release(intern);
@@ -98,6 +99,7 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     king_inference_cuda_ffn_swiglu_reset_fields(intern);
     king_inference_cuda_output_projection_reset_fields(intern);
     king_inference_cuda_logits_readback_reset_fields(intern);
+    king_inference_cuda_decoder_graph_executor_reset_fields(intern);
     memset(&intern->gguf, 0, sizeof(intern->gguf));
     zend_object_std_init(&intern->std, ce);
     object_properties_init(&intern->std, ce);

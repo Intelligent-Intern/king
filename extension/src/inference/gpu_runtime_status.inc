@@ -755,5 +755,6 @@ static void king_inference_gpu_runtime_status_from_model(
     king_inference_cuda_ffn_swiglu_apply_status(model, return_value);
     king_inference_cuda_output_projection_apply_status(model, return_value);
     king_inference_cuda_logits_readback_apply_status(model, return_value);
+    king_inference_cuda_decoder_graph_executor_apply_status(model, return_value);
     king_inference_gpu_replace_return_decoder_blockers(model, return_value);
 }

@@ -117,6 +117,7 @@ typedef struct _king_inference_model_object {
     int cuda_ffn_swiglu_result;
     int cuda_output_projection_result;
     int cuda_logits_readback_result;
+    int cuda_decoder_graph_executor_result;
     char cuda_context_error[160];
     char cuda_device_allocator_error[160];
     char cuda_weight_upload_error[160];
@@ -132,6 +133,7 @@ typedef struct _king_inference_model_object {
     char cuda_ffn_swiglu_error[160];
     char cuda_output_projection_error[160];
     char cuda_logits_readback_error[160];
+    char cuda_decoder_graph_executor_error[160];
     size_t cuda_device_bytes_allocated;
     size_t cuda_device_peak_bytes_allocated;
     size_t cuda_device_allocation_count;
@@ -175,6 +177,9 @@ typedef struct _king_inference_model_object {
     size_t cuda_logits_readback_last_bytes;
     size_t cuda_logits_readback_full_bytes;
     size_t cuda_logits_readback_saved_bytes;
+    size_t cuda_decoder_graph_executor_graph_count;
+    size_t cuda_decoder_graph_executor_last_op_count;
+    size_t cuda_decoder_graph_executor_last_supported_op_count;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
@@ -259,6 +264,10 @@ typedef struct _king_inference_model_object {
     bool cuda_logits_readback_module_loaded;
     bool cuda_logits_readback_top_k_available;
     bool cuda_logits_readback_bounded_cpu_available;
+    bool cuda_decoder_graph_executor_attempted;
+    bool cuda_decoder_graph_executor_available;
+    bool cuda_decoder_graph_executor_token_decode_available;
+    bool cuda_decoder_graph_executor_sampling_readback_available;
     zend_object std;
 } king_inference_model_object;
 

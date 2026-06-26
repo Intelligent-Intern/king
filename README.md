@@ -391,14 +391,14 @@ The core programming model is:
   and exposes token embedding row loading, native Q8_0 quantized matrix/vector,
   device vector operations, a lazy F32 device KV-cache with device-to-device
   slot writes, RMSNorm, RoPE, attention score, attention softmax, attention
-  value aggregation, FFN/SwiGLU, final output projection paths, and bounded
-  top-K logits readback as the first decoder compute leaves. The GPU
+  value aggregation, FFN/SwiGLU, final output projection paths, bounded top-K
+  logits readback, and a decoder graph executor contract for the complete
+  token-decode op set. The GPU
   backend now uses the same native stream object contract as the CPU backend
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes that missing bridge explicitly: the decoder graph
-  executor and the prompt decoder loop.
+  GPU metadata exposes that missing bridge explicitly: the prompt decoder loop.
   Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and
