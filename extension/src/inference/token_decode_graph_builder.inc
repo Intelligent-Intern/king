@@ -404,6 +404,7 @@ static zend_result king_inference_decode_graph_add_sampler(
     zval op;
     const char *mode;
     double temperature;
+    double top_p;
     zend_long top_k;
 
     *mode_out = "sample";
@@ -414,6 +415,13 @@ static zend_result king_inference_decode_graph_add_sampler(
         return FAILURE;
     }
     if (king_inference_decode_graph_non_negative_long_option(options, "top_k", 40, &top_k) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_inference_decode_graph_double_option(options, "top_p", 0.95, &top_p) != SUCCESS) {
+        return FAILURE;
+    }
+    if (top_p <= 0.0 || top_p > 1.0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph top_p must be greater than zero and at most one.");
         return FAILURE;
     }
     *mode_out = mode;
@@ -431,7 +439,7 @@ static zend_result king_inference_decode_graph_add_sampler(
     add_assoc_string(&op, "logits", logits);
     add_assoc_double(&op, "temperature", temperature);
     add_assoc_long(&op, "top_k", top_k);
-    add_assoc_double(&op, "top_p", king_inference_double_from_array(options, "top_p", 0.95));
+    add_assoc_double(&op, "top_p", top_p);
     add_assoc_long(&op, "seed", king_inference_long_from_array(options, "seed", 0));
     add_assoc_long(&op, "sample_index", (zend_long) position);
     king_inference_decode_graph_push_op(ops, &op);

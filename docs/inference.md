@@ -776,7 +776,12 @@ RMS epsilon, and RoPE position scale must be finite numbers. `top_k` must be a
 non-negative integer. `top_k=0` means no top-k cap; positive values cap the
 candidate set after logits are converted to probabilities and sorted by
 probability with token id as the deterministic tie-breaker. The graph and
-`terminal` metadata expose the effective `token_selection_top_k` value. Both
+`terminal` metadata expose the effective `token_selection_top_k` value. `top_p`
+must be greater than zero and at most one. `top_p=1` keeps the top-k candidate
+set intact; smaller values narrow the sorted candidate list until cumulative
+probability reaches or exceeds the threshold. The decode graph builder forwards
+the finite `top_p` value unchanged into `sample_token`, and the local runner
+rejects invalid CLI values before building a graph. Both
 token-selection ops return `[token_id, probability, logit, rank]`. This is still
 CPU-side vector state, but it matches the page-table contract that later native
 paged attention needs.

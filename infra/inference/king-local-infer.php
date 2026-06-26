@@ -83,7 +83,10 @@ function parse_args(array $argv): array
                 }
                 break;
             case '--top-p':
-                $options['top_p'] = min(1.0, max(0.001, (float) $next()));
+                $options['top_p'] = $float($next(), $arg);
+                if ($options['top_p'] <= 0.0 || $options['top_p'] > 1.0) {
+                    fail("{$arg} must be greater than zero and at most one");
+                }
                 break;
             case '--sampler':
                 $options['sampler'] = $next();
