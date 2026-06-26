@@ -230,6 +230,7 @@ typedef struct _king_inference_model_object {
     size_t cuda_decoder_graph_executor_ffn_gate_up_projection_execution_count;
     size_t cuda_decoder_graph_executor_ffn_swiglu_execution_count;
     size_t cuda_decoder_graph_executor_ffn_down_projection_execution_count;
+    size_t cuda_decoder_graph_executor_ffn_output_residual_execution_count;
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_expected_heads;
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_prepared_heads;
     size_t cuda_decoder_graph_executor_last_attention_output_projection_width;
@@ -239,6 +240,7 @@ typedef struct _king_inference_model_object {
     size_t cuda_decoder_graph_executor_last_ffn_up_rows;
     size_t cuda_decoder_graph_executor_last_ffn_swiglu_width;
     size_t cuda_decoder_graph_executor_last_ffn_down_rows;
+    size_t cuda_decoder_graph_executor_last_ffn_output_residual_width;
     size_t cuda_decoder_prompt_loop_count;
     size_t cuda_decoder_prompt_loop_last_prompt_tokens;
     size_t cuda_decoder_prompt_loop_last_validated_graphs;
@@ -352,6 +354,7 @@ typedef struct _king_inference_model_object {
     bool cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available;
     bool cuda_decoder_graph_executor_ffn_swiglu_execution_available;
     bool cuda_decoder_graph_executor_ffn_down_projection_execution_available;
+    bool cuda_decoder_graph_executor_ffn_output_residual_execution_available;
     bool cuda_decoder_prompt_loop_attempted;
     bool cuda_decoder_prompt_loop_available;
     bool cuda_decoder_prompt_loop_tokenizer_ready;
