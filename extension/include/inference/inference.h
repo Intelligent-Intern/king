@@ -211,6 +211,13 @@ typedef struct _king_inference_model_object {
     zend_ulong cuda_decoder_graph_executor_last_kv_write_layer;
     zend_ulong cuda_decoder_graph_executor_last_kv_write_head;
     zend_ulong cuda_decoder_graph_executor_last_kv_write_position;
+    size_t cuda_decoder_graph_executor_kv_attention_execution_count;
+    size_t cuda_decoder_graph_executor_last_kv_attention_key_length;
+    size_t cuda_decoder_graph_executor_last_kv_attention_value_length;
+    zend_ulong cuda_decoder_graph_executor_last_kv_attention_layer;
+    zend_ulong cuda_decoder_graph_executor_last_kv_attention_head;
+    zend_ulong cuda_decoder_graph_executor_last_kv_attention_slot_start;
+    zend_ulong cuda_decoder_graph_executor_last_kv_attention_slot_count;
     size_t cuda_decoder_prompt_loop_count;
     size_t cuda_decoder_prompt_loop_last_prompt_tokens;
     size_t cuda_decoder_prompt_loop_last_validated_graphs;
@@ -314,6 +321,7 @@ typedef struct _king_inference_model_object {
     bool cuda_decoder_graph_executor_rope_execution_available;
     bool cuda_decoder_graph_executor_kv_head_prepare_execution_available;
     bool cuda_decoder_graph_executor_kv_write_execution_available;
+    bool cuda_decoder_graph_executor_kv_attention_execution_available;
     bool cuda_decoder_prompt_loop_attempted;
     bool cuda_decoder_prompt_loop_available;
     bool cuda_decoder_prompt_loop_tokenizer_ready;

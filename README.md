@@ -415,9 +415,9 @@ The core programming model is:
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes the remaining bridge explicitly: the remaining KV cache
-  write, KV attention, residual, FFN, and logits device ops after the initial
-  embedding/RMSNorm/linear/slice/RoPE plus K/V head-preparation chain still
+  GPU metadata exposes the remaining bridge explicitly: the remaining residual,
+  FFN, and logits device ops after the initial embedding/RMSNorm/linear/slice/
+  RoPE plus K/V head-preparation, KV-cache write, and KV-attention chain still
   need execution and bounded logits results before the prompt loop may emit
   decoded tokens.
   Sampling stays CPU-side for the current native GPU
