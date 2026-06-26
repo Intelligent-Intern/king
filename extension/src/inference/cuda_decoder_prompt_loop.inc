@@ -242,6 +242,11 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
         "attention_stack_slot_device_execution_ready",
         model->cuda_decoder_graph_executor_attention_stack_slot_execution_available
     );
+    add_assoc_bool(
+        &event,
+        "attention_heads_device_execution_ready",
+        model->cuda_decoder_graph_executor_attention_heads_execution_available
+    );
     add_assoc_bool(&event, "device_execution_result_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
     add_assoc_long(&event, "prompt_tokens", (zend_long) token_count);
@@ -325,6 +330,11 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
         &loop,
         "attention_stack_slot_device_execution_ready",
         model->cuda_decoder_graph_executor_attention_stack_slot_execution_available
+    );
+    add_assoc_bool(
+        &loop,
+        "attention_heads_device_execution_ready",
+        model->cuda_decoder_graph_executor_attention_heads_execution_available
     );
     add_assoc_bool(&loop, "device_execution_result_ready", false);
     add_assoc_long(&loop, "runs", (zend_long) model->cuda_decoder_prompt_loop_count);
