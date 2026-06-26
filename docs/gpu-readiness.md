@@ -69,96 +69,43 @@ If no thermal source is configured and `king.inference_gpu_allow_unmonitored=0`,
 King refuses GPU inference. Setting `king.inference_gpu_allow_unmonitored=1` is
 an explicit operator decision and should not be the default on a workstation.
 
-## Preflight Script
+## Preflight Command
 
-The following script is safe to run before starting the local router. It does
-not send a generation request first. It checks the selected runtime profile,
-the raw GPU readiness payload, the loaded model metadata, and the router-facing
-model listing flags.
+`bin/king-inference-status` is safe to run before starting the local router. It
+does not send a generation request first. It checks the selected runtime
+profile, the raw GPU readiness payload, the loaded model metadata, and the
+router-facing model listing flags.
 
-```php
-<?php
-
-use King\Inference;
-
-$status = Inference::gpuRuntimeStatus();
-
-printf("GPU backend: %s\n", $status['backend'] ?? 'unknown');
-printf("GPU config ready: %s\n", !empty($status['config_ready']) ? 'yes' : 'no');
-printf("GPU generation ready: %s\n", !empty($status['generation_ready']) ? 'yes' : 'no');
-printf("Primary reason: %s\n", $status['reason'] ?? 'unknown');
-
-if (!empty($status['refusal_reasons'])) {
-    printf("Refusal reasons: %s\n", implode(', ', $status['refusal_reasons']));
-}
-
-if (!empty($status['cuda_driver']['device_name'])) {
-    printf("CUDA device: %s\n", $status['cuda_driver']['device_name']);
-}
-
-if (array_key_exists('free_vram_after_reserve_bytes', $status)) {
-    printf(
-        "Free VRAM after reserve: %.2f GiB\n",
-        $status['free_vram_after_reserve_bytes'] / 1024 / 1024 / 1024
-    );
-}
-
-$modelConfig = Inference::runtimeModelConfig();
-printf("Requested profile: %s\n", $modelConfig['runtime_requested_profile']);
-printf("Selected profile: %s\n", $modelConfig['runtime_profile']);
-printf("Selected backend: %s\n", $modelConfig['backend']);
-printf("Selected model: %s\n", $modelConfig['name']);
-
-if ($modelConfig['runtime_profile'] !== 'gpu'
-    || $modelConfig['backend'] !== 'king_native_gpu') {
-    fwrite(STDERR, "Refusing startup: runtime did not select the GPU profile.\n");
-    exit(2);
-}
-
-$model = Inference::runtimeModelLoad();
-$info = $model->info();
-$runtime = $info['gpu_runtime'];
-
-printf("Artifact: %s\n", $info['artifact_path']);
-printf("Artifact bytes: %d\n", $info['artifact_bytes']);
-printf("Runtime VRAM admitted: %s\n", !empty($runtime['runtime_vram_fits_free']) ? 'yes' : 'no');
-printf("Thermal monitor: %s\n", !empty($runtime['thermal']['monitored']) ? 'yes' : 'no');
-printf("Silent CPU fallback: %s\n", !empty($info['silent_cpu_fallback']) ? 'yes' : 'no');
-
-$models = [$info['name'] => $model];
-$response = Inference::openaiHttpResponse($models, [
-    'method' => 'GET',
-    'path' => '/v1/models',
-]);
-$payload = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
-$listed = $payload['data'][0]['x_king'];
-
-printf(
-    "Router GPU generation ready: %s\n",
-    !empty($listed['client_capabilities']['gpu_generation_ready']) ? 'yes' : 'no'
-);
-printf(
-    "Router OpenAI chat ready: %s\n",
-    !empty($listed['client_capabilities']['openai_chat_completions']) ? 'yes' : 'no'
-);
-
-if (empty($runtime['generation_ready'])
-    || empty($listed['client_capabilities']['gpu_generation_ready'])) {
-    fwrite(STDERR, "GPU generation is not admitted. Fix refusal reasons before routing traffic.\n");
-    exit(3);
-}
-```
-
-Run it with the same ini fragment as the router:
+The command loads the same PHP ini fragment as `bin/king-openai-router` by
+default:
 
 ```bash
-php -c /opt/king/infra/inference/local-gpu.php.ini /opt/king/bin/gpu-readiness.php
+bin/king-inference-status --require-gpu
 ```
 
-Exit code `0` means the GPU profile is selected and generation is admitted.
-Exit code `2` means the runtime did not select `king_native_gpu`. Exit code `3`
-means the GPU profile was selected, but King refused generation for a concrete
-runtime reason.
+Use `--json` when a supervisor, deployment script, or health gate needs the
+machine-readable report:
+
+```bash
+bin/king-inference-status --require-gpu --json
+```
+
+Override the PHP binary, extension path, or ini fragment through the same
+environment variables as the router:
+
+```bash
+PHP_BIN=/usr/bin/php8.4 \
+KING_EXTENSION=/opt/king/extension/modules/king.so \
+KING_INFERENCE_PHP_INI=/opt/king/infra/inference/local-gpu.php.ini \
+bin/king-inference-status --require-gpu
+```
+
+Exit code `0` means the selected model can serve local OpenAI-compatible chat.
+Exit code `2` means `--require-gpu` was set but the active config did not select
+`king_native_gpu`. Exit code `3` means the selected profile loaded but King
+refused generation for concrete runtime reasons. Exit code `1` means the status
+command itself hit a config or runtime error before readiness could be
+evaluated.
 
 ## Interpreting Readiness
 
@@ -218,8 +165,8 @@ For a hard serving gate, run the preflight first and start the router only when
 it succeeds:
 
 ```bash
-php -c /opt/king/infra/inference/local-gpu.php.ini /opt/king/bin/gpu-readiness.php
-exec php -c /opt/king/infra/inference/local-gpu.php.ini /opt/king/bin/king-openai-router
+bin/king-inference-status --require-gpu
+exec bin/king-openai-router
 ```
 
 This preserves the King contract: a selected GPU profile either runs on the GPU
