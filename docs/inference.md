@@ -520,12 +520,13 @@ marks `bounded_logits_result_ready=true` plus
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against
 the GPU executor without CPU execution fallback. It now consumes the bounded
-candidate set for the final prompt graph, applies the same argmax/temperature/
-top-k/top-p/seed sampling policy on CPU over those bounded candidates, writes a
-CPU-compatible `final.next_token.values` token vector into the graph result, and
-emits the decoded token text in the native event stream. OpenAI-compatible GPU
-chat remains refused until the prompt loop continues generation for
-`max_tokens` beyond that first decoded token and the route is explicitly enabled.
+candidate set for the final prompt graph and each following generated-token
+graph until `max_tokens` is reached, applies the same argmax/temperature/top-k/
+top-p/seed sampling policy on CPU over those bounded candidates, writes a
+CPU-compatible `final.next_token.values` token vector into each graph result,
+and emits the decoded token text pieces in the native event stream after the
+structured prompt-loop event. OpenAI-compatible GPU chat remains refused until
+the route is explicitly enabled without CPU fallback.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
