@@ -52,7 +52,10 @@ loader, builds token-step graphs through `king_inference_token_decode_graph()`,
 keeps KV state between steps, and streams decoded token text on stdout for the
 OpenAI-compatible router. Prompt processing passes the tokenizer output into the
 graph builder, so each `tokens[position]` value enters the embedding operation
-and then flows through every resolved transformer layer in the native graph.
+and then flows through every resolved transformer layer in the native graph. The
+runner fails closed when `king_inference_graph_run()` does not return a
+non-empty `state.kv_cache`, because later generated tokens must inherit the KV
+entries written by earlier prompt and decode steps.
 
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
 `infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects

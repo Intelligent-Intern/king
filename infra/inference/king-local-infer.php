@@ -125,6 +125,21 @@ function graph_options(array $gguf): array
     ];
 }
 
+function require_kv_state(array $result): array
+{
+    $state = $result['state'] ?? null;
+    if (!is_array($state)) {
+        fail('native graph produced no state for KV-cache continuity');
+    }
+
+    $kvCache = $state['kv_cache'] ?? null;
+    if (!is_array($kvCache) || $kvCache === []) {
+        fail('native graph produced no kv_cache entries for KV-cache continuity');
+    }
+
+    return $state;
+}
+
 function run_step(
     King\Inference\Model $model,
     int|array $token,
@@ -142,7 +157,7 @@ function run_step(
 
     $graph = king_inference_token_decode_graph($model, $token, $position, $decodeOptions);
     $result = king_inference_graph_run($model, $graph, $options);
-    $nextState = isset($result['state']) && is_array($result['state']) ? $result['state'] : null;
+    $nextState = require_kv_state($result);
 
     if (!$emitToken) {
         return [null, $nextState];
