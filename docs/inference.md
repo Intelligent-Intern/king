@@ -1278,14 +1278,21 @@ validation, OpenAI-compatible routing, and error contracts without a GGUF file.
 Native model integration tests remain opt-in through
 `KING_INFERENCE_TEST_MODEL_PATH`, because CI should not silently fetch hundreds
 of megabytes or depend on an external model host.
+GPU runtime readiness checks are opt-in through
+`KING_INFERENCE_GPU_TEST_MODEL_PATH` and fall back to
+`KING_INFERENCE_TEST_MODEL_PATH` only when the GPU-specific variable is not
+set. Those checks require a local GGUF artifact, visible CUDA driver state, and
+free-VRAM status; they do not downgrade a GPU profile into a CPU-only check.
 
 The split is deliberate:
 
 - Model-free CI tests prove the extension API, INI surface, and validation.
 - Optional GGUF tests prove loader, tokenizer, tensor, graph, and stream
   behavior against a real artifact.
+- Optional GPU GGUF tests prove local GPU configuration and runtime status
+  against a real artifact and a visible GPU runtime.
 - Release or nightly CI can mount a cached GGUF artifact and set
-  `KING_INFERENCE_TEST_MODEL_PATH`.
+  `KING_INFERENCE_TEST_MODEL_PATH` and `KING_INFERENCE_GPU_TEST_MODEL_PATH`.
 
 For a small King command model, start with a compact instruct model and
 fine-tune it on deterministic King-specific command traces instead of training
