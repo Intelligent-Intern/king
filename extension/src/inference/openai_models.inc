@@ -207,6 +207,13 @@ static void king_inference_openai_model_object(
         "native_graph_streaming",
         backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
     );
+    add_assoc_bool(
+        &king_meta,
+        "native_stream_contract",
+        backend_config_valid
+            && (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+                || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU)
+    );
     add_assoc_bool(&king_meta, "embeddings", backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU);
     add_assoc_bool(&king_meta, "gpu_enabled", gpu_enabled);
     if (gpu_enabled) {

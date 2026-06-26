@@ -43,14 +43,7 @@ static zend_result king_inference_stream_start(king_inference_stream_object *str
             return king_inference_king_native_cpu_stream_start(stream, function_name);
 
         case KING_INFERENCE_BACKEND_KING_NATIVE_GPU:
-            zend_throw_exception_ex(
-                king_ce_validation_exception,
-                0,
-                "%s() backend '%s' is part of the King inference contract but is not implemented in this build.",
-                function_name,
-                king_inference_backend_kind_name(kind)
-            );
-            return FAILURE;
+            return king_inference_king_native_gpu_stream_start(stream, function_name);
     }
 
     zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s() resolved an unknown inference backend.", function_name);
@@ -78,11 +71,7 @@ static void king_inference_backend_model_info(king_inference_model_object *inter
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
         king_inference_king_native_model_info(intern, return_value);
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
-        add_assoc_string(return_value, "engine", "king_native_gpu");
-        add_assoc_string(return_value, "loader", "king_gguf_structure");
-        add_assoc_bool(return_value, "external_runtime", false);
-        add_assoc_bool(return_value, "decoder_kernel_ready", false);
-        add_assoc_bool(return_value, "generation_ready", false);
+        king_inference_king_native_gpu_model_info(intern, return_value);
     }
 
     king_inference_backend_capabilities_array(kind, &capabilities);

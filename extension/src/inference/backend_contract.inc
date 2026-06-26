@@ -116,7 +116,8 @@ static zend_result king_inference_backend_kind_from_config(
 static bool king_inference_backend_kind_is_available(king_inference_backend_kind kind)
 {
     return kind == KING_INFERENCE_BACKEND_LOCAL
-        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
 }
 
 static bool king_inference_backend_kind_allows_model_registration(king_inference_backend_kind kind)
@@ -131,14 +132,16 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     bool native_backend = kind != KING_INFERENCE_BACKEND_LOCAL;
     bool gpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
     bool native_cpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    bool native_stream_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
     bool local_backend = kind == KING_INFERENCE_BACKEND_LOCAL;
 
     array_init(return_value);
     add_assoc_bool(return_value, "implemented", king_inference_backend_kind_is_available(kind));
     add_assoc_bool(return_value, "local", true);
-    add_assoc_bool(return_value, "streaming", !gpu_backend);
+    add_assoc_bool(return_value, "streaming", true);
     add_assoc_bool(return_value, "openai_chat_completions_stream", local_backend);
-    add_assoc_bool(return_value, "cancellable", !gpu_backend);
+    add_assoc_bool(return_value, "cancellable", true);
     add_assoc_bool(return_value, "model_registration", king_inference_backend_kind_allows_model_registration(kind));
     add_assoc_bool(return_value, "model_metadata", true);
     add_assoc_bool(return_value, "gguf_metadata", true);
@@ -152,6 +155,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "native_tokenization", true);
     add_assoc_bool(return_value, "native_token_decode", true);
     add_assoc_bool(return_value, "paged_kv_cache", true);
+    add_assoc_bool(return_value, "native_stream_contract", native_stream_backend);
     add_assoc_bool(return_value, "native_graph_streaming", native_cpu_backend);
     add_assoc_bool(return_value, "native_token_selection", native_cpu_backend);
     add_assoc_bool(return_value, "token_generation", !gpu_backend);
@@ -180,6 +184,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_thermal_policy", gpu_backend);
     add_assoc_bool(return_value, "gpu_thermal_preflight", gpu_backend);
     add_assoc_bool(return_value, "gpu_thermal_stream_abort", gpu_backend);
+    add_assoc_bool(return_value, "gpu_decoder_stream_contract", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_kernel", false);
     add_assoc_bool(return_value, "gpu_generation", false);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);

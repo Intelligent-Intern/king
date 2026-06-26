@@ -364,9 +364,10 @@ CPU accidentally.
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
 indexes, map the file for native access, and expose the model through
 `/v1/models`. It does not mean GPU token generation is available. The backend
-capabilities keep `model_registration=true`, while `implemented=false`,
-`streaming=false`, and `token_generation=false` until the GPU decoder kernel is
-present.
+capabilities keep `model_registration=true`, `implemented=true`,
+`streaming=true`, `native_stream_contract=true`, and
+`gpu_decoder_stream_contract=true`, while `token_generation=false` until the
+GPU decoder kernel is present.
 The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
 `gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
@@ -376,9 +377,21 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_attention_value_aggregation_kernel`, `gpu_ffn_swiglu_path`,
 `gpu_output_projection_path`, `gpu_minimized_logits_readback`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
-and `gpu_thermal_stream_abort` are true for the GPU backend.
+`gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
+GPU backend.
 `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
 `silent_cpu_fallback` remain false.
+
+The native GPU backend is connected to the same stream object contract as the
+native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
+the start event reports `backend=king_native_gpu`, native events are read
+through `king_inference_next()`, cancellation moves the stream to a terminal
+state, and stream metrics expose native event indexes plus GPU thermal
+preflight/abort metadata. The first GPU native event is a structured
+`gpu_decoder_stream_contract` event with `stream_contract=king_native_events`,
+`decoder_stream_contract_ready=true`, `generation_ready=false`, and the current
+`gpu_runtime` object. OpenAI-compatible GPU chat remains refused until the
+later token-generation path is ready.
 
 ## GPU Sampling Decision
 
@@ -557,9 +570,10 @@ metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
 `backend_capabilities`. For `king_native_gpu`, model info also exposes
 `gpu_runtime.cuda_context`, `gpu_runtime.device_memory_allocator`,
-`gpu_runtime.required_weight_upload`, `decoder_kernel_ready=false`, and
-`generation_ready=false` directly, so clients do not need to infer decoder or
-generation state from model registration or backend name.
+`gpu_runtime.required_weight_upload`, `decoder_stream_contract_ready=true`,
+`decoder_kernel_ready=false`, and `generation_ready=false` directly, so clients
+do not need to infer decoder or generation state from model registration or
+backend name.
 The `gguf` entry contains `architecture`, `architecture_supported`,
 `architecture_family`, `architecture_generation`, `decoder_profile`,
 `decoder_shape_ready`, `decoder_ready`, `architecture_support_status`,

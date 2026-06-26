@@ -1,0 +1,144 @@
+static zend_result king_inference_king_native_gpu_validate_stream_request(
+    king_inference_stream_object *stream,
+    const char *function_name,
+    zend_long *max_tokens
+) {
+    zval *graph = king_inference_array_find(&stream->request, "graph");
+    zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *request_graph_options = king_inference_array_find(&stream->request, "graph_options");
+    zval *option_graph_options = king_inference_array_find(&stream->options, "graph_options");
+    zval *graph_options = king_inference_king_native_graph_options(stream);
+    zval *max_tokens_value = king_inference_array_find(&stream->request, "max_tokens");
+    zend_long max_native_stream_tokens;
+
+    *max_tokens = 1;
+
+    if (stream->openai_compatible) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "%s() backend 'king_native_gpu' exposes the native event stream contract; "
+            "OpenAI-compatible GPU text generation is not ready in this build.",
+            function_name
+        );
+        return FAILURE;
+    }
+    if (graph != NULL && !king_inference_openai_array_is_object(graph)) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graph must be an object array.");
+        return FAILURE;
+    }
+    if (graphs != NULL && !king_inference_openai_array_is_list(graphs)) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graphs must be a list array.");
+        return FAILURE;
+    }
+    if ((request_graph_options != NULL && !king_inference_openai_array_is_object(request_graph_options))
+        || (option_graph_options != NULL && !king_inference_openai_array_is_object(option_graph_options))) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graph_options must be an object array.");
+        return FAILURE;
+    }
+    if (graphs == NULL && graph == NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native GPU streaming requires a native graph or graphs request."
+        );
+        return FAILURE;
+    }
+    if (max_tokens_value != NULL) {
+        if (Z_TYPE_P(max_tokens_value) != IS_LONG) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream max_tokens must be an integer.");
+            return FAILURE;
+        }
+        *max_tokens = Z_LVAL_P(max_tokens_value);
+    } else if (graphs != NULL) {
+        *max_tokens = (zend_long) zend_hash_num_elements(Z_ARRVAL_P(graphs));
+    }
+    if (*max_tokens <= 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream max_tokens must be positive.");
+        return FAILURE;
+    }
+    if (king_inference_king_native_stream_token_limit(stream, graph_options, &max_native_stream_tokens) != SUCCESS) {
+        return FAILURE;
+    }
+    if (*max_tokens > max_native_stream_tokens) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native GPU stream max_tokens exceeds configured max_native_stream_tokens."
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static void king_inference_king_native_gpu_add_contract_event(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream,
+    zend_long max_tokens
+) {
+    zval event;
+    zval gpu_runtime;
+    zval *reason;
+
+    array_init(&event);
+    add_assoc_string(&event, "type", "gpu_decoder_stream_contract");
+    add_assoc_string(&event, "backend", "king_native_gpu");
+    add_assoc_string(&event, "stream_contract", "king_native_events");
+    add_assoc_bool(&event, "native_stream", true);
+    add_assoc_bool(&event, "decoder_stream_contract_ready", true);
+    add_assoc_bool(&event, "decoder_kernel_ready", false);
+    add_assoc_bool(&event, "generation_ready", false);
+    add_assoc_bool(&event, "token_generation", false);
+    add_assoc_bool(&event, "openai_generation", false);
+    add_assoc_bool(&event, "silent_cpu_fallback", false);
+    add_assoc_long(&event, "accepted_max_tokens", max_tokens);
+
+    king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
+    reason = king_inference_array_find(&gpu_runtime, "reason");
+    if (reason != NULL && Z_TYPE_P(reason) == IS_STRING) {
+        add_assoc_str(&event, "reason", zend_string_copy(Z_STR_P(reason)));
+    }
+    add_assoc_zval(&event, "gpu_runtime", &gpu_runtime);
+    add_next_index_zval(&stream->native_events, &event);
+}
+
+static zend_result king_inference_king_native_gpu_stream_start(
+    king_inference_stream_object *stream,
+    const char *function_name
+) {
+    king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
+    zend_long max_tokens;
+
+    if (king_inference_check_gpu_policy_before_run(stream, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_inference_king_native_gpu_validate_stream_request(stream, function_name, &max_tokens) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (!Z_ISUNDEF(stream->native_events)) {
+        zval_ptr_dtor(&stream->native_events);
+    }
+    array_init(&stream->native_events);
+    stream->native_event_index = 0;
+
+    king_inference_king_native_gpu_add_contract_event(model, stream, max_tokens);
+    return SUCCESS;
+}
+
+static void king_inference_king_native_gpu_model_info(
+    king_inference_model_object *intern,
+    zval *return_value
+) {
+    (void) intern;
+
+    add_assoc_string(return_value, "engine", "king_native_gpu");
+    add_assoc_string(return_value, "loader", "king_gguf_structure");
+    add_assoc_string(return_value, "stream_contract", "king_native_events");
+    add_assoc_bool(return_value, "external_runtime", false);
+    add_assoc_bool(return_value, "decoder_stream_contract_ready", true);
+    add_assoc_bool(return_value, "decoder_kernel_ready", false);
+    add_assoc_bool(return_value, "generation_ready", false);
+    add_assoc_bool(return_value, "silent_cpu_fallback", false);
+}

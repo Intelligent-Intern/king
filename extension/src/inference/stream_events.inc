@@ -489,7 +489,15 @@ static zend_result king_inference_stream_next_event(
     ssize_t read_len;
 
     if (stream->start_event_pending) {
+        king_inference_backend_kind kind = KING_INFERENCE_BACKEND_LOCAL;
+
         stream->start_event_pending = false;
+        if (!Z_ISUNDEF(stream->model) && Z_TYPE(stream->model) == IS_OBJECT) {
+            model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
+            if (king_inference_backend_kind_from_config(&model->config, &kind, "King inference stream") != SUCCESS) {
+                return FAILURE;
+            }
+        }
         if (stream->openai_compatible) {
             king_inference_stream_openai_chunk(stream, "assistant", NULL, 0, NULL, return_value);
             return SUCCESS;
@@ -499,7 +507,7 @@ static zend_result king_inference_stream_next_event(
         add_assoc_string(
             return_value,
             "backend",
-            king_inference_stream_has_native_events(stream) ? "king_native_cpu" : "local"
+            king_inference_backend_kind_name(kind)
         );
         add_assoc_bool(return_value, "native_stream", king_inference_stream_has_native_events(stream));
         add_assoc_long(return_value, "pid", stream->child_pid);

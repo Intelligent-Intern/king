@@ -78,6 +78,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "openai_options.inc"
 #include "backend_king_local.inc"
 #include "backend_king_native.inc"
+#include "backend_king_native_gpu.inc"
 #include "backend_registry.inc"
 #include "model_config.inc"
 #include "runtime_profile.inc"
