@@ -223,6 +223,7 @@ typedef struct _king_inference_model_object {
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_input_index;
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_input_count;
     size_t cuda_decoder_graph_executor_attention_heads_execution_count;
+    size_t cuda_decoder_graph_executor_attention_stack_execution_count;
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_expected_heads;
     zend_ulong cuda_decoder_graph_executor_last_attention_stack_prepared_heads;
     size_t cuda_decoder_prompt_loop_count;
@@ -331,6 +332,7 @@ typedef struct _king_inference_model_object {
     bool cuda_decoder_graph_executor_kv_attention_execution_available;
     bool cuda_decoder_graph_executor_attention_stack_slot_execution_available;
     bool cuda_decoder_graph_executor_attention_heads_execution_available;
+    bool cuda_decoder_graph_executor_attention_stack_execution_available;
     bool cuda_decoder_prompt_loop_attempted;
     bool cuda_decoder_prompt_loop_available;
     bool cuda_decoder_prompt_loop_tokenizer_ready;

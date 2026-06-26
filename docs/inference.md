@@ -266,12 +266,16 @@ is exposed as `decoder_graph_attention_stack_slot_execution_ready` and
 head slices from the attention query projection and runs their K/V write,
 attention aggregation, and stack-slot copy path; the aggregate status is exposed
 as `decoder_graph_attention_heads_execution_ready` and
-`attention_heads_device_execution_ready`.
+`attention_heads_device_execution_ready`. The complete multi-head attention
+stack is now returned as one retained device buffer until the current GPU
+device-op cleanup point, and that bridge is exposed as
+`decoder_graph_attention_stack_execution_ready` and
+`attention_stack_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King retains one complete multi-head stack for the
-attention output projection, runs the residual add, finishes the FFN path, and
-returns bounded logits to the sampler.
+remains blocked until King consumes that retained stack in the attention output
+projection, runs the residual add, finishes the FFN path, and returns bounded
+logits to the sampler.
 
 GPU readiness is inspectable before model load:
 

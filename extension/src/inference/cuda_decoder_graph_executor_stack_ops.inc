@@ -125,9 +125,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
     zend_ulong input_index = 0;
     zend_ulong input_count = 0;
     zend_ulong output_offset = 0;
+    zend_ulong resolved_stack_width = 0;
+    bool allocated_stack = false;
 
-    *stack_output = 0;
-    *stack_width = 0;
     add_assoc_bool(stack_probe, "attempted", stack_op != NULL);
     add_assoc_bool(
         stack_probe,
@@ -163,7 +163,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
             context_length,
             &input_index,
             &input_count,
-            stack_width
+            &resolved_stack_width
     ) != SUCCESS) {
         return FAILURE;
     }
@@ -177,17 +177,28 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
         );
         return FAILURE;
     }
-    if (king_inference_cuda_device_allocator_alloc(
-            model,
-            (size_t) *stack_width * sizeof(float),
-            stack_output
-    ) != SUCCESS) {
+    if (*stack_output == 0) {
+        if (king_inference_cuda_device_allocator_alloc(
+                model,
+                (size_t) resolved_stack_width * sizeof(float),
+                stack_output
+        ) != SUCCESS) {
+            king_inference_cuda_decoder_graph_executor_set_error(
+                model,
+                model->cuda_device_allocator_result,
+                model->cuda_device_allocator_error[0] != '\0'
+                    ? model->cuda_device_allocator_error
+                    : "cuda_decoder_graph_attention_stack_allocation_failed"
+            );
+            return FAILURE;
+        }
+        *stack_width = resolved_stack_width;
+        allocated_stack = true;
+    } else if (*stack_width != resolved_stack_width) {
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
-            model->cuda_device_allocator_result,
-            model->cuda_device_allocator_error[0] != '\0'
-                ? model->cuda_device_allocator_error
-                : "cuda_decoder_graph_attention_stack_allocation_failed"
+            -1,
+            "cuda_decoder_graph_attention_stack_width_mismatch"
         );
         return FAILURE;
     }
@@ -219,10 +230,11 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
     add_assoc_str(stack_probe, "context", zend_string_copy(context_id));
     add_assoc_bool(stack_probe, "executed", true);
     add_assoc_bool(stack_probe, "retained_device_output", true);
+    add_assoc_bool(stack_probe, "allocated_stack_output", allocated_stack);
     add_assoc_long(stack_probe, "input_index", (zend_long) input_index);
     add_assoc_long(stack_probe, "input_count", (zend_long) input_count);
     add_assoc_long(stack_probe, "context_length", (zend_long) context_length);
-    add_assoc_long(stack_probe, "stack_width", (zend_long) *stack_width);
+    add_assoc_long(stack_probe, "stack_width", (zend_long) resolved_stack_width);
     add_assoc_long(stack_probe, "output_offset", (zend_long) output_offset);
     return SUCCESS;
 }

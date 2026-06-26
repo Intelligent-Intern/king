@@ -39,6 +39,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
     zval *slice_probe,
     zval *rope_probe,
     zval *kv_head_prepare_probe,
+    king_inference_cuda_device_ptr *attention_stack_output,
+    zend_ulong *attention_stack_width,
     zend_ulong *executed_device_ops,
     zend_ulong *first_slice_length,
     bool *rope_executed,
@@ -152,6 +154,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
                 slice_length,
                 &head_rope_probe,
                 &head_kv_probe,
+                attention_stack_output,
+                attention_stack_width,
                 executed_device_ops,
                 &head_prepared
         ) != SUCCESS) {
@@ -206,6 +210,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
     add_assoc_long(kv_head_prepare_probe, "expected_heads", (zend_long) head_index);
     add_assoc_long(kv_head_prepare_probe, "prepared_heads", (zend_long) prepared_heads);
     add_assoc_bool(kv_head_prepare_probe, "all_heads_prepared", head_index > 0 && prepared_heads == head_index);
+    add_assoc_long(kv_head_prepare_probe, "attention_stack_width", (zend_long) *attention_stack_width);
+    add_assoc_bool(kv_head_prepare_probe, "attention_stack_retained", *attention_stack_output != 0);
+    add_assoc_bool(
+        kv_head_prepare_probe,
+        "complete_attention_stack",
+        head_index > 0 && prepared_heads == head_index && *attention_stack_output != 0
+    );
+    add_assoc_bool(kv_head_prepare_probe, "attention_stack_released", false);
     add_assoc_zval(kv_head_prepare_probe, "query_heads", &heads);
 
     *rope_executed = prepared_heads > 0;
@@ -214,6 +226,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
     model->cuda_decoder_graph_executor_last_attention_stack_prepared_heads = prepared_heads;
     if (*kv_prepared) {
         model->cuda_decoder_graph_executor_attention_heads_execution_count++;
+        if (*attention_stack_output != 0) {
+            model->cuda_decoder_graph_executor_attention_stack_execution_count++;
+        }
     }
     return SUCCESS;
 }
