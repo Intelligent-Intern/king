@@ -144,6 +144,160 @@ static zend_result king_inference_cuda_decoder_graph_executor_slice_to_device(
     return SUCCESS;
 }
 
+static zval *king_inference_cuda_decoder_graph_executor_kv_write_op_for_vectors(
+    zval *graph,
+    zend_string *key_id,
+    zend_string *value_id
+) {
+    zval *ops = king_inference_cuda_decoder_graph_executor_ops(graph);
+    zval *entry;
+
+    if (ops == NULL || key_id == NULL || value_id == NULL) {
+        return NULL;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(ops), entry) {
+        zval *op_name;
+        zval *key;
+        zval *value;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+        op_name = king_inference_array_find(entry, "op");
+        key = king_inference_array_find(entry, "key");
+        value = king_inference_array_find(entry, "value");
+        if (op_name != NULL
+            && Z_TYPE_P(op_name) == IS_STRING
+            && zend_string_equals_literal(Z_STR_P(op_name), "kv_write")
+            && king_inference_cuda_decoder_graph_executor_zval_string_equals(key, key_id)
+            && king_inference_cuda_decoder_graph_executor_zval_string_equals(value, value_id)) {
+            return entry;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_kv_write_shape(
+    king_inference_model_object *model,
+    zval *kv_write_op,
+    zend_ulong key_length,
+    zend_ulong value_length,
+    zend_ulong *layer,
+    zend_ulong *head,
+    zend_ulong *position
+) {
+    zend_string *cache = NULL;
+    zval *slot;
+    unsigned long parsed_layer = 0;
+    unsigned long parsed_head = 0;
+    int consumed = 0;
+
+    *layer = 0;
+    *head = 0;
+    *position = 0;
+    if (kv_write_op == NULL
+        || king_inference_graph_required_string(kv_write_op, "cache", &cache) != SUCCESS
+        || ZSTR_LEN(cache) > INT_MAX
+        || sscanf(ZSTR_VAL(cache), "l%lu.h%lu%n", &parsed_layer, &parsed_head, &consumed) != 2
+        || consumed != (int) ZSTR_LEN(cache)) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_write_cache_invalid");
+        return FAILURE;
+    }
+
+    slot = king_inference_array_find(kv_write_op, "slot");
+    if (slot == NULL || Z_TYPE_P(slot) != IS_LONG || Z_LVAL_P(slot) < 0) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_write_slot_invalid");
+        return FAILURE;
+    }
+    if (!model->cuda_device_kv_cache_available
+        || key_length != model->cuda_device_kv_cache_key_length
+        || value_length != model->cuda_device_kv_cache_value_length
+        || (zend_ulong) parsed_layer >= model->cuda_device_kv_cache_layers
+        || (zend_ulong) parsed_head >= model->cuda_device_kv_cache_kv_heads
+        || (zend_ulong) Z_LVAL_P(slot) >= model->cuda_device_kv_cache_context_tokens) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_write_shape_invalid");
+        return FAILURE;
+    }
+
+    *layer = (zend_ulong) parsed_layer;
+    *head = (zend_ulong) parsed_head;
+    *position = (zend_ulong) Z_LVAL_P(slot);
+    return SUCCESS;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_write(
+    king_inference_model_object *model,
+    zval *kv_write_op,
+    king_inference_cuda_device_ptr key_output,
+    zend_ulong key_length,
+    king_inference_cuda_device_ptr value_output,
+    zend_ulong value_length,
+    zval *kv_write_probe,
+    zend_ulong *executed_device_ops
+) {
+    zend_ulong layer = 0;
+    zend_ulong head = 0;
+    zend_ulong position = 0;
+
+    add_assoc_bool(kv_write_probe, "attempted", kv_write_op != NULL);
+    add_assoc_bool(kv_write_probe, "available", model->cuda_decoder_graph_executor_kv_write_execution_available);
+    add_assoc_bool(kv_write_probe, "executed", false);
+    if (kv_write_op == NULL) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_write_missing");
+        return FAILURE;
+    }
+    if (!model->cuda_decoder_graph_executor_kv_write_execution_available) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_write_execution_unavailable");
+        return FAILURE;
+    }
+    if (king_inference_cuda_decoder_graph_executor_kv_write_shape(
+            model,
+            kv_write_op,
+            key_length,
+            value_length,
+            &layer,
+            &head,
+            &position
+    ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_inference_cuda_device_kv_cache_write(
+            model,
+            layer,
+            head,
+            position,
+            key_output,
+            value_output
+    ) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_kv_cache_result,
+            model->cuda_device_kv_cache_error[0] != '\0'
+                ? model->cuda_device_kv_cache_error
+                : "cuda_decoder_graph_kv_write_execution_failed"
+        );
+        return FAILURE;
+    }
+
+    model->cuda_decoder_graph_executor_kv_write_execution_count++;
+    model->cuda_decoder_graph_executor_last_kv_write_key_length = key_length;
+    model->cuda_decoder_graph_executor_last_kv_write_value_length = value_length;
+    model->cuda_decoder_graph_executor_last_kv_write_layer = layer;
+    model->cuda_decoder_graph_executor_last_kv_write_head = head;
+    model->cuda_decoder_graph_executor_last_kv_write_position = position;
+    (*executed_device_ops)++;
+
+    add_assoc_bool(kv_write_probe, "executed", true);
+    add_assoc_long(kv_write_probe, "layer", (zend_long) layer);
+    add_assoc_long(kv_write_probe, "head", (zend_long) head);
+    add_assoc_long(kv_write_probe, "position", (zend_long) position);
+    add_assoc_long(kv_write_probe, "key_length", (zend_long) key_length);
+    add_assoc_long(kv_write_probe, "value_length", (zend_long) value_length);
+    return SUCCESS;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_prepare(
     king_inference_model_object *model,
     zval *graph,
@@ -157,14 +311,20 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     zval *key_linear_op = king_inference_cuda_decoder_graph_executor_nth_op_for_input(graph, rms_norm_id, "linear", 1);
     zval *value_linear_op = king_inference_cuda_decoder_graph_executor_nth_op_for_input(graph, rms_norm_id, "linear", 2);
     zval *key_slice_op = NULL;
+    zval *key_rope_op = NULL;
     zval *value_slice_op = NULL;
+    zval *kv_write_op = NULL;
     zval key_rope_probe;
+    zval kv_write_probe;
     zend_string *key_linear_id = NULL;
     zend_string *key_slice_id = NULL;
+    zend_string *key_rope_id = NULL;
     zend_string *value_linear_id = NULL;
+    zend_string *value_slice_id = NULL;
     king_inference_cuda_device_ptr key_linear_output = 0;
     king_inference_cuda_device_ptr value_linear_output = 0;
     king_inference_cuda_device_ptr key_slice_output = 0;
+    king_inference_cuda_device_ptr key_rope_output = 0;
     king_inference_cuda_device_ptr value_slice_output = 0;
     zend_ulong key_rows = 0;
     zend_ulong value_rows = 0;
@@ -172,6 +332,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     zend_ulong key_slice_length = 0;
     zend_ulong value_slice_offset = 0;
     zend_ulong value_slice_length = 0;
+    zend_ulong key_rope_length = 0;
     bool key_rope_executed = false;
 
     *kv_prepared = false;
@@ -224,13 +385,20 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
         return FAILURE;
     }
     (*executed_device_ops)++;
+    key_rope_op = king_inference_cuda_decoder_graph_executor_op_for_input(graph, key_slice_id, "rope");
+    if (key_rope_op == NULL || king_inference_graph_required_string(key_rope_op, "id", &key_rope_id) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_key_rope_contract_invalid");
+        return FAILURE;
+    }
     array_init(&key_rope_probe);
     add_assoc_string(&key_rope_probe, "type", "gpu_decoder_key_rope_device_execution");
     add_assoc_bool(&key_rope_probe, "attempted", false);
     add_assoc_bool(&key_rope_probe, "available", model->cuda_decoder_graph_executor_rope_execution_available);
     add_assoc_bool(&key_rope_probe, "executed", false);
     add_assoc_bool(&key_rope_probe, "retained_device_output", false);
-    if (king_inference_cuda_decoder_graph_executor_execute_rope_after_slice(
+    if (king_inference_cuda_decoder_graph_executor_execute_rope_after_slice_to_device(
             model,
             graph,
             key_slice_id,
@@ -238,6 +406,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
             key_slice_length,
             &key_rope_probe,
             executed_device_ops,
+            &key_rope_output,
+            &key_rope_length,
             &key_rope_executed
     ) != SUCCESS) {
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
@@ -252,8 +422,6 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_key_rope_missing");
         return FAILURE;
     }
-    add_assoc_zval(kv_probe, "key_rope_execution", &key_rope_probe);
-
     if (king_inference_cuda_decoder_graph_executor_linear_to_device(
             model,
             value_linear_op,
@@ -262,14 +430,18 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
             &value_linear_output,
             &value_rows
     ) != SUCCESS) {
+        zval_ptr_dtor(&key_rope_probe);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
         return FAILURE;
     }
     (*executed_device_ops)++;
     value_slice_op = king_inference_cuda_decoder_graph_executor_op_for_input(graph, value_linear_id, "slice");
-    if (value_slice_op == NULL) {
+    if (value_slice_op == NULL || king_inference_graph_required_string(value_slice_op, "id", &value_slice_id) != SUCCESS) {
+        zval_ptr_dtor(&key_rope_probe);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_value_slice_contract_invalid");
@@ -284,12 +456,44 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
             &value_slice_offset,
             &value_slice_length
     ) != SUCCESS) {
+        zval_ptr_dtor(&key_rope_probe);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
         return FAILURE;
     }
     (*executed_device_ops)++;
+
+    kv_write_op = king_inference_cuda_decoder_graph_executor_kv_write_op_for_vectors(
+        graph,
+        key_rope_id,
+        value_slice_id
+    );
+    array_init(&kv_write_probe);
+    add_assoc_string(&kv_write_probe, "type", "gpu_decoder_kv_write_device_execution");
+    if (king_inference_cuda_decoder_graph_executor_execute_kv_write(
+            model,
+            kv_write_op,
+            key_rope_output,
+            key_rope_length,
+            value_slice_output,
+            value_slice_length,
+            &kv_write_probe,
+            executed_device_ops
+    ) != SUCCESS) {
+        zval_ptr_dtor(&kv_write_probe);
+        zval_ptr_dtor(&key_rope_probe);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
+        return FAILURE;
+    }
+    add_assoc_bool(&key_rope_probe, "retained_device_output", false);
+    add_assoc_zval(kv_probe, "key_rope_execution", &key_rope_probe);
+    add_assoc_zval(kv_probe, "kv_write_execution", &kv_write_probe);
 
     model->cuda_decoder_graph_executor_kv_head_prepare_execution_count++;
     model->cuda_decoder_graph_executor_last_kv_head_key_length = key_slice_length;
@@ -301,6 +505,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     add_assoc_long(kv_probe, "key_linear_rows", (zend_long) key_rows);
     add_assoc_long(kv_probe, "key_slice_offset", (zend_long) key_slice_offset);
     add_assoc_long(kv_probe, "key_slice_length", (zend_long) key_slice_length);
+    add_assoc_long(kv_probe, "key_rope_length", (zend_long) key_rope_length);
     add_assoc_long(kv_probe, "value_linear_rows", (zend_long) value_rows);
     add_assoc_long(kv_probe, "value_slice_offset", (zend_long) value_slice_offset);
     add_assoc_long(kv_probe, "value_slice_length", (zend_long) value_slice_length);
@@ -314,11 +519,25 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
                 : "cuda_decoder_graph_kv_head_prepare_free_failed"
         );
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
         return FAILURE;
     }
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : "cuda_decoder_graph_kv_head_prepare_free_failed"
+        );
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
+        return FAILURE;
+    }
+    if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output) != SUCCESS) {
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_device_allocator_result,

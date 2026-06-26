@@ -150,6 +150,7 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "gpu_decoder_graph_slice_execution", false);
     add_assoc_bool(return_value, "gpu_decoder_graph_rope_execution", false);
     add_assoc_bool(return_value, "gpu_decoder_graph_kv_head_prepare_execution", false);
+    add_assoc_bool(return_value, "gpu_decoder_graph_kv_write_execution", false);
     add_assoc_bool(return_value, "gpu_prompt_decoder_loop", false);
     add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
     add_assoc_bool(return_value, "gpu_vram_admission", false);

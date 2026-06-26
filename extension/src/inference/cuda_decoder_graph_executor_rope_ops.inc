@@ -46,7 +46,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_rope_shape(
     return SUCCESS;
 }
 
-static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after_slice(
+static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after_slice_to_device(
     king_inference_model_object *model,
     zval *graph,
     zend_string *slice_id,
@@ -54,6 +54,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
     zend_ulong slice_length,
     zval *rope_probe,
     zend_ulong *executed_device_ops,
+    king_inference_cuda_device_ptr *rope_output,
+    zend_ulong *rope_length,
     bool *rope_executed
 ) {
     zval *rope_op = king_inference_cuda_decoder_graph_executor_op_for_input(graph, slice_id, "rope");
@@ -62,8 +64,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
     zend_ulong rope_position = 0;
     double rope_position_scale = 1.0;
     double rope_base = 10000.0;
-    king_inference_cuda_device_ptr rope_output = 0;
 
+    *rope_output = 0;
+    *rope_length = 0;
     *rope_executed = false;
     add_assoc_bool(rope_probe, "attempted", rope_op != NULL);
     if (rope_op == NULL) {
@@ -92,7 +95,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
     if (king_inference_cuda_device_allocator_alloc(
             model,
             (size_t) slice_length * sizeof(float),
-            &rope_output
+            rope_output
     ) != SUCCESS) {
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
@@ -106,7 +109,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
     if (king_inference_cuda_rope_f32(
             model,
             slice_output,
-            rope_output,
+            *rope_output,
             slice_length,
             rope_offset,
             rope_head_dim,
@@ -114,7 +117,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
             rope_position_scale,
             rope_base
     ) != SUCCESS) {
-        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rope_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, rope_output);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_rope_result,
@@ -122,6 +125,53 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
                 ? model->cuda_rope_error
                 : "cuda_decoder_graph_rope_execution_failed"
         );
+        return FAILURE;
+    }
+
+    model->cuda_decoder_graph_executor_rope_execution_count++;
+    model->cuda_decoder_graph_executor_last_rope_length = slice_length;
+    model->cuda_decoder_graph_executor_last_rope_position = rope_position;
+    (*executed_device_ops)++;
+    *rope_executed = true;
+    *rope_length = slice_length;
+
+    add_assoc_bool(rope_probe, "executed", true);
+    add_assoc_bool(rope_probe, "retained_device_output", true);
+    add_assoc_long(rope_probe, "length", (zend_long) slice_length);
+    add_assoc_long(rope_probe, "offset", (zend_long) rope_offset);
+    add_assoc_long(rope_probe, "head_dim", (zend_long) rope_head_dim);
+    add_assoc_long(rope_probe, "position", (zend_long) rope_position);
+    add_assoc_double(rope_probe, "position_scale", rope_position_scale);
+    add_assoc_double(rope_probe, "rope_base", rope_base);
+    add_assoc_long(rope_probe, "bytes", (zend_long) ((size_t) slice_length * sizeof(float)));
+    return SUCCESS;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after_slice(
+    king_inference_model_object *model,
+    zval *graph,
+    zend_string *slice_id,
+    king_inference_cuda_device_ptr slice_output,
+    zend_ulong slice_length,
+    zval *rope_probe,
+    zend_ulong *executed_device_ops,
+    bool *rope_executed
+) {
+    king_inference_cuda_device_ptr rope_output = 0;
+    zend_ulong rope_length = 0;
+
+    if (king_inference_cuda_decoder_graph_executor_execute_rope_after_slice_to_device(
+            model,
+            graph,
+            slice_id,
+            slice_output,
+            slice_length,
+            rope_probe,
+            executed_device_ops,
+            &rope_output,
+            &rope_length,
+            rope_executed
+    ) != SUCCESS) {
         return FAILURE;
     }
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rope_output) != SUCCESS) {
@@ -134,20 +184,6 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_rope_after
         );
         return FAILURE;
     }
-
-    model->cuda_decoder_graph_executor_rope_execution_count++;
-    model->cuda_decoder_graph_executor_last_rope_length = slice_length;
-    model->cuda_decoder_graph_executor_last_rope_position = rope_position;
-    (*executed_device_ops)++;
-    *rope_executed = true;
-
-    add_assoc_bool(rope_probe, "executed", true);
-    add_assoc_long(rope_probe, "length", (zend_long) slice_length);
-    add_assoc_long(rope_probe, "offset", (zend_long) rope_offset);
-    add_assoc_long(rope_probe, "head_dim", (zend_long) rope_head_dim);
-    add_assoc_long(rope_probe, "position", (zend_long) rope_position);
-    add_assoc_double(rope_probe, "position_scale", rope_position_scale);
-    add_assoc_double(rope_probe, "rope_base", rope_base);
-    add_assoc_long(rope_probe, "bytes", (zend_long) ((size_t) slice_length * sizeof(float)));
+    add_assoc_bool(rope_probe, "retained_device_output", false);
     return SUCCESS;
 }

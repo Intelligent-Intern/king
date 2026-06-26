@@ -376,6 +376,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         add_assoc_bool(result, "slice_device_execution_ready", false);
         add_assoc_bool(result, "rope_device_execution_ready", false);
         add_assoc_bool(result, "kv_head_prepare_device_execution_ready", false);
+        add_assoc_bool(result, "kv_write_device_execution_ready", false);
         add_assoc_long(result, "executed_device_ops", 0);
         return SUCCESS;
     }
@@ -788,6 +789,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(result, "slice_device_execution_ready", slice_length > 0);
     add_assoc_bool(result, "rope_device_execution_ready", rope_executed);
     add_assoc_bool(result, "kv_head_prepare_device_execution_ready", kv_head_prepared);
+    add_assoc_bool(result, "kv_write_device_execution_ready", kv_head_prepared);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);
