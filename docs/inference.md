@@ -225,6 +225,7 @@ $status = king_inference_gpu_runtime_status($config);
 
 if (!$status['generation_ready']) {
     error_log('King GPU inference is not ready: ' . $status['reason']);
+    error_log('All refusal reasons: ' . implode(', ', $status['refusal_reasons']));
 }
 
 $sameStatus = King\Inference::gpuRuntimeStatus($config);
@@ -249,6 +250,12 @@ free VRAM than that configured minimum, GPU readiness fails closed with
 Thermal guardrails still come from the configured sensor path or command,
 because operators may prefer platform-specific sensor files over driver-level
 telemetry.
+
+`reason` is the primary refusal reason, ordered by the first gate King would
+need an operator to fix. `refusal_reasons` contains the complete ordered list of
+currently active refusal reasons, so a broken setup can show, for example, a
+missing artifact, unavailable VRAM telemetry, and a missing thermal monitor in
+one response instead of hiding later blockers behind the first one.
 
 GPU stream startup performs a fresh thermal preflight immediately before the
 backend run is admitted. For the local process backend this check happens after
@@ -294,6 +301,9 @@ extension/src/inference/
 ├── gguf_architecture_metadata.inc
 ├── gguf_loader.inc
 ├── gguf_metadata_helpers.inc
+├── gpu_runtime_reason.inc
+├── gpu_runtime_status.inc
+├── gpu_vram_policy.inc
 ├── helpers.inc
 ├── model_config.inc
 ├── native_memory.inc

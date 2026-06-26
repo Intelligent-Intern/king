@@ -1245,7 +1245,8 @@ namespace {
     /**
      * Return the effective GPU inference readiness for the current process or
      * a provided King\Config snapshot. This reports configuration, artifact,
-     * driver/thermal visibility, and the current decoder-kernel readiness.
+     * driver/thermal visibility, the primary refusal reason, all active
+     * refusal reasons, and the current decoder-kernel readiness.
      * @param mixed $config null, King\Config, or native King\Config resource
      * @return array<string,mixed>
      * @throws \King\ValidationException

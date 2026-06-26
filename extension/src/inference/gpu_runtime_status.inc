@@ -294,73 +294,6 @@ static bool king_inference_gpu_status_backend_supported(const char *backend)
         || strcasecmp(backend, "cuda") == 0;
 }
 
-static const char *king_inference_gpu_status_reason(
-    bool gpu_enabled,
-    bool process_bindings_enabled,
-    bool config_bindings_enabled,
-    bool backend_supported,
-    bool artifact_configured,
-    bool artifact_readable,
-    zend_long max_gpu_layers,
-    bool thermal_monitored,
-    bool allow_unmonitored,
-    bool temperature_available,
-    bool temperature_ok,
-    bool driver_visible,
-    bool vram_admission_checked,
-    bool free_vram_floor_met,
-    bool model_vram_admitted,
-    bool model_vram_fits_without_reserve
-) {
-    if (!gpu_enabled) {
-        return "gpu_disabled";
-    }
-    if (!process_bindings_enabled) {
-        return "process_gpu_bindings_disabled";
-    }
-    if (!config_bindings_enabled) {
-        return "config_gpu_bindings_disabled";
-    }
-    if (!backend_supported) {
-        return "unsupported_gpu_backend";
-    }
-    if (!artifact_configured) {
-        return "gpu_model_artifact_missing";
-    }
-    if (!artifact_readable) {
-        return "gpu_model_artifact_not_readable";
-    }
-    if (max_gpu_layers <= 0) {
-        return "gpu_layers_disabled";
-    }
-    if (!vram_admission_checked) {
-        return "gpu_vram_status_unavailable";
-    }
-    if (!free_vram_floor_met) {
-        return "gpu_free_vram_below_configured_floor";
-    }
-    if (!model_vram_admitted) {
-        if (model_vram_fits_without_reserve) {
-            return "gpu_model_artifact_exceeds_free_vram_after_reserve";
-        }
-        return "gpu_model_artifact_exceeds_free_vram";
-    }
-    if (!driver_visible && !temperature_available) {
-        return "gpu_driver_not_visible";
-    }
-    if (!thermal_monitored && !allow_unmonitored) {
-        return "gpu_thermal_monitor_missing";
-    }
-    if (thermal_monitored && !temperature_available) {
-        return "gpu_temperature_unavailable";
-    }
-    if (temperature_available && !temperature_ok) {
-        return "gpu_temperature_limit_reached";
-    }
-
-    return "gpu_decoder_kernel_not_implemented";
-}
-
 static void king_inference_gpu_runtime_status_array(
     zval *return_value,
     bool gpu_enabled,
@@ -391,11 +324,13 @@ static void king_inference_gpu_runtime_status_array(
     bool artifact_size_available;
     bool vram_admission_checked;
     bool model_vram_admitted;
+    bool model_vram_fits_after_reserve;
     bool model_vram_fits_without_reserve;
     bool driver_visible;
     bool config_ready;
     king_inference_gpu_vram_policy vram_policy;
     double temperature_c = 0.0;
+    zval refusal_reasons;
     const char *reason;
 
     king_inference_cuda_driver_probe(&cuda_status);
@@ -411,9 +346,11 @@ static void king_inference_gpu_runtime_status_array(
     vram_admission_checked = artifact_size_available && cuda_status.memory_info_available;
     model_vram_fits_without_reserve = vram_admission_checked
         && artifact_bytes <= (size_t) vram_policy.free_bytes;
+    model_vram_fits_after_reserve = vram_admission_checked
+        && artifact_bytes <= (size_t) vram_policy.free_after_reserve_bytes;
     model_vram_admitted = vram_admission_checked
         && vram_policy.floor_met
-        && artifact_bytes <= (size_t) vram_policy.free_after_reserve_bytes;
+        && model_vram_fits_after_reserve;
 
     if (thermal_path_configured) {
         temperature_available = king_inference_gpu_status_read_temperature_path(
@@ -446,7 +383,8 @@ static void king_inference_gpu_runtime_status_array(
         && ((thermal_monitored && temperature_available && temperature_ok)
             || (!thermal_monitored && allow_unmonitored));
 
-    reason = king_inference_gpu_status_reason(
+    king_inference_gpu_status_refusal_reasons(
+        &refusal_reasons,
         gpu_enabled,
         process_bindings_enabled,
         config_bindings_enabled,
@@ -461,9 +399,10 @@ static void king_inference_gpu_runtime_status_array(
         driver_visible,
         vram_admission_checked,
         vram_policy.floor_met,
-        model_vram_admitted,
+        model_vram_fits_after_reserve,
         model_vram_fits_without_reserve
     );
+    reason = king_inference_gpu_status_first_reason(&refusal_reasons);
 
     array_init(return_value);
     add_assoc_bool(return_value, "gpu_enabled", gpu_enabled);
@@ -512,6 +451,7 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
     add_assoc_string(return_value, "reason", reason);
+    add_assoc_zval(return_value, "refusal_reasons", &refusal_reasons);
 
     array_init(&cuda_driver);
     add_assoc_bool(&cuda_driver, "loader_available", cuda_status.loader_available);
@@ -586,6 +526,7 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     bool free_vram_floor_met = false;
     bool overflow = false;
     bool previous_model_vram_admitted_bool = false;
+    const char *runtime_reason = NULL;
     zend_long artifact_bytes = 0;
     zend_long estimated_bytes = 0;
     zend_long free_vram_bytes = 0;
@@ -706,18 +647,15 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     if (estimate_available) {
         add_assoc_bool(return_value, "model_vram_admitted", fits_free);
     }
-    if (previous_model_vram_admitted_bool
-        && compared_to_free
-        && !fits_free) {
-        add_assoc_string(
-            return_value,
-            "reason",
-            overflow
-                ? "gpu_required_vram_overflow"
-                : (fits_without_reserve
-                    ? "gpu_required_vram_exceeds_free_vram_after_reserve"
-                    : "gpu_required_vram_exceeds_free_vram")
-        );
+    if (previous_model_vram_admitted_bool && compared_to_free && !fits_free) {
+        runtime_reason = overflow
+            ? "gpu_required_vram_overflow"
+            : (fits_without_reserve
+                ? "gpu_required_vram_exceeds_free_vram_after_reserve"
+                : "gpu_required_vram_exceeds_free_vram");
+
+        add_assoc_string(return_value, "reason", runtime_reason);
+        king_inference_gpu_status_append_return_reason(return_value, runtime_reason);
     }
 }
 
