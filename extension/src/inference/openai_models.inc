@@ -105,6 +105,7 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "model_registration", true);
     add_assoc_bool(return_value, "model_metadata", false);
     add_assoc_bool(return_value, "gguf_metadata", false);
+    add_assoc_bool(return_value, "gguf_architecture_classification", false);
     add_assoc_bool(return_value, "process_runner", false);
     add_assoc_bool(return_value, "native_runtime", false);
     add_assoc_bool(return_value, "native_model_loader", false);

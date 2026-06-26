@@ -142,6 +142,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "model_registration", king_inference_backend_kind_allows_model_registration(kind));
     add_assoc_bool(return_value, "model_metadata", true);
     add_assoc_bool(return_value, "gguf_metadata", true);
+    add_assoc_bool(return_value, "gguf_architecture_classification", true);
     add_assoc_bool(return_value, "process_runner", local_backend);
     add_assoc_bool(return_value, "native_runtime", native_backend);
     add_assoc_bool(return_value, "native_model_loader", true);

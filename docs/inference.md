@@ -391,8 +391,12 @@ ranges for supported scalar and block formats, and can multiply rank-1 or
 rank-2 tensors by a PHP vector with explicit safety limits.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
-key/value dimensions. `paged_kv_cache.inc` turns that into a deterministic
-page plan for the native attention cache.
+key/value dimensions. It also classifies the loaded GGUF architecture against
+King's native decoder target set. `gemma3` and `gemma4` are exposed as
+supported decoder profiles; unsupported or missing architecture metadata remains
+inspectable, but is not reported as decoder-ready. `paged_kv_cache.inc` turns
+the shape metadata into a deterministic page plan for the native attention
+cache.
 `native_memory.inc` owns the read-only `mmap()` lifecycle used by native King
 backends so tensor bytes can be addressed directly by later graph execution
 without handing the model to an external runtime.
@@ -404,7 +408,10 @@ metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `decoder_kernel_ready=false` and `generation_ready=false` directly, so clients
 do not need to infer decoder or generation state from model registration or
 backend name.
-The `gguf` entry contains `architecture`, `tokenizer_model`,
+The `gguf` entry contains `architecture`, `architecture_supported`,
+`architecture_family`, `architecture_generation`, `decoder_profile`,
+`decoder_shape_ready`, `decoder_ready`, `architecture_support_status`,
+`architecture_missing_fields`, `supported_architectures`, `tokenizer_model`,
 `tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
 status fields when the source artifact provides them. Native backend info
 additionally exposes `native_model_mapped`, `native_map_bytes`,
