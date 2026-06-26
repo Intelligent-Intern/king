@@ -5,6 +5,7 @@ static zend_result king_inference_king_native_gpu_validate_stream_request(
 ) {
     zval *graph = king_inference_array_find(&stream->request, "graph");
     zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *prompt_text = king_inference_array_find(&stream->request, "native_prompt_text");
     zval *request_graph_options = king_inference_array_find(&stream->request, "graph_options");
     zval *option_graph_options = king_inference_array_find(&stream->options, "graph_options");
     zval *graph_options = king_inference_king_native_graph_options(stream);
@@ -31,16 +32,28 @@ static zend_result king_inference_king_native_gpu_validate_stream_request(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graphs must be a list array.");
         return FAILURE;
     }
+    if (prompt_text != NULL && (Z_TYPE_P(prompt_text) != IS_STRING || Z_STRLEN_P(prompt_text) == 0)) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream native_prompt_text must be a non-empty string.");
+        return FAILURE;
+    }
+    if (prompt_text != NULL && (graph != NULL || graphs != NULL)) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "King native GPU stream must use either native_prompt_text or graph/graphs, not both."
+        );
+        return FAILURE;
+    }
     if ((request_graph_options != NULL && !king_inference_openai_array_is_object(request_graph_options))
         || (option_graph_options != NULL && !king_inference_openai_array_is_object(option_graph_options))) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native GPU stream graph_options must be an object array.");
         return FAILURE;
     }
-    if (graphs == NULL && graph == NULL) {
+    if (graphs == NULL && graph == NULL && prompt_text == NULL) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "King native GPU streaming requires a native graph or graphs request."
+            "King native GPU streaming requires native_prompt_text, graph, or graphs."
         );
         return FAILURE;
     }
@@ -72,6 +85,52 @@ static zend_result king_inference_king_native_gpu_validate_stream_request(
     return SUCCESS;
 }
 
+static zend_result king_inference_king_native_gpu_validate_graph_requests(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream
+) {
+    zval *graph = king_inference_array_find(&stream->request, "graph");
+    zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *entry;
+    zval event;
+    zend_long validated = 0;
+
+    if (graph != NULL) {
+        if (king_inference_cuda_decoder_graph_executor_validate_graph(model, graph) != SUCCESS) {
+            return FAILURE;
+        }
+        validated++;
+    }
+    if (graphs != NULL) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(graphs), entry) {
+            if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+                king_inference_cuda_decoder_graph_executor_set_error(
+                    model,
+                    -1,
+                    "cuda_decoder_graph_request_invalid"
+                );
+                return FAILURE;
+            }
+            if (king_inference_cuda_decoder_graph_executor_validate_graph(model, entry) != SUCCESS) {
+                return FAILURE;
+            }
+            validated++;
+        } ZEND_HASH_FOREACH_END();
+    }
+    if (validated == 0) {
+        return SUCCESS;
+    }
+
+    array_init(&event);
+    add_assoc_string(&event, "type", "gpu_decoder_graph_executor_contract");
+    add_assoc_string(&event, "backend", "king_native_gpu");
+    add_assoc_bool(&event, "graphs_validated", true);
+    add_assoc_bool(&event, "device_execution_result_ready", false);
+    add_assoc_long(&event, "validated_graphs", validated);
+    add_next_index_zval(&stream->native_events, &event);
+    return SUCCESS;
+}
+
 static void king_inference_king_native_gpu_add_contract_event(
     king_inference_model_object *model,
     king_inference_stream_object *stream,
@@ -92,7 +151,7 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_bool(&event, "device_vector_ops_ready", model->cuda_device_vector_ops_available);
     add_assoc_bool(&event, "device_kv_cache_ready", model->cuda_device_kv_cache_available);
     add_assoc_bool(&event, "decoder_graph_executor_ready", model->cuda_decoder_graph_executor_available);
-    add_assoc_bool(&event, "decoder_prompt_loop_ready", false);
+    add_assoc_bool(&event, "decoder_prompt_loop_ready", model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
     add_assoc_bool(&event, "plain_text_chat_ready", false);
@@ -133,6 +192,22 @@ static zend_result king_inference_king_native_gpu_stream_start(
     stream->native_event_index = 0;
 
     king_inference_king_native_gpu_add_contract_event(model, stream, max_tokens);
+    {
+        zval *prompt_text = king_inference_array_find(&stream->request, "native_prompt_text");
+        if (prompt_text != NULL
+            && king_inference_cuda_decoder_prompt_loop_validate_prompt(
+                model,
+                stream,
+                prompt_text,
+                max_tokens
+            ) != SUCCESS) {
+            return FAILURE;
+        }
+        if (prompt_text == NULL
+            && king_inference_king_native_gpu_validate_graph_requests(model, stream) != SUCCESS) {
+            return FAILURE;
+        }
+    }
     return SUCCESS;
 }
 
@@ -153,7 +228,7 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_bool(return_value, "device_vector_ops_ready", intern->cuda_device_vector_ops_available);
     add_assoc_bool(return_value, "device_kv_cache_ready", intern->cuda_device_kv_cache_available);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", intern->cuda_decoder_graph_executor_available);
-    add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
+    add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
     add_assoc_bool(return_value, "plain_text_chat_ready", false);

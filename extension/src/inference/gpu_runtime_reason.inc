@@ -45,7 +45,9 @@ static void king_inference_gpu_decoder_blockers(king_inference_model_object *mod
     if (model == NULL || !model->cuda_decoder_graph_executor_available) {
         king_inference_gpu_status_append_reason(blockers, "gpu_decoder_graph_executor_missing");
     }
-    king_inference_gpu_status_append_reason(blockers, "gpu_prompt_decoder_loop_missing");
+    if (model == NULL || !model->cuda_decoder_prompt_loop_available) {
+        king_inference_gpu_status_append_reason(blockers, "gpu_prompt_decoder_loop_missing");
+    }
 }
 
 static void king_inference_gpu_replace_return_decoder_blockers(
