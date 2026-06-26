@@ -71,6 +71,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "llm_cache_policy.inc"
 #include "openai_usage.inc"
 #include "stream_events.inc"
+#include "openai_completion_payload.inc"
 #include "object_handlers.inc"
 #include "openai_compat.inc"
 #include "openai_responses.inc"

@@ -1113,9 +1113,11 @@ native graph-selected token stream. `graph_options` must be a JSON object when
 provided. Native graph streams are stateless unless the payload or options set
 `with_memory` or `with-memory` to `true`.
 
-For `stream=false`, the helper drains into one OpenAI-shaped `chat.completion`
-JSON response. For `stream=true`, it returns a bounded `text/event-stream` body
-with `data: {chunk}` events and a final `data: [DONE]` marker.
+For `stream=false`, the helper drains native decoder content deltas into one
+OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
+Decoder text is treated as assistant content unless the request explicitly
+activates tools. For `stream=true`, it returns a bounded `text/event-stream`
+body with `data: {chunk}` events and a final `data: [DONE]` marker.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
 returns a precise OpenAI error while the GPU decoder kernel is not ready. The
 message states that the model is registered for metadata/readiness inspection,
