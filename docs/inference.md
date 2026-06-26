@@ -369,8 +369,8 @@ identifies the missing runtime layers between the available CUDA leaves and
 plain-text chat generation. When the GPU model has initialized the embedding
 row loader, device vector ops, device KV-cache, decoder graph executor, and
 prompt-loop admission path, the remaining gap is that the graph executor still
-needs all device ops plus bounded logits results before the prompt loop can
-emit decoded tokens.
+needs the remaining device ops plus bounded logits results before the prompt
+loop can emit decoded tokens.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -391,7 +391,8 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_device_vector_ops`, `gpu_device_kv_cache`,
 `gpu_minimized_logits_readback`, `gpu_decoder_graph_executor`,
 `gpu_decoder_graph_result_envelope`, `gpu_decoder_graph_execution_plan`,
-`gpu_decoder_graph_embedding_execution`, `gpu_prompt_decoder_loop`,
+`gpu_decoder_graph_embedding_execution`, `gpu_decoder_graph_rms_norm_execution`,
+`gpu_prompt_decoder_loop`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
@@ -402,7 +403,7 @@ metadata expose the same boundary with `embedding_row_loader_ready`,
 `device_vector_ops_ready`, `device_kv_cache_ready`,
 `decoder_graph_executor_ready`, `decoder_graph_result_contract_ready`,
 `decoder_graph_execution_plan_ready`, `decoder_graph_embedding_execution_ready`,
-`decoder_prompt_loop_ready`,
+`decoder_graph_rms_norm_execution_ready`, `decoder_prompt_loop_ready`,
 `plain_text_chat_ready=false`, and `gpu_plain_text_chat_generation=false`.
 The embedding row loader resolves the selected token embedding tensor, uses the
 uploaded GPU weight cache, and writes one token row into a device-side `float`
@@ -425,10 +426,12 @@ terminal output, token-selection metadata, and a `gpu_decoder_graph_execution_pl
 object that separates CUDA-device graph work from host sampling after bounded
 logits readback. When the graph contains an `embedding` op, the executor now
 allocates a temporary device vector, runs the CUDA embedding row loader for
-that token, records the executed first device op, and releases the temporary
-buffer again. It keeps `device_execution_result_ready=false` until the CUDA
-executor carries the remaining graph ops through bounded logits and writes real
-token results back into the stream contract. The GPU
+that token, then runs the following RMSNorm op on that device vector when the
+graph wires it directly from the embedding output. Temporary buffers are
+released after the admitted initial device chain. It keeps
+`device_execution_result_ready=false` until the CUDA executor carries the
+remaining graph ops through bounded logits and writes real token results back
+into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against

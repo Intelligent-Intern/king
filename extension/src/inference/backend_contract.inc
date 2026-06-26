@@ -186,6 +186,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_decoder_graph_result_envelope", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_execution_plan", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_embedding_execution", gpu_backend);
+    add_assoc_bool(return_value, "gpu_decoder_graph_rms_norm_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_prompt_decoder_loop", gpu_backend);
     add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);
