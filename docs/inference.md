@@ -279,11 +279,14 @@ path, exposed as `decoder_graph_attention_residual_execution_ready` and
 `attention_residual_device_execution_ready`. The feed-forward RMSNorm is now
 executed directly from that attention residual bridge, exposed as
 `decoder_graph_ffn_norm_execution_ready` and
-`ffn_norm_device_execution_ready`.
+`ffn_norm_device_execution_ready`. The FFN Gate and Up projections are then
+materialized from the retained FFN norm buffer through the same quantized GPU
+linear path, exposed as `decoder_graph_ffn_gate_up_projection_execution_ready`
+and `ffn_gate_up_projection_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King finishes the FFN Gate/Up/SwiGLU/Down path and
-returns bounded logits to the sampler.
+remains blocked until King finishes the FFN SwiGLU/Down path and returns
+bounded logits to the sampler.
 
 GPU readiness is inspectable before model load:
 
@@ -396,8 +399,8 @@ identifies the missing runtime layers between the available CUDA leaves and
 plain-text chat generation. When the GPU model has initialized the embedding
 row loader, device vector ops, device KV-cache, decoder graph executor, and
 prompt-loop admission path, the remaining gap is that the graph executor still
-needs the remaining FFN Gate/Up/SwiGLU/Down and logits device ops plus bounded
-logits results before the prompt loop can emit decoded tokens.
+needs the remaining FFN SwiGLU/Down and logits device ops plus bounded logits
+results before the prompt loop can emit decoded tokens.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -423,7 +426,14 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_decoder_graph_rope_execution`,
 `gpu_decoder_graph_kv_head_prepare_execution`,
 `gpu_decoder_graph_kv_write_execution`,
-`gpu_decoder_graph_kv_attention_execution`, `gpu_prompt_decoder_loop`,
+`gpu_decoder_graph_kv_attention_execution`,
+`gpu_decoder_graph_attention_stack_slot_execution`,
+`gpu_decoder_graph_attention_heads_execution`,
+`gpu_decoder_graph_attention_stack_execution`,
+`gpu_decoder_graph_attention_output_projection_execution`,
+`gpu_decoder_graph_attention_residual_execution`,
+`gpu_decoder_graph_ffn_norm_execution`,
+`gpu_decoder_graph_ffn_gate_up_projection_execution`, `gpu_prompt_decoder_loop`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
@@ -475,11 +485,13 @@ device KV cache through the graph's `kv_write` op, then executing the first
 against the device KV cache. The resulting context vector is retained inside
 the K/V helper until the downstream residual bridge can consume it, then
 released during the helper cleanup path. The attention residual now feeds the
-feed-forward RMSNorm on device before that temporary buffer is released. Other
-temporary buffers are released after the admitted initial device chain. It keeps
+feed-forward RMSNorm on device before that temporary buffer is released, and the
+FFN Gate/Up projections run from the retained FFN norm buffer before their
+temporary outputs are released. Other temporary buffers are released after the
+admitted initial device chain. It keeps
 `device_execution_result_ready=false` until the CUDA executor carries the
-remaining FFN Gate/Up/SwiGLU/Down and logits ops through bounded logits and
-writes real token results back into the stream contract. The GPU
+remaining FFN SwiGLU/Down and logits ops through bounded logits and writes real
+token results back into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against

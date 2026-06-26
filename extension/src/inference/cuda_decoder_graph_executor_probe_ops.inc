@@ -24,7 +24,9 @@ static void king_inference_cuda_decoder_graph_executor_destroy_downstream_probes
     bool residual_initialized,
     zval *residual_probe,
     bool ffn_norm_initialized,
-    zval *ffn_norm_probe
+    zval *ffn_norm_probe,
+    bool ffn_gate_up_initialized,
+    zval *ffn_gate_up_probe
 ) {
     if (projection_initialized) {
         zval_ptr_dtor(projection_probe);
@@ -34,5 +36,8 @@ static void king_inference_cuda_decoder_graph_executor_destroy_downstream_probes
     }
     if (ffn_norm_initialized) {
         zval_ptr_dtor(ffn_norm_probe);
+    }
+    if (ffn_gate_up_initialized) {
+        zval_ptr_dtor(ffn_gate_up_probe);
     }
 }
