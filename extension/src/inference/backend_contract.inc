@@ -190,6 +190,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_decoder_graph_linear_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_slice_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_rope_execution", gpu_backend);
+    add_assoc_bool(return_value, "gpu_decoder_graph_kv_head_prepare_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_prompt_decoder_loop", gpu_backend);
     add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);

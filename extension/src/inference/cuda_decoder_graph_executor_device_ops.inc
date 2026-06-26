@@ -279,20 +279,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_release_device_ptr
 }
 
 #include "cuda_decoder_graph_executor_rope_ops.inc"
-
-static void king_inference_cuda_decoder_graph_executor_destroy_initial_probes(
-    zval *embedding_probe,
-    zval *rms_norm_probe,
-    zval *linear_probe,
-    zval *slice_probe,
-    zval *rope_probe
-) {
-    zval_ptr_dtor(embedding_probe);
-    zval_ptr_dtor(rms_norm_probe);
-    zval_ptr_dtor(linear_probe);
-    zval_ptr_dtor(slice_probe);
-    zval_ptr_dtor(rope_probe);
-}
+#include "cuda_decoder_graph_executor_kv_ops.inc"
+#include "cuda_decoder_graph_executor_probe_ops.inc"
 
 static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_device_ops(
     king_inference_model_object *model,
@@ -307,6 +295,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     zval linear_probe;
     zval slice_probe;
     zval rope_probe;
+    zval kv_head_prepare_probe;
     zend_string *embedding_id = NULL;
     zend_string *rms_norm_id = NULL;
     zend_string *rms_weight = NULL;
@@ -325,6 +314,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     king_inference_cuda_device_ptr slice_output = 0;
     zend_ulong executed_device_ops = 0;
     bool rope_executed = false;
+    bool kv_head_prepared = false;
     double epsilon = 0.000001;
 
     array_init(&embedding_probe);
@@ -362,22 +352,35 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(&rope_probe, "executed", false);
     add_assoc_bool(&rope_probe, "retained_device_output", false);
 
+    array_init(&kv_head_prepare_probe);
+    add_assoc_string(&kv_head_prepare_probe, "type", "gpu_decoder_kv_head_prepare_device_execution");
+    add_assoc_bool(&kv_head_prepare_probe, "attempted", false);
+    add_assoc_bool(
+        &kv_head_prepare_probe,
+        "available",
+        model->cuda_decoder_graph_executor_kv_head_prepare_execution_available
+    );
+    add_assoc_bool(&kv_head_prepare_probe, "executed", false);
+    add_assoc_bool(&kv_head_prepare_probe, "retained_device_output", false);
+
     if (embedding_op == NULL) {
         add_assoc_zval(result, "embedding_device_execution", &embedding_probe);
         add_assoc_zval(result, "rms_norm_device_execution", &rms_norm_probe);
         add_assoc_zval(result, "linear_device_execution", &linear_probe);
         add_assoc_zval(result, "slice_device_execution", &slice_probe);
         add_assoc_zval(result, "rope_device_execution", &rope_probe);
+        add_assoc_zval(result, "kv_head_prepare_device_execution", &kv_head_prepare_probe);
         add_assoc_bool(result, "embedding_device_execution_ready", false);
         add_assoc_bool(result, "rms_norm_device_execution_ready", false);
         add_assoc_bool(result, "linear_device_execution_ready", false);
         add_assoc_bool(result, "slice_device_execution_ready", false);
         add_assoc_bool(result, "rope_device_execution_ready", false);
+        add_assoc_bool(result, "kv_head_prepare_device_execution_ready", false);
         add_assoc_long(result, "executed_device_ops", 0);
         return SUCCESS;
     }
     if (!model->cuda_decoder_graph_executor_embedding_execution_available) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -386,7 +389,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         return FAILURE;
     }
     if (king_inference_graph_required_string(embedding_op, "id", &embedding_id) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_embedding_id_invalid");
         return FAILURE;
     }
@@ -396,7 +399,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         token_value = king_inference_array_find(embedding_op, "token");
     }
     if (token_value == NULL || Z_TYPE_P(token_value) != IS_LONG || Z_LVAL_P(token_value) < 0) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -405,7 +408,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         return FAILURE;
     }
     if (width == 0 || width > (zend_ulong) (SIZE_MAX / sizeof(float))) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -417,7 +420,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     token_id = (zend_ulong) Z_LVAL_P(token_value);
     bytes = (size_t) width * sizeof(float);
     if (king_inference_cuda_device_allocator_alloc(model, bytes, &embedding_output) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_device_allocator_result,
@@ -430,7 +433,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
 
     if (king_inference_cuda_embedding_row_load(model, token_id, embedding_output, width) != SUCCESS) {
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_embedding_row_result,
@@ -459,7 +462,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
 
         if (!model->cuda_decoder_graph_executor_rms_norm_execution_available) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 -1,
@@ -472,13 +475,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             || king_inference_graph_finite_double_option(rms_norm_op, "epsilon", 0.000001, &epsilon) != SUCCESS
             || epsilon <= 0.0) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_rms_norm_contract_invalid");
             return FAILURE;
         }
         if (king_inference_cuda_device_allocator_alloc(model, bytes, &rms_norm_output) != SUCCESS) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 model->cuda_device_allocator_result,
@@ -498,7 +501,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         ) != SUCCESS) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 model->cuda_rms_norm_result,
@@ -525,7 +528,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             if (!model->cuda_decoder_graph_executor_linear_execution_available) {
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 king_inference_cuda_decoder_graph_executor_set_error(
                     model,
                     -1,
@@ -536,7 +539,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             if (king_inference_graph_required_string(linear_op, "id", &linear_id) != SUCCESS) {
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_linear_id_invalid");
                 return FAILURE;
             }
@@ -550,7 +553,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 || linear_rows > (zend_ulong) (SIZE_MAX / sizeof(float))) {
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 return FAILURE;
             }
             if (king_inference_cuda_device_allocator_alloc(
@@ -560,7 +563,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 ) != SUCCESS) {
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 king_inference_cuda_decoder_graph_executor_set_error(
                     model,
                     model->cuda_device_allocator_result,
@@ -581,7 +584,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 king_inference_cuda_decoder_graph_executor_set_error(
                     model,
                     model->cuda_quantized_matvec_result,
@@ -608,7 +611,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     king_inference_cuda_decoder_graph_executor_set_error(
                         model,
                         -1,
@@ -626,7 +629,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     return FAILURE;
                 }
                 if (king_inference_cuda_device_allocator_alloc(
@@ -637,7 +640,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     king_inference_cuda_decoder_graph_executor_set_error(
                         model,
                         model->cuda_device_allocator_result,
@@ -658,7 +661,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     king_inference_cuda_decoder_graph_executor_set_error(
                         model,
                         model->cuda_device_vector_ops_result,
@@ -682,7 +685,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_slice_id_invalid");
                     return FAILURE;
                 }
@@ -700,14 +703,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     return FAILURE;
                 }
                 if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &slice_output) != SUCCESS) {
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                     king_inference_cuda_decoder_graph_executor_set_error(
                         model,
                         model->cuda_device_allocator_result,
@@ -721,7 +724,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output) != SUCCESS) {
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
                 king_inference_cuda_decoder_graph_executor_set_error(
                     model,
                     model->cuda_device_allocator_result,
@@ -731,11 +734,26 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 );
                 return FAILURE;
             }
+            if (king_inference_cuda_decoder_graph_executor_execute_kv_head_prepare(
+                    model,
+                    graph,
+                    rms_norm_id,
+                    rms_norm_output,
+                    width,
+                    &kv_head_prepare_probe,
+                    &executed_device_ops,
+                    &kv_head_prepared
+            ) != SUCCESS) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
+                return FAILURE;
+            }
         }
 
         if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output) != SUCCESS) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 model->cuda_device_allocator_result,
@@ -748,7 +766,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     }
 
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_device_allocator_result,
@@ -763,11 +781,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_zval(result, "linear_device_execution", &linear_probe);
     add_assoc_zval(result, "slice_device_execution", &slice_probe);
     add_assoc_zval(result, "rope_device_execution", &rope_probe);
+    add_assoc_zval(result, "kv_head_prepare_device_execution", &kv_head_prepare_probe);
     add_assoc_bool(result, "embedding_device_execution_ready", true);
     add_assoc_bool(result, "rms_norm_device_execution_ready", rms_norm_op != NULL);
     add_assoc_bool(result, "linear_device_execution_ready", linear_rows > 0);
     add_assoc_bool(result, "slice_device_execution_ready", slice_length > 0);
     add_assoc_bool(result, "rope_device_execution_ready", rope_executed);
+    add_assoc_bool(result, "kv_head_prepare_device_execution_ready", kv_head_prepared);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);

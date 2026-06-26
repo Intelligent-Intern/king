@@ -402,9 +402,11 @@ The core programming model is:
   RMSNorm kernel, and the following Q8_0 linear projection can run through the
   CUDA quantized matvec kernel. When the next graph op slices that linear
   output for attention heads, the CUDA slice vector kernel runs. When that
-  slice feeds RoPE, the CUDA RoPE kernel rotates the head vector before
-  temporary buffers are released. The contract still refuses to claim decoded
-  token output before full device execution results exist. The native GPU
+  slice feeds RoPE, the CUDA RoPE kernel rotates the head vector. The executor
+  also prepares the sibling K/V head path by running K and V projections,
+  slicing the first key/value head, and rotating the key slice before temporary
+  buffers are released. The contract still refuses to claim decoded token
+  output before full device execution results exist. The native GPU
   prompt-loop admission path can
   tokenize prompt text, build token-decode graphs, and validate those graphs
   into result envelopes against the GPU executor without falling back to CPU
@@ -413,10 +415,11 @@ The core programming model is:
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes the remaining bridge explicitly: the remaining KV
-  attention, residual, FFN, and logits device ops after the initial
-  embedding/RMSNorm/linear/slice/RoPE chain still need execution and bounded
-  logits results before the prompt loop may emit decoded tokens.
+  GPU metadata exposes the remaining bridge explicitly: the remaining KV cache
+  write, KV attention, residual, FFN, and logits device ops after the initial
+  embedding/RMSNorm/linear/slice/RoPE plus K/V head-preparation chain still
+  need execution and bounded logits results before the prompt loop may emit
+  decoded tokens.
   Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and

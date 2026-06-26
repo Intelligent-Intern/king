@@ -29,6 +29,9 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_rope_execution_count = 0;
     model->cuda_decoder_graph_executor_last_rope_length = 0;
     model->cuda_decoder_graph_executor_last_rope_position = 0;
+    model->cuda_decoder_graph_executor_kv_head_prepare_execution_count = 0;
+    model->cuda_decoder_graph_executor_last_kv_head_key_length = 0;
+    model->cuda_decoder_graph_executor_last_kv_head_value_length = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
@@ -41,6 +44,7 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_linear_execution_available = false;
     model->cuda_decoder_graph_executor_slice_execution_available = false;
     model->cuda_decoder_graph_executor_rope_execution_available = false;
+    model->cuda_decoder_graph_executor_kv_head_prepare_execution_available = false;
 }
 
 static void king_inference_cuda_decoder_graph_executor_set_error(
@@ -320,6 +324,10 @@ static void king_inference_cuda_decoder_graph_executor_init(
         model->cuda_vector_slice_available && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_rope_execution_available =
         model->cuda_rope_f32_available && model->cuda_device_allocator_available;
+    model->cuda_decoder_graph_executor_kv_head_prepare_execution_available =
+        model->cuda_decoder_graph_executor_linear_execution_available
+        && model->cuda_decoder_graph_executor_slice_execution_available
+        && model->cuda_decoder_graph_executor_rope_execution_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -374,6 +382,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         &executor,
         "rope_execution_available",
         model->cuda_decoder_graph_executor_rope_execution_available
+    );
+    add_assoc_bool(
+        &executor,
+        "kv_head_prepare_execution_available",
+        model->cuda_decoder_graph_executor_kv_head_prepare_execution_available
     );
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
@@ -469,6 +482,21 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "last_rope_position",
         (zend_long) model->cuda_decoder_graph_executor_last_rope_position
     );
+    add_assoc_long(
+        &executor,
+        "kv_head_prepare_device_executions",
+        (zend_long) model->cuda_decoder_graph_executor_kv_head_prepare_execution_count
+    );
+    add_assoc_long(
+        &executor,
+        "last_kv_head_key_length",
+        (zend_long) model->cuda_decoder_graph_executor_last_kv_head_key_length
+    );
+    add_assoc_long(
+        &executor,
+        "last_kv_head_value_length",
+        (zend_long) model->cuda_decoder_graph_executor_last_kv_head_value_length
+    );
     if (model->cuda_decoder_graph_executor_last_embedding_token_available
         && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
         add_assoc_long(
@@ -536,6 +564,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         return_value,
         "decoder_graph_rope_execution_ready",
         model->cuda_decoder_graph_executor_rope_execution_available
+    );
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_kv_head_prepare_execution_ready",
+        model->cuda_decoder_graph_executor_kv_head_prepare_execution_available
     );
 }
 
