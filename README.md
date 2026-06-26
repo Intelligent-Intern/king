@@ -385,9 +385,9 @@ The core programming model is:
   `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
   falling back to `gemma3:1b` for CPU. The GPU path owns a CUDA context,
   allocates device memory, uploads required weights, caches uploaded tensors,
-  and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, and attention
-  score kernels as the first decoder compute leaves. Memory-enabled native
-  graph streams also
+  and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, attention
+  score, and attention softmax kernels as the first decoder compute leaves.
+  Memory-enabled native graph streams also
   enforce an LLM-cache admission policy with a configurable disk-free floor and
   webhook/MCP alert metadata. The process-runner path is explicit `local`
   configuration.
