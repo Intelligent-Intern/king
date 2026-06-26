@@ -388,16 +388,17 @@ The core programming model is:
   `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
   falling back to `gemma3:1b` for CPU. The GPU path owns a CUDA context,
   allocates device memory, uploads required weights, caches uploaded tensors,
-  and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, attention
-  score, attention softmax, attention value aggregation, FFN/SwiGLU, and final
-  output projection paths, and bounded top-K logits readback as the first
-  decoder compute leaves. The GPU backend now uses the same native stream
-  object contract as the CPU backend for start events, native events,
+  and exposes token embedding row loading, native Q8_0 quantized matrix/vector,
+  RMSNorm, RoPE, attention score, attention softmax, attention value
+  aggregation, FFN/SwiGLU, final output projection paths, and bounded top-K
+  logits readback as the first decoder compute leaves. The GPU backend now uses
+  the same native stream object contract as the CPU backend for start events,
+  native events,
   cancellation, metrics, and thermal preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes that missing bridge explicitly: embedding-row loading,
-  device vector ops, device KV cache, the decoder graph executor, and the
-  prompt decoder loop. Sampling stays CPU-side for the current native GPU
+  GPU metadata exposes that missing bridge explicitly: device vector ops,
+  device KV cache, the decoder graph executor, and the prompt decoder loop.
+  Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and
   seed handling without copying the full vocabulary logits back. Memory-enabled

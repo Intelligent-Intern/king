@@ -71,6 +71,9 @@ typedef struct _king_inference_model_object {
     void *cuda_rope_nvrtc_handle;
     void *cuda_rope_module;
     void *cuda_rope_function;
+    void *cuda_embedding_row_nvrtc_handle;
+    void *cuda_embedding_row_module;
+    void *cuda_embedding_row_function;
     void *cuda_attention_scores_nvrtc_handle;
     void *cuda_attention_scores_module;
     void *cuda_attention_scores_function;
@@ -95,6 +98,7 @@ typedef struct _king_inference_model_object {
     int cuda_quantized_matvec_result;
     int cuda_rms_norm_result;
     int cuda_rope_result;
+    int cuda_embedding_row_result;
     int cuda_attention_scores_result;
     int cuda_attention_softmax_result;
     int cuda_attention_values_result;
@@ -107,6 +111,7 @@ typedef struct _king_inference_model_object {
     char cuda_quantized_matvec_error[160];
     char cuda_rms_norm_error[160];
     char cuda_rope_error[160];
+    char cuda_embedding_row_error[160];
     char cuda_attention_scores_error[160];
     char cuda_attention_softmax_error[160];
     char cuda_attention_values_error[160];
@@ -128,6 +133,9 @@ typedef struct _king_inference_model_object {
     size_t cuda_quantized_matvec_launch_count;
     size_t cuda_rms_norm_launch_count;
     size_t cuda_rope_launch_count;
+    size_t cuda_embedding_row_launch_count;
+    zend_ulong cuda_embedding_row_last_token_id;
+    zend_ulong cuda_embedding_row_last_width;
     size_t cuda_attention_scores_launch_count;
     size_t cuda_attention_softmax_launch_count;
     size_t cuda_attention_values_launch_count;
@@ -166,6 +174,14 @@ typedef struct _king_inference_model_object {
     bool cuda_rope_nvrtc_available;
     bool cuda_rope_module_loaded;
     bool cuda_rope_f32_available;
+    bool cuda_embedding_row_attempted;
+    bool cuda_embedding_row_available;
+    bool cuda_embedding_row_nvrtc_available;
+    bool cuda_embedding_row_module_loaded;
+    bool cuda_embedding_row_f32_available;
+    bool cuda_embedding_row_f16_available;
+    bool cuda_embedding_row_bf16_available;
+    bool cuda_embedding_row_q8_0_available;
     bool cuda_attention_scores_attempted;
     bool cuda_attention_scores_available;
     bool cuda_attention_scores_nvrtc_available;

@@ -49,6 +49,7 @@ static void king_inference_model_object_free(zend_object *object)
     king_inference_cuda_attention_scores_release(intern);
     king_inference_cuda_rope_release(intern);
     king_inference_cuda_rms_norm_release(intern);
+    king_inference_cuda_embedding_row_release(intern);
     king_inference_cuda_quantized_matvec_release(intern);
     king_inference_cuda_weight_upload_release(intern);
     king_inference_cuda_device_allocator_release(intern);
@@ -84,6 +85,7 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     king_inference_cuda_device_allocator_reset_fields(intern);
     king_inference_cuda_weight_upload_reset_fields(intern);
     king_inference_cuda_quantized_matvec_reset_fields(intern);
+    king_inference_cuda_embedding_row_reset_fields(intern);
     king_inference_cuda_rms_norm_reset_fields(intern);
     king_inference_cuda_rope_reset_fields(intern);
     king_inference_cuda_attention_scores_reset_fields(intern);

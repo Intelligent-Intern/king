@@ -88,6 +88,7 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_string(&event, "stream_contract", "king_native_events");
     add_assoc_bool(&event, "native_stream", true);
     add_assoc_bool(&event, "decoder_stream_contract_ready", true);
+    add_assoc_bool(&event, "embedding_row_loader_ready", model->cuda_embedding_row_available);
     add_assoc_bool(&event, "decoder_graph_executor_ready", false);
     add_assoc_bool(&event, "decoder_prompt_loop_ready", false);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
@@ -97,7 +98,7 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_bool(&event, "openai_generation", false);
     add_assoc_bool(&event, "silent_cpu_fallback", false);
     add_assoc_long(&event, "accepted_max_tokens", max_tokens);
-    king_inference_gpu_decoder_blockers(&decoder_blockers);
+    king_inference_gpu_decoder_blockers(model, &decoder_blockers);
     add_assoc_zval(&event, "decoder_blockers", &decoder_blockers);
 
     king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
@@ -146,12 +147,13 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_string(return_value, "stream_contract", "king_native_events");
     add_assoc_bool(return_value, "external_runtime", false);
     add_assoc_bool(return_value, "decoder_stream_contract_ready", true);
+    add_assoc_bool(return_value, "embedding_row_loader_ready", intern->cuda_embedding_row_available);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
     add_assoc_bool(return_value, "plain_text_chat_ready", false);
-    king_inference_gpu_decoder_blockers(&decoder_blockers);
+    king_inference_gpu_decoder_blockers(intern, &decoder_blockers);
     add_assoc_zval(return_value, "decoder_blockers", &decoder_blockers);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);
 }
