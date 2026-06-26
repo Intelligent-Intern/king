@@ -2,8 +2,11 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__, 2);
+require_once __DIR__ . '/runtime-logging.php';
+
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('KING_OPENAI_PORT') ?: '8080');
+$profile = ini_get('king.inference_preferred_model_profile');
 $iniCpuModelName = ini_get('king.inference_cpu_model_name');
 $iniCpuModelArtifact = ini_get('king.inference_cpu_model_artifact');
 $iniGpuModelName = ini_get('king.inference_gpu_model_name');
@@ -48,11 +51,6 @@ function king_local_ini_string(string $key, string $fallback = ''): string
     return $value === false || $value === '' ? $fallback : (string) $value;
 }
 
-if (!is_file($cpuModelPath) || !is_readable($cpuModelPath)) {
-    fwrite(STDERR, "CPU model artifact is not readable: {$cpuModelPath}\n");
-    exit(1);
-}
-
 $backend = is_string($runner) && $runner !== '' && is_executable($runner)
     ? ['name' => 'local', 'runner_path' => $runner]
     : 'king_native_cpu';
@@ -72,6 +70,29 @@ if ($gpuSensorPath !== '') {
 }
 if ($gpuSensorCommand !== '') {
     $gpuThermal['sensor_command'] = $gpuSensorCommand;
+}
+
+king_inference_runtime_log_configured([
+    'host' => $host,
+    'port' => $port,
+    'profile' => is_string($profile) && $profile !== '' ? $profile : 'auto',
+    'backend' => king_inference_runtime_backend_label($backend),
+    'cpu_model' => $cpuModelName,
+    'cpu_artifact' => $cpuModelPath,
+    'cpu_artifact_readable' => is_file($cpuModelPath) && is_readable($cpuModelPath),
+    'gpu_model' => $gpuModelName,
+    'gpu_artifact' => $gpuModelPath,
+    'gpu_artifact_readable' => is_file($gpuModelPath) && is_readable($gpuModelPath),
+    'gpu_enabled' => $gpuEnabled,
+    'gpu_layers' => $gpuLayers,
+    'gpu_vram_reserve_mb' => $gpuVramReserveMb,
+    'gpu_min_free_vram_mb' => $gpuMinFreeVramMb,
+    'gpu_thermal_source' => $gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand,
+]);
+
+if (!is_file($cpuModelPath) || !is_readable($cpuModelPath)) {
+    fwrite(STDERR, "CPU model artifact is not readable: {$cpuModelPath}\n");
+    exit(1);
 }
 
 $loadModel = static function (string $name, string $modelPath, bool $useGpu = false) use ($backend, $gpuLayers, $gpuVramReserveMb, $gpuMinFreeVramMb, $gpuThermal): object {
@@ -101,6 +122,19 @@ if ($gpuEnabled && is_file($gpuModelPath) && is_readable($gpuModelPath)) {
     $models = [$gpuModelName => $loadModel($gpuModelName, $gpuModelPath, true)] + $models;
 }
 
+foreach ($models as $registryName => $model) {
+    king_inference_runtime_log_model_admitted((string) $registryName, $model);
+}
+if (!isset($models[$gpuModelName]) && is_file($gpuModelPath) && is_readable($gpuModelPath)) {
+    king_inference_runtime_log_line('admitted', [
+        'registry' => $gpuModelName,
+        'model' => $gpuModelName,
+        'backend' => 'king_native_gpu',
+        'admitted' => false,
+        'reason' => 'gpu_bindings_or_layers_disabled',
+    ]);
+}
+
 fwrite(STDERR, "King OpenAI router listening on http://{$host}:{$port}/v1\n");
 fwrite(STDERR, "CPU model artifact: {$cpuModelPath}\n");
 if (isset($models[$gpuModelName])) {
@@ -124,18 +158,21 @@ while (true) {
             $host,
             $port,
             $listenerConfig,
-            static fn (array $request): array => king_inference_openai_http_response($models, $request, [
-                'owned_by' => 'local-king',
-                'read_timeout_ms' => 250,
-                'max_events' => 4096,
-                'max_idle_events' => 4800,
-                'max_chat_messages' => 256,
-                'max_response_input_items' => 256,
-                'max_completion_prompts' => 128,
-                'max_embedding_inputs' => 512,
-                'max_embedding_tokens' => 2048,
-                'max_embedding_dimensions' => 8192,
-            ])
+            static function (array $request) use ($models): array {
+                king_inference_runtime_log_request_executing($request, $models);
+                return king_inference_openai_http_response($models, $request, [
+                    'owned_by' => 'local-king',
+                    'read_timeout_ms' => 250,
+                    'max_events' => 4096,
+                    'max_idle_events' => 4800,
+                    'max_chat_messages' => 256,
+                    'max_response_input_items' => 256,
+                    'max_completion_prompts' => 128,
+                    'max_embedding_inputs' => 512,
+                    'max_embedding_tokens' => 2048,
+                    'max_embedding_dimensions' => 8192,
+                ]);
+            }
         );
     } catch (Throwable $e) {
         fwrite(STDERR, '[' . date('c') . '] ' . $e::class . ': ' . $e->getMessage() . "\n");

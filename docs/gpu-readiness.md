@@ -172,3 +172,20 @@ exec bin/king-openai-router
 This preserves the King contract: a selected GPU profile either runs on the GPU
 or fails with explicit runtime reasons. It does not silently burn CPU for a
 large GPU model.
+
+## Router Log States
+
+`bin/king-openai-router` writes structured readiness lines to STDERR:
+
+- `state=configured` is emitted once after environment variables and PHP ini
+  values have been resolved. It reports host, port, selected profile, backend,
+  CPU/GPU artifact paths, GPU layers, VRAM floors, and the thermal source.
+- `state=admitted` is emitted for every registered model after model load and
+  metadata inspection. CPU lines report generation readiness. GPU lines include
+  `config_ready`, `generation_ready`, `reason`, and ordered refusal reasons.
+  If a readable GPU artifact exists but GPU bindings or layers are disabled,
+  the router emits `admitted=no` with a concrete reason.
+- `state=executing` is emitted for every incoming request immediately before
+  it is routed through `king_inference_openai_http_response()`. The line reports
+  method, path, requested model, and registered model count. Prompt, message,
+  and response content are intentionally not logged.
