@@ -171,6 +171,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_rope_kernel", gpu_backend);
     add_assoc_bool(return_value, "gpu_attention_scores_kernel", gpu_backend);
     add_assoc_bool(return_value, "gpu_attention_softmax_kernel", gpu_backend);
+    add_assoc_bool(return_value, "gpu_attention_value_aggregation_kernel", gpu_backend);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);
     add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", gpu_backend);
     add_assoc_bool(return_value, "gpu_thermal_policy", gpu_backend);

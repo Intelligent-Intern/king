@@ -739,4 +739,5 @@ static void king_inference_gpu_runtime_status_from_model(
     king_inference_cuda_rope_apply_status(model, return_value);
     king_inference_cuda_attention_scores_apply_status(model, return_value);
     king_inference_cuda_attention_softmax_apply_status(model, return_value);
+    king_inference_cuda_attention_values_apply_status(model, return_value);
 }
