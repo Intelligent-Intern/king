@@ -287,6 +287,16 @@ Thermal guardrails still come from the configured sensor path or command,
 because operators may prefer platform-specific sensor files over driver-level
 telemetry.
 
+For loaded `king_native_gpu` models, King also opens and owns the CUDA primary
+context for the first visible device when GPU execution is enabled. The driver
+handle and context stay attached to the loaded model object until the model is
+freed, so later GPU decoder leaves can allocate memory and launch kernels
+without reopening the driver. `gpu_runtime.cuda_context` exposes whether context
+opening was attempted, whether the context is available and owned, the selected
+device ordinal, the raw CUDA result code, and the last context error. When the
+loaded GPU model cannot own a context, `config_ready` is false and
+`gpu_cuda_context_unavailable` is included in `refusal_reasons`.
+
 `reason` is the primary refusal reason, ordered by the first gate King would
 need an operator to fix. `refusal_reasons` contains the complete ordered list of
 currently active refusal reasons, so a broken setup can show, for example, a
@@ -329,11 +339,11 @@ capabilities keep `model_registration=true`, while `implemented=false`,
 `streaming=false`, and `token_generation=false` until the GPU decoder kernel is
 present.
 The same capabilities explicitly describe the ready GPU support surfaces:
-`gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_vram_admission`,
-`gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`,
-`gpu_thermal_preflight`, and `gpu_thermal_stream_abort` are true for the GPU
-backend. `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
-`silent_cpu_fallback` remain false.
+`gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
+`gpu_cuda_context_owned`, `gpu_vram_admission`, `gpu_kv_cache_vram_estimate`,
+`gpu_thermal_policy`, `gpu_thermal_preflight`, and
+`gpu_thermal_stream_abort` are true for the GPU backend. `gpu_decoder_kernel`,
+`gpu_generation`, `token_generation`, and `silent_cpu_fallback` remain false.
 
 ## Internal Backend Layout
 
@@ -348,6 +358,7 @@ extension/src/inference/
 ├── backend_king_native.inc
 ├── backend_registry.inc
 ├── class_entries.inc
+├── cuda_context.inc
 ├── gguf_architecture_metadata.inc
 ├── gguf_loader.inc
 ├── gguf_metadata_helpers.inc

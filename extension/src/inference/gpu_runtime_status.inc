@@ -731,4 +731,5 @@ static void king_inference_gpu_runtime_status_from_model(
         allow_unmonitored
     );
     king_inference_gpu_runtime_add_kv_cache_estimate(return_value, model);
+    king_inference_cuda_context_apply_status(model, return_value);
 }

@@ -56,7 +56,15 @@ typedef struct _king_inference_model_object {
     king_inference_gguf_metadata gguf;
     void *native_map;
     size_t native_map_size;
+    void *cuda_driver_handle;
+    void *cuda_context;
+    int cuda_device;
+    int cuda_context_result;
+    char cuda_context_error[160];
     bool native_map_loaded;
+    bool cuda_context_attempted;
+    bool cuda_context_available;
+    bool cuda_context_owned;
     zend_object std;
 } king_inference_model_object;
 

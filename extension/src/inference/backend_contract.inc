@@ -161,6 +161,8 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_backend", gpu_backend);
     add_assoc_bool(return_value, "gpu_runtime_status", gpu_backend);
     add_assoc_bool(return_value, "gpu_cuda_driver_probe", gpu_backend);
+    add_assoc_bool(return_value, "gpu_cuda_context", gpu_backend);
+    add_assoc_bool(return_value, "gpu_cuda_context_owned", gpu_backend);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);
     add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", gpu_backend);
     add_assoc_bool(return_value, "gpu_thermal_policy", gpu_backend);

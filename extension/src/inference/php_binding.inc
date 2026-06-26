@@ -49,6 +49,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "resource_policy.inc"
 #include "gpu_vram_policy.inc"
 #include "gpu_runtime_reason.inc"
+#include "cuda_context.inc"
 #include "gpu_runtime_status.inc"
 #include "gguf_loader.inc"
 #include "native_memory.inc"
