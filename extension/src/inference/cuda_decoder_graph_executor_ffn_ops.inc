@@ -391,89 +391,6 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_ffn_down_p
     return SUCCESS;
 }
 
-static zend_result king_inference_cuda_decoder_graph_executor_execute_ffn_output_residual_add(
-    king_inference_model_object *model,
-    zval *graph,
-    zend_string *attention_residual_id,
-    king_inference_cuda_device_ptr attention_residual_output,
-    zend_ulong attention_residual_width,
-    zend_string *down_id,
-    king_inference_cuda_device_ptr down_output,
-    zend_ulong down_width,
-    zval *ffn_output_probe,
-    king_inference_cuda_device_ptr *output,
-    zend_ulong *output_width,
-    zend_string **output_id_out,
-    zend_ulong *executed_device_ops
-) {
-    zval *output_op = king_inference_cuda_decoder_graph_executor_add_op_for_inputs(graph, attention_residual_id, down_id);
-    zend_string *output_id = NULL;
-
-    *output = 0;
-    *output_width = 0;
-    if (output_id_out != NULL) {
-        *output_id_out = NULL;
-    }
-    add_assoc_string(ffn_output_probe, "type", "gpu_decoder_ffn_output_residual_device_execution");
-    add_assoc_bool(ffn_output_probe, "attempted", output_op != NULL);
-    add_assoc_bool(ffn_output_probe, "available", model->cuda_decoder_graph_executor_ffn_output_residual_execution_available);
-    add_assoc_bool(ffn_output_probe, "executed", false);
-    add_assoc_bool(ffn_output_probe, "retained_device_output", false);
-    if (output_op == NULL) {
-        return SUCCESS;
-    }
-    if (!model->cuda_decoder_graph_executor_ffn_output_residual_execution_available) {
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_ffn_output_residual_execution_unavailable");
-        return FAILURE;
-    }
-    if (attention_residual_output == 0
-        || down_output == 0
-        || attention_residual_width == 0
-        || attention_residual_width != down_width
-        || attention_residual_width > (zend_ulong) (SIZE_MAX / sizeof(float))
-        || king_inference_graph_required_string(output_op, "id", &output_id) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_ffn_output_residual_contract_invalid");
-        return FAILURE;
-    }
-    if (king_inference_cuda_device_allocator_alloc(model, (size_t) attention_residual_width * sizeof(float), output) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_set_error(
-            model,
-            model->cuda_device_allocator_result,
-            model->cuda_device_allocator_error[0] != '\0'
-                ? model->cuda_device_allocator_error
-                : "cuda_decoder_graph_ffn_output_residual_allocation_failed"
-        );
-        return FAILURE;
-    }
-    if (king_inference_cuda_vector_add(model, attention_residual_output, down_output, *output, attention_residual_width) != SUCCESS) {
-        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, output);
-        king_inference_cuda_decoder_graph_executor_set_error(
-            model,
-            model->cuda_device_vector_ops_result,
-            model->cuda_device_vector_ops_error[0] != '\0'
-                ? model->cuda_device_vector_ops_error
-                : "cuda_decoder_graph_ffn_output_residual_add_failed"
-        );
-        return FAILURE;
-    }
-
-    model->cuda_decoder_graph_executor_ffn_output_residual_execution_count++;
-    model->cuda_decoder_graph_executor_last_ffn_output_residual_width = attention_residual_width;
-    *output_width = attention_residual_width;
-    if (output_id_out != NULL) {
-        *output_id_out = output_id;
-    }
-    (*executed_device_ops)++;
-
-    add_assoc_str(ffn_output_probe, "residual", zend_string_copy(attention_residual_id));
-    add_assoc_str(ffn_output_probe, "down", zend_string_copy(down_id));
-    add_assoc_str(ffn_output_probe, "output", zend_string_copy(output_id));
-    add_assoc_bool(ffn_output_probe, "executed", true);
-    add_assoc_bool(ffn_output_probe, "retained_device_output", true);
-    add_assoc_long(ffn_output_probe, "width", (zend_long) attention_residual_width);
-    return SUCCESS;
-}
-
 static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_projection_residual_ffn_norm_gate_up_swiglu_down_and_output(
     king_inference_model_object *model,
     zval *graph,
@@ -490,6 +407,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zval *ffn_swiglu_probe,
     zval *ffn_down_probe,
     zval *ffn_output_probe,
+    zval *final_norm_probe,
     zend_ulong *executed_device_ops,
     bool *projection_executed,
     bool *residual_executed,
@@ -497,7 +415,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     bool *ffn_gate_up_executed,
     bool *ffn_swiglu_executed,
     bool *ffn_down_executed,
-    bool *ffn_output_executed
+    bool *ffn_output_executed,
+    bool *final_norm_executed
 ) {
     zend_string *projection_id = NULL;
     zend_string *residual_id = NULL;
@@ -506,6 +425,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zend_string *ffn_up_id = NULL;
     zend_string *ffn_gated_id = NULL;
     zend_string *ffn_down_id = NULL;
+    zend_string *ffn_output_id = NULL;
     king_inference_cuda_device_ptr projection_output = 0;
     king_inference_cuda_device_ptr residual_output = 0;
     king_inference_cuda_device_ptr ffn_norm_output = 0;
@@ -514,6 +434,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     king_inference_cuda_device_ptr ffn_swiglu_output = 0;
     king_inference_cuda_device_ptr ffn_down_output = 0;
     king_inference_cuda_device_ptr ffn_output_residual = 0;
+    king_inference_cuda_device_ptr final_norm_output = 0;
     zend_ulong projection_width = 0;
     zend_ulong residual_width = 0;
     zend_ulong ffn_norm_width = 0;
@@ -522,6 +443,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     zend_ulong ffn_swiglu_width = 0;
     zend_ulong ffn_down_width = 0;
     zend_ulong ffn_output_width = 0;
+    zend_ulong final_norm_width = 0;
     zend_result release_result = SUCCESS;
 
     *projection_executed = false;
@@ -531,6 +453,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     *ffn_swiglu_executed = false;
     *ffn_down_executed = false;
     *ffn_output_executed = false;
+    *final_norm_executed = false;
     add_assoc_string(ffn_gate_up_probe, "type", "gpu_decoder_ffn_gate_up_projection_device_execution");
     add_assoc_bool(ffn_gate_up_probe, "attempted", false);
     add_assoc_bool(ffn_gate_up_probe, "available", model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available);
@@ -551,6 +474,11 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_bool(ffn_output_probe, "available", model->cuda_decoder_graph_executor_ffn_output_residual_execution_available);
     add_assoc_bool(ffn_output_probe, "executed", false);
     add_assoc_bool(ffn_output_probe, "retained_device_output", false);
+    add_assoc_string(final_norm_probe, "type", "gpu_decoder_final_norm_device_execution");
+    add_assoc_bool(final_norm_probe, "attempted", false);
+    add_assoc_bool(final_norm_probe, "available", model->cuda_decoder_graph_executor_final_norm_execution_available);
+    add_assoc_bool(final_norm_probe, "executed", false);
+    add_assoc_bool(final_norm_probe, "retained_device_output", false);
     if (king_inference_cuda_decoder_graph_executor_execute_attention_output_projection(
             model,
             graph,
@@ -690,7 +618,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
             ffn_output_probe,
             &ffn_output_residual,
             &ffn_output_width,
-            NULL,
+            &ffn_output_id,
             executed_device_ops
     ) != SUCCESS) {
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_output_residual);
@@ -704,6 +632,34 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
         return FAILURE;
     }
     *ffn_output_executed = ffn_output_residual != 0 && ffn_output_width > 0;
+    if (*ffn_output_executed
+        && king_inference_cuda_decoder_graph_executor_execute_final_norm(
+            model,
+            graph,
+            ffn_output_id,
+            ffn_output_residual,
+            ffn_output_width,
+            final_norm_probe,
+            &final_norm_output,
+            &final_norm_width,
+            NULL,
+            executed_device_ops
+    ) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &final_norm_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_output_residual);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_down_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_swiglu_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_up_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_gate_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_norm_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &residual_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &projection_output);
+        return FAILURE;
+    }
+    *final_norm_executed = final_norm_output != 0 && final_norm_width > 0;
+    if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &final_norm_output) != SUCCESS) {
+        release_result = FAILURE;
+    }
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &ffn_output_residual) != SUCCESS) {
         release_result = FAILURE;
     }
@@ -734,7 +690,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
             model->cuda_device_allocator_result,
             model->cuda_device_allocator_error[0] != '\0'
                 ? model->cuda_device_allocator_error
-                : "cuda_decoder_graph_attention_residual_ffn_gate_up_swiglu_down_output_free_failed"
+                : "cuda_decoder_graph_attention_residual_ffn_gate_up_swiglu_down_output_final_norm_free_failed"
         );
         return FAILURE;
     }
@@ -752,6 +708,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_bool(ffn_down_probe, "down_output_released", *ffn_down_executed);
     add_assoc_bool(ffn_output_probe, "retained_device_output", false);
     add_assoc_bool(ffn_output_probe, "output_residual_released", *ffn_output_executed);
+    add_assoc_bool(final_norm_probe, "retained_device_output", false);
+    add_assoc_bool(final_norm_probe, "final_norm_output_released", *final_norm_executed);
     add_assoc_long(residual_probe, "projection_width", (zend_long) projection_width);
     add_assoc_long(residual_probe, "residual_width", (zend_long) residual_width);
     add_assoc_long(ffn_norm_probe, "residual_width", (zend_long) residual_width);
@@ -764,5 +722,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
     add_assoc_long(ffn_down_probe, "down_width", (zend_long) ffn_down_width);
     add_assoc_long(ffn_output_probe, "down_width", (zend_long) ffn_down_width);
     add_assoc_long(ffn_output_probe, "output_width", (zend_long) ffn_output_width);
+    add_assoc_long(final_norm_probe, "input_width", (zend_long) ffn_output_width);
+    add_assoc_long(final_norm_probe, "final_norm_width", (zend_long) final_norm_width);
     return SUCCESS;
 }
