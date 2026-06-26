@@ -304,6 +304,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     zval ffn_norm_probe;
     zval ffn_gate_up_probe;
     zval ffn_swiglu_probe;
+    zval ffn_down_probe;
     zend_string *embedding_id = NULL;
     zend_string *rms_norm_id = NULL;
     zend_string *rms_weight = NULL;
@@ -327,12 +328,12 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     bool attention_residual_probe_initialized = false;
     bool ffn_norm_probe_initialized = false;
     bool ffn_gate_up_probe_initialized = false;
-    bool ffn_swiglu_probe_initialized = false;
+    bool ffn_swiglu_probe_initialized = false, ffn_down_probe_initialized = false;
     bool attention_projection_executed = false;
     bool attention_residual_executed = false;
     bool ffn_norm_executed = false;
     bool ffn_gate_up_executed = false;
-    bool ffn_swiglu_executed = false;
+    bool ffn_swiglu_executed = false, ffn_down_executed = false;
     double epsilon = 0.000001;
 
     array_init(&embedding_probe);
@@ -404,6 +405,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         add_assoc_bool(result, "ffn_norm_device_execution_ready", false);
         add_assoc_bool(result, "ffn_gate_up_projection_device_execution_ready", false);
         add_assoc_bool(result, "ffn_swiglu_device_execution_ready", false);
+        add_assoc_bool(result, "ffn_down_projection_device_execution_ready", false);
         add_assoc_long(result, "executed_device_ops", 0);
         return SUCCESS;
     }
@@ -663,12 +665,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 array_init(&ffn_norm_probe);
                 array_init(&ffn_gate_up_probe);
                 array_init(&ffn_swiglu_probe);
+                array_init(&ffn_down_probe);
                 attention_projection_probe_initialized = true;
                 attention_residual_probe_initialized = true;
                 ffn_norm_probe_initialized = true;
                 ffn_gate_up_probe_initialized = true;
                 ffn_swiglu_probe_initialized = true;
-                if (king_inference_cuda_decoder_graph_executor_execute_attention_projection_residual_ffn_norm_gate_up_and_swiglu(
+                ffn_down_probe_initialized = true;
+                if (king_inference_cuda_decoder_graph_executor_execute_attention_projection_residual_ffn_norm_gate_up_swiglu_and_down(
                         model,
                         graph,
                         embedding_id,
@@ -682,14 +686,16 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                         &ffn_norm_probe,
                         &ffn_gate_up_probe,
                         &ffn_swiglu_probe,
+                        &ffn_down_probe,
                         &executed_device_ops,
                         &attention_projection_executed,
                         &attention_residual_executed,
                         &ffn_norm_executed,
                         &ffn_gate_up_executed,
-                        &ffn_swiglu_executed
+                        &ffn_swiglu_executed,
+                        &ffn_down_executed
                 ) != SUCCESS) {
-                    king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(true, &attention_projection_probe, true, &attention_residual_probe, true, &ffn_norm_probe, true, &ffn_gate_up_probe, true, &ffn_swiglu_probe);
+                    king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(true, &attention_projection_probe, true, &attention_residual_probe, true, &ffn_norm_probe, true, &ffn_gate_up_probe, true, &ffn_swiglu_probe, true, &ffn_down_probe);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &attention_stack_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                     (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
@@ -703,7 +709,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                     model,
                     &attention_stack_output
             ) != SUCCESS) {
-                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe, ffn_down_probe_initialized, &ffn_down_probe);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
@@ -720,7 +726,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             add_assoc_bool(&kv_head_prepare_probe, "attention_stack_released", true);
             add_assoc_long(&kv_head_prepare_probe, "attention_stack_width", (zend_long) attention_stack_width);
             if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output) != SUCCESS) {
-                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe);
+                king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe, ffn_down_probe_initialized, &ffn_down_probe);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
                 (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
                 king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
@@ -736,7 +742,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         }
 
         if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output) != SUCCESS) {
-            king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe);
+            king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe, ffn_down_probe_initialized, &ffn_down_probe);
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
@@ -751,7 +757,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     }
 
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output) != SUCCESS) {
-        king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe);
+        king_inference_cuda_decoder_graph_executor_destroy_downstream_probes(attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe, ffn_down_probe_initialized, &ffn_down_probe);
         king_inference_cuda_decoder_graph_executor_destroy_initial_probes(&embedding_probe, &rms_norm_probe, &linear_probe, &slice_probe, &rope_probe, &kv_head_prepare_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
@@ -768,7 +774,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_zval(result, "slice_device_execution", &slice_probe);
     add_assoc_zval(result, "rope_device_execution", &rope_probe);
     add_assoc_zval(result, "kv_head_prepare_device_execution", &kv_head_prepare_probe);
-    king_inference_cuda_decoder_graph_executor_add_downstream_probes(result, attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe);
+    king_inference_cuda_decoder_graph_executor_add_downstream_probes(result, attention_projection_probe_initialized, &attention_projection_probe, attention_residual_probe_initialized, &attention_residual_probe, ffn_norm_probe_initialized, &ffn_norm_probe, ffn_gate_up_probe_initialized, &ffn_gate_up_probe, ffn_swiglu_probe_initialized, &ffn_swiglu_probe, ffn_down_probe_initialized, &ffn_down_probe);
     add_assoc_bool(result, "embedding_device_execution_ready", true);
     add_assoc_bool(result, "rms_norm_device_execution_ready", rms_norm_op != NULL);
     add_assoc_bool(result, "linear_device_execution_ready", linear_rows > 0);
@@ -785,6 +791,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(result, "ffn_norm_device_execution_ready", ffn_norm_executed);
     add_assoc_bool(result, "ffn_gate_up_projection_device_execution_ready", ffn_gate_up_executed);
     add_assoc_bool(result, "ffn_swiglu_device_execution_ready", ffn_swiglu_executed);
+    add_assoc_bool(result, "ffn_down_projection_device_execution_ready", ffn_down_executed);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);

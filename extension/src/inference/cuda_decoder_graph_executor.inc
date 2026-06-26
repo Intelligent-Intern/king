@@ -320,6 +320,10 @@ static void king_inference_cuda_decoder_graph_executor_init(
         && model->cuda_ffn_swiglu_path_available
         && model->cuda_ffn_swiglu_f32_available
         && model->cuda_device_allocator_available;
+    model->cuda_decoder_graph_executor_ffn_down_projection_execution_available =
+        model->cuda_decoder_graph_executor_ffn_swiglu_execution_available
+        && model->cuda_decoder_graph_executor_linear_execution_available
+        && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -406,6 +410,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     add_assoc_bool(&executor, "ffn_norm_execution_available", model->cuda_decoder_graph_executor_ffn_norm_execution_available);
     add_assoc_bool(&executor, "ffn_gate_up_projection_execution_available", model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available);
     add_assoc_bool(&executor, "ffn_swiglu_execution_available", model->cuda_decoder_graph_executor_ffn_swiglu_execution_available);
+    add_assoc_bool(&executor, "ffn_down_projection_execution_available", model->cuda_decoder_graph_executor_ffn_down_projection_execution_available);
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
     add_assoc_long(
@@ -611,6 +616,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     add_assoc_long(&executor, "ffn_norm_device_executions", (zend_long) model->cuda_decoder_graph_executor_ffn_norm_execution_count);
     add_assoc_long(&executor, "ffn_gate_up_projection_device_executions", (zend_long) model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_count);
     add_assoc_long(&executor, "ffn_swiglu_device_executions", (zend_long) model->cuda_decoder_graph_executor_ffn_swiglu_execution_count);
+    add_assoc_long(&executor, "ffn_down_projection_device_executions", (zend_long) model->cuda_decoder_graph_executor_ffn_down_projection_execution_count);
     add_assoc_long(
         &executor,
         "last_attention_stack_expected_heads",
@@ -627,6 +633,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     add_assoc_long(&executor, "last_ffn_gate_rows", (zend_long) model->cuda_decoder_graph_executor_last_ffn_gate_rows);
     add_assoc_long(&executor, "last_ffn_up_rows", (zend_long) model->cuda_decoder_graph_executor_last_ffn_up_rows);
     add_assoc_long(&executor, "last_ffn_swiglu_width", (zend_long) model->cuda_decoder_graph_executor_last_ffn_swiglu_width);
+    add_assoc_long(&executor, "last_ffn_down_rows", (zend_long) model->cuda_decoder_graph_executor_last_ffn_down_rows);
     if (model->cuda_decoder_graph_executor_last_embedding_token_available
         && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
         add_assoc_long(
@@ -726,6 +733,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     add_assoc_bool(return_value, "decoder_graph_ffn_norm_execution_ready", model->cuda_decoder_graph_executor_ffn_norm_execution_available);
     add_assoc_bool(return_value, "decoder_graph_ffn_gate_up_projection_execution_ready", model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available);
     add_assoc_bool(return_value, "decoder_graph_ffn_swiglu_execution_ready", model->cuda_decoder_graph_executor_ffn_swiglu_execution_available);
+    add_assoc_bool(return_value, "decoder_graph_ffn_down_projection_execution_ready", model->cuda_decoder_graph_executor_ffn_down_projection_execution_available);
 }
 
 static void king_inference_cuda_decoder_graph_executor_apply_status(

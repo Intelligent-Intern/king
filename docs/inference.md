@@ -285,11 +285,14 @@ linear path, exposed as `decoder_graph_ffn_gate_up_projection_execution_ready`
 and `ffn_gate_up_projection_device_execution_ready`. The Gate and Up projection
 buffers now feed the CUDA FFN-SwiGLU kernel, exposed as
 `decoder_graph_ffn_swiglu_execution_ready` and
-`ffn_swiglu_device_execution_ready`.
+`ffn_swiglu_device_execution_ready`. The SwiGLU output then feeds the FFN Down
+projection through the quantized GPU linear path, exposed as
+`decoder_graph_ffn_down_projection_execution_ready` and
+`ffn_down_projection_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King finishes the FFN Down path and returns bounded logits
-to the sampler.
+remains blocked until King finishes the FFN output residual, final norm, and
+bounded logits path to the sampler.
 
 GPU readiness is inspectable before model load:
 
@@ -402,8 +405,8 @@ identifies the missing runtime layers between the available CUDA leaves and
 plain-text chat generation. When the GPU model has initialized the embedding
 row loader, device vector ops, device KV-cache, decoder graph executor, and
 prompt-loop admission path, the remaining gap is that the graph executor still
-needs the remaining FFN Down and logits device ops plus bounded logits results
-before the prompt loop can emit decoded tokens.
+needs the remaining FFN output residual, final norm, and logits device ops plus
+bounded logits results before the prompt loop can emit decoded tokens.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -437,7 +440,8 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_decoder_graph_attention_residual_execution`,
 `gpu_decoder_graph_ffn_norm_execution`,
 `gpu_decoder_graph_ffn_gate_up_projection_execution`,
-`gpu_decoder_graph_ffn_swiglu_execution`, `gpu_prompt_decoder_loop`,
+`gpu_decoder_graph_ffn_swiglu_execution`,
+`gpu_decoder_graph_ffn_down_projection_execution`, `gpu_prompt_decoder_loop`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
@@ -491,11 +495,12 @@ the K/V helper until the downstream residual bridge can consume it, then
 released during the helper cleanup path. The attention residual now feeds the
 feed-forward RMSNorm on device before that temporary buffer is released, and the
 FFN Gate/Up projections run from the retained FFN norm buffer before their
-temporary outputs feed the CUDA FFN-SwiGLU kernel and are released. Other
-temporary buffers are released after the admitted initial device chain. It keeps
+temporary outputs feed the CUDA FFN-SwiGLU kernel. The retained SwiGLU output
+then feeds the FFN Down projection before those temporary buffers are released
+after the admitted initial device chain. It keeps
 `device_execution_result_ready=false` until the CUDA executor carries the
-remaining FFN Down and logits ops through bounded logits and writes real token
-results back into the stream contract. The GPU
+remaining FFN output residual, final norm, and logits ops through bounded
+logits and writes real token results back into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against
