@@ -381,7 +381,9 @@ The core programming model is:
   native stream contract.
   Native graph streams are stateless by default; `king.inference_with_memory`
   sets the php.ini baseline and `with_memory` opts into carrying graph result
-  state between decode steps. The stream layer can emit
+  state between decode steps. The LLM cache for that memory mode is also
+  disabled by default and becomes active only when both memory mode and
+  `king.inference_llm_cache_enable=1` are configured. The stream layer can emit
   explicit OpenAI-compatible Chat
   Completions chunks, and the HTTP helper can serve
   `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,

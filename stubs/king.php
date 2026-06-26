@@ -1257,8 +1257,9 @@ namespace {
      * Return the effective LLM cache admission status for King inference.
      * The cache is active only for memory-enabled native graph inference. When
      * active, King checks the configured cache path and minimum free disk
-     * floor before admitting graph memory cache work. Options may override
-     * `with_memory` or `with-memory` for a preflight status check.
+     * floor before admitting graph memory cache work. The default cache policy
+     * is disabled until the operator opts in through config. Options may
+     * override `with_memory` or `with-memory` for a preflight status check.
      * @param mixed $config null, King\Config, or native King\Config resource
      * @param array{with_memory?:bool,with-memory?:bool}|null $options
      * @return array<string,mixed>

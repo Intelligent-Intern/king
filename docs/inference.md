@@ -143,7 +143,9 @@ forcing the model to see the full catalogue again.
 
 King now exposes the cache admission policy for that memory mode. The LLM cache
 is never active for stateless inference. It is checked only when effective
-`with_memory` is `true`.
+`with_memory` is `true`. The compiled and php.ini defaults keep it disabled;
+set `king.inference_llm_cache_enable=1` only for deployments that explicitly
+want memory-enabled graph cache admission.
 
 ```ini
 king.inference_llm_cache_enable=1
@@ -219,7 +221,7 @@ king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
 king.inference_gpu_thermal_sensor_command=
 king.inference_gpu_thermal_max_temperature_c=78
 king.inference_gpu_allow_unmonitored=0
-king.inference_llm_cache_enable=1
+king.inference_llm_cache_enable=0
 king.inference_llm_cache_path=/tmp/king-llm-cache
 king.inference_llm_cache_min_free_mb=5120
 king.inference_llm_cache_fail_closed=1
