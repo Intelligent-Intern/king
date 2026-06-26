@@ -159,6 +159,32 @@ PHP_FUNCTION(king_inference_token_decode)
     RETURN_STR(decoded);
 }
 
+PHP_FUNCTION(king_inference_token_decode_graph)
+{
+    zval *model, *options = NULL;
+    zend_long token_id, position;
+    ZEND_PARSE_PARAMETERS_START(3, 4)
+        Z_PARAM_OBJECT_OF_CLASS(model, king_ce_inference_model)
+        Z_PARAM_LONG(token_id)
+        Z_PARAM_LONG(position)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+    if (token_id < 0 || position < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token_id and position must be non-negative.");
+        RETURN_THROWS();
+    }
+    if (king_inference_token_decode_graph_array(
+        php_king_inference_model_obj_from_zend(Z_OBJ_P(model)),
+        (zend_ulong) token_id,
+        (zend_ulong) position,
+        options,
+        return_value
+    ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+}
+
 PHP_FUNCTION(king_inference_kv_cache_plan)
 {
     zval *model;
@@ -458,6 +484,31 @@ PHP_METHOD(King_Inference_Model, tokenDecode)
         RETURN_THROWS();
     }
     RETURN_STR(decoded);
+}
+
+PHP_METHOD(King_Inference_Model, tokenDecodeGraph)
+{
+    zval *options = NULL;
+    zend_long token_id, position;
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_LONG(token_id)
+        Z_PARAM_LONG(position)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+    if (token_id < 0 || position < 0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph token_id and position must be non-negative.");
+        RETURN_THROWS();
+    }
+    if (king_inference_token_decode_graph_array(
+        php_king_inference_model_obj_from_zend(Z_OBJ_P(ZEND_THIS)),
+        (zend_ulong) token_id,
+        (zend_ulong) position,
+        options,
+        return_value
+    ) != SUCCESS) {
+        RETURN_THROWS();
+    }
 }
 
 PHP_METHOD(King_Inference_Model, kvCachePlan)

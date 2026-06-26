@@ -100,6 +100,7 @@ PHP_FUNCTION(king_inference_llm_cache_status);
 PHP_FUNCTION(king_inference_model_info);
 PHP_FUNCTION(king_inference_tokenize);
 PHP_FUNCTION(king_inference_token_decode);
+PHP_FUNCTION(king_inference_token_decode_graph);
 PHP_FUNCTION(king_inference_tensor_view);
 PHP_FUNCTION(king_inference_tensor_index);
 PHP_FUNCTION(king_inference_tensor_dequantize);

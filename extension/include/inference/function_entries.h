@@ -6,6 +6,7 @@
     PHP_FE(king_inference_model_info, arginfo_king_inference_model_info)
     PHP_FE(king_inference_tokenize, arginfo_king_inference_tokenize)
     PHP_FE(king_inference_token_decode, arginfo_king_inference_token_decode)
+    PHP_FE(king_inference_token_decode_graph, arginfo_king_inference_token_decode_graph)
     PHP_FE(king_inference_tensor_view, arginfo_king_inference_tensor_view)
     PHP_FE(king_inference_tensor_index, arginfo_king_inference_tensor_index)
     PHP_FE(king_inference_tensor_dequantize, arginfo_king_inference_tensor_dequantize)

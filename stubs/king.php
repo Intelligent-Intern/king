@@ -1320,6 +1320,14 @@ namespace {
     function king_inference_token_decode(\King\Inference\Model $model, int $token_id): string {}
 
     /**
+     * Build the complete native CPU token decode graph for one token position.
+     * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+     * @return array<string,mixed>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_token_decode_graph(\King\Inference\Model $model, int $token_id, int $position, ?array $options = null): array {}
+
+    /**
      * Return a read-only native tensor view descriptor for one tensor from the
      * loaded GGUF artifact. The descriptor includes shape, quantized block
      * format, byte range, bounds status, and native map readiness, but never
@@ -2787,6 +2795,12 @@ namespace King {
 
         public static function tokenDecode(Inference\Model $model, int $token_id): string {}
 
+        /**
+         * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+         * @return array<string,mixed>
+         */
+        public static function tokenDecodeGraph(Inference\Model $model, int $token_id, int $position, ?array $options = null): array {}
+
         /** @return array<string,mixed> */
         public static function tensorView(Inference\Model $model, string $name): array {}
 
@@ -2995,6 +3009,12 @@ namespace King\Inference {
         public function tokenize(string $text): array {}
 
         public function tokenDecode(int $token_id): string {}
+
+        /**
+         * @param array{emit_token?:bool,epsilon?:float,rope_base?:float,sampler?:string,temperature?:float,top_k?:int,top_p?:float,seed?:int,state?:array<string,mixed>}|null $options
+         * @return array<string,mixed>
+         */
+        public function tokenDecodeGraph(int $token_id, int $position, ?array $options = null): array {}
 
         /** @return array<string,mixed> */
         public function tensorView(string $name): array {}

@@ -23,19 +23,21 @@ during model load instead of being silently ignored by later model listings,
 embedding routes, decoder graph construction, or runner argument mapping.
 `king_inference_token_decode()` and `King\Inference\Model::tokenDecode()`
 decode one native token id through the tokenizer loaded from the same GGUF
-artifact; local runners use that surface instead of reading tokenizer arrays
-directly.
+artifact. `king_inference_token_decode_graph()` and
+`King\Inference\Model::tokenDecodeGraph()` build the complete native CPU
+decode graph for one token position from the loaded model metadata and tensor
+resolvers.
 
 The implemented token-streaming backends are `local` and `king_native_cpu`.
 `local` uses a King-owned process runner contract while the public backend name
 stays independent from the runner implementation. The `king_native_cpu` backend
 uses King's native GGUF loader, metadata parser, tokenizer lookup, paged
 KV-cache planning, public tensor views, bounded tensor dequantization, first
-CPU tensor/vector math, native mini-graph execution, token selection from
-logits, and a read-only memory map of the model artifact. Native CPU streaming
-expects an explicit `graph` or `graphs` request and decodes the selected token
-ids through the artifact tokenizer; it does not call an external inference
-runtime.
+CPU tensor/vector math, complete per-token decode graph construction, token
+selection from logits, and a read-only memory map of the model artifact. Native
+CPU streaming expects an explicit `graph` or `graphs` request and decodes the
+selected token ids through the artifact tokenizer; it does not call an external
+inference runtime.
 
 When `backend` is omitted, King selects `king_native_cpu`. The process-runner
 backend is still available, but it must be selected intentionally with
@@ -349,6 +351,7 @@ extension/src/inference/
 ├── stream_events.inc
 ├── tensor_attention_resolver.inc
 ├── tensor_ffn_resolver.inc
+├── token_decode_graph_builder.inc
 ├── tensor_graph.inc
 ├── tensor_graph_kv.inc
 ├── tensor_resolver.inc
@@ -426,6 +429,10 @@ configured `{layer}` patterns first, then known GGUF/HF-style names, and
 finally guarded layer/name/shape scans. Shape validation requires `gate` and
 `up` matrices to project from embedding width to feed-forward width, and
 `down` matrices to project from feed-forward width back to embedding width.
+`token_decode_graph_builder.inc` uses those resolvers to create the full
+single-position CPU decode graph: token embedding, per-layer attention norm,
+Q/K/V projections, RoPE, KV write/read attention, attention residual, FFN
+SwiGLU, final norm, output projection, and token sampling/argmax.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
@@ -893,54 +900,21 @@ $model = king_inference_model_load([
 $encoded = king_inference_tokenize($model, 'Explain invoice rejection HU-2026-0007.');
 $promptTokens = $encoded['tokens'];
 
-$decodeStep = static function (int $position, int $tokenId): array {
-    return [
-        'ops' => [
-            [
-                'id' => 'x',
-                'op' => 'embedding',
-                'tensor' => 'token_embd.weight',
-                'token_id' => $tokenId,
-            ],
-            [
-                'id' => 'norm',
-                'op' => 'rms_norm',
-                'input' => 'x',
-                'weight' => 'blk.0.attn_norm.weight',
-                'epsilon' => 1e-6,
-            ],
-            [
-                'id' => 'logits',
-                'op' => 'linear',
-                'input' => 'norm',
-                'weight' => 'output.weight',
-                'row_limit' => 32000,
-            ],
-            [
-                'id' => 'next_token',
-                'op' => 'sample_token',
-                'logits' => 'logits',
-                'temperature' => 0.4,
-                'top_k' => 40,
-                'top_p' => 0.95,
-                'seed' => 90210,
-                'sample_index' => $position,
-            ],
-        ],
-        'output' => 'next_token',
-    ];
-};
-
 $graphs = [];
 foreach (array_slice($promptTokens, -3, 3, true) as $position => $tokenId) {
-    $graphs[] = $decodeStep((int) $position, (int) $tokenId);
+    $graphs[] = king_inference_token_decode_graph($model, (int) $tokenId, (int) $position, [
+        'temperature' => 0.4,
+        'top_k' => 40,
+        'top_p' => 0.95,
+        'seed' => 90210,
+    ]);
 }
 
 $stream = king_inference_stream($model, [
     'graphs' => $graphs,
 ], [
     'max_native_stream_tokens' => 64,
-    'with_memory' => false,
+    'with_memory' => true,
     'graph_options' => [
         'max_vector_values' => 65536,
         'max_operations' => 524288,
