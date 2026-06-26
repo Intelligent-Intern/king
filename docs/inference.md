@@ -1007,6 +1007,10 @@ message states that the model is registered for metadata/readiness inspection,
 reports `gpu_runtime.generation_ready=false`,
 `gpu_runtime.decoder_kernel_ready=false`, includes the primary
 `gpu_runtime.reason`, and makes the no-silent-CPU-fallback rule explicit.
+Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
+authoritative readiness source for GPU models. A registered `king_native_gpu`
+model can be listed and selected for inspection, but UI and autodetect flows
+must not infer generation readiness from the model id or backend name.
 
 ## Function, Example 1d: OpenAI-Compatible Model Router
 
