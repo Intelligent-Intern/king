@@ -209,6 +209,131 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_final_norm
     return SUCCESS;
 }
 
+static zval *king_inference_cuda_decoder_graph_executor_sampling_op_for_logits(
+    zval *graph,
+    zend_string *logits_id
+) {
+    zval *ops = king_inference_cuda_decoder_graph_executor_ops(graph);
+    zval *entry;
+
+    if (ops == NULL || logits_id == NULL) {
+        return NULL;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(ops), entry) {
+        zval *op_name;
+        zval *logits;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+        op_name = king_inference_array_find(entry, "op");
+        logits = king_inference_array_find(entry, "logits");
+        if (op_name != NULL
+            && Z_TYPE_P(op_name) == IS_STRING
+            && (zend_string_equals_literal(Z_STR_P(op_name), "argmax_token")
+                || zend_string_equals_literal(Z_STR_P(op_name), "sample_token"))
+            && king_inference_cuda_decoder_graph_executor_zval_string_equals(logits, logits_id)) {
+            return entry;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_ulong king_inference_cuda_decoder_graph_executor_candidate_limit(
+    zval *sampling_op,
+    zend_ulong fallback
+) {
+    zval *op_name;
+    zend_ulong top_k;
+
+    if (fallback == 0) {
+        fallback = KING_INFERENCE_CUDA_LOGITS_READBACK_MAX_CANDIDATES;
+    }
+    if (sampling_op == NULL) {
+        return fallback;
+    }
+    op_name = king_inference_array_find(sampling_op, "op");
+    if (op_name != NULL
+        && Z_TYPE_P(op_name) == IS_STRING
+        && zend_string_equals_literal(Z_STR_P(op_name), "argmax_token")) {
+        return 1;
+    }
+    top_k = king_inference_tensor_option_ulong(sampling_op, "top_k", fallback);
+    return top_k == 0 ? fallback : top_k;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_add_bounded_logits_readback(
+    king_inference_model_object *model,
+    zval *graph,
+    zend_string *logits_id,
+    king_inference_cuda_device_ptr logits_output,
+    zend_ulong logits_rows,
+    zval *logits_probe
+) {
+    unsigned int host_indices[KING_INFERENCE_CUDA_LOGITS_READBACK_MAX_CANDIDATES];
+    float host_logits[KING_INFERENCE_CUDA_LOGITS_READBACK_MAX_CANDIDATES];
+    zend_ulong candidate_count = 0;
+    zend_ulong requested_candidates;
+    zval *sampling_op = king_inference_cuda_decoder_graph_executor_sampling_op_for_logits(graph, logits_id);
+    zval candidates;
+    zend_ulong i;
+
+    requested_candidates = king_inference_cuda_decoder_graph_executor_candidate_limit(
+        sampling_op,
+        (zend_ulong) model->cuda_logits_readback_candidate_limit
+    );
+    add_assoc_bool(logits_probe, "bounded_readback_attempted", true);
+    add_assoc_bool(logits_probe, "bounded_readback_available", model->cuda_logits_readback_available);
+    add_assoc_bool(logits_probe, "bounded_readback_executed", false);
+    add_assoc_bool(logits_probe, "sampling_op_present", sampling_op != NULL);
+    if (sampling_op != NULL) {
+        zval *op_name = king_inference_array_find(sampling_op, "op");
+
+        if (op_name != NULL && Z_TYPE_P(op_name) == IS_STRING) {
+            add_assoc_str(logits_probe, "sampling_op", zend_string_copy(Z_STR_P(op_name)));
+        }
+    }
+    add_assoc_long(logits_probe, "requested_candidates", (zend_long) requested_candidates);
+    if (king_inference_cuda_logits_readback_top_k(
+            model,
+            logits_output,
+            logits_rows,
+            requested_candidates,
+            host_indices,
+            host_logits,
+            &candidate_count
+    ) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_logits_readback_result,
+            model->cuda_logits_readback_error[0] != '\0'
+                ? model->cuda_logits_readback_error
+                : "cuda_decoder_graph_logits_readback_failed"
+        );
+        return FAILURE;
+    }
+
+    array_init(&candidates);
+    for (i = 0; i < candidate_count; i++) {
+        zval candidate;
+
+        array_init(&candidate);
+        add_assoc_long(&candidate, "rank", (zend_long) i);
+        add_assoc_long(&candidate, "token_id", (zend_long) host_indices[i]);
+        add_assoc_double(&candidate, "logit", (double) host_logits[i]);
+        add_next_index_zval(&candidates, &candidate);
+    }
+    add_assoc_bool(logits_probe, "bounded_readback_executed", true);
+    add_assoc_long(logits_probe, "candidate_count", (zend_long) candidate_count);
+    add_assoc_long(logits_probe, "readback_bytes", (zend_long) model->cuda_logits_readback_last_bytes);
+    add_assoc_long(logits_probe, "full_logits_bytes", (zend_long) model->cuda_logits_readback_full_bytes);
+    add_assoc_long(logits_probe, "saved_readback_bytes", (zend_long) model->cuda_logits_readback_saved_bytes);
+    add_assoc_zval(logits_probe, "candidates", &candidates);
+    return SUCCESS;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_execute_logits_projection(
     king_inference_model_object *model,
     zval *graph,
@@ -292,6 +417,17 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_logits_pro
                 ? model->cuda_output_projection_error
                 : "cuda_decoder_graph_logits_projection_execution_failed"
         );
+        return FAILURE;
+    }
+    if (king_inference_cuda_decoder_graph_executor_add_bounded_logits_readback(
+            model,
+            graph,
+            logits_id,
+            *logits_output,
+            *logits_rows,
+            logits_probe
+    ) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, logits_output);
         return FAILURE;
     }
 

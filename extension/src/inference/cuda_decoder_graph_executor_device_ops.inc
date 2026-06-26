@@ -788,6 +788,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(result, "ffn_output_residual_device_execution_ready", ffn_output_executed);
     add_assoc_bool(result, "final_norm_device_execution_ready", final_norm_executed);
     add_assoc_bool(result, "logits_projection_device_execution_ready", logits_executed);
+    add_assoc_bool(result, "bounded_logits_result_ready", logits_executed);
+    add_assoc_bool(result, "device_execution_result_ready", logits_executed);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);

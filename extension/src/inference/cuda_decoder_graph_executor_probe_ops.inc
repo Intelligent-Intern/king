@@ -47,7 +47,8 @@ static void king_inference_cuda_decoder_graph_executor_add_empty_initial_result(
         "ffn_down_projection_device_execution_ready",
         "ffn_output_residual_device_execution_ready",
         "final_norm_device_execution_ready",
-        "logits_projection_device_execution_ready"
+        "logits_projection_device_execution_ready",
+        "bounded_logits_result_ready"
     };
     size_t index;
 

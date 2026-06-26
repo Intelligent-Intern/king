@@ -512,10 +512,13 @@ the admitted initial device chain. When that residual is the terminal hidden
 state, the final RMSNorm runs on device before its temporary buffer is released.
 If the graph requests logits, King now projects that final norm buffer into a
 GPU logits buffer through the output projection tensor and releases it after the
-device execution probe records the row count. It keeps
-`device_execution_result_ready=false` until the CUDA executor carries the
-bounded logits result back into the sampler and writes real token results back
-into the stream contract. The GPU
+device execution probe records the row count. The executor then runs the
+bounded Top-K readback kernel against that GPU logits buffer, returns candidate
+token ids and logits in `logits_projection_device_execution.candidates`, and
+marks `bounded_logits_result_ready=true` plus
+`device_execution_result_ready=true`. It still keeps token generation blocked
+until the prompt loop consumes those candidates through the sampler and writes
+real token results back into the stream contract. The GPU
 prompt-loop admission path
 accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
 used by the CPU loop, and validates those graphs into result envelopes against
@@ -553,8 +556,8 @@ GPU path removes the expensive full-logits readback.
 Full-logits CPU readback is therefore not part of the normal GPU generation
 path. It is only appropriate for explicit diagnostic or `emit_logits` style
 inspection flows. The default generation path is GPU logits projection, GPU
-bounded top-K candidate extraction, bounded candidate readback, then CPU policy
-sampling. A later GPU sampler may replace the CPU policy step only when it can
+bounded top-K candidate extraction, bounded candidate readback into candidate
+records, then CPU policy sampling. A later GPU sampler may replace the CPU policy step only when it can
 produce the same observable semantics for argmax, temperature, top-k, top-p,
 seeded sampling, and deterministic tie-breaking.
 
