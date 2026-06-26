@@ -1358,9 +1358,10 @@ payload or options set `with_memory` or `with-memory` to `true`.
 
 For `stream=false`, the helper drains native decoder content deltas into one
 OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
-Decoder text is treated as assistant content unless the request explicitly
-activates tools. For `stream=true`, it returns a bounded `text/event-stream`
-body with `data: {chunk}` events and a final `data: [DONE]` marker.
+Decoder text is treated as assistant content. Tool-call request fields remain
+rejected until a real King tool execution path exists. For `stream=true`, it
+returns a bounded `text/event-stream` body with `data: {chunk}` events and a
+final `data: [DONE]` marker.
 For `king_native_cpu`, that streaming response is backed by native decoder
 events rather than the external process runner.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
