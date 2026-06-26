@@ -1299,8 +1299,8 @@ namespace {
     /**
      * Return the normalized metadata for a loaded King inference model,
      * including backend name, backend capabilities, GPU readiness surfaces,
-     * explicit GPU decoder readiness, and local runner executable status when
-     * the local backend is selected.
+     * explicit GPU decoder and generation readiness, and local runner
+     * executable status when the local backend is selected.
      * @return array<string,mixed>
      */
     function king_inference_model_info(\King\Inference\Model $model): array {}

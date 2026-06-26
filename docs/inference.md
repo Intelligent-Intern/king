@@ -401,8 +401,9 @@ without handing the model to an external runtime.
 metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
 `backend_capabilities`. For `king_native_gpu`, model info also exposes
-`decoder_kernel_ready=false` directly, so clients do not need to infer decoder
-state from model registration or backend name.
+`decoder_kernel_ready=false` and `generation_ready=false` directly, so clients
+do not need to infer decoder or generation state from model registration or
+backend name.
 The `gguf` entry contains `architecture`, `tokenizer_model`,
 `tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
 status fields when the source artifact provides them. Native backend info

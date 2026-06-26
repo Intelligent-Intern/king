@@ -82,6 +82,7 @@ static void king_inference_backend_model_info(king_inference_model_object *inter
         add_assoc_string(return_value, "loader", "king_gguf_structure");
         add_assoc_bool(return_value, "external_runtime", false);
         add_assoc_bool(return_value, "decoder_kernel_ready", false);
+        add_assoc_bool(return_value, "generation_ready", false);
     }
 
     king_inference_backend_capabilities_array(kind, &capabilities);
