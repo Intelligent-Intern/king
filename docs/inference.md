@@ -665,8 +665,8 @@ file offsets, byte ranges, bounds status, and native mapping readiness without
 exposing process-local native pointers to PHP.
 `tensor_math.inc` owns the first native CPU tensor operations on top of those
 views. It reads bytes from the read-only model mapping, dequantizes bounded
-ranges for supported scalar and block formats, and can multiply rank-1 or
-rank-2 tensors by a PHP vector with explicit safety limits.
+ranges for supported scalar and block formats, including Q5_0, and can multiply
+rank-1 or rank-2 tensors by a PHP vector with explicit safety limits.
 `tensor_resolver.inc` centralizes model tensor name resolution. The token
 embedding resolver honors explicit `tensor`, `embedding_tensor`, and
 `token_embedding_tensor` configuration first, then checks known GGUF names, and
@@ -845,7 +845,7 @@ printf(
 
 This is one compute step inside the native graph path. The CPU path currently
 supports scalar F32, F16, BF16, I8, I16, I32, I64, F64 and the Q4_0, Q4_1,
-Q8_0, Q4_K, Q5_K, and Q6_K block formats. Rank-2 matmul follows GGUF tensor
+Q5_0, Q8_0, Q4_K, Q5_K, and Q6_K block formats. Rank-2 matmul follows GGUF tensor
 order: dimension 0 is the input width and dimension 1 is the output row count.
 Quantized rows use blockwise dot decoding where supported. The operation
 guards input size, output size, and total multiply-add count so a large model

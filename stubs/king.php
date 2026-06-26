@@ -1354,7 +1354,7 @@ namespace {
     /**
      * Dequantize a bounded element range from one native tensor into PHP
      * floats. Supported tensor formats are scalar F32/F16/BF16/I* types plus
-     * Q4_0, Q4_1, Q8_0, Q4_K, Q5_K, and Q6_K block formats.
+     * Q4_0, Q4_1, Q5_0, Q8_0, Q4_K, Q5_K, and Q6_K block formats.
      * @param array{offset?:int,count?:int,max_values?:int}|null $options
      * @return array<string,mixed>
      * @throws \King\ValidationException|\King\RuntimeException

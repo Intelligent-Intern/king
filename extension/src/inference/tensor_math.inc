@@ -133,6 +133,19 @@ static double king_inference_tensor_q5_k_value(const unsigned char *block, zend_
     return d * (double) scale * (double) quant - dmin * (double) minimum;
 }
 
+static double king_inference_tensor_q5_0_value(const unsigned char *block, zend_ulong in_block)
+{
+    zend_ulong low_index = in_block & 15;
+    unsigned char packed = block[6 + low_index];
+    uint32_t high_bits = king_inference_tensor_read_u32(block + 2);
+    int low = (int) (in_block < 16 ? (packed & 0x0fU) : (packed >> 4));
+    int high = (int) ((high_bits >> in_block) & 1U);
+    int quant = (low | (high << 4)) - 16;
+    double scale = (double) king_inference_tensor_f16_to_float(king_inference_tensor_read_u16(block));
+
+    return scale * (double) quant;
+}
+
 static double king_inference_tensor_q6_k_value(const unsigned char *block, zend_ulong in_block)
 {
     zend_ulong chunk = in_block / 128;
@@ -306,6 +319,11 @@ static zend_result king_inference_tensor_value_at(
                 int quant = (int) (in_block < 16 ? (packed & 0x0fU) : (packed >> 4));
                 *value = minimum + (scale * (double) quant);
             }
+            return SUCCESS;
+        case 6:
+            block_index = index / 32;
+            in_block = index % 32;
+            *value = king_inference_tensor_q5_0_value(view->data + block_index * 22, in_block);
             return SUCCESS;
         case 8:
             block_index = index / 32;
@@ -495,6 +513,12 @@ static zend_result king_inference_tensor_block_dot(
                 double scale = (double) king_inference_tensor_f16_to_float(king_inference_tensor_read_u16(block));
                 double minimum = (double) king_inference_tensor_f16_to_float(king_inference_tensor_read_u16(block + 2));
                 *sum += (minimum + scale * (double) quant) * vector[vector_offset + i];
+            }
+            return SUCCESS;
+        case 6:
+            block = view->data + block_index * 22;
+            for (i = 0; i < 32; i++) {
+                *sum += king_inference_tensor_q5_0_value(block, i) * vector[vector_offset + i];
             }
             return SUCCESS;
         case 8:
