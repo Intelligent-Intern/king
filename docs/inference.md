@@ -371,10 +371,38 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
 `gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
 `gpu_host_to_device_weight_upload`, `gpu_uploaded_weight_cache`,
+`gpu_quantized_matvec_kernel`, `gpu_rms_norm_kernel`, `gpu_rope_kernel`,
+`gpu_attention_scores_kernel`, `gpu_attention_softmax_kernel`,
+`gpu_attention_value_aggregation_kernel`, `gpu_ffn_swiglu_path`,
+`gpu_output_projection_path`, `gpu_minimized_logits_readback`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 and `gpu_thermal_stream_abort` are true for the GPU backend.
 `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
 `silent_cpu_fallback` remain false.
+
+## GPU Sampling Decision
+
+Sampling stays CPU-side for the current native GPU decoder contract. The GPU
+path owns the high-volume tensor work: projection into logits, bounded top-K
+candidate selection, and the transfer boundary that avoids copying the full
+vocabulary logits to host memory. The CPU receives only bounded candidate ids
+and their logits for token selection.
+
+That boundary is intentional. King already has one deterministic token-selection
+contract for `argmax_token` and `sample_token`: temperature, top-k, top-p,
+seeded sampling, `sample_index`, token offset handling, and deterministic
+tie-breaking live in the graph sampling layer. Duplicating that policy in CUDA
+before the GPU decoder stream is fully connected would create two behavioral
+sources of truth. Keeping sampling CPU-side preserves reproducibility while the
+GPU path removes the expensive full-logits readback.
+
+Full-logits CPU readback is therefore not part of the normal GPU generation
+path. It is only appropriate for explicit diagnostic or `emit_logits` style
+inspection flows. The default generation path is GPU logits projection, GPU
+bounded top-K candidate extraction, bounded candidate readback, then CPU policy
+sampling. A later GPU sampler may replace the CPU policy step only when it can
+produce the same observable semantics for argmax, temperature, top-k, top-p,
+seeded sampling, and deterministic tie-breaking.
 
 ## Internal Backend Layout
 
@@ -563,8 +591,10 @@ graph finishers such as `argmax_token` and `sample_token`, not to local runner
 text generation. GPU-specific capability flags separate registration,
 metadata, CUDA probing, CUDA context ownership, device-memory allocation, VRAM
 admission, host-to-device weight upload, uploaded-weight caching, thermal
-enforcement, and decoder generation so clients do not infer generation readiness
-from model presence.
+enforcement, bounded logits readback, and decoder generation so clients do not
+infer generation readiness from model presence. `gpu_minimized_logits_readback`
+means the GPU backend has a top-K candidate readback boundary; it does not mean
+that final token sampling has moved to CUDA.
 
 Generation stream options are validated before the local runner process starts.
 `max_tokens` must be a positive integer, numeric generation options must be

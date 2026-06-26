@@ -388,7 +388,11 @@ The core programming model is:
   and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, attention
   score, attention softmax, attention value aggregation, FFN/SwiGLU, and final
   output projection paths, and bounded top-K logits readback as the first
-  decoder compute leaves. Memory-enabled native graph streams also
+  decoder compute leaves. Sampling stays CPU-side for the current native GPU
+  contract: the GPU narrows logits to bounded candidates, then the existing
+  deterministic token-selection policy applies temperature, top-k, top-p, and
+  seed handling without copying the full vocabulary logits back. Memory-enabled
+  native graph streams also
   enforce an LLM-cache admission policy with a configurable disk-free floor and
   webhook/MCP alert metadata. The process-runner path is explicit `local`
   configuration.
