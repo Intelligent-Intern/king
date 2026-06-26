@@ -18,16 +18,23 @@ typedef int (*king_inference_cuda_cu_device_get_count_fn)(int *count);
 typedef int (*king_inference_cuda_cu_device_get_fn)(int *device, int ordinal);
 typedef int (*king_inference_cuda_cu_device_get_name_fn)(char *name, int len, int device);
 typedef int (*king_inference_cuda_cu_device_total_mem_fn)(size_t *bytes, int device);
+typedef int (*king_inference_cuda_cu_device_primary_ctx_retain_fn)(void **ctx, int device);
+typedef int (*king_inference_cuda_cu_device_primary_ctx_release_fn)(int device);
+typedef int (*king_inference_cuda_cu_ctx_set_current_fn)(void *ctx);
+typedef int (*king_inference_cuda_cu_mem_get_info_fn)(size_t *free_bytes, size_t *total_bytes);
 
 typedef struct _king_inference_cuda_driver_status {
     bool loader_available;
     bool symbols_available;
     bool initialized;
+    bool memory_info_available;
     int init_result;
     int driver_version;
     int device_count;
     char first_device_name[256];
     size_t first_device_total_memory_bytes;
+    size_t first_device_free_memory_bytes;
+    size_t first_device_runtime_total_memory_bytes;
     char error[160];
 } king_inference_cuda_driver_status;
 
@@ -38,6 +45,8 @@ static void king_inference_cuda_driver_status_init(king_inference_cuda_driver_st
     status->driver_version = 0;
     status->device_count = 0;
     status->first_device_name[0] = '\0';
+    status->first_device_free_memory_bytes = 0;
+    status->first_device_runtime_total_memory_bytes = 0;
     status->error[0] = '\0';
 }
 
@@ -76,6 +85,11 @@ static void king_inference_cuda_driver_probe(king_inference_cuda_driver_status *
     king_inference_cuda_cu_device_get_fn cu_device_get;
     king_inference_cuda_cu_device_get_name_fn cu_device_get_name;
     king_inference_cuda_cu_device_total_mem_fn cu_device_total_mem;
+    king_inference_cuda_cu_device_primary_ctx_retain_fn cu_device_primary_ctx_retain;
+    king_inference_cuda_cu_device_primary_ctx_release_fn cu_device_primary_ctx_release;
+    king_inference_cuda_cu_ctx_set_current_fn cu_ctx_set_current;
+    king_inference_cuda_cu_mem_get_info_fn cu_mem_get_info;
+    void *ctx = NULL;
     int device = 0;
 
     king_inference_cuda_driver_status_init(status);
@@ -119,6 +133,20 @@ static void king_inference_cuda_driver_probe(king_inference_cuda_driver_status *
         cu_device_total_mem = (king_inference_cuda_cu_device_total_mem_fn)
             dlsym(handle, "cuDeviceTotalMem");
     }
+    cu_device_primary_ctx_retain = (king_inference_cuda_cu_device_primary_ctx_retain_fn)
+        dlsym(handle, "cuDevicePrimaryCtxRetain");
+    cu_device_primary_ctx_release = (king_inference_cuda_cu_device_primary_ctx_release_fn)
+        dlsym(handle, "cuDevicePrimaryCtxRelease");
+    cu_ctx_set_current = (king_inference_cuda_cu_ctx_set_current_fn)
+        dlsym(handle, "cuCtxSetCurrent");
+    cu_mem_get_info = NULL;
+    if (dlsym(handle, "cuMemGetInfo_v2") != NULL) {
+        cu_mem_get_info = (king_inference_cuda_cu_mem_get_info_fn)
+            dlsym(handle, "cuMemGetInfo_v2");
+    } else if (dlsym(handle, "cuMemGetInfo") != NULL) {
+        cu_mem_get_info = (king_inference_cuda_cu_mem_get_info_fn)
+            dlsym(handle, "cuMemGetInfo");
+    }
 
     status->symbols_available = true;
     status->init_result = cu_init(0);
@@ -143,9 +171,40 @@ static void king_inference_cuda_driver_probe(king_inference_cuda_driver_status *
             && cu_device_total_mem(&status->first_device_total_memory_bytes, device) != 0) {
             status->first_device_total_memory_bytes = 0;
         }
+        if (cu_device_primary_ctx_retain != NULL
+            && cu_device_primary_ctx_release != NULL
+            && cu_ctx_set_current != NULL
+            && cu_mem_get_info != NULL
+            && cu_device_primary_ctx_retain(&ctx, device) == 0
+            && ctx != NULL) {
+            if (cu_ctx_set_current(ctx) == 0
+                && cu_mem_get_info(
+                    &status->first_device_free_memory_bytes,
+                    &status->first_device_runtime_total_memory_bytes
+                ) == 0) {
+                status->memory_info_available = true;
+            }
+            (void) cu_device_primary_ctx_release(device);
+        }
     }
 
     dlclose(handle);
+}
+
+static bool king_inference_gpu_status_artifact_size(const char *path, size_t *bytes_out)
+{
+    struct stat st;
+
+    *bytes_out = 0;
+    if (!king_inference_gpu_status_non_empty(path)) {
+        return false;
+    }
+    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0) {
+        return false;
+    }
+
+    *bytes_out = (size_t) st.st_size;
+    return true;
 }
 
 static bool king_inference_gpu_status_driver_visible(void)
@@ -247,7 +306,9 @@ static const char *king_inference_gpu_status_reason(
     bool allow_unmonitored,
     bool temperature_available,
     bool temperature_ok,
-    bool driver_visible
+    bool driver_visible,
+    bool vram_admission_checked,
+    bool model_vram_admitted
 ) {
     if (!gpu_enabled) {
         return "gpu_disabled";
@@ -269,6 +330,12 @@ static const char *king_inference_gpu_status_reason(
     }
     if (max_gpu_layers <= 0) {
         return "gpu_layers_disabled";
+    }
+    if (!vram_admission_checked) {
+        return "gpu_vram_status_unavailable";
+    }
+    if (!model_vram_admitted) {
+        return "gpu_model_artifact_exceeds_free_vram";
     }
     if (!driver_visible && !temperature_available) {
         return "gpu_driver_not_visible";
@@ -308,8 +375,12 @@ static void king_inference_gpu_runtime_status_array(
     bool thermal_path_configured = king_inference_gpu_status_non_empty(thermal_sensor_path);
     bool thermal_command_configured = king_inference_gpu_status_non_empty(thermal_sensor_command);
     bool thermal_monitored = thermal_path_configured || thermal_command_configured;
+    size_t artifact_bytes = 0;
     bool temperature_available = false;
     bool temperature_ok = false;
+    bool artifact_size_available;
+    bool vram_admission_checked;
+    bool model_vram_admitted;
     bool driver_visible;
     bool config_ready;
     double temperature_c = 0.0;
@@ -318,6 +389,10 @@ static void king_inference_gpu_runtime_status_array(
     king_inference_cuda_driver_probe(&cuda_status);
     driver_visible = (cuda_status.initialized && cuda_status.device_count > 0)
         || king_inference_gpu_status_driver_visible();
+    artifact_size_available = king_inference_gpu_status_artifact_size(artifact_path, &artifact_bytes);
+    vram_admission_checked = artifact_size_available && cuda_status.memory_info_available;
+    model_vram_admitted = vram_admission_checked
+        && artifact_bytes <= cuda_status.first_device_free_memory_bytes;
 
     if (thermal_path_configured) {
         temperature_available = king_inference_gpu_status_read_temperature_path(
@@ -343,6 +418,8 @@ static void king_inference_gpu_runtime_status_array(
         && artifact_configured
         && artifact_readable
         && max_gpu_layers > 0
+        && vram_admission_checked
+        && model_vram_admitted
         && driver_visible
         && ((thermal_monitored && temperature_available && temperature_ok)
             || (!thermal_monitored && allow_unmonitored));
@@ -359,7 +436,9 @@ static void king_inference_gpu_runtime_status_array(
         allow_unmonitored,
         temperature_available,
         temperature_ok,
-        driver_visible
+        driver_visible,
+        vram_admission_checked,
+        model_vram_admitted
     );
 
     array_init(return_value);
@@ -379,6 +458,11 @@ static void king_inference_gpu_runtime_status_array(
     );
     add_assoc_bool(return_value, "artifact_configured", artifact_configured);
     add_assoc_bool(return_value, "artifact_readable", artifact_readable);
+    add_assoc_bool(return_value, "artifact_size_available", artifact_size_available);
+    add_assoc_long(return_value, "artifact_bytes", (zend_long) artifact_bytes);
+    add_assoc_long(return_value, "model_vram_required_bytes", (zend_long) artifact_bytes);
+    add_assoc_bool(return_value, "vram_admission_checked", vram_admission_checked);
+    add_assoc_bool(return_value, "model_vram_admitted", model_vram_admitted);
     add_assoc_long(return_value, "max_gpu_layers", max_gpu_layers);
     add_assoc_bool(return_value, "driver_visible", driver_visible);
     add_assoc_bool(return_value, "config_ready", config_ready);
@@ -398,6 +482,17 @@ static void king_inference_gpu_runtime_status_array(
         &cuda_driver,
         "first_device_total_memory_bytes",
         (zend_long) cuda_status.first_device_total_memory_bytes
+    );
+    add_assoc_bool(&cuda_driver, "memory_info_available", cuda_status.memory_info_available);
+    add_assoc_long(
+        &cuda_driver,
+        "first_device_free_memory_bytes",
+        (zend_long) cuda_status.first_device_free_memory_bytes
+    );
+    add_assoc_long(
+        &cuda_driver,
+        "first_device_runtime_total_memory_bytes",
+        (zend_long) cuda_status.first_device_runtime_total_memory_bytes
     );
     add_assoc_string(&cuda_driver, "error", cuda_status.error);
     add_assoc_zval(return_value, "cuda_driver", &cuda_driver);
