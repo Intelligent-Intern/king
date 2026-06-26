@@ -58,6 +58,41 @@ static zend_result king_inference_openai_require_generation_backend(
         }
     }
 
+    if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
+        zval gpu_runtime;
+        zval *reason_value;
+        const char *reason = "gpu_decoder_kernel_not_implemented";
+
+        king_inference_gpu_runtime_status_from_model(model_object, &gpu_runtime);
+        reason_value = king_inference_array_find(&gpu_runtime, "reason");
+        if (reason_value != NULL && Z_TYPE_P(reason_value) == IS_STRING && Z_STRLEN_P(reason_value) > 0) {
+            reason = Z_STRVAL_P(reason_value);
+        }
+
+        message = strpprintf(
+            0,
+            "%s cannot generate with the selected King GPU model yet. "
+            "The model is registered for metadata and readiness inspection, "
+            "but gpu_runtime.generation_ready=false and "
+            "gpu_runtime.decoder_kernel_ready=false. "
+            "Primary gpu_runtime.reason=%s. King will not silently fall back to CPU for a GPU profile.",
+            endpoint_name,
+            reason
+        );
+        zval_ptr_dtor(&gpu_runtime);
+        if (has_error_response != NULL) {
+            *has_error_response = true;
+        }
+        result = king_inference_openai_error_response(
+            return_value,
+            400,
+            ZSTR_VAL(message),
+            "invalid_request_error"
+        );
+        zend_string_release(message);
+        return result;
+    }
+
     kind_name = king_inference_backend_kind_name(kind);
     message = strpprintf(
         0,

@@ -1415,6 +1415,8 @@ namespace {
      * collapsed. Options that request tool/function calls, multimodal/audio
      * output, prediction hints, or logprob output are rejected by the local
      * generation route until those features have a real King execution path.
+     * GPU models return an explicit readiness refusal while generation is not
+     * ready instead of silently falling back to CPU.
      * Options include
      * `read_timeout_ms`, `max_events`, and `max_idle_events` for the bounded
      * drain window, defaulting to `250`, `4096`, and `240`, plus

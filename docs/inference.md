@@ -1001,6 +1001,12 @@ provided. Native graph streams are stateless unless the payload or options set
 For `stream=false`, the helper drains into one OpenAI-shaped `chat.completion`
 JSON response. For `stream=true`, it returns a bounded `text/event-stream` body
 with `data: {chunk}` events and a final `data: [DONE]` marker.
+If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
+returns a precise OpenAI error while the GPU decoder kernel is not ready. The
+message states that the model is registered for metadata/readiness inspection,
+reports `gpu_runtime.generation_ready=false`,
+`gpu_runtime.decoder_kernel_ready=false`, includes the primary
+`gpu_runtime.reason`, and makes the no-silent-CPU-fallback rule explicit.
 
 ## Function, Example 1d: OpenAI-Compatible Model Router
 
