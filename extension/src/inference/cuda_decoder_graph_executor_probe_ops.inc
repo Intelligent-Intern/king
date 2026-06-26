@@ -26,7 +26,9 @@ static void king_inference_cuda_decoder_graph_executor_destroy_downstream_probes
     bool ffn_norm_initialized,
     zval *ffn_norm_probe,
     bool ffn_gate_up_initialized,
-    zval *ffn_gate_up_probe
+    zval *ffn_gate_up_probe,
+    bool ffn_swiglu_initialized,
+    zval *ffn_swiglu_probe
 ) {
     if (projection_initialized) {
         zval_ptr_dtor(projection_probe);
@@ -39,5 +41,38 @@ static void king_inference_cuda_decoder_graph_executor_destroy_downstream_probes
     }
     if (ffn_gate_up_initialized) {
         zval_ptr_dtor(ffn_gate_up_probe);
+    }
+    if (ffn_swiglu_initialized) {
+        zval_ptr_dtor(ffn_swiglu_probe);
+    }
+}
+
+static void king_inference_cuda_decoder_graph_executor_add_downstream_probes(
+    zval *result,
+    bool projection_initialized,
+    zval *projection_probe,
+    bool residual_initialized,
+    zval *residual_probe,
+    bool ffn_norm_initialized,
+    zval *ffn_norm_probe,
+    bool ffn_gate_up_initialized,
+    zval *ffn_gate_up_probe,
+    bool ffn_swiglu_initialized,
+    zval *ffn_swiglu_probe
+) {
+    if (projection_initialized) {
+        add_assoc_zval(result, "attention_output_projection_device_execution", projection_probe);
+    }
+    if (residual_initialized) {
+        add_assoc_zval(result, "attention_residual_device_execution", residual_probe);
+    }
+    if (ffn_norm_initialized) {
+        add_assoc_zval(result, "ffn_norm_device_execution", ffn_norm_probe);
+    }
+    if (ffn_gate_up_initialized) {
+        add_assoc_zval(result, "ffn_gate_up_projection_device_execution", ffn_gate_up_probe);
+    }
+    if (ffn_swiglu_initialized) {
+        add_assoc_zval(result, "ffn_swiglu_device_execution", ffn_swiglu_probe);
     }
 }

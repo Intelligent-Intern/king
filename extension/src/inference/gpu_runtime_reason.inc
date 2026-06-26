@@ -54,6 +54,9 @@ static void king_inference_gpu_decoder_blockers(king_inference_model_object *mod
     if (model == NULL || !model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available) {
         king_inference_gpu_status_append_reason(blockers, "gpu_decoder_graph_ffn_gate_up_projection_missing");
     }
+    if (model == NULL || !model->cuda_decoder_graph_executor_ffn_swiglu_execution_available) {
+        king_inference_gpu_status_append_reason(blockers, "gpu_decoder_graph_ffn_swiglu_missing");
+    }
     if (model == NULL || !model->cuda_decoder_prompt_loop_available) {
         king_inference_gpu_status_append_reason(blockers, "gpu_prompt_decoder_loop_missing");
     }

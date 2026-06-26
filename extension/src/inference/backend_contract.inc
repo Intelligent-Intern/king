@@ -200,6 +200,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_decoder_graph_attention_residual_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_ffn_norm_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_ffn_gate_up_projection_execution", gpu_backend);
+    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_swiglu_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_prompt_decoder_loop", gpu_backend);
     add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
     add_assoc_bool(return_value, "gpu_vram_admission", gpu_backend);

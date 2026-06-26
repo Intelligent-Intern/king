@@ -55,6 +55,7 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_attention_residual_execution_count = 0;
     model->cuda_decoder_graph_executor_ffn_norm_execution_count = 0;
     model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_count = 0;
+    model->cuda_decoder_graph_executor_ffn_swiglu_execution_count = 0;
     model->cuda_decoder_graph_executor_last_attention_stack_expected_heads = 0;
     model->cuda_decoder_graph_executor_last_attention_stack_prepared_heads = 0;
     model->cuda_decoder_graph_executor_last_attention_output_projection_width = 0;
@@ -62,6 +63,7 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_last_ffn_norm_width = 0;
     model->cuda_decoder_graph_executor_last_ffn_gate_rows = 0;
     model->cuda_decoder_graph_executor_last_ffn_up_rows = 0;
+    model->cuda_decoder_graph_executor_last_ffn_swiglu_width = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
@@ -84,4 +86,5 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_attention_residual_execution_available = false;
     model->cuda_decoder_graph_executor_ffn_norm_execution_available = false;
     model->cuda_decoder_graph_executor_ffn_gate_up_projection_execution_available = false;
+    model->cuda_decoder_graph_executor_ffn_swiglu_execution_available = false;
 }
