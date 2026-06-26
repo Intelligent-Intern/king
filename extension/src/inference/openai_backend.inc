@@ -39,6 +39,8 @@ static zend_result king_inference_openai_require_generation_backend(
         zval *graph = king_inference_array_find(payload, "graph");
         zval *graphs = king_inference_array_find(payload, "graphs");
         zval *graph_options = king_inference_array_find(payload, "graph_options");
+        zval *messages = king_inference_array_find(payload, "messages");
+        zval *prompt = king_inference_array_find(payload, "prompt");
 
         if ((graph != NULL && !king_inference_openai_array_is_object(graph))
             || (graphs != NULL && !king_inference_openai_array_is_list(graphs))
@@ -54,6 +56,10 @@ static zend_result king_inference_openai_require_generation_backend(
             );
         }
         if (graph != NULL || graphs != NULL) {
+            return SUCCESS;
+        }
+        if ((messages != NULL && king_inference_openai_array_is_list(messages))
+            || (prompt != NULL && Z_TYPE_P(prompt) == IS_STRING)) {
             return SUCCESS;
         }
     }

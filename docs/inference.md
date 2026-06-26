@@ -37,9 +37,14 @@ uses King's native GGUF loader, metadata parser, tokenizer lookup, paged
 KV-cache planning, public tensor views, bounded tensor dequantization, first
 CPU tensor/vector math, complete per-token decode graph construction, token
 selection from logits, and a read-only memory map of the model artifact. Native
-CPU streaming expects an explicit `graph` or `graphs` request and decodes the
+CPU streaming accepts explicit `graph` or `graphs` requests and decodes the
 selected token ids through the artifact tokenizer; it does not call an external
-inference runtime.
+inference runtime. For OpenAI-compatible plain-text chat requests, King renders
+the validated `messages` into a deterministic prompt, tokenizes that prompt
+with the loaded model tokenizer, runs prefix tokens through native CPU decode
+graphs without emitting them, emits generated assistant tokens from the final
+prompt state, and keeps that KV state transiently inside the one response
+without enabling persistent graph memory.
 
 When `backend` is omitted, King selects `king_native_cpu`. The process-runner
 backend is still available, but it must be selected intentionally with
@@ -1198,11 +1203,13 @@ The helper accepts the normalized King HTTP request array and owns the
 OpenAI-compatible endpoint contract for `POST /v1/chat/completions`. The request
 body is decoded as a Chat Completions JSON payload, `messages` are validated,
 and the loaded King model is used for both normal and streaming responses. For
-`king_native_cpu` models, the same route accepts an explicit `graph` object or
-`graphs` array in the JSON payload and emits OpenAI-shaped responses from the
-native graph-selected token stream. `graph_options` must be a JSON object when
-provided. Native graph streams are stateless unless the payload or options set
-`with_memory` or `with-memory` to `true`.
+`king_native_cpu` models, the same route accepts normal plain-text `messages`
+as well as an explicit `graph` object or `graphs` array in the JSON payload and
+emits OpenAI-shaped responses from the native CPU decoder. Plain text chat uses
+transient KV state for the prompt and generated tokens but does not enable the
+optional persistent graph-memory/cache policy. `graph_options` must be a JSON
+object when provided. Explicit native graph streams are stateless unless the
+payload or options set `with_memory` or `with-memory` to `true`.
 
 For `stream=false`, the helper drains native decoder content deltas into one
 OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.

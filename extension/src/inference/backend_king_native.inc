@@ -10,6 +10,13 @@ static zval *king_inference_king_native_graph_options(king_inference_stream_obje
     return options != NULL && king_inference_openai_array_is_object(options) ? options : NULL;
 }
 
+static zend_result king_inference_king_native_append_prompt_generated_tokens(
+    king_inference_model_object *model,
+    king_inference_stream_object *stream,
+    zval *prompt_text,
+    zval *graph_options,
+    zend_long max_tokens);
+
 static zend_result king_inference_king_native_stream_token_limit(
     king_inference_stream_object *stream,
     zval *graph_options,
@@ -441,6 +448,7 @@ static zend_result king_inference_king_native_prepare_events(
 ) {
     zval *graph = king_inference_array_find(&stream->request, "graph");
     zval *graphs = king_inference_array_find(&stream->request, "graphs");
+    zval *prompt_text = king_inference_array_find(&stream->request, "native_prompt_text");
     zval *request_graph_options = king_inference_array_find(&stream->request, "graph_options");
     zval *option_graph_options = king_inference_array_find(&stream->options, "graph_options");
     zval *graph_options = king_inference_king_native_graph_options(stream);
@@ -465,11 +473,11 @@ static zend_result king_inference_king_native_prepare_events(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King native stream graph_options must be an object array.");
         return FAILURE;
     }
-    if (graphs == NULL && graph == NULL) {
+    if (graphs == NULL && graph == NULL && prompt_text == NULL) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "King native CPU streaming requires a native graph or graphs request."
+            "King native CPU streaming requires a native graph, graphs, or prompt request."
         );
         return FAILURE;
     }
@@ -535,6 +543,19 @@ static zend_result king_inference_king_native_prepare_events(
             }
             emitted++;
         } ZEND_HASH_FOREACH_END();
+    } else if (prompt_text != NULL) {
+        if (king_inference_king_native_append_prompt_generated_tokens(
+                model,
+                stream,
+                prompt_text,
+                graph_options,
+                max_tokens
+            ) != SUCCESS) {
+            if (!Z_ISUNDEF(state)) {
+                zval_ptr_dtor(&state);
+            }
+            return FAILURE;
+        }
     } else if (king_inference_king_native_is_token_decode_graph(graph)) {
         if (king_inference_king_native_append_generated_tokens(model, stream, graph, graph_options, &state, with_memory, max_tokens) != SUCCESS) {
             if (!Z_ISUNDEF(state)) {
