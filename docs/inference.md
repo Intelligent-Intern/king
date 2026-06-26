@@ -55,7 +55,11 @@ graph builder, so each `tokens[position]` value enters the embedding operation
 and then flows through every resolved transformer layer in the native graph. The
 runner fails closed when `king_inference_graph_run()` does not return a
 non-empty `state.kv_cache`, because later generated tokens must inherit the KV
-entries written by earlier prompt and decode steps.
+entries written by earlier prompt and decode steps. It also owns the local
+special-token policy: the prompt gets at most one leading BOS token when the
+model metadata exposes one, generated BOS/EOS tokens stop generation before
+they are decoded to text, and configured stop strings are withheld from stdout
+instead of being emitted and recognized afterwards.
 
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
 `infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
@@ -504,7 +508,9 @@ Generation stream options are validated before the local runner process starts.
 finite numbers, `temperature` must be non-negative, `top_p` must be greater than
 zero and at most one, and `top_k` must be a non-negative integer. `stop` can be
 one non-empty string or one to four non-empty strings; invalid stop sequences are
-rejected before runner arguments are built.
+rejected before runner arguments are built. The runner also enforces the same
+direct-CLI stop contract and buffers the trailing prefix of each possible stop
+sequence so streamed output never includes the matched stop text.
 
 ## Function, Tensor Index and Tensor View
 

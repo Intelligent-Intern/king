@@ -140,6 +140,54 @@ function require_kv_state(array $result): array
     return $state;
 }
 
+function metadata_token_id(array $gguf, string $key): ?int
+{
+    if (!array_key_exists($key, $gguf)) {
+        return null;
+    }
+
+    $id = (int) $gguf[$key];
+    return $id >= 0 ? $id : null;
+}
+
+function prepare_prompt_tokens(array $tokens, ?int $bosTokenId, int $context): array
+{
+    $tokens = array_values(array_map('intval', $tokens));
+    if ($bosTokenId !== null && ($tokens === [] || $tokens[0] !== $bosTokenId)) {
+        array_unshift($tokens, $bosTokenId);
+    }
+    if ($tokens === []) {
+        fail('prompt produced no tokens');
+    }
+    if ($context > 0 && count($tokens) > $context) {
+        if ($bosTokenId !== null && $context > 1 && $tokens[0] === $bosTokenId) {
+            $tokens = array_merge([$bosTokenId], array_slice($tokens, -($context - 1)));
+        } else {
+            $tokens = array_slice($tokens, -$context);
+        }
+    }
+
+    return array_values($tokens);
+}
+
+function normalize_stop_sequences(array $stops): array
+{
+    if (count($stops) > 4) {
+        fail('at most four stop sequences are supported');
+    }
+
+    $unique = [];
+    foreach ($stops as $stop) {
+        $stop = (string) $stop;
+        if ($stop === '') {
+            fail('stop sequence must not be empty');
+        }
+        $unique[$stop] = $stop;
+    }
+
+    return array_values($unique);
+}
+
 function run_step(
     King\Inference\Model $model,
     int|array $token,
@@ -171,17 +219,84 @@ function run_step(
     return [(int) $payload[0], $nextState];
 }
 
-function should_stop(string $buffer, array $stops): bool
+function should_stop_on_token(int $token, ?int $bosTokenId, ?int $eosTokenId): bool
 {
+    if ($eosTokenId !== null && $token === $eosTokenId) {
+        return true;
+    }
+    if ($bosTokenId !== null && $token === $bosTokenId) {
+        return true;
+    }
+
+    return false;
+}
+
+function find_stop_offset(string $text, array $stops): ?int
+{
+    $offset = null;
     foreach ($stops as $stop) {
-        if ($stop !== '' && str_contains($buffer, $stop)) {
-            return true;
+        $position = strpos($text, $stop);
+        if ($position !== false && ($offset === null || $position < $offset)) {
+            $offset = $position;
         }
     }
+
+    return $offset;
+}
+
+function pending_stop_prefix_length(string $text, array $stops): int
+{
+    $keep = 0;
+    foreach ($stops as $stop) {
+        $max = min(strlen($stop) - 1, strlen($text));
+        for ($length = $max; $length > 0; $length--) {
+            if (substr($text, -$length) === substr($stop, 0, $length)) {
+                $keep = max($keep, $length);
+                break;
+            }
+        }
+    }
+
+    return $keep;
+}
+
+function write_output(string $text): void
+{
+    if ($text === '') {
+        return;
+    }
+
+    echo $text;
+    flush();
+}
+
+function emit_generated_text(string &$pending, string $piece, array $stops): bool
+{
+    if ($stops === []) {
+        write_output($piece);
+        return false;
+    }
+
+    $pending .= $piece;
+    $stopOffset = find_stop_offset($pending, $stops);
+    if ($stopOffset !== null) {
+        write_output(substr($pending, 0, $stopOffset));
+        $pending = '';
+        return true;
+    }
+
+    $keep = pending_stop_prefix_length($pending, $stops);
+    $emitLength = strlen($pending) - $keep;
+    if ($emitLength > 0) {
+        write_output(substr($pending, 0, $emitLength));
+        $pending = $keep > 0 ? substr($pending, -$keep) : '';
+    }
+
     return false;
 }
 
 $args = parse_args($argv);
+$stopSequences = normalize_stop_sequences($args['stops']);
 require_supported_execution($args);
 $model = model_load($args['model']);
 $info = king_inference_model_info($model);
@@ -195,18 +310,9 @@ $tokens = $encoded['tokens'] ?? [];
 if (!is_array($tokens)) {
     fail('tokenizer did not return token ids');
 }
-$tokens = array_values(array_map('intval', $tokens));
-$bos = (int) ($gguf['tokenizer_bos_id'] ?? -1);
-$eos = (int) ($gguf['tokenizer_eos_id'] ?? -1);
-if ($bos >= 0 && ($tokens === [] || $tokens[0] !== $bos)) {
-    array_unshift($tokens, $bos);
-}
-if ($tokens === []) {
-    fail('prompt produced no tokens');
-}
-if ((int) $args['context'] > 0 && count($tokens) > (int) $args['context']) {
-    $tokens = array_slice($tokens, -((int) $args['context']));
-}
+$bosTokenId = metadata_token_id($gguf, 'tokenizer_bos_id');
+$eosTokenId = metadata_token_id($gguf, 'tokenizer_eos_id');
+$tokens = prepare_prompt_tokens($tokens, $bosTokenId, (int) $args['context']);
 
 $graphOptions = graph_options($gguf);
 $state = null;
@@ -231,21 +337,22 @@ foreach (array_keys($tokens) as $index) {
     );
 }
 
-$buffer = '';
+$pendingText = '';
+$stoppedByText = false;
 $generated = 0;
 $position = count($tokens);
 while ($nextToken !== null && $generated < (int) $args['tokens']) {
-    if ($nextToken === $eos) {
+    if (should_stop_on_token($nextToken, $bosTokenId, $eosTokenId)) {
         break;
     }
 
     $piece = king_inference_token_decode($model, $nextToken);
-    echo $piece;
-    flush();
-    $buffer .= $piece;
     $generated++;
-
-    if (should_stop($buffer, $args['stops']) || $generated >= (int) $args['tokens']) {
+    if (emit_generated_text($pendingText, $piece, $stopSequences)) {
+        $stoppedByText = true;
+        break;
+    }
+    if ($generated >= (int) $args['tokens']) {
         break;
     }
 
@@ -259,4 +366,8 @@ while ($nextToken !== null && $generated < (int) $args['tokens']) {
         $graphOptions
     );
     $position++;
+}
+
+if (!$stoppedByText) {
+    write_output($pendingText);
 }

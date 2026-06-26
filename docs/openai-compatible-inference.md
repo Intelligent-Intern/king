@@ -205,9 +205,12 @@ controls return an OpenAI-shaped `400` response before any backend process is
 started.
 Chat Completions and legacy Completions also validate OpenAI `stop` as a
 string or an array of one to four non-empty strings and pass those stop
-sequences to the local generation runner. They accept `n` only when it is the
-integer `1`; requests for multiple independent choices return an OpenAI-shaped
-`400` instead of silently returning fewer choices than requested.
+sequences to the local generation runner. The runner withholds possible stop
+prefixes until they are known to be ordinary text, so the matched stop sequence
+is not included in the streamed or non-streamed response content. They accept
+`n` only when it is the integer `1`; requests for multiple independent choices
+return an OpenAI-shaped `400` instead of silently returning fewer choices than
+requested.
 
 The local generation routes also reject active requests for features that this
 runtime does not yet execute. Chat Completions rejects tool/function calling,
