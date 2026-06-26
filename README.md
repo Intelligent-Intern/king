@@ -373,7 +373,9 @@ The core programming model is:
   graph-backed native CPU token streaming without an external inference runtime.
   Plain-text OpenAI-compatible chat requests on `king_native_cpu` now compile
   validated `messages` into transient native CPU prompt/decode graphs instead
-  of requiring callers to provide `graph` or `graphs` manually.
+  of requiring callers to provide `graph` or `graphs` manually, and
+  `stream=true` returns OpenAI-compatible Chat Completions SSE chunks from the
+  same native event stream.
   Native graph streams are stateless by default; `king.inference_with_memory`
   sets the php.ini baseline and `with_memory` opts into carrying graph result
   state between decode steps. The stream layer can emit

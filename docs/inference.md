@@ -45,6 +45,10 @@ with the loaded model tokenizer, runs prefix tokens through native CPU decode
 graphs without emitting them, emits generated assistant tokens from the final
 prompt state, and keeps that KV state transiently inside the one response
 without enabling persistent graph memory.
+For `stream=true`, the same native CPU prompt path emits OpenAI-compatible SSE
+chunks from native token events, and `/v1/models` advertises that with
+`x_king.openai_chat_completions_stream=true` plus
+`x_king.capabilities.openai_chat_completions_stream=true`.
 
 When `backend` is omitted, King selects `king_native_cpu`. The process-runner
 backend is still available, but it must be selected intentionally with
@@ -1357,6 +1361,8 @@ OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
 Decoder text is treated as assistant content unless the request explicitly
 activates tools. For `stream=true`, it returns a bounded `text/event-stream`
 body with `data: {chunk}` events and a final `data: [DONE]` marker.
+For `king_native_cpu`, that streaming response is backed by native decoder
+events rather than the external process runner.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
 accepts `stream=false` plain-text `messages` when the native GPU prompt loop is
 ready. The route renders those messages into `native_prompt_text`, runs bounded
