@@ -258,6 +258,15 @@ $modelConfig = King\Inference::runtimeModelConfig($config);
 $model = King\Inference::runtimeModelLoad($config);
 ```
 
+The GPU decoder graph now executes the first real attention bridge after KV
+aggregation: the retained device-side attention context is copied into the
+matching `stack` slot by the CUDA vector copy-to-offset primitive. That status
+is exposed as `decoder_graph_attention_stack_slot_execution_ready` and
+`attention_stack_slot_device_execution_ready`. This is still an intermediate
+decoder contract. Plain-text GPU generation remains blocked until King fills
+the complete multi-head stack, runs the attention output projection and
+residual add, finishes the FFN path, and returns bounded logits to the sampler.
+
 GPU readiness is inspectable before model load:
 
 ```php

@@ -45,6 +45,10 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_last_kv_attention_head = 0;
     model->cuda_decoder_graph_executor_last_kv_attention_slot_start = 0;
     model->cuda_decoder_graph_executor_last_kv_attention_slot_count = 0;
+    model->cuda_decoder_graph_executor_attention_stack_slot_execution_count = 0;
+    model->cuda_decoder_graph_executor_last_attention_stack_width = 0;
+    model->cuda_decoder_graph_executor_last_attention_stack_input_index = 0;
+    model->cuda_decoder_graph_executor_last_attention_stack_input_count = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
@@ -60,6 +64,7 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_kv_head_prepare_execution_available = false;
     model->cuda_decoder_graph_executor_kv_write_execution_available = false;
     model->cuda_decoder_graph_executor_kv_attention_execution_available = false;
+    model->cuda_decoder_graph_executor_attention_stack_slot_execution_available = false;
 }
 
 static void king_inference_cuda_decoder_graph_executor_set_error(
@@ -352,6 +357,10 @@ static void king_inference_cuda_decoder_graph_executor_init(
         && model->cuda_attention_scores_f32_available
         && model->cuda_attention_softmax_f32_available
         && model->cuda_attention_values_f32_available;
+    model->cuda_decoder_graph_executor_attention_stack_slot_execution_available =
+        model->cuda_decoder_graph_executor_kv_attention_execution_available
+        && model->cuda_vector_copy_to_offset_available
+        && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -421,6 +430,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         &executor,
         "kv_attention_execution_available",
         model->cuda_decoder_graph_executor_kv_attention_execution_available
+    );
+    add_assoc_bool(
+        &executor,
+        "attention_stack_slot_execution_available",
+        model->cuda_decoder_graph_executor_attention_stack_slot_execution_available
     );
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
@@ -596,6 +610,26 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "last_kv_attention_slot_count",
         (zend_long) model->cuda_decoder_graph_executor_last_kv_attention_slot_count
     );
+    add_assoc_long(
+        &executor,
+        "attention_stack_slot_device_executions",
+        (zend_long) model->cuda_decoder_graph_executor_attention_stack_slot_execution_count
+    );
+    add_assoc_long(
+        &executor,
+        "last_attention_stack_width",
+        (zend_long) model->cuda_decoder_graph_executor_last_attention_stack_width
+    );
+    add_assoc_long(
+        &executor,
+        "last_attention_stack_input_index",
+        (zend_long) model->cuda_decoder_graph_executor_last_attention_stack_input_index
+    );
+    add_assoc_long(
+        &executor,
+        "last_attention_stack_input_count",
+        (zend_long) model->cuda_decoder_graph_executor_last_attention_stack_input_count
+    );
     if (model->cuda_decoder_graph_executor_last_embedding_token_available
         && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
         add_assoc_long(
@@ -678,6 +712,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         return_value,
         "decoder_graph_kv_attention_execution_ready",
         model->cuda_decoder_graph_executor_kv_attention_execution_available
+    );
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_attention_stack_slot_execution_ready",
+        model->cuda_decoder_graph_executor_attention_stack_slot_execution_available
     );
 }
 
