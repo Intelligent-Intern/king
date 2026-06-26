@@ -66,8 +66,9 @@ It resolves a local GGUF artifact from `KING_INFERENCE_HELLO_MODEL_PATH`,
 `KING_INFERENCE_CPU_MODEL_PATH`, `KING_INFERENCE_MODEL_PATH`,
 `KING_INFERENCE_TEST_MODEL_PATH`, or
 `var/inference-models/gemma3-1b.gguf`, then calls `bin/king-local-infer` with
-temperature `0`, `top_k=1`, `top_p=1`, and a fixed seed. The command captures
-the generated text, prints it, and exits non-zero unless the model output
+the explicit `argmax` sampler, temperature `0`, `top_k=1`, `top_p=1`, and a
+fixed seed. The command captures the generated text, prints it, and exits
+non-zero unless the model output
 contains `Hello world`. It does not contact Ollama, vLLM, or another model
 server; the only model runtime in that path is the King extension plus the local
 GGUF artifact.
@@ -754,7 +755,13 @@ returned `state` into the next token step. `kv_attention` is the compact path fo
 token decoding: it reads a strict slot range from `state.kv_cache`, computes
 scaled QK softmax, and returns the weighted context vector from the cached value
 vectors. `argmax_token` and `sample_token` are the native token-selection
-finishers for logits. `sample_token` supports temperature, top-k, top-p, optional
+finishers for logits. `king_inference_token_decode_graph()` emits
+`argmax_token` directly when options contain `sampler => 'argmax'` or
+`temperature => 0`; the returned graph and `terminal` metadata expose
+`token_selection=argmax` and `token_selection_op=argmax_token` for that path.
+Argmax selection is deterministic: the highest logit wins, and equal logits
+keep the lowest token index.
+`sample_token` supports temperature, top-k, top-p, optional
 seeded deterministic sampling, `sample_index` as a per-step seed salt, and
 `token_offset` for sharded vocab projections. Graph numeric options such as
 sampling temperature, top-p, vector scales, softmax scale, KV-attention scale,
@@ -765,6 +772,8 @@ paged attention needs.
 
 Set graph option `return_outputs => false` for decoder loops that only need
 `final` and `state`; the default stays `true` for interactive inspection.
+Use `sampler => 'sample'` to force the sampling finalizer when temperature is
+positive. Any other sampler name is rejected while the graph is built.
 
 ## Function, Paged KV-Cache Plan
 

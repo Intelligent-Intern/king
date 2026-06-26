@@ -35,6 +35,49 @@ static bool king_inference_decode_graph_bool_option(zval *options, const char *k
     return zend_is_true(value);
 }
 
+static zend_result king_inference_decode_graph_sampler_mode(
+    zval *options,
+    const char **mode_out,
+    double *temperature_out
+) {
+    zval *sampler = king_inference_array_find(options, "sampler");
+    double temperature = 0.7;
+
+    *mode_out = "sample";
+    *temperature_out = temperature;
+    if (sampler != NULL) {
+        if (Z_TYPE_P(sampler) != IS_STRING || Z_STRLEN_P(sampler) == 0) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph sampler must be 'argmax' or 'sample'.");
+            return FAILURE;
+        }
+        if (zend_string_equals_literal(Z_STR_P(sampler), "argmax")) {
+            *mode_out = "argmax";
+            *temperature_out = 0.0;
+            return SUCCESS;
+        }
+        if (!zend_string_equals_literal(Z_STR_P(sampler), "sample")) {
+            zend_throw_exception_ex(
+                king_ce_validation_exception,
+                0,
+                "King inference token decode graph sampler '%s' is not supported; expected 'argmax' or 'sample'.",
+                Z_STRVAL_P(sampler)
+            );
+            return FAILURE;
+        }
+    }
+    if (king_inference_decode_graph_double_option(options, "temperature", 0.7, &temperature) != SUCCESS) {
+        return FAILURE;
+    }
+    if (temperature < 0.0) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph temperature must be non-negative.");
+        return FAILURE;
+    }
+
+    *temperature_out = temperature;
+    *mode_out = temperature == 0.0 ? "argmax" : "sample";
+    return SUCCESS;
+}
+
 static zend_result king_inference_decode_graph_token_id_from_source(
     king_inference_model_object *model,
     zval *source,
@@ -323,30 +366,40 @@ static void king_inference_decode_graph_add_stack(zval *ops, const char *id, zva
     king_inference_decode_graph_push_op(ops, &op);
 }
 
-static void king_inference_decode_graph_add_sampler(
+static zend_result king_inference_decode_graph_add_sampler(
     zval *ops,
     const char *logits,
     zend_ulong position,
-    zval *options
+    zval *options,
+    const char **mode_out,
+    const char **op_out
 ) {
     zval op;
-    zval *sampler = king_inference_array_find(options, "sampler");
+    const char *mode;
+    double temperature;
 
-    if (sampler != NULL && Z_TYPE_P(sampler) == IS_STRING && zend_string_equals_literal(Z_STR_P(sampler), "argmax")) {
+    if (king_inference_decode_graph_sampler_mode(options, &mode, &temperature) != SUCCESS) {
+        return FAILURE;
+    }
+    *mode_out = mode;
+    if (strcmp(mode, "argmax") == 0) {
         king_inference_decode_graph_start_op(&op, "next_token", "argmax_token");
         add_assoc_string(&op, "logits", logits);
         king_inference_decode_graph_push_op(ops, &op);
-        return;
+        *op_out = "argmax_token";
+        return SUCCESS;
     }
 
     king_inference_decode_graph_start_op(&op, "next_token", "sample_token");
     add_assoc_string(&op, "logits", logits);
-    add_assoc_double(&op, "temperature", king_inference_double_from_array(options, "temperature", 0.7));
+    add_assoc_double(&op, "temperature", temperature);
     add_assoc_long(&op, "top_k", king_inference_long_from_array(options, "top_k", 40));
     add_assoc_double(&op, "top_p", king_inference_double_from_array(options, "top_p", 0.95));
     add_assoc_long(&op, "seed", king_inference_long_from_array(options, "seed", 0));
     add_assoc_long(&op, "sample_index", (zend_long) position);
     king_inference_decode_graph_push_op(ops, &op);
+    *op_out = "sample_token";
+    return SUCCESS;
 }
 
 static zend_ulong king_inference_decode_graph_kv_head(zend_ulong head, zend_ulong heads, zend_ulong kv_heads)
@@ -390,6 +443,8 @@ static zend_result king_inference_token_decode_graph_array(
     bool emit_token = king_inference_decode_graph_bool_option(options, "emit_token", true);
     bool emit_logits = king_inference_decode_graph_bool_option(options, "emit_logits", false);
     bool needs_logits = emit_token || emit_logits;
+    const char *token_selection = "none";
+    const char *token_selection_op = NULL;
     double epsilon;
     double rope_base;
     char final_hidden_id[64];
@@ -590,7 +645,14 @@ static zend_result king_inference_token_decode_graph_array(
         king_inference_decode_graph_add_linear(&ops, "logits", "final_norm", output_projection, vocab);
     }
     if (emit_token) {
-        king_inference_decode_graph_add_sampler(&ops, "logits", position, options);
+        if (king_inference_decode_graph_add_sampler(&ops, "logits", position, options, &token_selection, &token_selection_op) != SUCCESS) {
+            zval_ptr_dtor(&ops);
+            if (output_projection != NULL) {
+                zend_string_release(output_projection);
+            }
+            zend_string_release(final_norm);
+            return FAILURE;
+        }
     }
 
     array_init(return_value);
@@ -602,6 +664,10 @@ static zend_result king_inference_token_decode_graph_array(
     add_assoc_long(return_value, "attention_head_count_kv", (zend_long) kv_heads);
     add_assoc_long(return_value, "attention_key_length", (zend_long) key_length);
     add_assoc_long(return_value, "attention_value_length", (zend_long) value_length);
+    add_assoc_string(return_value, "token_selection", token_selection);
+    if (token_selection_op != NULL) {
+        add_assoc_string(return_value, "token_selection_op", token_selection_op);
+    }
     add_assoc_zval(return_value, "ops", &ops);
     add_assoc_string(return_value, "output", emit_token ? "next_token" : (emit_logits ? "logits" : "final_norm"));
     {
@@ -619,6 +685,10 @@ static zend_result king_inference_token_decode_graph_array(
         }
         add_assoc_bool(&terminal, "emits_token", emit_token);
         add_assoc_bool(&terminal, "emits_logits", needs_logits);
+        add_assoc_string(&terminal, "token_selection", token_selection);
+        if (token_selection_op != NULL) {
+            add_assoc_string(&terminal, "token_selection_op", token_selection_op);
+        }
         if (needs_logits) {
             add_assoc_string(&terminal, "logits", "logits");
             add_assoc_str(&terminal, "output_projection_tensor", zend_string_copy(output_projection));

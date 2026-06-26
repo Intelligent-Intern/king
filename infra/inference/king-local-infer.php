@@ -26,6 +26,7 @@ function parse_args(array $argv): array
         'seed' => 0,
         'context' => 0,
         'gpu_layers' => 0,
+        'sampler' => null,
         'stops' => [],
     ];
 
@@ -60,6 +61,9 @@ function parse_args(array $argv): array
                 break;
             case '--top-p':
                 $options['top_p'] = min(1.0, max(0.001, (float) $next()));
+                break;
+            case '--sampler':
+                $options['sampler'] = $next();
                 break;
             case '--seed':
                 $options['seed'] = (int) $next();
@@ -324,6 +328,9 @@ $sample = [
     'top_p' => (float) $args['top_p'],
     'seed' => (int) $args['seed'],
 ];
+if (is_string($args['sampler']) && $args['sampler'] !== '') {
+    $sample['sampler'] = $args['sampler'];
+}
 
 foreach (array_keys($tokens) as $index) {
     [$nextToken, $state] = run_step(

@@ -38,6 +38,7 @@ OUTPUT="$(
     -m "$MODEL" \
     -p "$PROMPT" \
     -n "$TOKENS" \
+    --sampler argmax \
     --temperature 0 \
     --top-k 1 \
     --top-p 1 \
