@@ -119,6 +119,13 @@ static bool king_inference_backend_kind_is_available(king_inference_backend_kind
         || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
 }
 
+static bool king_inference_backend_kind_allows_model_registration(king_inference_backend_kind kind)
+{
+    return kind == KING_INFERENCE_BACKEND_LOCAL
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
+        || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+}
+
 static void king_inference_backend_capabilities_array(king_inference_backend_kind kind, zval *return_value)
 {
     array_init(return_value);
@@ -127,7 +134,7 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "streaming", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
     add_assoc_bool(return_value, "openai_chat_completions_stream", kind == KING_INFERENCE_BACKEND_LOCAL);
     add_assoc_bool(return_value, "cancellable", kind != KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
-    add_assoc_bool(return_value, "model_registration", true);
+    add_assoc_bool(return_value, "model_registration", king_inference_backend_kind_allows_model_registration(kind));
     add_assoc_bool(return_value, "process_runner", kind == KING_INFERENCE_BACKEND_LOCAL);
     add_assoc_bool(return_value, "native_runtime", kind != KING_INFERENCE_BACKEND_LOCAL);
     add_assoc_bool(return_value, "native_model_loader", true);

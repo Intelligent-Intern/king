@@ -285,6 +285,14 @@ therefore exposes the configured large model with explicit
 `x_king.gpu_runtime` metadata, but refuses GPU generation instead of burning the
 CPU accidentally.
 
+`king_native_gpu` model registration is still allowed. Registration means King
+can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
+indexes, map the file for native access, and expose the model through
+`/v1/models`. It does not mean GPU token generation is available. The backend
+capabilities keep `model_registration=true`, while `implemented=false`,
+`streaming=false`, and `token_generation=false` until the GPU decoder kernel is
+present.
+
 ## Internal Backend Layout
 
 The public API stays stable while backend internals can be optimized one module

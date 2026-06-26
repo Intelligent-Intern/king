@@ -1279,9 +1279,12 @@ namespace {
      * `king_native_cpu` backend exposes native GGUF metadata, an internal
      * tensor index, native tokenizer lookup, paged KV-cache planning, native
      * graph-backed token streaming, and read-only model mapping without an
-     * external inference runtime. Local runner streams preflight the runner
-     * executable before fork/exec. GPU use is disabled by default and requires
-     * explicit config plus thermal policy when enabled. GPU config is strict:
+     * external inference runtime. The `king_native_gpu` backend may register
+     * a GGUF artifact and expose metadata before GPU token generation is ready;
+     * its backend capabilities keep streaming and token generation disabled
+     * until the decoder kernel exists. Local runner streams preflight the
+     * runner executable before fork/exec. GPU use is disabled by default and
+     * requires explicit config plus thermal policy when enabled. GPU config is strict:
      * `gpu.enabled` and `gpu.thermal.allow_unmonitored_gpu` must be booleans,
      * `gpu.max_gpu_layers`, `gpu.vram_reserve_mb`, and `gpu.min_free_vram_mb`
      * must be non-negative integers,

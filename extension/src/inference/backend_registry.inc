@@ -6,11 +6,11 @@ static zend_result king_inference_backend_validate_model_config(zval *config, co
         return FAILURE;
     }
 
-    if (!king_inference_backend_kind_is_available(kind)) {
+    if (!king_inference_backend_kind_allows_model_registration(kind)) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "%s() backend '%s' is part of the King inference contract but is not implemented in this build.",
+            "%s() backend '%s' cannot register King inference models in this build.",
             function_name,
             king_inference_backend_kind_name(kind)
         );
