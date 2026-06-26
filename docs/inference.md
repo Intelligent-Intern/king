@@ -400,7 +400,9 @@ without handing the model to an external runtime.
 `King\Inference\Model::info()` and `king_inference_model_info()` expose backend
 metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
 `runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
-`backend_capabilities`.
+`backend_capabilities`. For `king_native_gpu`, model info also exposes
+`decoder_kernel_ready=false` directly, so clients do not need to infer decoder
+state from model registration or backend name.
 The `gguf` entry contains `architecture`, `tokenizer_model`,
 `tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
 status fields when the source artifact provides them. Native backend info

@@ -77,6 +77,11 @@ static void king_inference_backend_model_info(king_inference_model_object *inter
         add_assoc_bool(return_value, "runner_executable", runner_executable);
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
         king_inference_king_native_model_info(intern, return_value);
+    } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
+        add_assoc_string(return_value, "engine", "king_native_gpu");
+        add_assoc_string(return_value, "loader", "king_gguf_structure");
+        add_assoc_bool(return_value, "external_runtime", false);
+        add_assoc_bool(return_value, "decoder_kernel_ready", false);
     }
 
     king_inference_backend_capabilities_array(kind, &capabilities);
