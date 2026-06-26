@@ -9,10 +9,13 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_graph_count = 0;
     model->cuda_decoder_graph_executor_last_op_count = 0;
     model->cuda_decoder_graph_executor_last_supported_op_count = 0;
+    model->cuda_decoder_graph_executor_result_count = 0;
+    model->cuda_decoder_graph_executor_last_result_op_count = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
     model->cuda_decoder_graph_executor_sampling_readback_available = false;
+    model->cuda_decoder_graph_executor_result_contract_available = false;
 }
 
 static void king_inference_cuda_decoder_graph_executor_set_error(
@@ -140,6 +143,103 @@ static zend_result king_inference_cuda_decoder_graph_executor_validate_graph(
     return SUCCESS;
 }
 
+static void king_inference_cuda_decoder_graph_executor_copy_string_field(
+    zval *target,
+    zval *source,
+    const char *key
+) {
+    zval *value = king_inference_array_find(source, key);
+
+    if (value != NULL && Z_TYPE_P(value) == IS_STRING) {
+        add_assoc_str(target, key, zend_string_copy(Z_STR_P(value)));
+    }
+}
+
+static void king_inference_cuda_decoder_graph_executor_copy_long_field(
+    zval *target,
+    zval *source,
+    const char *key
+) {
+    zval *value = king_inference_array_find(source, key);
+
+    if (value != NULL && Z_TYPE_P(value) == IS_LONG) {
+        add_assoc_long(target, key, Z_LVAL_P(value));
+    }
+}
+
+static void king_inference_cuda_decoder_graph_executor_copy_bool_field(
+    zval *target,
+    zval *source,
+    const char *key
+) {
+    zval *value = king_inference_array_find(source, key);
+
+    if (value != NULL) {
+        add_assoc_bool(target, key, zend_is_true(value));
+    }
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_prepare_result(
+    king_inference_model_object *model,
+    zval *graph,
+    zval *result
+) {
+    zval terminal;
+    zval *graph_terminal;
+    bool has_terminal = false;
+
+    if (king_inference_cuda_decoder_graph_executor_validate_graph(model, graph) != SUCCESS) {
+        return FAILURE;
+    }
+
+    array_init(result);
+    add_assoc_string(result, "type", "gpu_decoder_graph_execution_result");
+    add_assoc_string(result, "backend", "king_native_gpu");
+    add_assoc_bool(result, "result_contract_ready", true);
+    add_assoc_bool(result, "graph_validated", true);
+    add_assoc_bool(result, "device_execution_result_ready", false);
+    add_assoc_bool(result, "token_result_ready", false);
+    add_assoc_bool(result, "decoded_token_ready", false);
+    add_assoc_bool(result, "silent_cpu_fallback", false);
+    add_assoc_long(result, "op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
+    add_assoc_long(
+        result,
+        "supported_op_count",
+        (zend_long) model->cuda_decoder_graph_executor_last_supported_op_count
+    );
+    king_inference_cuda_decoder_graph_executor_copy_string_field(result, graph, "graph_type");
+    king_inference_cuda_decoder_graph_executor_copy_string_field(result, graph, "output");
+    king_inference_cuda_decoder_graph_executor_copy_string_field(result, graph, "token_selection");
+    king_inference_cuda_decoder_graph_executor_copy_string_field(result, graph, "token_selection_op");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "token_id");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "position");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "block_count");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "attention_head_count");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "attention_head_count_kv");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "attention_key_length");
+    king_inference_cuda_decoder_graph_executor_copy_long_field(result, graph, "attention_value_length");
+
+    graph_terminal = king_inference_array_find(graph, "terminal");
+    array_init(&terminal);
+    if (graph_terminal != NULL && Z_TYPE_P(graph_terminal) == IS_ARRAY) {
+        has_terminal = true;
+        king_inference_cuda_decoder_graph_executor_copy_string_field(&terminal, graph_terminal, "hidden_output");
+        king_inference_cuda_decoder_graph_executor_copy_string_field(&terminal, graph_terminal, "final_norm");
+        king_inference_cuda_decoder_graph_executor_copy_string_field(&terminal, graph_terminal, "logits");
+        king_inference_cuda_decoder_graph_executor_copy_string_field(&terminal, graph_terminal, "token_selection");
+        king_inference_cuda_decoder_graph_executor_copy_string_field(&terminal, graph_terminal, "token_selection_op");
+        king_inference_cuda_decoder_graph_executor_copy_bool_field(&terminal, graph_terminal, "emits_token");
+        king_inference_cuda_decoder_graph_executor_copy_bool_field(&terminal, graph_terminal, "emits_logits");
+    }
+    add_assoc_bool(result, "terminal_present", has_terminal);
+    add_assoc_zval(result, "terminal", &terminal);
+
+    model->cuda_decoder_graph_executor_result_count++;
+    model->cuda_decoder_graph_executor_last_result_op_count =
+        model->cuda_decoder_graph_executor_last_op_count;
+    return SUCCESS;
+}
+
 static void king_inference_cuda_decoder_graph_executor_release(king_inference_model_object *model)
 {
     king_inference_cuda_decoder_graph_executor_reset_fields(model);
@@ -168,6 +268,7 @@ static void king_inference_cuda_decoder_graph_executor_init(
     model->cuda_decoder_graph_executor_available = true;
     model->cuda_decoder_graph_executor_token_decode_available = true;
     model->cuda_decoder_graph_executor_sampling_readback_available = true;
+    model->cuda_decoder_graph_executor_result_contract_available = true;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -188,6 +289,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "sampling_readback_available",
         model->cuda_decoder_graph_executor_sampling_readback_available
     );
+    add_assoc_bool(
+        &executor,
+        "result_contract_available",
+        model->cuda_decoder_graph_executor_result_contract_available
+    );
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
     add_assoc_long(
@@ -195,6 +301,13 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         "last_supported_op_count",
         (zend_long) model->cuda_decoder_graph_executor_last_supported_op_count
     );
+    add_assoc_long(&executor, "result_envelopes", (zend_long) model->cuda_decoder_graph_executor_result_count);
+    add_assoc_long(
+        &executor,
+        "last_result_op_count",
+        (zend_long) model->cuda_decoder_graph_executor_last_result_op_count
+    );
+    add_assoc_bool(&executor, "device_execution_result_ready", false);
     add_assoc_long(&executor, "result", model->cuda_decoder_graph_executor_result);
     add_assoc_string(&executor, "error", model->cuda_decoder_graph_executor_error);
 

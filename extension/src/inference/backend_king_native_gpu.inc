@@ -85,24 +85,27 @@ static zend_result king_inference_king_native_gpu_validate_stream_request(
     return SUCCESS;
 }
 
-static zend_result king_inference_king_native_gpu_validate_graph_requests(
+static zend_result king_inference_king_native_gpu_emit_graph_results(
     king_inference_model_object *model,
     king_inference_stream_object *stream
 ) {
     zval *graph = king_inference_array_find(&stream->request, "graph");
     zval *graphs = king_inference_array_find(&stream->request, "graphs");
     zval *entry;
-    zval event;
+    zval graph_result;
     zend_long validated = 0;
 
     if (graph != NULL) {
-        if (king_inference_cuda_decoder_graph_executor_validate_graph(model, graph) != SUCCESS) {
+        ZVAL_UNDEF(&graph_result);
+        if (king_inference_cuda_decoder_graph_executor_prepare_result(model, graph, &graph_result) != SUCCESS) {
             return FAILURE;
         }
+        add_next_index_zval(&stream->native_events, &graph_result);
         validated++;
     }
     if (graphs != NULL) {
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(graphs), entry) {
+            ZVAL_UNDEF(&graph_result);
             if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
                 king_inference_cuda_decoder_graph_executor_set_error(
                     model,
@@ -111,9 +114,10 @@ static zend_result king_inference_king_native_gpu_validate_graph_requests(
                 );
                 return FAILURE;
             }
-            if (king_inference_cuda_decoder_graph_executor_validate_graph(model, entry) != SUCCESS) {
+            if (king_inference_cuda_decoder_graph_executor_prepare_result(model, entry, &graph_result) != SUCCESS) {
                 return FAILURE;
             }
+            add_next_index_zval(&stream->native_events, &graph_result);
             validated++;
         } ZEND_HASH_FOREACH_END();
     }
@@ -121,13 +125,6 @@ static zend_result king_inference_king_native_gpu_validate_graph_requests(
         return SUCCESS;
     }
 
-    array_init(&event);
-    add_assoc_string(&event, "type", "gpu_decoder_graph_executor_contract");
-    add_assoc_string(&event, "backend", "king_native_gpu");
-    add_assoc_bool(&event, "graphs_validated", true);
-    add_assoc_bool(&event, "device_execution_result_ready", false);
-    add_assoc_long(&event, "validated_graphs", validated);
-    add_next_index_zval(&stream->native_events, &event);
     return SUCCESS;
 }
 
@@ -151,6 +148,11 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_bool(&event, "device_vector_ops_ready", model->cuda_device_vector_ops_available);
     add_assoc_bool(&event, "device_kv_cache_ready", model->cuda_device_kv_cache_available);
     add_assoc_bool(&event, "decoder_graph_executor_ready", model->cuda_decoder_graph_executor_available);
+    add_assoc_bool(
+        &event,
+        "decoder_graph_result_contract_ready",
+        model->cuda_decoder_graph_executor_result_contract_available
+    );
     add_assoc_bool(&event, "decoder_prompt_loop_ready", model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
@@ -204,7 +206,7 @@ static zend_result king_inference_king_native_gpu_stream_start(
             return FAILURE;
         }
         if (prompt_text == NULL
-            && king_inference_king_native_gpu_validate_graph_requests(model, stream) != SUCCESS) {
+            && king_inference_king_native_gpu_emit_graph_results(model, stream) != SUCCESS) {
             return FAILURE;
         }
     }
@@ -228,6 +230,11 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_bool(return_value, "device_vector_ops_ready", intern->cuda_device_vector_ops_available);
     add_assoc_bool(return_value, "device_kv_cache_ready", intern->cuda_device_kv_cache_available);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", intern->cuda_decoder_graph_executor_available);
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_result_contract_ready",
+        intern->cuda_decoder_graph_executor_result_contract_available
+    );
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);

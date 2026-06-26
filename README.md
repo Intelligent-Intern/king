@@ -393,15 +393,20 @@ The core programming model is:
   slot writes, RMSNorm, RoPE, attention score, attention softmax, attention
   value aggregation, FFN/SwiGLU, final output projection paths, bounded top-K
   logits readback, and a decoder graph executor contract for the complete
-  token-decode op set. The native GPU prompt-loop admission path can tokenize
-  prompt text, build token-decode graphs, and validate those graphs against the
-  GPU executor without falling back to CPU execution. The GPU
+  token-decode op set. The executor also exposes a graph result envelope for
+  native GPU graph streams, carrying graph, terminal, and token-selection
+  metadata while explicitly refusing to claim decoded token output before
+  device execution results exist. The native GPU prompt-loop admission path can
+  tokenize prompt text, build token-decode graphs, and validate those graphs
+  into result envelopes against the GPU executor without falling back to CPU
+  execution. The GPU
   backend now uses the same native stream object contract as the CPU backend
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes the remaining bridge explicitly: the prompt loop still
-  needs device graph execution results before it may emit decoded tokens.
+  GPU metadata exposes the remaining bridge explicitly: the result envelopes
+  still need device graph execution results before the prompt loop may emit
+  decoded tokens.
   Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and

@@ -9,11 +9,13 @@ static void king_inference_cuda_decoder_prompt_loop_reset_fields(king_inference_
     model->cuda_decoder_prompt_loop_count = 0;
     model->cuda_decoder_prompt_loop_last_prompt_tokens = 0;
     model->cuda_decoder_prompt_loop_last_validated_graphs = 0;
+    model->cuda_decoder_prompt_loop_last_result_envelopes = 0;
     model->cuda_decoder_prompt_loop_last_max_tokens = 0;
     model->cuda_decoder_prompt_loop_attempted = false;
     model->cuda_decoder_prompt_loop_available = false;
     model->cuda_decoder_prompt_loop_tokenizer_ready = false;
     model->cuda_decoder_prompt_loop_graph_validation_ready = false;
+    model->cuda_decoder_prompt_loop_result_contract_ready = false;
 }
 
 static void king_inference_cuda_decoder_prompt_loop_set_error(
@@ -64,6 +66,8 @@ static void king_inference_cuda_decoder_prompt_loop_init(
         king_inference_cuda_decoder_prompt_loop_tokenizer_ready(model);
     model->cuda_decoder_prompt_loop_graph_validation_ready =
         model->cuda_decoder_graph_executor_available;
+    model->cuda_decoder_prompt_loop_result_contract_ready =
+        model->cuda_decoder_graph_executor_result_contract_available;
 
     if (!model->cuda_decoder_prompt_loop_tokenizer_ready) {
         king_inference_cuda_decoder_prompt_loop_set_error(
@@ -78,6 +82,14 @@ static void king_inference_cuda_decoder_prompt_loop_init(
             model,
             -1,
             "cuda_decoder_prompt_loop_graph_executor_unavailable"
+        );
+        return;
+    }
+    if (!model->cuda_decoder_prompt_loop_result_contract_ready) {
+        king_inference_cuda_decoder_prompt_loop_set_error(
+            model,
+            -1,
+            "cuda_decoder_prompt_loop_result_contract_unavailable"
         );
         return;
     }
@@ -100,6 +112,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     zend_ulong token_count = 0;
     zend_ulong position;
     size_t validated_graphs = 0;
+    size_t result_envelopes = 0;
 
     ZVAL_UNDEF(&encoded);
     ZVAL_UNDEF(&tokenized_prompt);
@@ -140,11 +153,16 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     king_inference_king_native_prompt_decode_options(stream, &decode_options);
     for (position = 0; position < token_count; position++) {
         zval graph;
+        zval graph_result;
 
         ZVAL_UNDEF(&graph);
+        ZVAL_UNDEF(&graph_result);
         add_assoc_bool(&decode_options, "emit_token", position + 1 == token_count);
         if (king_inference_token_decode_graph_array(model, &tokenized_prompt, position, &decode_options, &graph) != SUCCESS
-            || king_inference_cuda_decoder_graph_executor_validate_graph(model, &graph) != SUCCESS) {
+            || king_inference_cuda_decoder_graph_executor_prepare_result(model, &graph, &graph_result) != SUCCESS) {
+            if (!Z_ISUNDEF(graph_result)) {
+                zval_ptr_dtor(&graph_result);
+            }
             if (!Z_ISUNDEF(graph)) {
                 zval_ptr_dtor(&graph);
             }
@@ -159,12 +177,15 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
             return FAILURE;
         }
         validated_graphs++;
+        result_envelopes++;
+        zval_ptr_dtor(&graph_result);
         zval_ptr_dtor(&graph);
     }
 
     model->cuda_decoder_prompt_loop_count++;
     model->cuda_decoder_prompt_loop_last_prompt_tokens = token_count;
     model->cuda_decoder_prompt_loop_last_validated_graphs = validated_graphs;
+    model->cuda_decoder_prompt_loop_last_result_envelopes = result_envelopes;
     model->cuda_decoder_prompt_loop_last_max_tokens = max_tokens;
     model->cuda_decoder_prompt_loop_result = 0;
     model->cuda_decoder_prompt_loop_error[0] = '\0';
@@ -174,10 +195,12 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     add_assoc_string(&event, "backend", "king_native_gpu");
     add_assoc_bool(&event, "prompt_loop_ready", true);
     add_assoc_bool(&event, "prompt_graphs_validated", true);
+    add_assoc_bool(&event, "graph_result_contract_ready", true);
     add_assoc_bool(&event, "device_execution_result_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
     add_assoc_long(&event, "prompt_tokens", (zend_long) token_count);
     add_assoc_long(&event, "validated_graphs", (zend_long) validated_graphs);
+    add_assoc_long(&event, "result_envelopes", (zend_long) result_envelopes);
     add_assoc_long(&event, "accepted_max_tokens", max_tokens);
     add_next_index_zval(&stream->native_events, &event);
 
@@ -202,6 +225,11 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
         "graph_validation_ready",
         model->cuda_decoder_prompt_loop_graph_validation_ready
     );
+    add_assoc_bool(
+        &loop,
+        "result_contract_ready",
+        model->cuda_decoder_prompt_loop_result_contract_ready
+    );
     add_assoc_bool(&loop, "device_execution_result_ready", false);
     add_assoc_long(&loop, "runs", (zend_long) model->cuda_decoder_prompt_loop_count);
     add_assoc_long(&loop, "last_prompt_tokens", (zend_long) model->cuda_decoder_prompt_loop_last_prompt_tokens);
@@ -209,6 +237,11 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
         &loop,
         "last_validated_graphs",
         (zend_long) model->cuda_decoder_prompt_loop_last_validated_graphs
+    );
+    add_assoc_long(
+        &loop,
+        "last_result_envelopes",
+        (zend_long) model->cuda_decoder_prompt_loop_last_result_envelopes
     );
     add_assoc_long(&loop, "last_max_tokens", model->cuda_decoder_prompt_loop_last_max_tokens);
     add_assoc_long(&loop, "result", model->cuda_decoder_prompt_loop_result);

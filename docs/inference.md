@@ -369,7 +369,8 @@ identifies the missing runtime layers between the available CUDA leaves and
 plain-text chat generation. When the GPU model has initialized the embedding
 row loader, device vector ops, device KV-cache, decoder graph executor, and
 prompt-loop admission path, the remaining gap is that the prompt loop still
-needs device graph execution results before it can emit decoded tokens.
+needs device graph execution results in the GPU result envelope before it can
+emit decoded tokens.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -389,7 +390,7 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_output_projection_path`, `gpu_embedding_row_loader`,
 `gpu_device_vector_ops`, `gpu_device_kv_cache`,
 `gpu_minimized_logits_readback`, `gpu_decoder_graph_executor`,
-`gpu_prompt_decoder_loop`,
+`gpu_decoder_graph_result_envelope`, `gpu_prompt_decoder_loop`,
 `gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
 `gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
 GPU backend.
@@ -398,7 +399,8 @@ GPU backend.
 The GPU model info, native GPU stream contract event, and `/v1/models`
 metadata expose the same boundary with `embedding_row_loader_ready`,
 `device_vector_ops_ready`, `device_kv_cache_ready`,
-`decoder_graph_executor_ready`, `decoder_prompt_loop_ready`,
+`decoder_graph_executor_ready`, `decoder_graph_result_contract_ready`,
+`decoder_prompt_loop_ready`,
 `plain_text_chat_ready=false`, and `gpu_plain_text_chat_generation=false`.
 The embedding row loader resolves the selected token embedding tensor, uses the
 uploaded GPU weight cache, and writes one token row into a device-side `float`
@@ -414,9 +416,14 @@ lazy-allocated: registration reports the runtime surface and byte requirements,
 while the actual key/value buffers are reserved on the first cache write.
 The decoder graph executor validates the complete token-decode graph op set
 that the CPU builder emits and binds that contract to the available CUDA leaves,
-including bounded logits readback for CPU-side sampling. The GPU prompt-loop
-admission path accepts `native_prompt_text`, tokenizes it, builds the same
-token-decode graphs used by the CPU loop, and validates those graphs against
+including bounded logits readback for CPU-side sampling. Explicit native GPU
+`graph` and `graphs` streams now emit one `gpu_decoder_graph_execution_result`
+envelope per validated graph. That envelope carries graph type, token position,
+terminal output, and token-selection metadata, and it keeps
+`device_execution_result_ready=false` until the CUDA executor writes real token
+results back into the stream contract. The GPU prompt-loop admission path
+accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
+used by the CPU loop, and validates those graphs into result envelopes against
 the GPU executor without CPU execution fallback. It does not yet emit decoded
 tokens: OpenAI-compatible GPU chat remains refused until device graph execution
 returns token results to that loop.
