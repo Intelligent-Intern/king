@@ -168,6 +168,11 @@ static void king_inference_king_native_gpu_add_contract_event(
         "decoder_graph_rms_norm_execution_ready",
         model->cuda_decoder_graph_executor_rms_norm_execution_available
     );
+    add_assoc_bool(
+        &event,
+        "decoder_graph_linear_execution_ready",
+        model->cuda_decoder_graph_executor_linear_execution_available
+    );
     add_assoc_bool(&event, "decoder_prompt_loop_ready", model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
@@ -264,6 +269,11 @@ static void king_inference_king_native_gpu_model_info(
         return_value,
         "decoder_graph_rms_norm_execution_ready",
         intern->cuda_decoder_graph_executor_rms_norm_execution_available
+    );
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_linear_execution_ready",
+        intern->cuda_decoder_graph_executor_linear_execution_available
     );
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);

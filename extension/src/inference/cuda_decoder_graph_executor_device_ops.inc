@@ -177,6 +177,93 @@ static zval *king_inference_cuda_decoder_graph_executor_rms_norm_for_input(
     return NULL;
 }
 
+static zval *king_inference_cuda_decoder_graph_executor_linear_for_input(
+    zval *graph,
+    zend_string *input_id
+) {
+    zval *ops = king_inference_cuda_decoder_graph_executor_ops(graph);
+    zval *entry;
+
+    if (ops == NULL || input_id == NULL) {
+        return NULL;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(ops), entry) {
+        zval *op_name;
+        zval *input;
+
+        if (entry == NULL || Z_TYPE_P(entry) != IS_ARRAY) {
+            continue;
+        }
+        op_name = king_inference_array_find(entry, "op");
+        input = king_inference_array_find(entry, "input");
+        if (op_name != NULL
+            && Z_TYPE_P(op_name) == IS_STRING
+            && zend_string_equals_literal(Z_STR_P(op_name), "linear")
+            && king_inference_cuda_decoder_graph_executor_zval_string_equals(input, input_id)) {
+            return entry;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return NULL;
+}
+
+static zend_result king_inference_cuda_decoder_graph_executor_linear_shape(
+    king_inference_model_object *model,
+    zval *op,
+    zend_ulong input_width,
+    zend_string **weight_name,
+    zend_ulong *rows
+) {
+    zval *descriptor;
+    zval *dimensions;
+    zend_ulong rank;
+    zend_ulong type;
+    zend_ulong cols;
+    zend_ulong tensor_rows;
+    zend_ulong row_offset = king_inference_tensor_option_ulong(op, "row_offset", 0);
+    zend_ulong row_limit;
+
+    *weight_name = NULL;
+    *rows = 0;
+    if (king_inference_graph_required_string(op, "weight", weight_name) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_linear_weight_invalid");
+        return FAILURE;
+    }
+
+    descriptor = king_inference_tensor_index_descriptor(model, *weight_name);
+    dimensions = descriptor != NULL
+        ? zend_hash_str_find(Z_ARRVAL_P(descriptor), "dimensions", sizeof("dimensions") - 1)
+        : NULL;
+    if (descriptor == NULL
+        || dimensions == NULL
+        || Z_TYPE_P(dimensions) != IS_ARRAY
+        || !king_inference_tensor_descriptor_ulong(descriptor, "rank", sizeof("rank") - 1, &rank)
+        || !king_inference_tensor_descriptor_ulong(descriptor, "type", sizeof("type") - 1, &type)
+        || rank != 2
+        || type != 8
+        || king_inference_tensor_dimension_at(dimensions, 0, &cols) != SUCCESS
+        || king_inference_tensor_dimension_at(dimensions, 1, &tensor_rows) != SUCCESS
+        || cols != input_width
+        || tensor_rows == 0
+        || tensor_rows > UINT_MAX) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_linear_q8_0_shape_invalid");
+        return FAILURE;
+    }
+
+    if (row_offset != 0) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_linear_row_offset_unsupported");
+        return FAILURE;
+    }
+
+    row_limit = king_inference_tensor_option_ulong(op, "row_limit", tensor_rows);
+    if (row_limit == 0 || row_limit > tensor_rows) {
+        row_limit = tensor_rows;
+    }
+    *rows = row_limit;
+    return SUCCESS;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_release_device_ptr(
     king_inference_model_object *model,
     king_inference_cuda_device_ptr *device_ptr
@@ -200,13 +287,18 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     zval *token_value;
     zval embedding_probe;
     zval rms_norm_probe;
+    zval linear_probe;
     zend_string *embedding_id = NULL;
+    zend_string *rms_norm_id = NULL;
     zend_string *rms_weight = NULL;
+    zend_string *linear_weight = NULL;
     zend_ulong width = model->gguf.architecture_params[KING_INFERENCE_ARCH_EMBEDDING_LENGTH];
+    zend_ulong linear_rows = 0;
     zend_ulong token_id;
     size_t bytes;
     king_inference_cuda_device_ptr embedding_output = 0;
     king_inference_cuda_device_ptr rms_norm_output = 0;
+    king_inference_cuda_device_ptr linear_output = 0;
     zend_ulong executed_device_ops = 0;
     double epsilon = 0.000001;
 
@@ -224,17 +316,27 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(&rms_norm_probe, "executed", false);
     add_assoc_bool(&rms_norm_probe, "retained_device_output", false);
 
+    array_init(&linear_probe);
+    add_assoc_string(&linear_probe, "type", "gpu_decoder_linear_device_execution");
+    add_assoc_bool(&linear_probe, "attempted", false);
+    add_assoc_bool(&linear_probe, "available", model->cuda_decoder_graph_executor_linear_execution_available);
+    add_assoc_bool(&linear_probe, "executed", false);
+    add_assoc_bool(&linear_probe, "retained_device_output", false);
+
     if (embedding_op == NULL) {
         add_assoc_zval(result, "embedding_device_execution", &embedding_probe);
         add_assoc_zval(result, "rms_norm_device_execution", &rms_norm_probe);
+        add_assoc_zval(result, "linear_device_execution", &linear_probe);
         add_assoc_bool(result, "embedding_device_execution_ready", false);
         add_assoc_bool(result, "rms_norm_device_execution_ready", false);
+        add_assoc_bool(result, "linear_device_execution_ready", false);
         add_assoc_long(result, "executed_device_ops", 0);
         return SUCCESS;
     }
     if (!model->cuda_decoder_graph_executor_embedding_execution_available) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -245,6 +347,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     if (king_inference_graph_required_string(embedding_op, "id", &embedding_id) != SUCCESS) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_embedding_id_invalid");
         return FAILURE;
     }
@@ -256,6 +359,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     if (token_value == NULL || Z_TYPE_P(token_value) != IS_LONG || Z_LVAL_P(token_value) < 0) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -266,6 +370,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     if (width == 0 || width > (zend_ulong) (SIZE_MAX / sizeof(float))) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             -1,
@@ -279,6 +384,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     if (king_inference_cuda_device_allocator_alloc(model, bytes, &embedding_output) != SUCCESS) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_device_allocator_result,
@@ -293,6 +399,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_embedding_row_result,
@@ -317,10 +424,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     rms_norm_op = king_inference_cuda_decoder_graph_executor_rms_norm_for_input(graph, embedding_id);
     add_assoc_bool(&rms_norm_probe, "attempted", rms_norm_op != NULL);
     if (rms_norm_op != NULL) {
+        zval *linear_op = NULL;
+
         if (!model->cuda_decoder_graph_executor_rms_norm_execution_available) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             zval_ptr_dtor(&embedding_probe);
             zval_ptr_dtor(&rms_norm_probe);
+            zval_ptr_dtor(&linear_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 -1,
@@ -328,12 +438,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             );
             return FAILURE;
         }
-        if (king_inference_graph_required_string(rms_norm_op, "weight", &rms_weight) != SUCCESS
+        if (king_inference_graph_required_string(rms_norm_op, "id", &rms_norm_id) != SUCCESS
+            || king_inference_graph_required_string(rms_norm_op, "weight", &rms_weight) != SUCCESS
             || king_inference_graph_finite_double_option(rms_norm_op, "epsilon", 0.000001, &epsilon) != SUCCESS
             || epsilon <= 0.0) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             zval_ptr_dtor(&embedding_probe);
             zval_ptr_dtor(&rms_norm_probe);
+            zval_ptr_dtor(&linear_probe);
             king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_rms_norm_contract_invalid");
             return FAILURE;
         }
@@ -341,6 +453,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             zval_ptr_dtor(&embedding_probe);
             zval_ptr_dtor(&rms_norm_probe);
+            zval_ptr_dtor(&linear_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 model->cuda_device_allocator_result,
@@ -357,30 +470,18 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
                 rms_norm_output,
                 width,
                 epsilon
-            ) != SUCCESS) {
+        ) != SUCCESS) {
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
             (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
             zval_ptr_dtor(&embedding_probe);
             zval_ptr_dtor(&rms_norm_probe);
+            zval_ptr_dtor(&linear_probe);
             king_inference_cuda_decoder_graph_executor_set_error(
                 model,
                 model->cuda_rms_norm_result,
                 model->cuda_rms_norm_error[0] != '\0'
                     ? model->cuda_rms_norm_error
                     : "cuda_decoder_graph_rms_norm_execution_failed"
-            );
-            return FAILURE;
-        }
-        if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output) != SUCCESS) {
-            (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
-            zval_ptr_dtor(&embedding_probe);
-            zval_ptr_dtor(&rms_norm_probe);
-            king_inference_cuda_decoder_graph_executor_set_error(
-                model,
-                model->cuda_device_allocator_result,
-                model->cuda_device_allocator_error[0] != '\0'
-                    ? model->cuda_device_allocator_error
-                    : "cuda_decoder_graph_rms_norm_free_failed"
             );
             return FAILURE;
         }
@@ -392,11 +493,126 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         add_assoc_long(&rms_norm_probe, "width", (zend_long) width);
         add_assoc_long(&rms_norm_probe, "bytes", (zend_long) bytes);
         add_assoc_double(&rms_norm_probe, "epsilon", epsilon);
+
+        linear_op = king_inference_cuda_decoder_graph_executor_linear_for_input(graph, rms_norm_id);
+        add_assoc_bool(&linear_probe, "attempted", linear_op != NULL);
+        if (linear_op != NULL) {
+            if (!model->cuda_decoder_graph_executor_linear_execution_available) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                zval_ptr_dtor(&embedding_probe);
+                zval_ptr_dtor(&rms_norm_probe);
+                zval_ptr_dtor(&linear_probe);
+                king_inference_cuda_decoder_graph_executor_set_error(
+                    model,
+                    -1,
+                    "cuda_decoder_graph_linear_execution_unavailable"
+                );
+                return FAILURE;
+            }
+            if (king_inference_cuda_decoder_graph_executor_linear_shape(
+                    model,
+                    linear_op,
+                    width,
+                    &linear_weight,
+                    &linear_rows
+                ) != SUCCESS
+                || linear_rows > (zend_ulong) (SIZE_MAX / sizeof(float))) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                zval_ptr_dtor(&embedding_probe);
+                zval_ptr_dtor(&rms_norm_probe);
+                zval_ptr_dtor(&linear_probe);
+                return FAILURE;
+            }
+            if (king_inference_cuda_device_allocator_alloc(
+                    model,
+                    (size_t) linear_rows * sizeof(float),
+                    &linear_output
+                ) != SUCCESS) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                zval_ptr_dtor(&embedding_probe);
+                zval_ptr_dtor(&rms_norm_probe);
+                zval_ptr_dtor(&linear_probe);
+                king_inference_cuda_decoder_graph_executor_set_error(
+                    model,
+                    model->cuda_device_allocator_result,
+                    model->cuda_device_allocator_error[0] != '\0'
+                        ? model->cuda_device_allocator_error
+                        : "cuda_decoder_graph_linear_allocation_failed"
+                );
+                return FAILURE;
+            }
+            if (king_inference_cuda_quantized_matvec_q8_0(
+                    model,
+                    linear_weight,
+                    rms_norm_output,
+                    width,
+                    linear_output,
+                    linear_rows
+                ) != SUCCESS) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                zval_ptr_dtor(&embedding_probe);
+                zval_ptr_dtor(&rms_norm_probe);
+                zval_ptr_dtor(&linear_probe);
+                king_inference_cuda_decoder_graph_executor_set_error(
+                    model,
+                    model->cuda_quantized_matvec_result,
+                    model->cuda_quantized_matvec_error[0] != '\0'
+                        ? model->cuda_quantized_matvec_error
+                        : "cuda_decoder_graph_linear_execution_failed"
+                );
+                return FAILURE;
+            }
+            if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &linear_output) != SUCCESS) {
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output);
+                (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+                zval_ptr_dtor(&embedding_probe);
+                zval_ptr_dtor(&rms_norm_probe);
+                zval_ptr_dtor(&linear_probe);
+                king_inference_cuda_decoder_graph_executor_set_error(
+                    model,
+                    model->cuda_device_allocator_result,
+                    model->cuda_device_allocator_error[0] != '\0'
+                        ? model->cuda_device_allocator_error
+                        : "cuda_decoder_graph_linear_free_failed"
+                );
+                return FAILURE;
+            }
+            model->cuda_decoder_graph_executor_linear_execution_count++;
+            model->cuda_decoder_graph_executor_last_linear_input_width = width;
+            model->cuda_decoder_graph_executor_last_linear_rows = linear_rows;
+            executed_device_ops++;
+
+            add_assoc_bool(&linear_probe, "executed", true);
+            add_assoc_long(&linear_probe, "input_width", (zend_long) width);
+            add_assoc_long(&linear_probe, "rows", (zend_long) linear_rows);
+            add_assoc_long(&linear_probe, "bytes", (zend_long) ((size_t) linear_rows * sizeof(float)));
+        }
+
+        if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &rms_norm_output) != SUCCESS) {
+            (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output);
+            zval_ptr_dtor(&embedding_probe);
+            zval_ptr_dtor(&rms_norm_probe);
+            zval_ptr_dtor(&linear_probe);
+            king_inference_cuda_decoder_graph_executor_set_error(
+                model,
+                model->cuda_device_allocator_result,
+                model->cuda_device_allocator_error[0] != '\0'
+                    ? model->cuda_device_allocator_error
+                    : "cuda_decoder_graph_rms_norm_free_failed"
+            );
+            return FAILURE;
+        }
     }
 
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &embedding_output) != SUCCESS) {
         zval_ptr_dtor(&embedding_probe);
         zval_ptr_dtor(&rms_norm_probe);
+        zval_ptr_dtor(&linear_probe);
         king_inference_cuda_decoder_graph_executor_set_error(
             model,
             model->cuda_device_allocator_result,
@@ -408,8 +624,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     }
     add_assoc_zval(result, "embedding_device_execution", &embedding_probe);
     add_assoc_zval(result, "rms_norm_device_execution", &rms_norm_probe);
+    add_assoc_zval(result, "linear_device_execution", &linear_probe);
     add_assoc_bool(result, "embedding_device_execution_ready", true);
     add_assoc_bool(result, "rms_norm_device_execution_ready", rms_norm_op != NULL);
+    add_assoc_bool(result, "linear_device_execution_ready", linear_rows > 0);
     add_assoc_bool(result, "first_device_op_executed", true);
     add_assoc_bool(result, "initial_device_ops_executed", executed_device_ops > 1);
     add_assoc_long(result, "executed_device_ops", (zend_long) executed_device_ops);

@@ -20,6 +20,9 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_last_embedding_token_id = 0;
     model->cuda_decoder_graph_executor_rms_norm_execution_count = 0;
     model->cuda_decoder_graph_executor_last_rms_norm_width = 0;
+    model->cuda_decoder_graph_executor_linear_execution_count = 0;
+    model->cuda_decoder_graph_executor_last_linear_input_width = 0;
+    model->cuda_decoder_graph_executor_last_linear_rows = 0;
     model->cuda_decoder_graph_executor_attempted = false;
     model->cuda_decoder_graph_executor_available = false;
     model->cuda_decoder_graph_executor_token_decode_available = false;
@@ -29,6 +32,7 @@ static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inferen
     model->cuda_decoder_graph_executor_embedding_execution_available = false;
     model->cuda_decoder_graph_executor_last_embedding_token_available = false;
     model->cuda_decoder_graph_executor_rms_norm_execution_available = false;
+    model->cuda_decoder_graph_executor_linear_execution_available = false;
 }
 
 static void king_inference_cuda_decoder_graph_executor_set_error(
@@ -302,6 +306,8 @@ static void king_inference_cuda_decoder_graph_executor_init(
         model->cuda_embedding_row_available && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_rms_norm_execution_available =
         model->cuda_rms_norm_available && model->cuda_device_allocator_available;
+    model->cuda_decoder_graph_executor_linear_execution_available =
+        model->cuda_quantized_matvec_q8_0_available && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -341,6 +347,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         &executor,
         "rms_norm_execution_available",
         model->cuda_decoder_graph_executor_rms_norm_execution_available
+    );
+    add_assoc_bool(
+        &executor,
+        "linear_execution_available",
+        model->cuda_decoder_graph_executor_linear_execution_available
     );
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
@@ -390,6 +401,21 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         &executor,
         "last_rms_norm_width",
         (zend_long) model->cuda_decoder_graph_executor_last_rms_norm_width
+    );
+    add_assoc_long(
+        &executor,
+        "linear_device_executions",
+        (zend_long) model->cuda_decoder_graph_executor_linear_execution_count
+    );
+    add_assoc_long(
+        &executor,
+        "last_linear_input_width",
+        (zend_long) model->cuda_decoder_graph_executor_last_linear_input_width
+    );
+    add_assoc_long(
+        &executor,
+        "last_linear_rows",
+        (zend_long) model->cuda_decoder_graph_executor_last_linear_rows
     );
     if (model->cuda_decoder_graph_executor_last_embedding_token_available
         && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
@@ -443,6 +469,11 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         return_value,
         "decoder_graph_rms_norm_execution_ready",
         model->cuda_decoder_graph_executor_rms_norm_execution_available
+    );
+    add_assoc_bool(
+        return_value,
+        "decoder_graph_linear_execution_ready",
+        model->cuda_decoder_graph_executor_linear_execution_available
     );
 }
 
