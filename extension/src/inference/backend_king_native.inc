@@ -364,7 +364,7 @@ static zend_result king_inference_king_native_cpu_stream_start(
 ) {
     king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
 
-    if (king_inference_check_gpu_policy(&model->config, function_name) != SUCCESS) {
+    if (king_inference_check_gpu_policy_before_run(stream, function_name) != SUCCESS) {
         return FAILURE;
     }
 

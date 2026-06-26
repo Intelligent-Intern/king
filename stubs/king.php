@@ -1389,7 +1389,10 @@ namespace {
      * `openai_compatible` must be a boolean and `format` must be one of
      * `openai`, `openai_chat`, or `openai_chat_completions` when provided.
      * Native graph streams require `graph` as an object array, `graphs` as a
-     * list array, and `graph_options` as an object array when provided.
+     * list array, and `graph_options` as an object array when provided. GPU
+     * streams perform a fresh thermal preflight immediately before backend run
+     * admission and expose that preflight through stream start events and
+     * `King\Inference\Stream::getMetrics()`.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException
@@ -1468,7 +1471,8 @@ namespace {
      * Read the next inference stream event. Native events use `type=start`,
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
      * return `chat.completion.chunk`-style arrays. The start event carries
-     * `backend`, `native_stream`, and `pid` where applicable.
+     * `backend`, `native_stream`, `pid`, and GPU thermal-preflight fields
+     * where applicable.
      * @return array<string,mixed>|null
      */
     function king_inference_next(\King\Inference\Stream $stream, ?int $timeout_ms = null): ?array {}

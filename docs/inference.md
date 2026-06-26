@@ -250,6 +250,15 @@ Thermal guardrails still come from the configured sensor path or command,
 because operators may prefer platform-specific sensor files over driver-level
 telemetry.
 
+GPU stream startup performs a fresh thermal preflight immediately before the
+backend run is admitted. For the local process backend this check happens after
+the command line is assembled and directly before `fork/exec`; for native
+streams it happens directly before native graph events are prepared. Stream
+start events and `King\Inference\Stream::getMetrics()` expose
+`gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and
+`gpu_thermal_preflight_temperature_c` so operators can distinguish stale model
+metadata from the last run-time admission check.
+
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status
 fields separate the layers:
@@ -1257,7 +1266,9 @@ $metrics = $stream->getMetrics();
 `Stream::getMetrics()` reports emitted token chunks, stderr chunks, bytes,
 terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
 native graph streams also `native_stream`, `native_event_count`, and
-`native_event_index`.
+`native_event_index`. GPU-enabled streams also report the last run preflight
+through `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and the
+optional `gpu_thermal_preflight_temperature_c`.
 
 ## OO, Example 3: Parallel Inference Streams
 

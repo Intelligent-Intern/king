@@ -339,6 +339,22 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_bool(return_value, "openai_compatible", stream->openai_compatible);
+    add_assoc_bool(return_value, "gpu_thermal_preflight_checked", stream->gpu_thermal_preflight_checked);
+    add_assoc_long(return_value, "gpu_thermal_preflight_at", stream->gpu_thermal_preflight_at);
+    add_assoc_bool(
+        return_value,
+        "gpu_thermal_preflight_temperature_available",
+        stream->gpu_thermal_preflight_temperature_available
+    );
+    if (stream->gpu_thermal_preflight_temperature_available) {
+        add_assoc_double(
+            return_value,
+            "gpu_thermal_preflight_temperature_c",
+            stream->gpu_thermal_preflight_temperature_c
+        );
+    } else {
+        add_assoc_null(return_value, "gpu_thermal_preflight_temperature_c");
+    }
     add_assoc_bool(return_value, "native_stream", native_event_count > 0);
     add_assoc_long(return_value, "native_event_count", native_event_count);
     add_assoc_long(return_value, "native_event_index", (zend_long) stream->native_event_index);
@@ -398,6 +414,17 @@ static zend_result king_inference_stream_next_event(
         );
         add_assoc_bool(return_value, "native_stream", king_inference_stream_has_native_events(stream));
         add_assoc_long(return_value, "pid", stream->child_pid);
+        add_assoc_bool(return_value, "gpu_thermal_preflight_checked", stream->gpu_thermal_preflight_checked);
+        add_assoc_long(return_value, "gpu_thermal_preflight_at", stream->gpu_thermal_preflight_at);
+        if (stream->gpu_thermal_preflight_temperature_available) {
+            add_assoc_double(
+                return_value,
+                "gpu_thermal_preflight_temperature_c",
+                stream->gpu_thermal_preflight_temperature_c
+            );
+        } else {
+            add_assoc_null(return_value, "gpu_thermal_preflight_temperature_c");
+        }
         return SUCCESS;
     }
 

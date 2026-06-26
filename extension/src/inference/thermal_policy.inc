@@ -99,7 +99,12 @@ static zend_result king_inference_read_temperature_command(zend_string *command,
     return SUCCESS;
 }
 
-static zend_result king_inference_check_gpu_policy(zval *config, const char *function_name)
+static zend_result king_inference_check_gpu_policy_sample(
+    zval *config,
+    const char *function_name,
+    bool *temperature_checked,
+    double *temperature_c_out
+)
 {
     zval *gpu = king_inference_array_find(config, "gpu");
     zval *thermal;
@@ -107,6 +112,13 @@ static zend_result king_inference_check_gpu_policy(zval *config, const char *fun
     zval *sensor_command;
     double temperature_c;
     double max_temperature_c;
+
+    if (temperature_checked != NULL) {
+        *temperature_checked = false;
+    }
+    if (temperature_c_out != NULL) {
+        *temperature_c_out = 0.0;
+    }
 
     if (gpu == NULL || Z_TYPE_P(gpu) != IS_ARRAY || !king_inference_bool_from_array(gpu, "enabled", false)) {
         return SUCCESS;
@@ -154,6 +166,12 @@ static zend_result king_inference_check_gpu_policy(zval *config, const char *fun
     } else if (king_inference_read_temperature_command(Z_STR_P(sensor_command), &temperature_c) != SUCCESS) {
         return FAILURE;
     }
+    if (temperature_checked != NULL) {
+        *temperature_checked = true;
+    }
+    if (temperature_c_out != NULL) {
+        *temperature_c_out = temperature_c;
+    }
 
     max_temperature_c = thermal != NULL && Z_TYPE_P(thermal) == IS_ARRAY
         ? king_inference_double_from_array(thermal, "max_temperature_c", 80.0)
@@ -172,5 +190,45 @@ static zend_result king_inference_check_gpu_policy(zval *config, const char *fun
         return FAILURE;
     }
 
+    return SUCCESS;
+}
+
+static zend_result king_inference_check_gpu_policy(zval *config, const char *function_name)
+{
+    return king_inference_check_gpu_policy_sample(config, function_name, NULL, NULL);
+}
+
+static zend_result king_inference_check_gpu_policy_before_run(
+    king_inference_stream_object *stream,
+    const char *function_name
+) {
+    king_inference_model_object *model;
+    zval *gpu;
+    bool temperature_checked = false;
+    double temperature_c = 0.0;
+
+    if (Z_ISUNDEF(stream->model) || Z_TYPE(stream->model) != IS_OBJECT) {
+        return SUCCESS;
+    }
+
+    model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
+    gpu = king_inference_array_find(&model->config, "gpu");
+    if (gpu == NULL || Z_TYPE_P(gpu) != IS_ARRAY || !king_inference_bool_from_array(gpu, "enabled", false)) {
+        return SUCCESS;
+    }
+
+    if (king_inference_check_gpu_policy_sample(
+            &model->config,
+            function_name,
+            &temperature_checked,
+            &temperature_c
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+
+    stream->gpu_thermal_preflight_checked = true;
+    stream->gpu_thermal_preflight_at = (zend_long) time(NULL);
+    stream->gpu_thermal_preflight_temperature_available = temperature_checked;
+    stream->gpu_thermal_preflight_temperature_c = temperature_checked ? temperature_c : 0.0;
     return SUCCESS;
 }

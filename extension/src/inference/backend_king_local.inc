@@ -369,9 +369,6 @@ static zend_result king_inference_king_local_stream_start(
     const char *stop_error = NULL;
 
     model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
-    if (king_inference_check_gpu_policy(&model->config, function_name) != SUCCESS) {
-        return FAILURE;
-    }
     if (!king_inference_openai_stream_generation_options_valid(&stream->request, &generation_error)) {
         zend_throw_exception_ex(
             king_ce_validation_exception,
@@ -433,6 +430,11 @@ static zend_result king_inference_king_local_stream_start(
     king_inference_king_local_append_long_arg(argv, &argc, &stream->request, "top_k", "--top-k");
     king_inference_king_local_append_double_arg(argv, &argc, &stream->request, "top_p", "--top-p");
     king_inference_king_local_append_stop_args(argv, &argc, &stream->request);
+
+    if (king_inference_check_gpu_policy_before_run(stream, function_name) != SUCCESS) {
+        king_inference_king_local_argv_release(argv, argc);
+        return FAILURE;
+    }
 
     if (king_inference_king_local_spawn_argv(stream, argv, argc) != SUCCESS) {
         king_inference_king_local_argv_release(argv, argc);

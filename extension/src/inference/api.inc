@@ -642,6 +642,10 @@ PHP_METHOD(King_Inference_Stream, __construct)
     stream->stderr_count = 0;
     stream->bytes_emitted = 0;
     stream->native_event_index = 0;
+    stream->gpu_thermal_preflight_at = 0;
+    stream->gpu_thermal_preflight_temperature_c = 0.0;
+    stream->gpu_thermal_preflight_checked = false;
+    stream->gpu_thermal_preflight_temperature_available = false;
     stream->openai_compatible = king_inference_stream_openai_requested(&stream->request, &stream->options);
     stream->created_at = (zend_long) time(NULL);
     if (stream->openai_compatible) {
