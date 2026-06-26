@@ -195,7 +195,8 @@ static zend_result king_inference_graph_op_embedding(
     double **values_out,
     zend_ulong *length_out
 ) {
-    zend_string *tensor;
+    zend_string *tensor = NULL;
+    const char *status = NULL;
     king_inference_tensor_native_view view;
     zend_ulong cols;
     zend_ulong rows;
@@ -204,7 +205,15 @@ static zend_result king_inference_graph_op_embedding(
     zval *token;
     double *values;
 
-    if (king_inference_graph_required_string(op, "tensor", &tensor) != SUCCESS) {
+    if (king_inference_resolve_token_embedding_tensor_name(model, op, &tensor, NULL, &status) != SUCCESS
+        || tensor == NULL) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            status != NULL && strcmp(status, "ambiguous_shape_scan") == 0
+                ? "King inference graph embedding found more than one possible token embedding tensor; set tensor explicitly."
+                : "King inference graph embedding requires tensor or a resolvable token embedding tensor."
+        );
         return FAILURE;
     }
     token = king_inference_array_find(op, "token_id");
@@ -212,12 +221,14 @@ static zend_result king_inference_graph_op_embedding(
         token = king_inference_array_find(op, "token");
     }
     if (token == NULL || Z_TYPE_P(token) != IS_LONG || Z_LVAL_P(token) < 0) {
+        zend_string_release(tensor);
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph embedding requires token_id.");
         return FAILURE;
     }
     token_id = Z_LVAL_P(token);
 
     if (king_inference_tensor_native_view_resolve(model, tensor, &view) != SUCCESS) {
+        zend_string_release(tensor);
         return FAILURE;
     }
     if (view.rank != 2
@@ -227,6 +238,7 @@ static zend_result king_inference_graph_op_embedding(
         || cols == 0
         || cols > max_values
         || cols > (zend_ulong) (SIZE_MAX / sizeof(double))) {
+        zend_string_release(tensor);
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference graph embedding tensor dimensions or token_id are invalid.");
         return FAILURE;
     }
@@ -235,9 +247,11 @@ static zend_result king_inference_graph_op_embedding(
     for (col = 0; col < cols; col++) {
         if (king_inference_tensor_value_at(&view, ((zend_ulong) token_id) * cols + col, &values[col]) != SUCCESS) {
             efree(values);
+            zend_string_release(tensor);
             return FAILURE;
         }
     }
+    zend_string_release(tensor);
 
     *values_out = values;
     *length_out = cols;

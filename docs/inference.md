@@ -343,6 +343,7 @@ extension/src/inference/
 ├── stream_events.inc
 ├── tensor_graph.inc
 ├── tensor_graph_kv.inc
+├── tensor_resolver.inc
 ├── tensor_graph_ops.inc
 ├── tensor_graph_sampling.inc
 ├── tensor_math.inc
@@ -389,6 +390,11 @@ exposing process-local native pointers to PHP.
 views. It reads bytes from the read-only model mapping, dequantizes bounded
 ranges for supported scalar and block formats, and can multiply rank-1 or
 rank-2 tensors by a PHP vector with explicit safety limits.
+`tensor_resolver.inc` centralizes model tensor name resolution. The token
+embedding resolver honors explicit `tensor`, `embedding_tensor`, and
+`token_embedding_tensor` configuration first, then checks known GGUF names, and
+finally performs a guarded shape/name-hint scan when architecture embedding
+length and tokenizer row count are available.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
@@ -417,7 +423,9 @@ status fields when the source artifact provides them. Native backend info
 additionally exposes `native_model_mapped`, `native_map_bytes`,
 `native_tensor_index_count`, `native_tokenizer_token_count`,
 `native_tokenizer_merge_count`, `tokenization_ready`, and
-`paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`.
+`paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`
+and `resolved_tensors.token_embedding`, so callers can inspect the selected
+token embedding tensor before building decoder graphs.
 `backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
 selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
@@ -642,11 +650,14 @@ does not decide a model topology by itself; the local runner builds the
 Gemma3 token-step graph on top of these operations. The graph runner executes
 named operations in order, stores each vector by id, and feeds those vectors
 into later steps.
-`embedding` gathers one row from a rank-2 tensor, `rms_norm` applies native
-RMSNorm with an optional weight tensor, and `linear` reuses the blockwise CPU
-matmul path. `rope` applies rotary position embedding to an even head slice
-using caller-supplied inverse frequencies or a previously produced frequency
-vector. `slice` isolates head-sized spans for per-head normalization, and
+`embedding` gathers one row from a rank-2 tensor. Its `tensor` field may be
+omitted when the shared token embedding resolver can identify exactly one
+supported embedding matrix from model config, known GGUF names, or guarded
+shape scan. `rms_norm` applies native RMSNorm with an optional weight tensor,
+and `linear` reuses the blockwise CPU matmul path. `rope` applies rotary
+position embedding to an even head slice using caller-supplied inverse
+frequencies or a previously produced frequency vector. `slice` isolates
+head-sized spans for per-head normalization, and
 `silu` plus `mul` cover the gated feed-forward path used by local decoder
 layers. `dot`, `stack`, `softmax`, and `weighted_sum` cover the first useful
 attention path: scores become probabilities and probabilities produce a context

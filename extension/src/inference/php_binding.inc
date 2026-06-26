@@ -54,6 +54,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "native_memory.inc"
 #include "tensor_view.inc"
 #include "tensor_math.inc"
+#include "tensor_resolver.inc"
 #include "tensor_graph.inc"
 #include "paged_kv_cache.inc"
 #include "tokenizer.inc"

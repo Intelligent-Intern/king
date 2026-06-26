@@ -167,8 +167,10 @@ $firstVector = $payload['data'][0]['embedding'];
 Embeddings are mean-pooled from the model's native token embedding tensor after
 King tokenizes the input. The tensor name can be supplied in the loaded model
 config as `embedding_tensor` or `token_embedding_tensor`, or as router option
-`embedding_tensor`. If no name is supplied, King checks common GGUF tensor
-names such as `token_embd.weight`.
+`embedding_tensor`. If no name is supplied, King uses the shared token
+embedding resolver: explicit names win, known GGUF names such as
+`token_embd.weight` are checked next, and a guarded shape/name-hint scan is used
+only when the model metadata makes the embedding matrix unambiguous.
 
 `input` may be a string, a list of strings, one token-id list, or a batch of
 token-id lists. `dimensions` can request a bounded prefix of the native

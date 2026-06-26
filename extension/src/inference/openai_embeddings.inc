@@ -13,55 +13,6 @@ static zend_string *king_inference_openai_embeddings_payload_model_name(zval *mo
     return zend_string_init("local-quantized-model", sizeof("local-quantized-model") - 1, 0);
 }
 
-static zend_string *king_inference_openai_embeddings_configured_tensor_name(
-    king_inference_model_object *model,
-    zval *options)
-{
-    zval *field;
-
-    field = king_inference_array_find(options, "embedding_tensor");
-    if (field != NULL && Z_TYPE_P(field) == IS_STRING && Z_STRLEN_P(field) > 0) {
-        return zend_string_copy(Z_STR_P(field));
-    }
-
-    field = king_inference_array_find(&model->config, "embedding_tensor");
-    if (field != NULL && Z_TYPE_P(field) == IS_STRING && Z_STRLEN_P(field) > 0) {
-        return zend_string_copy(Z_STR_P(field));
-    }
-
-    field = king_inference_array_find(&model->config, "token_embedding_tensor");
-    if (field != NULL && Z_TYPE_P(field) == IS_STRING && Z_STRLEN_P(field) > 0) {
-        return zend_string_copy(Z_STR_P(field));
-    }
-
-    return NULL;
-}
-
-static zend_string *king_inference_openai_embeddings_default_tensor_name(king_inference_model_object *model)
-{
-    static const char *candidates[] = {
-        "token_embd.weight",
-        "tok_embeddings.weight",
-        "model.embed_tokens.weight",
-        "transformer.wte.weight",
-        "gpt_neox.embed_in.weight",
-        NULL
-    };
-    size_t i;
-
-    if (Z_ISUNDEF(model->tensor_index) || Z_TYPE(model->tensor_index) != IS_ARRAY) {
-        return NULL;
-    }
-
-    for (i = 0; candidates[i] != NULL; i++) {
-        if (zend_hash_str_exists(Z_ARRVAL(model->tensor_index), candidates[i], strlen(candidates[i]))) {
-            return zend_string_init(candidates[i], strlen(candidates[i]), 0);
-        }
-    }
-
-    return NULL;
-}
-
 static zend_result king_inference_openai_embeddings_resolve_view(
     king_inference_model_object *model,
     zval *options,
@@ -71,7 +22,8 @@ static zend_result king_inference_openai_embeddings_resolve_view(
     zend_ulong *dimensions_out,
     zend_ulong *vocab_out)
 {
-    zend_string *tensor = king_inference_openai_embeddings_configured_tensor_name(model, options);
+    zend_string *tensor = NULL;
+    const char *status = NULL;
     zend_ulong dimensions;
     zend_ulong vocab;
 
@@ -79,14 +31,20 @@ static zend_result king_inference_openai_embeddings_resolve_view(
     *dimensions_out = 0;
     *vocab_out = 0;
 
-    if (tensor == NULL) {
-        tensor = king_inference_openai_embeddings_default_tensor_name(model);
-    }
-    if (tensor == NULL) {
+    if (king_inference_resolve_token_embedding_tensor_name(
+            model,
+            options,
+            &tensor,
+            NULL,
+            &status
+        ) != SUCCESS
+        || tensor == NULL) {
         return king_inference_openai_error_response(
             return_value,
             500,
-            "King embedding endpoint requires an embedding_tensor or a known token embedding tensor in the loaded model.",
+            status != NULL && strcmp(status, "ambiguous_shape_scan") == 0
+                ? "King embedding endpoint found more than one possible token embedding tensor; configure embedding_tensor explicitly."
+                : "King embedding endpoint requires an embedding_tensor or a known token embedding tensor in the loaded model.",
             "server_error"
         );
     }
