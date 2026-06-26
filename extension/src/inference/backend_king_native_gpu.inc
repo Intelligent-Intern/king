@@ -77,6 +77,7 @@ static void king_inference_king_native_gpu_add_contract_event(
     king_inference_stream_object *stream,
     zend_long max_tokens
 ) {
+    zval decoder_blockers;
     zval event;
     zval gpu_runtime;
     zval *reason;
@@ -87,12 +88,17 @@ static void king_inference_king_native_gpu_add_contract_event(
     add_assoc_string(&event, "stream_contract", "king_native_events");
     add_assoc_bool(&event, "native_stream", true);
     add_assoc_bool(&event, "decoder_stream_contract_ready", true);
+    add_assoc_bool(&event, "decoder_graph_executor_ready", false);
+    add_assoc_bool(&event, "decoder_prompt_loop_ready", false);
     add_assoc_bool(&event, "decoder_kernel_ready", false);
     add_assoc_bool(&event, "generation_ready", false);
+    add_assoc_bool(&event, "plain_text_chat_ready", false);
     add_assoc_bool(&event, "token_generation", false);
     add_assoc_bool(&event, "openai_generation", false);
     add_assoc_bool(&event, "silent_cpu_fallback", false);
     add_assoc_long(&event, "accepted_max_tokens", max_tokens);
+    king_inference_gpu_decoder_blockers(&decoder_blockers);
+    add_assoc_zval(&event, "decoder_blockers", &decoder_blockers);
 
     king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
     reason = king_inference_array_find(&gpu_runtime, "reason");
@@ -131,6 +137,8 @@ static void king_inference_king_native_gpu_model_info(
     king_inference_model_object *intern,
     zval *return_value
 ) {
+    zval decoder_blockers;
+
     (void) intern;
 
     add_assoc_string(return_value, "engine", "king_native_gpu");
@@ -138,7 +146,12 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_string(return_value, "stream_contract", "king_native_events");
     add_assoc_bool(return_value, "external_runtime", false);
     add_assoc_bool(return_value, "decoder_stream_contract_ready", true);
+    add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
+    add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
+    add_assoc_bool(return_value, "plain_text_chat_ready", false);
+    king_inference_gpu_decoder_blockers(&decoder_blockers);
+    add_assoc_zval(return_value, "decoder_blockers", &decoder_blockers);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);
 }

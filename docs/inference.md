@@ -364,6 +364,11 @@ remain `false` for the native GPU backend. The local OpenAI-compatible router
 therefore exposes the configured large model with explicit
 `x_king.gpu_runtime` metadata, but refuses GPU generation instead of burning the
 CPU accidentally.
+The refusal is not a generic placeholder: `gpu_runtime.decoder_blockers`
+identifies the missing runtime layers between the available CUDA leaves and
+plain-text chat generation. Those blockers currently are the GPU embedding row
+loader, device vector operations, device KV cache, decoder graph executor, and
+prompt decoder loop.
 
 `king_native_gpu` model registration is still allowed. Registration means King
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
@@ -386,6 +391,10 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 GPU backend.
 `gpu_decoder_kernel`, `gpu_generation`, `token_generation`, and
 `silent_cpu_fallback` remain false.
+The GPU model info, native GPU stream contract event, and `/v1/models`
+metadata expose the same boundary with `decoder_graph_executor_ready=false`,
+`decoder_prompt_loop_ready=false`, `plain_text_chat_ready=false`, and
+`gpu_plain_text_chat_generation=false`.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
@@ -1221,7 +1230,8 @@ returns a precise OpenAI error while the GPU decoder kernel is not ready. The
 message states that the model is registered for metadata/readiness inspection,
 reports `gpu_runtime.generation_ready=false`,
 `gpu_runtime.decoder_kernel_ready=false`, includes the primary
-`gpu_runtime.reason`, and makes the no-silent-CPU-fallback rule explicit.
+`gpu_runtime.reason`, lists `gpu_runtime.decoder_blockers`, and makes the
+no-silent-CPU-fallback rule explicit.
 Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
 authoritative readiness source for GPU models. A registered `king_native_gpu`
 model can be listed and selected for inspection, but UI and autodetect flows

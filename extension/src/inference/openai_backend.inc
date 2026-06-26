@@ -1,3 +1,33 @@
+static zend_string *king_inference_openai_gpu_decoder_blockers_message(zval *gpu_runtime)
+{
+    zval *blockers = king_inference_array_find(gpu_runtime, "decoder_blockers");
+    zval *entry;
+    smart_str buffer = {0};
+    bool first = true;
+
+    if (blockers == NULL || Z_TYPE_P(blockers) != IS_ARRAY) {
+        return zend_string_init("unknown", sizeof("unknown") - 1, 0);
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(blockers), entry) {
+        if (Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+            continue;
+        }
+        if (!first) {
+            smart_str_appendc(&buffer, ',');
+        }
+        smart_str_append(&buffer, Z_STR_P(entry));
+        first = false;
+    } ZEND_HASH_FOREACH_END();
+
+    if (first) {
+        return zend_string_init("none", sizeof("none") - 1, 0);
+    }
+
+    smart_str_0(&buffer);
+    return buffer.s;
+}
+
 static zend_result king_inference_openai_require_generation_backend(
     zval *return_value,
     zval *model,
@@ -65,11 +95,13 @@ static zend_result king_inference_openai_require_generation_backend(
     }
 
     if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
+        zend_string *blockers;
         zval gpu_runtime;
         zval *reason_value;
         const char *reason = "gpu_decoder_kernel_not_implemented";
 
         king_inference_gpu_runtime_status_from_model(model_object, &gpu_runtime);
+        blockers = king_inference_openai_gpu_decoder_blockers_message(&gpu_runtime);
         reason_value = king_inference_array_find(&gpu_runtime, "reason");
         if (reason_value != NULL && Z_TYPE_P(reason_value) == IS_STRING && Z_STRLEN_P(reason_value) > 0) {
             reason = Z_STRVAL_P(reason_value);
@@ -81,10 +113,14 @@ static zend_result king_inference_openai_require_generation_backend(
             "The model is registered for metadata and readiness inspection, "
             "but gpu_runtime.generation_ready=false and "
             "gpu_runtime.decoder_kernel_ready=false. "
-            "Primary gpu_runtime.reason=%s. King will not silently fall back to CPU for a GPU profile.",
+            "Primary gpu_runtime.reason=%s. "
+            "Decoder blockers=%s. "
+            "King will not silently fall back to CPU for a GPU profile.",
             endpoint_name,
-            reason
+            reason,
+            ZSTR_VAL(blockers)
         );
+        zend_string_release(blockers);
         zval_ptr_dtor(&gpu_runtime);
         if (has_error_response != NULL) {
             *has_error_response = true;

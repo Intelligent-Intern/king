@@ -330,6 +330,7 @@ static void king_inference_gpu_runtime_status_array(
     bool config_ready;
     king_inference_gpu_vram_policy vram_policy;
     double temperature_c = 0.0;
+    zval decoder_blockers;
     zval refusal_reasons;
     const char *reason;
 
@@ -448,8 +449,13 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_long(return_value, "max_gpu_layers", max_gpu_layers);
     add_assoc_bool(return_value, "driver_visible", driver_visible);
     add_assoc_bool(return_value, "config_ready", config_ready);
+    add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
+    add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
+    add_assoc_bool(return_value, "plain_text_chat_ready", false);
     add_assoc_bool(return_value, "decoder_kernel_ready", false);
     add_assoc_bool(return_value, "generation_ready", false);
+    king_inference_gpu_decoder_blockers(&decoder_blockers);
+    add_assoc_zval(return_value, "decoder_blockers", &decoder_blockers);
     add_assoc_string(return_value, "reason", reason);
     add_assoc_zval(return_value, "refusal_reasons", &refusal_reasons);
 

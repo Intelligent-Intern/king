@@ -30,6 +30,16 @@ static const char *king_inference_gpu_status_first_reason(zval *reasons)
     return Z_STRVAL_P(first);
 }
 
+static void king_inference_gpu_decoder_blockers(zval *blockers)
+{
+    array_init(blockers);
+    king_inference_gpu_status_append_reason(blockers, "gpu_embedding_row_loader_missing");
+    king_inference_gpu_status_append_reason(blockers, "gpu_device_vector_ops_missing");
+    king_inference_gpu_status_append_reason(blockers, "gpu_device_kv_cache_missing");
+    king_inference_gpu_status_append_reason(blockers, "gpu_decoder_graph_executor_missing");
+    king_inference_gpu_status_append_reason(blockers, "gpu_prompt_decoder_loop_missing");
+}
+
 static void king_inference_gpu_status_refusal_reasons(
     zval *reasons,
     bool gpu_enabled,

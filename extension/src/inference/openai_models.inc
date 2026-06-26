@@ -138,6 +138,12 @@ static void king_inference_openai_invalid_backend_capabilities(zval *return_valu
     add_assoc_bool(return_value, "gpu_ffn_swiglu_path", false);
     add_assoc_bool(return_value, "gpu_output_projection_path", false);
     add_assoc_bool(return_value, "gpu_minimized_logits_readback", false);
+    add_assoc_bool(return_value, "gpu_embedding_row_loader", false);
+    add_assoc_bool(return_value, "gpu_device_vector_ops", false);
+    add_assoc_bool(return_value, "gpu_device_kv_cache", false);
+    add_assoc_bool(return_value, "gpu_decoder_graph_executor", false);
+    add_assoc_bool(return_value, "gpu_prompt_decoder_loop", false);
+    add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
     add_assoc_bool(return_value, "gpu_vram_admission", false);
     add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", false);
     add_assoc_bool(return_value, "gpu_thermal_policy", false);
