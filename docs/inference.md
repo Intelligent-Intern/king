@@ -273,11 +273,14 @@ device-op cleanup point, and that bridge is exposed as
 `attention_stack_device_execution_ready`. King now consumes that retained stack
 through the attention output projection linear op; that bridge is exposed as
 `decoder_graph_attention_output_projection_execution_ready` and
-`attention_output_projection_device_execution_ready`.
+`attention_output_projection_device_execution_ready`. The projected attention
+output is then added to the retained hidden state through the CUDA vector-add
+path, exposed as `decoder_graph_attention_residual_execution_ready` and
+`attention_residual_device_execution_ready`.
 
 This is still an intermediate decoder contract. Plain-text GPU generation
-remains blocked until King runs the residual add, finishes the FFN path, and
-returns bounded logits to the sampler.
+remains blocked until King finishes the FFN path and returns bounded logits to
+the sampler.
 
 GPU readiness is inspectable before model load:
 

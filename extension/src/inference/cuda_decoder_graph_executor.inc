@@ -2,80 +2,6 @@
  * CUDA decoder graph executor contract for native King GPU inference.
  */
 
-static void king_inference_cuda_decoder_graph_executor_reset_fields(king_inference_model_object *model)
-{
-    model->cuda_decoder_graph_executor_result = 0;
-    model->cuda_decoder_graph_executor_error[0] = '\0';
-    model->cuda_decoder_graph_executor_graph_count = 0;
-    model->cuda_decoder_graph_executor_last_op_count = 0;
-    model->cuda_decoder_graph_executor_last_supported_op_count = 0;
-    model->cuda_decoder_graph_executor_result_count = 0;
-    model->cuda_decoder_graph_executor_last_result_op_count = 0;
-    model->cuda_decoder_graph_executor_plan_count = 0;
-    model->cuda_decoder_graph_executor_last_plan_op_count = 0;
-    model->cuda_decoder_graph_executor_last_plan_device_ops = 0;
-    model->cuda_decoder_graph_executor_last_plan_host_sampling_ops = 0;
-    model->cuda_decoder_graph_executor_embedding_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_embedding_width = 0;
-    model->cuda_decoder_graph_executor_last_embedding_token_id = 0;
-    model->cuda_decoder_graph_executor_rms_norm_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_rms_norm_width = 0;
-    model->cuda_decoder_graph_executor_linear_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_linear_input_width = 0;
-    model->cuda_decoder_graph_executor_last_linear_rows = 0;
-    model->cuda_decoder_graph_executor_slice_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_slice_offset = 0;
-    model->cuda_decoder_graph_executor_last_slice_length = 0;
-    model->cuda_decoder_graph_executor_rope_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_rope_length = 0;
-    model->cuda_decoder_graph_executor_last_rope_position = 0;
-    model->cuda_decoder_graph_executor_kv_head_prepare_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_kv_head_key_length = 0;
-    model->cuda_decoder_graph_executor_last_kv_head_value_length = 0;
-    model->cuda_decoder_graph_executor_kv_write_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_kv_write_key_length = 0;
-    model->cuda_decoder_graph_executor_last_kv_write_value_length = 0;
-    model->cuda_decoder_graph_executor_last_kv_write_layer = 0;
-    model->cuda_decoder_graph_executor_last_kv_write_head = 0;
-    model->cuda_decoder_graph_executor_last_kv_write_position = 0;
-    model->cuda_decoder_graph_executor_kv_attention_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_key_length = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_value_length = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_layer = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_head = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_slot_start = 0;
-    model->cuda_decoder_graph_executor_last_kv_attention_slot_count = 0;
-    model->cuda_decoder_graph_executor_attention_stack_slot_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_attention_stack_width = 0;
-    model->cuda_decoder_graph_executor_last_attention_stack_input_index = 0;
-    model->cuda_decoder_graph_executor_last_attention_stack_input_count = 0;
-    model->cuda_decoder_graph_executor_attention_heads_execution_count = 0;
-    model->cuda_decoder_graph_executor_attention_stack_execution_count = 0;
-    model->cuda_decoder_graph_executor_attention_output_projection_execution_count = 0;
-    model->cuda_decoder_graph_executor_last_attention_stack_expected_heads = 0;
-    model->cuda_decoder_graph_executor_last_attention_stack_prepared_heads = 0;
-    model->cuda_decoder_graph_executor_last_attention_output_projection_width = 0;
-    model->cuda_decoder_graph_executor_attempted = false;
-    model->cuda_decoder_graph_executor_available = false;
-    model->cuda_decoder_graph_executor_token_decode_available = false;
-    model->cuda_decoder_graph_executor_sampling_readback_available = false;
-    model->cuda_decoder_graph_executor_result_contract_available = false;
-    model->cuda_decoder_graph_executor_execution_plan_available = false;
-    model->cuda_decoder_graph_executor_embedding_execution_available = false;
-    model->cuda_decoder_graph_executor_last_embedding_token_available = false;
-    model->cuda_decoder_graph_executor_rms_norm_execution_available = false;
-    model->cuda_decoder_graph_executor_linear_execution_available = false;
-    model->cuda_decoder_graph_executor_slice_execution_available = false;
-    model->cuda_decoder_graph_executor_rope_execution_available = false;
-    model->cuda_decoder_graph_executor_kv_head_prepare_execution_available = false;
-    model->cuda_decoder_graph_executor_kv_write_execution_available = false;
-    model->cuda_decoder_graph_executor_kv_attention_execution_available = false;
-    model->cuda_decoder_graph_executor_attention_stack_slot_execution_available = false;
-    model->cuda_decoder_graph_executor_attention_heads_execution_available = false;
-    model->cuda_decoder_graph_executor_attention_stack_execution_available = false;
-    model->cuda_decoder_graph_executor_attention_output_projection_execution_available = false;
-}
-
 static void king_inference_cuda_decoder_graph_executor_set_error(
     king_inference_model_object *model,
     int result,
@@ -377,6 +303,10 @@ static void king_inference_cuda_decoder_graph_executor_init(
     model->cuda_decoder_graph_executor_attention_output_projection_execution_available =
         model->cuda_decoder_graph_executor_attention_stack_execution_available
         && model->cuda_decoder_graph_executor_linear_execution_available;
+    model->cuda_decoder_graph_executor_attention_residual_execution_available =
+        model->cuda_decoder_graph_executor_attention_output_projection_execution_available
+        && model->cuda_vector_add_available
+        && model->cuda_device_allocator_available;
     model->cuda_decoder_graph_executor_result = 0;
     model->cuda_decoder_graph_executor_error[0] = '\0';
 }
@@ -459,6 +389,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     );
     add_assoc_bool(&executor, "attention_stack_execution_available", model->cuda_decoder_graph_executor_attention_stack_execution_available);
     add_assoc_bool(&executor, "attention_output_projection_execution_available", model->cuda_decoder_graph_executor_attention_output_projection_execution_available);
+    add_assoc_bool(&executor, "attention_residual_execution_available", model->cuda_decoder_graph_executor_attention_residual_execution_available);
     add_assoc_long(&executor, "graphs", (zend_long) model->cuda_decoder_graph_executor_graph_count);
     add_assoc_long(&executor, "last_op_count", (zend_long) model->cuda_decoder_graph_executor_last_op_count);
     add_assoc_long(
@@ -660,6 +591,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     );
     add_assoc_long(&executor, "attention_stack_device_executions", (zend_long) model->cuda_decoder_graph_executor_attention_stack_execution_count);
     add_assoc_long(&executor, "attention_output_projection_device_executions", (zend_long) model->cuda_decoder_graph_executor_attention_output_projection_execution_count);
+    add_assoc_long(&executor, "attention_residual_device_executions", (zend_long) model->cuda_decoder_graph_executor_attention_residual_execution_count);
     add_assoc_long(
         &executor,
         "last_attention_stack_expected_heads",
@@ -671,6 +603,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
         (zend_long) model->cuda_decoder_graph_executor_last_attention_stack_prepared_heads
     );
     add_assoc_long(&executor, "last_attention_output_projection_width", (zend_long) model->cuda_decoder_graph_executor_last_attention_output_projection_width);
+    add_assoc_long(&executor, "last_attention_residual_width", (zend_long) model->cuda_decoder_graph_executor_last_attention_residual_width);
     if (model->cuda_decoder_graph_executor_last_embedding_token_available
         && model->cuda_decoder_graph_executor_last_embedding_token_id <= (zend_ulong) ZEND_LONG_MAX) {
         add_assoc_long(
@@ -766,6 +699,7 @@ static void king_inference_cuda_decoder_graph_executor_add_status(
     );
     add_assoc_bool(return_value, "decoder_graph_attention_stack_execution_ready", model->cuda_decoder_graph_executor_attention_stack_execution_available);
     add_assoc_bool(return_value, "decoder_graph_attention_output_projection_execution_ready", model->cuda_decoder_graph_executor_attention_output_projection_execution_available);
+    add_assoc_bool(return_value, "decoder_graph_attention_residual_execution_ready", model->cuda_decoder_graph_executor_attention_residual_execution_available);
 }
 
 static void king_inference_cuda_decoder_graph_executor_apply_status(

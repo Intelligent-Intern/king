@@ -76,6 +76,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "cuda_logits_readback.inc"
 #include "token_decode_graph_builder.inc"
 #include "tensor_graph.inc"
+#include "cuda_decoder_graph_executor_reset.inc"
 #include "cuda_decoder_graph_executor.inc"
 #include "paged_kv_cache.inc"
 #include "tokenizer.inc"
