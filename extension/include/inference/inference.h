@@ -75,12 +75,16 @@ typedef struct _king_inference_stream_object {
     zend_long bytes_emitted;
     zend_long created_at;
     zend_long gpu_thermal_preflight_at;
+    zend_long gpu_thermal_abort_at;
     double gpu_thermal_preflight_temperature_c;
+    double gpu_thermal_abort_temperature_c;
+    double gpu_thermal_abort_ceiling_c;
     zend_string *response_id;
     bool start_event_pending;
     bool openai_compatible;
     bool gpu_thermal_preflight_checked;
     bool gpu_thermal_preflight_temperature_available;
+    bool gpu_thermal_aborted;
     bool done;
     bool cancelled;
     zend_object std;

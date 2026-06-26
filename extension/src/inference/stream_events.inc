@@ -337,6 +337,15 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
     add_assoc_bool(return_value, "done", stream->done);
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
+    add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
+    add_assoc_long(return_value, "gpu_thermal_abort_at", stream->gpu_thermal_abort_at);
+    if (stream->gpu_thermal_aborted) {
+        add_assoc_double(return_value, "gpu_thermal_abort_temperature_c", stream->gpu_thermal_abort_temperature_c);
+        add_assoc_double(return_value, "gpu_thermal_abort_ceiling_c", stream->gpu_thermal_abort_ceiling_c);
+    } else {
+        add_assoc_null(return_value, "gpu_thermal_abort_temperature_c");
+        add_assoc_null(return_value, "gpu_thermal_abort_ceiling_c");
+    }
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_bool(return_value, "openai_compatible", stream->openai_compatible);
     add_assoc_bool(return_value, "gpu_thermal_preflight_checked", stream->gpu_thermal_preflight_checked);
@@ -384,6 +393,7 @@ static void king_inference_stream_done_event(king_inference_stream_object *strea
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_long(return_value, "chunks", stream->chunk_count);
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
+    add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
 }
 
 static zend_result king_inference_stream_next_event(
@@ -435,7 +445,7 @@ static zend_result king_inference_stream_next_event(
 
     if (!Z_ISUNDEF(stream->model) && Z_TYPE(stream->model) == IS_OBJECT) {
         model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
-        if (king_inference_check_gpu_policy(&model->config, "King inference stream") != SUCCESS) {
+        if (king_inference_check_gpu_policy_during_run(stream, "King inference stream") != SUCCESS) {
             stream->cancelled = true;
             stream->done = true;
             king_inference_stream_close_process(stream, true);

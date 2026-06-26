@@ -1392,7 +1392,8 @@ namespace {
      * list array, and `graph_options` as an object array when provided. GPU
      * streams perform a fresh thermal preflight immediately before backend run
      * admission and expose that preflight through stream start events and
-     * `King\Inference\Stream::getMetrics()`.
+     * `King\Inference\Stream::getMetrics()`. Active GPU streams are aborted
+     * when the configured thermal ceiling is reached.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException
@@ -1472,7 +1473,8 @@ namespace {
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
      * return `chat.completion.chunk`-style arrays. The start event carries
      * `backend`, `native_stream`, `pid`, and GPU thermal-preflight fields
-     * where applicable.
+     * where applicable. Thermal-ceiling aborts terminate the stream and are
+     * exposed through `King\Inference\Stream::getMetrics()`.
      * @return array<string,mixed>|null
      */
     function king_inference_next(\King\Inference\Stream $stream, ?int $timeout_ms = null): ?array {}

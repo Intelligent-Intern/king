@@ -257,7 +257,11 @@ streams it happens directly before native graph events are prepared. Stream
 start events and `King\Inference\Stream::getMetrics()` expose
 `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and
 `gpu_thermal_preflight_temperature_c` so operators can distinguish stale model
-metadata from the last run-time admission check.
+metadata from the last run-time admission check. During an active GPU stream,
+King checks the same thermal ceiling before every event read; when the ceiling
+is reached, the stream is marked cancelled, the runner process is terminated,
+and metrics expose `gpu_thermal_aborted`, `gpu_thermal_abort_at`,
+`gpu_thermal_abort_temperature_c`, and `gpu_thermal_abort_ceiling_c`.
 
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status
@@ -1268,7 +1272,10 @@ terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
 native graph streams also `native_stream`, `native_event_count`, and
 `native_event_index`. GPU-enabled streams also report the last run preflight
 through `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and the
-optional `gpu_thermal_preflight_temperature_c`.
+optional `gpu_thermal_preflight_temperature_c`. If a running GPU stream is
+aborted at the configured thermal ceiling, metrics include
+`gpu_thermal_aborted`, `gpu_thermal_abort_at`,
+`gpu_thermal_abort_temperature_c`, and `gpu_thermal_abort_ceiling_c`.
 
 ## OO, Example 3: Parallel Inference Streams
 

@@ -124,12 +124,16 @@ static zend_object *king_inference_stream_object_create(zend_class_entry *ce)
     intern->bytes_emitted = 0;
     intern->created_at = 0;
     intern->gpu_thermal_preflight_at = 0;
+    intern->gpu_thermal_abort_at = 0;
     intern->gpu_thermal_preflight_temperature_c = 0.0;
+    intern->gpu_thermal_abort_temperature_c = 0.0;
+    intern->gpu_thermal_abort_ceiling_c = 0.0;
     intern->response_id = NULL;
     intern->start_event_pending = true;
     intern->openai_compatible = false;
     intern->gpu_thermal_preflight_checked = false;
     intern->gpu_thermal_preflight_temperature_available = false;
+    intern->gpu_thermal_aborted = false;
     intern->done = false;
     intern->cancelled = false;
     zend_object_std_init(&intern->std, ce);
