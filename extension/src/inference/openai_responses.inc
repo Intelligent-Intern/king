@@ -466,11 +466,10 @@ static zend_result king_inference_openai_responses_payload_response(
         result = king_inference_responses_stream_response(return_value, stream, response_id, message_id, &drain_controls);
     } else {
         smart_str content = {0};
-        const char *finish_reason = "stop";
         zval response_payload;
         zend_string *json = NULL;
 
-        result = king_inference_openai_drain_stream(stream, &stream_value, &drain_controls, &content, NULL, &finish_reason);
+        result = king_inference_openai_drain_stream(stream, &stream_value, &drain_controls, &content, NULL, NULL);
         smart_str_0(&content);
         if (result == SUCCESS) {
             result = king_inference_responses_output_payload(

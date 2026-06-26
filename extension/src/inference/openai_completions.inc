@@ -94,7 +94,7 @@ static zend_result king_inference_completion_run_prompt(
     zval stream_value;
     king_inference_stream_object *stream;
     smart_str content = {0};
-    const char *finish_reason = "stop";
+    zend_string *finish_reason = NULL;
     zend_result result;
 
     if (king_inference_completion_prompt_to_chat_payload(payload, prompt, &chat_payload) != SUCCESS) {
@@ -122,8 +122,11 @@ static zend_result king_inference_completion_run_prompt(
             choice_out,
             choice_index,
             content.s,
-            finish_reason
+            finish_reason != NULL ? ZSTR_VAL(finish_reason) : "stop"
         );
+    }
+    if (finish_reason != NULL) {
+        zend_string_release(finish_reason);
     }
     smart_str_free(&content);
     zval_ptr_dtor(&stream_value);

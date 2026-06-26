@@ -285,7 +285,7 @@ static zend_result king_inference_openai_drain_stream(
     const king_inference_openai_drain_controls *controls,
     smart_str *content,
     smart_str *sse_body,
-    const char **finish_reason_out)
+    zend_string **finish_reason_out)
 {
     zend_long events = 0;
     zend_long idle_events = 0;
@@ -293,7 +293,7 @@ static zend_result king_inference_openai_drain_stream(
     (void) stream_value;
 
     if (finish_reason_out != NULL) {
-        *finish_reason_out = "stop";
+        *finish_reason_out = zend_string_init("stop", sizeof("stop") - 1, 0);
     }
 
     while (events < controls->max_events && idle_events < controls->max_idle_events) {
@@ -327,9 +327,16 @@ static zend_result king_inference_openai_drain_stream(
         if (content != NULL) {
             king_inference_openai_append_delta_content(&event, content);
         }
-        if (king_inference_openai_chunk_is_terminal(&event, finish_reason_out)) {
-            zval_ptr_dtor(&event);
-            return SUCCESS;
+        {
+            const char *event_finish_reason = NULL;
+            if (king_inference_openai_chunk_is_terminal(&event, &event_finish_reason)) {
+                if (finish_reason_out != NULL && event_finish_reason != NULL) {
+                    zend_string_release(*finish_reason_out);
+                    *finish_reason_out = zend_string_init(event_finish_reason, strlen(event_finish_reason), 0);
+                }
+                zval_ptr_dtor(&event);
+                return SUCCESS;
+            }
         }
         zval_ptr_dtor(&event);
     }
@@ -521,7 +528,7 @@ static zend_result king_inference_openai_payload_response(
     king_inference_openai_drain_controls drain_controls;
     bool stream_requested;
     bool has_error_response = false;
-    const char *finish_reason = "stop";
+    zend_string *finish_reason = NULL;
     const char *generation_error = NULL;
     const char *limit_error = NULL;
 
@@ -608,7 +615,12 @@ static zend_result king_inference_openai_payload_response(
         );
         if (result == SUCCESS && tools_active) {
             smart_str_0(&content);
-            result = king_inference_openai_sse_append_buffered_chat(stream, &content, finish_reason, &sse);
+            result = king_inference_openai_sse_append_buffered_chat(
+                stream,
+                &content,
+                finish_reason != NULL ? ZSTR_VAL(finish_reason) : "stop",
+                &sse
+            );
         }
         if (result == SUCCESS && include_usage) {
             smart_str_0(&content);
@@ -619,6 +631,10 @@ static zend_result king_inference_openai_payload_response(
         }
         smart_str_0(&sse);
         zval_ptr_dtor(&stream_value);
+        if (finish_reason != NULL) {
+            zend_string_release(finish_reason);
+            finish_reason = NULL;
+        }
         if (result != SUCCESS) {
             smart_str_free(&sse);
             smart_str_free(&content);
@@ -646,12 +662,16 @@ static zend_result king_inference_openai_payload_response(
             king_inference_openai_completion_payload(
                 stream,
                 &content,
-                finish_reason,
+                finish_reason != NULL ? ZSTR_VAL(finish_reason) : "stop",
                 king_inference_openai_tools_active(payload),
                 &response_payload
             );
             result = king_inference_openai_json_encode(&response_payload, &json);
             zval_ptr_dtor(&response_payload);
+        }
+        if (finish_reason != NULL) {
+            zend_string_release(finish_reason);
+            finish_reason = NULL;
         }
         smart_str_free(&content);
         zval_ptr_dtor(&stream_value);
