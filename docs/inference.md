@@ -445,8 +445,10 @@ two linear projections from the same RMSNorm output, slicing the first key and
 value heads, running RoPE for the key head, writing that K/V pair into the
 device KV cache through the graph's `kv_write` op, then executing the first
 `kv_attention` op by running attention scores, softmax, and value aggregation
-against the device KV cache. Temporary buffers are released after the admitted
-initial device chain. It keeps
+against the device KV cache. The resulting context vector is retained inside
+the K/V helper until the downstream residual bridge can consume it, then
+released during the helper cleanup path. Other temporary buffers are released
+after the admitted initial device chain. It keeps
 `device_execution_result_ready=false` until the CUDA executor carries the
 remaining residual, FFN, and logits ops through bounded logits and writes real
 token results back into the stream contract. The GPU

@@ -337,6 +337,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     king_inference_cuda_device_ptr key_rope_output = 0;
     king_inference_cuda_device_ptr value_slice_output = 0;
     king_inference_cuda_device_ptr query_rope_output = 0;
+    king_inference_cuda_device_ptr attention_context_output = 0;
     zend_ulong key_rows = 0;
     zend_ulong value_rows = 0;
     zend_ulong key_slice_offset = 0;
@@ -345,6 +346,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     zend_ulong value_slice_length = 0;
     zend_ulong key_rope_length = 0;
     zend_ulong query_rope_length = 0;
+    zend_ulong attention_context_length = 0;
     bool key_rope_executed = false;
     bool query_rope_executed = false;
 
@@ -564,12 +566,15 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
             query_rope_output,
             query_rope_length,
             &kv_attention_probe,
+            &attention_context_output,
+            &attention_context_length,
             executed_device_ops
     ) != SUCCESS) {
         zval_ptr_dtor(&kv_attention_probe);
         zval_ptr_dtor(&kv_write_probe);
         zval_ptr_dtor(&key_rope_probe);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &query_rope_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &attention_context_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
@@ -581,6 +586,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
         zval_ptr_dtor(&kv_attention_probe);
         zval_ptr_dtor(&kv_write_probe);
         zval_ptr_dtor(&key_rope_probe);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &attention_context_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_slice_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
@@ -596,10 +602,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
         return FAILURE;
     }
     add_assoc_bool(query_rope_probe, "retained_device_output", false);
+    add_assoc_long(kv_probe, "attention_context_length", (zend_long) attention_context_length);
     add_assoc_bool(&key_rope_probe, "retained_device_output", false);
-    add_assoc_zval(kv_probe, "key_rope_execution", &key_rope_probe);
-    add_assoc_zval(kv_probe, "kv_write_execution", &kv_write_probe);
-    add_assoc_zval(kv_probe, "kv_attention_execution", &kv_attention_probe);
 
     model->cuda_decoder_graph_executor_kv_head_prepare_execution_count++;
     model->cuda_decoder_graph_executor_last_kv_head_key_length = key_slice_length;
@@ -615,6 +619,30 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     add_assoc_long(kv_probe, "value_linear_rows", (zend_long) value_rows);
     add_assoc_long(kv_probe, "value_slice_offset", (zend_long) value_slice_offset);
     add_assoc_long(kv_probe, "value_slice_length", (zend_long) value_slice_length);
+
+    if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &attention_context_output) != SUCCESS) {
+        zval_ptr_dtor(&kv_attention_probe);
+        zval_ptr_dtor(&kv_write_probe);
+        zval_ptr_dtor(&key_rope_probe);
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : "cuda_decoder_graph_kv_attention_context_free_failed"
+        );
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_linear_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_rope_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_slice_output);
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &key_linear_output);
+        return FAILURE;
+    }
+    add_assoc_bool(&kv_attention_probe, "retained_device_output", false);
+    add_assoc_bool(kv_probe, "attention_context_released", true);
+    add_assoc_zval(kv_probe, "key_rope_execution", &key_rope_probe);
+    add_assoc_zval(kv_probe, "kv_write_execution", &kv_write_probe);
+    add_assoc_zval(kv_probe, "kv_attention_execution", &kv_attention_probe);
 
     if (king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &value_slice_output) != SUCCESS) {
         king_inference_cuda_decoder_graph_executor_set_error(
