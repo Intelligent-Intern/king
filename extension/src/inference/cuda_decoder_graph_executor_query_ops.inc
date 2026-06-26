@@ -41,6 +41,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
     zval *kv_head_prepare_probe,
     king_inference_cuda_device_ptr *attention_stack_output,
     zend_ulong *attention_stack_width,
+    zend_string **attention_stack_id,
     zend_ulong *executed_device_ops,
     zend_ulong *first_slice_length,
     bool *rope_executed,
@@ -156,6 +157,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_query_atte
                 &head_kv_probe,
                 attention_stack_output,
                 attention_stack_width,
+                attention_stack_id,
                 executed_device_ops,
                 &head_prepared
         ) != SUCCESS) {

@@ -314,6 +314,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
     zval *kv_probe,
     king_inference_cuda_device_ptr *attention_stack_output,
     zend_ulong *attention_stack_width,
+    zend_string **attention_stack_id,
     zend_ulong *executed_device_ops,
     bool *kv_prepared
 ) {
@@ -633,6 +634,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_head_pr
             &attention_stack_probe,
             attention_stack_output,
             attention_stack_width,
+            attention_stack_id,
             executed_device_ops
     ) != SUCCESS) {
         zval_ptr_dtor(&attention_stack_probe);

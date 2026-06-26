@@ -118,6 +118,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
     zval *stack_probe,
     king_inference_cuda_device_ptr *stack_output,
     zend_ulong *stack_width,
+    zend_string **stack_id_out,
     zend_ulong *executed_device_ops
 ) {
     zval *stack_op = king_inference_cuda_decoder_graph_executor_stack_op_for_input(graph, context_id);
@@ -155,6 +156,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_attention_
     if (king_inference_graph_required_string(stack_op, "id", &stack_id) != SUCCESS) {
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_attention_stack_id_invalid");
         return FAILURE;
+    }
+    if (stack_id_out != NULL && *stack_id_out != NULL && !zend_string_equals(*stack_id_out, stack_id)) {
+        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_attention_stack_id_mismatch");
+        return FAILURE;
+    }
+    if (stack_id_out != NULL && *stack_id_out == NULL) {
+        *stack_id_out = stack_id;
     }
     if (king_inference_cuda_decoder_graph_executor_attention_stack_shape(
             model,
