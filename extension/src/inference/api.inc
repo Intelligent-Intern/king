@@ -416,9 +416,7 @@ PHP_FUNCTION(king_inference_cancel)
     ZEND_PARSE_PARAMETERS_END();
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(stream_object));
-    stream->cancelled = true;
-    stream->done = true;
-    king_inference_stream_close_process(stream, true);
+    king_inference_stream_cancel_state(stream);
     RETURN_TRUE;
 }
 
@@ -768,9 +766,7 @@ PHP_METHOD(King_Inference_Stream, cancel)
     ZEND_PARSE_PARAMETERS_NONE();
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    stream->cancelled = true;
-    stream->done = true;
-    king_inference_stream_close_process(stream, true);
+    king_inference_stream_cancel_state(stream);
     RETURN_TRUE;
 }
 

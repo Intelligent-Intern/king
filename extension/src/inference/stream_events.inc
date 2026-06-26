@@ -22,6 +22,17 @@ static bool king_inference_stream_has_native_events(king_inference_stream_object
     return !Z_ISUNDEF(stream->native_events) && Z_TYPE(stream->native_events) == IS_ARRAY;
 }
 
+static void king_inference_stream_cancel_state(king_inference_stream_object *stream)
+{
+    stream->cancelled = true;
+    stream->start_event_pending = false;
+    if (king_inference_stream_has_native_events(stream)) {
+        stream->native_event_index = (zend_ulong) zend_hash_num_elements(Z_ARRVAL(stream->native_events));
+    }
+    king_inference_stream_close_process(stream, true);
+    stream->done = true;
+}
+
 static void king_inference_stream_openai_chunk(
     king_inference_stream_object *stream,
     const char *role,
@@ -484,9 +495,7 @@ static zend_result king_inference_stream_next_event(
     if (!Z_ISUNDEF(stream->model) && Z_TYPE(stream->model) == IS_OBJECT) {
         model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
         if (king_inference_check_gpu_policy_during_run(stream, "King inference stream") != SUCCESS) {
-            stream->cancelled = true;
-            stream->done = true;
-            king_inference_stream_close_process(stream, true);
+            king_inference_stream_cancel_state(stream);
             return FAILURE;
         }
     }

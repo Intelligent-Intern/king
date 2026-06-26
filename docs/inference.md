@@ -1378,6 +1378,9 @@ while (($event = Inference::next($stream, 500)) !== null) {
 
 The static facade mirrors the procedural surface: `Inference::nextAsync($stream)`
 returns a `King\Awaitable`, and `Inference::cancel($stream)` closes the stream.
+For native decoder streams, cancellation also drops any pending start event and
+advances the native event cursor to the end of the prepared token buffer, so no
+buffered decoder tokens are emitted after cancellation.
 
 ## OO, Example 2: Explicit Model And Cancellation
 
@@ -1426,9 +1429,11 @@ $metrics = $stream->getMetrics();
 `Stream::getMetrics()` reports emitted token chunks, stderr chunks, bytes,
 terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
 native graph streams also `native_stream`, `native_event_count`, and
-`native_event_index`. GPU-enabled streams also report the last run preflight
-through `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and the
-optional `gpu_thermal_preflight_temperature_c`. If a running GPU stream is
+`native_event_index`. After native stream cancellation, `native_event_index`
+points at the end of the prepared native event buffer. GPU-enabled streams also
+report the last run preflight through `gpu_thermal_preflight_checked`,
+`gpu_thermal_preflight_at`, and the optional
+`gpu_thermal_preflight_temperature_c`. If a running GPU stream is
 aborted at the configured thermal ceiling, metrics include
 `gpu_thermal_aborted`, `gpu_thermal_abort_at`,
 `gpu_thermal_abort_temperature_c`, and `gpu_thermal_abort_ceiling_c`.
