@@ -770,7 +770,14 @@ passes temperature to `bin/king-local-infer` with double round-trip precision
 instead of rounding it for display.
 `sample_token` supports temperature, top-k, top-p, optional
 seeded deterministic sampling, `sample_index` as a per-step seed salt, and
-`token_offset` for sharded vocab projections. Graph numeric options such as
+`token_offset` for sharded vocab projections. `seed` must be an integer when
+provided; the decode graph builder forwards it unchanged into `sample_token`,
+and the local runner rejects non-integer CLI seed values before graph
+construction. For identical logits, temperature, top-k, top-p, seed, and
+sample-index inputs, the selected rank is reproducible. Direct `sample_token`
+ops without a seed keep the sorted top candidate; the decode graph builder and
+local runner default to seed `0` so generated-token loops stay reproducible.
+Graph numeric options such as
 sampling temperature, top-p, vector scales, softmax scale, KV-attention scale,
 RMS epsilon, and RoPE position scale must be finite numbers. `top_k` must be a
 non-negative integer. `top_k=0` means no top-k cap; positive values cap the

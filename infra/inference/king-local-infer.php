@@ -92,7 +92,7 @@ function parse_args(array $argv): array
                 $options['sampler'] = $next();
                 break;
             case '--seed':
-                $options['seed'] = (int) $next();
+                $options['seed'] = $int($next(), $arg);
                 break;
             case '-c':
             case '--ctx-size':

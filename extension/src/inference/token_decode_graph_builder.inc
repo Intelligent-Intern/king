@@ -37,11 +37,7 @@ static zend_result king_inference_decode_graph_non_negative_long_option(
     if (value == NULL) {
         return SUCCESS;
     }
-    if (Z_TYPE_P(value) != IS_LONG) {
-        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph option '%s' must be a non-negative integer.", key);
-        return FAILURE;
-    }
-    if (Z_LVAL_P(value) < 0) {
+    if (Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) < 0) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph option '%s' must be a non-negative integer.", key);
         return FAILURE;
     }
@@ -406,6 +402,8 @@ static zend_result king_inference_decode_graph_add_sampler(
     double temperature;
     double top_p;
     zend_long top_k;
+    zend_long seed = 0;
+    zval *seed_value = king_inference_array_find(options, "seed");
 
     *mode_out = "sample";
     *op_out = NULL;
@@ -424,6 +422,13 @@ static zend_result king_inference_decode_graph_add_sampler(
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph top_p must be greater than zero and at most one.");
         return FAILURE;
     }
+    if (seed_value != NULL && Z_TYPE_P(seed_value) != IS_LONG) {
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph option 'seed' must be an integer.");
+        return FAILURE;
+    }
+    if (seed_value != NULL) {
+        seed = Z_LVAL_P(seed_value);
+    }
     *mode_out = mode;
     *temperature_out = temperature;
     if (strcmp(mode, "argmax") == 0) {
@@ -440,7 +445,7 @@ static zend_result king_inference_decode_graph_add_sampler(
     add_assoc_double(&op, "temperature", temperature);
     add_assoc_long(&op, "top_k", top_k);
     add_assoc_double(&op, "top_p", top_p);
-    add_assoc_long(&op, "seed", king_inference_long_from_array(options, "seed", 0));
+    add_assoc_long(&op, "seed", seed);
     add_assoc_long(&op, "sample_index", (zend_long) position);
     king_inference_decode_graph_push_op(ops, &op);
     *op_out = "sample_token";
