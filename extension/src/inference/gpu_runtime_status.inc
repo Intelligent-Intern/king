@@ -450,6 +450,7 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "driver_visible", driver_visible);
     add_assoc_bool(return_value, "config_ready", config_ready);
     add_assoc_bool(return_value, "gpu_embedding_row_loader_ready", false);
+    add_assoc_bool(return_value, "gpu_device_vector_ops_ready", false);
     add_assoc_bool(return_value, "decoder_graph_executor_ready", false);
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", false);
     add_assoc_bool(return_value, "plain_text_chat_ready", false);
@@ -743,6 +744,7 @@ static void king_inference_gpu_runtime_status_from_model(
     king_inference_cuda_weight_upload_apply_status(model, return_value);
     king_inference_cuda_quantized_matvec_apply_status(model, return_value);
     king_inference_cuda_embedding_row_apply_status(model, return_value);
+    king_inference_cuda_device_vector_ops_apply_status(model, return_value);
     king_inference_cuda_rms_norm_apply_status(model, return_value);
     king_inference_cuda_rope_apply_status(model, return_value);
     king_inference_cuda_attention_scores_apply_status(model, return_value);

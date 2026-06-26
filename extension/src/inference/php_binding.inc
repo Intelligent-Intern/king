@@ -64,6 +64,7 @@ static zend_result king_inference_llm_cache_prepare_stream(
 #include "cuda_weight_upload.inc"
 #include "cuda_quantized_matvec.inc"
 #include "cuda_embedding_row.inc"
+#include "cuda_device_vector_ops.inc"
 #include "cuda_rms_norm.inc"
 #include "cuda_rope.inc"
 #include "cuda_attention_scores.inc"
