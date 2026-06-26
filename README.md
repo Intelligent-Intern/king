@@ -387,8 +387,8 @@ The core programming model is:
   allocates device memory, uploads required weights, caches uploaded tensors,
   and exposes native Q8_0 quantized matrix/vector, RMSNorm, RoPE, attention
   score, attention softmax, attention value aggregation, FFN/SwiGLU, and final
-  output projection paths as the first decoder compute leaves. Memory-enabled
-  native graph streams also
+  output projection paths, and bounded top-K logits readback as the first
+  decoder compute leaves. Memory-enabled native graph streams also
   enforce an LLM-cache admission policy with a configurable disk-free floor and
   webhook/MCP alert metadata. The process-runner path is explicit `local`
   configuration.

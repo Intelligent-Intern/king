@@ -83,6 +83,9 @@ typedef struct _king_inference_model_object {
     void *cuda_ffn_swiglu_nvrtc_handle;
     void *cuda_ffn_swiglu_module;
     void *cuda_ffn_swiglu_function;
+    void *cuda_logits_readback_nvrtc_handle;
+    void *cuda_logits_readback_module;
+    void *cuda_logits_top_k_function;
     king_inference_cuda_device_allocation *cuda_device_allocations;
     king_inference_cuda_weight_upload *cuda_weight_uploads;
     int cuda_device;
@@ -97,6 +100,7 @@ typedef struct _king_inference_model_object {
     int cuda_attention_values_result;
     int cuda_ffn_swiglu_result;
     int cuda_output_projection_result;
+    int cuda_logits_readback_result;
     char cuda_context_error[160];
     char cuda_device_allocator_error[160];
     char cuda_weight_upload_error[160];
@@ -108,6 +112,7 @@ typedef struct _king_inference_model_object {
     char cuda_attention_values_error[160];
     char cuda_ffn_swiglu_error[160];
     char cuda_output_projection_error[160];
+    char cuda_logits_readback_error[160];
     size_t cuda_device_bytes_allocated;
     size_t cuda_device_peak_bytes_allocated;
     size_t cuda_device_allocation_count;
@@ -128,6 +133,12 @@ typedef struct _king_inference_model_object {
     size_t cuda_attention_values_launch_count;
     size_t cuda_ffn_swiglu_launch_count;
     size_t cuda_output_projection_launch_count;
+    size_t cuda_logits_readback_launch_count;
+    size_t cuda_logits_readback_candidate_limit;
+    size_t cuda_logits_readback_last_candidate_count;
+    size_t cuda_logits_readback_last_bytes;
+    size_t cuda_logits_readback_full_bytes;
+    size_t cuda_logits_readback_saved_bytes;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
     bool cuda_context_attempted;
@@ -182,6 +193,12 @@ typedef struct _king_inference_model_object {
     bool cuda_output_projection_uploaded;
     bool cuda_output_projection_tied_token_embedding;
     bool cuda_output_projection_q8_0_available;
+    bool cuda_logits_readback_attempted;
+    bool cuda_logits_readback_available;
+    bool cuda_logits_readback_nvrtc_available;
+    bool cuda_logits_readback_module_loaded;
+    bool cuda_logits_readback_top_k_available;
+    bool cuda_logits_readback_bounded_cpu_available;
     zend_object std;
 } king_inference_model_object;
 
