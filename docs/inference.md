@@ -11,10 +11,12 @@ filesystem paths through `artifact`, `artifact.path`, or `artifact_path`.
 Those fields must be non-empty strings; object-store references are rejected
 until they are materialized to a local GGUF path.
 Optional public metadata fields are also strict: `name`, `quantization`,
-`owned_by`, `embedding_tensor`, and `token_embedding_tensor` must be non-empty
-strings when provided, and `context_tokens` must be a positive integer. Invalid
-model metadata is rejected during model load instead of being silently ignored
-by later model listings, embedding routes, or runner argument mapping.
+`owned_by`, `embedding_tensor`, `token_embedding_tensor`, `output_tensor`,
+`output_projection_tensor`, and `lm_head_tensor` must be non-empty strings when
+provided, and `context_tokens` must be a positive integer. Invalid model
+metadata is rejected during model load instead of being silently ignored by
+later model listings, embedding routes, decoder graph construction, or runner
+argument mapping.
 `king_inference_token_decode()` and `King\Inference\Model::tokenDecode()`
 decode one native token id through the tokenizer loaded from the same GGUF
 artifact; local runners use that surface instead of reading tokenizer arrays
@@ -394,7 +396,13 @@ rank-2 tensors by a PHP vector with explicit safety limits.
 embedding resolver honors explicit `tensor`, `embedding_tensor`, and
 `token_embedding_tensor` configuration first, then checks known GGUF names, and
 finally performs a guarded shape/name-hint scan when architecture embedding
-length and tokenizer row count are available.
+length and tokenizer row count are available. The output projection resolver
+uses the same explicit-first order for `tensor`, `output_tensor`,
+`output_projection_tensor`, and `lm_head_tensor`, then checks known GGUF
+output/lm-head names and performs a guarded shape/name-hint scan. If the model
+does not carry a separate output projection tensor but the token embedding
+tensor resolves, King reports the output projection as `tied_token_embedding`
+instead of guessing a second tensor.
 `gguf_architecture_metadata.inc` captures model-shape metadata such as context
 length, layer count, head count, KV head count, embedding length, and
 key/value dimensions. It also classifies the loaded GGUF architecture against
@@ -424,8 +432,11 @@ additionally exposes `native_model_mapped`, `native_map_bytes`,
 `native_tensor_index_count`, `native_tokenizer_token_count`,
 `native_tokenizer_merge_count`, `tokenization_ready`, and
 `paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`
-and `resolved_tensors.token_embedding`, so callers can inspect the selected
-token embedding tensor before building decoder graphs.
+and `resolved_tensors.token_embedding` plus
+`resolved_tensors.output_projection`, so callers can inspect the selected
+embedding and logits projection tensors before building decoder graphs. The
+output projection entry includes `tied_token_embedding=true` when the model
+uses the token embedding matrix for logits projection.
 `backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
 selected backend kind; configured GPU use remains visible through
 `gpu_enabled`. `backend_capabilities.native_token_selection` refers to King

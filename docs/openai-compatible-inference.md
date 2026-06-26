@@ -93,8 +93,9 @@ be a non-empty string. The registered models must resolve to unique listed
 OpenAI model ids; duplicate listed ids are rejected as router configuration
 errors.
 Loaded model metadata is strict before the router sees it: model `name`,
-`owned_by`, `embedding_tensor`, and `token_embedding_tensor` must be non-empty
-strings when provided.
+`owned_by`, `embedding_tensor`, `token_embedding_tensor`, `output_tensor`,
+`output_projection_tensor`, and `lm_head_tensor` must be non-empty strings when
+provided.
 
 `GET /v1/models` and `GET /v1/models/{model}` return normal OpenAI model
 objects plus an `x_king` extension object. Model objects always include integer

@@ -132,6 +132,9 @@ static zend_result king_inference_validate_model_config(zval *config, const char
         || king_inference_validate_optional_string_config(config, "owned_by", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "embedding_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_string_config(config, "token_embedding_tensor", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "output_tensor", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "output_projection_tensor", function_name) != SUCCESS
+        || king_inference_validate_optional_string_config(config, "lm_head_tensor", function_name) != SUCCESS
         || king_inference_validate_optional_positive_long_config(config, "context_tokens", function_name) != SUCCESS
         || king_inference_validate_optional_bool_alias_config(config, "with_memory", "with-memory", function_name) != SUCCESS
         || king_inference_validate_gpu_config(config, function_name) != SUCCESS) {
@@ -373,7 +376,7 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
         (zend_long) zend_hash_num_elements(Z_ARRVAL(intern->tokenizer_merges))
     );
     king_inference_add_gguf_metadata_array(&intern->gguf, return_value);
-    king_inference_add_token_embedding_resolution_info(intern, return_value);
+    king_inference_add_tensor_resolution_info(intern, return_value);
     if (!Z_ISUNDEF(intern->paged_kv_cache_plan)) {
         zval plan;
         ZVAL_COPY(&plan, &intern->paged_kv_cache_plan);
