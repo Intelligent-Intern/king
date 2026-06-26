@@ -400,9 +400,11 @@ The core programming model is:
   token embedding row loading, now executes through the CUDA embedding kernel;
   the following RMSNorm op can run on that device vector through the CUDA
   RMSNorm kernel, and the following Q8_0 linear projection can run through the
-  CUDA quantized matvec kernel before temporary buffers are released. The
-  contract still refuses to claim decoded token output before full device
-  execution results exist. The native GPU prompt-loop admission path can
+  CUDA quantized matvec kernel. When the next graph op slices that linear
+  output for attention heads, the CUDA slice vector kernel runs before
+  temporary buffers are released. The contract still refuses to claim decoded
+  token output before full device execution results exist. The native GPU
+  prompt-loop admission path can
   tokenize prompt text, build token-decode graphs, and validate those graphs
   into result envelopes against the GPU executor without falling back to CPU
   execution. The GPU
@@ -410,10 +412,10 @@ The core programming model is:
   for start events, native events, cancellation, metrics, and thermal
   preflight/abort metadata, while OpenAI
   text generation remains blocked until the full GPU decoder loop is ready.
-  GPU metadata exposes the remaining bridge explicitly: the remaining attention,
-  residual, FFN, and logits device ops after the initial embedding/RMSNorm/linear
-  chain still need execution and bounded logits results before the prompt loop
-  may emit decoded tokens.
+  GPU metadata exposes the remaining bridge explicitly: the remaining RoPE,
+  KV attention, residual, FFN, and logits device ops after the initial
+  embedding/RMSNorm/linear/slice chain still need execution and bounded logits
+  results before the prompt loop may emit decoded tokens.
   Sampling stays CPU-side for the current native GPU
   contract: the GPU narrows logits to bounded candidates, then the existing
   deterministic token-selection policy applies temperature, top-k, top-p, and
