@@ -35,6 +35,10 @@ function king_openai_router_message_content_text(mixed $content): string
 
 function king_openai_router_deterministic_content(array $payload, array $routerOptions = []): ?string
 {
+    if (function_exists('king_openai_engine_deterministic_result')) {
+        $result = king_openai_engine_deterministic_result($payload, $routerOptions);
+        return is_array($result) && is_string($result['content'] ?? null) ? $result['content'] : null;
+    }
     if (function_exists('king_openai_router_deterministic_result')) {
         $result = king_openai_router_deterministic_result($payload, $routerOptions);
         return is_array($result) && is_string($result['content'] ?? null) ? $result['content'] : null;

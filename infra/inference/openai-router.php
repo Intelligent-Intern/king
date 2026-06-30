@@ -7,6 +7,7 @@ require_once __DIR__ . '/openai-router-models.php';
 require_once __DIR__ . '/openai-router-coder.php';
 require_once __DIR__ . '/openai-router-prompt.php';
 require_once __DIR__ . '/openai-router-tools.php';
+require_once __DIR__ . '/openai-engine-deterministic.php';
 require_once __DIR__ . '/openai-router-memory.php';
 require_once __DIR__ . '/openai-router-stream.php';
 
@@ -687,7 +688,7 @@ while (true) {
                         $preparedRequest['headers'] = [];
                     }
                     $preparedRequest['headers']['content-length'] = (string) strlen($preparedRequest['body']);
-                    $deterministicResult = king_openai_router_deterministic_result($preparedPayload, $routerOptions);
+                    $deterministicResult = king_openai_engine_deterministic_result($preparedPayload, $routerOptions);
                     if ($deterministicResult !== null && is_string($deterministicResult['content'] ?? null)) {
                         $responseModel = is_string($preparedPayload['model'] ?? null) && $preparedPayload['model'] !== ''
                             ? $preparedPayload['model']
