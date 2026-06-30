@@ -614,6 +614,7 @@ typedef struct _king_inference_stream_object {
 
 PHP_FUNCTION(king_inference_model_load);
 PHP_FUNCTION(king_inference_runtime_model_config);
+PHP_FUNCTION(king_inference_runtime_model_registry_config);
 PHP_FUNCTION(king_inference_runtime_model_load);
 PHP_FUNCTION(king_inference_runtime_mini_op_content);
 PHP_FUNCTION(king_inference_gpu_runtime_status);

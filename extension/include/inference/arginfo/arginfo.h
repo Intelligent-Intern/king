@@ -2,6 +2,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_runtime_model_con
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, config, IS_MIXED, 1, "null")
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_king_inference_runtime_model_registry_config, 0, 0, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, config, IS_MIXED, 1, "null")
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_king_inference_runtime_model_load, 0, 0, King\\Inference\\Model, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, config, IS_MIXED, 1, "null")
 ZEND_END_ARG_INFO()

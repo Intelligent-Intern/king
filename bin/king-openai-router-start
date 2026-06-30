@@ -84,6 +84,7 @@ gpu_snapshot() {
 HOST="${KING_OPENAI_HOST:-127.0.0.1}"
 PORT="${KING_OPENAI_PORT:-8080}"
 PROFILE="$(ini_value king.inference_preferred_model_profile auto)"
+MODEL_REGISTRY="$(ini_value king.inference_models "")"
 GPU_ENABLED="$(ini_value king.gpu_bindings_enable 0)"
 GPU_BACKEND="$(ini_value king.gpu_default_backend disabled)"
 GPU_LAYERS="$(ini_value king.inference_gpu_max_gpu_layers 0)"
@@ -113,6 +114,7 @@ root=$ROOT
 ini=$INI
 bind=$HOST:$PORT
 profile=$PROFILE
+model.registry=$MODEL_REGISTRY
 gpu.enabled=$GPU_ENABLED
 gpu.backend=$GPU_BACKEND
 gpu.layers=$GPU_LAYERS

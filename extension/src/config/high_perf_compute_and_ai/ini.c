@@ -178,6 +178,8 @@ static ZEND_INI_MH(OnUpdateInferenceString)
 {
     if (zend_string_equals_literal(entry->name, "king.inference_cpu_model_name")) {
         high_perf_replace_string(&king_high_perf_compute_ai_config.inference_cpu_model_name, new_value);
+    } else if (zend_string_equals_literal(entry->name, "king.inference_models")) {
+        high_perf_replace_string(&king_high_perf_compute_ai_config.inference_models, new_value);
     } else if (zend_string_equals_literal(entry->name, "king.inference_cpu_model_artifact")) {
         high_perf_replace_string(&king_high_perf_compute_ai_config.inference_cpu_model_artifact, new_value);
     } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_model_name")) {
@@ -268,6 +270,7 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.inference_kv_page_tokens", "16", PHP_INI_SYSTEM, OnUpdateAiPositiveLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_kv_element_bytes", "2", PHP_INI_SYSTEM, OnUpdateAiPositiveLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_preferred_model_profile", "auto", PHP_INI_SYSTEM, OnUpdateInferenceProfile, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_models", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_cpu_model_name", "gemma3:1b", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_cpu_model_artifact", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_model_name", "gemma4:12b", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)

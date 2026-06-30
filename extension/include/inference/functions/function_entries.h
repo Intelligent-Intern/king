@@ -1,4 +1,5 @@
     PHP_FE(king_inference_runtime_model_config, arginfo_king_inference_runtime_model_config)
+    PHP_FE(king_inference_runtime_model_registry_config, arginfo_king_inference_runtime_model_registry_config)
     PHP_FE(king_inference_runtime_model_load, arginfo_king_inference_runtime_model_load)
     PHP_FE(king_inference_runtime_mini_op_content, arginfo_king_inference_runtime_mini_op_content)
     PHP_FE(king_inference_gpu_runtime_status, arginfo_king_inference_gpu_runtime_status)

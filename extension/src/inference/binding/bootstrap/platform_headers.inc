@@ -6,6 +6,7 @@
 #include "config/resource_helpers.h"
 
 #include <errno.h>
+#include <ctype.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <limits.h>

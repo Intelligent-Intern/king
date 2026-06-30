@@ -94,6 +94,7 @@ void king_config_release_module_globals(void)
     memset(&king_dynamic_admin_api_config, 0, sizeof(king_dynamic_admin_api_config));
 
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_preferred_model_profile);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_models);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_name);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_artifact);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_name);

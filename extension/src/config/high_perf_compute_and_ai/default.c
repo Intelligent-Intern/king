@@ -25,6 +25,7 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.inference_kv_page_tokens = 16;
     king_high_perf_compute_ai_config.inference_kv_element_bytes = 2;
     king_high_perf_compute_ai_config.inference_preferred_model_profile = pestrdup("auto", 1);
+    king_high_perf_compute_ai_config.inference_models = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_cpu_model_name = pestrdup("gemma3:1b", 1);
     king_high_perf_compute_ai_config.inference_cpu_model_artifact = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_model_name = pestrdup("gemma4:12b", 1);

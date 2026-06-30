@@ -140,6 +140,7 @@ static void king_config_free_mcp_orchestrator_strings(kg_mcp_orchestrator_config
 static void king_config_free_compute_ai_strings(kg_high_perf_compute_ai_config_t *compute_ai)
 {
     pefree(compute_ai->inference_preferred_model_profile, 1);
+    pefree(compute_ai->inference_models, 1);
     pefree(compute_ai->inference_cpu_model_name, 1);
     pefree(compute_ai->inference_cpu_model_artifact, 1);
     pefree(compute_ai->inference_gpu_model_name, 1);
@@ -257,6 +258,7 @@ static void king_config_clone_owned_strings(king_cfg_t *cfg)
     cfg->owns_mcp_orchestrator_strings = 1;
 
     cfg->compute_ai.inference_preferred_model_profile = king_config_clone_persistent_string(cfg->compute_ai.inference_preferred_model_profile);
+    cfg->compute_ai.inference_models = king_config_clone_persistent_string(cfg->compute_ai.inference_models);
     cfg->compute_ai.inference_cpu_model_name = king_config_clone_persistent_string(cfg->compute_ai.inference_cpu_model_name);
     cfg->compute_ai.inference_cpu_model_artifact = king_config_clone_persistent_string(cfg->compute_ai.inference_cpu_model_artifact);
     cfg->compute_ai.inference_gpu_model_name = king_config_clone_persistent_string(cfg->compute_ai.inference_gpu_model_name);

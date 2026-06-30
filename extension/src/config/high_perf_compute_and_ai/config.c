@@ -175,6 +175,8 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_validate_positive_long(value, &target->inference_kv_element_bytes) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_preferred_model_profile")) {
             if (kg_validate_string_from_allowlist(value, k_high_perf_inference_profile_allowed, &target->inference_preferred_model_profile) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_models")) {
+            if (kg_high_perf_apply_string_field(value, "inference_models", &target->inference_models) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_cpu_model_name")) {
             if (kg_high_perf_apply_string_field(value, "inference_cpu_model_name", &target->inference_cpu_model_name) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_cpu_model_artifact")) {

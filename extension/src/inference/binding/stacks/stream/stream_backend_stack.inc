@@ -11,6 +11,7 @@
 #include "../../../backends/registry/backend_registry.inc"
 #include "../../../runtime/config/model_config.inc"
 #include "../../../runtime/config/runtime_profile.inc"
+#include "../../../runtime/config/runtime_model_registry.inc"
 #include "../../../runtime/cache/llm_cache_policy.inc"
 #include "../../../openai/resources/openai_usage.inc"
 #include "../../../runtime/events/stream_events.inc"

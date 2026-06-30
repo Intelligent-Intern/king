@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__, 2);
 require_once __DIR__ . '/runtime-logging.php';
+require_once __DIR__ . '/openai-router-models.php';
 require_once __DIR__ . '/openai-router-coder.php';
 require_once __DIR__ . '/openai-router-prompt.php';
 require_once __DIR__ . '/openai-router-tools.php';
@@ -46,7 +47,12 @@ function king_openai_router_artifact_path(array $config): string
     return king_openai_router_string($artifact, 'path', king_openai_router_string($config, 'artifact_path'));
 }
 
-$runtimeModelConfig = king_inference_runtime_model_config();
+$runtimeModelConfigs = king_openai_router_model_configs();
+$runtimeModelConfig = reset($runtimeModelConfigs);
+if (!is_array($runtimeModelConfig)) {
+    fwrite(STDERR, "King runtime model registry did not provide a primary model config.\n");
+    exit(1);
+}
 $modelName = king_openai_router_string($runtimeModelConfig, 'name', 'king-runtime');
 $backend = king_openai_router_string($runtimeModelConfig, 'backend', 'unknown');
 $runtimeProfile = king_openai_router_string($runtimeModelConfig, 'runtime_profile', 'unknown');
@@ -94,27 +100,33 @@ king_inference_runtime_log_configured([
     'coder_instruction_wrapper' => $coderInstructionWrapper,
     'internal_mcp_tools_enabled' => $internalMcpToolsEnabled,
     'internal_mcp_tool_timeout_ms' => $internalMcpToolTimeoutMs,
+    'model_registry_count' => count($runtimeModelConfigs),
+    'model_registry_ids' => array_keys($runtimeModelConfigs),
     'gpu_thermal_source' => $gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand,
     'gpu_thermal_check_interval_sec' => king_openai_router_int($gpuThermal, 'check_interval_seconds'),
     'gpu_generation_ready' => king_openai_router_bool($gpuRuntime, 'generation_ready'),
     'gpu_admission_reason' => king_openai_router_string($gpuRuntime, 'reason'),
 ]);
 
-if ($artifactPath === '' || !is_file($artifactPath) || !is_readable($artifactPath)) {
-    fwrite(STDERR, "Configured model artifact is not readable: {$artifactPath}\n");
-    exit(1);
+foreach ($runtimeModelConfigs as $registryId => $registryConfig) {
+    if (!is_array($registryConfig)) {
+        fwrite(STDERR, "Configured model registry entry is invalid: {$registryId}\n");
+        exit(1);
+    }
+    $registryArtifactPath = king_openai_router_artifact_path($registryConfig);
+    if ($registryArtifactPath === '' || !is_file($registryArtifactPath) || !is_readable($registryArtifactPath)) {
+        fwrite(STDERR, "Configured model artifact is not readable for {$registryId}: {$registryArtifactPath}\n");
+        exit(1);
+    }
 }
 
-$model = king_inference_runtime_model_load();
-$models = [$modelName => $model];
-$modelAliases = [];
-if ($modelName !== 'gemma4:12b') {
-    $modelAliases['gemma4:12b'] = $modelName;
+[$models, $modelAliases] = king_openai_router_load_model_registry($runtimeModelConfigs);
+foreach ($models as $registryName => $model) {
+    king_inference_runtime_log_model_admitted($registryName, $model);
 }
-king_inference_runtime_log_model_admitted($modelName, $model);
 
 fwrite(STDERR, "King OpenAI router listening on http://{$host}:{$port}/v1\n");
-fwrite(STDERR, "Configured model: {$modelName}\n");
+fwrite(STDERR, "Configured models: " . implode(',', array_keys($models)) . "\n");
 fwrite(STDERR, "Configured backend: {$backend}\n");
 fwrite(STDERR, "Configured artifact: {$artifactPath}\n");
 if ($gpuEnabled) {

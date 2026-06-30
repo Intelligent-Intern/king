@@ -29,6 +29,7 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     zend_long inference_kv_page_tokens;
     zend_long inference_kv_element_bytes;
     char *inference_preferred_model_profile;
+    char *inference_models;
     char *inference_cpu_model_name;
     char *inference_cpu_model_artifact;
     char *inference_gpu_model_name;

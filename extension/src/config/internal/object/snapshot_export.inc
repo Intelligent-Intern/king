@@ -57,6 +57,13 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
     );
     add_assoc_string(
         target,
+        "inference.models",
+        cfg->compute_ai.inference_models != NULL
+            ? cfg->compute_ai.inference_models
+            : ""
+    );
+    add_assoc_string(
+        target,
         "inference.cpu_model_name",
         cfg->compute_ai.inference_cpu_model_name != NULL
             ? cfg->compute_ai.inference_cpu_model_name

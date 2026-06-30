@@ -79,6 +79,24 @@ static zend_string *king_inference_openai_model_owner(zval *model_value, zval *o
     return zend_string_init("king", sizeof("king") - 1, 0);
 }
 
+static void king_inference_openai_model_aliases_array(zval *model_value, zval *return_value)
+{
+    king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ_P(model_value));
+    zval *aliases = king_inference_array_find(&model->config, "aliases");
+    zval *alias;
+
+    array_init(return_value);
+    if (aliases == NULL || Z_TYPE_P(aliases) != IS_ARRAY) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(aliases), alias) {
+        if (alias != NULL && Z_TYPE_P(alias) == IS_STRING && Z_STRLEN_P(alias) > 0) {
+            add_next_index_str(return_value, zend_string_copy(Z_STR_P(alias)));
+        }
+    } ZEND_HASH_FOREACH_END();
+}
+
 static bool king_inference_openai_model_listing_options_valid(zval *options, const char **message)
 {
     zval *owner = king_inference_array_find(options, "owned_by");
@@ -345,6 +363,7 @@ static void king_inference_openai_model_object(
     zval native_engine_readiness;
     zval error_taxonomy;
     zval route_status;
+    zval aliases;
     bool backend_config_valid = true;
     bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
     bool gpu_enabled = false;
@@ -408,6 +427,8 @@ static void king_inference_openai_model_object(
         "backend",
         backend_config_valid ? king_inference_backend_kind_name(kind) : "invalid"
     );
+    king_inference_openai_model_aliases_array(model_value, &aliases);
+    add_assoc_zval(&king_meta, "aliases", &aliases);
     add_assoc_bool(&king_meta, "backend_config_valid", backend_config_valid);
     add_assoc_bool(&king_meta, "openai_generation", openai_generation_ready);
     add_assoc_bool(&king_meta, "openai_chat_completions_stream", openai_generation_ready);
@@ -544,6 +565,25 @@ static bool king_inference_openai_model_name_matches(zval *model_value, zend_str
     return model->name != NULL && zend_string_equals(model->name, name);
 }
 
+static bool king_inference_openai_model_alias_matches(zval *model_value, zend_string *name)
+{
+    king_inference_model_object *model = php_king_inference_model_obj_from_zend(Z_OBJ_P(model_value));
+    zval *aliases = king_inference_array_find(&model->config, "aliases");
+    zval *alias;
+
+    if (aliases == NULL || Z_TYPE_P(aliases) != IS_ARRAY) {
+        return false;
+    }
+
+    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(aliases), alias) {
+        if (alias != NULL && Z_TYPE_P(alias) == IS_STRING && zend_string_equals(Z_STR_P(alias), name)) {
+            return true;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return false;
+}
+
 static bool king_inference_openai_model_listed_id_matches(
     zval *model_value,
     zend_string *key,
@@ -584,6 +624,7 @@ static zval *king_inference_openai_find_model(zval *models, zval *payload)
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
         if (king_inference_openai_is_model(entry)
             && (king_inference_openai_model_name_matches(entry, Z_STR_P(requested))
+                || king_inference_openai_model_alias_matches(entry, Z_STR_P(requested))
                 || king_inference_openai_model_listed_id_matches(entry, key, index, Z_STR_P(requested)))) {
             return entry;
         }
@@ -610,6 +651,7 @@ static zval *king_inference_openai_find_model_by_id(zval *models, zend_string *r
     ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(models), index, key, entry) {
         if (king_inference_openai_is_model(entry)
             && (king_inference_openai_model_name_matches(entry, requested)
+                || king_inference_openai_model_alias_matches(entry, requested)
                 || king_inference_openai_model_listed_id_matches(entry, key, index, requested))) {
             return entry;
         }
@@ -714,6 +756,7 @@ static zend_result king_inference_openai_retrieve_model_response(
         if (king_inference_openai_is_model(entry)
             && (zend_hash_find(Z_ARRVAL_P(models), model_id) == entry
                 || king_inference_openai_model_name_matches(entry, model_id)
+                || king_inference_openai_model_alias_matches(entry, model_id)
                 || king_inference_openai_model_listed_id_matches(entry, key, index, model_id))) {
             king_inference_openai_model_object(&model_object, entry, key, index, options);
             result = king_inference_openai_json_encode(&model_object, &json);

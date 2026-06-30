@@ -242,6 +242,22 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.models",
+            sizeof("inference.models") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_models != NULL
+                ? cfg->compute_ai.inference_models
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.cpu_model_artifact",
             sizeof("inference.cpu_model_artifact") - 1
         )
