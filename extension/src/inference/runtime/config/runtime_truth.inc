@@ -128,6 +128,112 @@ static void king_inference_model_runtime_truth_array(
     }
 }
 
+static void king_inference_model_decoder_truth_array(
+    king_inference_model_object *model,
+    zval *return_value
+) {
+    king_inference_backend_kind kind;
+    bool backend_config_valid = true;
+    bool native_cpu_backend;
+    bool native_gpu_backend;
+    bool local_backend;
+    bool gpu_enabled;
+    bool gpu_prompt_ready = false;
+    bool gpu_synthetic_graph_ready = false;
+    bool silent_cpu_fallback = false;
+    const char *backend_name;
+    const char *active_device;
+    const char *prompt_graph_path;
+    const char *synthetic_graph_path;
+    const char *sampler_path;
+    const char *kv_cache_path;
+    const char *fallback_error = "none";
+    const char *fallback_policy = "no_cpu_fallback";
+
+    if (king_inference_backend_kind_from_config(&model->config, &kind, "King decoder truth") != SUCCESS) {
+        if (EG(exception)) {
+            zend_clear_exception();
+        }
+        backend_config_valid = false;
+        kind = KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    }
+
+    native_cpu_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    native_gpu_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+    local_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_LOCAL;
+    gpu_enabled = backend_config_valid && king_inference_gpu_enabled(&model->config);
+    backend_name = backend_config_valid ? king_inference_backend_kind_name(kind) : "invalid";
+
+    if (!backend_config_valid) {
+        active_device = "invalid";
+        prompt_graph_path = "unavailable";
+        synthetic_graph_path = "unavailable";
+        sampler_path = "unavailable";
+        kv_cache_path = "unavailable";
+        fallback_error = "king.validation.invalid_backend_config";
+        fallback_policy = "invalid_backend_refused";
+    } else if (native_gpu_backend) {
+        gpu_prompt_ready = model->cuda_decoder_prompt_loop_available;
+        gpu_synthetic_graph_ready = model->cuda_decoder_graph_executor_available
+            && model->cuda_decoder_graph_executor_result_contract_available;
+        active_device = model->cuda_context_available ? "cuda" : "cuda_unavailable";
+        prompt_graph_path = gpu_prompt_ready
+            ? "king_native_gpu_prompt_to_logits_decode"
+            : "unavailable";
+        synthetic_graph_path = gpu_synthetic_graph_ready
+            ? "king_native_gpu_synthetic_token_vector_graph"
+            : "unavailable";
+        sampler_path = gpu_prompt_ready
+            ? "king_native_gpu_bounded_top_k_sampler"
+            : "unavailable";
+        kv_cache_path = model->cuda_device_kv_cache_allocated
+            ? "king_native_gpu_device_kv_cache"
+            : "unallocated";
+        fallback_policy = "refuse_cpu_fallback";
+    } else if (native_cpu_backend) {
+        active_device = "cpu";
+        prompt_graph_path = "king_native_cpu_prompt_to_logits_decode";
+        synthetic_graph_path = "king_native_cpu_synthetic_token_vector_graph";
+        sampler_path = "king_native_cpu_sampler";
+        kv_cache_path = (!Z_ISUNDEF(model->paged_kv_cache_plan) && Z_TYPE(model->paged_kv_cache_plan) == IS_ARRAY)
+            ? "king_native_cpu_paged_kv_cache_plan"
+            : "king_native_cpu_runtime_state";
+        fallback_policy = "cpu_profile";
+    } else if (local_backend) {
+        active_device = gpu_enabled ? "local_process_gpu_requested" : "local_process";
+        prompt_graph_path = "external_local_runner";
+        synthetic_graph_path = "not_supported";
+        sampler_path = "external_local_runner";
+        kv_cache_path = "external_local_runner";
+        fallback_policy = gpu_enabled ? "external_runner_gpu_policy" : "external_process";
+    } else {
+        active_device = "unknown";
+        prompt_graph_path = "unavailable";
+        synthetic_graph_path = "unavailable";
+        sampler_path = "unavailable";
+        kv_cache_path = "unavailable";
+        fallback_error = "king.runtime.unknown_backend";
+        fallback_policy = "unknown";
+    }
+
+    array_init(return_value);
+    add_assoc_long(return_value, "schema_version", 1);
+    add_assoc_string(return_value, "backend", backend_name);
+    add_assoc_bool(return_value, "backend_config_valid", backend_config_valid);
+    add_assoc_string(return_value, "active_device", active_device);
+    add_assoc_string(return_value, "prompt_graph_path", prompt_graph_path);
+    add_assoc_string(return_value, "synthetic_graph_path", synthetic_graph_path);
+    add_assoc_string(return_value, "sampler_path", sampler_path);
+    add_assoc_string(return_value, "kv_cache_path", kv_cache_path);
+    add_assoc_bool(return_value, "prompt_to_logits_inference", native_cpu_backend || gpu_prompt_ready);
+    add_assoc_bool(return_value, "synthetic_token_vector_graph", native_cpu_backend || gpu_synthetic_graph_ready);
+    add_assoc_bool(return_value, "sampler_available", native_cpu_backend || gpu_prompt_ready || local_backend);
+    add_assoc_bool(return_value, "kv_cache_available", native_cpu_backend || model->cuda_device_kv_cache_allocated || local_backend);
+    add_assoc_bool(return_value, "silent_cpu_fallback", silent_cpu_fallback);
+    add_assoc_string(return_value, "fallback_policy", fallback_policy);
+    add_assoc_string(return_value, "fallback_error", fallback_error);
+}
+
 static bool king_inference_model_memory_enabled(king_inference_model_object *model)
 {
     return king_inference_bool_from_array(&model->config, "with_memory", false);
@@ -346,6 +452,7 @@ static void king_inference_model_add_runtime_surface_fields(
 ) {
     zval memory;
     zval readiness;
+    zval decoder_truth;
     zval *backend = king_inference_array_find(runtime_truth, "backend");
     zval *active_device = king_inference_array_find(runtime_truth, "active_device");
     zval *fallback_mode = king_inference_array_find(runtime_truth, "fallback_mode");
@@ -385,4 +492,6 @@ static void king_inference_model_add_runtime_surface_fields(
     add_assoc_zval(target, "memory", &memory);
     king_inference_model_readiness_truth_array(model, &readiness);
     add_assoc_zval(target, "readiness", &readiness);
+    king_inference_model_decoder_truth_array(model, &decoder_truth);
+    add_assoc_zval(target, "decoder_truth", &decoder_truth);
 }

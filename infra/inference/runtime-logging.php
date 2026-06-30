@@ -51,6 +51,25 @@ function king_inference_runtime_log_configured(array $config, mixed $stream = nu
     king_inference_runtime_log_line('configured', $config, $stream);
 }
 
+function king_inference_runtime_decoder_truth_fields(array $info): array
+{
+    $truth = is_array($info['decoder_truth'] ?? null) ? $info['decoder_truth'] : [];
+
+    return [
+        'decoder_backend' => is_string($truth['backend'] ?? null) ? $truth['backend'] : '',
+        'decoder_active_device' => is_string($truth['active_device'] ?? null) ? $truth['active_device'] : '',
+        'prompt_graph_path' => is_string($truth['prompt_graph_path'] ?? null) ? $truth['prompt_graph_path'] : '',
+        'synthetic_graph_path' => is_string($truth['synthetic_graph_path'] ?? null) ? $truth['synthetic_graph_path'] : '',
+        'sampler_path' => is_string($truth['sampler_path'] ?? null) ? $truth['sampler_path'] : '',
+        'kv_cache_path' => is_string($truth['kv_cache_path'] ?? null) ? $truth['kv_cache_path'] : '',
+        'prompt_to_logits_inference' => !empty($truth['prompt_to_logits_inference']),
+        'synthetic_token_vector_graph' => !empty($truth['synthetic_token_vector_graph']),
+        'decoder_silent_cpu_fallback' => !empty($truth['silent_cpu_fallback']),
+        'fallback_policy' => is_string($truth['fallback_policy'] ?? null) ? $truth['fallback_policy'] : '',
+        'fallback_error' => is_string($truth['fallback_error'] ?? null) ? $truth['fallback_error'] : '',
+    ];
+}
+
 function king_inference_runtime_log_model_admitted(string $registryName, object $model, mixed $stream = null): void
 {
     $info = king_inference_model_info($model);
@@ -75,6 +94,7 @@ function king_inference_runtime_log_model_admitted(string $registryName, object 
             ? $timing['tokens_per_second']
             : '',
     ];
+    $fields += king_inference_runtime_decoder_truth_fields($info);
 
     if ($backend === 'king_native_gpu') {
         $runtime = is_array($info['gpu_runtime'] ?? null) ? $info['gpu_runtime'] : [];
@@ -151,6 +171,7 @@ function king_inference_runtime_log_request_completed(
                 ? $timing['tokens_per_second']
                 : '',
         ];
+        $fields += king_inference_runtime_decoder_truth_fields($info);
     }
 
     king_inference_runtime_log_line('completed', $fields, $stream);
