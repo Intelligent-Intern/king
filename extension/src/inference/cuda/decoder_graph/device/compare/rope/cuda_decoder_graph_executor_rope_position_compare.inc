@@ -116,13 +116,13 @@ static void king_inference_cuda_decoder_graph_executor_set_rope_position_compare
     snprintf(
         message,
         sizeof(message),
-        "cuda_decoder_graph_rope_position_compare_failed position=%lu status=%s compared=%ld matched=%ld max_abs_diff=%.9g first_mismatch_index=%ld actual=%.9g expected=%.9g abs_diff=%.9g",
+        "cuda_decoder_graph_rope_position_compare_failed position=%lu status=%s compared=" ZEND_LONG_FMT " matched=" ZEND_LONG_FMT " max_abs_diff=%.9g first_mismatch_index=" ZEND_LONG_FMT " actual=%.9g expected=%.9g abs_diff=%.9g",
         (unsigned long) position,
         status_value,
-        (long) compared_value_count,
-        (long) matched_value_count,
+        compared_value_count,
+        matched_value_count,
         max_abs_diff_value,
-        (long) first_index,
+        first_index,
         first_actual,
         first_expected,
         first_diff

@@ -1234,6 +1234,15 @@ namespace {
     function king_inference_runtime_model_config(mixed $config = null): array {}
 
     /**
+     * Return all effective OpenAI-compatible runtime model registry entries
+     * derived from the current King inference config.
+     * @param mixed $config null, King\Config, or native King\Config resource
+     * @return array<string,mixed>
+     * @throws \King\ValidationException
+     */
+    function king_inference_runtime_model_registry_config(mixed $config = null): array {}
+
+    /**
      * Load the model selected by the effective King runtime inference profile.
      * This is the direct primitive for applications that want "use the
      * configured runtime model" instead of manually composing the model array.
@@ -1241,6 +1250,13 @@ namespace {
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_inference_runtime_model_load(mixed $config = null): \King\Inference\Model {}
+
+    /**
+     * Return deterministic local mini-op content for OpenAI-style payloads
+     * when the runtime can prove the answer without model inference.
+     * @param array<string,mixed> $payload
+     */
+    function king_inference_runtime_mini_op_content(array $payload): ?string {}
 
     /**
      * Return the effective GPU inference readiness for the current process or
@@ -2808,8 +2824,19 @@ namespace King {
 
         /**
          * @param mixed $config null, King\Config, or native King\Config resource
+         * @return array<string,mixed>
+         */
+        public static function runtimeModelRegistryConfig(mixed $config = null): array {}
+
+        /**
+         * @param mixed $config null, King\Config, or native King\Config resource
          */
         public static function runtimeModelLoad(mixed $config = null): Inference\Model {}
+
+        /**
+         * @param array<string,mixed> $payload
+         */
+        public static function runtimeMiniOpContent(array $payload): ?string {}
 
         /**
          * @param mixed $config null, King\Config, or native King\Config resource
