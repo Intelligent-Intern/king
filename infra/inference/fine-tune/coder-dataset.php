@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/coder-local-examples.php';
+
 function king_ft_fail(string $message, int $code = 1): never
 {
     fwrite(STDERR, "king-coder-fine-tune: {$message}\n");
@@ -10,8 +12,8 @@ function king_ft_fail(string $message, int $code = 1): never
 function king_ft_usage(): never
 {
     fwrite(STDERR, "Usage: bin/king-coder-fine-tune prepare [--model=/path/model.gguf] [--out=var/fine-tuning/gemma3-1b-coder]\n");
-    fwrite(STDERR, "       [--source=docs] [--max-tokens=2048] [--limit=N] [--trainable-base=/path/checkpoint-dir]\n");
-    fwrite(STDERR, "       Defaults build a tokenizer-validated coder dataset from repository docs.\n");
+    fwrite(STDERR, "       [--source=docs|local-examples|path] [--max-tokens=2048] [--limit=N] [--trainable-base=/path/checkpoint-dir]\n");
+    fwrite(STDERR, "       Defaults build a tokenizer-validated coder dataset from repository docs; local-examples adds curated King/PHP/tool examples.\n");
     exit(64);
 }
 
@@ -107,7 +109,22 @@ function king_ft_absolute_path(string $root, string $path): string
 
 function king_ft_json_encode(array $value): string
 {
-    return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+}
+
+function king_ft_split_sources(array $sources): array
+{
+    $docSources = [];
+    $includeLocalExamples = false;
+    foreach ($sources as $source) {
+        $source = (string) $source;
+        if (in_array($source, ['local', 'local-examples', 'examples'], true)) {
+            $includeLocalExamples = true;
+            continue;
+        }
+        $docSources[] = $source === 'docs' ? 'docs' : $source;
+    }
+    return [$docSources, $includeLocalExamples];
 }
 
 function king_ft_docs_files(string $root, array $sources): array
@@ -249,9 +266,22 @@ function king_ft_training_example(array $block): array
             'start_line' => $block['start_line'],
             'heading' => $block['heading'],
             'language' => $language,
+            'example_type' => 'positive',
+            'topic' => 'docs_code_block',
             'source_sha256' => hash('sha256', (string) $block['code']),
         ],
     ];
+}
+
+function king_ft_count_metadata(array $examples, string $key): array
+{
+    $counts = [];
+    foreach ($examples as $example) {
+        $value = (string) ($example['metadata'][$key] ?? 'unknown');
+        $counts[$value] = ($counts[$value] ?? 0) + 1;
+    }
+    ksort($counts);
+    return $counts;
 }
 
 function king_ft_example_text(array $example): string
@@ -307,15 +337,22 @@ function king_ft_run(array $argv): void
         'with_memory' => false,
     ]);
 
-    $blocks = [];
-    foreach (king_ft_docs_files($root, $options['sources']) as $file) {
-        array_push($blocks, ...king_ft_extract_code_blocks($root, $file));
+    [$docSources, $includeLocalExamples] = king_ft_split_sources($options['sources']);
+    $candidateExamples = [];
+    if ($includeLocalExamples) {
+        array_push($candidateExamples, ...king_ft_local_training_examples());
+    }
+    if ($docSources !== []) {
+        foreach (king_ft_docs_files($root, $docSources) as $file) {
+            foreach (king_ft_extract_code_blocks($root, $file) as $block) {
+                $candidateExamples[] = king_ft_training_example($block);
+            }
+        }
     }
 
     $examples = [];
     $skippedTooLarge = 0;
-    foreach ($blocks as $block) {
-        $example = king_ft_training_example($block);
+    foreach ($candidateExamples as $example) {
         $tokenCount = king_ft_token_count($model, $example);
         if ($tokenCount > $options['max_tokens']) {
             $skippedTooLarge++;
@@ -360,10 +397,16 @@ function king_ft_run(array $argv): void
         'trainable_base_checkpoint' => (string) $options['trainable_base'],
         'output_dir' => $outDir,
         'sources' => array_values($options['sources']),
+        'source_breakdown' => [
+            'docs' => $docSources,
+            'local_examples' => $includeLocalExamples,
+        ],
         'max_tokens' => $options['max_tokens'],
         'examples_total' => count($examples),
         'train_examples' => count($train),
         'validation_examples' => count($validation),
+        'example_types' => king_ft_count_metadata($examples, 'example_type'),
+        'topics' => king_ft_count_metadata($examples, 'topic'),
         'skipped_too_large' => $skippedTooLarge,
         'status' => (string) $options['trainable_base'] === ''
             ? 'dataset_prepared_trainable_base_missing'
