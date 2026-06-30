@@ -78,6 +78,8 @@ static void king_inference_openai_runtime_surface_array(
         && king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model);
     bool batch_prefill_admitted = native_gpu_backend
         && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model);
+    bool batch_prefill_ready = native_gpu_backend
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(model);
     zval implemented;
     zval admitted;
     zval refused;
@@ -144,8 +146,10 @@ static void king_inference_openai_runtime_surface_array(
     add_assoc_bool(&experimental, "native_graph_streaming", native_cpu_backend);
     add_assoc_bool(&experimental, "synthetic_token_vector_graph", native_stream_contract_capable);
     add_assoc_bool(&experimental, "batch_prefill_compiled", native_gpu_backend);
+    add_assoc_bool(&experimental, "batch_prefill_ready", batch_prefill_ready);
     add_assoc_bool(&experimental, "batch_prefill_config_enabled", batch_prefill_experimental_enabled);
     add_assoc_bool(&experimental, "batch_prefill_admitted", batch_prefill_admitted);
+    add_assoc_bool(&experimental, "batch_prefill_request_control_allowed", false);
     add_assoc_string(
         &experimental,
         "batch_prefill_status",

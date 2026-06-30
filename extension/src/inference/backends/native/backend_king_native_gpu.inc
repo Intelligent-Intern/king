@@ -673,7 +673,8 @@ static void king_inference_king_native_gpu_model_info(
     );
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "decoder_prompt_batch_prefill_compiled", true);
-    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_ready", intern->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_available", intern->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_ready", king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(intern));
     add_assoc_bool(return_value, "decoder_prompt_batch_prefill_experimental_enabled", king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(intern));
     add_assoc_bool(return_value, "decoder_prompt_batch_prefill_admitted", king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(intern));
     add_assoc_string(return_value, "decoder_prompt_batch_prefill_status", king_inference_cuda_decoder_prompt_loop_batch_prefill_status(intern));

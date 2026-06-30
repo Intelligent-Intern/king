@@ -16,8 +16,10 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
     add_assoc_bool(&loop, "available", model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(&loop, "batch_prefill_compiled", true);
     add_assoc_bool(&loop, "batch_prefill_available", model->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(&loop, "batch_prefill_ready", king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(model));
     add_assoc_bool(&loop, "batch_prefill_experimental_enabled", king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model));
     add_assoc_bool(&loop, "batch_prefill_admitted", king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model));
+    add_assoc_bool(&loop, "batch_prefill_request_control_allowed", false);
     add_assoc_string(&loop, "batch_prefill_status", king_inference_cuda_decoder_prompt_loop_batch_prefill_status(model));
     add_assoc_string(
         &loop,

@@ -264,8 +264,10 @@ static void king_inference_openai_route_status_array(
     add_assoc_bool(return_value, "sequential_prefill_available", gpu_backend && model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "batch_prefill_compiled", gpu_backend);
     add_assoc_bool(return_value, "batch_prefill_available", gpu_backend && model->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(return_value, "batch_prefill_ready", gpu_backend && king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(model));
     add_assoc_bool(return_value, "batch_prefill_experimental_enabled", gpu_backend && king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model));
     add_assoc_bool(return_value, "batch_prefill_admitted", gpu_backend && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model));
+    add_assoc_bool(return_value, "batch_prefill_request_control_allowed", false);
     add_assoc_string(
         return_value,
         "batch_prefill_status",

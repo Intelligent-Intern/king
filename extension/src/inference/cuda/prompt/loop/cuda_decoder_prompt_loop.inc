@@ -153,18 +153,25 @@ static bool king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(
         && king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model);
 }
 
+static bool king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(
+    king_inference_model_object *model
+) {
+    (void) model;
+    return false;
+}
+
 static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_status(
     king_inference_model_object *model
 ) {
     if (model == NULL) {
         return "unavailable";
     }
-    if (!model->cuda_decoder_prompt_loop_batch_prefill_available) {
+    if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
         return "disabled";
     }
-    return king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)
-        ? "experimental_admitted"
-        : "disabled";
+    return king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(model)
+        ? "ready"
+        : "experimental";
 }
 
 static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_admission_reason(
@@ -181,16 +188,18 @@ static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_admissi
             ? model->cuda_decoder_prompt_loop_error
             : "prompt_loop_unavailable";
     }
-    if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model)) {
-        return "batch_prefill_decoder_dependencies_unavailable";
-    }
     if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model)) {
         return "batch_prefill_experimental_config_disabled";
+    }
+    if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model)) {
+        return "batch_prefill_decoder_dependencies_unavailable";
     }
     if (!model->cuda_decoder_prompt_loop_batch_prefill_available) {
         return "batch_prefill_disabled_until_kv_correctness_hardened";
     }
-    return "batch_prefill_experimental_admitted";
+    return king_inference_cuda_decoder_prompt_loop_batch_prefill_ready(model)
+        ? "batch_prefill_ready"
+        : "batch_prefill_experimental_config_enabled";
 }
 
 #include "cuda_decoder_prompt_loop_sampling.inc"
