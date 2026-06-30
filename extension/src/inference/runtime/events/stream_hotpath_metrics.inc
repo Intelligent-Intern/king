@@ -158,6 +158,19 @@ static void king_inference_stream_add_hotpath_metrics(
         "request_saved_bytes",
         model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_saved_readback_bytes : 0
     );
+    add_assoc_bool(
+        &readback,
+        "resident_device_buffers",
+        model != NULL
+            && model->cuda_logits_readback_device_indices != 0
+            && model->cuda_logits_readback_device_logits != 0
+    );
+    add_assoc_long(
+        &readback,
+        "resident_buffer_reuses",
+        model != NULL ? (zend_long) model->cuda_logits_readback_buffer_reuse_count : 0
+    );
+    add_assoc_bool(&readback, "explicit_pre_readback_sync_removed", true);
     add_assoc_double(
         &readback,
         "bytes_per_token",

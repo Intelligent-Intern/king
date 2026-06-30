@@ -111,6 +111,11 @@ static void king_inference_cuda_logits_readback_reset_fields(king_inference_mode
     model->cuda_logits_readback_last_bytes = 0;
     model->cuda_logits_readback_full_bytes = 0;
     model->cuda_logits_readback_saved_bytes = 0;
+    model->cuda_logits_readback_device_indices = 0;
+    model->cuda_logits_readback_device_logits = 0;
+    model->cuda_logits_readback_device_indices_bytes = 0;
+    model->cuda_logits_readback_device_logits_bytes = 0;
+    model->cuda_logits_readback_buffer_reuse_count = 0;
     model->cuda_logits_readback_last_ns = 0;
     model->cuda_logits_readback_synthetic_vocab_size = 0;
     model->cuda_logits_readback_synthetic_candidate_count = 0;
@@ -305,9 +310,59 @@ static bool king_inference_cuda_logits_readback_compile_ptx(
     return true;
 }
 
+static void king_inference_cuda_logits_readback_release_buffers(king_inference_model_object *model)
+{
+    if (model->cuda_logits_readback_device_logits != 0) {
+        (void) king_inference_cuda_device_allocator_free(model, model->cuda_logits_readback_device_logits);
+        model->cuda_logits_readback_device_logits = 0;
+    }
+    if (model->cuda_logits_readback_device_indices != 0) {
+        (void) king_inference_cuda_device_allocator_free(model, model->cuda_logits_readback_device_indices);
+        model->cuda_logits_readback_device_indices = 0;
+    }
+    model->cuda_logits_readback_device_logits_bytes = 0;
+    model->cuda_logits_readback_device_indices_bytes = 0;
+}
+
+static zend_result king_inference_cuda_logits_readback_ensure_buffer(
+    king_inference_model_object *model,
+    size_t bytes,
+    king_inference_cuda_device_ptr *device_ptr,
+    size_t *capacity,
+    const char *label
+) {
+    if (bytes == 0 || device_ptr == NULL || capacity == NULL) {
+        king_inference_cuda_logits_readback_set_error(model, -1, "cuda_logits_readback_buffer_argument_invalid");
+        return FAILURE;
+    }
+    if (*device_ptr != 0 && *capacity >= bytes) {
+        model->cuda_logits_readback_buffer_reuse_count++;
+        return SUCCESS;
+    }
+    if (*device_ptr != 0) {
+        (void) king_inference_cuda_device_allocator_free(model, *device_ptr);
+        *device_ptr = 0;
+        *capacity = 0;
+    }
+    if (king_inference_cuda_device_allocator_alloc(model, bytes, device_ptr) != SUCCESS) {
+        king_inference_cuda_logits_readback_set_error(
+            model,
+            model->cuda_device_allocator_result,
+            model->cuda_device_allocator_error[0] != '\0'
+                ? model->cuda_device_allocator_error
+                : label
+        );
+        return FAILURE;
+    }
+    *capacity = bytes;
+    return SUCCESS;
+}
+
 static void king_inference_cuda_logits_readback_release(king_inference_model_object *model)
 {
     king_inference_cuda_module_unload_fn cu_module_unload;
+
+    king_inference_cuda_logits_readback_release_buffers(model);
 
     if (model->cuda_logits_readback_module != NULL
         && model->cuda_driver_handle != NULL
@@ -411,6 +466,24 @@ static void king_inference_cuda_logits_readback_init(
     model->cuda_logits_readback_available = true;
     model->cuda_logits_readback_result = 0;
     model->cuda_logits_readback_error[0] = '\0';
+    if (king_inference_cuda_logits_readback_ensure_buffer(
+            model,
+            model->cuda_logits_readback_candidate_limit * sizeof(unsigned int),
+            &model->cuda_logits_readback_device_indices,
+            &model->cuda_logits_readback_device_indices_bytes,
+            "cuda_logits_readback_indices_prewarm_failed"
+        ) != SUCCESS
+        || king_inference_cuda_logits_readback_ensure_buffer(
+            model,
+            model->cuda_logits_readback_candidate_limit * sizeof(float),
+            &model->cuda_logits_readback_device_logits,
+            &model->cuda_logits_readback_device_logits_bytes,
+            "cuda_logits_readback_logits_prewarm_failed"
+        ) != SUCCESS) {
+        model->cuda_logits_readback_available = false;
+        model->cuda_logits_readback_top_k_available = false;
+        return;
+    }
     if (king_inference_cuda_device_vector_numeric_compare_enabled(&model->config)
         && king_inference_cuda_logits_readback_synthetic_ordering_check(model) != SUCCESS) {
         model->cuda_logits_readback_available = false;
@@ -429,10 +502,7 @@ static zend_result king_inference_cuda_logits_readback_top_k(
     zend_ulong *candidate_count_out
 ) {
     king_inference_cuda_launch_kernel_fn cu_launch_kernel;
-    king_inference_cuda_ctx_synchronize_fn cu_ctx_synchronize;
     king_inference_cuda_logits_memcpy_dtoh_fn cu_memcpy_dtoh;
-    king_inference_cuda_device_ptr device_indices = 0;
-    king_inference_cuda_device_ptr device_logits = 0;
     unsigned int vocab32;
     unsigned int count32;
     size_t index_bytes;
@@ -472,15 +542,20 @@ static zend_result king_inference_cuda_logits_readback_top_k(
     index_bytes = (size_t) count32 * sizeof(unsigned int);
     logit_bytes = (size_t) count32 * sizeof(float);
 
-    if (king_inference_cuda_device_allocator_alloc(model, index_bytes, &device_indices) != SUCCESS
-        || king_inference_cuda_device_allocator_alloc(model, logit_bytes, &device_logits) != SUCCESS) {
-        king_inference_cuda_logits_readback_set_error(
+    if (king_inference_cuda_logits_readback_ensure_buffer(
             model,
-            model->cuda_device_allocator_result,
-            model->cuda_device_allocator_error[0] != '\0'
-                ? model->cuda_device_allocator_error
-                : "cuda_logits_readback_allocation_failed"
-        );
+            index_bytes,
+            &model->cuda_logits_readback_device_indices,
+            &model->cuda_logits_readback_device_indices_bytes,
+            "cuda_logits_readback_indices_allocation_failed"
+        ) != SUCCESS
+        || king_inference_cuda_logits_readback_ensure_buffer(
+            model,
+            logit_bytes,
+            &model->cuda_logits_readback_device_logits,
+            &model->cuda_logits_readback_device_logits_bytes,
+            "cuda_logits_readback_logits_allocation_failed"
+        ) != SUCCESS) {
         goto failure;
     }
     if (!king_inference_cuda_device_allocator_set_current(model)) {
@@ -494,7 +569,6 @@ static zend_result king_inference_cuda_logits_readback_top_k(
         goto failure;
     }
     if (!king_inference_cuda_logits_readback_driver_symbol(model, "cuLaunchKernel", NULL, (void **) &cu_launch_kernel)
-        || !king_inference_cuda_logits_readback_driver_symbol(model, "cuCtxSynchronize", NULL, (void **) &cu_ctx_synchronize)
         || !king_inference_cuda_logits_readback_driver_symbol(
             model,
             "cuMemcpyDtoH_v2",
@@ -507,8 +581,8 @@ static zend_result king_inference_cuda_logits_readback_top_k(
     params[0] = &logits;
     params[1] = &vocab32;
     params[2] = &count32;
-    params[3] = &device_indices;
-    params[4] = &device_logits;
+    params[3] = &model->cuda_logits_readback_device_indices;
+    params[4] = &model->cuda_logits_readback_device_logits;
     result = cu_launch_kernel(
         model->cuda_logits_top_k_function,
         1,
@@ -527,28 +601,19 @@ static zend_result king_inference_cuda_logits_readback_top_k(
         goto failure;
     }
 
-    result = cu_ctx_synchronize();
-    if (result != 0) {
-        king_inference_cuda_logits_readback_set_error(model, result, "cuCtxSynchronize_failed");
-        goto failure;
-    }
-    model->cuda_logits_readback_sync_count++;
-
-    result = cu_memcpy_dtoh(host_indices, device_indices, index_bytes);
+    result = cu_memcpy_dtoh(host_indices, model->cuda_logits_readback_device_indices, index_bytes);
     if (result != 0) {
         king_inference_cuda_logits_readback_set_error(model, result, "cuMemcpyDtoH_indices_failed");
         goto failure;
     }
     model->cuda_logits_readback_dtoh_count++;
-    result = cu_memcpy_dtoh(host_logits, device_logits, logit_bytes);
+    result = cu_memcpy_dtoh(host_logits, model->cuda_logits_readback_device_logits, logit_bytes);
     if (result != 0) {
         king_inference_cuda_logits_readback_set_error(model, result, "cuMemcpyDtoH_logits_failed");
         goto failure;
     }
     model->cuda_logits_readback_dtoh_count++;
 
-    (void) king_inference_cuda_device_allocator_free(model, device_logits);
-    (void) king_inference_cuda_device_allocator_free(model, device_indices);
     model->cuda_logits_readback_launch_count++;
     model->cuda_logits_readback_last_candidate_count = count32;
     model->cuda_logits_readback_last_bytes = index_bytes + logit_bytes;
@@ -565,12 +630,6 @@ static zend_result king_inference_cuda_logits_readback_top_k(
     return SUCCESS;
 
 failure:
-    if (device_logits != 0) {
-        (void) king_inference_cuda_device_allocator_free(model, device_logits);
-    }
-    if (device_indices != 0) {
-        (void) king_inference_cuda_device_allocator_free(model, device_indices);
-    }
     return FAILURE;
 }
 
@@ -595,6 +654,24 @@ static void king_inference_cuda_logits_readback_add_status(
     add_assoc_long(&readback, "last_readback_bytes", (zend_long) model->cuda_logits_readback_last_bytes);
     add_assoc_long(&readback, "full_logits_bytes", (zend_long) model->cuda_logits_readback_full_bytes);
     add_assoc_long(&readback, "saved_readback_bytes", (zend_long) model->cuda_logits_readback_saved_bytes);
+    add_assoc_bool(&readback, "resident_device_buffers", model->cuda_logits_readback_device_indices != 0
+        && model->cuda_logits_readback_device_logits != 0);
+    add_assoc_long(
+        &readback,
+        "resident_indices_buffer_bytes",
+        (zend_long) model->cuda_logits_readback_device_indices_bytes
+    );
+    add_assoc_long(
+        &readback,
+        "resident_logits_buffer_bytes",
+        (zend_long) model->cuda_logits_readback_device_logits_bytes
+    );
+    add_assoc_long(
+        &readback,
+        "resident_buffer_reuses",
+        (zend_long) model->cuda_logits_readback_buffer_reuse_count
+    );
+    add_assoc_bool(&readback, "explicit_pre_readback_sync_removed", true);
     add_assoc_long(&readback, "last_readback_ns", model->cuda_logits_readback_last_ns);
     add_assoc_bool(&readback, "full_logits_cpu_readback_avoided", model->cuda_logits_readback_available);
     array_init(&synthetic_ordering);

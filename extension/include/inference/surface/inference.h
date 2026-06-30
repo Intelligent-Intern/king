@@ -122,6 +122,8 @@ typedef struct _king_inference_model_object {
     void *cuda_logits_readback_nvrtc_handle;
     void *cuda_logits_readback_module;
     void *cuda_logits_top_k_function;
+    king_inference_cuda_device_ptr cuda_logits_readback_device_indices;
+    king_inference_cuda_device_ptr cuda_logits_readback_device_logits;
     king_inference_cuda_device_allocation *cuda_device_allocations;
     king_inference_cuda_weight_upload *cuda_weight_uploads;
     int cuda_device;
@@ -258,6 +260,9 @@ typedef struct _king_inference_model_object {
     size_t cuda_logits_readback_last_bytes;
     size_t cuda_logits_readback_full_bytes;
     size_t cuda_logits_readback_saved_bytes;
+    size_t cuda_logits_readback_device_indices_bytes;
+    size_t cuda_logits_readback_device_logits_bytes;
+    size_t cuda_logits_readback_buffer_reuse_count;
     zend_long cuda_logits_readback_last_ns;
     size_t cuda_logits_readback_synthetic_vocab_size;
     size_t cuda_logits_readback_synthetic_candidate_count;

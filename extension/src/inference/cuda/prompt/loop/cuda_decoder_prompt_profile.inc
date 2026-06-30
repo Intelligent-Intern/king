@@ -272,9 +272,9 @@ static void king_inference_cuda_decoder_prompt_profile_add_status(
     add_assoc_long(&profile, "host_device_syncs", (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_syncs);
     add_assoc_long(&profile, "device_to_host_copies", (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_dtoh_copies);
     add_assoc_long(&profile, "allocator_acquisitions", (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_allocator_acquisitions);
-    add_assoc_string(&profile, "sync_sources", "logits_top_k_cuCtxSynchronize");
+    add_assoc_string(&profile, "sync_sources", "none_on_bounded_logits_readback_hotpath");
     add_assoc_string(&profile, "deferred_sync_sources", "rope_default_stream_ordering");
-    add_assoc_string(&profile, "dtoh_sources", "bounded_top_k_indices_and_logits");
+    add_assoc_string(&profile, "dtoh_sources", "blocking_bounded_top_k_indices_and_logits");
 
     array_init(&launches);
     add_assoc_long(&launches, "embedding", (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_embedding_launches);
