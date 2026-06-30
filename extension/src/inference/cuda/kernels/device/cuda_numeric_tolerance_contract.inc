@@ -73,7 +73,7 @@ static const char *king_inference_cuda_numeric_sample_classification(
     double max_rel
 ) {
     if (!isfinite(actual) || !isfinite(expected) || !isfinite(abs_diff)) {
-        return "non_finite_correctness_failure";
+        return "non_finite_numeric_mismatch";
     }
     if (abs_diff <= max_abs) {
         return "float_noise_abs_tolerance";
@@ -81,7 +81,7 @@ static const char *king_inference_cuda_numeric_sample_classification(
     if (isfinite(rel_diff) && rel_diff <= max_rel) {
         return "float_noise_relative_tolerance";
     }
-    return "correctness_failure";
+    return "numeric_mismatch";
 }
 
 static bool king_inference_cuda_numeric_sample_matches(const char *classification)
@@ -118,7 +118,7 @@ static void king_inference_cuda_numeric_tolerance_contract_table(zval *return_va
     add_assoc_long(return_value, "schema_version", 1);
     add_assoc_string(return_value, "match_rule", "abs_or_relative");
     add_assoc_string(return_value, "noise_status", "float_noise_abs_tolerance_or_float_noise_relative_tolerance");
-    add_assoc_string(return_value, "failure_status", "correctness_failure");
+    add_assoc_string(return_value, "failure_status", "numeric_mismatch");
     add_assoc_string(return_value, "sample_context_fields", "op,layer,tensor,sample_index");
     array_init(&entries);
     king_inference_cuda_numeric_tolerance_contract_add_entry(&entries, "embedding", 0.00001, 0.00001, "token_embedding_row");

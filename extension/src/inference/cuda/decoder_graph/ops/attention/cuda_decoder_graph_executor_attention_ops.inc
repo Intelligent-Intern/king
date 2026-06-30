@@ -254,7 +254,15 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_attenti
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, context_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &probabilities_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &scores_output);
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_attention_score_compare_failed");
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            king_inference_cuda_decoder_graph_executor_attention_compare_error_reason(
+                attention_probe,
+                "attention_score_numeric_compare",
+                "cuda_decoder_graph_kv_attention_score_compare_failed"
+            )
+        );
         return FAILURE;
     }
     if (king_inference_cuda_attention_softmax_f32(
@@ -291,7 +299,15 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_attenti
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, context_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &probabilities_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &scores_output);
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_attention_softmax_compare_failed");
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            king_inference_cuda_decoder_graph_executor_attention_compare_error_reason(
+                attention_probe,
+                "attention_softmax_numeric_compare",
+                "cuda_decoder_graph_kv_attention_softmax_compare_failed"
+            )
+        );
         return FAILURE;
     }
     if (king_inference_cuda_attention_values_f32(
@@ -332,7 +348,15 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_kv_attenti
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, context_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &probabilities_output);
         (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, &scores_output);
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_attention_value_compare_failed");
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            -1,
+            king_inference_cuda_decoder_graph_executor_attention_compare_error_reason(
+                attention_probe,
+                "attention_value_numeric_compare",
+                "cuda_decoder_graph_kv_attention_value_compare_failed"
+            )
+        );
         return FAILURE;
     }
 

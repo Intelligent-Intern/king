@@ -222,6 +222,10 @@ static zend_result king_inference_cuda_device_vector_numeric_compare(
 
     efree(actual);
     add_assoc_string(return_value, "status", matched ? "matched" : "mismatch");
+    add_assoc_string(return_value, "classification", matched ? "matched" : "numeric_mismatch");
+    add_assoc_string(return_value, "error_category", matched ? "none" : "numeric_mismatch");
+    add_assoc_string(return_value, "error_code", matched ? "none" : "king.numeric_mismatch.detected");
+    add_assoc_string(return_value, "failure_status", matched ? "none" : "numeric_mismatch");
     add_assoc_bool(return_value, "matched", matched);
     add_assoc_long(return_value, "compared_values", (zend_long) compare_count);
     add_assoc_long(return_value, "matched_values", (zend_long) matched_values);

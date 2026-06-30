@@ -2,6 +2,35 @@
  * Internal CUDA attention numeric compares for block-0 BOS.
  */
 
+static const char *king_inference_cuda_decoder_graph_executor_attention_compare_error_reason(
+    zval *attention_probe,
+    const char *compare_key,
+    const char *fallback
+) {
+    zval *compare = attention_probe != NULL && Z_TYPE_P(attention_probe) == IS_ARRAY
+        ? king_inference_array_find(attention_probe, compare_key)
+        : NULL;
+    zval *error_category = compare != NULL && Z_TYPE_P(compare) == IS_ARRAY
+        ? king_inference_array_find(compare, "error_category")
+        : NULL;
+    zval *status = compare != NULL && Z_TYPE_P(compare) == IS_ARRAY
+        ? king_inference_array_find(compare, "status")
+        : NULL;
+
+    if (error_category != NULL
+        && Z_TYPE_P(error_category) == IS_STRING
+        && zend_string_equals_literal(Z_STR_P(error_category), "numeric_mismatch")) {
+        return "king.numeric_mismatch.detected";
+    }
+    if (status != NULL
+        && Z_TYPE_P(status) == IS_STRING
+        && zend_string_equals_literal(Z_STR_P(status), "numeric_mismatch")) {
+        return "king.numeric_mismatch.detected";
+    }
+
+    return fallback;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_bos_attention_scores(
     king_inference_model_object *model,
     king_inference_cuda_device_ptr query_output,
