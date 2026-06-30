@@ -789,103 +789,6 @@ static zend_result king_inference_openai_sse_append_finish_chunk(
     return result;
 }
 
-static zend_result king_inference_openai_sse_append_tool_call_chunk(
-    king_inference_stream_object *stream,
-    zval *tool_calls,
-    smart_str *sse)
-{
-    zval chunk;
-    zval choices;
-    zval choice;
-    zval delta;
-    zval stream_tool_calls;
-    zval *call;
-    zend_long index = 0;
-    zend_result result;
-
-    king_inference_stream_openai_chunk_base(stream, &chunk);
-    array_init(&choices);
-    array_init(&choice);
-    add_assoc_long(&choice, "index", 0);
-    array_init(&delta);
-    add_assoc_string(&delta, "role", "assistant");
-    array_init(&stream_tool_calls);
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(tool_calls), call) {
-        zval stream_call;
-        zval *id;
-        zval *type;
-        zval *function;
-
-        if (!king_inference_openai_array_is_object(call)) {
-            continue;
-        }
-        id = king_inference_array_find(call, "id");
-        type = king_inference_array_find(call, "type");
-        function = king_inference_array_find(call, "function");
-
-        array_init(&stream_call);
-        add_assoc_long(&stream_call, "index", index++);
-        if (id != NULL) {
-            Z_TRY_ADDREF_P(id);
-            add_assoc_zval(&stream_call, "id", id);
-        }
-        if (type != NULL) {
-            Z_TRY_ADDREF_P(type);
-            add_assoc_zval(&stream_call, "type", type);
-        }
-        if (function != NULL) {
-            Z_TRY_ADDREF_P(function);
-            add_assoc_zval(&stream_call, "function", function);
-        }
-        add_next_index_zval(&stream_tool_calls, &stream_call);
-    } ZEND_HASH_FOREACH_END();
-    add_assoc_zval(&delta, "tool_calls", &stream_tool_calls);
-    add_assoc_zval(&choice, "delta", &delta);
-    add_assoc_null(&choice, "finish_reason");
-    add_next_index_zval(&choices, &choice);
-    add_assoc_zval(&chunk, "choices", &choices);
-    if (king_inference_openai_stream_usage_requested(&stream->request)) {
-        add_assoc_null(&chunk, "usage");
-    }
-
-    result = king_inference_openai_sse_append(sse, &chunk);
-    zval_ptr_dtor(&chunk);
-    return result;
-}
-
-static zend_result king_inference_openai_sse_append_buffered_chat(
-    king_inference_stream_object *stream,
-    smart_str *content,
-    const char *finish_reason,
-    smart_str *sse)
-{
-    zval tool_calls;
-    bool has_tool_calls = false;
-    zend_result result;
-
-    ZVAL_UNDEF(&tool_calls);
-    if (content != NULL && content->s != NULL) {
-        has_tool_calls = king_inference_openai_tool_calls_from_content(content->s, &tool_calls);
-    }
-
-    if (has_tool_calls) {
-        result = king_inference_openai_sse_append_tool_call_chunk(stream, &tool_calls, sse);
-        zval_ptr_dtor(&tool_calls);
-        if (result != SUCCESS) {
-            return FAILURE;
-        }
-        return king_inference_openai_sse_append_finish_chunk(stream, "tool_calls", sse);
-    }
-
-    if (content != NULL && content->s != NULL) {
-        result = king_inference_openai_sse_append_content_chunk(stream, content->s, sse);
-        if (result != SUCCESS) {
-            return FAILURE;
-        }
-    }
-    return king_inference_openai_sse_append_finish_chunk(stream, finish_reason, sse);
-}
-
 static zend_result king_inference_openai_append_stream_usage_chunk(
     king_inference_stream_object *stream,
     smart_str *content,
@@ -1014,25 +917,15 @@ static zend_result king_inference_openai_payload_response(
         smart_str sse = {0};
         smart_str content = {0};
         bool include_usage = king_inference_openai_stream_usage_requested(payload);
-        bool tools_active = king_inference_openai_tools_active(payload);
 
         result = king_inference_openai_drain_stream(
             stream,
             &stream_value,
             &drain_controls,
-            include_usage || tools_active ? &content : NULL,
-            tools_active ? NULL : &sse,
+            include_usage ? &content : NULL,
+            &sse,
             &finish_reason
         );
-        if (result == SUCCESS && tools_active) {
-            smart_str_0(&content);
-            result = king_inference_openai_sse_append_buffered_chat(
-                stream,
-                &content,
-                finish_reason != NULL ? ZSTR_VAL(finish_reason) : "stop",
-                &sse
-            );
-        }
         if (result == SUCCESS && include_usage) {
             smart_str_0(&content);
             result = king_inference_openai_append_stream_usage_chunk(stream, &content, &sse);
