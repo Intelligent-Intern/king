@@ -6,7 +6,6 @@ function king_openai_router_memory_policy(array $runtimeModelConfig): array
     $withMemory = king_openai_router_bool($runtimeModelConfig, 'with_memory');
     $llmCache = king_openai_router_array($runtimeModelConfig, 'llm_cache');
     $llmCacheConfigured = king_openai_router_bool($llmCache, 'enabled');
-    $llmCacheActive = $withMemory && $llmCacheConfigured;
     $status = [];
 
     if (function_exists('king_inference_llm_cache_status')) {
@@ -20,6 +19,17 @@ function king_openai_router_memory_policy(array $runtimeModelConfig): array
             ];
         }
     }
+    $statusOk = ($status === []) || !array_key_exists('ok', $status) || $status['ok'] === true;
+    $statusAction = is_string($status['action'] ?? null) ? $status['action'] : '';
+    $llmCacheActive = $withMemory && $llmCacheConfigured && $statusOk;
+    $disabledReason = '';
+    if (!$withMemory) {
+        $disabledReason = 'memory_disabled';
+    } else if (!$llmCacheConfigured) {
+        $disabledReason = 'llm_cache_not_configured';
+    } else if (!$statusOk) {
+        $disabledReason = $statusAction !== '' ? $statusAction : 'disk_floor_failed';
+    }
 
     return [
         'with_memory' => $withMemory,
@@ -30,9 +40,25 @@ function king_openai_router_memory_policy(array $runtimeModelConfig): array
             ...$llmCache,
             'enabled' => $llmCacheActive,
             'configured_enabled' => $llmCacheConfigured,
-            'disabled_reason' => $llmCacheActive ? '' : ($withMemory ? 'llm_cache_not_configured' : 'memory_disabled'),
+            'status_ok' => $statusOk,
+            'status_action' => $statusAction,
+            'disabled_reason' => $llmCacheActive ? '' : $disabledReason,
         ],
         'llm_cache_status' => is_array($status) ? $status : [],
+    ];
+}
+
+function king_openai_router_memory_status_log_fields(array $policy): array
+{
+    $status = is_array($policy['llm_cache_status'] ?? null) ? $policy['llm_cache_status'] : [];
+    return [
+        'llm_cache_status_action' => is_string($status['action'] ?? null) ? $status['action'] : '',
+        'llm_cache_status_degraded' => !empty($status['degraded']),
+        'llm_cache_min_free_mb' => is_int($status['min_free_mb'] ?? null) ? $status['min_free_mb'] : '',
+        'llm_cache_free_mb' => is_int($status['free_mb'] ?? null) ? $status['free_mb'] : '',
+        'llm_cache_alert_requested' => !empty($status['alert']['requested']),
+        'llm_cache_webhook_configured' => !empty($status['alert']['webhook_configured']),
+        'llm_cache_mcp_configured' => !empty($status['alert']['mcp_configured']),
     ];
 }
 

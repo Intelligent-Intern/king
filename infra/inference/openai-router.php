@@ -120,6 +120,7 @@ king_inference_runtime_log_configured([
     'llm_cache_status_active' => !empty($memoryPolicy['llm_cache_status']['active']),
     'llm_cache_status_ok' => !empty($memoryPolicy['llm_cache_status']['ok']),
     'llm_cache_status_reason' => is_string($memoryPolicy['llm_cache_status']['reason'] ?? null) ? $memoryPolicy['llm_cache_status']['reason'] : '',
+    ...king_openai_router_memory_status_log_fields($memoryPolicy),
     'context_policy' => $contextPolicy,
     'default_max_tokens' => $defaultMaxTokens,
     'max_completion_tokens' => $maxCompletionTokens,
