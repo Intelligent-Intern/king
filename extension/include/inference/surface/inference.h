@@ -396,6 +396,10 @@ typedef struct _king_inference_model_object {
     zend_long runtime_last_duration_ms;
     zend_long runtime_last_time_to_first_token_ms;
     zend_long runtime_last_generated_tokens;
+    zend_long tokenizer_last_token_count;
+    zend_long tokenizer_last_unknown_count;
+    zend_long tokenizer_last_input_bytes;
+    zend_long tokenizer_last_normalized_bytes;
     double runtime_last_tokens_per_second;
     HashTable cuda_weight_cache;
     bool native_map_loaded;
@@ -533,6 +537,7 @@ typedef struct _king_inference_model_object {
     bool cuda_decoder_prompt_loop_last_hot_token_full_logits_readback_avoided;
     bool runtime_last_timing_available;
     bool runtime_last_first_token_available;
+    bool tokenizer_last_encode_available;
     zend_object std;
 } king_inference_model_object;
 

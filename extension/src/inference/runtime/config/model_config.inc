@@ -400,6 +400,7 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
     zval *quantization = king_inference_array_find(&intern->config, "quantization");
     zval runtime_truth;
     zval native_engine_readiness;
+    zval tokenizer_status;
 
     array_init(return_value);
     add_assoc_str(return_value, "name", zend_string_copy(intern->name));
@@ -421,6 +422,8 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
         "native_tokenizer_merge_count",
         (zend_long) zend_hash_num_elements(Z_ARRVAL(intern->tokenizer_merges))
     );
+    king_inference_tokenizer_status_array(intern, &tokenizer_status);
+    add_assoc_zval(return_value, "tokenizer_status", &tokenizer_status);
     king_inference_add_gguf_metadata_array(&intern->gguf, return_value);
     king_inference_add_tensor_resolution_info(intern, return_value);
     if (!Z_ISUNDEF(intern->paged_kv_cache_plan)) {

@@ -33,6 +33,8 @@ static void king_inference_model_runtime_resident_truth(
     king_inference_model_object *model,
     zval *return_value
 ) {
+    zval tokenizer_status;
+
     array_init(return_value);
     add_assoc_bool(return_value, "model_object", true);
     add_assoc_bool(return_value, "gguf_metadata", model->gguf.loaded);
@@ -41,6 +43,8 @@ static void king_inference_model_runtime_resident_truth(
         && zend_hash_num_elements(Z_ARRVAL(model->tensor_index)) > 0);
     add_assoc_bool(return_value, "tokenizer", model->gguf.tokenizer_tokens_loaded
         && model->gguf.tokenizer_lookup_loaded);
+    king_inference_tokenizer_status_array(model, &tokenizer_status);
+    add_assoc_zval(return_value, "tokenizer_status", &tokenizer_status);
     add_assoc_bool(return_value, "cuda_context", model->cuda_context_available);
     add_assoc_bool(return_value, "cuda_context_owned", model->cuda_context_owned);
     add_assoc_bool(return_value, "cuda_weights", model->cuda_weight_upload_complete

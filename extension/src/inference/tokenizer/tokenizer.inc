@@ -130,6 +130,33 @@ static bool king_inference_tokenizer_add_byte_fallback(
     return true;
 }
 
+static void king_inference_tokenizer_status_array(
+    king_inference_model_object *model,
+    zval *return_value
+) {
+    array_init(return_value);
+    add_assoc_bool(return_value, "ready", model->gguf.tokenizer_tokens_loaded
+        && model->gguf.tokenizer_lookup_loaded
+        && Z_TYPE(model->tokenizer_tokens) == IS_ARRAY
+        && Z_TYPE(model->tokenizer_lookup) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL(model->tokenizer_tokens)) > 0
+        && zend_hash_num_elements(Z_ARRVAL(model->tokenizer_lookup)) > 0);
+    add_assoc_bool(return_value, "tokens_loaded", model->gguf.tokenizer_tokens_loaded);
+    add_assoc_bool(return_value, "lookup_loaded", model->gguf.tokenizer_lookup_loaded);
+    add_assoc_bool(return_value, "merges_loaded", model->gguf.tokenizer_merges_loaded);
+    add_assoc_long(return_value, "token_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_tokens)));
+    add_assoc_long(return_value, "lookup_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_lookup)));
+    add_assoc_long(return_value, "merge_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_merges)));
+    add_assoc_long(return_value, "unknown_token_id", model->gguf.tokenizer_unknown_id);
+    add_assoc_bool(return_value, "last_encode_available", model->tokenizer_last_encode_available);
+    add_assoc_long(return_value, "last_token_count", model->tokenizer_last_token_count);
+    add_assoc_long(return_value, "last_unknown_count", model->tokenizer_last_unknown_count);
+    add_assoc_long(return_value, "last_input_bytes", model->tokenizer_last_input_bytes);
+    add_assoc_long(return_value, "last_normalized_bytes", model->tokenizer_last_normalized_bytes);
+    add_assoc_bool(return_value, "last_clean", model->tokenizer_last_encode_available
+        && model->tokenizer_last_unknown_count == 0);
+}
+
 static zend_result king_inference_tokenizer_encode(
     king_inference_model_object *model,
     zend_string *text,
@@ -227,6 +254,12 @@ static zend_result king_inference_tokenizer_encode(
     }
 
     token_count = (zend_long) zend_hash_num_elements(Z_ARRVAL(token_ids));
+    model->tokenizer_last_encode_available = true;
+    model->tokenizer_last_token_count = token_count;
+    model->tokenizer_last_unknown_count = unknown_count;
+    model->tokenizer_last_input_bytes = (zend_long) ZSTR_LEN(text);
+    model->tokenizer_last_normalized_bytes = (zend_long) length;
+
     array_init(return_value);
     add_assoc_long(return_value, "token_count", token_count);
     add_assoc_zval(return_value, "tokens", &token_ids);

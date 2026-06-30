@@ -564,6 +564,115 @@ static zval *king_inference_openai_chunk_delta_content(zval *chunk)
     return king_inference_array_find(delta, "content");
 }
 
+static const char *king_inference_openai_memmem(
+    const char *haystack,
+    size_t haystack_len,
+    const char *needle,
+    size_t needle_len)
+{
+    size_t offset;
+
+    if (needle_len == 0 || haystack_len < needle_len) {
+        return NULL;
+    }
+    for (offset = 0; offset <= haystack_len - needle_len; offset++) {
+        if (memcmp(haystack + offset, needle, needle_len) == 0) {
+            return haystack + offset;
+        }
+    }
+    return NULL;
+}
+
+static bool king_inference_openai_stop_trim_offset(
+    zval *request,
+    zend_string *content,
+    size_t *offset_out)
+{
+    zval *stop = king_inference_array_find(request, "stop");
+    zval *entry;
+    const char *earliest = NULL;
+
+    if (offset_out != NULL) {
+        *offset_out = 0;
+    }
+    if (stop == NULL || content == NULL || ZSTR_LEN(content) == 0) {
+        return false;
+    }
+    if (Z_TYPE_P(stop) == IS_STRING) {
+        if (Z_STRLEN_P(stop) == 0) {
+            return false;
+        }
+        earliest = king_inference_openai_memmem(
+            ZSTR_VAL(content),
+            ZSTR_LEN(content),
+            Z_STRVAL_P(stop),
+            Z_STRLEN_P(stop)
+        );
+    } else if (king_inference_openai_array_is_list(stop)) {
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(stop), entry) {
+            const char *match;
+
+            if (Z_TYPE_P(entry) != IS_STRING || Z_STRLEN_P(entry) == 0) {
+                continue;
+            }
+            match = king_inference_openai_memmem(
+                ZSTR_VAL(content),
+                ZSTR_LEN(content),
+                Z_STRVAL_P(entry),
+                Z_STRLEN_P(entry)
+            );
+            if (match != NULL && (earliest == NULL || match < earliest)) {
+                earliest = match;
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (earliest == NULL) {
+        return false;
+    }
+    if (offset_out != NULL) {
+        *offset_out = (size_t) (earliest - ZSTR_VAL(content));
+    }
+    return true;
+}
+
+static void king_inference_openai_set_finish_reason(
+    zend_string **finish_reason_out,
+    const char *reason)
+{
+    if (finish_reason_out == NULL) {
+        return;
+    }
+    if (*finish_reason_out != NULL) {
+        zend_string_release(*finish_reason_out);
+    }
+    *finish_reason_out = zend_string_init(reason, strlen(reason), 0);
+}
+
+static void king_inference_openai_apply_stop_sequences_to_content(
+    zval *request,
+    smart_str *content,
+    zend_string **finish_reason_out)
+{
+    size_t offset = 0;
+    zend_string *trimmed;
+
+    if (content == NULL || content->s == NULL) {
+        return;
+    }
+    smart_str_0(content);
+    if (!king_inference_openai_stop_trim_offset(request, content->s, &offset)) {
+        return;
+    }
+
+    trimmed = zend_string_init(ZSTR_VAL(content->s), offset, 0);
+    smart_str_free(content);
+    smart_str_append(content, trimmed);
+    zend_string_release(trimmed);
+    smart_str_0(content);
+    king_inference_openai_set_finish_reason(finish_reason_out, "stop");
+}
+
 static zend_result king_inference_openai_drain_stream(
     king_inference_stream_object *stream,
     zval *stream_value,
@@ -595,6 +704,7 @@ static zend_result king_inference_openai_drain_stream(
         if (Z_TYPE(event) == IS_NULL) {
             zval_ptr_dtor(&event);
             if (stream->done) {
+                king_inference_openai_apply_stop_sequences_to_content(&stream->request, content, finish_reason_out);
                 return SUCCESS;
             }
             idle_events++;
@@ -619,6 +729,7 @@ static zend_result king_inference_openai_drain_stream(
                     zend_string_release(*finish_reason_out);
                     *finish_reason_out = zend_string_init(event_finish_reason, strlen(event_finish_reason), 0);
                 }
+                king_inference_openai_apply_stop_sequences_to_content(&stream->request, content, finish_reason_out);
                 zval_ptr_dtor(&event);
                 return SUCCESS;
             }

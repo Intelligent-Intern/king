@@ -93,9 +93,14 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     intern->runtime_last_duration_ms = 0;
     intern->runtime_last_time_to_first_token_ms = 0;
     intern->runtime_last_generated_tokens = 0;
+    intern->tokenizer_last_token_count = 0;
+    intern->tokenizer_last_unknown_count = 0;
+    intern->tokenizer_last_input_bytes = 0;
+    intern->tokenizer_last_normalized_bytes = 0;
     intern->runtime_last_tokens_per_second = 0.0;
     intern->runtime_last_timing_available = false;
     intern->runtime_last_first_token_available = false;
+    intern->tokenizer_last_encode_available = false;
     king_inference_cuda_context_reset_fields(intern);
     king_inference_cuda_device_allocator_reset_fields(intern);
     king_inference_cuda_weight_upload_reset_fields(intern);
