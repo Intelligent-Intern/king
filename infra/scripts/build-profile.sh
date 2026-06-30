@@ -32,6 +32,10 @@ Environment variables:
                  Explicit OpenSSL compile flags. Appended before configure.
   KING_OPENSSL_LIBS
                  Explicit OpenSSL linker flags. Appended before configure.
+  PHP_BIN        PHP binary used by matching smoke scripts. Also used to infer
+                 phpizeX.Y/php-configX.Y when PHPIZE/PHP_CONFIG are unset.
+  PHPIZE         phpize binary to use for this profile build.
+  PHP_CONFIG     php-config binary to pass to configure.
 EOF
 }
 
@@ -142,6 +146,7 @@ BASE_CPPFLAGS="${CPPFLAGS:-}"
 BASE_LDFLAGS="${LDFLAGS:-}"
 BASE_CC="${CC:-}"
 BASE_CXX="${CXX:-}"
+PHP_BIN="${PHP_BIN:-php}"
 
 profile_cc=""
 profile_cxx=""
@@ -150,6 +155,8 @@ profile_cppflags="${BASE_CPPFLAGS}"
 profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_kind=""
 lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-}"
+phpize_bin=""
+php_config_bin=""
 declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
 declare -a CONFIGURE_ENV=()
 PHPIZE_SNAPSHOT_DIR=""
@@ -160,6 +167,97 @@ trim_ascii_whitespace() {
     value="${value#"${value%%[![:space:]]*}"}"
     value="${value%"${value##*[![:space:]]}"}"
     printf '%s\n' "${value}"
+}
+
+php_binary_suffix() {
+    local binary_name=""
+
+    binary_name="$(basename "${PHP_BIN}")"
+    case "${binary_name}" in
+        php[0-9].[0-9])
+            printf '%s\n' "${binary_name#php}"
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+php_runtime_api() {
+    "${PHP_BIN}" -i 2>/dev/null | awk -F'=> ' '/^PHP API/ { print $2; exit }'
+}
+
+phpize_api() {
+    "${phpize_bin}" -v 2>/dev/null | awk -F': *' '/^PHP Api Version/ { print $2; exit }'
+}
+
+resolve_php_toolchain() {
+    local suffix=""
+    local runtime_api=""
+    local config_api=""
+    local phpize_reported_api=""
+
+    phpize_bin="${PHPIZE:-}"
+    php_config_bin="${PHP_CONFIG:-}"
+
+    if [[ -z "${phpize_bin}" || -z "${php_config_bin}" ]]; then
+        suffix="$(php_binary_suffix || true)"
+        if [[ -n "${suffix}" ]]; then
+            if [[ -z "${phpize_bin}" ]] && command -v "phpize${suffix}" >/dev/null 2>&1; then
+                phpize_bin="phpize${suffix}"
+            fi
+            if [[ -z "${php_config_bin}" ]] && command -v "php-config${suffix}" >/dev/null 2>&1; then
+                php_config_bin="php-config${suffix}"
+            fi
+        fi
+    fi
+
+    phpize_bin="${phpize_bin:-phpize}"
+    php_config_bin="${php_config_bin:-php-config}"
+
+    if ! command -v "${phpize_bin}" >/dev/null 2>&1; then
+        echo "Missing phpize binary: ${phpize_bin}" >&2
+        exit 1
+    fi
+
+    if ! command -v "${php_config_bin}" >/dev/null 2>&1; then
+        echo "Missing php-config binary: ${php_config_bin}" >&2
+        exit 1
+    fi
+
+    if ! command -v "${PHP_BIN}" >/dev/null 2>&1; then
+        echo "Missing PHP binary: ${PHP_BIN}" >&2
+        exit 1
+    fi
+
+    runtime_api="$(php_runtime_api)"
+    config_api="$("${php_config_bin}" --phpapi 2>/dev/null || true)"
+    phpize_reported_api="$(phpize_api)"
+
+    if [[ -z "${runtime_api}" ]]; then
+        echo "Failed to resolve PHP runtime API from ${PHP_BIN}." >&2
+        exit 1
+    fi
+
+    if [[ -z "${config_api}" ]]; then
+        echo "Failed to resolve PHP config API from ${php_config_bin}." >&2
+        exit 1
+    fi
+
+    if [[ -z "${phpize_reported_api}" ]]; then
+        echo "Failed to resolve phpize API from ${phpize_bin}." >&2
+        exit 1
+    fi
+
+    if [[ "${runtime_api}" != "${config_api}" || "${runtime_api}" != "${phpize_reported_api}" ]]; then
+        {
+            echo "PHP toolchain API mismatch:"
+            echo "  ${PHP_BIN}: ${runtime_api}"
+            echo "  ${php_config_bin}: ${config_api}"
+            echo "  ${phpize_bin}: ${phpize_reported_api}"
+        } >&2
+        exit 1
+    fi
 }
 
 load_phpize_generated_relative_paths() {
@@ -482,6 +580,11 @@ echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
 echo "Jobs: ${JOBS}"
 
+resolve_php_toolchain
+echo "PHP binary: ${PHP_BIN}"
+echo "phpize: ${phpize_bin}"
+echo "php-config: ${php_config_bin}"
+
 load_phpize_generated_relative_paths
 snapshot_phpize_generated_files
 trap restore_phpize_generated_files EXIT
@@ -492,8 +595,8 @@ if [[ -f Makefile ]]; then
     make clean >/dev/null 2>&1 || true
 fi
 
-phpize --clean >/dev/null 2>&1 || true
-phpize
+"${phpize_bin}" --clean >/dev/null 2>&1 || true
+"${phpize_bin}"
 
 CONFIGURE_ENV=(
     CC="${profile_cc}"
@@ -501,6 +604,7 @@ CONFIGURE_ENV=(
     CFLAGS="${profile_cflags}"
     CPPFLAGS="${profile_cppflags}"
     LDFLAGS="${profile_ldflags}"
+    PHP_CONFIG="${php_config_bin}"
 )
 
 if [[ "$(host_os)" == "darwin" ]]; then
@@ -519,7 +623,7 @@ if [[ -n "${lsquic_runtime_prefix}" ]]; then
     )
 fi
 
-env "${CONFIGURE_ENV[@]}" ./configure --enable-king
+env "${CONFIGURE_ENV[@]}" ./configure --enable-king --with-php-config="${php_config_bin}"
 patch_generated_libtool_for_host
 
 make -j"${JOBS}"
