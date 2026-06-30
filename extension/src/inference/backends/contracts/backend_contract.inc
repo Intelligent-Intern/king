@@ -127,6 +127,87 @@ static bool king_inference_backend_kind_allows_model_registration(king_inference
         || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
 }
 
+static void king_inference_reference_backend_operation_list(zval *return_value)
+{
+    static const char *operations[] = {
+        "embedding",
+        "rms_norm",
+        "qkv_projection",
+        "rope",
+        "attention_score",
+        "attention_softmax",
+        "attention_value",
+        "attention_projection_residual",
+        "ffn_gate_up",
+        "ffn_swiglu",
+        "ffn_down",
+        "ffn_output_residual",
+        "final_norm",
+        "logits_projection",
+        "sampler_candidate_ranking",
+    };
+
+    array_init(return_value);
+    for (size_t i = 0; i < sizeof(operations) / sizeof(operations[0]); i++) {
+        add_next_index_string(return_value, operations[i]);
+    }
+}
+
+static void king_inference_reference_backend_gap_list(zval *return_value)
+{
+    static const char *gaps[] = {
+        "full_unbounded_tensor_compare",
+        "batch_prefill_kv_state",
+        "whole_model_golden_prompt_semantics",
+        "long_context_quality",
+        "performance_baseline",
+        "external_backend_equivalence",
+        "openai_tool_execution",
+    };
+
+    array_init(return_value);
+    for (size_t i = 0; i < sizeof(gaps) / sizeof(gaps[0]); i++) {
+        add_next_index_string(return_value, gaps[i]);
+    }
+}
+
+static void king_inference_reference_backend_contract_array(
+    king_inference_backend_kind kind,
+    zval *return_value
+) {
+    bool gpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+    zval compared_operations;
+    zval not_compared;
+
+    array_init(return_value);
+    add_assoc_long(return_value, "schema_version", 1);
+    add_assoc_bool(return_value, "available", gpu_backend);
+    add_assoc_bool(return_value, "public_api", false);
+    add_assoc_bool(return_value, "active_runtime_backend", false);
+    add_assoc_bool(return_value, "production_execution_path", false);
+    add_assoc_bool(return_value, "requires_explicit_numeric_compare", true);
+    add_assoc_string(return_value, "scope", "internal_numeric_reference_contract");
+    add_assoc_string(
+        return_value,
+        "selected_reference",
+        gpu_backend ? "king_internal_cpu_reference" : "none"
+    );
+    add_assoc_string(
+        return_value,
+        "comparison_path",
+        gpu_backend ? "bounded_cuda_readback_against_cpu_recompute" : "unavailable"
+    );
+    add_assoc_string(
+        return_value,
+        "activation",
+        "gpu.debug.numeric_compare_enabled or king.inference_cuda_numeric_compare_enable"
+    );
+    king_inference_reference_backend_operation_list(&compared_operations);
+    add_assoc_zval(return_value, "compared_operations", &compared_operations);
+    king_inference_reference_backend_gap_list(&not_compared);
+    add_assoc_zval(return_value, "not_compared", &not_compared);
+}
+
 static void king_inference_backend_capabilities_array(king_inference_backend_kind kind, zval *return_value)
 {
     bool native_backend = kind != KING_INFERENCE_BACKEND_LOCAL;
@@ -135,10 +216,14 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     bool native_stream_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
         || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
     bool local_backend = kind == KING_INFERENCE_BACKEND_LOCAL;
+    zval reference_backend;
 
     array_init(return_value);
     add_assoc_long(return_value, "schema_version", 2);
-    add_assoc_string(return_value, "scope", "static_backend_contract");
+    add_assoc_string(return_value, "scope", "implemented_capability_contract");
+    add_assoc_string(return_value, "truth_source", "compiled_backend_contract");
+    add_assoc_bool(return_value, "runtime_admission", false);
+    add_assoc_string(return_value, "runtime_admission_source", "x_king.runtime_surface");
     add_assoc_bool(return_value, "implemented", king_inference_backend_kind_is_available(kind));
     add_assoc_bool(return_value, "local", true);
     add_assoc_bool(return_value, "streaming", true);
@@ -156,6 +241,14 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "native_model_mapping", native_backend);
     add_assoc_bool(return_value, "native_tokenization", true);
     add_assoc_bool(return_value, "native_token_decode", true);
+    add_assoc_string(
+        return_value,
+        "native_token_decode_scope",
+        native_stream_backend ? "tokenizer_and_token_vector_graph_decode" : "tokenizer_decode_only"
+    );
+    add_assoc_bool(return_value, "synthetic_token_vector_graph", native_stream_backend);
+    add_assoc_bool(return_value, "synthetic_token_vector_scores", native_stream_backend);
+    add_assoc_bool(return_value, "prompt_to_logits_generation", local_backend || native_cpu_backend || gpu_backend);
     add_assoc_bool(return_value, "paged_kv_cache", true);
     add_assoc_bool(return_value, "native_stream_contract", native_stream_backend);
     add_assoc_bool(return_value, "native_graph_streaming", native_cpu_backend);
@@ -187,6 +280,9 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_decoder_graph_executor", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_result_envelope", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_execution_plan", gpu_backend);
+    add_assoc_bool(return_value, "reference_backend_contract", gpu_backend);
+    add_assoc_bool(return_value, "numeric_reference_backend", gpu_backend);
+    add_assoc_bool(return_value, "reference_backend_active_in_production", false);
     add_assoc_bool(return_value, "gpu_decoder_graph_embedding_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_rms_norm_execution", gpu_backend);
     add_assoc_bool(return_value, "gpu_decoder_graph_linear_execution", gpu_backend);
@@ -219,4 +315,6 @@ static void king_inference_backend_capabilities_array(king_inference_backend_kin
     add_assoc_bool(return_value, "gpu_generation", gpu_backend);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);
     add_assoc_string(return_value, "model_format", "gguf");
+    king_inference_reference_backend_contract_array(kind, &reference_backend);
+    add_assoc_zval(return_value, "reference_backend", &reference_backend);
 }

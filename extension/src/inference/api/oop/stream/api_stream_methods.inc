@@ -36,20 +36,7 @@ PHP_METHOD(King_Inference_Stream, __construct)
     }
 
     stream = php_king_inference_stream_obj_from_zend(Z_OBJ_P(ZEND_THIS));
-    king_inference_stream_close_process(stream, true);
-    if (!Z_ISUNDEF(stream->model)) {
-        zval_ptr_dtor(&stream->model);
-    }
-    if (!Z_ISUNDEF(stream->request)) {
-        zval_ptr_dtor(&stream->request);
-    }
-    if (!Z_ISUNDEF(stream->options)) {
-        zval_ptr_dtor(&stream->options);
-    }
-    if (!Z_ISUNDEF(stream->native_events)) {
-        zval_ptr_dtor(&stream->native_events);
-        ZVAL_UNDEF(&stream->native_events);
-    }
+    king_inference_stream_release_owned_state(stream);
     ZVAL_COPY(&stream->model, model);
     ZVAL_COPY(&stream->request, request);
     if (options != NULL) {

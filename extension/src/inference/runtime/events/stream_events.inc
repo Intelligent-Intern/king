@@ -1,21 +1,4 @@
-static void king_inference_stream_close_process(king_inference_stream_object *stream, bool terminate)
-{
-    if (stream->stdout_fd >= 0) {
-        close(stream->stdout_fd);
-        stream->stdout_fd = -1;
-    }
-    if (stream->stderr_fd >= 0) {
-        close(stream->stderr_fd);
-        stream->stderr_fd = -1;
-    }
-    if (stream->child_pid > 0) {
-        if (terminate && !stream->done) {
-            kill((pid_t) stream->child_pid, SIGTERM);
-        }
-        waitpid((pid_t) stream->child_pid, NULL, WNOHANG);
-        stream->child_pid = -1;
-    }
-}
+#include "stream_process_close.inc"
 
 static bool king_inference_stream_has_native_events(king_inference_stream_object *stream)
 {

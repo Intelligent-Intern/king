@@ -53,11 +53,12 @@ static zend_result king_inference_openai_require_generation_backend(
         if (has_error_response != NULL) {
             *has_error_response = true;
         }
-        return king_inference_openai_error_response(
+        return king_inference_openai_error_response_classified(
             return_value,
             400,
             "Selected King model has an invalid inference backend configuration.",
-            "invalid_request_error"
+            "invalid_request_error",
+            "king.validation.invalid_backend_config"
         );
     }
 
@@ -78,11 +79,12 @@ static zend_result king_inference_openai_require_generation_backend(
             if (has_error_response != NULL) {
                 *has_error_response = true;
             }
-            return king_inference_openai_error_response(
+            return king_inference_openai_error_response_classified(
                 return_value,
                 400,
                 "Native graph generation requires graph to be an object, graphs to be an array, and graph_options to be an object when provided.",
-                "invalid_request_error"
+                "invalid_request_error",
+                "king.graph.invalid_request"
             );
         }
         if (graph != NULL || graphs != NULL) {
@@ -97,38 +99,49 @@ static zend_result king_inference_openai_require_generation_backend(
     if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
         zend_string *blockers;
         zval gpu_runtime;
+        zval native_engine_readiness;
         zval *graph = king_inference_array_find(payload, "graph");
         zval *graphs = king_inference_array_find(payload, "graphs");
         zval *messages = king_inference_array_find(payload, "messages");
         zval *prompt = king_inference_array_find(payload, "prompt");
         zval *native_prompt_text = king_inference_array_find(payload, "native_prompt_text");
         zval *reason_value;
-        zval *generation_ready;
         zval king_context;
         zval runtime_truth;
         const char *reason = "gpu_decoder_kernel_not_implemented";
+        bool native_plain_text_admitted;
 
+        king_inference_model_native_engine_readiness_array(model_object, &native_engine_readiness);
         king_inference_gpu_runtime_status_from_model(model_object, &gpu_runtime);
         blockers = king_inference_openai_gpu_decoder_blockers_message(&gpu_runtime);
-        generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
+        native_plain_text_admitted = king_inference_native_readiness_bool(
+            &native_engine_readiness,
+            "plain_text_generation_admitted"
+        );
         reason_value = king_inference_array_find(&gpu_runtime, "reason");
         if (reason_value != NULL && Z_TYPE_P(reason_value) == IS_STRING && Z_STRLEN_P(reason_value) > 0) {
             reason = Z_STRVAL_P(reason_value);
         }
         if (graph != NULL || graphs != NULL) {
+            zval native_engine_copy;
+
             array_init(&king_context);
             king_inference_model_runtime_truth_array(model_object, &runtime_truth);
             add_assoc_zval(&king_context, "runtime_truth", &runtime_truth);
+            ZVAL_COPY(&native_engine_copy, &native_engine_readiness);
+            add_assoc_zval(&king_context, "native_engine_readiness", &native_engine_copy);
             zend_string_release(blockers);
             zval_ptr_dtor(&gpu_runtime);
+            zval_ptr_dtor(&native_engine_readiness);
             if (has_error_response != NULL) {
                 *has_error_response = true;
             }
-            result = king_inference_openai_error_response_with_king(
+            result = king_inference_openai_error_response_with_king_classified(
                 return_value,
                 400,
                 "OpenAI-compatible King GPU generation accepts plain text messages only; use the native stream contract for GPU graph payloads.",
                 "invalid_request_error",
+                "king.unsupported_feature.requested",
                 &king_context
             );
             zval_ptr_dtor(&king_context);
@@ -137,11 +150,10 @@ static zend_result king_inference_openai_require_generation_backend(
         if ((messages != NULL && king_inference_openai_array_is_list(messages))
             || (prompt != NULL && Z_TYPE_P(prompt) == IS_STRING)
             || (native_prompt_text != NULL && Z_TYPE_P(native_prompt_text) == IS_STRING && Z_STRLEN_P(native_prompt_text) > 0)) {
-            if (zend_string_equals_literal(blockers, "none")
-                && generation_ready != NULL
-                && zend_is_true(generation_ready)) {
+            if (zend_string_equals_literal(blockers, "none") && native_plain_text_admitted) {
                 zend_string_release(blockers);
                 zval_ptr_dtor(&gpu_runtime);
+                zval_ptr_dtor(&native_engine_readiness);
                 return SUCCESS;
             }
         }
@@ -166,16 +178,23 @@ static zend_result king_inference_openai_require_generation_backend(
         king_inference_model_runtime_truth_array(model_object, &runtime_truth);
         add_assoc_zval(&king_context, "runtime_truth", &runtime_truth);
         {
+            zval native_engine_copy;
+            ZVAL_COPY(&native_engine_copy, &native_engine_readiness);
+            add_assoc_zval(&king_context, "native_engine_readiness", &native_engine_copy);
+        }
+        {
             zval gpu_runtime_copy;
             ZVAL_COPY(&gpu_runtime_copy, &gpu_runtime);
             add_assoc_zval(&king_context, "gpu_runtime", &gpu_runtime_copy);
         }
         zval_ptr_dtor(&gpu_runtime);
-        result = king_inference_openai_error_response_with_king(
+        zval_ptr_dtor(&native_engine_readiness);
+        result = king_inference_openai_error_response_with_king_classified(
             return_value,
             400,
             ZSTR_VAL(message),
             "invalid_request_error",
+            "king.policy.refused",
             &king_context
         );
         zval_ptr_dtor(&king_context);
@@ -194,11 +213,12 @@ static zend_result king_inference_openai_require_generation_backend(
     if (has_error_response != NULL) {
         *has_error_response = true;
     }
-    result = king_inference_openai_error_response(
+    result = king_inference_openai_error_response_classified(
         return_value,
         400,
         ZSTR_VAL(message),
-        "invalid_request_error"
+        "invalid_request_error",
+        "king.unsupported_feature.requested"
     );
     zend_string_release(message);
     return result;

@@ -151,6 +151,8 @@ typedef struct _king_inference_model_object {
     char cuda_embedding_row_error[160];
     char cuda_device_vector_ops_error[160];
     char cuda_device_kv_cache_error[160];
+    char cuda_device_kv_cache_guard_last_operation[64];
+    char cuda_device_kv_cache_guard_last_failure[160];
     char cuda_attention_scores_error[160];
     char cuda_attention_softmax_error[160];
     char cuda_attention_values_error[160];
@@ -224,6 +226,8 @@ typedef struct _king_inference_model_object {
     size_t cuda_device_kv_cache_allocation_count;
     size_t cuda_device_kv_cache_write_count;
     size_t cuda_device_kv_cache_batch_write_count;
+    size_t cuda_device_kv_cache_guard_check_count;
+    size_t cuda_device_kv_cache_guard_failure_count;
     zend_ulong cuda_device_kv_cache_layers;
     zend_ulong cuda_device_kv_cache_kv_heads;
     zend_ulong cuda_device_kv_cache_context_tokens;
@@ -232,6 +236,12 @@ typedef struct _king_inference_model_object {
     zend_ulong cuda_device_kv_cache_last_layer;
     zend_ulong cuda_device_kv_cache_last_head;
     zend_ulong cuda_device_kv_cache_last_position;
+    zend_ulong cuda_device_kv_cache_guard_last_layer;
+    zend_ulong cuda_device_kv_cache_guard_last_head;
+    zend_ulong cuda_device_kv_cache_guard_last_position;
+    zend_ulong cuda_device_kv_cache_guard_last_count;
+    zend_ulong cuda_device_kv_cache_guard_last_page_start;
+    zend_ulong cuda_device_kv_cache_guard_last_page_end;
     size_t cuda_attention_scores_launch_count;
     size_t cuda_attention_scores_batch_launch_count;
     size_t cuda_attention_softmax_launch_count;
@@ -444,6 +454,8 @@ typedef struct _king_inference_model_object {
     bool cuda_device_kv_cache_allocated;
     bool cuda_device_kv_cache_f32;
     bool cuda_device_kv_cache_dtod_available;
+    bool cuda_device_kv_cache_guard_fail_closed;
+    bool cuda_device_kv_cache_guard_last_page_crossed;
     bool cuda_attention_scores_attempted;
     bool cuda_attention_scores_available;
     bool cuda_attention_scores_nvrtc_available;
