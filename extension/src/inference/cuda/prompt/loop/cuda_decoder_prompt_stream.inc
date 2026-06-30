@@ -117,6 +117,8 @@ static zend_result king_inference_cuda_decoder_prompt_stream_initialize(
     zval encoded;
     zval *prompt_text = king_inference_array_find(&stream->request, "native_prompt_text");
     zend_ulong initial_token_id = 0;
+    uint64_t prefill_start_ns;
+    uint64_t prefill_end_ns;
 
     ZVAL_UNDEF(&encoded);
     if (prompt_text == NULL || Z_TYPE_P(prompt_text) != IS_STRING || Z_STRLEN_P(prompt_text) == 0) {
@@ -152,6 +154,7 @@ static zend_result king_inference_cuda_decoder_prompt_stream_initialize(
     state->graph_constructions_start = model->cuda_decoder_graph_executor_graph_count;
     state->plan_constructions_start = model->cuda_decoder_graph_executor_plan_count;
 
+    prefill_start_ns = king_inference_cuda_decoder_prompt_profile_ns();
     if (state->token_count >= KING_INFERENCE_CUDA_PROMPT_BATCH_PREFILL_MIN_TOKENS
         && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
         if (king_inference_cuda_decoder_prompt_loop_prefill_batch_template(
@@ -178,6 +181,9 @@ static zend_result king_inference_cuda_decoder_prompt_stream_initialize(
     ) != SUCCESS) {
         return FAILURE;
     }
+    prefill_end_ns = king_inference_cuda_decoder_prompt_profile_ns();
+    model->cuda_decoder_prompt_loop_last_prefill_ns =
+        king_inference_cuda_decoder_prompt_profile_elapsed(prefill_end_ns, prefill_start_ns);
 
     state->position = state->token_count - 1;
     add_assoc_bool(&state->decode_options, "emit_token", true);

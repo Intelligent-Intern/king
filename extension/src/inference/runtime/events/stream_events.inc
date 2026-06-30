@@ -17,6 +17,8 @@ static zend_long king_inference_runtime_monotonic_ms(void)
     return ((zend_long) ts.tv_sec * 1000) + ((zend_long) ts.tv_nsec / 1000000);
 }
 
+#include "stream_hotpath_metrics.inc"
+
 static void king_inference_stream_model_runtime_started(king_inference_stream_object *stream)
 {
     king_inference_model_object *model;
@@ -39,6 +41,9 @@ static void king_inference_stream_model_runtime_started(king_inference_stream_ob
     model->runtime_last_tokens_per_second = 0.0;
     model->runtime_last_timing_available = false;
     model->runtime_last_first_token_available = false;
+    model->cuda_decoder_prompt_loop_last_prefill_tokens = 0;
+    model->cuda_decoder_prompt_loop_last_prefill_ns = 0;
+    king_inference_cuda_decoder_prompt_loop_reset_hot_token_profile(model);
 }
 
 static void king_inference_stream_model_runtime_token(king_inference_stream_object *stream)
@@ -500,6 +505,7 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_long(return_value, "chunks", stream->chunk_count);
     add_assoc_long(return_value, "stderr_chunks", stream->stderr_count);
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
+    king_inference_stream_add_hotpath_metrics(stream, return_value);
     add_assoc_bool(return_value, "done", stream->done);
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
     add_assoc_bool(return_value, "timed_out", stream->timed_out);

@@ -28,6 +28,7 @@ static void king_inference_cuda_decoder_prompt_loop_reset_fields(king_inference_
     model->cuda_decoder_prompt_loop_last_policy_interval_skips = 0;
     model->cuda_decoder_prompt_loop_last_thermal_runtime_checks = 0;
     model->cuda_decoder_prompt_loop_last_power_runtime_checks = 0;
+    model->cuda_decoder_prompt_loop_last_prefill_ns = 0;
     model->cuda_decoder_prompt_prefill_embeddings = 0;
     model->cuda_decoder_prompt_prefill_initial_norm = 0;
     model->cuda_decoder_prompt_prefill_initial_linear = 0;
@@ -347,6 +348,8 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     double decoded_probability = 0.0;
     double decoded_logit = 0.0;
     double decoded_rank = 0.0;
+    uint64_t prefill_start_ns;
+    uint64_t prefill_end_ns;
     bool stopped = false;
 
     ZVAL_UNDEF(&encoded);
@@ -394,6 +397,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     }
     king_inference_king_native_prompt_add_default_stops(model, &stops);
     king_inference_king_native_prompt_decode_options(stream, &decode_options);
+    prefill_start_ns = king_inference_cuda_decoder_prompt_profile_ns();
     if (token_count >= KING_INFERENCE_CUDA_PROMPT_BATCH_PREFILL_MIN_TOKENS
         && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
         if (king_inference_cuda_decoder_prompt_loop_prefill_batch_template(
@@ -428,6 +432,9 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
         zval_ptr_dtor(&encoded);
         return FAILURE;
     }
+    prefill_end_ns = king_inference_cuda_decoder_prompt_profile_ns();
+    model->cuda_decoder_prompt_loop_last_prefill_ns =
+        king_inference_cuda_decoder_prompt_profile_elapsed(prefill_end_ns, prefill_start_ns);
 
     position = token_count - 1;
     {

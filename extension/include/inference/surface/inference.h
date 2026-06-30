@@ -366,6 +366,7 @@ typedef struct _king_inference_model_object {
     zend_long cuda_decoder_prompt_loop_last_hot_token_token_decode_ns;
     zend_long cuda_decoder_prompt_loop_last_hot_token_text_emit_ns;
     zend_long cuda_decoder_prompt_loop_last_hot_token_event_shape_ns;
+    zend_long cuda_decoder_prompt_loop_last_prefill_ns;
     size_t cuda_decoder_prompt_loop_last_hot_token_launches;
     size_t cuda_decoder_prompt_loop_last_hot_token_syncs;
     size_t cuda_decoder_prompt_loop_last_hot_token_dtoh_copies;

@@ -156,6 +156,15 @@ static void king_inference_cuda_decoder_prompt_loop_add_status(
     add_assoc_long(&loop, "last_decoded_tokens", (zend_long) model->cuda_decoder_prompt_loop_last_decoded_tokens);
     add_assoc_long(&loop, "last_prefill_batches", (zend_long) model->cuda_decoder_prompt_loop_last_prefill_batches);
     add_assoc_long(&loop, "last_prefill_tokens", (zend_long) model->cuda_decoder_prompt_loop_last_prefill_tokens);
+    add_assoc_long(&loop, "last_prefill_duration_ns", model->cuda_decoder_prompt_loop_last_prefill_ns);
+    add_assoc_double(
+        &loop,
+        "last_prefill_tokens_per_second",
+        model->cuda_decoder_prompt_loop_last_prefill_ns > 0
+            ? ((double) model->cuda_decoder_prompt_loop_last_prefill_tokens * 1000000000.0)
+                / (double) model->cuda_decoder_prompt_loop_last_prefill_ns
+            : 0.0
+    );
     add_assoc_long(
         &loop,
         "prefill_embedding_bytes",
