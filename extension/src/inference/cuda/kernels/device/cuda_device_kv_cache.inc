@@ -639,8 +639,12 @@ static void king_inference_cuda_device_kv_cache_add_status(
     add_assoc_bool(&cache, "f32", model->cuda_device_kv_cache_f32);
     add_assoc_bool(&cache, "device_to_device_copy_available", model->cuda_device_kv_cache_dtod_available);
     add_assoc_bool(&cache, "read_write_bounds_checked", true);
+    add_assoc_bool(&cache, "write_slot_bounds_checked", true);
+    add_assoc_bool(&cache, "read_range_bounds_checked", true);
+    add_assoc_bool(&cache, "full_width_vectors_required", true);
     add_assoc_bool(&cache, "context_overflow_fails_closed", true);
     add_assoc_bool(&cache, "page_boundary_tracked", true);
+    add_assoc_bool(&cache, "page_boundary_fails_closed", true);
     add_assoc_bool(&cache, "reset_clears_device_pointers", true);
     add_assoc_bool(&cache, "reset_clears_guard_state", true);
     add_assoc_long(&cache, "bytes", (zend_long) model->cuda_device_kv_cache_bytes);

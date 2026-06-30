@@ -79,9 +79,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_kv_attention_shape
     );
     if (query_length == 0
         || declared_key_length != query_length
-        || query_length > model->cuda_device_kv_cache_key_length
+        || query_length != model->cuda_device_kv_cache_key_length
         || declared_value_length == 0
-        || declared_value_length > model->cuda_device_kv_cache_value_length
+        || declared_value_length != model->cuda_device_kv_cache_value_length
         || !isfinite(*scale)) {
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_attention_shape_invalid");
         return FAILURE;
