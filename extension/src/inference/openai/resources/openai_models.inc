@@ -1,4 +1,6 @@
 #include "openai_route_reuse_profile.inc"
+#include "openai_runtime_surface.inc"
+#include "openai_invalid_backend_capabilities.inc"
 
 static bool king_inference_openai_is_model(zval *value)
 {
@@ -96,91 +98,6 @@ static bool king_inference_openai_model_listing_options_valid(zval *options, con
     return false;
 }
 
-static void king_inference_openai_invalid_backend_capabilities(zval *return_value)
-{
-    array_init(return_value);
-    add_assoc_long(return_value, "schema_version", 2);
-    add_assoc_string(return_value, "scope", "static_backend_contract");
-    add_assoc_bool(return_value, "implemented", false);
-    add_assoc_bool(return_value, "local", false);
-    add_assoc_bool(return_value, "streaming", false);
-    add_assoc_bool(return_value, "openai_chat_completions_stream", false);
-    add_assoc_bool(return_value, "cancellable", false);
-    add_assoc_bool(return_value, "model_registration", true);
-    add_assoc_bool(return_value, "model_metadata", false);
-    add_assoc_bool(return_value, "gguf_metadata", false);
-    add_assoc_bool(return_value, "gguf_architecture_classification", false);
-    add_assoc_bool(return_value, "process_runner", false);
-    add_assoc_bool(return_value, "native_runtime", false);
-    add_assoc_bool(return_value, "native_model_loader", false);
-    add_assoc_bool(return_value, "native_tensor_directory", false);
-    add_assoc_bool(return_value, "native_tensor_views", false);
-    add_assoc_bool(return_value, "native_model_mapping", false);
-    add_assoc_bool(return_value, "native_tokenization", false);
-    add_assoc_bool(return_value, "native_token_decode", false);
-    add_assoc_bool(return_value, "paged_kv_cache", false);
-    add_assoc_bool(return_value, "native_graph_streaming", false);
-    add_assoc_bool(return_value, "native_token_selection", false);
-    add_assoc_bool(return_value, "token_generation", false);
-    add_assoc_bool(return_value, "openai_generation", false);
-    add_assoc_bool(return_value, "embeddings", false);
-    add_assoc_bool(return_value, "gpu", false);
-    add_assoc_bool(return_value, "gpu_backend", false);
-    add_assoc_bool(return_value, "gpu_runtime_status", false);
-    add_assoc_bool(return_value, "gpu_cuda_driver_probe", false);
-    add_assoc_bool(return_value, "gpu_cuda_context", false);
-    add_assoc_bool(return_value, "gpu_cuda_context_owned", false);
-    add_assoc_bool(return_value, "gpu_device_memory_allocator", false);
-    add_assoc_bool(return_value, "gpu_host_to_device_weight_upload", false);
-    add_assoc_bool(return_value, "gpu_uploaded_weight_cache", false);
-    add_assoc_bool(return_value, "gpu_quantized_matvec_kernel", false);
-    add_assoc_bool(return_value, "gpu_rms_norm_kernel", false);
-    add_assoc_bool(return_value, "gpu_rope_kernel", false);
-    add_assoc_bool(return_value, "gpu_attention_scores_kernel", false);
-    add_assoc_bool(return_value, "gpu_attention_softmax_kernel", false);
-    add_assoc_bool(return_value, "gpu_attention_value_aggregation_kernel", false);
-    add_assoc_bool(return_value, "gpu_ffn_swiglu_path", false);
-    add_assoc_bool(return_value, "gpu_output_projection_path", false);
-    add_assoc_bool(return_value, "gpu_minimized_logits_readback", false);
-    add_assoc_bool(return_value, "gpu_embedding_row_loader", false);
-    add_assoc_bool(return_value, "gpu_device_vector_ops", false);
-    add_assoc_bool(return_value, "gpu_device_kv_cache", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_executor", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_result_envelope", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_execution_plan", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_embedding_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_rms_norm_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_linear_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_slice_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_rope_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_kv_head_prepare_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_kv_write_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_kv_attention_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_attention_stack_slot_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_attention_heads_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_attention_stack_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_attention_output_projection_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_attention_residual_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_norm_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_gate_up_projection_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_swiglu_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_down_projection_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_ffn_output_residual_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_final_norm_execution", false);
-    add_assoc_bool(return_value, "gpu_decoder_graph_logits_projection_execution", false);
-    add_assoc_bool(return_value, "gpu_prompt_decoder_loop", false);
-    add_assoc_bool(return_value, "gpu_plain_text_chat_generation", false);
-    add_assoc_bool(return_value, "gpu_vram_admission", false);
-    add_assoc_bool(return_value, "gpu_kv_cache_vram_estimate", false);
-    add_assoc_bool(return_value, "gpu_thermal_policy", false);
-    add_assoc_bool(return_value, "gpu_thermal_preflight", false);
-    add_assoc_bool(return_value, "gpu_thermal_stream_abort", false);
-    add_assoc_bool(return_value, "gpu_decoder_kernel", false);
-    add_assoc_bool(return_value, "gpu_generation", false);
-    add_assoc_bool(return_value, "silent_cpu_fallback", false);
-    add_assoc_string(return_value, "model_format", "gguf");
-}
-
 static void king_inference_openai_client_capabilities_array(
     zval *return_value,
     bool backend_config_valid,
@@ -208,8 +125,15 @@ static void king_inference_openai_client_capabilities_array(
     add_assoc_bool(return_value, "openai_responses", openai_text_generation);
     add_assoc_bool(return_value, "openai_completions", openai_text_generation);
     add_assoc_bool(return_value, "openai_embeddings", backend_config_valid && native_cpu_backend);
+    add_assoc_bool(return_value, "prompt_to_logits_generation", openai_text_generation);
     add_assoc_bool(return_value, "native_graph_streaming", backend_config_valid && native_cpu_backend);
     add_assoc_bool(return_value, "native_stream_contract", native_stream_contract);
+    add_assoc_bool(return_value, "synthetic_token_vector_graph", native_stream_contract);
+    add_assoc_string(
+        return_value,
+        "synthetic_token_vector_score_semantics",
+        native_stream_contract ? "direct_token_id_uses_probability_1_logit_0_rank_0" : "unavailable"
+    );
     add_assoc_bool(return_value, "requires_gpu", gpu_enabled || native_gpu_backend);
     add_assoc_bool(return_value, "gpu_runtime_required", gpu_enabled || native_gpu_backend);
     add_assoc_bool(return_value, "gpu_generation_ready", backend_config_valid && native_gpu_backend && gpu_generation_ready);
@@ -240,7 +164,7 @@ static const char *king_inference_openai_route_hot_path(
             if (model->cuda_decoder_prompt_loop_last_prompt_tokens > 0) {
                 return "sequential_prefill_decode";
             }
-            if (model->cuda_decoder_prompt_loop_batch_prefill_available) {
+            if (king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
                 return "batch_prefill_decode";
             }
             if (model->cuda_decoder_prompt_loop_available) {
@@ -287,16 +211,31 @@ static void king_inference_openai_route_status_array(
     king_inference_model_object *model,
     king_inference_backend_kind kind,
     bool backend_config_valid,
-    bool openai_generation_ready
+    bool openai_generation_ready,
+    zval *native_engine_readiness
 ) {
     bool native_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
         || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
     bool gpu_backend = kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
     bool lazy_gpu_token_stream = gpu_backend && model->cuda_decoder_prompt_loop_available;
+    bool native_plain_text_admitted = king_inference_native_readiness_bool(
+        native_engine_readiness,
+        "plain_text_generation_admitted"
+    );
+    bool native_graph_payload_admitted = king_inference_native_readiness_bool(
+        native_engine_readiness,
+        "native_graph_payload_admitted"
+    );
 
     array_init(return_value);
     add_assoc_long(return_value, "schema_version", 1);
     add_assoc_bool(return_value, "openai_generation_ready", openai_generation_ready);
+    add_assoc_string(return_value, "native_engine_admission_source", "x_king.native_engine_readiness");
+    add_assoc_bool(return_value, "native_engine_plain_text_generation_admitted", native_plain_text_admitted);
+    add_assoc_bool(return_value, "native_engine_graph_payload_admitted", native_graph_payload_admitted);
+    add_assoc_string(return_value, "prompt_formatting_owner", "openai_router");
+    add_assoc_string(return_value, "tool_fields_owner", "openai_router");
+    add_assoc_string(return_value, "error_response_owner", "openai_router");
     add_assoc_bool(return_value, "stream_transport", true);
     add_assoc_string(return_value, "stream_transport_mode", "sse_body_stream");
     add_assoc_bool(return_value, "immediate_token_streaming", lazy_gpu_token_stream);
@@ -325,7 +264,15 @@ static void king_inference_openai_route_status_array(
     add_assoc_bool(return_value, "sequential_prefill_available", gpu_backend && model->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "batch_prefill_compiled", gpu_backend);
     add_assoc_bool(return_value, "batch_prefill_available", gpu_backend && model->cuda_decoder_prompt_loop_batch_prefill_available);
-    add_assoc_bool(return_value, "batch_prefill_admitted", gpu_backend && model->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(return_value, "batch_prefill_experimental_enabled", gpu_backend && king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model));
+    add_assoc_bool(return_value, "batch_prefill_admitted", gpu_backend && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model));
+    add_assoc_string(
+        return_value,
+        "batch_prefill_status",
+        gpu_backend
+            ? king_inference_cuda_decoder_prompt_loop_batch_prefill_status(model)
+            : "non_gpu_backend"
+    );
     add_assoc_string(
         return_value,
         "batch_prefill_admission_reason",
@@ -392,6 +339,9 @@ static void king_inference_openai_model_object(
     zval gpu_runtime;
     zval runtime_truth;
     zval runtime_readiness;
+    zval runtime_surface;
+    zval native_engine_readiness;
+    zval error_taxonomy;
     zval route_status;
     bool backend_config_valid = true;
     bool created_config_valid = created != NULL && Z_TYPE_P(created) == IS_LONG && Z_LVAL_P(created) >= 0;
@@ -427,22 +377,28 @@ static void king_inference_openai_model_object(
     }
 
     array_init(&king_meta);
+    king_inference_model_native_engine_readiness_array(model, &native_engine_readiness);
     gpu_enabled = backend_config_valid && king_inference_gpu_enabled(&model->config);
     if (gpu_enabled) {
-        zval *generation_ready;
-
         king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
-        generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
-        gpu_openai_generation_ready = generation_ready != NULL && zend_is_true(generation_ready);
+        gpu_openai_generation_ready = king_inference_native_readiness_bool(
+            &native_engine_readiness,
+            "plain_text_generation_admitted"
+        );
     }
     openai_generation_ready = backend_config_valid
         && ((kind == KING_INFERENCE_BACKEND_LOCAL && !gpu_enabled)
             || kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-            || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU && gpu_openai_generation_ready));
-    native_graph_streaming_ready = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
-    native_stream_contract_ready = backend_config_valid
-        && (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU
-            || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+            || (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU
+                && gpu_openai_generation_ready));
+    native_graph_streaming_ready = king_inference_native_readiness_bool(
+        &native_engine_readiness,
+        "native_graph_payload_admitted"
+    ) && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    native_stream_contract_ready = king_inference_native_readiness_bool(
+        &native_engine_readiness,
+        "native_stream_contract_admitted"
+    );
     embeddings_ready = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
 
     add_assoc_string(
@@ -457,6 +413,27 @@ static void king_inference_openai_model_object(
     add_assoc_bool(&king_meta, "native_stream_contract", native_stream_contract_ready);
     add_assoc_bool(&king_meta, "embeddings", embeddings_ready);
     add_assoc_bool(&king_meta, "gpu_enabled", gpu_enabled);
+    {
+        zval native_engine_copy;
+        ZVAL_COPY(&native_engine_copy, &native_engine_readiness);
+        add_assoc_zval(&king_meta, "native_engine_readiness", &native_engine_copy);
+    }
+    king_inference_openai_runtime_surface_array(
+        &runtime_surface,
+        model,
+        kind,
+        backend_config_valid,
+        gpu_enabled,
+        gpu_openai_generation_ready,
+        openai_generation_ready,
+        native_graph_streaming_ready,
+        native_stream_contract_ready,
+        embeddings_ready,
+        gpu_enabled ? &gpu_runtime : NULL
+    );
+    add_assoc_zval(&king_meta, "runtime_surface", &runtime_surface);
+    king_inference_error_taxonomy_catalog_array(&error_taxonomy);
+    add_assoc_zval(&king_meta, "error_taxonomy", &error_taxonomy);
     if (gpu_enabled) {
         add_assoc_zval(&king_meta, "gpu_runtime", &gpu_runtime);
     }
@@ -465,7 +442,7 @@ static void king_inference_openai_model_object(
     add_assoc_zval(&king_meta, "runtime_truth", &runtime_truth);
     add_assoc_bool(&king_meta, "created_config_valid", created_config_valid);
     add_assoc_long(&king_meta, "capability_schema_version", 2);
-    add_assoc_string(&king_meta, "capabilities_scope", "static_backend_contract");
+    add_assoc_string(&king_meta, "capabilities_scope", "implemented_capability_contract");
     add_assoc_string(&king_meta, "readiness_scope", "active_runtime_state");
     king_inference_openai_client_capabilities_array(
         &client_capabilities,
@@ -488,9 +465,11 @@ static void king_inference_openai_model_object(
         model,
         kind,
         backend_config_valid,
-        openai_generation_ready
+        openai_generation_ready,
+        &native_engine_readiness
     );
     add_assoc_zval(&king_meta, "openai_route", &route_status);
+    zval_ptr_dtor(&native_engine_readiness);
     add_assoc_zval(return_value, "x_king", &king_meta);
 }
 
