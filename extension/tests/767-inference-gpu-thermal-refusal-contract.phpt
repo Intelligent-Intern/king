@@ -54,6 +54,7 @@ function thermalModelConfig(string $modelPath, string $sensor): array
             'thermal' => [
                 'sensor_path' => $sensor,
                 'max_temperature_c' => 80.0,
+                'check_interval_seconds' => 0,
                 'allow_unmonitored_gpu' => false,
             ],
         ],
@@ -97,6 +98,7 @@ function thermalModelConfig(string $modelPath, string $sensor): array
             'thermal' => [
                 'sensor_path' => $sensor,
                 'max_temperature_c' => 80.0,
+                'check_interval_seconds' => 0,
                 'allow_unmonitored_gpu' => false,
             ],
         ],

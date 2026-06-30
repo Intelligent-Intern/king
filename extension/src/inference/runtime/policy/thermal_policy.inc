@@ -542,10 +542,10 @@ static zend_result king_inference_check_gpu_policy_during_run(
     check_interval_sec = king_inference_gpu_thermal_check_interval_seconds(&model->config);
     stream->gpu_policy_during_run_checks++;
     stream->gpu_thermal_check_interval_seconds = check_interval_sec;
-    thermal_due = check_interval_sec > 0
-        && (stream->gpu_thermal_last_check_at <= 0
-            || now < stream->gpu_thermal_last_check_at
-            || now - stream->gpu_thermal_last_check_at >= check_interval_sec);
+    thermal_due = check_interval_sec <= 0
+        || stream->gpu_thermal_last_check_at <= 0
+        || now < stream->gpu_thermal_last_check_at
+        || now - stream->gpu_thermal_last_check_at >= check_interval_sec;
     power_check_interval_sec = king_inference_gpu_power_check_interval_seconds(&model->config);
     stream->gpu_power_check_interval_seconds = power_check_interval_sec;
     power_due = king_inference_gpu_power_max_watts(&model->config) > 0.0
