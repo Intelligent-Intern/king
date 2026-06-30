@@ -33,6 +33,112 @@ function king_openai_router_message_tool_calls_text(array $message): string
         . king_openai_router_prompt_json($toolCalls);
 }
 
+function king_openai_router_tool_field_keys(): array
+{
+    return [
+        'tools',
+        'tool_choice',
+        'parallel_tool_calls',
+        'functions',
+        'function_call',
+    ];
+}
+
+function king_openai_router_named_function_from_value(mixed $value): string
+{
+    if (!is_array($value)) {
+        return '';
+    }
+    if (is_string($value['name'] ?? null) && $value['name'] !== '') {
+        return $value['name'];
+    }
+    $function = $value['function'] ?? null;
+    if (is_array($function) && is_string($function['name'] ?? null) && $function['name'] !== '') {
+        return $function['name'];
+    }
+    return '';
+}
+
+function king_openai_router_tool_status(array $payload): array
+{
+    $available = [];
+    $invalidSchemaCount = 0;
+    $tools = is_array($payload['tools'] ?? null) ? $payload['tools'] : [];
+    foreach ($tools as $tool) {
+        $name = king_openai_router_named_function_from_value($tool);
+        if ($name !== '') {
+            $available[$name] = true;
+            continue;
+        }
+        $invalidSchemaCount++;
+    }
+    $functions = is_array($payload['functions'] ?? null) ? $payload['functions'] : [];
+    foreach ($functions as $function) {
+        $name = king_openai_router_named_function_from_value($function);
+        if ($name !== '') {
+            $available[$name] = true;
+            continue;
+        }
+        $invalidSchemaCount++;
+    }
+
+    $forced = [];
+    foreach (['tool_choice', 'function_call'] as $key) {
+        $name = king_openai_router_named_function_from_value($payload[$key] ?? null);
+        if ($name !== '') {
+            $forced[$name] = true;
+        }
+    }
+
+    $assistant = [];
+    $messages = is_array($payload['messages'] ?? null) ? $payload['messages'] : [];
+    foreach ($messages as $message) {
+        if (!is_array($message) || (($message['role'] ?? null) !== 'assistant')) {
+            continue;
+        }
+        $toolCalls = is_array($message['tool_calls'] ?? null) ? $message['tool_calls'] : [];
+        foreach ($toolCalls as $call) {
+            $name = king_openai_router_named_function_from_value($call);
+            if ($name !== '') {
+                $assistant[$name] = true;
+            }
+        }
+    }
+
+    $availableNames = array_keys($available);
+    sort($availableNames);
+    $forcedNames = array_keys($forced);
+    sort($forcedNames);
+    $assistantNames = array_keys($assistant);
+    sort($assistantNames);
+    $referenced = array_unique([...$forcedNames, ...$assistantNames]);
+    sort($referenced);
+    $unknown = array_values(array_filter(
+        $referenced,
+        static fn (string $name): bool => !isset($available[$name])
+    ));
+
+    $present = [];
+    foreach (king_openai_router_tool_field_keys() as $key) {
+        if (array_key_exists($key, $payload) && $payload[$key] !== null && $payload[$key] !== []) {
+            $present[] = $key;
+        }
+    }
+
+    return [
+        'present_fields' => $present,
+        'available_tool_names' => $availableNames,
+        'forced_tool_names' => $forcedNames,
+        'assistant_tool_call_names' => $assistantNames,
+        'unknown_tool_names' => $unknown,
+        'tool_schema_count' => count($tools),
+        'legacy_function_count' => count($functions),
+        'invalid_schema_count' => $invalidSchemaCount,
+        'parallel_tool_calls_present' => array_key_exists('parallel_tool_calls', $payload),
+        'context_only' => $present !== [] || $assistantNames !== [],
+    ];
+}
+
 function king_openai_router_tool_result_text(array $message): string
 {
     $content = king_openai_router_message_content_text($message['content'] ?? '');
@@ -123,25 +229,30 @@ function king_openai_router_normalize_prompt_messages(array $payload): array
     return $payload;
 }
 
-function king_openai_router_tool_context_text(array $payload): string
+function king_openai_router_tool_context_text(array $toolStatus): string
 {
-    $parts = [];
-    foreach ([
-        'tools',
-        'tool_choice',
-        'parallel_tool_calls',
-        'functions',
-        'function_call',
-    ] as $key) {
-        if (array_key_exists($key, $payload) && $payload[$key] !== null && $payload[$key] !== []) {
-            $parts[] = $key . ': ' . king_openai_router_prompt_json($payload[$key]);
-        }
+    if (empty($toolStatus['context_only'])) {
+        return '';
     }
 
-    return $parts === []
-        ? ''
-        : "OpenAI tool/function fields are present as context only. King has not executed any tool call in this route.\n"
-            . implode("\n", $parts);
+    $parts = [
+        'OpenAI tool/function fields are present as context only.',
+        'King has not executed any tool call in this route.',
+    ];
+    $available = $toolStatus['available_tool_names'] ?? [];
+    if (is_array($available) && $available !== []) {
+        $parts[] = 'Configured tool names: ' . implode(', ', $available) . '.';
+    }
+    $forced = $toolStatus['forced_tool_names'] ?? [];
+    if (is_array($forced) && $forced !== []) {
+        $parts[] = 'Requested tool names: ' . implode(', ', $forced) . '.';
+    }
+    $unknown = $toolStatus['unknown_tool_names'] ?? [];
+    if (is_array($unknown) && $unknown !== []) {
+        $parts[] = 'Unknown requested tool names: ' . implode(', ', $unknown) . '.';
+    }
+
+    return implode("\n", $parts);
 }
 
 function king_openai_router_insert_instruction_message(array $payload, array $message): array
@@ -163,9 +274,9 @@ function king_openai_router_insert_instruction_message(array $payload, array $me
     return $payload;
 }
 
-function king_openai_router_apply_tool_context(array $payload): array
+function king_openai_router_apply_tool_context(array $payload, array $toolStatus): array
 {
-    $text = king_openai_router_tool_context_text($payload);
+    $text = king_openai_router_tool_context_text($toolStatus);
     if ($text === '') {
         return $payload;
     }
@@ -174,6 +285,14 @@ function king_openai_router_apply_tool_context(array $payload): array
         'role' => 'system',
         'content' => $text,
     ]);
+}
+
+function king_openai_router_strip_tool_execution_fields(array $payload): array
+{
+    foreach (king_openai_router_tool_field_keys() as $key) {
+        unset($payload[$key]);
+    }
+    return $payload;
 }
 
 function king_openai_router_apply_context_policy(array $payload, string $contextPolicy): array
@@ -251,8 +370,10 @@ function king_openai_router_assemble_chat_messages(
     string $defaultSystemPrompt,
     bool $coderInstructionWrapper
 ): array {
+    $toolStatus = king_openai_router_tool_status($payload);
     $payload = king_openai_router_normalize_prompt_messages($payload);
-    $payload = king_openai_router_apply_tool_context($payload);
+    $payload = king_openai_router_apply_tool_context($payload, $toolStatus);
+    $payload = king_openai_router_strip_tool_execution_fields($payload);
     $payload = king_openai_router_apply_context_policy($payload, $contextPolicy);
     $payload = king_openai_router_ensure_default_system_instruction($payload, $defaultSystemPrompt);
     return king_openai_router_apply_coder_instruction_wrapper($payload, $coderInstructionWrapper);

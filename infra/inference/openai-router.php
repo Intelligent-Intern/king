@@ -231,6 +231,7 @@ function king_openai_router_log_prepared_payload(array $original, array $prepare
     $originalFunctions = $original['functions'] ?? null;
     $preparedTools = $prepared['tools'] ?? null;
     $preparedFunctions = $prepared['functions'] ?? null;
+    $toolStatus = king_openai_router_tool_status($original);
     [$originalMessageCount, $originalTextChars, $originalLastUserChars] =
         king_inference_runtime_payload_message_stats($original);
     [$preparedMessageCount, $preparedTextChars, $preparedLastUserChars] =
@@ -255,6 +256,21 @@ function king_openai_router_log_prepared_payload(array $original, array $prepare
         'prepared_legacy_function_count' => is_array($preparedFunctions) ? count($preparedFunctions) : 0,
         'tool_choice_removed' => array_key_exists('tool_choice', $original) && !array_key_exists('tool_choice', $prepared),
         'parallel_tool_calls_removed' => array_key_exists('parallel_tool_calls', $original) && !array_key_exists('parallel_tool_calls', $prepared),
+        'tool_execution' => !empty($toolStatus['context_only']) ? 'context_only' : 'none',
+        'tool_fields_sanitized' => !empty($toolStatus['context_only'])
+            && !array_key_exists('tools', $prepared)
+            && !array_key_exists('functions', $prepared)
+            && !array_key_exists('tool_choice', $prepared)
+            && !array_key_exists('function_call', $prepared)
+            && !array_key_exists('parallel_tool_calls', $prepared),
+        'tool_field_names' => is_array($toolStatus['present_fields'] ?? null) ? $toolStatus['present_fields'] : [],
+        'available_tool_names' => is_array($toolStatus['available_tool_names'] ?? null) ? $toolStatus['available_tool_names'] : [],
+        'forced_tool_names' => is_array($toolStatus['forced_tool_names'] ?? null) ? $toolStatus['forced_tool_names'] : [],
+        'assistant_tool_call_names' => is_array($toolStatus['assistant_tool_call_names'] ?? null) ? $toolStatus['assistant_tool_call_names'] : [],
+        'unknown_tool_names' => is_array($toolStatus['unknown_tool_names'] ?? null) ? $toolStatus['unknown_tool_names'] : [],
+        'invalid_tool_schema_count' => is_int($toolStatus['invalid_schema_count'] ?? null)
+            ? $toolStatus['invalid_schema_count']
+            : 0,
     ]);
 }
 
