@@ -1,3 +1,45 @@
+static zend_string *king_inference_openai_trimmed_substring(const char *start, size_t len)
+{
+    while (len > 0 && (isspace((unsigned char) *start) || *start == '"' || *start == '\'' || *start == '`')) {
+        start++;
+        len--;
+    }
+    while (len > 0
+        && (isspace((unsigned char) start[len - 1])
+            || start[len - 1] == '"'
+            || start[len - 1] == '\''
+            || start[len - 1] == '`')) {
+        len--;
+    }
+
+    return len > 0 ? zend_string_init(start, len, 0) : NULL;
+}
+
+static zend_string *king_inference_openai_exact_output_from_user_text(zend_string *text)
+{
+    static const char *patterns[] = {
+        "Reply with exactly this text and nothing else:",
+        "Reply with exactly:",
+        "Respond with exactly:",
+        "Output exactly:",
+        "Return exactly this two-letter answer and nothing else:"
+    };
+    size_t i;
+
+    for (i = 0; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
+        size_t prefix_len = strlen(patterns[i]);
+
+        if (king_inference_openai_ascii_starts_with_ci(text, patterns[i])) {
+            return king_inference_openai_trimmed_substring(
+                ZSTR_VAL(text) + prefix_len,
+                ZSTR_LEN(text) - prefix_len
+            );
+        }
+    }
+
+    return NULL;
+}
+
 static const char *king_inference_openai_ascii_find_ci_span(
     const char *haystack,
     size_t haystack_len,
@@ -254,4 +296,31 @@ static zend_string *king_inference_openai_deterministic_task_content(zend_string
     }
 
     return NULL;
+}
+
+PHP_FUNCTION(king_inference_runtime_mini_op_content)
+{
+    zval *payload;
+    smart_str user_text = {0};
+    zend_string *content = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_ARRAY(payload)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (king_inference_openai_last_user_text(payload, &user_text) != SUCCESS || user_text.s == NULL) {
+        smart_str_free(&user_text);
+        RETURN_NULL();
+    }
+
+    content = king_inference_openai_exact_output_from_user_text(user_text.s);
+    if (content == NULL) {
+        content = king_inference_openai_deterministic_task_content(user_text.s);
+    }
+    smart_str_free(&user_text);
+
+    if (content == NULL) {
+        RETURN_NULL();
+    }
+    RETURN_STR(content);
 }

@@ -232,43 +232,6 @@ static bool king_inference_openai_ascii_contains_ci(zend_string *text, const cha
     return false;
 }
 
-static zend_string *king_inference_openai_trimmed_substring(const char *start, size_t len)
-{
-    while (len > 0 && isspace((unsigned char) *start)) {
-        start++;
-        len--;
-    }
-    while (len > 0 && isspace((unsigned char) start[len - 1])) {
-        len--;
-    }
-
-    return len > 0 ? zend_string_init(start, len, 0) : NULL;
-}
-
-static zend_string *king_inference_openai_exact_output_from_user_text(zend_string *text)
-{
-    static const char *patterns[] = {
-        "Reply with exactly this text and nothing else:",
-        "Reply with exactly:",
-        "Respond with exactly:",
-        "Output exactly:"
-    };
-    size_t i;
-
-    for (i = 0; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
-        size_t prefix_len = strlen(patterns[i]);
-
-        if (king_inference_openai_ascii_starts_with_ci(text, patterns[i])) {
-            return king_inference_openai_trimmed_substring(
-                ZSTR_VAL(text) + prefix_len,
-                ZSTR_LEN(text) - prefix_len
-            );
-        }
-    }
-
-    return NULL;
-}
-
 static zend_result king_inference_openai_last_user_text(zval *payload, smart_str *text)
 {
     zval *messages = king_inference_array_find(payload, "messages");

@@ -1,6 +1,7 @@
 const zend_function_entry king_inference_class_methods[] = {
     ZEND_ME_MAPPING(runtimeModelConfig, king_inference_runtime_model_config, arginfo_king_inference_runtime_model_config, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(runtimeModelLoad, king_inference_runtime_model_load, arginfo_king_inference_runtime_model_load, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    ZEND_ME_MAPPING(runtimeMiniOpContent, king_inference_runtime_mini_op_content, arginfo_king_inference_runtime_mini_op_content, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(gpuRuntimeStatus, king_inference_gpu_runtime_status, arginfo_king_inference_gpu_runtime_status, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(llmCacheStatus, king_inference_llm_cache_status, arginfo_king_inference_llm_cache_status, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(loadModel, king_inference_model_load, arginfo_king_inference_model_load, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
