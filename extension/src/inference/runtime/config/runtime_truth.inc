@@ -67,8 +67,11 @@ static void king_inference_model_runtime_truth_array(
     bool gpu_runtime_created = false;
     zval gpu_runtime;
     zval *reason;
+    zval *generation_ready;
     const char *active_device = "unknown";
     const char *fallback_mode = "none";
+    const char *fallback_error = "none";
+    bool cpu_fallback_allowed = false;
 
     ZVAL_UNDEF(&gpu_runtime);
     if (king_inference_backend_kind_from_config(&model->config, &kind, "King runtime truth") != SUCCESS) {
@@ -87,9 +90,18 @@ static void king_inference_model_runtime_truth_array(
     if (!backend_config_valid) {
         active_device = "invalid";
         fallback_mode = "invalid_backend";
+        fallback_error = "king.validation.invalid_backend_config";
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU) {
         active_device = model->cuda_context_available ? "cuda" : "cuda_unavailable";
         fallback_mode = "refuse_cpu_fallback";
+        if (!model->cuda_context_available) {
+            fallback_error = "king.policy.gpu_unavailable";
+        } else if (gpu_runtime_created) {
+            generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
+            if (generation_ready == NULL || !zend_is_true(generation_ready)) {
+                fallback_error = "king.policy.gpu_generation_not_ready";
+            }
+        }
     } else if (kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU) {
         active_device = "cpu";
         fallback_mode = "cpu_profile";
@@ -109,8 +121,10 @@ static void king_inference_model_runtime_truth_array(
     add_assoc_string(return_value, "active_device", active_device);
     add_assoc_bool(return_value, "model_resident", true);
     add_assoc_bool(return_value, "gpu_required", gpu_enabled || kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU);
+    add_assoc_bool(return_value, "cpu_fallback_allowed", cpu_fallback_allowed);
     add_assoc_bool(return_value, "silent_cpu_fallback", false);
     add_assoc_string(return_value, "fallback_mode", fallback_mode);
+    add_assoc_string(return_value, "fallback_error", fallback_error);
     if (gpu_runtime_created) {
         reason = king_inference_array_find(&gpu_runtime, "reason");
         if (reason != NULL && Z_TYPE_P(reason) == IS_STRING && Z_STRLEN_P(reason) > 0) {
@@ -194,6 +208,11 @@ static void king_inference_model_decoder_truth_array(
             ? "king_native_gpu_device_kv_cache"
             : "unallocated";
         fallback_policy = "refuse_cpu_fallback";
+        if (!model->cuda_context_available) {
+            fallback_error = "king.policy.gpu_unavailable";
+        } else if (!gpu_prompt_ready) {
+            fallback_error = "king.policy.gpu_generation_not_ready";
+        }
     } else if (native_cpu_backend) {
         active_device = "cpu";
         prompt_graph_path = "king_native_cpu_prompt_to_logits_decode";
@@ -234,6 +253,7 @@ static void king_inference_model_decoder_truth_array(
     add_assoc_bool(return_value, "sampler_available", native_cpu_backend || gpu_prompt_ready || local_backend);
     add_assoc_bool(return_value, "kv_cache_available", native_cpu_backend || model->cuda_device_kv_cache_allocated || local_backend);
     add_assoc_bool(return_value, "silent_cpu_fallback", silent_cpu_fallback);
+    add_assoc_bool(return_value, "cpu_prompt_fallback_allowed", false);
     add_assoc_string(return_value, "fallback_policy", fallback_policy);
     add_assoc_string(return_value, "fallback_error", fallback_error);
 }

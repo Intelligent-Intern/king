@@ -779,3 +779,32 @@ static zend_result king_inference_gpu_runtime_require_config_ready(
     zval_ptr_dtor(&runtime);
     return FAILURE;
 }
+
+static zend_result king_inference_gpu_runtime_require_generation_ready(
+    king_inference_model_object *model,
+    const char *function_name
+) {
+    zval runtime;
+    zval *generation_ready;
+    zend_string *reasons;
+
+    ZVAL_UNDEF(&runtime);
+    king_inference_gpu_runtime_status_from_model(model, &runtime);
+    generation_ready = zend_hash_str_find(Z_ARRVAL(runtime), "generation_ready", sizeof("generation_ready") - 1);
+    if (generation_ready != NULL && zend_is_true(generation_ready)) {
+        zval_ptr_dtor(&runtime);
+        return SUCCESS;
+    }
+
+    reasons = king_inference_gpu_runtime_reason_string(&runtime);
+    zend_throw_exception_ex(
+        king_ce_runtime_exception,
+        0,
+        "%s() refused GPU inference because CUDA generation is not ready: %s. King will not silently fall back to CPU for a GPU profile.",
+        function_name,
+        ZSTR_VAL(reasons)
+    );
+    zend_string_release(reasons);
+    zval_ptr_dtor(&runtime);
+    return FAILURE;
+}
