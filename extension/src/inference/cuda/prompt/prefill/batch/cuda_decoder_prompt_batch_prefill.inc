@@ -335,8 +335,16 @@ static zend_result king_inference_cuda_decoder_prompt_loop_apply_prefill_mutatio
 ) {
     zend_ulong token_id;
     zend_ulong sliding_window = model->gguf.architecture_params[KING_INFERENCE_ARCH_ATTENTION_SLIDING_WINDOW];
-    zend_ulong slot_start = sliding_window > 0 && position >= sliding_window ? position - sliding_window + 1 : 0;
-    zend_ulong slot_count = position - slot_start + 1;
+    zend_ulong slot_start;
+    zend_ulong slot_count;
+
+    king_inference_decode_graph_attention_window(
+        model,
+        position,
+        sliding_window,
+        &slot_start,
+        &slot_count
+    );
 
     if (king_inference_cuda_decoder_prompt_loop_token_at(tokenized_prompt, position, &token_id) != SUCCESS
         || token_id > (zend_ulong) ZEND_LONG_MAX

@@ -89,6 +89,33 @@ static zend_result king_inference_decode_graph_format_id(
     return SUCCESS;
 }
 
+static void king_inference_decode_graph_attention_window(
+    king_inference_model_object *model,
+    zend_ulong position,
+    zend_ulong sliding_window,
+    zend_ulong *slot_start,
+    zend_ulong *slot_count
+) {
+    zend_ulong start = sliding_window > 0 && position >= sliding_window
+        ? position - sliding_window + 1
+        : 0;
+    zend_ulong page_tokens = king_inference_cuda_device_kv_cache_plan_long(
+        model,
+        "page_tokens",
+        KING_INFERENCE_DEFAULT_KV_PAGE_TOKENS
+    );
+
+    if (page_tokens > 0) {
+        zend_ulong page_start = (position / page_tokens) * page_tokens;
+        if (start < page_start) {
+            start = page_start;
+        }
+    }
+
+    *slot_start = start;
+    *slot_count = position - start + 1;
+}
+
 static void king_inference_decode_graph_start_op(zval *op, const char *id, const char *name)
 {
     array_init(op);
@@ -428,8 +455,13 @@ static zend_result king_inference_token_decode_graph_array(
         return FAILURE;
     }
 
-    slot_start = sliding_window > 0 && position >= sliding_window ? position - sliding_window + 1 : 0;
-    slot_count = position - slot_start + 1;
+    king_inference_decode_graph_attention_window(
+        model,
+        position,
+        sliding_window,
+        &slot_start,
+        &slot_count
+    );
     array_init(&ops);
     king_inference_decode_graph_add_embedding(&ops, token_embedding, token_id, embedding_scale);
     zend_string_release(token_embedding);
