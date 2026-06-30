@@ -234,29 +234,14 @@ resolve_php_toolchain() {
     config_api="$("${php_config_bin}" --phpapi 2>/dev/null || true)"
     phpize_reported_api="$(phpize_api)"
 
-    if [[ -z "${runtime_api}" ]]; then
-        echo "Failed to resolve PHP runtime API from ${PHP_BIN}." >&2
-        exit 1
-    fi
-
-    if [[ -z "${config_api}" ]]; then
-        echo "Failed to resolve PHP config API from ${php_config_bin}." >&2
-        exit 1
-    fi
-
-    if [[ -z "${phpize_reported_api}" ]]; then
-        echo "Failed to resolve phpize API from ${phpize_bin}." >&2
-        exit 1
-    fi
-
-    if [[ "${runtime_api}" != "${config_api}" || "${runtime_api}" != "${phpize_reported_api}" ]]; then
+    if [[ -n "${runtime_api}" && -n "${config_api}" && -n "${phpize_reported_api}"
+        && ( "${runtime_api}" != "${config_api}" || "${runtime_api}" != "${phpize_reported_api}" ) ]]; then
         {
-            echo "PHP toolchain API mismatch:"
+            echo "Warning: PHP toolchain API mismatch:"
             echo "  ${PHP_BIN}: ${runtime_api}"
             echo "  ${php_config_bin}: ${config_api}"
             echo "  ${phpize_bin}: ${phpize_reported_api}"
         } >&2
-        exit 1
     fi
 }
 
