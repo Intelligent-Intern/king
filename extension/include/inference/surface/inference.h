@@ -391,6 +391,10 @@ typedef struct _king_inference_model_object {
     size_t cuda_decoder_prompt_loop_last_hot_token_readback_bytes;
     size_t cuda_decoder_prompt_loop_last_hot_token_full_logits_bytes;
     size_t cuda_decoder_prompt_loop_last_hot_token_saved_readback_bytes;
+    size_t cuda_decoder_prompt_loop_last_readback_tokens;
+    size_t cuda_decoder_prompt_loop_last_readback_bytes;
+    size_t cuda_decoder_prompt_loop_last_full_logits_bytes;
+    size_t cuda_decoder_prompt_loop_last_saved_readback_bytes;
     zend_long runtime_last_started_ms;
     zend_long runtime_last_first_token_ms;
     zend_long runtime_last_finished_ms;

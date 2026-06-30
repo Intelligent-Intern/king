@@ -152,6 +152,10 @@ static void king_inference_cuda_decoder_prompt_loop_reset_hot_token_profile(
     model->cuda_decoder_prompt_loop_last_hot_token_readback_bytes = 0;
     model->cuda_decoder_prompt_loop_last_hot_token_full_logits_bytes = 0;
     model->cuda_decoder_prompt_loop_last_hot_token_saved_readback_bytes = 0;
+    model->cuda_decoder_prompt_loop_last_readback_tokens = 0;
+    model->cuda_decoder_prompt_loop_last_readback_bytes = 0;
+    model->cuda_decoder_prompt_loop_last_full_logits_bytes = 0;
+    model->cuda_decoder_prompt_loop_last_saved_readback_bytes = 0;
     model->cuda_decoder_prompt_loop_last_hot_token_full_logits_readback_avoided = false;
     model->cuda_decoder_prompt_loop_last_hot_token_profile_available = false;
 }
@@ -237,6 +241,12 @@ static void king_inference_cuda_decoder_prompt_profile_record(
     model->cuda_decoder_prompt_loop_last_hot_token_readback_bytes = after->readback_bytes;
     model->cuda_decoder_prompt_loop_last_hot_token_full_logits_bytes = after->full_logits_bytes;
     model->cuda_decoder_prompt_loop_last_hot_token_saved_readback_bytes = after->saved_readback_bytes;
+    if (after->readback_bytes > 0 || after->full_logits_bytes > 0) {
+        model->cuda_decoder_prompt_loop_last_readback_tokens++;
+        model->cuda_decoder_prompt_loop_last_readback_bytes += after->readback_bytes;
+        model->cuda_decoder_prompt_loop_last_full_logits_bytes += after->full_logits_bytes;
+        model->cuda_decoder_prompt_loop_last_saved_readback_bytes += after->saved_readback_bytes;
+    }
     model->cuda_decoder_prompt_loop_last_hot_token_full_logits_readback_avoided =
         after->full_logits_bytes > 0 && after->readback_bytes < after->full_logits_bytes;
     model->cuda_decoder_prompt_loop_last_hot_token_profile_available = true;
@@ -313,6 +323,50 @@ static void king_inference_cuda_decoder_prompt_profile_add_status(
         &readback,
         "saved_readback_bytes",
         (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_saved_readback_bytes
+    );
+    add_assoc_long(
+        &readback,
+        "request_readback_tokens",
+        (zend_long) model->cuda_decoder_prompt_loop_last_readback_tokens
+    );
+    add_assoc_long(
+        &readback,
+        "request_readback_bytes",
+        (zend_long) model->cuda_decoder_prompt_loop_last_readback_bytes
+    );
+    add_assoc_long(
+        &readback,
+        "request_full_logits_bytes",
+        (zend_long) model->cuda_decoder_prompt_loop_last_full_logits_bytes
+    );
+    add_assoc_long(
+        &readback,
+        "request_saved_readback_bytes",
+        (zend_long) model->cuda_decoder_prompt_loop_last_saved_readback_bytes
+    );
+    add_assoc_double(
+        &readback,
+        "readback_bytes_per_token",
+        model->cuda_decoder_prompt_loop_last_readback_tokens > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_readback_tokens
+            : 0.0
+    );
+    add_assoc_double(
+        &readback,
+        "saved_readback_bytes_per_token",
+        model->cuda_decoder_prompt_loop_last_readback_tokens > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_saved_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_readback_tokens
+            : 0.0
+    );
+    add_assoc_double(
+        &readback,
+        "readback_savings_ratio",
+        model->cuda_decoder_prompt_loop_last_full_logits_bytes > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_saved_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_full_logits_bytes
+            : 0.0
     );
     add_assoc_bool(
         &readback,

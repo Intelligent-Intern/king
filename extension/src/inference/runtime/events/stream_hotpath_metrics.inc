@@ -138,6 +138,50 @@ static void king_inference_stream_add_hotpath_metrics(
         "saved_bytes",
         model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_hot_token_saved_readback_bytes : 0
     );
+    add_assoc_long(
+        &readback,
+        "request_tokens",
+        model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_readback_tokens : 0
+    );
+    add_assoc_long(
+        &readback,
+        "request_bytes",
+        model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_readback_bytes : 0
+    );
+    add_assoc_long(
+        &readback,
+        "request_full_logits_bytes",
+        model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_full_logits_bytes : 0
+    );
+    add_assoc_long(
+        &readback,
+        "request_saved_bytes",
+        model != NULL ? (zend_long) model->cuda_decoder_prompt_loop_last_saved_readback_bytes : 0
+    );
+    add_assoc_double(
+        &readback,
+        "bytes_per_token",
+        model != NULL && model->cuda_decoder_prompt_loop_last_readback_tokens > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_readback_tokens
+            : 0.0
+    );
+    add_assoc_double(
+        &readback,
+        "saved_bytes_per_token",
+        model != NULL && model->cuda_decoder_prompt_loop_last_readback_tokens > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_saved_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_readback_tokens
+            : 0.0
+    );
+    add_assoc_double(
+        &readback,
+        "savings_ratio",
+        model != NULL && model->cuda_decoder_prompt_loop_last_full_logits_bytes > 0
+            ? (double) model->cuda_decoder_prompt_loop_last_saved_readback_bytes
+                / (double) model->cuda_decoder_prompt_loop_last_full_logits_bytes
+            : 0.0
+    );
     add_assoc_bool(
         &readback,
         "full_logits_readback_avoided",
