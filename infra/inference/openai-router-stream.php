@@ -84,6 +84,86 @@ function king_openai_router_attach_stream_timing(array $event, array $timing): a
     return $event;
 }
 
+function king_openai_router_model_stream_status(mixed $model, bool $allowBufferedNativeStream): array
+{
+    $info = [];
+    if (is_object($model) && function_exists('king_inference_model_info')) {
+        try {
+            $info = king_inference_model_info($model);
+        } catch (Throwable) {
+            $info = [];
+        }
+    }
+    $backend = is_string($info['backend'] ?? null) ? $info['backend'] : 'unknown';
+    $capabilities = is_array($info['backend_capabilities'] ?? null) ? $info['backend_capabilities'] : [];
+    $immediateGpuStream = $backend === 'king_native_gpu' && !empty($capabilities['gpu_prompt_decoder_loop']);
+    $nativeBuffered = in_array($backend, ['king_native_cpu', 'king_native_gpu'], true) && !$immediateGpuStream;
+
+    return [
+        'accepted' => !$nativeBuffered || $allowBufferedNativeStream,
+        'backend' => $backend,
+        'native_buffered' => $nativeBuffered,
+        'immediate_token_streaming' => $immediateGpuStream,
+        'reason' => $nativeBuffered
+            ? 'buffered_native_stream_requires_explicit_opt_in'
+            : 'stream_backend_accepted',
+    ];
+}
+
+function king_openai_router_attach_stream_backend_status(array $event, array $status): array
+{
+    $king = $event['x_king'] ?? [];
+    if (!is_array($king)) {
+        $king = [];
+    }
+    $king['stream_backend'] = $status;
+    $event['x_king'] = $king;
+    return $event;
+}
+
+function king_openai_router_typed_stream_end_response(
+    string $responseId,
+    int $created,
+    string $responseModel,
+    int $startedNs,
+    array $status
+): array {
+    $nowNs = hrtime(true);
+    $message = 'King accepted this OpenAI-compatible streaming request, but the selected model exposes a buffered native generation path instead of an immediate token stream. The router ended the stream without blocking the client.';
+    $initial = king_openai_router_attach_stream_timing(
+        king_openai_router_initial_chunk($responseId, $created, $responseModel),
+        king_openai_router_timing_payload($startedNs, $nowNs, 1, 0, null, null, null, false, false, null, [])
+    );
+    $content = king_openai_router_attach_stream_timing(
+        king_openai_router_content_chunk($responseId, $created, $responseModel, $message),
+        king_openai_router_timing_payload($startedNs, $nowNs, 2, 1, $nowNs, null, $nowNs, false, false, null, [])
+    );
+    $terminal = king_openai_router_attach_stream_timing(
+        king_openai_router_terminal_chunk($responseId, $created, $responseModel),
+        king_openai_router_timing_payload($startedNs, $nowNs, 3, 1, $nowNs, $nowNs, $nowNs, false, true, 'stop', [])
+    );
+    $initial = king_openai_router_attach_stream_backend_status($initial, $status);
+    $content = king_openai_router_attach_stream_backend_status($content, $status);
+    $terminal = king_openai_router_attach_stream_backend_status($terminal, $status);
+
+    return [
+        'status' => 200,
+        'headers' => [
+            'content-type' => 'text/event-stream',
+            'cache-control' => 'no-cache',
+            'x-accel-buffering' => 'no',
+            'x-king-openai-router-path' => 'typed_stream_end',
+            'x-king-openai-stream-api' => 'capability_preflight',
+            'x-king-openai-stream-backend' => (string) ($status['reason'] ?? 'stream_backend_rejected'),
+            'x-king-openai-tool-fields' => 'accepted_context_only',
+        ],
+        'body' => king_openai_router_sse($initial)
+            . king_openai_router_sse($content)
+            . king_openai_router_sse($terminal)
+            . "data: [DONE]\n\n",
+    ];
+}
+
 function king_openai_router_stream_response(
     array $models,
     array $payload,
@@ -110,6 +190,19 @@ function king_openai_router_stream_response(
         : (is_string($requestedModel) && $requestedModel !== '' ? $requestedModel : 'king-local');
     $responseId = king_openai_router_stream_id();
     $created = time();
+    $allowBufferedNativeStream = isset($options['allow_buffered_native_stream']) && is_bool($options['allow_buffered_native_stream'])
+        ? $options['allow_buffered_native_stream']
+        : false;
+    $streamStatus = king_openai_router_model_stream_status($model, $allowBufferedNativeStream);
+    if (empty($streamStatus['accepted'])) {
+        return king_openai_router_typed_stream_end_response(
+            $responseId,
+            $created,
+            $responseModel,
+            $startedNs,
+            $streamStatus
+        );
+    }
     $streamOptions = [
         'openai_compatible' => true,
         'format' => 'openai_chat_completions',

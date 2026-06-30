@@ -11,6 +11,10 @@ require_once __DIR__ . '/openai-router-stream.php';
 
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('KING_OPENAI_PORT') ?: '8080');
+if ($port <= 0 || $port > 65535) {
+    fwrite(STDERR, "KING_OPENAI_PORT must be between 1 and 65535.\n");
+    exit(1);
+}
 $contextPolicy = getenv('KING_OPENAI_CONTEXT_POLICY') ?: 'full';
 if (!in_array($contextPolicy, ['full', 'last_user'], true)) {
     $contextPolicy = 'full';
@@ -24,6 +28,7 @@ $maxCompletionTokens = max(1, (int) (getenv('KING_OPENAI_MAX_COMPLETION_TOKENS')
 $coderInstructionWrapper = king_openai_router_env_bool('KING_OPENAI_CODER_INSTRUCTION_WRAPPER', true);
 $internalMcpToolsEnabled = king_openai_router_env_bool('KING_OPENAI_INTERNAL_MCP_TOOLS', true);
 $internalMcpToolTimeoutMs = max(1, min((int) (getenv('KING_OPENAI_INTERNAL_MCP_TOOL_TIMEOUT_MS') ?: 100), 5000));
+$allowBufferedNativeStream = king_openai_router_env_bool('KING_OPENAI_ALLOW_BUFFERED_NATIVE_STREAM', false);
 
 function king_openai_router_string(array $source, string $key, string $fallback = ''): string
 {
@@ -36,6 +41,14 @@ function king_openai_router_int(array $source, string $key, int $fallback = 0): 
 function king_openai_router_bool(array $source, string $key, bool $fallback = false): bool
 {
     return is_bool($source[$key] ?? null) ? $source[$key] : $fallback;
+}
+function king_openai_router_ini_bool(string $key, bool $fallback = false): bool
+{
+    $value = ini_get($key);
+    if ($value === false || trim((string) $value) === '') {
+        return $fallback;
+    }
+    return in_array(strtolower(trim((string) $value)), ['1', 'on', 'yes', 'true'], true);
 }
 function king_openai_router_array(array $source, string $key): array
 {
@@ -74,10 +87,17 @@ $gpuVramReserveMb = king_openai_router_int($gpuConfig, 'vram_reserve_mb');
 $gpuMinFreeVramMb = king_openai_router_int($gpuConfig, 'min_free_vram_mb');
 $gpuSensorPath = king_openai_router_string($gpuThermal, 'sensor_path');
 $gpuSensorCommand = king_openai_router_string($gpuThermal, 'sensor_command');
+$listenerOverrideAllowed = king_openai_router_ini_bool('king.security_allow_config_override');
+$listenerConfig = $listenerOverrideAllowed ? [
+    'tcp_connect_timeout_ms' => 1000,
+    'tcp.persistent_listener' => true,
+] : [];
 
 king_inference_runtime_log_configured([
     'host' => $host,
     'port' => $port,
+    'listener_config_override_allowed' => $listenerOverrideAllowed,
+    'listener_persistent' => $listenerOverrideAllowed,
     'requested_profile' => $requestedProfile,
     'selected_profile' => $runtimeProfile,
     'backend' => $backend,
@@ -100,6 +120,7 @@ king_inference_runtime_log_configured([
     'coder_instruction_wrapper' => $coderInstructionWrapper,
     'internal_mcp_tools_enabled' => $internalMcpToolsEnabled,
     'internal_mcp_tool_timeout_ms' => $internalMcpToolTimeoutMs,
+    'allow_buffered_native_stream' => $allowBufferedNativeStream,
     'model_registry_count' => count($runtimeModelConfigs),
     'model_registry_ids' => array_keys($runtimeModelConfigs),
     'gpu_thermal_source' => $gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand,
@@ -135,11 +156,6 @@ if ($gpuEnabled) {
     fwrite(STDERR, "GPU minimum free VRAM: {$gpuMinFreeVramMb} MB\n");
     fwrite(STDERR, 'GPU thermal source: ' . ($gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand) . "\n");
 }
-
-$listenerConfig = [
-    'tcp_connect_timeout_ms' => 1000,
-    'tcp.persistent_listener' => true,
-];
 
 function king_openai_router_path_is(array $request, string $path): bool
 {
@@ -607,6 +623,7 @@ $routerOptions = [
     'max_completion_tokens' => $maxCompletionTokens,
     'internal_mcp_tools_enabled' => $internalMcpToolsEnabled,
     'internal_mcp_tool_timeout_ms' => $internalMcpToolTimeoutMs,
+    'allow_buffered_native_stream' => $allowBufferedNativeStream,
     'read_timeout_ms' => 250,
     'max_events' => 4096,
     'max_idle_events' => 4800,
