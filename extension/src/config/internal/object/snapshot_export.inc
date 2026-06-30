@@ -103,6 +103,16 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         "inference.gpu_allow_system_ram_offload",
         cfg->compute_ai.inference_gpu_allow_system_ram_offload
     );
+    add_assoc_long(
+        target,
+        "inference.gpu_system_ram_offload_max_mb",
+        cfg->compute_ai.inference_gpu_system_ram_offload_max_mb
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_system_ram_offload_min_free_mb",
+        cfg->compute_ai.inference_gpu_system_ram_offload_min_free_mb
+    );
     add_assoc_string(
         target,
         "inference.gpu_thermal_sensor_path",

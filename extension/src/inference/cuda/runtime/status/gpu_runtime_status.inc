@@ -12,200 +12,7 @@ static bool king_inference_gpu_status_path_readable(const char *path)
     return king_inference_gpu_status_non_empty(path) && access(path, R_OK) == 0;
 }
 
-typedef int (*king_inference_cuda_cu_init_fn)(unsigned int flags);
-typedef int (*king_inference_cuda_cu_driver_get_version_fn)(int *driver_version);
-typedef int (*king_inference_cuda_cu_device_get_count_fn)(int *count);
-typedef int (*king_inference_cuda_cu_device_get_fn)(int *device, int ordinal);
-typedef int (*king_inference_cuda_cu_device_get_name_fn)(char *name, int len, int device);
-typedef int (*king_inference_cuda_cu_device_total_mem_fn)(size_t *bytes, int device);
-typedef int (*king_inference_cuda_cu_device_primary_ctx_retain_fn)(void **ctx, int device);
-typedef int (*king_inference_cuda_cu_device_primary_ctx_release_fn)(int device);
-typedef int (*king_inference_cuda_cu_ctx_set_current_fn)(void *ctx);
-typedef int (*king_inference_cuda_cu_mem_get_info_fn)(size_t *free_bytes, size_t *total_bytes);
-
-typedef struct _king_inference_cuda_driver_status {
-    bool loader_available;
-    bool symbols_available;
-    bool initialized;
-    bool memory_info_available;
-    int init_result;
-    int driver_version;
-    int device_count;
-    char first_device_name[256];
-    size_t first_device_total_memory_bytes;
-    size_t first_device_free_memory_bytes;
-    size_t first_device_runtime_total_memory_bytes;
-    char error[160];
-} king_inference_cuda_driver_status;
-
-static void king_inference_cuda_driver_status_init(king_inference_cuda_driver_status *status)
-{
-    memset(status, 0, sizeof(*status));
-    status->init_result = -1;
-    status->driver_version = 0;
-    status->device_count = 0;
-    status->first_device_name[0] = '\0';
-    status->first_device_free_memory_bytes = 0;
-    status->first_device_runtime_total_memory_bytes = 0;
-    status->error[0] = '\0';
-}
-
-static void king_inference_cuda_driver_status_set_error(
-    king_inference_cuda_driver_status *status,
-    const char *message)
-{
-    if (message == NULL) {
-        message = "unknown_cuda_driver_error";
-    }
-
-    snprintf(status->error, sizeof(status->error), "%s", message);
-}
-
-static bool king_inference_cuda_driver_symbol(
-    void *handle,
-    const char *name,
-    void **symbol,
-    king_inference_cuda_driver_status *status)
-{
-    *symbol = dlsym(handle, name);
-    if (*symbol != NULL) {
-        return true;
-    }
-
-    king_inference_cuda_driver_status_set_error(status, name);
-    return false;
-}
-
-static void king_inference_cuda_driver_probe(king_inference_cuda_driver_status *status)
-{
-    void *handle;
-    king_inference_cuda_cu_init_fn cu_init;
-    king_inference_cuda_cu_driver_get_version_fn cu_driver_get_version;
-    king_inference_cuda_cu_device_get_count_fn cu_device_get_count;
-    king_inference_cuda_cu_device_get_fn cu_device_get;
-    king_inference_cuda_cu_device_get_name_fn cu_device_get_name;
-    king_inference_cuda_cu_device_total_mem_fn cu_device_total_mem;
-    king_inference_cuda_cu_device_primary_ctx_retain_fn cu_device_primary_ctx_retain;
-    king_inference_cuda_cu_device_primary_ctx_release_fn cu_device_primary_ctx_release;
-    king_inference_cuda_cu_ctx_set_current_fn cu_ctx_set_current;
-    king_inference_cuda_cu_mem_get_info_fn cu_mem_get_info;
-    void *ctx = NULL;
-    int device = 0;
-
-    king_inference_cuda_driver_status_init(status);
-
-    handle = dlopen("libcuda.so.1", RTLD_LAZY | RTLD_LOCAL);
-    if (handle == NULL) {
-        king_inference_cuda_driver_status_set_error(status, dlerror());
-        return;
-    }
-    status->loader_available = true;
-
-    if (!king_inference_cuda_driver_symbol(handle, "cuInit", (void **) &cu_init, status)
-        || !king_inference_cuda_driver_symbol(
-            handle,
-            "cuDriverGetVersion",
-            (void **) &cu_driver_get_version,
-            status
-        )
-        || !king_inference_cuda_driver_symbol(
-            handle,
-            "cuDeviceGetCount",
-            (void **) &cu_device_get_count,
-            status
-        )
-        || !king_inference_cuda_driver_symbol(handle, "cuDeviceGet", (void **) &cu_device_get, status)
-        || !king_inference_cuda_driver_symbol(
-            handle,
-            "cuDeviceGetName",
-            (void **) &cu_device_get_name,
-            status
-        )) {
-        dlclose(handle);
-        return;
-    }
-
-    cu_device_total_mem = NULL;
-    if (dlsym(handle, "cuDeviceTotalMem_v2") != NULL) {
-        cu_device_total_mem = (king_inference_cuda_cu_device_total_mem_fn)
-            dlsym(handle, "cuDeviceTotalMem_v2");
-    } else if (dlsym(handle, "cuDeviceTotalMem") != NULL) {
-        cu_device_total_mem = (king_inference_cuda_cu_device_total_mem_fn)
-            dlsym(handle, "cuDeviceTotalMem");
-    }
-    cu_device_primary_ctx_retain = (king_inference_cuda_cu_device_primary_ctx_retain_fn)
-        dlsym(handle, "cuDevicePrimaryCtxRetain");
-    cu_device_primary_ctx_release = (king_inference_cuda_cu_device_primary_ctx_release_fn)
-        dlsym(handle, "cuDevicePrimaryCtxRelease");
-    cu_ctx_set_current = (king_inference_cuda_cu_ctx_set_current_fn)
-        dlsym(handle, "cuCtxSetCurrent");
-    cu_mem_get_info = NULL;
-    if (dlsym(handle, "cuMemGetInfo_v2") != NULL) {
-        cu_mem_get_info = (king_inference_cuda_cu_mem_get_info_fn)
-            dlsym(handle, "cuMemGetInfo_v2");
-    } else if (dlsym(handle, "cuMemGetInfo") != NULL) {
-        cu_mem_get_info = (king_inference_cuda_cu_mem_get_info_fn)
-            dlsym(handle, "cuMemGetInfo");
-    }
-
-    status->symbols_available = true;
-    status->init_result = cu_init(0);
-    if (status->init_result != 0) {
-        king_inference_cuda_driver_status_set_error(status, "cuInit_failed");
-        dlclose(handle);
-        return;
-    }
-    status->initialized = true;
-
-    if (cu_driver_get_version(&status->driver_version) != 0) {
-        status->driver_version = 0;
-    }
-    if (cu_device_get_count(&status->device_count) != 0 || status->device_count < 0) {
-        status->device_count = 0;
-    }
-    if (status->device_count > 0 && cu_device_get(&device, 0) == 0) {
-        if (cu_device_get_name(status->first_device_name, sizeof(status->first_device_name), device) != 0) {
-            status->first_device_name[0] = '\0';
-        }
-        if (cu_device_total_mem != NULL
-            && cu_device_total_mem(&status->first_device_total_memory_bytes, device) != 0) {
-            status->first_device_total_memory_bytes = 0;
-        }
-        if (cu_device_primary_ctx_retain != NULL
-            && cu_device_primary_ctx_release != NULL
-            && cu_ctx_set_current != NULL
-            && cu_mem_get_info != NULL
-            && cu_device_primary_ctx_retain(&ctx, device) == 0
-            && ctx != NULL) {
-            if (cu_ctx_set_current(ctx) == 0
-                && cu_mem_get_info(
-                    &status->first_device_free_memory_bytes,
-                    &status->first_device_runtime_total_memory_bytes
-                ) == 0) {
-                status->memory_info_available = true;
-            }
-            (void) cu_device_primary_ctx_release(device);
-        }
-    }
-
-    dlclose(handle);
-}
-
-static bool king_inference_gpu_status_artifact_size(const char *path, size_t *bytes_out)
-{
-    struct stat st;
-
-    *bytes_out = 0;
-    if (!king_inference_gpu_status_non_empty(path)) {
-        return false;
-    }
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0) {
-        return false;
-    }
-
-    *bytes_out = (size_t) st.st_size;
-    return true;
-}
+#include "gpu_runtime_cuda_driver_probe.inc"
 
 static bool king_inference_gpu_status_driver_visible(void)
 {
@@ -288,13 +95,7 @@ static bool king_inference_gpu_status_read_temperature_command(
 }
 
 #include "gpu_runtime_power_status.inc"
-
-static bool king_inference_gpu_status_backend_supported(const char *backend)
-{
-    return !king_inference_gpu_status_non_empty(backend)
-        || strcasecmp(backend, "auto") == 0
-        || strcasecmp(backend, "cuda") == 0;
-}
+#include "../policy/gpu_runtime_memory_policy.inc"
 
 static void king_inference_gpu_runtime_status_array(
     zval *return_value,
@@ -306,6 +107,9 @@ static void king_inference_gpu_runtime_status_array(
     zend_long max_gpu_layers,
     zend_long vram_reserve_mb,
     zend_long min_free_vram_mb,
+    bool allow_system_ram_offload,
+    zend_long system_ram_offload_max_mb,
+    zend_long system_ram_offload_min_free_mb,
     const char *thermal_sensor_path,
     const char *thermal_sensor_command,
     double max_temperature_c,
@@ -337,6 +141,17 @@ static void king_inference_gpu_runtime_status_array(
     bool model_vram_admitted;
     bool model_vram_fits_after_reserve;
     bool model_vram_fits_without_reserve;
+    bool system_ram_offload_required;
+    bool system_ram_offload_limit_configured;
+    bool system_ram_offload_limit_met;
+    bool system_ram_available;
+    bool system_ram_floor_met;
+    bool system_ram_offload_supported = false;
+    bool system_ram_offload_admitted = false;
+    zend_long system_ram_available_bytes = 0;
+    zend_long system_ram_offload_required_bytes = 0;
+    zend_long system_ram_offload_max_bytes;
+    zend_long system_ram_offload_min_free_bytes;
     bool driver_visible;
     bool config_ready;
     king_inference_gpu_vram_policy vram_policy;
@@ -361,6 +176,25 @@ static void king_inference_gpu_runtime_status_array(
         && artifact_bytes <= (size_t) vram_policy.free_bytes;
     model_vram_fits_after_reserve = vram_admission_checked
         && artifact_bytes <= (size_t) vram_policy.free_after_reserve_bytes;
+    system_ram_offload_required = vram_admission_checked
+        && !model_vram_fits_after_reserve;
+    system_ram_offload_max_bytes = king_inference_gpu_mb_to_bytes(system_ram_offload_max_mb);
+    system_ram_offload_min_free_bytes = king_inference_gpu_mb_to_bytes(system_ram_offload_min_free_mb);
+    system_ram_available = king_inference_gpu_system_ram_available_bytes(&system_ram_available_bytes);
+    if (system_ram_offload_required && artifact_bytes > (size_t) vram_policy.free_after_reserve_bytes) {
+        size_t required_bytes = artifact_bytes - (size_t) vram_policy.free_after_reserve_bytes;
+        system_ram_offload_required_bytes = required_bytes > (size_t) ZEND_LONG_MAX
+            ? ZEND_LONG_MAX
+            : (zend_long) required_bytes;
+    }
+    system_ram_offload_limit_configured = system_ram_offload_max_bytes > 0;
+    system_ram_offload_limit_met = system_ram_offload_required_bytes > 0
+        && system_ram_offload_limit_configured
+        && system_ram_offload_required_bytes <= system_ram_offload_max_bytes;
+    system_ram_floor_met = !system_ram_offload_required
+        || (system_ram_available
+            && system_ram_available_bytes > system_ram_offload_required_bytes
+            && system_ram_available_bytes - system_ram_offload_required_bytes >= system_ram_offload_min_free_bytes);
     model_vram_admitted = vram_admission_checked
         && vram_policy.floor_met
         && model_vram_fits_after_reserve;
@@ -428,7 +262,15 @@ static void king_inference_gpu_runtime_status_array(
         vram_admission_checked,
         vram_policy.floor_met,
         model_vram_fits_after_reserve,
-        model_vram_fits_without_reserve
+        model_vram_fits_without_reserve,
+        system_ram_offload_required,
+        allow_system_ram_offload,
+        system_ram_offload_limit_configured,
+        system_ram_offload_limit_met,
+        system_ram_available,
+        system_ram_floor_met,
+        system_ram_offload_supported,
+        system_ram_offload_admitted
     );
     reason = king_inference_gpu_status_first_reason(&refusal_reasons);
 
@@ -460,10 +302,64 @@ static void king_inference_gpu_runtime_status_array(
     add_assoc_bool(return_value, "free_vram_floor_met", vram_policy.floor_met);
     add_assoc_long(return_value, "free_vram_after_reserve_bytes", vram_policy.free_after_reserve_bytes);
     add_assoc_long(return_value, "model_vram_required_bytes", (zend_long) artifact_bytes);
+    add_assoc_bool(return_value, "model_vram_fits_without_reserve", model_vram_fits_without_reserve);
+    add_assoc_bool(return_value, "model_vram_fits_after_reserve", model_vram_fits_after_reserve);
     add_assoc_long(return_value, "runtime_vram_required_bytes", (zend_long) artifact_bytes);
     add_assoc_string(return_value, "runtime_vram_required_source", "artifact_only");
     add_assoc_bool(return_value, "runtime_vram_compared_to_free", vram_admission_checked);
+    add_assoc_bool(return_value, "runtime_vram_fits_without_reserve", model_vram_fits_without_reserve);
+    add_assoc_bool(return_value, "runtime_vram_fits_after_reserve", model_vram_fits_after_reserve);
     add_assoc_bool(return_value, "runtime_vram_fits_free", model_vram_admitted);
+    add_assoc_bool(return_value, "system_ram_offload_allowed", allow_system_ram_offload);
+    add_assoc_bool(return_value, "system_ram_offload_required", system_ram_offload_required);
+    add_assoc_long(return_value, "system_ram_offload_required_bytes", system_ram_offload_required_bytes);
+    add_assoc_long(return_value, "system_ram_offload_max_mb", system_ram_offload_max_mb);
+    add_assoc_long(return_value, "system_ram_offload_max_bytes", system_ram_offload_max_bytes);
+    add_assoc_bool(return_value, "system_ram_offload_limit_configured", system_ram_offload_limit_configured);
+    add_assoc_bool(return_value, "system_ram_offload_limit_met", system_ram_offload_limit_met);
+    add_assoc_long(return_value, "system_ram_offload_min_free_mb", system_ram_offload_min_free_mb);
+    add_assoc_long(return_value, "system_ram_offload_min_free_bytes", system_ram_offload_min_free_bytes);
+    add_assoc_bool(return_value, "system_ram_available", system_ram_available);
+    add_assoc_long(return_value, "system_ram_available_bytes", system_ram_available ? system_ram_available_bytes : 0);
+    add_assoc_bool(return_value, "system_ram_offload_floor_met", system_ram_floor_met);
+    add_assoc_bool(
+        return_value,
+        "system_ram_offload_budget_admitted",
+        system_ram_offload_required
+            && allow_system_ram_offload
+            && system_ram_offload_limit_met
+            && system_ram_floor_met
+    );
+    add_assoc_bool(return_value, "system_ram_offload_supported", system_ram_offload_supported);
+    add_assoc_bool(return_value, "system_ram_offload_admitted", system_ram_offload_admitted);
+    add_assoc_string(
+        return_value,
+        "system_ram_offload_status",
+        king_inference_gpu_system_ram_offload_status(
+            system_ram_offload_required,
+            allow_system_ram_offload,
+            system_ram_offload_limit_configured,
+            system_ram_offload_limit_met,
+            system_ram_available,
+            system_ram_floor_met,
+            system_ram_offload_supported,
+            system_ram_offload_admitted
+        )
+    );
+    add_assoc_string(
+        return_value,
+        "system_ram_offload_error",
+        king_inference_gpu_system_ram_offload_error(
+            system_ram_offload_required,
+            allow_system_ram_offload,
+            system_ram_offload_limit_configured,
+            system_ram_offload_limit_met,
+            system_ram_available,
+            system_ram_floor_met,
+            system_ram_offload_supported,
+            system_ram_offload_admitted
+        )
+    );
     add_assoc_bool(return_value, "kv_cache_estimate_available", false);
     add_assoc_long(return_value, "kv_cache_estimated_bytes", 0);
     add_assoc_long(return_value, "kv_cache_context_tokens", 0);
@@ -608,6 +504,9 @@ static void king_inference_gpu_runtime_status_from_compute(
         compute->inference_gpu_max_gpu_layers,
         compute->inference_gpu_vram_reserve_mb,
         compute->inference_gpu_min_free_vram_mb,
+        compute->inference_gpu_allow_system_ram_offload,
+        compute->inference_gpu_system_ram_offload_max_mb,
+        compute->inference_gpu_system_ram_offload_min_free_mb,
         compute->inference_gpu_thermal_sensor_path,
         compute->inference_gpu_thermal_sensor_command,
         compute->inference_gpu_thermal_max_temperature_c,
@@ -658,6 +557,27 @@ static void king_inference_gpu_runtime_status_from_model(
         : king_high_perf_compute_ai_config.inference_gpu_thermal_check_interval_sec;
     zend_long vram_reserve_mb = king_inference_vram_reserve_mb(&model->config);
     zend_long min_free_vram_mb = king_inference_min_free_vram_mb(&model->config);
+    bool allow_system_ram_offload = gpu != NULL
+        && Z_TYPE_P(gpu) == IS_ARRAY
+        && king_inference_bool_from_array(
+            gpu,
+            "allow_system_ram_offload",
+            king_high_perf_compute_ai_config.inference_gpu_allow_system_ram_offload
+        );
+    zend_long system_ram_offload_max_mb = gpu != NULL && Z_TYPE_P(gpu) == IS_ARRAY
+        ? king_inference_long_from_array(
+            gpu,
+            "system_ram_offload_max_mb",
+            king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_max_mb
+        )
+        : king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_max_mb;
+    zend_long system_ram_offload_min_free_mb = gpu != NULL && Z_TYPE_P(gpu) == IS_ARRAY
+        ? king_inference_long_from_array(
+            gpu,
+            "system_ram_offload_min_free_mb",
+            king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_min_free_mb
+        )
+        : king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_min_free_mb;
     bool allow_unmonitored = thermal != NULL
         && Z_TYPE_P(thermal) == IS_ARRAY
         && king_inference_bool_from_array(thermal, "allow_unmonitored_gpu", false);
@@ -686,6 +606,9 @@ static void king_inference_gpu_runtime_status_from_model(
         king_inference_max_gpu_layers(&model->config),
         vram_reserve_mb,
         min_free_vram_mb,
+        allow_system_ram_offload,
+        system_ram_offload_max_mb,
+        system_ram_offload_min_free_mb,
         thermal_sensor_path,
         thermal_sensor_command,
         max_temperature_c,

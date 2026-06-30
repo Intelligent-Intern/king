@@ -127,6 +127,30 @@ static const char *king_inference_runtime_gpu_profile_refusal_hint(zval *gpu_run
     if (!king_inference_runtime_array_bool(gpu_runtime, "free_vram_floor_met")) {
         return "free VRAM is below king.inference_gpu_min_free_vram_mb";
     }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_allowed")) {
+        return "model needs memory outside the reserved GPU budget, but king.inference_gpu_allow_system_ram_offload is disabled";
+    }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_limit_configured")) {
+        return "model needs system RAM offload, but king.inference_gpu_system_ram_offload_max_mb is zero";
+    }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_limit_met")) {
+        return "model needs more system RAM offload than king.inference_gpu_system_ram_offload_max_mb allows";
+    }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_available")) {
+        return "model needs system RAM offload, but system memory availability could not be read";
+    }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_floor_met")) {
+        return "model needs system RAM offload, but king.inference_gpu_system_ram_offload_min_free_mb would be violated";
+    }
+    if (king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_required")
+        && !king_inference_runtime_array_bool(gpu_runtime, "system_ram_offload_supported")) {
+        return "model needs system RAM offload, but this King native GPU runtime does not support offloaded weights yet";
+    }
     if (!king_inference_runtime_array_bool(gpu_runtime, "runtime_vram_fits_free")
         || !king_inference_runtime_array_bool(gpu_runtime, "model_vram_admitted")) {
         return "model artifact and runtime memory do not fit into free VRAM after reserve";
@@ -391,6 +415,12 @@ static zend_result king_inference_runtime_model_config_array(
         add_assoc_long(&gpu, "vram_reserve_mb", compute->inference_gpu_vram_reserve_mb);
         add_assoc_long(&gpu, "min_free_vram_mb", compute->inference_gpu_min_free_vram_mb);
         add_assoc_bool(&gpu, "allow_system_ram_offload", compute->inference_gpu_allow_system_ram_offload);
+        add_assoc_long(&gpu, "system_ram_offload_max_mb", compute->inference_gpu_system_ram_offload_max_mb);
+        add_assoc_long(
+            &gpu,
+            "system_ram_offload_min_free_mb",
+            compute->inference_gpu_system_ram_offload_min_free_mb
+        );
         add_assoc_string(
             &gpu,
             "system_ram_offload_policy",

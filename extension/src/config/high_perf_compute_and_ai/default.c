@@ -33,6 +33,8 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb = 2048;
     king_high_perf_compute_ai_config.inference_gpu_min_free_vram_mb = 4096;
     king_high_perf_compute_ai_config.inference_gpu_allow_system_ram_offload = false;
+    king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_max_mb = 0;
+    king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_min_free_mb = 8192;
     king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = 78.0;

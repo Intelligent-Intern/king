@@ -41,6 +41,11 @@ function king_status_bytes_to_gib(mixed $value): ?float
     return is_int($value) || is_float($value) ? ((float) $value) / 1024 / 1024 / 1024 : null;
 }
 
+function king_status_bytes_to_mib(mixed $value): ?float
+{
+    return is_int($value) || is_float($value) ? ((float) $value) / 1024 / 1024 : null;
+}
+
 function king_status_line(string $label, string $value): void
 {
     fwrite(STDOUT, str_pad($label . ':', 34) . $value . "\n");
@@ -84,6 +89,18 @@ function king_status_report_human(array $report): void
         king_status_line('Generation ready', king_status_yes_no($report['gpu']['generation_ready']));
         king_status_line('Thermal monitored', king_status_yes_no($report['gpu']['thermal_monitored']));
         king_status_line('VRAM admitted', king_status_yes_no($report['gpu']['runtime_vram_fits_free']));
+        king_status_line('System RAM offload', $report['gpu']['system_ram_offload_status']);
+        if ($report['gpu']['system_ram_offload_required_mib'] !== null) {
+            king_status_line(
+                'Offload required',
+                sprintf('%.2f MiB', $report['gpu']['system_ram_offload_required_mib'])
+            );
+        }
+        king_status_line('Offload max', $report['gpu']['system_ram_offload_max_mb'] . ' MiB');
+        king_status_line('Offload min free RAM', $report['gpu']['system_ram_offload_min_free_mb'] . ' MiB');
+        if ($report['gpu']['system_ram_offload_error'] !== 'none') {
+            king_status_line('Offload error', $report['gpu']['system_ram_offload_error']);
+        }
         if ($report['gpu']['device_name'] !== '') {
             king_status_line('Device', $report['gpu']['device_name']);
         }
@@ -135,6 +152,13 @@ $report = [
         'generation_ready' => false,
         'thermal_monitored' => false,
         'runtime_vram_fits_free' => false,
+        'system_ram_offload_allowed' => false,
+        'system_ram_offload_required' => false,
+        'system_ram_offload_required_mib' => null,
+        'system_ram_offload_max_mb' => 0,
+        'system_ram_offload_min_free_mb' => 0,
+        'system_ram_offload_status' => 'unknown',
+        'system_ram_offload_error' => 'unknown',
         'device_name' => '',
         'free_vram_after_reserve_gib' => null,
         'reason' => '',
@@ -164,6 +188,13 @@ try {
     $report['gpu']['generation_ready'] = king_status_bool($gpuStatus['generation_ready'] ?? false);
     $report['gpu']['thermal_monitored'] = king_status_bool($gpuStatus['thermal']['monitored'] ?? false);
     $report['gpu']['runtime_vram_fits_free'] = king_status_bool($gpuStatus['runtime_vram_fits_free'] ?? false);
+    $report['gpu']['system_ram_offload_allowed'] = king_status_bool($gpuStatus['system_ram_offload_allowed'] ?? false);
+    $report['gpu']['system_ram_offload_required'] = king_status_bool($gpuStatus['system_ram_offload_required'] ?? false);
+    $report['gpu']['system_ram_offload_required_mib'] = king_status_bytes_to_mib($gpuStatus['system_ram_offload_required_bytes'] ?? null);
+    $report['gpu']['system_ram_offload_max_mb'] = is_int($gpuStatus['system_ram_offload_max_mb'] ?? null) ? $gpuStatus['system_ram_offload_max_mb'] : 0;
+    $report['gpu']['system_ram_offload_min_free_mb'] = is_int($gpuStatus['system_ram_offload_min_free_mb'] ?? null) ? $gpuStatus['system_ram_offload_min_free_mb'] : 0;
+    $report['gpu']['system_ram_offload_status'] = king_status_string($gpuStatus['system_ram_offload_status'] ?? null, 'unknown');
+    $report['gpu']['system_ram_offload_error'] = king_status_string($gpuStatus['system_ram_offload_error'] ?? null, 'unknown');
     $report['gpu']['device_name'] = king_status_string($gpuStatus['cuda_driver']['device_name'] ?? null);
     $report['gpu']['free_vram_after_reserve_gib'] = king_status_bytes_to_gib(
         $gpuStatus['free_vram_after_reserve_bytes'] ?? null
@@ -196,6 +227,13 @@ try {
             $report['gpu']['generation_ready'] = king_status_bool($runtime['generation_ready'] ?? false);
             $report['gpu']['thermal_monitored'] = king_status_bool($runtime['thermal']['monitored'] ?? false);
             $report['gpu']['runtime_vram_fits_free'] = king_status_bool($runtime['runtime_vram_fits_free'] ?? false);
+            $report['gpu']['system_ram_offload_allowed'] = king_status_bool($runtime['system_ram_offload_allowed'] ?? false);
+            $report['gpu']['system_ram_offload_required'] = king_status_bool($runtime['system_ram_offload_required'] ?? false);
+            $report['gpu']['system_ram_offload_required_mib'] = king_status_bytes_to_mib($runtime['system_ram_offload_required_bytes'] ?? null);
+            $report['gpu']['system_ram_offload_max_mb'] = is_int($runtime['system_ram_offload_max_mb'] ?? null) ? $runtime['system_ram_offload_max_mb'] : 0;
+            $report['gpu']['system_ram_offload_min_free_mb'] = is_int($runtime['system_ram_offload_min_free_mb'] ?? null) ? $runtime['system_ram_offload_min_free_mb'] : 0;
+            $report['gpu']['system_ram_offload_status'] = king_status_string($runtime['system_ram_offload_status'] ?? null, 'unknown');
+            $report['gpu']['system_ram_offload_error'] = king_status_string($runtime['system_ram_offload_error'] ?? null, 'unknown');
             $report['gpu']['device_name'] = king_status_string(
                 $runtime['cuda_driver']['device_name'] ?? null,
                 $report['gpu']['device_name']

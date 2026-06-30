@@ -334,6 +334,28 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.gpu_system_ram_offload_max_mb",
+            sizeof("inference.gpu_system_ram_offload_max_mb") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_system_ram_offload_max_mb);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_system_ram_offload_min_free_mb",
+            sizeof("inference.gpu_system_ram_offload_min_free_mb") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_system_ram_offload_min_free_mb);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.gpu_thermal_sensor_path",
             sizeof("inference.gpu_thermal_sensor_path") - 1
         )

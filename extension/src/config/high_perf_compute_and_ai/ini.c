@@ -80,6 +80,10 @@ static ZEND_INI_MH(OnUpdateAiNonNegativeLong)
         king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb = val;
     } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_min_free_vram_mb")) {
         king_high_perf_compute_ai_config.inference_gpu_min_free_vram_mb = val;
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_system_ram_offload_max_mb")) {
+        king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_max_mb = val;
+    } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_system_ram_offload_min_free_mb")) {
+        king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_min_free_mb = val;
     } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_thermal_check_interval_sec")) {
         king_high_perf_compute_ai_config.inference_gpu_thermal_check_interval_sec = val;
     } else if (zend_string_equals_literal(entry->name, "king.inference_gpu_power_check_interval_sec")) {
@@ -272,6 +276,8 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY_EX("king.inference_gpu_vram_reserve_mb", "2048", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_min_free_vram_mb", "4096", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
     STD_PHP_INI_ENTRY("king.inference_gpu_allow_system_ram_offload", "0", PHP_INI_SYSTEM, OnUpdateBool, inference_gpu_allow_system_ram_offload, kg_high_perf_compute_ai_config_t, king_high_perf_compute_ai_config)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_system_ram_offload_max_mb", "0", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
+    ZEND_INI_ENTRY_EX("king.inference_gpu_system_ram_offload_min_free_mb", "8192", PHP_INI_SYSTEM, OnUpdateAiNonNegativeLong, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_path", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_sensor_command", "", PHP_INI_SYSTEM, OnUpdateInferenceString, NULL)
     ZEND_INI_ENTRY_EX("king.inference_gpu_thermal_max_temperature_c", "78", PHP_INI_SYSTEM, OnUpdateAiPositiveDouble, NULL)

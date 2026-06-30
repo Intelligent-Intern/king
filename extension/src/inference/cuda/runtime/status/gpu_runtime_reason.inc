@@ -105,7 +105,15 @@ static void king_inference_gpu_status_refusal_reasons(
     bool vram_admission_checked,
     bool free_vram_floor_met,
     bool model_vram_fits_after_reserve,
-    bool model_vram_fits_without_reserve
+    bool model_vram_fits_without_reserve,
+    bool system_ram_offload_required,
+    bool system_ram_offload_allowed,
+    bool system_ram_offload_limit_configured,
+    bool system_ram_offload_limit_met,
+    bool system_ram_available,
+    bool system_ram_floor_met,
+    bool system_ram_offload_supported,
+    bool system_ram_offload_admitted
 ) {
     array_init(reasons);
 
@@ -142,6 +150,21 @@ static void king_inference_gpu_status_refusal_reasons(
                     ? "gpu_model_artifact_exceeds_free_vram_after_reserve"
                     : "gpu_model_artifact_exceeds_free_vram"
             );
+            if (system_ram_offload_required && !system_ram_offload_allowed) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_disabled");
+            } else if (system_ram_offload_required && !system_ram_offload_limit_configured) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_limit_missing");
+            } else if (system_ram_offload_required && !system_ram_offload_limit_met) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_exceeds_limit");
+            } else if (system_ram_offload_required && !system_ram_available) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_unavailable");
+            } else if (system_ram_offload_required && !system_ram_floor_met) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_floor_not_met");
+            } else if (system_ram_offload_required && !system_ram_offload_supported) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_not_supported");
+            } else if (system_ram_offload_required && !system_ram_offload_admitted) {
+                king_inference_gpu_status_append_reason(reasons, "gpu_system_ram_offload_not_admitted");
+            }
         }
     }
     if (!driver_visible && !temperature_available) {

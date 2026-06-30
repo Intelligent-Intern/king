@@ -297,6 +297,18 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
             "allow_system_ram_offload",
             "gpu.allow_system_ram_offload",
             function_name
+        ) != SUCCESS
+        || king_inference_validate_gpu_non_negative_long_field(
+            gpu,
+            "system_ram_offload_max_mb",
+            "gpu.system_ram_offload_max_mb",
+            function_name
+        ) != SUCCESS
+        || king_inference_validate_gpu_non_negative_long_field(
+            gpu,
+            "system_ram_offload_min_free_mb",
+            "gpu.system_ram_offload_min_free_mb",
+            function_name
         ) != SUCCESS) {
         return FAILURE;
     }
