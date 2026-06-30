@@ -459,13 +459,19 @@ static void king_inference_stream_openai_error(
     zval *return_value
 ) {
     zval error;
+    zend_string *safe_message = zend_string_init(message != NULL ? message : "", message != NULL ? message_len : 0, 0);
 
     king_inference_stream_openai_chunk_base(stream, return_value);
     add_assoc_string(return_value, "object", "error");
-    array_init(&error);
-    add_assoc_string(&error, "type", "server_error");
-    add_assoc_stringl(&error, "message", message, message_len);
+    king_inference_openai_error_object(
+        &error,
+        500,
+        ZSTR_VAL(safe_message),
+        "server_error",
+        NULL
+    );
     add_assoc_zval(return_value, "error", &error);
+    zend_string_release(safe_message);
 }
 
 static void king_inference_stream_metrics(king_inference_stream_object *stream, zval *return_value)

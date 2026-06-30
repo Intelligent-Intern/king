@@ -54,6 +54,58 @@ static bool king_inference_openai_uri_matches(zval *request)
     return zend_string_equals_literal(Z_STR_P(uri), "/v1/chat/completions");
 }
 
+static bool king_inference_openai_error_context_key_safe(zend_string *key)
+{
+    if (key == NULL || ZSTR_LEN(key) == 0) {
+        return false;
+    }
+
+    return !zend_string_equals_literal(key, "prompt")
+        && !zend_string_equals_literal(key, "messages")
+        && !zend_string_equals_literal(key, "message")
+        && !zend_string_equals_literal(key, "content")
+        && !zend_string_equals_literal(key, "body")
+        && !zend_string_equals_literal(key, "request")
+        && !zend_string_equals_literal(key, "request_body")
+        && !zend_string_equals_literal(key, "input")
+        && !zend_string_equals_literal(key, "output")
+        && !zend_string_equals_literal(key, "output_text");
+}
+
+static void king_inference_openai_error_object(
+    zval *error,
+    zend_long status,
+    const char *message,
+    const char *type,
+    const char *explicit_code)
+{
+    zval king_error;
+    const char *safe_message = message != NULL ? message : "King inference request failed.";
+    const char *safe_type = type != NULL ? type : "server_error";
+    const char *code = king_inference_error_code_from_explicit_or_message(
+        status,
+        safe_type,
+        safe_message,
+        explicit_code
+    );
+    const char *category = king_inference_error_category_from_code(code);
+
+    array_init(error);
+    add_assoc_string(error, "message", safe_message);
+    add_assoc_string(error, "type", safe_type);
+    add_assoc_null(error, "param");
+    add_assoc_string(error, "code", code);
+    array_init(&king_error);
+    add_assoc_long(&king_error, "schema_version", 1);
+    add_assoc_string(&king_error, "category", category);
+    add_assoc_string(&king_error, "code", code);
+    add_assoc_string(&king_error, "human_message", safe_message);
+    add_assoc_bool(&king_error, "prompt_included", false);
+    add_assoc_bool(&king_error, "request_body_included", false);
+    add_assoc_bool(&king_error, "safe_for_logs", true);
+    add_assoc_zval(error, "x_king", &king_error);
+}
+
 static void king_inference_openai_error_payload(
     zval *return_value,
     zend_long status,
@@ -62,28 +114,42 @@ static void king_inference_openai_error_payload(
     const char *explicit_code)
 {
     zval error;
-    zval king_error;
-    const char *code = explicit_code != NULL && explicit_code[0] != '\0'
-        ? explicit_code
-        : king_inference_error_code_from_message(status, type, message);
-    const char *category = king_inference_error_category_from_code(code);
 
     array_init(return_value);
-    array_init(&error);
-    add_assoc_string(&error, "message", message);
-    add_assoc_string(&error, "type", type);
-    add_assoc_null(&error, "param");
-    add_assoc_string(&error, "code", code);
-    array_init(&king_error);
-    add_assoc_long(&king_error, "schema_version", 1);
-    add_assoc_string(&king_error, "category", category);
-    add_assoc_string(&king_error, "code", code);
-    add_assoc_string(&king_error, "human_message", message);
-    add_assoc_bool(&king_error, "prompt_included", false);
-    add_assoc_bool(&king_error, "request_body_included", false);
-    add_assoc_bool(&king_error, "safe_for_logs", true);
-    add_assoc_zval(&error, "x_king", &king_error);
+    king_inference_openai_error_object(&error, status, message, type, explicit_code);
     add_assoc_zval(return_value, "error", &error);
+}
+
+static void king_inference_openai_error_payload_merge_king_context(zval *payload, zval *king_context)
+{
+    zval *error;
+    zval *target;
+    zval *value;
+    zend_string *key;
+
+    if (king_context == NULL || Z_TYPE_P(king_context) != IS_ARRAY) {
+        return;
+    }
+
+    error = king_inference_array_find(payload, "error");
+    if (error == NULL || Z_TYPE_P(error) != IS_ARRAY) {
+        return;
+    }
+
+    target = king_inference_array_find(error, "x_king");
+    if (target == NULL || Z_TYPE_P(target) != IS_ARRAY) {
+        return;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(king_context), key, value) {
+        zval copy;
+
+        if (!king_inference_openai_error_context_key_safe(key)) {
+            continue;
+        }
+        ZVAL_COPY(&copy, value);
+        zend_hash_update(Z_ARRVAL_P(target), key, &copy);
+    } ZEND_HASH_FOREACH_END();
 }
 
 static void king_inference_openai_http_array_response(
@@ -186,15 +252,11 @@ static zend_result king_inference_openai_error_response_with_king_classified(
     zval *king_context)
 {
     zval payload;
-    zval context_copy;
     zend_string *json = NULL;
     zend_result result;
 
     king_inference_openai_error_payload(&payload, status, message, type, code);
-    if (king_context != NULL && Z_TYPE_P(king_context) == IS_ARRAY) {
-        ZVAL_COPY(&context_copy, king_context);
-        add_assoc_zval(&payload, "x_king", &context_copy);
-    }
+    king_inference_openai_error_payload_merge_king_context(&payload, king_context);
     result = king_inference_openai_json_encode(&payload, &json);
     zval_ptr_dtor(&payload);
     if (result != SUCCESS) {

@@ -74,6 +74,11 @@ static const char *king_inference_error_category_from_code(const char *code)
     return "router";
 }
 
+static bool king_inference_error_code_is_stable(const char *code)
+{
+    return code != NULL && strncmp(code, "king.", sizeof("king.") - 1) == 0;
+}
+
 static const char *king_inference_error_code_from_runtime_reason(const char *reason)
 {
     if (reason == NULL || reason[0] == '\0') {
@@ -215,6 +220,19 @@ static const char *king_inference_error_code_from_message(
     }
 
     return "king.router.internal";
+}
+
+static const char *king_inference_error_code_from_explicit_or_message(
+    zend_long status,
+    const char *type,
+    const char *message,
+    const char *explicit_code)
+{
+    if (king_inference_error_code_is_stable(explicit_code)) {
+        return explicit_code;
+    }
+
+    return king_inference_error_code_from_message(status, type, message);
 }
 
 static void king_inference_error_taxonomy_add_unique_string(zval *values, const char *value)
