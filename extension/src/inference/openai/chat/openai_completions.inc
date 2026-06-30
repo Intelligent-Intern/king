@@ -60,22 +60,15 @@ static zend_result king_inference_completion_payload(
     zval *choices,
     zval *return_value)
 {
-    zval *requested_model = king_inference_array_find(payload, "model");
-    king_inference_model_object *model_object = php_king_inference_model_obj_from_zend(Z_OBJ_P(model));
     zend_long created_at = (zend_long) time(NULL);
     zend_string *completion_id = strpprintf(0, "cmpl_king_" ZEND_LONG_FMT "_%lu", created_at, (zend_ulong) Z_OBJ_HANDLE_P(model));
+    zend_string *model_name = king_inference_openai_payload_model_name(model, payload);
 
     array_init(return_value);
     add_assoc_str(return_value, "id", completion_id);
     add_assoc_string(return_value, "object", "text_completion");
     add_assoc_long(return_value, "created", created_at);
-    if (requested_model != NULL && Z_TYPE_P(requested_model) == IS_STRING && Z_STRLEN_P(requested_model) > 0) {
-        add_assoc_str(return_value, "model", zend_string_copy(Z_STR_P(requested_model)));
-    } else if (model_object->name != NULL) {
-        add_assoc_str(return_value, "model", zend_string_copy(model_object->name));
-    } else {
-        add_assoc_string(return_value, "model", "king-native");
-    }
+    add_assoc_str(return_value, "model", model_name);
     king_inference_openai_add_text_completion_usage(return_value, model, payload, choices);
     add_assoc_zval(return_value, "choices", choices);
     return SUCCESS;

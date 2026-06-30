@@ -54,6 +54,32 @@ static bool king_inference_openai_prompt_token_count(
     return counted;
 }
 
+static void king_inference_openai_usage_payload_from_counts(
+    zval *usage,
+    const char *prompt_key,
+    zend_long prompt_tokens,
+    const char *completion_key,
+    zend_long completion_tokens)
+{
+    array_init(usage);
+    add_assoc_long(usage, prompt_key, prompt_tokens);
+    add_assoc_long(usage, completion_key, completion_tokens);
+    add_assoc_long(usage, "total_tokens", prompt_tokens + completion_tokens);
+}
+
+static void king_inference_openai_add_usage_or_null(
+    zval *target,
+    bool available,
+    zval *usage)
+{
+    if (available) {
+        add_assoc_zval(target, "usage", usage);
+        return;
+    }
+
+    add_assoc_null(target, "usage");
+}
+
 static bool king_inference_openai_completion_usage_payload(
     zval *model,
     zval *request,
@@ -68,10 +94,12 @@ static bool king_inference_openai_completion_usage_payload(
         return false;
     }
 
-    array_init(usage);
-    add_assoc_long(usage, "prompt_tokens", prompt_tokens);
-    add_assoc_long(usage, "completion_tokens", completion_tokens);
-    add_assoc_long(usage, "total_tokens", prompt_tokens + completion_tokens);
+    king_inference_openai_usage_payload_from_counts(
+        usage,
+        "prompt_tokens",
+        prompt_tokens,
+        "completion_tokens",
+        completion_tokens);
     return true;
 }
 
@@ -83,12 +111,10 @@ static void king_inference_openai_add_completion_usage(
 {
     zval usage;
 
-    if (king_inference_openai_completion_usage_payload(model, request, completion, &usage)) {
-        add_assoc_zval(target, "usage", &usage);
-        return;
-    }
-
-    add_assoc_null(target, "usage");
+    king_inference_openai_add_usage_or_null(
+        target,
+        king_inference_openai_completion_usage_payload(model, request, completion, &usage),
+        &usage);
 }
 
 static bool king_inference_openai_response_usage_payload(
@@ -105,10 +131,12 @@ static bool king_inference_openai_response_usage_payload(
         return false;
     }
 
-    array_init(usage);
-    add_assoc_long(usage, "input_tokens", input_tokens);
-    add_assoc_long(usage, "output_tokens", output_tokens);
-    add_assoc_long(usage, "total_tokens", input_tokens + output_tokens);
+    king_inference_openai_usage_payload_from_counts(
+        usage,
+        "input_tokens",
+        input_tokens,
+        "output_tokens",
+        output_tokens);
     return true;
 }
 
@@ -120,12 +148,10 @@ static void king_inference_openai_add_response_usage(
 {
     zval usage;
 
-    if (king_inference_openai_response_usage_payload(model, request, output, &usage)) {
-        add_assoc_zval(target, "usage", &usage);
-        return;
-    }
-
-    add_assoc_null(target, "usage");
+    king_inference_openai_add_usage_or_null(
+        target,
+        king_inference_openai_response_usage_payload(model, request, output, &usage),
+        &usage);
 }
 
 static bool king_inference_openai_text_prompt_token_count(
@@ -208,10 +234,12 @@ static void king_inference_openai_add_text_completion_usage(
         return;
     }
 
-    array_init(&usage);
-    add_assoc_long(&usage, "prompt_tokens", prompt_tokens);
-    add_assoc_long(&usage, "completion_tokens", completion_tokens);
-    add_assoc_long(&usage, "total_tokens", prompt_tokens + completion_tokens);
+    king_inference_openai_usage_payload_from_counts(
+        &usage,
+        "prompt_tokens",
+        prompt_tokens,
+        "completion_tokens",
+        completion_tokens);
     add_assoc_zval(target, "usage", &usage);
 }
 
@@ -232,9 +260,11 @@ static void king_inference_openai_add_text_completion_stream_usage(
         return;
     }
 
-    array_init(&usage);
-    add_assoc_long(&usage, "prompt_tokens", prompt_tokens);
-    add_assoc_long(&usage, "completion_tokens", completion_tokens);
-    add_assoc_long(&usage, "total_tokens", prompt_tokens + completion_tokens);
+    king_inference_openai_usage_payload_from_counts(
+        &usage,
+        "prompt_tokens",
+        prompt_tokens,
+        "completion_tokens",
+        completion_tokens);
     add_assoc_zval(target, "usage", &usage);
 }
