@@ -1,5 +1,8 @@
 # Local Quantized Inference
 
+The interactive transformer-flow map lives at
+[`docs/inference/index.html`](inference/index.html).
+
 King inference is available procedurally through `king_inference_*` and as the
 native OO surface `King\Inference`, `King\Inference\Model`, and
 `King\Inference\Stream`.
@@ -72,30 +75,50 @@ model metadata exposes one, generated BOS/EOS tokens stop generation before
 they are decoded to text, and configured stop strings are withheld from stdout
 instead of being emitted and recognized afterwards.
 
-`bin/king-native-hello-world` is the first direct King-only generation command.
-It resolves a local GGUF artifact from `KING_INFERENCE_HELLO_MODEL_PATH`,
-`KING_INFERENCE_CPU_MODEL_PATH`, `KING_INFERENCE_MODEL_PATH`,
-`KING_INFERENCE_TEST_MODEL_PATH`, or
-`var/inference-models/gemma3-1b.gguf`, then calls `bin/king-local-infer` with
-the explicit `argmax` sampler, temperature `0`, `top_k=1`, `top_p=1`, and a
-fixed seed. The command captures the generated text, prints it, and exits
-non-zero when native generation produces no text. Set
-`KING_INFERENCE_HELLO_EXPECT` when the operator wants to additionally require a
-specific generated substring. It does not contact Ollama, vLLM, or another
-model server; the only model runtime in that path is the King extension plus
-the local GGUF artifact.
+`bin/king-native-hello-world` is the direct King-only native stream smoke for
+the CPU and GPU backends. It resolves local GGUF artifacts from
+`KING_INFERENCE_HELLO_CPU_MODEL_PATH`,
+`KING_INFERENCE_HELLO_GPU_MODEL_PATH`, `KING_INFERENCE_HELLO_MODEL_PATH`,
+`KING_INFERENCE_CPU_MODEL_PATH`, `KING_INFERENCE_GPU_MODEL_PATH`,
+`KING_INFERENCE_MODEL_PATH`, `KING_INFERENCE_TEST_MODEL_PATH`, or
+`var/inference-models/gemma3-1b.gguf`, then tokenizes `Hello world` and streams
+the resulting token-vector graphs through `king_inference_stream()`. The CPU
+path executes the native graph runner. The GPU path requires
+`gpu.enabled=true`, opens the CUDA-backed model profile, refuses silent CPU
+fallback, and emits token events for explicit token-vector graphs after GPU
+graph admission succeeds. The command exits non-zero unless every requested
+backend streams `Hello world`.
+
+The default backend is `both` and the default mode is `roundtrip`, so the plain
+command is a deterministic CPU plus GPU `Hello world` proof. Use
+`--backend=cpu`, `--backend=gpu`, or `--backend=both` to select the surface.
+Use `--mode=prompt` only when you intentionally want a short native generation
+smoke; prompt output depends on the current decoder quality and model behavior
+and is not the deterministic Hello-World contract. The command does not contact
+Ollama, vLLM, or another model server; the only model runtime in that path is
+the King extension plus the local GGUF artifact.
 
 ```bash
-KING_INFERENCE_HELLO_MODEL_PATH=/models/gemma3-1b.gguf bin/king-native-hello-world
+bin/king-native-hello-world --backend=both
+KING_INFERENCE_HELLO_GPU_MODEL_PATH=/models/gemma3-1b.gguf bin/king-native-hello-world --backend=gpu
 ```
+
+With `--json`, the command also emits the local performance measurement surface
+used for native inference hardening: prompt token count, generated token count,
+stream TTFB, stream total time, end-to-end time, model load time, tokens per
+second, resident state, and GPU before/after/delta snapshots for temperature,
+utilization, VRAM, and power. Set `KING_INFERENCE_GPU_POWER_MAX_WATTS` to enable
+the optional power guardrail in that local smoke.
 
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
 `infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
 `gemma4:12b` for the GPU profile, configures GPU layers, and uses
 `nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits` as the
-temperature source. The router registers `gemma4:12b` only when GPU bindings
-and a positive GPU-layer count are active; otherwise only the CPU model is
-listed.
+temperature source. The router loads exactly the model selected by
+`king_inference_runtime_model_config()` and
+`king_inference_runtime_model_load()`. CPU/GPU model names, artifacts, context,
+memory mode, VRAM reserve, and thermal policy therefore come from the effective
+King config snapshot instead of separate router-side inference overrides.
 
 Native graph stream memory is opt-in. The compiled default is stateless and the
 system baseline can be changed in `php.ini`:
@@ -200,7 +223,12 @@ non-negative integers,
 `gpu.thermal` must be an array when provided, `gpu.thermal.sensor_path` and
 `gpu.thermal.sensor_command` must be non-empty strings when provided,
 `gpu.thermal.max_temperature_c` must be a positive finite number, and
-`gpu.thermal.allow_unmonitored_gpu` must be a boolean.
+`gpu.thermal.check_interval_seconds` must be a non-negative integer when
+provided. `gpu.thermal.allow_unmonitored_gpu` must be a boolean. Optional
+`gpu.power` guardrails use a command-based watt sensor. `gpu.power.max_watts=0`
+keeps the power guardrail disabled; values greater than zero require
+`gpu.power.sensor_command`, and `gpu.power.check_interval_seconds` must be a
+non-negative integer.
 
 ## Runtime Model Profile
 
@@ -220,7 +248,11 @@ king.inference_gpu_min_free_vram_mb=4096
 king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
 king.inference_gpu_thermal_sensor_command=
 king.inference_gpu_thermal_max_temperature_c=78
+king.inference_gpu_thermal_check_interval_sec=15
 king.inference_gpu_allow_unmonitored=0
+king.inference_gpu_power_sensor_command="nvidia-smi --query-gpu=power.draw --format=csv,noheader,nounits"
+king.inference_gpu_power_max_watts=450
+king.inference_gpu_power_check_interval_sec=15
 king.inference_llm_cache_enable=0
 king.inference_llm_cache_path=/tmp/king-llm-cache
 king.inference_llm_cache_min_free_mb=5120
@@ -233,6 +265,22 @@ the config-level GPU bindings are enabled, and
 Otherwise it selects the CPU profile. `gpu` requires the GPU profile and fails
 fast when the GPU artifact, config-level GPU allowance, or process-level GPU
 allowance is missing. `cpu` always selects the CPU profile.
+
+`gemma3:1b` is the compact baseline model for local King inference. It is small
+enough for fast CPU/GPU preflight and short smoke checks, but it is not treated
+as a disposable smoke-only artifact. The expected capability floor is simple
+chat, exact-output following, language following, small PHP and King snippets,
+and basic local Coder assistance. If one of those contracts regresses, the
+problem is in runtime admission, prompt formatting, tokenizer handling, model
+configuration, or the fine-tune dataset, not in a lowered expectation for the
+model.
+
+The stronger GPU profile can prefer a larger local model such as `gemma4:12b`
+after the `gemma3:1b` hot path is fast and honest. That keeps a cheap baseline
+available for diagnostics while allowing editor and production-like workflows to
+select a larger GPU model when configured. Future supervised tuning should keep
+the 1B family useful for King/PHP/Coder tasks instead of replacing it with a
+generic benchmark-only model.
 
 The same settings can be scoped to a `King\Config` snapshot:
 
@@ -393,18 +441,41 @@ currently active refusal reasons, so a broken setup can show, for example, a
 missing artifact, unavailable VRAM telemetry, and a missing thermal monitor in
 one response instead of hiding later blockers behind the first one.
 
-GPU stream startup performs a fresh thermal preflight immediately before the
-backend run is admitted. For the local process backend this check happens after
-the command line is assembled and directly before `fork/exec`; for native
-streams it happens directly before native graph events are prepared. Stream
-start events and `King\Inference\Stream::getMetrics()` expose
-`gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and
-`gpu_thermal_preflight_temperature_c` so operators can distinguish stale model
-metadata from the last run-time admission check. During an active GPU stream,
-King checks the same thermal ceiling before every event read; when the ceiling
-is reached, the stream is marked cancelled, the runner process is terminated,
-and metrics expose `gpu_thermal_aborted`, `gpu_thermal_abort_at`,
-`gpu_thermal_abort_temperature_c`, and `gpu_thermal_abort_ceiling_c`.
+GPU stream startup performs fresh thermal and optional power preflight
+immediately before the backend run is admitted. For the local process backend
+this check happens after the command line is assembled and directly before
+`fork/exec`; for native streams it happens directly before native graph events
+are prepared. Stream start events and `King\Inference\Stream::getMetrics()`
+expose `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`,
+`gpu_thermal_preflight_temperature_c`, `gpu_power_preflight_checked`,
+`gpu_power_preflight_at`, and `gpu_power_preflight_watts` so operators can
+distinguish stale model metadata from the last run-time admission check.
+During an active GPU stream, King checks the same thermal ceiling and optional
+power ceiling at the configured `gpu.thermal.check_interval_seconds` and
+`gpu.power.check_interval_seconds` cadence. The default is 15 seconds; `0`
+keeps startup preflight but disables running rechecks for that guardrail. The
+native CUDA prompt decoder calls this guardrail path from the token loop, so a
+resident native decode is protected before all token events have been read by
+userland. When a ceiling is reached, the stream is marked cancelled, the runner
+process is terminated when applicable, and metrics expose
+`gpu_thermal_aborted`, `gpu_thermal_abort_at`,
+`gpu_thermal_abort_temperature_c`, `gpu_thermal_abort_ceiling_c`,
+`gpu_power_aborted`, `gpu_power_abort_at`, `gpu_power_abort_watts`, and
+`gpu_power_abort_ceiling_watts`.
+
+Internal CUDA numeric comparison is a local diagnostic surface, not a public
+inference API. The single supported hook is
+`king_inference_cuda_device_vector_numeric_compare()`, and all decoder
+component compares call through that hook. It is disabled by default through
+`king.inference_cuda_numeric_compare_enable=0`; the default bounded readback
+limit is `king.inference_cuda_numeric_compare_max_values=8` and is clamped to
+`1024`. A loaded model may override the same hook locally with
+`gpu.debug.numeric_compare_enabled` and
+`gpu.debug.numeric_compare_max_values`. When disabled, compare records report
+`status=disabled` and no device-to-host diagnostic readback is performed.
+`Model::info()` exposes this as `device_vector_ops.numeric_compare_hook` with
+`public_api=false`, `scope=internal_cuda_device_vector_readback_compare`, and
+`unavailable_by_default=true`.
 
 The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
 configured for GPU execution must not silently fall back to CPU. Current status
@@ -430,11 +501,13 @@ plain-text chat generation.
 can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
 indexes, map the file for native access, and expose the model through
 `/v1/models`. Runtime status still decides whether GPU token generation is
-currently admitted. The backend capabilities keep `model_registration=true`,
-`implemented=true`,
-`streaming=true`, `native_stream_contract=true`, and
-`gpu_decoder_stream_contract=true`, with `token_generation=true` and
-`openai_generation=true` for the GPU backend.
+currently admitted. The backend capability map describes implemented surfaces,
+not current execution admission: it keeps `model_registration=true`,
+`implemented=true`, `streaming=true`, `native_stream_contract=true`,
+`gpu_decoder_stream_contract=true`, `token_generation=true`, and
+`openai_generation=true` for the GPU backend. Clients must still use
+`x_king.openai_generation`, `x_king.readiness.openai_generation_ready`, and
+`x_king.client_capabilities.*` for runtime UI decisions.
 The same capabilities explicitly describe the ready GPU support surfaces:
 `gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
 `gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
@@ -468,8 +541,8 @@ The same capabilities explicitly describe the ready GPU support surfaces:
 GPU backend.
 `openai_chat_completions_stream` is true for the GPU backend when runtime
 readiness admits prompt generation. `silent_cpu_fallback` remains false.
-The GPU model info, native GPU stream contract event, and `/v1/models`
-metadata expose the same boundary with `embedding_row_loader_ready`,
+The GPU model info, `/v1/models` metadata, and the opt-in native GPU diagnostic
+stream contract expose the same boundary with `embedding_row_loader_ready`,
 `device_vector_ops_ready`, `device_kv_cache_ready`,
 `decoder_graph_executor_ready`, `decoder_graph_result_contract_ready`,
 `decoder_graph_execution_plan_ready`, `decoder_graph_embedding_execution_ready`,
@@ -535,21 +608,25 @@ candidate set for the final prompt graph and each following generated-token
 graph until `max_tokens` is reached, applies the same argmax/temperature/top-k/
 top-p/seed sampling policy on CPU over those bounded candidates, writes a
 CPU-compatible `final.next_token.values` token vector into each graph result,
-and emits the decoded token text pieces in the native event stream after the
-structured prompt-loop event. OpenAI-compatible GPU chat uses that prompt loop
-for both `stream=false` and `stream=true`, and does not fall back to CPU.
+and emits the decoded token text pieces in the native event stream. When
+server-side stream options set `include_stream_diagnostics=true` or
+`diagnostics.stream_contracts=true`, King also emits the structured
+`gpu_decoder_stream_contract` and `gpu_prompt_decoder_loop_contract` events for
+local diagnostics. OpenAI-compatible GPU chat uses that prompt loop for both
+`stream=false` and `stream=true`, and does not fall back to CPU.
 
 The native GPU backend is connected to the same stream object contract as the
 native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
 the start event reports `backend=king_native_gpu`, native events are read
 through `king_inference_next()`, cancellation moves the stream to a terminal
 state, and stream metrics expose native event indexes plus GPU thermal
-preflight/abort metadata. The first GPU native event is a structured
+preflight/abort metadata. The default GPU native stream emits normal
+`start`/`token`/`done` events. Internal diagnostics can opt in to the structured
 `gpu_decoder_stream_contract` event with `stream_contract=king_native_events`,
-`decoder_stream_contract_ready=true`, `generation_ready` mirroring prompt-loop
-readiness, and the current `gpu_runtime` object. OpenAI-compatible GPU chat is
-admitted only through plain text prompt generation; OpenAI graph payloads stay
-on the native stream contract.
+`decoder_stream_contract_ready=true`, prompt-loop readiness, and the current
+`gpu_runtime` object. OpenAI-compatible GPU chat is admitted only through plain
+text prompt generation; OpenAI graph payloads stay on the native stream
+contract.
 
 ## GPU Sampling Decision
 
@@ -582,76 +659,51 @@ at a time:
 
 ```text
 extension/src/inference/
-├── api.inc
-├── backend_contract.inc
-├── backend_king_local.inc
-├── backend_king_native.inc
-├── backend_registry.inc
-├── class_entries.inc
-├── cuda_context.inc
-├── cuda_device_memory.inc
-├── cuda_weight_upload.inc
-├── gguf_architecture_metadata.inc
-├── gguf_loader.inc
-├── gguf_metadata_helpers.inc
-├── gpu_runtime_reason.inc
-├── gpu_runtime_status.inc
-├── gpu_vram_policy.inc
-├── helpers.inc
-├── model_config.inc
-├── native_memory.inc
-├── object_handlers.inc
-├── openai_backend.inc
-├── openai_compat.inc
-├── openai_completions.inc
-├── openai_embeddings.inc
-├── openai_http_body.inc
-├── openai_http_helpers.inc
-├── openai_http_request.inc
-├── openai_http_router.inc
-├── openai_messages.inc
-├── openai_models.inc
-├── openai_options.inc
-├── openai_responses.inc
-├── openai_usage.inc
-├── paged_kv_cache.inc
-├── php_binding.inc
-├── registration.inc
-├── resource_policy.inc
-├── state.inc
-├── stream_events.inc
-├── tensor_attention_resolver.inc
-├── tensor_ffn_resolver.inc
-├── token_decode_graph_builder.inc
-├── tensor_graph.inc
-├── tensor_graph_kv.inc
-├── tensor_resolver.inc
-├── tensor_rms_norm_resolver.inc
-├── tensor_graph_ops.inc
-├── tensor_graph_sampling.inc
-├── tensor_math.inc
-├── tensor_view.inc
-├── thermal_policy.inc
-└── tokenizer.inc
+├── inference.c
+├── api/
+├── backends/
+├── binding/
+│   └── php_binding.inc
+├── core/
+├── cuda/
+│   ├── decoder_graph/
+│   ├── kernels/
+│   ├── prompt/
+│   └── runtime/
+├── gguf/
+├── openai/
+│   ├── chat/
+│   ├── http/
+│   ├── resources/
+│   └── runtime/
+├── runtime/
+├── tensor/
+│   ├── core/
+│   ├── graph/
+│   └── resolvers/
+└── tokenizer/
 ```
 
 The object and metadata contracts live in
-`extension/include/inference/inference.h`. PHP arginfo, function-table entries,
-and OO method-table entries live under `extension/include/inference/` and are
+`extension/include/inference/surface/inference.h`. PHP arginfo, function-table
+entries, class entries, registration hooks, and OO method-table entries live in
+their matching subdirectories under `extension/include/inference/` and are
 consumed by the extension bootstrap through `extension/include/php_king/`. The
 runtime implementation remains under `extension/src/inference/` and is included
-directly by the extension bootstrap.
+directly by the extension bootstrap. `binding/php_binding.inc` is the single
+aggregation boundary; leaf files stay in the directory that owns their concern
+instead of being flattened into the root inference directory.
 
-`backend_contract.inc` owns backend names and capabilities.
-`backend_registry.inc` dispatches stream startup to the selected backend.
-`backend_king_local.inc` owns the current process runner path, executable
+`backends/contracts/backend_contract.inc` owns backend names and capabilities.
+`backends/registry/backend_registry.inc` dispatches stream startup to the selected
+backend. `backends/local/backend_king_local.inc` owns the current process runner path, executable
 preflight, argument mapping, fork/exec handoff, and prompt normalization. If a
 configured local runner path is not executable, or a PATH-based runner name
 cannot be resolved before `fork()`, King raises a runtime error before stream
 startup instead of returning an empty stream with a child-process exit code.
 Resource and thermal policy are intentionally separate so CPU/GPU scheduling,
 VRAM limits, and temperature behavior can evolve without changing userland code.
-`openai_http_router.inc` owns route selection only. Request extraction,
+`openai/http/openai_http_router.inc` owns route selection only. Request extraction,
 response helpers, body decoding, model registry handling, route generation
 helpers, and endpoint-specific payloads live in the focused `openai_*`
 fragments so the OpenAI-compatible router remains inspectable as it grows.
@@ -724,14 +776,20 @@ backends so tensor bytes can be addressed directly by later graph execution
 without handing the model to an external runtime.
 
 `King\Inference\Model::info()` and `king_inference_model_info()` expose backend
-metadata, including `backend`, `engine`, `artifact_bytes`, `gguf`,
-`runner_path`, `runner_protocol`, `runner_executable`, `gpu_enabled`, and
-`backend_capabilities`. For `king_native_gpu`, model info also exposes
+metadata, including `backend`, `configured_backend`, `active_backend`,
+`active_device`, `fallback_mode`, `silent_cpu_fallback`,
+`gpu_admission_reason`, `with_memory`, `memory_mode`, `memory`, `readiness`,
+`engine`, `artifact_bytes`, `gguf`, `runner_path`, `runner_protocol`,
+`runner_executable`, `gpu_enabled`, and `backend_capabilities`. `/v1/models`
+exposes the same runtime-surface fields under `x_king`. For `king_native_gpu`,
+model info also exposes
 `gpu_runtime.cuda_context`, `gpu_runtime.device_memory_allocator`,
 `gpu_runtime.required_weight_upload`, `decoder_stream_contract_ready=true`,
 `decoder_kernel_ready`, `plain_text_chat_ready`, and `generation_ready`
-directly, so clients do not need to infer decoder or generation state from
-model registration or backend name.
+directly, plus `device_vector_ops.numeric_compare_hook` for local diagnostics.
+That hook is explicitly marked `public_api=false`, so clients do not need to
+infer decoder or generation state from model registration or backend name and
+must not treat numeric comparison as a production inference feature.
 The `gguf` entry contains `architecture`, `architecture_supported`,
 `architecture_family`, `architecture_generation`, `decoder_profile`,
 `decoder_shape_ready`, `decoder_ready`, `architecture_support_status`,
@@ -1377,14 +1435,14 @@ payload or options set `with_memory` or `with-memory` to `true`.
 
 For `stream=false`, the helper drains native decoder content deltas into one
 OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
-Decoder text is treated as assistant content. Tool-call request fields remain
-rejected until a real King tool execution path exists. Requests containing
-`tools`, `tool_choice`, `parallel_tool_calls`, legacy `functions` /
-`function_call`, or assistant-message `tool_calls` return an
-`invalid_request_error` that names the missing King tool execution path instead
-of pretending model text is executable tool output. For `stream=true`, it
-returns a bounded `text/event-stream` body with `data: {chunk}` events and a
-final `data: [DONE]` marker.
+Decoder text is treated as assistant content. Tool-call request fields are
+accepted for editor-client compatibility and ignored by plain inference. Until
+a real King MCP execution path is bound to the route, King does not dispatch
+those tools, does not synthesize tool-call responses from decoder text, and does
+not fail the request; the local router logs the tool metadata and continues
+normal inference.
+For `stream=true`, it returns a bounded `text/event-stream` body with
+`data: {chunk}` events and a final `data: [DONE]` marker.
 For `king_native_cpu`, that streaming response is backed by native decoder
 events rather than the external process runner.
 If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
@@ -1506,6 +1564,7 @@ $model = king_inference_model_load([
         'thermal' => [
             'sensor_path' => '/sys/class/hwmon/hwmon2/temp1_input',
             'max_temperature_c' => 78.0,
+            'check_interval_seconds' => 15,
         ],
     ],
 ]);

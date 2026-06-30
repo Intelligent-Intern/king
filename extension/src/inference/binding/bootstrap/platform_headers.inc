@@ -1,0 +1,25 @@
+#include "Zend/zend_smart_str.h"
+#include "ext/standard/base64.h"
+#include "ext/json/php_json.h"
+#include "config/config.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
+#include "config/resource_helpers.h"
+
+#include <errno.h>
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <math.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include <sys/mman.h>
+#include <sys/select.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>

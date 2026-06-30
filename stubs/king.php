@@ -1292,6 +1292,14 @@ namespace {
      * `gpu.thermal.sensor_path` and `gpu.thermal.sensor_command` must be
      * non-empty strings when provided, and
      * `gpu.thermal.max_temperature_c` must be a positive finite number.
+     * `gpu.thermal.check_interval_seconds` must be a non-negative integer.
+     * Optional `gpu.power.max_watts` must be a non-negative finite number;
+     * values greater than zero require `gpu.power.sensor_command`.
+     * `gpu.power.check_interval_seconds` must be a non-negative integer.
+     * `gpu.debug.numeric_compare_enabled` and
+     * `gpu.debug.numeric_compare_max_values` are internal local diagnostic
+     * controls for the CUDA device-vector compare hook; they do not expose a
+     * public inference API and are disabled by default.
      * @param array<string,mixed> $config
      * @throws \King\ValidationException|\King\RuntimeException
      */
@@ -1299,9 +1307,10 @@ namespace {
 
     /**
      * Return the normalized metadata for a loaded King inference model,
-     * including backend name, backend capabilities, GPU readiness surfaces,
-     * explicit GPU decoder and generation readiness, and local runner
-     * executable status when the local backend is selected.
+     * including backend name, configured backend, active backend/device,
+     * fallback state, memory mode, backend capabilities, GPU readiness
+     * surfaces, explicit GPU decoder and generation readiness, and local
+     * runner executable status when the local backend is selected.
      * @return array<string,mixed>
      */
     function king_inference_model_info(\King\Inference\Model $model): array {}
@@ -1409,15 +1418,34 @@ namespace {
      * `openai`, `openai_chat`, or `openai_chat_completions` when provided.
      * Native graph streams require `graph` as an object array, `graphs` as a
      * list array, and `graph_options` as an object array when provided. GPU
-     * streams perform a fresh thermal preflight immediately before backend run
-     * admission and expose that preflight through stream start events and
-     * `King\Inference\Stream::getMetrics()`. Active GPU streams are aborted
-     * when the configured thermal ceiling is reached.
+     * streams perform fresh thermal and optional power preflight immediately
+     * before backend run admission and expose those readings through stream
+     * start events and `King\Inference\Stream::getMetrics()`. Active GPU
+     * streams are aborted when the configured thermal or power ceiling is
+     * reached, and native CUDA prompt decoding checks those guardrails from the
+     * token loop. Internal GPU stream
+     * contract diagnostics are emitted only when server-side stream options set
+     * `include_stream_diagnostics=true` or
+     * `diagnostics.stream_contracts=true`.
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_inference_stream(\King\Inference\Model $model, array $request, ?array $options = null): \King\Inference\Stream {}
+
+    /**
+     * Start a live OpenAI-compatible Chat Completions stream for a loaded King
+     * model. Unlike `king_inference_openai_chat_http_response()` this returns
+     * the stream object immediately so an HTTP router can flush each
+     * `king_inference_next()` chunk as SSE instead of buffering the full body.
+     * The payload is the decoded Chat Completions JSON object. Native OpenAI
+     * streams return token-content chunks immediately and do not emit a
+     * leading role-only chunk before the first native token.
+     * @param array<string,mixed> $payload
+     * @param array<string,mixed>|null $options
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_inference_openai_chat_stream(\King\Inference\Model $model, array $payload, ?array $options = null): \King\Inference\Stream {}
 
     /**
      * Handle one OpenAI-compatible `POST /v1/chat/completions` HTTP request
@@ -1426,9 +1454,11 @@ namespace {
      * `stream=true` returns a bounded `text/event-stream` body, otherwise an
      * OpenAI-shaped `chat.completion` JSON body. `n` may be omitted or set to
      * `1`; higher choice counts are rejected instead of being silently
-     * collapsed. Options that request tool/function calls, multimodal/audio
-     * output, prediction hints, or logprob output are rejected by the local
-     * generation route until those features have a real King execution path.
+     * collapsed. Tool/function request fields are accepted as model context
+     * and logged, but not executed until a real King MCP tool path is bound to
+     * the route. Multimodal/audio output, prediction hints, and logprob output
+     * are rejected by the local generation route until those features have a
+     * real King execution path.
      * GPU models return an explicit readiness refusal while generation is not
      * ready instead of silently falling back to CPU.
      * Options include
@@ -1480,7 +1510,11 @@ namespace {
      * `owned_by` overrides model config owners and must be a non-empty string
      * when provided. Model listing responses always include integer
      * `created`; `x_king.created_config_valid` reports whether model config
-     * provided a usable non-negative integer timestamp.
+     * provided a usable non-negative integer timestamp. GPU generation
+     * readiness must be read from `x_king.openai_generation`,
+     * `x_king.readiness.openai_generation_ready`, and
+     * `x_king.client_capabilities`, not from the static backend capability
+     * map alone.
      * @param array<string|int,\King\Inference\Model> $models
      * @param array<string,mixed> $request
      * @param array<string,mixed>|null $options
@@ -1493,9 +1527,9 @@ namespace {
      * Read the next inference stream event. Native events use `type=start`,
      * `token`, `stderr`, `done`, or `cancelled`; OpenAI-compatible streams
      * return `chat.completion.chunk`-style arrays. The start event carries
-     * `backend`, `native_stream`, `pid`, and GPU thermal-preflight fields
-     * where applicable. Thermal-ceiling aborts terminate the stream and are
-     * exposed through `King\Inference\Stream::getMetrics()`.
+     * `backend`, `native_stream`, `pid`, and GPU thermal/power-preflight
+     * fields where applicable. Thermal or power ceiling aborts terminate the
+     * stream and are exposed through `King\Inference\Stream::getMetrics()`.
      * @return array<string,mixed>|null
      */
     function king_inference_next(\King\Inference\Stream $stream, ?int $timeout_ms = null): ?array {}
@@ -2852,6 +2886,9 @@ namespace King {
          * `openai`, `openai_chat`, or `openai_chat_completions` when provided.
          * Native graph streams require `graph` as an object array, `graphs` as
          * a list array, and `graph_options` as an object array when provided.
+         * Internal GPU stream contract diagnostics are emitted only when
+         * server-side stream options set `include_stream_diagnostics=true` or
+         * `diagnostics.stream_contracts=true`.
          */
         public static function stream(Inference\Model $model, array $request, ?array $options = null): Inference\Stream {}
 

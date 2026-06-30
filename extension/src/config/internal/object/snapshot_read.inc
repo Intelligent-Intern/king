@@ -177,6 +177,39 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.context_tokens",
+            sizeof("inference.context_tokens") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_context_tokens);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.kv_page_tokens",
+            sizeof("inference.kv_page_tokens") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_kv_page_tokens);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.kv_element_bytes",
+            sizeof("inference.kv_element_bytes") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_kv_element_bytes);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.preferred_model_profile",
             sizeof("inference.preferred_model_profile") - 1
         )
@@ -333,11 +366,82 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.gpu_thermal_check_interval_sec",
+            sizeof("inference.gpu_thermal_check_interval_sec") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_thermal_check_interval_sec);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.gpu_allow_unmonitored",
             sizeof("inference.gpu_allow_unmonitored") - 1
         )
     ) {
         ZVAL_BOOL(return_value, cfg->compute_ai.inference_gpu_allow_unmonitored);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_power_sensor_command",
+            sizeof("inference.gpu_power_sensor_command") - 1
+        )
+    ) {
+        ZVAL_STRING(
+            return_value,
+            cfg->compute_ai.inference_gpu_power_sensor_command != NULL
+                ? cfg->compute_ai.inference_gpu_power_sensor_command
+                : ""
+        );
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_power_max_watts",
+            sizeof("inference.gpu_power_max_watts") - 1
+        )
+    ) {
+        ZVAL_DOUBLE(return_value, cfg->compute_ai.inference_gpu_power_max_watts);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.gpu_power_check_interval_sec",
+            sizeof("inference.gpu_power_check_interval_sec") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_gpu_power_check_interval_sec);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.cuda_numeric_compare_enable",
+            sizeof("inference.cuda_numeric_compare_enable") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_cuda_numeric_compare_enable);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
+            "inference.cuda_numeric_compare_max_values",
+            sizeof("inference.cuda_numeric_compare_max_values") - 1
+        )
+    ) {
+        ZVAL_LONG(return_value, cfg->compute_ai.inference_cuda_numeric_compare_max_values);
         return SUCCESS;
     }
 

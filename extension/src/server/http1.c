@@ -35,6 +35,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef MSG_NOSIGNAL
+#  define MSG_NOSIGNAL 0
+#endif
+
 #include "local_listener.inc"
 
 #define KING_SERVER_HTTP1_MAX_REQUEST_HEAD_BYTES 32768

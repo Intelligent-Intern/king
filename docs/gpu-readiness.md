@@ -19,6 +19,9 @@ falling back to CPU.
 Use a dedicated PHP ini fragment for the local inference process. The router
 and any operator preflight script should start with the same fragment, so the
 status probe and the serving process see the same process-level settings.
+The bundled OpenAI-compatible router resolves its active model through the
+King runtime config object; do not pass separate model or GPU-layer environment
+overrides to the router as a second source of truth.
 
 ```ini
 extension=/opt/king/extension/modules/king.so
@@ -39,6 +42,7 @@ king.inference_gpu_min_free_vram_mb=4096
 king.inference_gpu_thermal_sensor_path=
 king.inference_gpu_thermal_sensor_command=nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits
 king.inference_gpu_thermal_max_temperature_c=78
+king.inference_gpu_thermal_check_interval_sec=15
 king.inference_gpu_allow_unmonitored=0
 
 king.inference_with_memory=0

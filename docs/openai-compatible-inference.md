@@ -5,6 +5,13 @@ King's OpenAI-compatible router is a King HTTP response helper over loaded
 Chat, Responses, legacy Completions, Models, and Embeddings are all routed
 through the same model registry.
 
+The bundled local router (`bin/king-openai-router`) loads its serving model
+through `king_inference_runtime_model_config()` and
+`king_inference_runtime_model_load()`. Inference backend, artifact path, GPU
+admission, context length, memory mode, VRAM reserve, and thermal policy come
+from the effective King config snapshot. Router bind settings and request drain
+limits are router options; they do not override model backend selection.
+
 ## Function, Example 1: One Router
 
 ```php
@@ -105,7 +112,9 @@ and `ffn_down_tensor_pattern` must be non-empty strings when provided.
 objects plus an `x_king` extension object. Model objects always include integer
 `created`; when the model config has no usable non-negative integer timestamp,
 King reports `created: 0` and sets `x_king.created_config_valid` accordingly.
-The `x_king` object also contains the resolved King backend, whether the backend
+The `x_king` object also contains the resolved King backend, configured backend,
+active backend, active device, fallback mode, silent CPU fallback state, CUDA
+admission reason, memory mode, readiness object, whether the backend
 configuration resolved cleanly, whether the model can serve the generic OpenAI
 generation routes, whether it supports native graph streaming, whether it can
 serve embeddings, whether configured GPU use is enabled for the model, and the
@@ -115,10 +124,15 @@ runtime-ready contract: `openai_chat_completions`,
 `openai_chat_completions_stream`, `openai_responses`,
 `openai_completions`, `openai_embeddings`, `native_graph_streaming`,
 `requires_gpu`, `gpu_runtime_required`, and `gpu_generation_ready` are direct
-booleans, and unsupported OpenAI tool-call surfaces are explicitly reported as
-`false` with `tool_call_status=unsupported`. If a backend configuration cannot
-be resolved, `x_king.backend` is `invalid`, `x_king.backend_config_valid` is
-`false`, and all executable client capability flags are reported as
+booleans, and executable OpenAI tool-call dispatch is explicitly reported as
+`false` with `tool_call_status=unsupported`. Tool schemas in chat requests are
+accepted for editor-client compatibility and logged by the local router, but
+plain inference ignores them. They do not make the route execute a tool, buffer
+the stream for synthetic tool-call extraction, or fail inference when no King
+MCP tool path is configured.
+If a backend configuration cannot be resolved, `x_king.backend` is `invalid`,
+`x_king.backend_config_valid` is `false`, and all executable client capability
+flags are reported as
 unavailable. The router-level `owned_by` option overrides the model config
 owner for model-listing responses and must be a non-empty string when provided;
 invalid listing options return a server error instead of being ignored.
@@ -219,8 +233,9 @@ is not included in the streamed or non-streamed response content. They accept
 return an OpenAI-shaped `400` instead of silently returning fewer choices than
 requested.
 
-The local generation routes also reject active requests for features that this
-runtime does not yet execute. Chat Completions rejects tool/function calling,
+The local generation routes reject active requests for features that this
+runtime does not yet execute. Chat Completions accepts tool/function fields as
+model context and leaves executable dispatch disabled, but rejects
 multimodal/audio output, prediction hints, and logprob output; it accepts
 `response_format` only when `type` is `text`. Legacy Completions rejects
 suffix, echo, best-of, and logprob output. Responses rejects tool calling,
@@ -240,6 +255,9 @@ and legacy Completions, `include_usage=true` appends a final OpenAI-shaped usage
 chunk with empty `choices` immediately before the final `data: [DONE]` marker.
 Other chunks carry `usage: null`, and the final usage chunk is computed through
 the same tokenizer-backed path as non-streaming generation responses.
+Live native streams created with `king_inference_openai_chat_stream()` return
+token-content chunks immediately. They do not emit a leading role-only chunk
+before the first native token.
 
 ## OO, Example 1: Static Facade
 

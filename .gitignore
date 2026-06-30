@@ -2,6 +2,7 @@ libcurl
 quiche
 llama-fork/
 node_modules
+.venv/
 .cargo/
 
 # Archived source snapshots

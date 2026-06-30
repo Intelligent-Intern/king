@@ -393,7 +393,11 @@ The core programming model is:
   backend config selects `king_native_cpu`; the runtime model primitive can
   resolve the configured `auto|gpu|cpu` model profile, preferring
   `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
-  falling back to `gemma3:1b` for CPU. The GPU path owns a CUDA context,
+  falling back to `gemma3:1b` for CPU. `gemma3:1b` is the compact King baseline:
+  useful for fast local preflight and smoke checks, but still expected to handle
+  simple chat, exact output, language following, small PHP/King snippets, and
+  basic local Coder help. Future fine-tuning keeps that baseline useful instead
+  of treating it as a disposable test model. The GPU path owns a CUDA context,
   allocates device memory, uploads required weights, caches uploaded tensors,
   and exposes token embedding row loading, native Q8_0 quantized matrix/vector,
   device vector operations, a lazy F32 device KV-cache with device-to-device

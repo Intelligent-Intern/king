@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
 EXTENSION="${KING_EXTENSION:-$ROOT/extension/modules/king.so}"
 INI="${KING_INFERENCE_PHP_INI:-$ROOT/infra/inference/local-gpu.php.ini}"
+MEMORY_LIMIT="${KING_INFERENCE_PHP_MEMORY_LIMIT:-4G}"
 
 if [[ ! -f "$EXTENSION" ]]; then
   echo "king-openai-router: King extension module not found at $EXTENSION" >&2
@@ -19,11 +20,15 @@ fi
 export KING_ROOT="$ROOT"
 export KING_INFERENCE_PHP_INI="$INI"
 export PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR:-}"
+export KING_OPENAI_CONTEXT_POLICY="${KING_OPENAI_CONTEXT_POLICY:-full}"
+export KING_OPENAI_DEFAULT_MAX_TOKENS="${KING_OPENAI_DEFAULT_MAX_TOKENS:-128}"
+export KING_OPENAI_MAX_COMPLETION_TOKENS="${KING_OPENAI_MAX_COMPLETION_TOKENS:-512}"
 
 exec "$PHP_BIN" \
   -c "$INI" \
   -d "extension=$EXTENSION" \
   -d king.security_allow_config_override=1 \
+  -d "memory_limit=$MEMORY_LIMIT" \
   -d display_errors=1 \
   -d error_reporting=32767 \
   "$ROOT/infra/inference/openai-router.php"

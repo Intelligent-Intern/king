@@ -14,6 +14,6 @@
 #include "php_king.h"
 #include "inference/arginfo/index.h"
 
-#include "state.inc"
-#include "php_binding.inc"
-#include "registration.inc"
+#include "core/bootstrap/state.inc"
+#include "binding/php_binding.inc"
+#include "core/bootstrap/registration.inc"

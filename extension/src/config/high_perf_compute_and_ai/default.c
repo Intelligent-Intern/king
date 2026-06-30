@@ -21,6 +21,9 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.dataframe_string_interning_enable = true;
     king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default = 0;
     king_high_perf_compute_ai_config.inference_with_memory = false;
+    king_high_perf_compute_ai_config.inference_context_tokens = 2048;
+    king_high_perf_compute_ai_config.inference_kv_page_tokens = 16;
+    king_high_perf_compute_ai_config.inference_kv_element_bytes = 2;
     king_high_perf_compute_ai_config.inference_preferred_model_profile = pestrdup("auto", 1);
     king_high_perf_compute_ai_config.inference_cpu_model_name = pestrdup("gemma3:1b", 1);
     king_high_perf_compute_ai_config.inference_cpu_model_artifact = pestrdup("", 1);
@@ -32,7 +35,13 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = 78.0;
+    king_high_perf_compute_ai_config.inference_gpu_thermal_check_interval_sec = 15;
     king_high_perf_compute_ai_config.inference_gpu_allow_unmonitored = false;
+    king_high_perf_compute_ai_config.inference_gpu_power_sensor_command = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_power_max_watts = 0.0;
+    king_high_perf_compute_ai_config.inference_gpu_power_check_interval_sec = 15;
+    king_high_perf_compute_ai_config.inference_cuda_numeric_compare_enable = false;
+    king_high_perf_compute_ai_config.inference_cuda_numeric_compare_max_values = 8;
     king_high_perf_compute_ai_config.inference_llm_cache_enable = false;
     king_high_perf_compute_ai_config.inference_llm_cache_path = pestrdup("/tmp/king-llm-cache", 1);
     king_high_perf_compute_ai_config.inference_llm_cache_min_free_mb = 5120;

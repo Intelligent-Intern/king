@@ -45,6 +45,9 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
     );
     add_assoc_long(target, "autoscale.max_nodes", cfg->autoscale.max_nodes);
     add_assoc_bool(target, "inference.with_memory", cfg->compute_ai.inference_with_memory);
+    add_assoc_long(target, "inference.context_tokens", cfg->compute_ai.inference_context_tokens);
+    add_assoc_long(target, "inference.kv_page_tokens", cfg->compute_ai.inference_kv_page_tokens);
+    add_assoc_long(target, "inference.kv_element_bytes", cfg->compute_ai.inference_kv_element_bytes);
     add_assoc_string(
         target,
         "inference.preferred_model_profile",
@@ -114,10 +117,42 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         "inference.gpu_thermal_max_temperature_c",
         cfg->compute_ai.inference_gpu_thermal_max_temperature_c
     );
+    add_assoc_long(
+        target,
+        "inference.gpu_thermal_check_interval_sec",
+        cfg->compute_ai.inference_gpu_thermal_check_interval_sec
+    );
     add_assoc_bool(
         target,
         "inference.gpu_allow_unmonitored",
         cfg->compute_ai.inference_gpu_allow_unmonitored
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_power_sensor_command",
+        cfg->compute_ai.inference_gpu_power_sensor_command != NULL
+            ? cfg->compute_ai.inference_gpu_power_sensor_command
+            : ""
+    );
+    add_assoc_double(
+        target,
+        "inference.gpu_power_max_watts",
+        cfg->compute_ai.inference_gpu_power_max_watts
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_power_check_interval_sec",
+        cfg->compute_ai.inference_gpu_power_check_interval_sec
+    );
+    add_assoc_bool(
+        target,
+        "inference.cuda_numeric_compare_enable",
+        cfg->compute_ai.inference_cuda_numeric_compare_enable
+    );
+    add_assoc_long(
+        target,
+        "inference.cuda_numeric_compare_max_values",
+        cfg->compute_ai.inference_cuda_numeric_compare_max_values
     );
     add_assoc_bool(target, "inference.llm_cache_enable", cfg->compute_ai.inference_llm_cache_enable);
     add_assoc_string(

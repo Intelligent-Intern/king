@@ -358,6 +358,7 @@ static zend_result king_server_local_validate_response(
     zval *status;
     zval *headers;
     zval *body;
+    zval *body_stream;
     zend_long code;
 
     if (Z_TYPE_P(retval) != IS_ARRAY) {
@@ -385,6 +386,21 @@ static zend_result king_server_local_validate_response(
         && Z_TYPE_P(body) != IS_NULL) {
         king_server_local_set_errorf(
             "%s() handler response 'body' must be a string when present.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    body_stream = zend_hash_str_find(
+        Z_ARRVAL_P(retval),
+        "body_stream",
+        sizeof("body_stream") - 1
+    );
+    if (body_stream != NULL
+        && Z_TYPE_P(body_stream) != IS_NULL
+        && !zend_is_callable(body_stream, 0, NULL)) {
+        king_server_local_set_errorf(
+            "%s() handler response 'body_stream' must be a callable when present.",
             function_name
         );
         return FAILURE;

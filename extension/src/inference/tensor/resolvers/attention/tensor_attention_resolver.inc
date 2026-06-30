@@ -1,0 +1,5 @@
+#include "components/metadata/tensor_attention_patterns.inc"
+#include "components/shape/tensor_attention_dimensions.inc"
+#include "components/shape/tensor_attention_resolution.inc"
+#include "components/shape/tensor_attention_runtime_shape.inc"
+#include "components/metadata/tensor_attention_info.inc"

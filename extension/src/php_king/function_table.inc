@@ -25,7 +25,7 @@ static const zend_function_entry king_functions[] = {
 #include "object_store/function_entries.h"
 
 #include "xslt/function_entries.h"
-#include "inference/function_entries.h"
+#include "inference/functions/function_entries.h"
 
 #include "telemetry/function_entries.h"
 

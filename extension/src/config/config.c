@@ -100,6 +100,7 @@ void king_config_release_module_globals(void)
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_artifact);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_power_sensor_command);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_path);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_webhook);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_service);

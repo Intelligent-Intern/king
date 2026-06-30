@@ -107,6 +107,38 @@ static int kg_high_perf_apply_positive_double_field(zval *value, const char *nam
     return SUCCESS;
 }
 
+static int kg_high_perf_apply_non_negative_double_field(zval *value, const char *name, double *target)
+{
+    double number;
+
+    if (Z_TYPE_P(value) == IS_LONG) {
+        number = (double) Z_LVAL_P(value);
+    } else if (Z_TYPE_P(value) == IS_DOUBLE) {
+        number = Z_DVAL_P(value);
+    } else {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid type for %s. A non-negative finite number is required.",
+            name
+        );
+        return FAILURE;
+    }
+
+    if (!isfinite(number) || number < 0.0) {
+        zend_throw_exception_ex(
+            spl_ce_InvalidArgumentException,
+            0,
+            "Invalid value for %s. A non-negative finite number is required.",
+            name
+        );
+        return FAILURE;
+    }
+
+    *target = number;
+    return SUCCESS;
+}
+
 int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
     kg_high_perf_compute_ai_config_t *target,
     zval *config_arr)
@@ -135,6 +167,12 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_validate_non_negative_long_local(value, &target->dataframe_cpu_parallelism_default) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_with_memory")) {
             if (kg_high_perf_apply_bool_field(value, "inference_with_memory", &target->inference_with_memory) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_context_tokens")) {
+            if (kg_validate_positive_long(value, &target->inference_context_tokens) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_kv_page_tokens")) {
+            if (kg_validate_positive_long(value, &target->inference_kv_page_tokens) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_kv_element_bytes")) {
+            if (kg_validate_positive_long(value, &target->inference_kv_element_bytes) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_preferred_model_profile")) {
             if (kg_validate_string_from_allowlist(value, k_high_perf_inference_profile_allowed, &target->inference_preferred_model_profile) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_cpu_model_name")) {
@@ -157,8 +195,20 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_high_perf_apply_string_field(value, "inference_gpu_thermal_sensor_command", &target->inference_gpu_thermal_sensor_command) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_thermal_max_temperature_c")) {
             if (kg_high_perf_apply_positive_double_field(value, "inference_gpu_thermal_max_temperature_c", &target->inference_gpu_thermal_max_temperature_c) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_thermal_check_interval_sec")) {
+            if (kg_validate_non_negative_long_local(value, &target->inference_gpu_thermal_check_interval_sec) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_allow_unmonitored")) {
             if (kg_high_perf_apply_bool_field(value, "inference_gpu_allow_unmonitored", &target->inference_gpu_allow_unmonitored) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_power_sensor_command")) {
+            if (kg_high_perf_apply_string_field(value, "inference_gpu_power_sensor_command", &target->inference_gpu_power_sensor_command) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_power_max_watts")) {
+            if (kg_high_perf_apply_non_negative_double_field(value, "inference_gpu_power_max_watts", &target->inference_gpu_power_max_watts) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_power_check_interval_sec")) {
+            if (kg_validate_non_negative_long_local(value, &target->inference_gpu_power_check_interval_sec) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_cuda_numeric_compare_enable")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_cuda_numeric_compare_enable", &target->inference_cuda_numeric_compare_enable) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_cuda_numeric_compare_max_values")) {
+            if (kg_validate_positive_long(value, &target->inference_cuda_numeric_compare_max_values) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_llm_cache_enable")) {
             if (kg_high_perf_apply_bool_field(value, "inference_llm_cache_enable", &target->inference_llm_cache_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_llm_cache_path")) {

@@ -25,6 +25,9 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     zend_long dataframe_cpu_parallelism_default;
 
     bool inference_with_memory;
+    zend_long inference_context_tokens;
+    zend_long inference_kv_page_tokens;
+    zend_long inference_kv_element_bytes;
     char *inference_preferred_model_profile;
     char *inference_cpu_model_name;
     char *inference_cpu_model_artifact;
@@ -36,7 +39,13 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     char *inference_gpu_thermal_sensor_path;
     char *inference_gpu_thermal_sensor_command;
     double inference_gpu_thermal_max_temperature_c;
+    zend_long inference_gpu_thermal_check_interval_sec;
     bool inference_gpu_allow_unmonitored;
+    char *inference_gpu_power_sensor_command;
+    double inference_gpu_power_max_watts;
+    zend_long inference_gpu_power_check_interval_sec;
+    bool inference_cuda_numeric_compare_enable;
+    zend_long inference_cuda_numeric_compare_max_values;
     bool inference_llm_cache_enable;
     char *inference_llm_cache_path;
     zend_long inference_llm_cache_min_free_mb;
