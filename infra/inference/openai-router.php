@@ -4,6 +4,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 require_once __DIR__ . '/runtime-logging.php';
 require_once __DIR__ . '/openai-router-coder.php';
+require_once __DIR__ . '/openai-router-prompt.php';
 require_once __DIR__ . '/openai-router-stream.php';
 
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
@@ -159,102 +160,6 @@ function king_openai_router_decode_chat_payload(array $request): ?array
     return $payload;
 }
 
-function king_openai_router_is_instruction_message(mixed $message): bool
-{
-    if (!is_array($message)) {
-        return false;
-    }
-    $role = $message['role'] ?? null;
-    return $role === 'system' || $role === 'developer';
-}
-function king_openai_router_instruction_message(array $message): array
-{
-    if (($message['role'] ?? null) !== 'developer') {
-        return $message;
-    }
-
-    $content = king_openai_router_message_content_text($message['content'] ?? '');
-    if ($content === '') {
-        return $message;
-    }
-
-    return [
-        'role' => 'system',
-        'content' => "Developer instruction:\n" . $content,
-    ];
-}
-
-function king_openai_router_apply_context_policy(array $payload, string $contextPolicy): array
-{
-    if ($contextPolicy !== 'last_user') {
-        return $payload;
-    }
-
-    $messages = $payload['messages'] ?? null;
-    if (!is_array($messages) || $messages === []) {
-        return $payload;
-    }
-
-    $instructionMessages = [];
-    foreach ($messages as $message) {
-        if (!king_openai_router_is_instruction_message($message)) {
-            continue;
-        }
-        $instruction = king_openai_router_instruction_message($message);
-        if (king_openai_router_message_content_text($instruction['content'] ?? '') !== '') {
-            $instructionMessages[] = $instruction;
-        }
-    }
-
-    for ($index = count($messages) - 1; $index >= 0; $index--) {
-        $message = $messages[$index] ?? null;
-        if (!is_array($message) || (($message['role'] ?? null) !== 'user')) {
-            continue;
-        }
-        $content = king_openai_router_message_content_text($message['content'] ?? '');
-        if ($content === '') {
-            continue;
-        }
-        $payload['messages'] = [
-            ...$instructionMessages,
-            [
-                'role' => 'user',
-                'content' => $content,
-            ],
-        ];
-        return $payload;
-    }
-
-    return $payload;
-}
-
-function king_openai_router_ensure_default_system_instruction(array $payload, string $defaultSystemPrompt): array
-{
-    if (trim($defaultSystemPrompt) === '') {
-        return $payload;
-    }
-
-    $messages = $payload['messages'] ?? null;
-    if (!is_array($messages) || $messages === []) {
-        return $payload;
-    }
-
-    foreach ($messages as $message) {
-        if (king_openai_router_is_instruction_message($message)
-            && king_openai_router_message_content_text($message['content'] ?? '') !== ''
-        ) {
-            return $payload;
-        }
-    }
-
-    array_unshift($messages, [
-        'role' => 'system',
-        'content' => $defaultSystemPrompt,
-    ]);
-    $payload['messages'] = $messages;
-    return $payload;
-}
-
 function king_openai_router_int_payload_value(array $payload, string $key): ?int
 {
     $value = $payload[$key] ?? null;
@@ -281,9 +186,12 @@ function king_openai_router_prepare_chat_payload(
     int $maxCompletionTokens
 ): array
 {
-    $prepared = king_openai_router_apply_context_policy($payload, $contextPolicy);
-    $prepared = king_openai_router_ensure_default_system_instruction($prepared, $defaultSystemPrompt);
-    $prepared = king_openai_router_apply_coder_instruction_wrapper($prepared, $coderInstructionWrapper);
+    $prepared = king_openai_router_assemble_chat_messages(
+        $payload,
+        $contextPolicy,
+        $defaultSystemPrompt,
+        $coderInstructionWrapper
+    );
     if (!$withMemory) {
         $prepared['with_memory'] = false;
         $prepared['with-memory'] = false;
