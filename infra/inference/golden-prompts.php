@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function king_golden_usage(): void
 {
-    fwrite(STDERR, "Usage: php infra/inference/golden-prompts.php [--url=http://127.0.0.1:8080/v1] [--model=name] [--artifact=/path/model.gguf] [--case=name] [--scope=all|fast|model] [--strict] [--json]\n");
+    fwrite(STDERR, "Usage: php infra/inference/golden-prompts.php [--url=http://127.0.0.1:8080/v1] [--model=name] [--artifact=/path/model.gguf] [--case=name] [--scope=all|fast|model] [--pack=none|core|/path/pack.php] [--pack-summary] [--strict] [--json]\n");
 }
 
 function king_golden_env_bool(string $name, bool $fallback = false): bool
@@ -23,6 +23,8 @@ function king_golden_parse_args(array $argv): array
         'artifact' => getenv('KING_INFERENCE_GOLDEN_MODEL_PATH') ?: '',
         'case' => getenv('KING_INFERENCE_GOLDEN_CASE') ?: '',
         'scope' => getenv('KING_INFERENCE_GOLDEN_SCOPE') ?: 'all',
+        'pack' => getenv('KING_INFERENCE_GOLDEN_PACK') ?: 'none',
+        'pack_summary' => king_golden_env_bool('KING_INFERENCE_GOLDEN_PACK_SUMMARY', false),
         'strict' => king_golden_env_bool('KING_INFERENCE_GOLDEN_STRICT', false),
         'json' => king_golden_env_bool('KING_INFERENCE_GOLDEN_JSON', false),
         'timeout' => max(1, (int) (getenv('KING_INFERENCE_GOLDEN_TIMEOUT_SEC') ?: 45)),
@@ -37,11 +39,15 @@ function king_golden_parse_args(array $argv): array
             $options['json'] = true;
             continue;
         }
+        if ($arg === '--pack-summary') {
+            $options['pack_summary'] = true;
+            continue;
+        }
         if ($arg === '-h' || $arg === '--help') {
             king_golden_usage();
             exit(0);
         }
-        foreach (['url', 'model', 'artifact', 'case', 'scope', 'timeout'] as $key) {
+        foreach (['url', 'model', 'artifact', 'case', 'scope', 'pack', 'timeout'] as $key) {
             $prefix = '--' . $key . '=';
             if (str_starts_with($arg, $prefix)) {
                 $options[$key] = substr($arg, strlen($prefix));
@@ -58,6 +64,9 @@ function king_golden_parse_args(array $argv): array
     $options['scope'] = in_array((string) $options['scope'], ['all', 'fast', 'model'], true)
         ? (string) $options['scope']
         : 'all';
+    if ($options['pack_summary'] && in_array((string) $options['pack'], ['', 'none'], true)) {
+        $options['pack'] = 'core';
+    }
     return $options;
 }
 
@@ -218,6 +227,109 @@ function king_golden_cases(): array
             ],
         ],
     ];
+}
+
+function king_golden_pack_path(string $pack): string
+{
+    if ($pack === '' || $pack === 'none') {
+        return '';
+    }
+    if ($pack === 'core') {
+        return __DIR__ . '/golden-prompt-pack.php';
+    }
+    return $pack;
+}
+
+function king_golden_load_prompt_pack(string $pack): array
+{
+    $path = king_golden_pack_path($pack);
+    if ($path === '') {
+        return ['id' => 'none', 'version' => 0, 'categories' => [], 'cases' => []];
+    }
+    if (!is_file($path) || !is_readable($path)) {
+        throw new RuntimeException('Prompt pack is not readable: ' . $path);
+    }
+
+    require_once $path;
+    if (!function_exists('king_inference_golden_prompt_pack')) {
+        throw new RuntimeException('Prompt pack must define king_inference_golden_prompt_pack().');
+    }
+
+    $loaded = king_inference_golden_prompt_pack();
+    if (!is_array($loaded)) {
+        throw new RuntimeException('Prompt pack did not return an array.');
+    }
+    $loaded['_path'] = $path;
+    return $loaded;
+}
+
+function king_golden_prompt_pack_summary(array $pack): array
+{
+    $cases = is_array($pack['cases'] ?? null) ? $pack['cases'] : [];
+    $categories = is_array($pack['categories'] ?? null) ? $pack['categories'] : [];
+    $categoryCounts = [];
+    $modeCounts = [];
+    $invalid = [];
+
+    foreach ($cases as $index => $case) {
+        if (!is_array($case)) {
+            $invalid[] = 'case_' . $index . ':not_array';
+            continue;
+        }
+        $category = (string) ($case['category'] ?? $case['coverage'] ?? 'uncategorized');
+        $mode = (string) ($case['mode'] ?? 'deterministic');
+        $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
+        $modeCounts[$mode] = ($modeCounts[$mode] ?? 0) + 1;
+
+        foreach (['name', 'messages', 'max_tokens', 'sampler'] as $required) {
+            if (!array_key_exists($required, $case)) {
+                $invalid[] = ($case['name'] ?? 'case_' . $index) . ':missing_' . $required;
+            }
+        }
+        if ($mode === 'deterministic' && !is_array($case['expected'] ?? null)) {
+            $invalid[] = ($case['name'] ?? 'case_' . $index) . ':missing_expected';
+        }
+        if ($mode !== 'deterministic' && array_key_exists('expected', $case)) {
+            $invalid[] = ($case['name'] ?? 'case_' . $index) . ':qualitative_has_expected';
+        }
+    }
+
+    ksort($categoryCounts);
+    ksort($modeCounts);
+    $deterministic = (int) ($modeCounts['deterministic'] ?? 0);
+    $qualitative = array_sum($modeCounts) - $deterministic;
+    $isNoPack = ($pack['id'] ?? null) === 'none';
+
+    return [
+        'ok' => $isNoPack || ($deterministic >= 100 && $invalid === [] && count($categoryCounts) >= 8),
+        'id' => $pack['id'] ?? null,
+        'version' => $pack['version'] ?? null,
+        'path' => $pack['_path'] ?? null,
+        'category_definitions' => count($categories),
+        'category_count' => count($categoryCounts),
+        'categories' => $categoryCounts,
+        'modes' => $modeCounts,
+        'case_count' => count($cases),
+        'deterministic_count' => $deterministic,
+        'qualitative_count' => $qualitative,
+        'invalid_count' => count($invalid),
+        'invalid' => $invalid,
+    ];
+}
+
+function king_golden_prompt_pack_runtime_cases(array $pack): array
+{
+    $runtimeCases = [];
+    foreach (($pack['cases'] ?? []) as $case) {
+        if (!is_array($case) || ($case['mode'] ?? 'deterministic') !== 'deterministic') {
+            continue;
+        }
+        if (!is_array($case['expected'] ?? null)) {
+            continue;
+        }
+        $runtimeCases[] = $case;
+    }
+    return $runtimeCases;
 }
 
 function king_golden_http_json(string $method, string $url, ?array $payload, int $timeout): array
@@ -554,6 +666,31 @@ function king_golden_run_case(string $url, string $model, array $case, int $time
 $options = king_golden_parse_args($argv);
 
 try {
+    if ($options['pack_summary']) {
+        $pack = king_golden_load_prompt_pack((string) $options['pack']);
+        $summary = king_golden_prompt_pack_summary($pack);
+        if ($options['json']) {
+            echo json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        } else {
+            echo "King golden prompt pack\n";
+            echo "id={$summary['id']}\n";
+            echo "version={$summary['version']}\n";
+            echo "path={$summary['path']}\n";
+            echo "cases={$summary['case_count']}\n";
+            echo "deterministic={$summary['deterministic_count']}\n";
+            echo "qualitative={$summary['qualitative_count']}\n";
+            echo "categories={$summary['category_count']}\n";
+            foreach ($summary['categories'] as $category => $count) {
+                echo "  {$category}: {$count}\n";
+            }
+            if ($summary['invalid_count'] > 0) {
+                echo "invalid={$summary['invalid_count']}\n";
+            }
+            echo "status=" . ($summary['ok'] ? 'ok' : 'invalid') . "\n";
+        }
+        exit($summary['ok'] ? 0 : 1);
+    }
+
     $artifact = king_golden_validate_artifact((string) $options['artifact']);
     $modelsResponse = king_golden_http_json('GET', (string) $options['url'] . '/models', null, (int) $options['timeout']);
     if ($modelsResponse['status'] < 200 || $modelsResponse['status'] >= 300 || !is_array($modelsResponse['json'])) {
@@ -568,7 +705,9 @@ try {
         }
     }
 
-    $allCases = king_golden_cases();
+    $pack = king_golden_load_prompt_pack((string) $options['pack']);
+    $packCases = king_golden_prompt_pack_runtime_cases($pack);
+    $allCases = array_merge(king_golden_cases(), $packCases);
     $cases = king_golden_filter_cases($allCases, (string) $options['case'], (string) $options['scope']);
     if ($cases === []) {
         throw new RuntimeException(
@@ -590,6 +729,7 @@ try {
         'scope' => $options['scope'],
         'artifact' => $artifact,
         'model_entry' => king_golden_model_summary($selected),
+        'prompt_pack' => king_golden_prompt_pack_summary($pack),
         'available_case_count' => count($allCases),
         'case_count' => count($results),
         'passed' => count($results) - count($failed),

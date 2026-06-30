@@ -13,6 +13,13 @@ BACKEND="${KING_INFERENCE_GOLDEN_BACKEND:-cpu}"
 START_TIMEOUT_SEC="${KING_INFERENCE_GOLDEN_START_TIMEOUT_SEC:-45}"
 USE_EXISTING="${KING_INFERENCE_GOLDEN_USE_EXISTING_SERVER:-0}"
 LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/king-openai-golden.XXXXXX.log")"
+PACK_SUMMARY=0
+
+for arg in "$@"; do
+  if [[ "$arg" == "--pack-summary" ]]; then
+    PACK_SUMMARY=1
+  fi
+done
 
 cleanup() {
   local status=$?
@@ -28,7 +35,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-if [[ "$USE_EXISTING" != "1" ]]; then
+if [[ "$USE_EXISTING" != "1" && "$PACK_SUMMARY" != "1" ]]; then
   if [[ ! -f "$EXTENSION" ]]; then
     echo "king-openai-golden-prompts: King extension module not found at $EXTENSION" >&2
     exit 127
