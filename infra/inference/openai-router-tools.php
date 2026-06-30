@@ -1,9 +1,23 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/openai-router-mini-language.php';
+
 function king_openai_router_internal_tool_specs(): array
 {
-    return [
+    $tools = [
+        'king.inference.structured_mini_language' => [
+            'kind' => 'king_inference_mini_language',
+            'operations' => array_keys(king_openai_router_mini_language_specs()),
+            'io' => 'none',
+            'safe' => true,
+            'pure' => true,
+            'filesystem' => false,
+            'cli' => false,
+            'network' => false,
+            'timeout_category' => 'timeout',
+            'error_category' => 'runtime',
+        ],
         'king.inference.count_occurrences' => [
             'kind' => 'king_inference_mini_op',
             'operation' => 'count_occurrences',
@@ -13,44 +27,7 @@ function king_openai_router_internal_tool_specs(): array
             'error_category' => 'runtime',
         ],
     ];
-}
-
-function king_openai_router_last_user_text_for_tool(array $payload): string
-{
-    $messages = is_array($payload['messages'] ?? null) ? $payload['messages'] : [];
-    for ($index = count($messages) - 1; $index >= 0; $index--) {
-        $message = $messages[$index] ?? null;
-        if (!is_array($message) || (($message['role'] ?? null) !== 'user')) {
-            continue;
-        }
-        $content = king_openai_router_message_content_text($message['content'] ?? '');
-        if ($content !== '') {
-            return $content;
-        }
-    }
-    return '';
-}
-
-function king_openai_router_count_tool_candidate(array $payload): bool
-{
-    $text = strtolower(king_openai_router_last_user_text_for_tool($payload));
-    if ($text === '') {
-        return false;
-    }
-
-    $questionIntent = str_contains($text, 'how many')
-        || str_contains($text, 'how often')
-        || str_contains($text, 'wie viele')
-        || str_contains($text, 'wieviele')
-        || str_contains($text, 'wie oft')
-        || str_contains($text, 'ho man');
-    $countVocabulary = str_contains($text, 'letter')
-        || str_contains($text, 'character')
-        || str_contains($text, 'ltter')
-        || str_contains($text, 'buchstaben')
-        || str_contains($text, 'zeichen');
-
-    return $questionIntent && $countVocabulary;
+    return $tools;
 }
 
 function king_openai_router_mcp_tools_enabled(array $routerOptions): bool
@@ -130,7 +107,8 @@ function king_openai_router_mcp_register_internal_tools(): array
 function king_openai_router_mcp_tool_bridge_result(array $payload, array $routerOptions): array
 {
     $startedNs = hrtime(true);
-    $toolName = 'king.inference.count_occurrences';
+    $toolName = 'king.inference.structured_mini_language';
+    $miniLanguageResult = king_openai_router_mini_language_result($payload);
     $result = [
         'executed' => false,
         'content' => null,
@@ -143,12 +121,12 @@ function king_openai_router_mcp_tool_bridge_result(array $payload, array $router
         'registry_errors' => [],
     ];
 
+    if (!is_array($miniLanguageResult)) {
+        return $result;
+    }
     if (!king_openai_router_mcp_tools_enabled($routerOptions)) {
         $result['status'] = 'disabled';
         $result['error_category'] = 'policy';
-        return $result;
-    }
-    if (!king_openai_router_count_tool_candidate($payload)) {
         return $result;
     }
 
@@ -162,14 +140,9 @@ function king_openai_router_mcp_tool_bridge_result(array $payload, array $router
         return $result;
     }
 
-    try {
-        $content = king_inference_runtime_mini_op_content($payload);
-    } catch (Throwable $e) {
-        $result['status'] = 'runtime_error';
-        $result['error_category'] = 'runtime';
-        $result['registry_errors'][] = $e::class;
-        return $result;
-    }
+    $content = is_array($miniLanguageResult) && is_string($miniLanguageResult['content'] ?? null)
+        ? $miniLanguageResult['content']
+        : null;
 
     $durationMs = (hrtime(true) - $startedNs) / 1_000_000;
     $result['duration_ms'] = round($durationMs, 3);
@@ -186,6 +159,8 @@ function king_openai_router_mcp_tool_bridge_result(array $payload, array $router
 
     $result['executed'] = true;
     $result['content'] = $content;
+    $result['program'] = $miniLanguageResult['program'] ?? null;
+    $result['typed_result'] = $miniLanguageResult['result'] ?? null;
     $result['status'] = 'executed';
     return $result;
 }
@@ -211,6 +186,24 @@ function king_openai_router_deterministic_result(array $payload, array $routerOp
             'source' => 'mcp_internal_tool',
             'tool' => $toolResult,
         ];
+    }
+
+    $miniLanguageResult = king_openai_router_mini_language_result($payload);
+    if (is_array($miniLanguageResult) && is_string($miniLanguageResult['content'] ?? null) && $miniLanguageResult['content'] !== '') {
+        king_inference_runtime_log_line('mini_language', [
+            'operation' => $miniLanguageResult['program']['operation'] ?? '',
+            'typed_result' => $miniLanguageResult['result'] ?? null,
+            'source' => 'structured_mini_language',
+        ]);
+        return [
+            'content' => $miniLanguageResult['content'],
+            'source' => 'structured_mini_language',
+            'tool' => $miniLanguageResult,
+        ];
+    }
+
+    if (!function_exists('king_inference_runtime_mini_op_content')) {
+        return null;
     }
 
     $content = king_inference_runtime_mini_op_content($payload);
