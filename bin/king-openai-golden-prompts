@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_BIN="${PHP_BIN:-php}"
+HOST="${KING_INFERENCE_GOLDEN_HOST:-127.0.0.1}"
+PORT="${KING_INFERENCE_GOLDEN_PORT:-18092}"
+URL="${KING_INFERENCE_GOLDEN_BASE_URL:-http://${HOST}:${PORT}/v1}"
+ARTIFACT="${KING_INFERENCE_GOLDEN_MODEL_PATH:-$ROOT/var/inference-models/gemma3-1b.gguf}"
+START_TIMEOUT_SEC="${KING_INFERENCE_GOLDEN_START_TIMEOUT_SEC:-45}"
+USE_EXISTING="${KING_INFERENCE_GOLDEN_USE_EXISTING_SERVER:-0}"
+LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/king-openai-golden.XXXXXX.log")"
+
+cleanup() {
+  local status=$?
+  if [[ -n "${ROUTER_PID:-}" ]] && kill -0 "$ROUTER_PID" 2>/dev/null; then
+    kill "$ROUTER_PID" 2>/dev/null || true
+    wait "$ROUTER_PID" 2>/dev/null || true
+  fi
+  if [[ "$status" -ne 0 && -s "$LOG_FILE" ]]; then
+    echo "king-openai-golden-prompts: router log follows:" >&2
+    tail -n 80 "$LOG_FILE" >&2 || true
+  fi
+  rm -f "$LOG_FILE"
+}
+trap cleanup EXIT INT TERM
+
+if [[ "$USE_EXISTING" != "1" ]]; then
+  KING_OPENAI_HOST="$HOST" \
+  KING_OPENAI_PORT="$PORT" \
+  KING_OPENAI_DEFAULT_MAX_TOKENS="${KING_OPENAI_DEFAULT_MAX_TOKENS:-128}" \
+  KING_OPENAI_MAX_COMPLETION_TOKENS="${KING_OPENAI_MAX_COMPLETION_TOKENS:-256}" \
+  KING_OPENAI_CONTEXT_POLICY="${KING_OPENAI_CONTEXT_POLICY:-full}" \
+  KING_OPENAI_CONFIRM_START=1 \
+    "$ROOT/bin/king-openai-router-start" --confirm >"$LOG_FILE" 2>&1 &
+  ROUTER_PID=$!
+
+  deadline=$((SECONDS + START_TIMEOUT_SEC))
+  until curl -fsS --max-time 1 "${URL}/models" >/dev/null 2>&1; do
+    if ! kill -0 "$ROUTER_PID" 2>/dev/null; then
+      echo "king-openai-golden-prompts: router exited before /v1/models became reachable" >&2
+      exit 1
+    fi
+    if (( SECONDS >= deadline )); then
+      echo "king-openai-golden-prompts: timed out waiting for ${URL}/models" >&2
+      exit 1
+    fi
+    sleep 0.5
+  done
+fi
+
+KING_INFERENCE_GOLDEN_BASE_URL="$URL" \
+KING_INFERENCE_GOLDEN_MODEL_PATH="$ARTIFACT" \
+  "$PHP_BIN" "$ROOT/infra/inference/golden-prompts.php" "$@"

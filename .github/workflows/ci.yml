@@ -204,6 +204,11 @@ jobs:
         working-directory: extension
         run: ../infra/scripts/check-stub-parity.sh
 
+      - name: Run model-optional inference verification matrix
+        if: matrix.shard-index == 1
+        working-directory: extension
+        run: ../bin/king-inference-verify-matrix --json
+
       - name: Run canonical PHPT suite
         working-directory: extension
         env:

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_BIN="${PHP_BIN:-php}"
+EXTENSION="${KING_EXTENSION:-$ROOT/extension/modules/king.so}"
+INI="${KING_INFERENCE_PHP_INI:-$ROOT/infra/inference/local-gpu.php.ini}"
+
+if [[ ! -f "$EXTENSION" ]]; then
+  echo "king-inference-layer0-debug: King extension module not found at $EXTENSION" >&2
+  exit 127
+fi
+
+if [[ ! -f "$INI" ]]; then
+  echo "king-inference-layer0-debug: PHP INI not found at $INI" >&2
+  exit 127
+fi
+
+export KING_ROOT="$ROOT"
+export KING_INFERENCE_PHP_INI="$INI"
+export PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR:-}"
+
+exec "$PHP_BIN" \
+  -c "$INI" \
+  -d "extension=$EXTENSION" \
+  -d king.security_allow_config_override=1 \
+  -d display_errors=1 \
+  -d error_reporting=32767 \
+  "$ROOT/infra/inference/layer0-debug.php" "$@"
