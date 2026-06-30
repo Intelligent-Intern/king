@@ -268,6 +268,12 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
     }
 
     if (king_inference_validate_gpu_bool_field(gpu, "enabled", "gpu.enabled", function_name) != SUCCESS
+        || king_inference_validate_gpu_bool_field(
+            gpu,
+            "batch_prefill_experimental_enable",
+            "gpu.batch_prefill_experimental_enable",
+            function_name
+        ) != SUCCESS
         || king_inference_validate_gpu_non_negative_long_field(
             gpu,
             "max_gpu_layers",

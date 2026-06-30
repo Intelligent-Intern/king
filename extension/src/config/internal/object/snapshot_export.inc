@@ -146,6 +146,11 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
     );
     add_assoc_bool(
         target,
+        "inference.gpu_batch_prefill_experimental_enable",
+        cfg->compute_ai.inference_gpu_batch_prefill_experimental_enable
+    );
+    add_assoc_bool(
+        target,
         "inference.cuda_numeric_compare_enable",
         cfg->compute_ai.inference_cuda_numeric_compare_enable
     );

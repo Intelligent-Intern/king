@@ -426,6 +426,17 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.gpu_batch_prefill_experimental_enable",
+            sizeof("inference.gpu_batch_prefill_experimental_enable") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_gpu_batch_prefill_experimental_enable);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.cuda_numeric_compare_enable",
             sizeof("inference.cuda_numeric_compare_enable") - 1
         )

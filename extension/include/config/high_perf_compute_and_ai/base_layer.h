@@ -44,6 +44,7 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     char *inference_gpu_power_sensor_command;
     double inference_gpu_power_max_watts;
     zend_long inference_gpu_power_check_interval_sec;
+    bool inference_gpu_batch_prefill_experimental_enable;
     bool inference_cuda_numeric_compare_enable;
     zend_long inference_cuda_numeric_compare_max_values;
     bool inference_llm_cache_enable;

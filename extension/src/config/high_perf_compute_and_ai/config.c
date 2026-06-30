@@ -205,6 +205,8 @@ int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
             if (kg_high_perf_apply_non_negative_double_field(value, "inference_gpu_power_max_watts", &target->inference_gpu_power_max_watts) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_gpu_power_check_interval_sec")) {
             if (kg_validate_non_negative_long_local(value, &target->inference_gpu_power_check_interval_sec) != SUCCESS) return FAILURE;
+        } else if (zend_string_equals_literal(key, "inference_gpu_batch_prefill_experimental_enable")) {
+            if (kg_high_perf_apply_bool_field(value, "inference_gpu_batch_prefill_experimental_enable", &target->inference_gpu_batch_prefill_experimental_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_cuda_numeric_compare_enable")) {
             if (kg_high_perf_apply_bool_field(value, "inference_cuda_numeric_compare_enable", &target->inference_cuda_numeric_compare_enable) != SUCCESS) return FAILURE;
         } else if (zend_string_equals_literal(key, "inference_cuda_numeric_compare_max_values")) {

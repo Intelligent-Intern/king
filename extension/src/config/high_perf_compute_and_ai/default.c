@@ -40,6 +40,7 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.inference_gpu_power_sensor_command = pestrdup("", 1);
     king_high_perf_compute_ai_config.inference_gpu_power_max_watts = 0.0;
     king_high_perf_compute_ai_config.inference_gpu_power_check_interval_sec = 15;
+    king_high_perf_compute_ai_config.inference_gpu_batch_prefill_experimental_enable = false;
     king_high_perf_compute_ai_config.inference_cuda_numeric_compare_enable = false;
     king_high_perf_compute_ai_config.inference_cuda_numeric_compare_max_values = 8;
     king_high_perf_compute_ai_config.inference_llm_cache_enable = false;

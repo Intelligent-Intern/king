@@ -215,6 +215,11 @@ static zend_result king_inference_runtime_model_config_array(
         add_assoc_long(&gpu, "max_gpu_layers", compute->inference_gpu_max_gpu_layers);
         add_assoc_long(&gpu, "vram_reserve_mb", compute->inference_gpu_vram_reserve_mb);
         add_assoc_long(&gpu, "min_free_vram_mb", compute->inference_gpu_min_free_vram_mb);
+        add_assoc_bool(
+            &gpu,
+            "batch_prefill_experimental_enable",
+            compute->inference_gpu_batch_prefill_experimental_enable
+        );
 
         array_init(&thermal);
         if (king_inference_runtime_non_empty(compute->inference_gpu_thermal_sensor_path)) {

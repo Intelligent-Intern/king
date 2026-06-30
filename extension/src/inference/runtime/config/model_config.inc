@@ -399,6 +399,7 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
 {
     zval *quantization = king_inference_array_find(&intern->config, "quantization");
     zval runtime_truth;
+    zval native_engine_readiness;
 
     array_init(return_value);
     add_assoc_str(return_value, "name", zend_string_copy(intern->name));
@@ -435,6 +436,8 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
         add_assoc_zval(return_value, "gpu_runtime", &gpu_runtime);
     }
     king_inference_backend_model_info(intern, return_value);
+    king_inference_model_native_engine_readiness_array(intern, &native_engine_readiness);
+    add_assoc_zval(return_value, "native_engine_readiness", &native_engine_readiness);
     king_inference_model_runtime_truth_array(intern, &runtime_truth);
     king_inference_model_add_runtime_surface_fields(intern, return_value, &runtime_truth);
     add_assoc_zval(return_value, "runtime_truth", &runtime_truth);

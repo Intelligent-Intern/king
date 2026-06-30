@@ -206,6 +206,139 @@ static void king_inference_model_readiness_truth_array(
     }
 }
 
+static bool king_inference_native_readiness_bool(zval *source, const char *key)
+{
+    zval *value;
+
+    if (source == NULL || Z_TYPE_P(source) != IS_ARRAY) {
+        return false;
+    }
+
+    value = king_inference_array_find(source, key);
+    return value != NULL && zend_is_true(value);
+}
+
+static void king_inference_model_native_engine_readiness_array(
+    king_inference_model_object *model,
+    zval *return_value
+) {
+    king_inference_backend_kind kind;
+    bool backend_config_valid = true;
+    bool gpu_enabled;
+    bool local_backend;
+    bool native_cpu_backend;
+    bool native_gpu_backend;
+    bool gpu_config_ready = false;
+    bool gpu_generation_ready = false;
+    bool native_stream_contract_admitted = false;
+    bool native_graph_payload_admitted = false;
+    bool plain_text_generation_admitted = false;
+    const char *backend_name;
+    const char *state = "not_native_backend";
+    const char *proof_path = "non_native_backend";
+    zval blockers;
+    zval refusal_reasons;
+    zval refusal_error_codes;
+    zval refusal_error_categories;
+    zval gpu_runtime;
+
+    ZVAL_UNDEF(&gpu_runtime);
+    if (king_inference_backend_kind_from_config(&model->config, &kind, "King native engine readiness") != SUCCESS) {
+        if (EG(exception)) {
+            zend_clear_exception();
+        }
+        backend_config_valid = false;
+        kind = KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    }
+
+    gpu_enabled = backend_config_valid && king_inference_gpu_enabled(&model->config);
+    local_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_LOCAL;
+    native_cpu_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_CPU;
+    native_gpu_backend = backend_config_valid && kind == KING_INFERENCE_BACKEND_KING_NATIVE_GPU;
+    backend_name = backend_config_valid ? king_inference_backend_kind_name(kind) : "invalid";
+
+    array_init(&blockers);
+    array_init(&refusal_reasons);
+
+    if (!backend_config_valid) {
+        state = "invalid_backend_config";
+        proof_path = "backend_config_validation";
+        add_next_index_string(&refusal_reasons, "backend_config_invalid");
+    } else if (local_backend) {
+        state = "not_native_backend";
+        proof_path = "local_process_backend";
+        add_next_index_string(&refusal_reasons, "not_native_backend");
+    } else if (native_cpu_backend) {
+        state = "admitted";
+        proof_path = "native_cpu_model_resident_tokenizer_contract";
+        native_stream_contract_admitted = true;
+        native_graph_payload_admitted = true;
+        plain_text_generation_admitted = true;
+    } else if (native_gpu_backend) {
+        zval *config_ready;
+        zval *generation_ready;
+        zval *runtime_refusals;
+        zval *entry;
+
+        proof_path = "gpu_runtime_status_decoder_blockers_and_policy";
+        king_inference_gpu_runtime_status_from_model(model, &gpu_runtime);
+        config_ready = king_inference_array_find(&gpu_runtime, "config_ready");
+        generation_ready = king_inference_array_find(&gpu_runtime, "generation_ready");
+        gpu_config_ready = config_ready != NULL && zend_is_true(config_ready);
+        gpu_generation_ready = generation_ready != NULL && zend_is_true(generation_ready);
+        native_stream_contract_admitted = true;
+        native_graph_payload_admitted = model->cuda_decoder_graph_executor_available
+            && model->cuda_decoder_graph_executor_result_contract_available;
+        plain_text_generation_admitted = gpu_generation_ready;
+        state = plain_text_generation_admitted ? "admitted" : "refused";
+
+        king_inference_gpu_decoder_blockers(model, &blockers);
+        runtime_refusals = king_inference_array_find(&gpu_runtime, "refusal_reasons");
+        if (runtime_refusals != NULL && Z_TYPE_P(runtime_refusals) == IS_ARRAY) {
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(runtime_refusals), entry) {
+                if (Z_TYPE_P(entry) == IS_STRING && Z_STRLEN_P(entry) > 0) {
+                    add_next_index_str(&refusal_reasons, zend_string_copy(Z_STR_P(entry)));
+                }
+            } ZEND_HASH_FOREACH_END();
+        }
+        if (!plain_text_generation_admitted) {
+            add_next_index_string(&refusal_reasons, "native_plain_text_generation_not_admitted");
+        }
+    }
+
+    king_inference_error_taxonomy_codes_from_reason_list(&refusal_reasons, &refusal_error_codes);
+    king_inference_error_taxonomy_categories_from_code_list(
+        &refusal_error_codes,
+        &refusal_error_categories
+    );
+
+    array_init(return_value);
+    add_assoc_long(return_value, "schema_version", 1);
+    add_assoc_string(return_value, "scope", "native_engine_readiness");
+    add_assoc_bool(return_value, "router_independent", true);
+    add_assoc_string(return_value, "backend", backend_name);
+    add_assoc_bool(return_value, "backend_config_valid", backend_config_valid);
+    add_assoc_bool(return_value, "native_backend", native_cpu_backend || native_gpu_backend);
+    add_assoc_bool(return_value, "gpu_required", gpu_enabled || native_gpu_backend);
+    add_assoc_bool(return_value, "gpu_config_ready", native_gpu_backend && gpu_config_ready);
+    add_assoc_bool(return_value, "native_stream_contract_admitted", native_stream_contract_admitted);
+    add_assoc_bool(return_value, "native_graph_payload_admitted", native_graph_payload_admitted);
+    add_assoc_bool(return_value, "plain_text_generation_admitted", plain_text_generation_admitted);
+    add_assoc_bool(return_value, "openai_prompt_formatting_applied", false);
+    add_assoc_string(return_value, "prompt_formatting_owner", "openai_router");
+    add_assoc_string(return_value, "tool_fields_owner", "openai_router");
+    add_assoc_string(return_value, "error_response_owner", "openai_router");
+    add_assoc_string(return_value, "state", state);
+    add_assoc_string(return_value, "proof_path", proof_path);
+    add_assoc_zval(return_value, "decoder_blockers", &blockers);
+    add_assoc_zval(return_value, "refusal_reasons", &refusal_reasons);
+    add_assoc_zval(return_value, "refusal_error_codes", &refusal_error_codes);
+    add_assoc_zval(return_value, "refusal_error_categories", &refusal_error_categories);
+    if (native_gpu_backend && !Z_ISUNDEF(gpu_runtime)) {
+        add_assoc_zval(return_value, "gpu_runtime", &gpu_runtime);
+    }
+}
+
 static void king_inference_model_add_runtime_surface_fields(
     king_inference_model_object *model,
     zval *target,
