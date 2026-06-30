@@ -184,7 +184,7 @@ php_binary_suffix() {
 }
 
 php_runtime_api() {
-    "${PHP_BIN}" -i 2>/dev/null | awk -F'=> ' '/^PHP API/ { print $2; exit }'
+    "${PHP_BIN}" -n -i 2>/dev/null | awk -F'=> ' '/^PHP API/ { print $2; exit }'
 }
 
 phpize_api() {
@@ -230,9 +230,9 @@ resolve_php_toolchain() {
         exit 1
     fi
 
-    runtime_api="$(php_runtime_api)"
+    runtime_api="$(php_runtime_api || true)"
     config_api="$("${php_config_bin}" --phpapi 2>/dev/null || true)"
-    phpize_reported_api="$(phpize_api)"
+    phpize_reported_api="$(phpize_api || true)"
 
     if [[ -n "${runtime_api}" && -n "${config_api}" && -n "${phpize_reported_api}"
         && ( "${runtime_api}" != "${config_api}" || "${runtime_api}" != "${phpize_reported_api}" ) ]]; then
