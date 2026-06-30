@@ -7,6 +7,7 @@ require_once __DIR__ . '/openai-router-models.php';
 require_once __DIR__ . '/openai-router-coder.php';
 require_once __DIR__ . '/openai-router-prompt.php';
 require_once __DIR__ . '/openai-router-tools.php';
+require_once __DIR__ . '/openai-router-memory.php';
 require_once __DIR__ . '/openai-router-stream.php';
 
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
@@ -71,13 +72,13 @@ $backend = king_openai_router_string($runtimeModelConfig, 'backend', 'unknown');
 $runtimeProfile = king_openai_router_string($runtimeModelConfig, 'runtime_profile', 'unknown');
 $requestedProfile = king_openai_router_string($runtimeModelConfig, 'runtime_requested_profile', $runtimeProfile);
 $artifactPath = king_openai_router_artifact_path($runtimeModelConfig);
-$withMemory = king_openai_router_bool($runtimeModelConfig, 'with_memory');
+$memoryPolicy = king_openai_router_memory_policy($runtimeModelConfig);
+$withMemory = !empty($memoryPolicy['with_memory']);
 $contextTokens = king_openai_router_int($runtimeModelConfig, 'context_tokens', 2048);
 $kvCache = king_openai_router_array($runtimeModelConfig, 'kv_cache');
 $kvPageTokens = king_openai_router_int($kvCache, 'page_tokens', 16);
 $kvElementBytes = king_openai_router_int($kvCache, 'element_bytes', 2);
-$llmCache = king_openai_router_array($runtimeModelConfig, 'llm_cache');
-$llmCacheEnabled = king_openai_router_bool($llmCache, 'enabled');
+$llmCacheEnabled = !empty($memoryPolicy['llm_cache_active']);
 $gpuConfig = king_openai_router_array($runtimeModelConfig, 'gpu');
 $gpuThermal = king_openai_router_array($gpuConfig, 'thermal');
 $gpuRuntime = king_openai_router_array($runtimeModelConfig, 'gpu_runtime');
@@ -114,6 +115,11 @@ king_inference_runtime_log_configured([
     'kv_element_bytes' => $kvElementBytes,
     'with_memory' => $withMemory,
     'llm_cache_enable' => $llmCacheEnabled,
+    'memory_mode' => $memoryPolicy['mode'],
+    'llm_cache_configured' => !empty($memoryPolicy['llm_cache_configured']),
+    'llm_cache_status_active' => !empty($memoryPolicy['llm_cache_status']['active']),
+    'llm_cache_status_ok' => !empty($memoryPolicy['llm_cache_status']['ok']),
+    'llm_cache_status_reason' => is_string($memoryPolicy['llm_cache_status']['reason'] ?? null) ? $memoryPolicy['llm_cache_status']['reason'] : '',
     'context_policy' => $contextPolicy,
     'default_max_tokens' => $defaultMaxTokens,
     'max_completion_tokens' => $maxCompletionTokens,
@@ -210,13 +216,13 @@ function king_openai_router_int_payload_value(array $payload, string $key): ?int
 
 function king_openai_router_prepare_chat_payload(
     array $payload,
-    bool $withMemory,
     string $contextPolicy,
     string $defaultSystemPrompt,
     bool $coderInstructionWrapper,
     array $modelAliases,
     int $defaultMaxTokens,
-    int $maxCompletionTokens
+    int $maxCompletionTokens,
+    array $memoryPolicy
 ): array
 {
     $prepared = king_openai_router_assemble_chat_messages(
@@ -225,13 +231,7 @@ function king_openai_router_prepare_chat_payload(
         $defaultSystemPrompt,
         $coderInstructionWrapper
     );
-    if (!$withMemory) {
-        $prepared['with_memory'] = false;
-        $prepared['graph_options'] = [
-            ...((isset($prepared['graph_options']) && is_array($prepared['graph_options'])) ? $prepared['graph_options'] : []),
-            'with_memory' => false,
-        ];
-    }
+    $prepared = king_openai_router_apply_memory_policy_to_payload($prepared, $memoryPolicy);
     $requestedMaxTokens = king_openai_router_int_payload_value($prepared, 'max_tokens')
         ?? king_openai_router_int_payload_value($prepared, 'max_completion_tokens')
         ?? $defaultMaxTokens;
@@ -285,6 +285,7 @@ function king_openai_router_log_prepared_payload(array $original, array $prepare
         'prepared_tool_schema_count' => is_array($preparedTools) ? count($preparedTools) : 0,
         'original_legacy_function_count' => is_array($originalFunctions) ? count($originalFunctions) : 0,
         'prepared_legacy_function_count' => is_array($preparedFunctions) ? count($preparedFunctions) : 0,
+        ...king_openai_router_memory_log_fields($prepared),
         'tool_choice_removed' => array_key_exists('tool_choice', $original) && !array_key_exists('tool_choice', $prepared),
         'parallel_tool_calls_removed' => array_key_exists('parallel_tool_calls', $original) && !array_key_exists('parallel_tool_calls', $prepared),
         'tool_execution' => !empty($toolStatus['context_only']) ? 'context_only' : 'none',
@@ -615,6 +616,7 @@ function king_openai_router_normalize_plain_artifact_response(array $response, a
 $routerOptions = [
     'owned_by' => 'local-king',
     'with_memory' => $withMemory,
+    'memory_policy' => $memoryPolicy,
     'context_policy' => $contextPolicy,
     'default_system_prompt' => $defaultSystemPrompt,
     'coder_instruction_wrapper' => $coderInstructionWrapper,
@@ -646,9 +648,6 @@ while (true) {
                 king_inference_runtime_log_request_executing($request, $models);
                 $chatPayload = king_openai_router_decode_chat_payload($request);
                 if ($chatPayload !== null) {
-                    $withMemory = isset($routerOptions['with_memory']) && is_bool($routerOptions['with_memory'])
-                        ? $routerOptions['with_memory']
-                        : false;
                     $contextPolicy = isset($routerOptions['context_policy']) && is_string($routerOptions['context_policy'])
                         ? $routerOptions['context_policy']
                         : 'full';
@@ -667,15 +666,18 @@ while (true) {
                     $maxCompletionTokens = isset($routerOptions['max_completion_tokens']) && is_int($routerOptions['max_completion_tokens'])
                         ? max(1, $routerOptions['max_completion_tokens'])
                         : 64;
+                    $memoryPolicy = isset($routerOptions['memory_policy']) && is_array($routerOptions['memory_policy'])
+                        ? $routerOptions['memory_policy']
+                        : ['with_memory' => false, 'llm_cache' => ['enabled' => false]];
                     $preparedPayload = king_openai_router_prepare_chat_payload(
                         $chatPayload,
-                        $withMemory,
                         $contextPolicy,
                         $defaultSystemPrompt,
                         $coderInstructionWrapper,
                         $modelAliases,
                         $defaultMaxTokens,
-                        $maxCompletionTokens
+                        $maxCompletionTokens,
+                        $memoryPolicy
                     );
                     king_openai_router_log_prepared_payload($chatPayload, $preparedPayload);
                     $preparedRequest = $request;
