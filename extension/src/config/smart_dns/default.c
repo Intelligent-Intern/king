@@ -28,4 +28,5 @@ void kg_config_smart_dns_defaults_load(void)
     king_smart_dns_config.semantic_mode_enable = false;
     king_smart_dns_config.mothernode_uri = NULL;
     king_smart_dns_config.live_probe_allowed_hosts = NULL;
+    king_smart_dns_config.state_path = NULL;
 }

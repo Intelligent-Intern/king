@@ -160,6 +160,8 @@ PHP_INI_BEGIN()
         OnUpdateDnsProbeHostAllowlist, NULL)
     STD_PHP_INI_ENTRY("king.dns_mothernode_uri", "", PHP_INI_SYSTEM,
         OnUpdateString, mothernode_uri, kg_smart_dns_config_t, king_smart_dns_config)
+    STD_PHP_INI_ENTRY("king.dns_state_path", "", PHP_INI_SYSTEM,
+        OnUpdateString, state_path, kg_smart_dns_config_t, king_smart_dns_config)
 PHP_INI_END()
 
 

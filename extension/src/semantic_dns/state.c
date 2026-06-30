@@ -18,9 +18,7 @@
 #include <stdint.h>
 #include <zend_smart_str.h>
 
-#define KING_SEMANTIC_DNS_STATE_DIR "/tmp/king_semantic_dns_state"
-#define KING_SEMANTIC_DNS_STATE_FILE KING_SEMANTIC_DNS_STATE_DIR "/durable_state.bin"
-#define KING_SEMANTIC_DNS_STATE_LOCK_FILE KING_SEMANTIC_DNS_STATE_DIR "/durable_state.bin.lock"
+#define KING_SEMANTIC_DNS_DEFAULT_STATE_FILE "/tmp/king_semantic_dns_state/durable_state.bin"
 #define KING_SEMANTIC_DNS_STATE_MAGIC 0x53444e53 /* 'SDNS' */
 #define KING_SEMANTIC_DNS_STATE_VERSION 1
 #define KING_SEMANTIC_DNS_STATE_MAX_MOTHER_NODES 1024U

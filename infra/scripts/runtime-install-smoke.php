@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 $schema = 'InstallSmoke_' . getmypid();
 $dnsPort = 10000 + (getmypid() % 40000);
+$semanticDnsStatePath = getenv('KING_SEMANTIC_DNS_STATE_PATH');
 
 if (!function_exists('king_connect')) {
     fwrite(STDERR, "King extension functions are unavailable.\n");
@@ -71,6 +72,9 @@ if (!king_semantic_dns_init([
     'default_record_ttl_sec' => 120,
     'service_discovery_max_ips_per_response' => 5,
     'semantic_mode_enable' => true,
+    'state_path' => is_string($semanticDnsStatePath) && $semanticDnsStatePath !== ''
+        ? $semanticDnsStatePath
+        : sys_get_temp_dir() . '/king_install_smoke_' . getmypid() . '/semantic_dns_state.bin',
     'mothernode_uri' => 'mother://install-smoke',
     'routing_policies' => ['mode' => 'local'],
 ])) {

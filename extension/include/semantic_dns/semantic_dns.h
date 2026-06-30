@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <netinet/in.h>
+#include <limits.h>
 
 /* --- Semantic DNS Types --- */
 
@@ -103,6 +104,7 @@ typedef struct _king_semantic_dns_config_t {
     uint32_t mothernode_sync_interval_sec;
     uint32_t service_discovery_max_ips_per_response;
     char mothernode_uri[256];
+    char state_path[PATH_MAX];
     king_mother_node_t *mother_nodes;
     uint32_t mother_node_count;
     zval routing_policies; /* PHP array */

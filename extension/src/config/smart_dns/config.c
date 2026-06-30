@@ -148,6 +148,10 @@ int kg_config_smart_dns_apply_userland_config_to(
             if (kg_validate_string(value, &target->mothernode_uri) != SUCCESS) {
                 return FAILURE;
             }
+        } else if (zend_string_equals_literal(key, "dns_state_path")) {
+            if (kg_validate_string(value, &target->state_path) != SUCCESS) {
+                return FAILURE;
+            }
         }
     } ZEND_HASH_FOREACH_END();
 

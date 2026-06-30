@@ -24,6 +24,11 @@ SCRATCH_DIR=""
 PREVIOUS_WORKTREE=""
 BASELINE_REF=""
 DIRECTION="upgrade"
+SEMANTIC_DNS_LEGACY_STATE_DIR="/tmp/king_semantic_dns_state"
+SEMANTIC_DNS_LEGACY_STATE_FILE="${SEMANTIC_DNS_LEGACY_STATE_DIR}/durable_state.bin"
+SEMANTIC_DNS_LEGACY_STATE_DIR_EXISTED=0
+SEMANTIC_DNS_LEGACY_BACKUP_FILE=""
+SEMANTIC_DNS_COMPAT_LOCK="/tmp/king_semantic_dns_release_compat.lock"
 
 resolve_existing_path() {
     local candidate="$1"
@@ -54,6 +59,8 @@ resolve_path_for_output() {
 }
 
 cleanup() {
+    restore_semantic_dns_legacy_state
+
     if [[ -n "${PREVIOUS_WORKTREE}" ]] && [[ -d "${PREVIOUS_WORKTREE}" ]]; then
         git -C "${ROOT_DIR}" worktree remove --force "${PREVIOUS_WORKTREE}" >/dev/null 2>&1 || true
     fi
@@ -61,9 +68,27 @@ cleanup() {
     if [[ -n "${SCRATCH_DIR}" && -d "${SCRATCH_DIR}" ]]; then
         rm -rf "${SCRATCH_DIR}"
     fi
+
+    if [[ -n "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}" ]]; then
+        rm -f "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}" >/dev/null 2>&1 || true
+    fi
 }
 
 trap cleanup EXIT
+
+restore_semantic_dns_legacy_state() {
+    if [[ -n "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}" && -f "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}" ]]; then
+        mkdir -p "${SEMANTIC_DNS_LEGACY_STATE_DIR}"
+        chmod 0700 "${SEMANTIC_DNS_LEGACY_STATE_DIR}"
+        cp "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}" "${SEMANTIC_DNS_LEGACY_STATE_FILE}"
+    else
+        rm -f "${SEMANTIC_DNS_LEGACY_STATE_FILE}"
+    fi
+
+    if [[ "${SEMANTIC_DNS_LEGACY_STATE_DIR_EXISTED}" == "0" ]]; then
+        rmdir "${SEMANTIC_DNS_LEGACY_STATE_DIR}" >/dev/null 2>&1 || true
+    fi
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -162,7 +187,23 @@ fi
 PREVIOUS_BUILD_DIR="${ARTIFACTS_DIR}/previous"
 CURRENT_BUILD_DIR="${ARTIFACTS_DIR}/current"
 INSTALL_ROOT="${ARTIFACTS_DIR}/upgrade-prefix"
-mkdir -p "${PREVIOUS_BUILD_DIR}" "${CURRENT_BUILD_DIR}" "${INSTALL_ROOT}"
+SEMANTIC_DNS_STATE_DIR="${ARTIFACTS_DIR}/semantic-dns-state"
+SEMANTIC_DNS_STATE_FILE="${SEMANTIC_DNS_STATE_DIR}/durable_state.bin"
+mkdir -p "${PREVIOUS_BUILD_DIR}" "${CURRENT_BUILD_DIR}" "${INSTALL_ROOT}" "${SEMANTIC_DNS_STATE_DIR}"
+chmod 0700 "${SEMANTIC_DNS_STATE_DIR}"
+
+exec 9>"${SEMANTIC_DNS_COMPAT_LOCK}"
+flock 9
+if [[ -d "${SEMANTIC_DNS_LEGACY_STATE_DIR}" ]]; then
+    SEMANTIC_DNS_LEGACY_STATE_DIR_EXISTED=1
+fi
+if [[ -f "${SEMANTIC_DNS_LEGACY_STATE_FILE}" && ! -L "${SEMANTIC_DNS_LEGACY_STATE_FILE}" ]]; then
+    SEMANTIC_DNS_LEGACY_BACKUP_FILE="$(mktemp)"
+    cp "${SEMANTIC_DNS_LEGACY_STATE_FILE}" "${SEMANTIC_DNS_LEGACY_BACKUP_FILE}"
+fi
+mkdir -p "${SEMANTIC_DNS_LEGACY_STATE_DIR}"
+chmod 0700 "${SEMANTIC_DNS_LEGACY_STATE_DIR}"
+rm -f "${SEMANTIC_DNS_LEGACY_STATE_FILE}"
 
 prepare_legacy_packaging_tree() {
     local tree_root="$1"
@@ -242,7 +283,8 @@ verify_archive() {
 
     (
         cd "${ROOT_DIR}"
-        PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
+        KING_SEMANTIC_DNS_STATE_PATH="${SEMANTIC_DNS_STATE_FILE}" \
+            PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
     ) 2>&1 | tee "${log_path}"
 }
 
@@ -256,7 +298,8 @@ install_archive_to_prefix() {
 
     (
         tar -xzf "${archive_path}" -C "${prefix}" --strip-components=1
-        PHP_BIN="${PHP_BIN}" "${prefix}/bin/smoke.sh"
+        KING_SEMANTIC_DNS_STATE_PATH="${SEMANTIC_DNS_STATE_FILE}" \
+            PHP_BIN="${PHP_BIN}" "${prefix}/bin/smoke.sh"
     ) 2>&1 | tee "${log_path}"
 }
 

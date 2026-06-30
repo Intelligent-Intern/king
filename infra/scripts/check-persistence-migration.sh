@@ -29,6 +29,7 @@ SEMANTIC_DNS_STATE_DIR="/tmp/king_semantic_dns_state"
 SEMANTIC_DNS_STATE_FILE="${SEMANTIC_DNS_STATE_DIR}/durable_state.bin"
 SEMANTIC_DNS_STATE_DIR_EXISTED=0
 SEMANTIC_DNS_BACKUP_FILE=""
+SEMANTIC_DNS_COMPAT_LOCK="/tmp/king_semantic_dns_release_compat.lock"
 
 resolve_existing_path() {
     local candidate="$1"
@@ -59,6 +60,10 @@ resolve_path_for_output() {
 }
 
 restore_semantic_dns_state() {
+    if [[ -z "${SEMANTIC_DNS_STATE_DIR}" || -z "${SEMANTIC_DNS_STATE_FILE}" ]]; then
+        return 0
+    fi
+
     if [[ -n "${SEMANTIC_DNS_BACKUP_FILE}" && -f "${SEMANTIC_DNS_BACKUP_FILE}" ]]; then
         mkdir -p "${SEMANTIC_DNS_STATE_DIR}"
         chmod 0700 "${SEMANTIC_DNS_STATE_DIR}"
@@ -175,6 +180,8 @@ OBJECT_STORE_ROOT="${ARTIFACTS_DIR}/persisted-object-store"
 ORCHESTRATOR_STATE_PATH="${ARTIFACTS_DIR}/orchestrator-state.bin"
 mkdir -p "${PREVIOUS_BUILD_DIR}" "${CURRENT_BUILD_DIR}"
 
+exec 9>"${SEMANTIC_DNS_COMPAT_LOCK}"
+flock 9
 if [[ -d "${SEMANTIC_DNS_STATE_DIR}" ]]; then
     SEMANTIC_DNS_STATE_DIR_EXISTED=1
 fi
@@ -273,7 +280,8 @@ verify_archive() {
 
     (
         cd "${ROOT_DIR}"
-        PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
+        KING_SEMANTIC_DNS_STATE_PATH="${SEMANTIC_DNS_STATE_FILE}" \
+            PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
     ) 2>&1 | tee "${log_path}"
 }
 
