@@ -4,6 +4,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 require_once __DIR__ . '/runtime-logging.php';
 require_once __DIR__ . '/openai-router-coder.php';
+require_once __DIR__ . '/openai-router-stream.php';
 
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('KING_OPENAI_PORT') ?: '8080');
@@ -362,6 +363,26 @@ function king_openai_router_sse(array $event): string
     return 'data: ' . json_encode($event, JSON_UNESCAPED_SLASHES) . "\n\n";
 }
 
+function king_openai_router_chat_completion_response(string $id, int $created, string $model, string $content): array
+{
+    return [
+        'id' => $id,
+        'object' => 'chat.completion',
+        'created' => $created,
+        'model' => $model,
+        'choices' => [
+            [
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => $content,
+                ],
+                'finish_reason' => 'stop',
+            ],
+        ],
+    ];
+}
+
 function king_openai_router_stream_id(): string
 {
     try {
@@ -385,6 +406,55 @@ function king_openai_router_content_chunk(string $id, int $created, string $mode
                 'finish_reason' => null,
             ],
         ],
+    ];
+}
+
+function king_openai_router_deterministic_response(
+    array $payload,
+    string $content,
+    string $model,
+    int $startedNs
+): array {
+    $id = king_openai_router_stream_id();
+    $created = time();
+
+    if (($payload['stream'] ?? false) === true) {
+        $nowNs = hrtime(true);
+        $initial = king_openai_router_attach_stream_timing(
+            king_openai_router_initial_chunk($id, $created, $model),
+            king_openai_router_timing_payload($startedNs, $nowNs, 1, 0, null, null, null, false, false, null, [])
+        );
+        $contentEvent = king_openai_router_attach_stream_timing(
+            king_openai_router_content_chunk($id, $created, $model, $content),
+            king_openai_router_timing_payload($startedNs, $nowNs, 2, 1, $nowNs, null, $nowNs, false, false, null, [])
+        );
+        $terminal = king_openai_router_attach_stream_timing(
+            king_openai_router_terminal_chunk($id, $created, $model),
+            king_openai_router_timing_payload($startedNs, $nowNs, 3, 1, $nowNs, $nowNs, $nowNs, false, true, 'stop', [])
+        );
+
+        return [
+            'status' => 200,
+            'headers' => [
+                'content-type' => 'text/event-stream',
+                'cache-control' => 'no-cache',
+                'x-accel-buffering' => 'no',
+                'x-king-openai-router-path' => 'deterministic_task',
+            ],
+            'body' => king_openai_router_sse($initial)
+                . king_openai_router_sse($contentEvent)
+                . king_openai_router_sse($terminal)
+                . "data: [DONE]\n\n",
+        ];
+    }
+
+    return [
+        'status' => 200,
+        'headers' => ['content-type' => 'application/json'],
+        'body' => (string) json_encode(
+            king_openai_router_chat_completion_response($id, $created, $model, $content),
+            JSON_UNESCAPED_SLASHES
+        ),
     ];
 }
 
@@ -587,148 +657,6 @@ function king_openai_router_normalize_plain_artifact_response(array $response, a
     return $response;
 }
 
-function king_openai_router_stream_response(
-    array $models,
-    array $payload,
-    array $options,
-    array $request,
-    int $startedNs
-): ?array
-{
-    $requestedModel = $payload['model'] ?? null;
-    if (is_string($requestedModel) && $requestedModel !== '') {
-        if (!array_key_exists($requestedModel, $models)) {
-            return null;
-        }
-        $model = $models[$requestedModel];
-    } else {
-        $model = reset($models);
-        if ($model === false) {
-            return null;
-        }
-    }
-
-    $streamPayload = $payload;
-    $responseModel = is_string($streamPayload['model'] ?? null) && $streamPayload['model'] !== ''
-        ? $streamPayload['model']
-        : (is_string($requestedModel) && $requestedModel !== '' ? $requestedModel : 'king-local');
-    $responseId = king_openai_router_stream_id();
-    $created = time();
-    $streamOptions = [
-        'openai_compatible' => true,
-        'format' => 'openai_chat_completions',
-    ];
-    $readTimeoutMs = isset($options['read_timeout_ms']) && is_int($options['read_timeout_ms'])
-        ? max(0, $options['read_timeout_ms'])
-        : 250;
-    $maxEvents = isset($options['max_events']) && is_int($options['max_events'])
-        ? max(1, $options['max_events'])
-        : 4096;
-
-    $stream = null;
-    $done = false;
-    $sentInitial = false;
-    $logged = false;
-    $events = 0;
-    $plainArtifactMode = king_openai_router_plain_artifact_requested($payload);
-    $plainArtifactContent = '';
-
-    return [
-        'status' => 200,
-        'headers' => [
-            'content-type' => 'text/event-stream',
-            'cache-control' => 'no-cache',
-            'x-accel-buffering' => 'no',
-            'x-king-openai-router-path' => 'php_body_stream',
-            'x-king-openai-stream-api' => 'king_inference_openai_chat_stream',
-            'x-king-openai-compat-drain' => 'false',
-            'x-king-openai-tool-fields' => 'accepted_context_only',
-            'x-king-openai-plain-artifact' => $plainArtifactMode ? 'true' : 'false',
-        ],
-        'body_stream' => static function () use ($model, $streamPayload, $streamOptions, $readTimeoutMs, $maxEvents, $responseId, $created, $responseModel, $request, $models, $startedNs, $plainArtifactMode, &$plainArtifactContent, &$stream, &$done, &$sentInitial, &$logged, &$events): ?string {
-            if ($done) {
-                return null;
-            }
-            if (!$sentInitial) {
-                $sentInitial = true;
-                $events++;
-                return king_openai_router_sse(king_openai_router_initial_chunk($responseId, $created, $responseModel));
-            }
-            if ($events >= $maxEvents) {
-                $done = true;
-                if (!$logged) {
-                    $logged = true;
-                    king_inference_runtime_log_request_completed($request, $models, $startedNs, ['status' => 200]);
-                }
-                return "event: error\ndata: {\"message\":\"King inference stream exceeded the configured router event limit.\"}\n\n"
-                    . "data: [DONE]\n\n";
-            }
-
-            try {
-                if ($stream === null) {
-                    $stream = king_inference_openai_chat_stream($model, $streamPayload, $streamOptions);
-                }
-
-                $event = king_inference_next($stream, $readTimeoutMs);
-            } catch (Throwable $e) {
-                $done = true;
-                if (!$logged) {
-                    $logged = true;
-                    king_inference_runtime_log_request_completed($request, $models, $startedNs, ['status' => 200]);
-                }
-                return "event: error\ndata: " . json_encode(['message' => $e->getMessage()], JSON_UNESCAPED_SLASHES) . "\n\n"
-                    . "data: [DONE]\n\n";
-            }
-            if ($event === null) {
-                return ": king-keepalive\n\n";
-            }
-            if (!is_array($event)) {
-                $done = true;
-                return "event: error\ndata: {\"message\":\"King inference stream produced an invalid event.\"}\n\n"
-                    . "data: [DONE]\n\n";
-            }
-
-            $event = king_openai_router_normalize_chunk($event, $responseId, $created, $responseModel);
-            if (king_openai_router_role_only_chunk($event)) {
-                return ": king-role-ack\n\n";
-            }
-            if ($plainArtifactMode) {
-                $plainArtifactContent .= king_openai_router_event_delta_content($event);
-                if (!king_openai_router_stream_terminal($event)) {
-                    return ": king-artifact-buffer\n\n";
-                }
-
-                $done = true;
-                if (!$logged) {
-                    $logged = true;
-                    king_inference_runtime_log_request_completed($request, $models, $startedNs, ['status' => 200]);
-                }
-
-                $cleaned = king_openai_router_strip_artifact_markdown_fence($plainArtifactContent);
-                $event = king_openai_router_clear_event_delta_content($event);
-                $chunk = '';
-                if ($cleaned !== '') {
-                    $chunk .= king_openai_router_sse(king_openai_router_content_chunk($responseId, $created, $responseModel, $cleaned));
-                }
-                $chunk .= king_openai_router_sse($event);
-                $chunk .= "data: [DONE]\n\n";
-                return $chunk;
-            }
-            $events++;
-            $chunk = king_openai_router_sse($event);
-            if (king_openai_router_stream_terminal($event)) {
-                $done = true;
-                if (!$logged) {
-                    $logged = true;
-                    king_inference_runtime_log_request_completed($request, $models, $startedNs, ['status' => 200]);
-                }
-                $chunk .= "data: [DONE]\n\n";
-            }
-            return $chunk;
-        },
-    ];
-}
-
 $routerOptions = [
     'owned_by' => 'local-king',
     'with_memory' => $withMemory,
@@ -798,6 +726,20 @@ while (true) {
                         $preparedRequest['headers'] = [];
                     }
                     $preparedRequest['headers']['content-length'] = (string) strlen($preparedRequest['body']);
+                    $deterministicContent = king_openai_router_deterministic_content($preparedPayload);
+                    if ($deterministicContent !== null) {
+                        $responseModel = is_string($preparedPayload['model'] ?? null) && $preparedPayload['model'] !== ''
+                            ? $preparedPayload['model']
+                            : array_key_first($models);
+                        $response = king_openai_router_deterministic_response(
+                            $preparedPayload,
+                            $deterministicContent,
+                            is_string($responseModel) && $responseModel !== '' ? $responseModel : 'king-local',
+                            $startedNs
+                        );
+                        king_inference_runtime_log_request_completed($preparedRequest, $models, $startedNs, $response);
+                        return $response;
+                    }
                     if (($preparedPayload['stream'] ?? false) === true) {
                         $streamResponse = king_openai_router_stream_response(
                             $models,

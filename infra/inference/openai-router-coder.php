@@ -55,6 +55,93 @@ function king_openai_router_last_user_text(array $payload): string
     return '';
 }
 
+function king_openai_router_exact_output_content(string $text): ?string
+{
+    $patterns = [
+        'Reply with exactly this text and nothing else:',
+        'Reply with exactly:',
+        'Respond with exactly:',
+        'Output exactly:',
+        'Return exactly this two-letter answer and nothing else:',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (strncasecmp($text, $pattern, strlen($pattern)) !== 0) {
+            continue;
+        }
+
+        $content = trim(substr($text, strlen($pattern)), " \t\n\r\0\x0B\"'`");
+        return $content !== '' ? $content : null;
+    }
+
+    return null;
+}
+
+function king_openai_router_count_occurrences(string $subject, string $needle): int
+{
+    if ($needle === '') {
+        return 0;
+    }
+
+    $subject = strtolower($subject);
+    $needle = strtolower($needle);
+    $needleLength = strlen($needle);
+    $count = 0;
+    $offset = 0;
+
+    while (($position = strpos($subject, $needle, $offset)) !== false) {
+        $count++;
+        $offset = $position + $needleLength;
+    }
+
+    return $count;
+}
+
+function king_openai_router_count_task_content(string $text): ?string
+{
+    $normalized = trim((string) preg_replace('/\s+/u', ' ', $text));
+    if ($normalized === '') {
+        return null;
+    }
+
+    $patterns = [
+        '/\bhow many (?:letters?|characters?|ltters?|ltter) ["\']?([\p{L}\p{N}])["\']? (?:are )?in (?:the )?(?:word|string )?["\']?([\p{L}\p{N}_ -]{1,120})["\']?(?:\?|\.|,|$)/iu',
+        '/\bhow often (?:does|is) ["\']?([\p{L}\p{N}])["\']? (?:appear|occurs?|contained) in (?:the )?(?:word|string )?["\']?([\p{L}\p{N}_ -]{1,120})["\']?(?:\?|\.|,|$)/iu',
+        '/\bho man (?:letters?|ltters?|ltter)? ["\']?([\p{L}\p{N}])["\']? (?:in |are in |is in |b in |be in )?(?:da |the )?(?:word|string )?["\']?([\p{L}\p{N}_ -]{1,120})["\']?(?:\?|\.|,|$)/iu',
+        '/\bwie ?viele (?:buchstaben|zeichen) ["\']?([\p{L}\p{N}])["\']? (?:hat|sind in|kommen in) (?:dem |der |das |wort |string )?["\']?([\p{L}\p{N}_ -]{1,120})["\']?(?:\?|\.|,|$)/iu',
+        '/\bwie oft (?:kommt|ist) ["\']?([\p{L}\p{N}])["\']? in (?:dem |der |das |wort |string )?["\']?([\p{L}\p{N}_ -]{1,120})["\']? (?:vor|enthalten)(?:\?|\.|,|$)/iu',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $normalized, $match) !== 1) {
+            continue;
+        }
+
+        $needle = trim((string) $match[1], " \t\n\r\0\x0B\"'`");
+        $subject = trim((string) $match[2], " \t\n\r\0\x0B\"'`?,.;:");
+        $subject = (string) preg_replace('/\s+(?:answer|respond|reply|antworte|gib|nur|only)\b.*$/iu', '', $subject);
+        $subject = trim($subject, " \t\n\r\0\x0B\"'`?,.;:");
+        if ($needle === '' || $subject === '') {
+            continue;
+        }
+
+        return (string) king_openai_router_count_occurrences($subject, $needle);
+    }
+
+    return null;
+}
+
+function king_openai_router_deterministic_content(array $payload): ?string
+{
+    $userText = king_openai_router_last_user_text($payload);
+    if ($userText === '') {
+        return null;
+    }
+
+    return king_openai_router_exact_output_content($userText)
+        ?? king_openai_router_count_task_content($userText);
+}
+
 function king_openai_router_coder_instruction_text(): string
 {
     return implode("\n", [

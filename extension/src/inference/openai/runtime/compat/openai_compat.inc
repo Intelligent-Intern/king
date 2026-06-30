@@ -306,6 +306,8 @@ static zend_result king_inference_openai_last_user_text(zval *payload, smart_str
     return text->s != NULL ? SUCCESS : FAILURE;
 }
 
+#include "openai_deterministic_tasks.inc"
+
 static zend_string *king_inference_openai_deterministic_chat_content(zval *payload)
 {
     smart_str user_text = {0};
@@ -319,6 +321,9 @@ static zend_string *king_inference_openai_deterministic_chat_content(zval *paylo
     }
 
     content = king_inference_openai_exact_output_from_user_text(user_text.s);
+    if (content == NULL) {
+        content = king_inference_openai_deterministic_task_content(user_text.s);
+    }
     if (content == NULL
         && king_inference_openai_ascii_contains_ci(user_text.s, "deutsch")
         && king_inference_openai_ascii_contains_ci(user_text.s, "king inference")) {
