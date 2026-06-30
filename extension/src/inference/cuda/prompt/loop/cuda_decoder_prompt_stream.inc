@@ -26,6 +26,7 @@ typedef struct _king_inference_cuda_decoder_prompt_stream_state {
     size_t graph_constructions_start;
     size_t plan_constructions_start;
     zend_string *decoded_token_text;
+    smart_str pending;
     double decoded_probability;
     double decoded_logit;
     double decoded_rank;
@@ -74,6 +75,7 @@ static void king_inference_cuda_decoder_prompt_stream_release(king_inference_str
         zend_string_release(state->decoded_token_text);
         state->decoded_token_text = NULL;
     }
+    smart_str_free(&state->pending);
     efree(state);
     stream->native_gpu_stream_state = NULL;
 }
@@ -257,6 +259,17 @@ static void king_inference_cuda_decoder_prompt_stream_finish(
     model->cuda_decoder_prompt_loop_result = 0;
     model->cuda_decoder_prompt_loop_error[0] = '\0';
 
+    if (!state->stopped) {
+        king_inference_king_native_prompt_flush_pending(stream, &state->pending);
+    } else {
+        smart_str_free(&state->pending);
+    }
+    if (!Z_ISUNDEF(stream->native_events)
+        && Z_TYPE(stream->native_events) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL(stream->native_events)) == 0) {
+        add_next_index_stringl(&stream->native_events, "", 0);
+    }
+
     if (king_inference_king_native_stream_diagnostics_enabled(stream)) {
         array_init(&event);
         add_assoc_string(&event, "type", "gpu_prompt_decoder_loop_contract");
@@ -380,6 +393,7 @@ static zend_result king_inference_cuda_decoder_prompt_stream_step(
             state->decoded_token_id,
             state->decoded_token_text,
             &state->stops,
+            &state->pending,
             &state->stopped
         ) != SUCCESS) {
         king_inference_cuda_decoder_prompt_stream_release(stream);

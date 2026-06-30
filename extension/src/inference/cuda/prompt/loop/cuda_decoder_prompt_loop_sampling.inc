@@ -357,11 +357,14 @@ static zend_result king_inference_cuda_decoder_prompt_loop_emit_decoded_text(
     zend_ulong token_id,
     zend_string *decoded_text,
     zval *stops,
+    smart_str *pending,
     bool *stopped
 ) {
     *stopped = false;
-    if (king_inference_king_native_prompt_should_stop_token(model, token_id)
-        || king_inference_king_native_prompt_piece_matches_stop(decoded_text, stops)) {
+    if (king_inference_king_native_prompt_should_stop_token(model, token_id)) {
+        if (pending != NULL) {
+            king_inference_king_native_prompt_flush_pending(stream, pending);
+        }
         *stopped = true;
         return SUCCESS;
     }
@@ -371,6 +374,13 @@ static zend_result king_inference_cuda_decoder_prompt_loop_emit_decoded_text(
     if (Z_ISUNDEF(stream->native_events) || Z_TYPE(stream->native_events) != IS_ARRAY) {
         king_inference_cuda_decoder_prompt_loop_set_error(model, -1, "cuda_decoder_prompt_loop_native_stream_unavailable");
         return FAILURE;
+    }
+    if (pending != NULL) {
+        return king_inference_king_native_prompt_emit_text(stream, pending, decoded_text, stops, stopped);
+    }
+    if (king_inference_king_native_prompt_piece_matches_stop(decoded_text, stops)) {
+        *stopped = true;
+        return SUCCESS;
     }
     add_next_index_str(&stream->native_events, zend_string_copy(decoded_text));
     return SUCCESS;

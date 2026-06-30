@@ -25,6 +25,9 @@ static void king_inference_cuda_decoder_graph_executor_final_norm_compare_fail(
     array_init(&compare);
     add_assoc_string(&compare, "type", "gpu_decoder_final_norm_numeric_compare");
     add_assoc_string(&compare, "status", status);
+    add_assoc_string(&compare, "classification", "validation_error");
+    add_assoc_string(&compare, "error_category", "validation");
+    add_assoc_string(&compare, "error_code", "king.validation_error.detected");
     add_assoc_bool(&compare, "matched", false);
     add_assoc_bool(final_norm_probe, "final_norm_numeric_compare_failed", true);
     add_assoc_zval(final_norm_probe, "final_norm_numeric_compare", &compare);
@@ -85,6 +88,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_final_norm
         array_init(&compare);
         add_assoc_string(&compare, "type", "gpu_decoder_final_norm_numeric_compare");
         add_assoc_string(&compare, "status", "final_norm_weight_shape_invalid");
+        add_assoc_string(&compare, "classification", "shape_mismatch");
+        add_assoc_string(&compare, "error_category", "shape");
+        add_assoc_string(&compare, "error_code", "king.shape_mismatch.detected");
         add_assoc_bool(&compare, "matched", false);
         add_assoc_str(&compare, "weight_tensor", zend_string_copy(weight_name));
         add_assoc_long(&compare, "weight_elements", (zend_long) weight_view.elements);
@@ -123,6 +129,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_final_norm
         array_init(&compare);
         add_assoc_string(&compare, "type", "gpu_decoder_final_norm_numeric_compare");
         add_assoc_string(&compare, "status", "cuMemcpyDtoH_vector_failed");
+        add_assoc_string(&compare, "classification", "device_readback_failed");
+        add_assoc_string(&compare, "error_category", "device_readback");
+        add_assoc_string(&compare, "error_code", "king.device_readback.failed");
         add_assoc_long(&compare, "result", result);
         add_assoc_bool(&compare, "matched", false);
         add_assoc_bool(final_norm_probe, "final_norm_numeric_compare_failed", true);
@@ -184,6 +193,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_final_norm
             add_assoc_double(&sample, "actual", (double) actual[i]);
             add_assoc_double(&sample, "expected", expected[i]);
             add_assoc_double(&sample, "abs_diff", diff);
+            add_assoc_bool(&sample, "matched", diff <= tolerance);
+            add_assoc_string(&sample, "classification", diff <= tolerance ? "matched" : "numeric_mismatch");
             add_next_index_zval(&samples, &sample);
         }
     }
@@ -195,6 +206,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_final_norm
     add_assoc_string(&compare, "type", "gpu_decoder_final_norm_numeric_compare");
     add_assoc_string(&compare, "reference", "cpu_final_hidden_readback_rms_norm_weight");
     add_assoc_string(&compare, "status", matched ? "matched" : "mismatch");
+    add_assoc_string(&compare, "classification", matched ? "matched" : "numeric_mismatch");
+    add_assoc_string(&compare, "error_category", matched ? "none" : "numeric_mismatch");
+    add_assoc_string(&compare, "error_code", matched ? "none" : "king.numeric_mismatch.detected");
     add_assoc_bool(&compare, "matched", matched);
     if (input_id != NULL) {
         add_assoc_str(&compare, "input", zend_string_copy(input_id));
@@ -220,7 +234,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_final_norm
         snprintf(
             message,
             sizeof(message),
-            "final_norm_mismatch tensor=%s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
+            "king.numeric_mismatch.detected final_norm_mismatch tensor=%s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
             ZSTR_VAL(weight_name),
             (unsigned long) input_width,
             (unsigned long) matched_values,

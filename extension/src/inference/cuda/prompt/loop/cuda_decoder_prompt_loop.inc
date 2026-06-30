@@ -509,6 +509,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
                 decoded_token_id,
                 decoded_token_text,
                 &stops,
+                NULL,
                 &stopped
         ) != SUCCESS) {
             king_inference_cuda_decoder_prompt_loop_prefill_mutations_release(&mutations);
@@ -596,6 +597,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
                     decoded_token_id,
                     decoded_token_text,
                     &stops,
+                    NULL,
                     &stopped
             ) != SUCCESS) {
                 king_inference_cuda_decoder_prompt_loop_prefill_mutations_release(&mutations);

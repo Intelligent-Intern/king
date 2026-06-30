@@ -31,6 +31,9 @@ static void king_inference_cuda_decoder_graph_executor_logits_compare_fail(
     array_init(&compare);
     add_assoc_string(&compare, "type", "gpu_decoder_logits_projection_numeric_compare");
     add_assoc_string(&compare, "status", status);
+    add_assoc_string(&compare, "classification", "validation_error");
+    add_assoc_string(&compare, "error_category", "validation");
+    add_assoc_string(&compare, "error_code", "king.validation_error.detected");
     add_assoc_bool(&compare, "matched", false);
     add_assoc_bool(logits_probe, "logits_projection_numeric_compare_failed", true);
     add_assoc_zval(logits_probe, "logits_projection_numeric_compare", &compare);
@@ -200,6 +203,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
         array_init(&compare);
         add_assoc_string(&compare, "type", "gpu_decoder_logits_projection_numeric_compare");
         add_assoc_string(&compare, "status", "logits_projection_tensor_shape_invalid");
+        add_assoc_string(&compare, "classification", "shape_mismatch");
+        add_assoc_string(&compare, "error_category", "shape");
+        add_assoc_string(&compare, "error_code", "king.shape_mismatch.detected");
         add_assoc_bool(&compare, "matched", false);
         add_assoc_str(&compare, "weight_tensor", zend_string_copy(weight_name));
         add_assoc_long(&compare, "cols", (zend_long) cols);
@@ -235,6 +241,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
         array_init(&compare);
         add_assoc_string(&compare, "type", "gpu_decoder_logits_projection_numeric_compare");
         add_assoc_string(&compare, "status", "cuMemcpyDtoH_final_norm_failed");
+        add_assoc_string(&compare, "classification", "device_readback_failed");
+        add_assoc_string(&compare, "error_category", "device_readback");
+        add_assoc_string(&compare, "error_code", "king.device_readback.failed");
         add_assoc_long(&compare, "result", result);
         add_assoc_bool(&compare, "matched", false);
         add_assoc_bool(logits_probe, "logits_projection_numeric_compare_failed", true);
@@ -326,6 +335,12 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
             add_assoc_bool(&sample, "value_match", value_match);
             add_assoc_bool(&sample, "order_match", order_match);
             add_assoc_bool(&sample, "rank_logit_match", rank_logit_match);
+            add_assoc_bool(&sample, "matched", value_match && order_match && rank_logit_match);
+            add_assoc_string(
+                &sample,
+                "classification",
+                value_match && order_match && rank_logit_match ? "matched" : "numeric_mismatch"
+            );
             add_next_index_zval(&samples, &sample);
         }
     }
@@ -351,6 +366,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
     add_assoc_string(&compare, "type", "gpu_decoder_logits_projection_numeric_compare");
     add_assoc_string(&compare, "reference", "cpu_full_output_projection_top_k");
     add_assoc_string(&compare, "status", matched ? "matched" : "mismatch");
+    add_assoc_string(&compare, "classification", matched ? "matched" : "numeric_mismatch");
+    add_assoc_string(&compare, "error_category", matched ? "none" : "numeric_mismatch");
+    add_assoc_string(&compare, "error_code", matched ? "none" : "king.numeric_mismatch.detected");
     add_assoc_bool(&compare, "matched", matched);
     add_assoc_bool(&compare, "ordering_matched", matched_ordering == candidate_count);
     add_assoc_str(&compare, "weight_tensor", zend_string_copy(weight_name));
@@ -367,6 +385,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
     add_assoc_double(&compare, "max_expected_abs", max_expected_abs);
     add_assoc_zval(&compare, "samples", &samples);
     add_assoc_bool(logits_probe, "logits_projection_numeric_compare_failed", !matched);
+    add_assoc_bool(logits_probe, "bounded_top_k_numeric_validated", matched);
+    add_assoc_bool(logits_probe, "bounded_top_k_ordering_validated", matched_ordering == candidate_count);
     add_assoc_zval(logits_probe, "logits_projection_numeric_compare", &compare);
     if (!matched) {
         char message[256];
@@ -374,7 +394,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_bounded_lo
         snprintf(
             message,
             sizeof(message),
-            "logits_projection_mismatch tensor=%s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
+            "king.numeric_mismatch.detected logits_projection_mismatch tensor=%s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
             ZSTR_VAL(weight_name),
             (unsigned long) candidate_count,
             (unsigned long) matched_values,

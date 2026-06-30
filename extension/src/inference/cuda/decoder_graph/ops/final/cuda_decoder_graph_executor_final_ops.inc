@@ -328,6 +328,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_add_selected_bound
         add_assoc_double(logits_probe, "selected_token_logit", (double) host_logits[0]);
         add_assoc_double(logits_probe, "selected_token_rank", 0.0);
         add_assoc_string(logits_probe, "selected_token_source", "bounded_readback_argmax");
+        add_assoc_string(logits_probe, "sampler_mode", "argmax");
+        add_assoc_bool(logits_probe, "sampler_deterministic", true);
+        add_assoc_long(logits_probe, "sampler_active_candidate_count", 1);
+        add_assoc_bool(logits_probe, "bounded_top_k_selected_from_rank_zero", true);
         return SUCCESS;
     }
     if (temperature == 0.0) {
@@ -342,6 +346,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_add_selected_bound
         add_assoc_double(logits_probe, "selected_token_logit", (double) host_logits[0]);
         add_assoc_double(logits_probe, "selected_token_rank", 0.0);
         add_assoc_string(logits_probe, "selected_token_source", "bounded_readback_temperature_zero");
+        add_assoc_string(logits_probe, "sampler_mode", "temperature_zero_argmax");
+        add_assoc_bool(logits_probe, "sampler_deterministic", true);
+        add_assoc_long(logits_probe, "sampler_active_candidate_count", 1);
+        add_assoc_bool(logits_probe, "bounded_top_k_selected_from_rank_zero", true);
         return SUCCESS;
     }
 
@@ -406,6 +414,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_add_selected_bound
     add_assoc_double(logits_probe, "selected_token_logit", (double) host_logits[selected_rank]);
     add_assoc_double(logits_probe, "selected_token_rank", (double) selected_rank);
     add_assoc_string(logits_probe, "selected_token_source", "bounded_readback_sampler");
+    add_assoc_string(logits_probe, "sampler_mode", "sample");
+    add_assoc_bool(logits_probe, "sampler_deterministic", has_seed);
+    add_assoc_bool(logits_probe, "sampler_seeded", has_seed);
+    add_assoc_long(logits_probe, "sampler_active_candidate_count", (zend_long) active_count);
+    add_assoc_double(logits_probe, "sampler_active_probability_sum", active_sum);
+    add_assoc_double(logits_probe, "sampler_temperature", temperature);
+    add_assoc_double(logits_probe, "sampler_top_p", top_p);
     return SUCCESS;
 }
 
@@ -443,6 +458,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_add_bounded_logits
     add_assoc_bool(logits_probe, "bounded_readback_executed", false);
     add_assoc_bool(logits_probe, "sampling_op_present", sampling_op != NULL);
     add_assoc_bool(logits_probe, "candidate_materialization_requested", materialize_candidates);
+    add_assoc_bool(logits_probe, "bounded_top_k_numeric_validated", false);
+    add_assoc_bool(logits_probe, "bounded_top_k_ordering_validated", false);
     if (sampling_op != NULL) {
         zval *op_name = king_inference_array_find(sampling_op, "op");
 
