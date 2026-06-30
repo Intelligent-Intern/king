@@ -321,6 +321,7 @@ static void king_inference_decode_graph_add_stack(zval *ops, const char *id, zva
 
 #include "token_decode_graph_sampler.inc"
 #include "token_decode_graph_attention_norm.inc"
+#include "token_decode_graph_debug.inc"
 
 static zend_result king_inference_token_decode_graph_array(
     king_inference_model_object *model,
@@ -766,6 +767,10 @@ static zend_result king_inference_token_decode_graph_array(
     zend_string_release(final_norm);
     if (output_projection != NULL) {
         zend_string_release(output_projection);
+    }
+    if (king_inference_decode_graph_attach_debug(model, return_value) != SUCCESS) {
+        zval_ptr_dtor(return_value);
+        return FAILURE;
     }
     state = king_inference_array_find(options, "state");
     if (state != NULL) {
