@@ -38,6 +38,112 @@ static const char *king_inference_cuda_decoder_graph_executor_plan_allocation_sc
     return "temporary_device_vector";
 }
 
+static const char *king_inference_cuda_decoder_graph_executor_plan_required_capability(
+    zend_string *node_id,
+    zend_string *op_name
+) {
+    if (zend_string_equals_literal(op_name, "embedding")) {
+        return "embedding_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "rms_norm")) {
+        return "rms_norm_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "linear")) {
+        if (node_id != NULL && zend_string_equals_literal(node_id, "logits")) {
+            return "logits_projection_execution_available";
+        }
+        return "linear_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "add")) {
+        return "vector_add_available";
+    }
+    if (zend_string_equals_literal(op_name, "scale")) {
+        return "vector_scale_available";
+    }
+    if (zend_string_equals_literal(op_name, "mul")) {
+        return "vector_mul_available";
+    }
+    if (zend_string_equals_literal(op_name, "silu")) {
+        return "vector_silu_available";
+    }
+    if (zend_string_equals_literal(op_name, "gelu_tanh")) {
+        return "ffn_swiglu_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "slice")) {
+        return "slice_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "rope")) {
+        return "rope_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "kv_write")) {
+        return "kv_write_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "kv_attention")) {
+        return "kv_attention_execution_available";
+    }
+    if (zend_string_equals_literal(op_name, "stack")) {
+        return "vector_copy_to_offset_available";
+    }
+    if (king_inference_cuda_decoder_graph_executor_host_sampling_op(op_name)) {
+        return "sampling_readback_available";
+    }
+    return "unsupported_operation";
+}
+
+static bool king_inference_cuda_decoder_graph_executor_plan_capability_available(
+    king_inference_model_object *model,
+    zend_string *node_id,
+    zend_string *op_name
+) {
+    if (zend_string_equals_literal(op_name, "embedding")) {
+        return model->cuda_decoder_graph_executor_embedding_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "rms_norm")) {
+        return model->cuda_decoder_graph_executor_rms_norm_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "linear")) {
+        if (node_id != NULL && zend_string_equals_literal(node_id, "logits")) {
+            return model->cuda_decoder_graph_executor_logits_projection_execution_available;
+        }
+        return model->cuda_decoder_graph_executor_linear_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "add")) {
+        return model->cuda_vector_add_available && model->cuda_device_allocator_available;
+    }
+    if (zend_string_equals_literal(op_name, "scale")) {
+        return model->cuda_vector_scale_available && model->cuda_device_allocator_available;
+    }
+    if (zend_string_equals_literal(op_name, "mul")) {
+        return model->cuda_vector_mul_available && model->cuda_device_allocator_available;
+    }
+    if (zend_string_equals_literal(op_name, "silu")) {
+        return model->cuda_vector_silu_available && model->cuda_device_allocator_available;
+    }
+    if (zend_string_equals_literal(op_name, "gelu_tanh")) {
+        return model->cuda_decoder_graph_executor_ffn_swiglu_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "slice")) {
+        return model->cuda_decoder_graph_executor_slice_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "rope")) {
+        return model->cuda_decoder_graph_executor_rope_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "kv_write")) {
+        return model->cuda_decoder_graph_executor_kv_write_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "kv_attention")) {
+        return model->cuda_decoder_graph_executor_kv_attention_execution_available;
+    }
+    if (zend_string_equals_literal(op_name, "stack")) {
+        return model->cuda_vector_copy_to_offset_available && model->cuda_device_allocator_available;
+    }
+    if (king_inference_cuda_decoder_graph_executor_host_sampling_op(op_name)) {
+        return model->cuda_decoder_graph_executor_sampling_readback_available
+            && model->cuda_logits_readback_available;
+    }
+    return false;
+}
+
 static void king_inference_cuda_decoder_graph_executor_plan_record_read(
     zval *read_counts,
     zval *read_last,
@@ -383,10 +489,13 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
         zval lifetime;
         zval step_kernels;
         zval step_boundaries;
+        zval kernel_profile;
+        zval validation;
         zval buffer;
         const char *owner;
         const char *dtype;
         const char *allocation_scope;
+        const char *required_capability;
 
         if (string_index != NULL
             || numeric_index > (zend_ulong) ZEND_LONG_MAX
@@ -454,6 +563,18 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
         owner = king_inference_cuda_decoder_graph_executor_plan_owner(op_name);
         dtype = king_inference_cuda_decoder_graph_executor_plan_dtype(op_name);
         allocation_scope = king_inference_cuda_decoder_graph_executor_plan_allocation_scope(op_name);
+        required_capability = king_inference_cuda_decoder_graph_executor_plan_required_capability(id, op_name);
+        if (!king_inference_cuda_decoder_graph_executor_plan_capability_available(model, id, op_name)) {
+            zval_ptr_dtor(&reads);
+            status = king_inference_cuda_decoder_graph_executor_validation_error(
+                model,
+                "execution_plan_capability",
+                id,
+                "op",
+                required_capability
+            );
+            break;
+        }
         last_read_value = zend_hash_find(Z_ARRVAL(read_last), id);
         read_count_value = zend_hash_find(Z_ARRVAL(read_counts), id);
         if (last_read_value != NULL && Z_TYPE_P(last_read_value) == IS_LONG) {
@@ -469,11 +590,24 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
         add_assoc_string(&shape, "rank", "vector");
         add_assoc_long(&shape, "length", (zend_long) output_length);
         add_assoc_string(&shape, "dtype", dtype);
+        add_assoc_string(&shape, "validation", "graph_contract_preflight");
         array_init(&lifetime);
         add_assoc_long(&lifetime, "produce_step", (zend_long) numeric_index);
         add_assoc_long(&lifetime, "last_read_step", last_read);
         add_assoc_long(&lifetime, "read_count", read_count);
         add_assoc_string(&lifetime, "allocation_scope", allocation_scope);
+        array_init(&kernel_profile);
+        add_assoc_string(&kernel_profile, "required_capability", required_capability);
+        add_assoc_bool(&kernel_profile, "capability_available", true);
+        add_assoc_string(&kernel_profile, "owner", owner);
+        add_assoc_string(&kernel_profile, "dtype", dtype);
+        add_assoc_string(&kernel_profile, "allocation_scope", allocation_scope);
+        array_init(&validation);
+        add_assoc_bool(&validation, "dependencies_validated", true);
+        add_assoc_bool(&validation, "shape_validated", true);
+        add_assoc_bool(&validation, "dtype_validated", true);
+        add_assoc_bool(&validation, "capability_validated", true);
+        add_assoc_string(&validation, "error_code", "none");
 
         array_init(&step_kernels);
         king_inference_cuda_decoder_graph_executor_plan_add_kernel_sequence(
@@ -505,6 +639,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
         add_assoc_zval(&step, "shape", &shape);
         add_assoc_zval(&step, "buffer_lifetime", &lifetime);
         add_assoc_zval(&step, "kernel_sequence", &step_kernels);
+        add_assoc_zval(&step, "kernel_profile", &kernel_profile);
+        add_assoc_zval(&step, "validation", &validation);
         add_assoc_zval(&step, "failure_boundaries", &step_boundaries);
         add_next_index_zval(&steps, &step);
 
@@ -518,6 +654,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
         add_assoc_long(&buffer, "last_read_step", last_read);
         add_assoc_long(&buffer, "read_count", read_count);
         add_assoc_string(&buffer, "allocation_scope", allocation_scope);
+        add_assoc_string(&buffer, "required_capability", required_capability);
         add_next_index_zval(&buffers, &buffer);
 
         if (king_inference_cuda_decoder_graph_executor_device_op(op_name)) {
@@ -576,6 +713,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
     add_assoc_long(&plan, "schema_version", 2);
     add_assoc_bool(&plan, "ready", true);
     add_assoc_bool(&plan, "dependency_closure_proven", true);
+    add_assoc_bool(&plan, "capability_closure_proven", true);
+    add_assoc_bool(&plan, "shape_dtype_preflight_proven", true);
     add_assoc_bool(&plan, "prompt_content_free_debug_surface", true);
     add_assoc_bool(&plan, "device_execution_result_ready", false);
     add_assoc_bool(&plan, "token_result_ready", false);
@@ -594,6 +733,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
     add_assoc_zval(result, "execution_plan", &plan);
     add_assoc_bool(result, "execution_plan_ready", true);
     add_assoc_bool(result, "execution_plan_dependency_closure_proven", true);
+    add_assoc_bool(result, "execution_plan_capability_closure_proven", true);
+    add_assoc_bool(result, "execution_plan_shape_dtype_preflight_proven", true);
     add_assoc_bool(result, "execution_plan_prompt_content_free", true);
     add_assoc_long(result, "planned_device_ops", (zend_long) device_ops);
     add_assoc_long(result, "planned_host_sampling_ops", (zend_long) host_sampling_ops);
