@@ -111,14 +111,109 @@ utilization, VRAM, and power. Set `KING_INFERENCE_GPU_POWER_MAX_WATTS` to enable
 the optional power guardrail in that local smoke.
 
 For the local OpenAI-compatible router, `bin/king-openai-router` loads
-`infra/inference/local-gpu.php.ini`. That profile enables GPU bindings, selects
-`gemma4:12b` for the GPU profile, configures GPU layers, and uses
+`infra/inference/local-gpu.php.ini`. That local profile enables GPU bindings,
+selects `gemma3:1b` for the CPU and GPU profiles, expects the materialized GGUF
+artifact at `var/inference-models/gemma3-1b.gguf`, uses a 4096-token context,
+keeps graph memory disabled, configures GPU layer admission, and uses
 `nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits` as the
 temperature source. The router loads exactly the model selected by
 `king_inference_runtime_model_config()` and
 `king_inference_runtime_model_load()`. CPU/GPU model names, artifacts, context,
-memory mode, VRAM reserve, and thermal policy therefore come from the effective
-King config snapshot instead of separate router-side inference overrides.
+memory mode, VRAM reserve, power limits, and thermal policy therefore come from
+the effective King config snapshot instead of separate router-side inference
+overrides.
+
+## Local Chat App
+
+The repository includes a browser chat under `demo/chat` for exercising the
+OpenAI-compatible inference route with real streaming. The chat is intentionally
+thin: it persists threads in SQLite, validates browser requests in PHP, proxies
+to the King router, and streams the router's Server-Sent Events back to the
+browser. It does not call Ollama, vLLM, or a hosted API at runtime.
+
+Required local inputs:
+
+- `extension/modules/king.so` built from the current tree.
+- Local Docker image `king-local:php8.4-inference`.
+- A materialized GGUF model at `var/inference-models/gemma3-1b.gguf`.
+- Docker Compose and, for GPU execution, a working NVIDIA container runtime.
+
+Build the extension from the repository root whenever native code has changed:
+
+```bash
+make build
+```
+
+Build the local runtime image when it is missing. The Dockerfile consumes the
+release package artifacts from `dist/docker-packages`; create them first when
+that directory is not present for PHP 8.4:
+
+```bash
+make release-package
+docker build --load \
+  -f infra/php-runtime.Dockerfile \
+  -t king-local:php8.4-inference \
+  --build-arg PHP_VERSION=8.4 \
+  .
+```
+
+Provide the model artifact. King needs a direct local GGUF file path; model
+weights remain ignored by git. If you already have an approved GGUF artifact,
+copy or symlink it to the path used by the local profile:
+
+```bash
+mkdir -p var/inference-models
+ln -sf /absolute/path/to/gemma3-1b.gguf var/inference-models/gemma3-1b.gguf
+```
+
+If the artifact source is a local Ollama installation, Ollama is only used to
+download and store the model. The King router still reads the GGUF blob directly
+and does not call Ollama's HTTP API:
+
+```bash
+ollama pull gemma3:1b
+ollama show --modelfile gemma3:1b
+mkdir -p var/inference-models
+ln -sf /path/to/ollama/models/blobs/sha256-... var/inference-models/gemma3-1b.gguf
+```
+
+Use the `FROM` digest shown by `ollama show --modelfile gemma3:1b` to choose the
+matching blob. Common blob roots are `/usr/share/ollama/.ollama/models/blobs`
+for the Linux service user and `$HOME/.ollama/models/blobs` for a user-local
+Ollama installation. When the symlink points into the service path, make the same
+directory visible to the container through `demo/chat/.env`:
+
+```bash
+cd demo/chat
+cp .env.example .env
+# Adjust KING_MODEL_BLOBS when your Ollama blob directory is not the default.
+```
+
+Start the chat:
+
+```bash
+cd demo/chat
+docker compose up -d
+```
+
+Open:
+
+- Chat UI: `http://127.0.0.1:19480`
+- OpenAI-compatible base URL: `http://127.0.0.1:8080/v1`
+- Compose-scoped model list: `http://127.0.0.1:19481/v1/models`
+
+The chat backend stores threads in `demo/chat/var/chat.sqlite`, which is local
+runtime state and ignored by git. Stop the stack with:
+
+```bash
+cd demo/chat
+docker compose down
+```
+
+If `/v1/models` works but chat generation is slow, inspect the router start log
+first. It prints the effective model profile, artifact paths, context policy,
+GPU backend, VRAM guardrails, thermal ceiling, and immediate-streaming flags
+before binding the port.
 
 Native graph stream memory is opt-in. The compiled default is stateless and the
 system baseline can be changed in `php.ini`:
