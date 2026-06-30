@@ -43,6 +43,13 @@ static const char *king_inference_runtime_array_string(zval *source, const char 
     return value != NULL && Z_TYPE_P(value) == IS_STRING ? Z_STRVAL_P(value) : "";
 }
 
+static bool king_inference_runtime_gpu_profile_configured(
+    const kg_high_perf_compute_ai_config_t *compute
+) {
+    return king_inference_runtime_non_empty(compute->inference_gpu_model_artifact)
+        || compute->inference_gpu_max_gpu_layers > 0;
+}
+
 static zend_string *king_inference_runtime_gpu_refusal_reasons_string(zval *gpu_runtime)
 {
     zval *reasons;
@@ -144,7 +151,8 @@ static const char *king_inference_runtime_gpu_profile_refusal_hint(zval *gpu_run
 
 static zend_result king_inference_runtime_refuse_gpu_profile(
     const char *function_name,
-    zval *gpu_runtime)
+    zval *gpu_runtime,
+    const char *profile_kind)
 {
     zend_string *reasons = king_inference_runtime_gpu_refusal_reasons_string(gpu_runtime);
     const char *hint = king_inference_runtime_gpu_profile_refusal_hint(gpu_runtime);
@@ -157,8 +165,9 @@ static zend_result king_inference_runtime_refuse_gpu_profile(
     zend_throw_exception_ex(
         king_ce_validation_exception,
         0,
-        "%s() refused explicit gpu profile: %s. Reasons=%s. Artifact=%s. CUDA error=%s. King will not silently fall back to CPU for a gpu profile.",
+        "%s() refused %s gpu profile: %s. Reasons=%s. Artifact=%s. CUDA error=%s. King will not silently fall back to CPU for a gpu profile.",
         function_name,
+        profile_kind,
         hint,
         ZSTR_VAL(reasons),
         artifact_path[0] != '\0' ? artifact_path : "(not configured)",
@@ -214,7 +223,7 @@ static zend_result king_inference_runtime_select_profile(
     if (strcasecmp(profile, "gpu") == 0) {
         king_inference_gpu_runtime_status_from_compute(compute, &gpu_runtime);
         if (!king_inference_runtime_array_bool(&gpu_runtime, "config_ready")) {
-            king_inference_runtime_refuse_gpu_profile(function_name, &gpu_runtime);
+            king_inference_runtime_refuse_gpu_profile(function_name, &gpu_runtime, "explicit");
             zval_ptr_dtor(&gpu_runtime);
             return FAILURE;
         }
@@ -236,6 +245,10 @@ static zend_result king_inference_runtime_select_profile(
         *selected_gpu = *gpu_profile_available;
         if (*selected_gpu) {
             ZVAL_COPY(selected_gpu_runtime, &gpu_runtime);
+        } else if (king_inference_runtime_gpu_profile_configured(compute)) {
+            king_inference_runtime_refuse_gpu_profile(function_name, &gpu_runtime, "configured");
+            zval_ptr_dtor(&gpu_runtime);
+            return FAILURE;
         }
         zval_ptr_dtor(&gpu_runtime);
         return SUCCESS;
@@ -268,6 +281,7 @@ static zend_result king_inference_runtime_model_config_array(
     const char *selected_artifact;
     bool selected_gpu;
     bool gpu_profile_available;
+    bool gpu_profile_configured = king_inference_runtime_gpu_profile_configured(compute);
     bool process_gpu_enabled = king_high_perf_compute_ai_config.gpu_bindings_enable;
     bool config_gpu_enabled = compute->gpu_bindings_enable;
     zval selected_gpu_runtime;
@@ -312,6 +326,8 @@ static zend_result king_inference_runtime_model_config_array(
     add_assoc_string(return_value, "runtime_requested_profile", profile);
     add_assoc_string(return_value, "runtime_cpu_model_name", cpu_name);
     add_assoc_string(return_value, "runtime_gpu_model_name", gpu_name);
+    add_assoc_bool(return_value, "runtime_gpu_profile_configured", gpu_profile_configured);
+    add_assoc_bool(return_value, "runtime_cpu_fallback_allowed", !gpu_profile_configured);
     add_assoc_bool(return_value, "runtime_gpu_bindings_enable", process_gpu_enabled);
     add_assoc_bool(return_value, "runtime_config_gpu_bindings_enable", config_gpu_enabled);
     add_assoc_bool(
@@ -374,6 +390,12 @@ static zend_result king_inference_runtime_model_config_array(
         add_assoc_long(&gpu, "max_gpu_layers", compute->inference_gpu_max_gpu_layers);
         add_assoc_long(&gpu, "vram_reserve_mb", compute->inference_gpu_vram_reserve_mb);
         add_assoc_long(&gpu, "min_free_vram_mb", compute->inference_gpu_min_free_vram_mb);
+        add_assoc_bool(&gpu, "allow_system_ram_offload", compute->inference_gpu_allow_system_ram_offload);
+        add_assoc_string(
+            &gpu,
+            "system_ram_offload_policy",
+            compute->inference_gpu_allow_system_ram_offload ? "explicitly_allowed" : "disabled_fail_closed"
+        );
         add_assoc_bool(
             &gpu,
             "batch_prefill_experimental_enable",

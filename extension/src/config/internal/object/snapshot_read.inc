@@ -323,6 +323,17 @@ static zend_result king_config_object_snapshot_read(
     if (
         zend_string_equals_cstr(
             canonical_key,
+            "inference.gpu_allow_system_ram_offload",
+            sizeof("inference.gpu_allow_system_ram_offload") - 1
+        )
+    ) {
+        ZVAL_BOOL(return_value, cfg->compute_ai.inference_gpu_allow_system_ram_offload);
+        return SUCCESS;
+    }
+
+    if (
+        zend_string_equals_cstr(
+            canonical_key,
             "inference.gpu_thermal_sensor_path",
             sizeof("inference.gpu_thermal_sensor_path") - 1
         )

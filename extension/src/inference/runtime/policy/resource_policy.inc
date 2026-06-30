@@ -291,6 +291,12 @@ static zend_result king_inference_validate_gpu_config(zval *config, const char *
             "min_free_vram_mb",
             "gpu.min_free_vram_mb",
             function_name
+        ) != SUCCESS
+        || king_inference_validate_gpu_bool_field(
+            gpu,
+            "allow_system_ram_offload",
+            "gpu.allow_system_ram_offload",
+            function_name
         ) != SUCCESS) {
         return FAILURE;
     }
