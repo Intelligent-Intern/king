@@ -211,6 +211,7 @@ static zend_result king_inference_responses_stream_response(
     zend_string *model_name = king_inference_stream_openai_model_name(stream);
     zval event;
     bool finished = false;
+    const char *response_format_error = NULL;
 
     king_inference_responses_base_event(&event, "response.created", response_id, message_id, model_name);
     if (king_inference_responses_sse_append(&sse, "response.created", &event) != SUCCESS) {
@@ -288,6 +289,22 @@ static zend_result king_inference_responses_stream_response(
     }
 
     smart_str_0(&content);
+    if (king_inference_openai_validate_response_format_output(
+        &stream->request,
+        content.s,
+        &response_format_error
+    ) != SUCCESS) {
+        zend_string_release(model_name);
+        smart_str_free(&sse);
+        smart_str_free(&content);
+        return king_inference_openai_error_response(
+            return_value,
+            502,
+            response_format_error != NULL ? response_format_error : "Model output did not satisfy response_format.",
+            "server_error"
+        );
+    }
+
     king_inference_responses_base_event(&event, "response.completed", response_id, message_id, model_name);
     if (content.s != NULL) {
         add_assoc_str(&event, "output_text", zend_string_copy(content.s));
@@ -468,9 +485,29 @@ static zend_result king_inference_openai_responses_payload_response(
         smart_str content = {0};
         zval response_payload;
         zend_string *json = NULL;
+        const char *response_format_error = NULL;
 
         result = king_inference_openai_drain_stream(stream, &stream_value, &drain_controls, &content, NULL, NULL);
         smart_str_0(&content);
+        if (result == SUCCESS
+            && king_inference_openai_validate_response_format_output(
+                &stream->request,
+                content.s,
+                &response_format_error
+            ) != SUCCESS) {
+            result = king_inference_openai_error_response(
+                return_value,
+                502,
+                response_format_error != NULL ? response_format_error : "Model output did not satisfy response_format.",
+                "server_error"
+            );
+            smart_str_free(&content);
+            zend_string_release(response_id);
+            zend_string_release(message_id);
+            zval_ptr_dtor(&stream_value);
+            zval_ptr_dtor(&chat_payload);
+            return result;
+        }
         if (result == SUCCESS) {
             result = king_inference_responses_output_payload(
                 stream,

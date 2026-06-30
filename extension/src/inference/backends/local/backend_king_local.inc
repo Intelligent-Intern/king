@@ -195,6 +195,7 @@ static zend_string *king_inference_king_local_prompt_from_request(zval *request)
     } ZEND_HASH_FOREACH_END();
 
     king_inference_openai_append_tool_prompt(request, &buffer);
+    king_inference_openai_append_response_format_instruction(request, &buffer);
     smart_str_appends(&buffer, "assistant: ");
     smart_str_0(&buffer);
     return buffer.s;

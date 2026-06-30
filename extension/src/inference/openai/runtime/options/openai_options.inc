@@ -419,11 +419,95 @@ static bool king_inference_openai_response_format_valid(zval *source, const char
     if (zend_string_equals_literal(Z_STR_P(type), "text")) {
         return true;
     }
+    if (zend_string_equals_literal(Z_STR_P(type), "json_object")) {
+        return true;
+    }
 
     if (message != NULL) {
-        *message = "King local inference supports only response_format.type=text.";
+        *message = "King local inference supports only response_format.type=text or json_object.";
     }
     return false;
+}
+
+static bool king_inference_openai_response_format_json_object_requested(zval *source)
+{
+    zval *format = king_inference_array_find(source, "response_format");
+    zval *type;
+
+    if (!king_inference_openai_array_is_object(format)) {
+        return false;
+    }
+
+    type = king_inference_array_find(format, "type");
+    return type != NULL
+        && Z_TYPE_P(type) == IS_STRING
+        && zend_string_equals_literal(Z_STR_P(type), "json_object");
+}
+
+static void king_inference_openai_append_response_format_instruction(zval *source, smart_str *buffer)
+{
+    if (!king_inference_openai_response_format_json_object_requested(source)) {
+        return;
+    }
+
+    smart_str_appends(
+        buffer,
+        "Return only one valid JSON object. Do not wrap it in Markdown. Do not include prose before or after the JSON object.\n"
+    );
+}
+
+static zend_result king_inference_openai_validate_json_object_output(
+    zend_string *content,
+    const char **message)
+{
+    zval decoded;
+
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (content == NULL || ZSTR_LEN(content) == 0) {
+        if (message != NULL) {
+            *message = "Model output was empty for response_format.type=json_object.";
+        }
+        return FAILURE;
+    }
+
+    ZVAL_UNDEF(&decoded);
+    if (php_json_decode(&decoded, ZSTR_VAL(content), ZSTR_LEN(content), 0, 512) != SUCCESS) {
+        if (EG(exception)) {
+            zend_clear_exception();
+        }
+        king_set_error("");
+        if (message != NULL) {
+            *message = "Model output was not valid JSON for response_format.type=json_object.";
+        }
+        return FAILURE;
+    }
+    if (Z_TYPE(decoded) != IS_OBJECT) {
+        zval_ptr_dtor(&decoded);
+        if (message != NULL) {
+            *message = "Model output was valid JSON but not a JSON object for response_format.type=json_object.";
+        }
+        return FAILURE;
+    }
+
+    zval_ptr_dtor(&decoded);
+    return SUCCESS;
+}
+
+static zend_result king_inference_openai_validate_response_format_output(
+    zval *request,
+    zend_string *content,
+    const char **message)
+{
+    if (message != NULL) {
+        *message = NULL;
+    }
+    if (!king_inference_openai_response_format_json_object_requested(request)) {
+        return SUCCESS;
+    }
+
+    return king_inference_openai_validate_json_object_output(content, message);
 }
 
 static bool king_inference_openai_response_instructions_valid(zval *source, const char **message)
@@ -488,6 +572,10 @@ static bool king_inference_openai_response_feature_options_valid(zval *source, c
         NULL
     };
 
+    if (!king_inference_openai_response_format_valid(source, message)) {
+        return false;
+    }
+
     return king_inference_openai_no_unsupported_features(source, unsupported_keys, message);
 }
 
@@ -515,6 +603,19 @@ static void king_inference_openai_copy_array_option(zval *source, zval *target, 
 
     ZVAL_COPY(&copy, field);
     add_assoc_zval(target, key, &copy);
+}
+
+static void king_inference_openai_copy_response_format_option(zval *source, zval *target)
+{
+    zval *format = king_inference_array_find(source, "response_format");
+    zval copy;
+
+    if (format == NULL || Z_TYPE_P(format) != IS_ARRAY) {
+        return;
+    }
+
+    ZVAL_COPY(&copy, format);
+    add_assoc_zval(target, "response_format", &copy);
 }
 
 static void king_inference_openai_copy_native_graph_options(zval *source, zval *target)
@@ -550,6 +651,7 @@ static void king_inference_openai_copy_chat_generation_options(zval *source, zva
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
     king_inference_openai_copy_stop_option(source, target);
+    king_inference_openai_copy_response_format_option(source, target);
     king_inference_openai_copy_native_graph_options(source, target);
 }
 
@@ -574,6 +676,7 @@ static void king_inference_openai_copy_response_generation_options(zval *source,
     };
 
     king_inference_openai_copy_generation_options(source, target, max_token_keys);
+    king_inference_openai_copy_response_format_option(source, target);
     king_inference_openai_copy_native_graph_options(source, target);
 }
 

@@ -130,6 +130,7 @@ static zend_result king_inference_openai_render_gemma_messages_prompt(
         smart_str_appends(&rendered, pipe_turn_template ? "<turn|>\n" : "<end_of_turn>\n");
     } ZEND_HASH_FOREACH_END();
 
+    king_inference_openai_append_response_format_instruction(payload, &pending_instructions);
     if (pending_instructions.s != NULL && ZSTR_LEN(pending_instructions.s) > 0) {
         smart_str_appends(&rendered, pipe_turn_template ? "<|turn>user\n" : "<start_of_turn>user\n");
         smart_str_0(&pending_instructions);
@@ -196,6 +197,7 @@ static zend_result king_inference_openai_render_messages_prompt(
         smart_str_appends(&rendered, "\n");
     } ZEND_HASH_FOREACH_END();
 
+    king_inference_openai_append_response_format_instruction(payload, &rendered);
     smart_str_appends(&rendered, "assistant: ");
     smart_str_0(&rendered);
     if (rendered.s == NULL) {
