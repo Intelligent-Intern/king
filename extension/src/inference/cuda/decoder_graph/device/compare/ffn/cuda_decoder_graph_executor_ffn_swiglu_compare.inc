@@ -46,7 +46,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     float *actual = NULL;
     double max_expected_abs = 0.0;
     double max_abs_diff = 0.0;
+    double max_relative_diff = 0.0;
     double tolerance;
+    double relative_tolerance = king_inference_cuda_numeric_tolerance_relative("ffn_swiglu");
     zend_ulong matched_values = 0;
     zend_ulong sample_limit;
     bool matched = true;
@@ -127,49 +129,68 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     array_init(&samples);
     for (zend_ulong i = 0; i < swiglu_width; i++) {
         double expected = king_inference_cuda_decoder_graph_executor_cpu_ffn_activation((double) gate[i], activation) * (double) up[i];
-        double diff = fabs((double) actual[i] - expected);
         double abs_expected = fabs(expected);
 
         if (abs_expected > max_expected_abs) {
             max_expected_abs = abs_expected;
-        }
-        if (diff > max_abs_diff) {
-            max_abs_diff = diff;
-        }
-        if (i < sample_limit) {
-            zval sample;
-
-            array_init(&sample);
-            add_assoc_long(&sample, "index", (zend_long) i);
-            add_assoc_double(&sample, "actual", (double) actual[i]);
-            add_assoc_double(&sample, "expected", expected);
-            add_assoc_double(&sample, "abs_diff", diff);
-            add_next_index_zval(&samples, &sample);
         }
     }
     tolerance = fmax(0.0005, max_expected_abs * 0.00005);
     for (zend_ulong i = 0; i < swiglu_width; i++) {
         double expected = king_inference_cuda_decoder_graph_executor_cpu_ffn_activation((double) gate[i], activation) * (double) up[i];
         double diff = fabs((double) actual[i] - expected);
+        double rel_diff = king_inference_cuda_numeric_relative_diff((double) actual[i], expected);
+        const char *classification = king_inference_cuda_numeric_sample_classification(
+            (double) actual[i],
+            expected,
+            diff,
+            rel_diff,
+            tolerance,
+            relative_tolerance
+        );
 
-        if (diff <= tolerance) {
+        if (king_inference_cuda_numeric_sample_matches(classification)) {
             matched_values++;
         } else {
             matched = false;
+        }
+        if (diff > max_abs_diff) {
+            max_abs_diff = diff;
+        }
+        if (rel_diff > max_relative_diff && isfinite(rel_diff)) {
+            max_relative_diff = rel_diff;
+        }
+        if (i < sample_limit) {
+            king_inference_cuda_decoder_graph_executor_ffn_compare_add_sample(
+                &samples,
+                i,
+                "ffn_swiglu",
+                0,
+                (double) actual[i],
+                expected,
+                diff,
+                rel_diff,
+                tolerance,
+                relative_tolerance,
+                classification
+            );
         }
     }
 
     efree(actual);
     efree(up);
     efree(gate);
-    add_assoc_string(&compare, "status", matched ? "matched" : "mismatch");
+    king_inference_cuda_decoder_graph_executor_ffn_compare_add_status(&compare, matched);
     add_assoc_bool(&compare, "matched", matched);
     add_assoc_long(&compare, "compared_values", (zend_long) swiglu_width);
     add_assoc_long(&compare, "matched_values", (zend_long) matched_values);
     add_assoc_long(&compare, "width", (zend_long) swiglu_width);
     add_assoc_long(&compare, "sampled_values", (zend_long) sample_limit);
     add_assoc_double(&compare, "tolerance", tolerance);
+    add_assoc_double(&compare, "max_abs_tolerance", tolerance);
+    add_assoc_double(&compare, "max_relative_tolerance", relative_tolerance);
     add_assoc_double(&compare, "max_abs_diff", max_abs_diff);
+    add_assoc_double(&compare, "max_relative_diff", max_relative_diff);
     add_assoc_double(&compare, "max_expected_abs", max_expected_abs);
     add_assoc_zval(&compare, "samples", &samples);
     add_assoc_bool(ffn_swiglu_probe, "ffn_swiglu_numeric_compare_failed", !matched);
@@ -180,7 +201,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
         snprintf(
             message,
             sizeof(message),
-            "ffn_swiglu_mismatch compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
+            "king.numeric_mismatch.detected ffn_swiglu_mismatch compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
             (unsigned long) swiglu_width,
             (unsigned long) matched_values,
             max_abs_diff,

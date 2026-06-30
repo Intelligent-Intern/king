@@ -2,6 +2,46 @@
  * Internal CUDA FFN down-projection and output-residual compares for selected blocks.
  */
 
+static void king_inference_cuda_decoder_graph_executor_ffn_compare_add_status(
+    zval *compare,
+    bool matched
+) {
+    add_assoc_string(compare, "status", matched ? "matched" : "mismatch");
+    add_assoc_string(compare, "classification", matched ? "matched" : "numeric_mismatch");
+    add_assoc_string(compare, "error_category", matched ? "none" : "numeric_mismatch");
+    add_assoc_string(compare, "error_code", matched ? "none" : "king.numeric_mismatch.detected");
+    add_assoc_string(compare, "failure_status", matched ? "none" : "numeric_mismatch");
+}
+
+static void king_inference_cuda_decoder_graph_executor_ffn_compare_add_sample(
+    zval *samples,
+    zend_ulong index,
+    const char *op,
+    zend_ulong layer,
+    double actual,
+    double expected,
+    double abs_diff,
+    double relative_diff,
+    double max_abs_tolerance,
+    double max_relative_tolerance,
+    const char *classification
+) {
+    zval sample;
+
+    array_init(&sample);
+    add_assoc_long(&sample, "index", (zend_long) index);
+    add_assoc_string(&sample, "op", op);
+    add_assoc_long(&sample, "layer", (zend_long) layer);
+    add_assoc_double(&sample, "actual", actual);
+    add_assoc_double(&sample, "expected", expected);
+    add_assoc_double(&sample, "abs_diff", abs_diff);
+    add_assoc_double(&sample, "relative_diff", relative_diff);
+    add_assoc_double(&sample, "max_abs_tolerance", max_abs_tolerance);
+    add_assoc_double(&sample, "max_relative_tolerance", max_relative_tolerance);
+    add_assoc_string(&sample, "classification", classification);
+    add_next_index_zval(samples, &sample);
+}
+
 static bool king_inference_cuda_decoder_graph_executor_parse_layer_id(
     zend_string *value,
     const char *suffix,
@@ -66,7 +106,7 @@ static void king_inference_cuda_decoder_graph_executor_compare_down_set_error(
     snprintf(
         message,
         sizeof(message),
-        "%s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
+        "king.numeric_mismatch.detected %s compared=%lu matched=%lu max_abs_diff=%.9g tolerance=%.9g",
         prefix,
         (unsigned long) compared,
         (unsigned long) matched,
@@ -74,6 +114,58 @@ static void king_inference_cuda_decoder_graph_executor_compare_down_set_error(
         tolerance
     );
     king_inference_cuda_decoder_graph_executor_set_error(model, -1, message);
+}
+
+static void king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compare(
+    zval *result,
+    zval *probe,
+    const char *source_key,
+    const char *target_key
+) {
+    zval *compare = probe != NULL && Z_TYPE_P(probe) == IS_ARRAY
+        ? king_inference_array_find(probe, source_key)
+        : NULL;
+    zval copy;
+
+    if (compare == NULL || Z_TYPE_P(compare) != IS_ARRAY) {
+        return;
+    }
+
+    ZVAL_COPY(&copy, compare);
+    add_assoc_zval(result, target_key, &copy);
+}
+
+static void king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compares(
+    zval *result,
+    zval *ffn_gate_up_probe,
+    zval *ffn_swiglu_probe,
+    zval *ffn_down_probe,
+    zval *ffn_output_probe
+) {
+    king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compare(
+        result,
+        ffn_gate_up_probe,
+        "ffn_gate_up_numeric_compare",
+        "block0_ffn_gate_up_numeric_compare"
+    );
+    king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compare(
+        result,
+        ffn_swiglu_probe,
+        "ffn_swiglu_numeric_compare",
+        "block0_ffn_swiglu_numeric_compare"
+    );
+    king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compare(
+        result,
+        ffn_down_probe,
+        "ffn_down_numeric_compare",
+        "block0_ffn_down_numeric_compare"
+    );
+    king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compare(
+        result,
+        ffn_output_probe,
+        "ffn_output_residual_numeric_compare",
+        "block0_ffn_output_residual_numeric_compare"
+    );
 }
 
 static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn_down_projection(
@@ -98,7 +190,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     double *input = NULL;
     double max_expected_abs = 0.0;
     double max_abs_diff = 0.0;
+    double max_relative_diff = 0.0;
     double tolerance;
+    double relative_tolerance = king_inference_cuda_numeric_tolerance_relative("ffn_down");
     zend_ulong matched_values = 0;
     zend_ulong sample_limit;
     bool matched = true;
@@ -201,7 +295,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     for (zend_ulong row = 0; row < down_width; row++) {
         double expected = 0.0;
         double diff;
+        double rel_diff;
         double abs_expected;
+        const char *classification;
 
         if (king_inference_tensor_row_dot(&weight_view, row * cols, cols, input, &expected) != SUCCESS) {
             zval_ptr_dtor(&samples);
@@ -212,8 +308,17 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
             return FAILURE;
         }
         diff = fabs((double) actual[row] - expected);
+        rel_diff = king_inference_cuda_numeric_relative_diff((double) actual[row], expected);
+        classification = king_inference_cuda_numeric_sample_classification(
+            (double) actual[row],
+            expected,
+            diff,
+            rel_diff,
+            tolerance,
+            relative_tolerance
+        );
         abs_expected = fabs(expected);
-        if (diff <= tolerance) {
+        if (king_inference_cuda_numeric_sample_matches(classification)) {
             matched_values++;
         } else {
             matched = false;
@@ -224,22 +329,30 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
         if (abs_expected > max_expected_abs) {
             max_expected_abs = abs_expected;
         }
+        if (rel_diff > max_relative_diff && isfinite(rel_diff)) {
+            max_relative_diff = rel_diff;
+        }
         if (row < sample_limit) {
-            zval sample;
-
-            array_init(&sample);
-            add_assoc_long(&sample, "index", (zend_long) row);
-            add_assoc_double(&sample, "actual", (double) actual[row]);
-            add_assoc_double(&sample, "expected", expected);
-            add_assoc_double(&sample, "abs_diff", diff);
-            add_next_index_zval(&samples, &sample);
+            king_inference_cuda_decoder_graph_executor_ffn_compare_add_sample(
+                &samples,
+                row,
+                "ffn_down",
+                layer,
+                (double) actual[row],
+                expected,
+                diff,
+                rel_diff,
+                tolerance,
+                relative_tolerance,
+                classification
+            );
         }
     }
 
     efree(input);
     efree(actual);
     efree(swiglu);
-    add_assoc_string(&compare, "status", matched ? "matched" : "mismatch");
+    king_inference_cuda_decoder_graph_executor_ffn_compare_add_status(&compare, matched);
     add_assoc_bool(&compare, "matched", matched);
     add_assoc_long(&compare, "compared_values", (zend_long) down_width);
     add_assoc_long(&compare, "matched_values", (zend_long) matched_values);
@@ -247,7 +360,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     add_assoc_long(&compare, "down_width", (zend_long) down_width);
     add_assoc_long(&compare, "sampled_values", (zend_long) sample_limit);
     add_assoc_double(&compare, "tolerance", tolerance);
+    add_assoc_double(&compare, "max_abs_tolerance", tolerance);
+    add_assoc_double(&compare, "max_relative_tolerance", relative_tolerance);
     add_assoc_double(&compare, "max_abs_diff", max_abs_diff);
+    add_assoc_double(&compare, "max_relative_diff", max_relative_diff);
     add_assoc_double(&compare, "max_expected_abs", max_expected_abs);
     add_assoc_zval(&compare, "samples", &samples);
     add_assoc_bool(ffn_down_probe, "ffn_down_numeric_compare_failed", !matched);
@@ -286,7 +402,9 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     float *actual = NULL;
     double max_expected_abs = 0.0;
     double max_abs_diff = 0.0;
+    double max_relative_diff = 0.0;
     double tolerance;
+    double relative_tolerance = king_inference_cuda_numeric_tolerance_relative("ffn_output_residual");
     zend_ulong matched_values = 0;
     zend_ulong sample_limit;
     bool matched = true;
@@ -298,7 +416,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
         return SUCCESS;
     }
     if (down_id == NULL
-        || !king_inference_cuda_decoder_graph_executor_parse_layer_id(down_id, "_ffn_down", &layer)
+        || (!king_inference_cuda_decoder_graph_executor_parse_layer_id(down_id, "_ffn_down", &layer)
+            && !king_inference_cuda_decoder_graph_executor_parse_layer_id(down_id, "_post_ffw_norm", &layer))
         || !king_inference_cuda_decoder_graph_executor_compare_selected_ffn_layer(model, layer)) {
         return SUCCESS;
     }
@@ -382,8 +501,17 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
     for (zend_ulong i = 0; i < output_width; i++) {
         double expected = (double) residual[i] + (double) down[i];
         double diff = fabs((double) actual[i] - expected);
+        double rel_diff = king_inference_cuda_numeric_relative_diff((double) actual[i], expected);
+        const char *classification = king_inference_cuda_numeric_sample_classification(
+            (double) actual[i],
+            expected,
+            diff,
+            rel_diff,
+            tolerance,
+            relative_tolerance
+        );
 
-        if (diff <= tolerance) {
+        if (king_inference_cuda_numeric_sample_matches(classification)) {
             matched_values++;
         } else {
             matched = false;
@@ -391,29 +519,40 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_ffn
         if (diff > max_abs_diff) {
             max_abs_diff = diff;
         }
+        if (rel_diff > max_relative_diff && isfinite(rel_diff)) {
+            max_relative_diff = rel_diff;
+        }
         if (i < sample_limit) {
-            zval sample;
-
-            array_init(&sample);
-            add_assoc_long(&sample, "index", (zend_long) i);
-            add_assoc_double(&sample, "actual", (double) actual[i]);
-            add_assoc_double(&sample, "expected", expected);
-            add_assoc_double(&sample, "abs_diff", diff);
-            add_next_index_zval(&samples, &sample);
+            king_inference_cuda_decoder_graph_executor_ffn_compare_add_sample(
+                &samples,
+                i,
+                "ffn_output_residual",
+                layer,
+                (double) actual[i],
+                expected,
+                diff,
+                rel_diff,
+                tolerance,
+                relative_tolerance,
+                classification
+            );
         }
     }
 
     efree(actual);
     efree(down);
     efree(residual);
-    add_assoc_string(&compare, "status", matched ? "matched" : "mismatch");
+    king_inference_cuda_decoder_graph_executor_ffn_compare_add_status(&compare, matched);
     add_assoc_bool(&compare, "matched", matched);
     add_assoc_long(&compare, "compared_values", (zend_long) output_width);
     add_assoc_long(&compare, "matched_values", (zend_long) matched_values);
     add_assoc_long(&compare, "width", (zend_long) output_width);
     add_assoc_long(&compare, "sampled_values", (zend_long) sample_limit);
     add_assoc_double(&compare, "tolerance", tolerance);
+    add_assoc_double(&compare, "max_abs_tolerance", tolerance);
+    add_assoc_double(&compare, "max_relative_tolerance", relative_tolerance);
     add_assoc_double(&compare, "max_abs_diff", max_abs_diff);
+    add_assoc_double(&compare, "max_relative_diff", max_relative_diff);
     add_assoc_double(&compare, "max_expected_abs", max_expected_abs);
     add_assoc_zval(&compare, "samples", &samples);
     add_assoc_bool(ffn_output_probe, "ffn_output_residual_numeric_compare_failed", !matched);

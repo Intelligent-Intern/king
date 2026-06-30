@@ -719,6 +719,14 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     {
         zval *compact_decode_result = king_inference_array_find(result, "compact_decode_result");
 
+        king_inference_cuda_decoder_graph_executor_copy_ffn_numeric_compares(
+            result,
+            ffn_gate_up_probe_initialized ? &ffn_gate_up_probe : NULL,
+            ffn_swiglu_probe_initialized ? &ffn_swiglu_probe : NULL,
+            ffn_down_probe_initialized ? &ffn_down_probe : NULL,
+            ffn_output_probe_initialized ? &ffn_output_probe : NULL
+        );
+
         if (compact_decode_result != NULL && zend_is_true(compact_decode_result)) {
             king_inference_cuda_decoder_graph_executor_copy_initial_numeric_compares(result, &embedding_probe, &rms_norm_probe, &linear_probe);
             king_inference_cuda_decoder_graph_executor_destroy_initial_probes(
