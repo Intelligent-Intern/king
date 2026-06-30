@@ -5,6 +5,7 @@ $root = dirname(__DIR__, 2);
 require_once __DIR__ . '/runtime-logging.php';
 require_once __DIR__ . '/openai-router-coder.php';
 require_once __DIR__ . '/openai-router-prompt.php';
+require_once __DIR__ . '/openai-router-tools.php';
 require_once __DIR__ . '/openai-router-stream.php';
 
 $host = getenv('KING_OPENAI_HOST') ?: '127.0.0.1';
@@ -20,6 +21,8 @@ if (!is_string($defaultSystemPrompt) || trim($defaultSystemPrompt) === '') {
 $defaultMaxTokens = max(1, (int) (getenv('KING_OPENAI_DEFAULT_MAX_TOKENS') ?: 128));
 $maxCompletionTokens = max(1, (int) (getenv('KING_OPENAI_MAX_COMPLETION_TOKENS') ?: 512));
 $coderInstructionWrapper = king_openai_router_env_bool('KING_OPENAI_CODER_INSTRUCTION_WRAPPER', true);
+$internalMcpToolsEnabled = king_openai_router_env_bool('KING_OPENAI_INTERNAL_MCP_TOOLS', true);
+$internalMcpToolTimeoutMs = max(1, min((int) (getenv('KING_OPENAI_INTERNAL_MCP_TOOL_TIMEOUT_MS') ?: 100), 5000));
 
 function king_openai_router_string(array $source, string $key, string $fallback = ''): string
 {
@@ -89,6 +92,8 @@ king_inference_runtime_log_configured([
     'default_max_tokens' => $defaultMaxTokens,
     'max_completion_tokens' => $maxCompletionTokens,
     'coder_instruction_wrapper' => $coderInstructionWrapper,
+    'internal_mcp_tools_enabled' => $internalMcpToolsEnabled,
+    'internal_mcp_tool_timeout_ms' => $internalMcpToolTimeoutMs,
     'gpu_thermal_source' => $gpuSensorPath !== '' ? $gpuSensorPath : $gpuSensorCommand,
     'gpu_thermal_check_interval_sec' => king_openai_router_int($gpuThermal, 'check_interval_seconds'),
     'gpu_generation_ready' => king_openai_router_bool($gpuRuntime, 'generation_ready'),
@@ -194,11 +199,9 @@ function king_openai_router_prepare_chat_payload(
     );
     if (!$withMemory) {
         $prepared['with_memory'] = false;
-        $prepared['with-memory'] = false;
         $prepared['graph_options'] = [
             ...((isset($prepared['graph_options']) && is_array($prepared['graph_options'])) ? $prepared['graph_options'] : []),
             'with_memory' => false,
-            'with-memory' => false,
         ];
     }
     $requestedMaxTokens = king_openai_router_int_payload_value($prepared, 'max_tokens')
@@ -590,6 +593,8 @@ $routerOptions = [
     'model_aliases' => $modelAliases,
     'default_max_tokens' => $defaultMaxTokens,
     'max_completion_tokens' => $maxCompletionTokens,
+    'internal_mcp_tools_enabled' => $internalMcpToolsEnabled,
+    'internal_mcp_tool_timeout_ms' => $internalMcpToolTimeoutMs,
     'read_timeout_ms' => 250,
     'max_events' => 4096,
     'max_idle_events' => 4800,
@@ -650,14 +655,14 @@ while (true) {
                         $preparedRequest['headers'] = [];
                     }
                     $preparedRequest['headers']['content-length'] = (string) strlen($preparedRequest['body']);
-                    $deterministicContent = king_openai_router_deterministic_content($preparedPayload);
-                    if ($deterministicContent !== null) {
+                    $deterministicResult = king_openai_router_deterministic_result($preparedPayload, $routerOptions);
+                    if ($deterministicResult !== null && is_string($deterministicResult['content'] ?? null)) {
                         $responseModel = is_string($preparedPayload['model'] ?? null) && $preparedPayload['model'] !== ''
                             ? $preparedPayload['model']
                             : array_key_first($models);
                         $response = king_openai_router_deterministic_response(
                             $preparedPayload,
-                            $deterministicContent,
+                            $deterministicResult['content'],
                             is_string($responseModel) && $responseModel !== '' ? $responseModel : 'king-local',
                             $startedNs
                         );

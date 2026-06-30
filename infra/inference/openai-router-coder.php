@@ -33,8 +33,13 @@ function king_openai_router_message_content_text(mixed $content): string
     return trim(implode("\n", $parts));
 }
 
-function king_openai_router_deterministic_content(array $payload): ?string
+function king_openai_router_deterministic_content(array $payload, array $routerOptions = []): ?string
 {
+    if (function_exists('king_openai_router_deterministic_result')) {
+        $result = king_openai_router_deterministic_result($payload, $routerOptions);
+        return is_array($result) && is_string($result['content'] ?? null) ? $result['content'] : null;
+    }
+
     $content = king_inference_runtime_mini_op_content($payload);
     return is_string($content) && $content !== '' ? $content : null;
 }
