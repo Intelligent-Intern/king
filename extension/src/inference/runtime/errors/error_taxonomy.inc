@@ -114,6 +114,12 @@ static const char *king_inference_error_code_from_runtime_reason(const char *rea
         || king_inference_error_ascii_contains(reason, "memory")) {
         return "king.allocation.failed";
     }
+    if (king_inference_error_ascii_contains(reason, "gpu_temperature_limit_reached")) {
+        return "king.policy.gpu_thermal_limit_reached";
+    }
+    if (king_inference_error_ascii_contains(reason, "gpu_power_limit_reached")) {
+        return "king.policy.gpu_power_limit_reached";
+    }
     if (king_inference_error_ascii_contains(reason, "thermal")
         || king_inference_error_ascii_contains(reason, "power")
         || king_inference_error_ascii_contains(reason, "disabled")
@@ -191,6 +197,14 @@ static const char *king_inference_error_code_from_message(
             || king_inference_error_ascii_contains(message, "cannot generate")
             || king_inference_error_ascii_contains(message, "not admitted")) {
             return "king.policy.refused";
+        }
+        if (king_inference_error_ascii_contains(message, "refused GPU inference because sensor")
+            && king_inference_error_ascii_contains(message, "at or above")) {
+            return "king.policy.gpu_thermal_limit_reached";
+        }
+        if (king_inference_error_ascii_contains(message, "power draw")
+            && king_inference_error_ascii_contains(message, "at or above")) {
+            return "king.policy.gpu_power_limit_reached";
         }
         if (king_inference_error_ascii_contains(message, "timeout")
             || king_inference_error_ascii_contains(message, "deadline")) {
@@ -274,6 +288,8 @@ static void king_inference_error_taxonomy_catalog_array(zval *return_value)
         "king.numeric_mismatch.detected",
         "king.kv_cache.invalid",
         "king.policy.refused",
+        "king.policy.gpu_thermal_limit_reached",
+        "king.policy.gpu_power_limit_reached",
         "king.router.internal",
         "king.router.route_not_found",
         "king.router.method_not_allowed",

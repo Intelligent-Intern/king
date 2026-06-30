@@ -648,9 +648,7 @@ static void king_inference_gpu_runtime_status_from_model(
     const char *power_sensor_command_config = power_sensor_command != NULL && Z_TYPE_P(power_sensor_command) == IS_STRING
         ? Z_STRVAL_P(power_sensor_command)
         : king_high_perf_compute_ai_config.inference_gpu_power_sensor_command;
-    double max_temperature_c = thermal != NULL && Z_TYPE_P(thermal) == IS_ARRAY
-        ? king_inference_double_from_array(thermal, "max_temperature_c", 80.0)
-        : 80.0;
+    double max_temperature_c = king_inference_gpu_thermal_max_temperature_c(&model->config);
     zend_long thermal_check_interval_sec = thermal != NULL && Z_TYPE_P(thermal) == IS_ARRAY
         ? king_inference_long_from_array(
             thermal,

@@ -155,6 +155,8 @@ static zend_result king_inference_read_power_command(zend_string *command, doubl
     return SUCCESS;
 }
 
+static double king_inference_gpu_thermal_max_temperature_c(zval *config);
+
 static zend_result king_inference_check_gpu_policy_sample(
     zval *config,
     const char *function_name,
@@ -237,9 +239,7 @@ static zend_result king_inference_check_gpu_policy_sample(
         *temperature_c_out = temperature_c;
     }
 
-    max_temperature_c = thermal != NULL && Z_TYPE_P(thermal) == IS_ARRAY
-        ? king_inference_double_from_array(thermal, "max_temperature_c", 80.0)
-        : 80.0;
+    max_temperature_c = king_inference_gpu_thermal_max_temperature_c(config);
     if (max_temperature_c_out != NULL) {
         *max_temperature_c_out = max_temperature_c;
     }
@@ -423,6 +423,27 @@ static zend_long king_inference_gpu_thermal_check_interval_seconds(zval *config)
         thermal,
         "check_interval_seconds",
         king_high_perf_compute_ai_config.inference_gpu_thermal_check_interval_sec
+    );
+}
+
+static double king_inference_gpu_thermal_max_temperature_c(zval *config)
+{
+    zval *gpu = king_inference_array_find(config, "gpu");
+    zval *thermal;
+
+    if (gpu == NULL || Z_TYPE_P(gpu) != IS_ARRAY) {
+        return king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c;
+    }
+
+    thermal = king_inference_array_find(gpu, "thermal");
+    if (thermal == NULL || Z_TYPE_P(thermal) != IS_ARRAY) {
+        return king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c;
+    }
+
+    return king_inference_double_from_array(
+        thermal,
+        "max_temperature_c",
+        king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c
     );
 }
 

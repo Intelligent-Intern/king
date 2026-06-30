@@ -137,6 +137,8 @@ static void king_inference_stream_timeout_state(king_inference_stream_object *st
     king_inference_stream_abort_state(stream);
 }
 
+#include "stream_gpu_policy_status.inc"
+
 static void king_inference_stream_openai_chunk(
     king_inference_stream_object *stream,
     const char *role,
@@ -501,50 +503,9 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_bool(return_value, "done", stream->done);
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
     add_assoc_bool(return_value, "timed_out", stream->timed_out);
-    add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
-    add_assoc_long(return_value, "gpu_thermal_abort_at", stream->gpu_thermal_abort_at);
-    if (stream->gpu_thermal_aborted) {
-        add_assoc_double(return_value, "gpu_thermal_abort_temperature_c", stream->gpu_thermal_abort_temperature_c);
-        add_assoc_double(return_value, "gpu_thermal_abort_ceiling_c", stream->gpu_thermal_abort_ceiling_c);
-    } else {
-        add_assoc_null(return_value, "gpu_thermal_abort_temperature_c");
-        add_assoc_null(return_value, "gpu_thermal_abort_ceiling_c");
-    }
-    add_assoc_bool(return_value, "gpu_power_aborted", stream->gpu_power_aborted);
-    add_assoc_long(return_value, "gpu_power_abort_at", stream->gpu_power_abort_at);
-    if (stream->gpu_power_aborted) {
-        add_assoc_double(return_value, "gpu_power_abort_watts", stream->gpu_power_abort_watts);
-        add_assoc_double(return_value, "gpu_power_abort_ceiling_watts", stream->gpu_power_abort_ceiling_watts);
-    } else {
-        add_assoc_null(return_value, "gpu_power_abort_watts");
-        add_assoc_null(return_value, "gpu_power_abort_ceiling_watts");
-    }
+    king_inference_stream_add_gpu_policy_metrics(stream, return_value);
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_bool(return_value, "openai_compatible", stream->openai_compatible);
-    add_assoc_bool(return_value, "gpu_thermal_preflight_checked", stream->gpu_thermal_preflight_checked);
-    add_assoc_long(return_value, "gpu_thermal_preflight_at", stream->gpu_thermal_preflight_at);
-    add_assoc_bool(
-        return_value,
-        "gpu_thermal_preflight_temperature_available",
-        stream->gpu_thermal_preflight_temperature_available
-    );
-    if (stream->gpu_thermal_preflight_temperature_available) {
-        add_assoc_double(
-            return_value,
-            "gpu_thermal_preflight_temperature_c",
-            stream->gpu_thermal_preflight_temperature_c
-        );
-    } else {
-        add_assoc_null(return_value, "gpu_thermal_preflight_temperature_c");
-    }
-    add_assoc_bool(return_value, "gpu_power_preflight_checked", stream->gpu_power_preflight_checked);
-    add_assoc_long(return_value, "gpu_power_preflight_at", stream->gpu_power_preflight_at);
-    add_assoc_bool(return_value, "gpu_power_preflight_available", stream->gpu_power_preflight_available);
-    if (stream->gpu_power_preflight_available) {
-        add_assoc_double(return_value, "gpu_power_preflight_watts", stream->gpu_power_preflight_watts);
-    } else {
-        add_assoc_null(return_value, "gpu_power_preflight_watts");
-    }
     add_assoc_bool(return_value, "native_stream", native_event_count > 0);
     add_assoc_long(return_value, "native_event_count", native_event_count);
     add_assoc_long(return_value, "native_event_index", (zend_long) stream->native_event_index);
@@ -621,8 +582,8 @@ static void king_inference_stream_done_event(king_inference_stream_object *strea
     add_assoc_long(return_value, "chunks", stream->chunk_count);
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
     add_assoc_bool(return_value, "timed_out", stream->timed_out);
-    add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
-    add_assoc_bool(return_value, "gpu_power_aborted", stream->gpu_power_aborted);
+    king_inference_stream_add_gpu_policy_runtime_metrics(stream, return_value);
+    king_inference_stream_add_gpu_policy_abort_metrics(stream, return_value);
 }
 
 static zend_result king_inference_stream_next_event(
@@ -652,10 +613,13 @@ static zend_result king_inference_stream_next_event(
             if (king_inference_stream_has_native_events(stream)) {
                 if (model != NULL
                     && king_inference_check_gpu_policy_during_run(stream, "King inference stream") != SUCCESS) {
-                    king_inference_stream_cancel_state(stream);
+                    king_inference_stream_gpu_policy_abort_state(stream);
                     return FAILURE;
                 }
                 if (king_inference_stream_ensure_native_event_available(stream) != SUCCESS) {
+                    if (king_inference_stream_gpu_policy_abort_code(stream) != NULL) {
+                        king_inference_stream_gpu_policy_abort_state(stream);
+                    }
                     return FAILURE;
                 }
                 return king_inference_stream_next_native_event(stream, return_value);
@@ -672,24 +636,7 @@ static zend_result king_inference_stream_next_event(
         );
         add_assoc_bool(return_value, "native_stream", king_inference_stream_has_native_events(stream));
         add_assoc_long(return_value, "pid", stream->child_pid);
-        add_assoc_bool(return_value, "gpu_thermal_preflight_checked", stream->gpu_thermal_preflight_checked);
-        add_assoc_long(return_value, "gpu_thermal_preflight_at", stream->gpu_thermal_preflight_at);
-        if (stream->gpu_thermal_preflight_temperature_available) {
-            add_assoc_double(
-                return_value,
-                "gpu_thermal_preflight_temperature_c",
-                stream->gpu_thermal_preflight_temperature_c
-            );
-        } else {
-            add_assoc_null(return_value, "gpu_thermal_preflight_temperature_c");
-        }
-        add_assoc_bool(return_value, "gpu_power_preflight_checked", stream->gpu_power_preflight_checked);
-        add_assoc_long(return_value, "gpu_power_preflight_at", stream->gpu_power_preflight_at);
-        if (stream->gpu_power_preflight_available) {
-            add_assoc_double(return_value, "gpu_power_preflight_watts", stream->gpu_power_preflight_watts);
-        } else {
-            add_assoc_null(return_value, "gpu_power_preflight_watts");
-        }
+        king_inference_stream_add_gpu_policy_start_status(stream, return_value);
         return SUCCESS;
     }
 
@@ -701,13 +648,16 @@ static zend_result king_inference_stream_next_event(
     if (!Z_ISUNDEF(stream->model) && Z_TYPE(stream->model) == IS_OBJECT) {
         model = php_king_inference_model_obj_from_zend(Z_OBJ(stream->model));
         if (king_inference_check_gpu_policy_during_run(stream, "King inference stream") != SUCCESS) {
-            king_inference_stream_cancel_state(stream);
+            king_inference_stream_gpu_policy_abort_state(stream);
             return FAILURE;
         }
     }
 
     if (king_inference_stream_has_native_events(stream)) {
         if (king_inference_stream_ensure_native_event_available(stream) != SUCCESS) {
+            if (king_inference_stream_gpu_policy_abort_code(stream) != NULL) {
+                king_inference_stream_gpu_policy_abort_state(stream);
+            }
             return FAILURE;
         }
         return king_inference_stream_next_native_event(stream, return_value);
