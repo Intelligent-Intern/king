@@ -3,6 +3,7 @@
 #include "../../../cuda/kernels/matvec/cuda_quantized_matvec_batch.inc"
 #include "../../../cuda/kernels/matvec/cuda_quantized_matvec_status.inc"
 #include "../../../cuda/kernels/embedding/cuda_embedding_row.inc"
+#include "../../../cuda/kernels/device/cuda_numeric_tolerance_contract.inc"
 #include "../../../cuda/kernels/device/cuda_device_vector_ops.inc"
 #include "../../../cuda/kernels/device/cuda_device_kv_cache.inc"
 #include "../../../cuda/kernels/embedding/cuda_embedding_prefill_copy.inc"

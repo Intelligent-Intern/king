@@ -30,6 +30,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_first_rms_
     king_inference_cuda_device_ptr rms_norm_output,
     zend_ulong width,
     double epsilon,
+    double embedding_scale,
     zval *rms_norm_probe
 ) {
     zend_string *embedding_tensor = NULL;
@@ -59,6 +60,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_first_rms_
     add_assoc_string(&compare, "type", "gpu_decoder_first_rms_norm_numeric_compare");
     add_assoc_long(&compare, "token_id", (zend_long) token_id);
     add_assoc_long(&compare, "width", (zend_long) width);
+    add_assoc_double(&compare, "embedding_scale", embedding_scale);
     if (weight_tensor != NULL) {
         add_assoc_str(&compare, "weight_tensor", zend_string_copy(weight_tensor));
     }
@@ -131,6 +133,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_first_rms_
             zend_string_release(embedding_name);
             return FAILURE;
         }
+        value *= embedding_scale;
         sumsq += value * value;
     }
     scale = 1.0 / king_inference_graph_sqrt((sumsq / (double) width) + epsilon);
@@ -168,6 +171,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_first_rms_
     add_assoc_long(&compare, "width", (zend_long) width);
     add_assoc_long(&compare, "chunk_limit", (zend_long) chunk_limit);
     add_assoc_double(&compare, "epsilon", epsilon);
+    add_assoc_double(&compare, "embedding_scale", embedding_scale);
     add_assoc_double(&compare, "scale", scale);
     add_assoc_str(&compare, "input_tensor", zend_string_copy(embedding_name));
     add_assoc_str(&compare, "weight_tensor", zend_string_copy(weight_tensor));
@@ -197,12 +201,17 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_first_rms_
                 zend_string_release(embedding_name);
                 return FAILURE;
             }
+            input_value *= embedding_scale;
             expected[i] = (float) (input_value * scale * weight_value);
         }
 
         if (king_inference_cuda_device_vector_numeric_compare(
                 model,
                 "bos_first_rms_norm_output_chunk",
+                "rms_norm",
+                0,
+                ZSTR_VAL(weight_tensor),
+                offset,
                 rms_norm_output + ((king_inference_cuda_device_ptr) offset * (king_inference_cuda_device_ptr) sizeof(float)),
                 chunk_values,
                 expected,
@@ -287,6 +296,7 @@ static void king_inference_cuda_decoder_graph_executor_record_first_rms_norm_com
     king_inference_cuda_device_ptr rms_norm_output,
     zend_ulong width,
     double epsilon,
+    double embedding_scale,
     zval *rms_norm_probe
 ) {
     if (king_inference_cuda_decoder_graph_executor_compare_first_rms_norm(
@@ -296,6 +306,7 @@ static void king_inference_cuda_decoder_graph_executor_record_first_rms_norm_com
             rms_norm_output,
             width,
             epsilon,
+            embedding_scale,
             rms_norm_probe
     ) != SUCCESS) {
         add_assoc_bool(rms_norm_probe, "numeric_compare_failed", true);

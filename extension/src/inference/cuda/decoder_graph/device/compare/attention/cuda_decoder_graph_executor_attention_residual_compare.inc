@@ -2,6 +2,123 @@
  * Internal CUDA attention output-projection plus residual compare for block-0.
  */
 
+static zend_result king_inference_cuda_decoder_graph_executor_compare_attention_residual_add(
+    king_inference_model_object *model,
+    king_inference_cuda_device_ptr left_output,
+    zend_ulong left_width,
+    king_inference_cuda_device_ptr right_output,
+    zend_ulong right_width,
+    king_inference_cuda_device_ptr residual_output,
+    zend_ulong residual_width,
+    zval *residual_probe
+) {
+    king_inference_cuda_memcpy_dtoh_fn cu_memcpy_dtoh;
+    float *left = NULL;
+    float *right = NULL;
+    float *expected = NULL;
+    zval compare;
+    zval *matched;
+    int result;
+
+    if (!king_inference_cuda_device_vector_numeric_compare_enabled(&model->config)) {
+        return SUCCESS;
+    }
+    if (left_output == 0
+        || right_output == 0
+        || residual_output == 0
+        || left_width == 0
+        || left_width != right_width
+        || left_width != residual_width
+        || left_width > (zend_ulong) (SIZE_MAX / sizeof(float))) {
+        array_init(&compare);
+        add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+        add_assoc_string(&compare, "status", "attention_residual_add_compare_argument_invalid");
+        add_assoc_bool(&compare, "matched", false);
+        add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", true);
+        add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+        return FAILURE;
+    }
+    if (!king_inference_cuda_device_allocator_set_current(model)) {
+        array_init(&compare);
+        add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+        add_assoc_string(&compare, "status", "cuda_context_current_failed");
+        add_assoc_bool(&compare, "matched", false);
+        add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", true);
+        add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+        return FAILURE;
+    }
+    cu_memcpy_dtoh = (king_inference_cuda_memcpy_dtoh_fn) dlsym(model->cuda_driver_handle, "cuMemcpyDtoH_v2");
+    if (cu_memcpy_dtoh == NULL) {
+        cu_memcpy_dtoh = (king_inference_cuda_memcpy_dtoh_fn) dlsym(model->cuda_driver_handle, "cuMemcpyDtoH");
+    }
+    if (cu_memcpy_dtoh == NULL) {
+        array_init(&compare);
+        add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+        add_assoc_string(&compare, "status", "cuMemcpyDtoH_unavailable");
+        add_assoc_bool(&compare, "matched", false);
+        add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", true);
+        add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+        return FAILURE;
+    }
+
+    left = emalloc((size_t) left_width * sizeof(float));
+    right = emalloc((size_t) right_width * sizeof(float));
+    expected = emalloc((size_t) residual_width * sizeof(float));
+    result = cu_memcpy_dtoh(left, left_output, (size_t) left_width * sizeof(float));
+    if (result == 0) {
+        result = cu_memcpy_dtoh(right, right_output, (size_t) right_width * sizeof(float));
+    }
+    if (result != 0) {
+        efree(expected);
+        efree(right);
+        efree(left);
+        array_init(&compare);
+        add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+        add_assoc_string(&compare, "status", "cuMemcpyDtoH_vector_failed");
+        add_assoc_long(&compare, "result", result);
+        add_assoc_bool(&compare, "matched", false);
+        add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", true);
+        add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+        return FAILURE;
+    }
+    for (zend_ulong i = 0; i < residual_width; i++) {
+        expected[i] = left[i] + right[i];
+    }
+    efree(right);
+    efree(left);
+
+    if (king_inference_cuda_device_vector_numeric_compare(
+            model,
+            "block0_attention_residual_add",
+            "attention_residual",
+            0,
+            NULL,
+            0,
+            residual_output,
+            residual_width,
+            expected,
+            residual_width,
+            0.00001,
+            &compare
+    ) != SUCCESS) {
+        efree(expected);
+        add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+        add_assoc_string(&compare, "reference", "cpu_hidden_plus_attention_projection_or_post_norm");
+        add_assoc_long(&compare, "width", (zend_long) residual_width);
+        add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", true);
+        add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+        return FAILURE;
+    }
+    efree(expected);
+    add_assoc_string(&compare, "type", "gpu_decoder_attention_residual_add_numeric_compare");
+    add_assoc_string(&compare, "reference", "cpu_hidden_plus_attention_projection_or_post_norm");
+    add_assoc_long(&compare, "width", (zend_long) residual_width);
+    matched = king_inference_array_find(&compare, "matched");
+    add_assoc_bool(residual_probe, "attention_residual_add_numeric_compare_failed", matched == NULL || !zend_is_true(matched));
+    add_assoc_zval(residual_probe, "attention_residual_add_numeric_compare", &compare);
+    return matched != NULL && zend_is_true(matched) ? SUCCESS : FAILURE;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_attention_projection_residual(
     king_inference_model_object *model,
     zval *graph,

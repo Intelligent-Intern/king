@@ -3,6 +3,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_embedding_
     zend_ulong token_id,
     king_inference_cuda_device_ptr embedding_output,
     zend_ulong width,
+    double output_scale,
     zval *embedding_probe
 ) {
     zend_string *tensor = NULL;
@@ -29,6 +30,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_embedding_
     add_assoc_string(&compare, "type", "gpu_decoder_embedding_row_numeric_compare");
     add_assoc_long(&compare, "token_id", (zend_long) token_id);
     add_assoc_long(&compare, "width", (zend_long) width);
+    add_assoc_double(&compare, "output_scale", output_scale);
 
     if (king_inference_resolve_token_embedding_tensor_name(model, NULL, &tensor, NULL, &status) != SUCCESS
         || tensor == NULL) {
@@ -82,6 +84,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_embedding_
     add_assoc_long(&compare, "token_id", (zend_long) token_id);
     add_assoc_long(&compare, "width", (zend_long) width);
     add_assoc_long(&compare, "chunk_limit", (zend_long) chunk_limit);
+    add_assoc_double(&compare, "output_scale", output_scale);
     add_assoc_str(&compare, "tensor", zend_string_copy(tensor_name));
     array_init(&chunks);
 
@@ -107,12 +110,16 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_embedding_
                 zend_string_release(tensor_name);
                 return FAILURE;
             }
-            expected[i] = (float) value;
+            expected[i] = (float) (value * output_scale);
         }
 
         if (king_inference_cuda_device_vector_numeric_compare(
                 model,
                 "bos_token_embedding_row_chunk",
+                "embedding",
+                -1,
+                ZSTR_VAL(tensor_name),
+                offset,
                 embedding_output + ((king_inference_cuda_device_ptr) offset * (king_inference_cuda_device_ptr) sizeof(float)),
                 chunk_values,
                 expected,
@@ -169,6 +176,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_embedding_
     add_assoc_zval(&compare, "chunks", &chunks);
     add_assoc_long(&compare, "token_id", (zend_long) token_id);
     add_assoc_long(&compare, "width", (zend_long) width);
+    add_assoc_double(&compare, "output_scale", output_scale);
     zend_string_release(tensor_name);
     add_assoc_zval(embedding_probe, "numeric_compare", &compare);
     return matched ? SUCCESS : FAILURE;

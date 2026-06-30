@@ -27,6 +27,8 @@ static void king_inference_cuda_device_kv_cache_reset_fields(king_inference_mode
     model->cuda_device_kv_cache_allocation_count = 0;
     model->cuda_device_kv_cache_write_count = 0;
     model->cuda_device_kv_cache_batch_write_count = 0;
+    model->cuda_device_kv_cache_guard_check_count = 0;
+    model->cuda_device_kv_cache_guard_failure_count = 0;
     model->cuda_device_kv_cache_layers = 0;
     model->cuda_device_kv_cache_kv_heads = 0;
     model->cuda_device_kv_cache_context_tokens = 0;
@@ -35,12 +37,22 @@ static void king_inference_cuda_device_kv_cache_reset_fields(king_inference_mode
     model->cuda_device_kv_cache_last_layer = 0;
     model->cuda_device_kv_cache_last_head = 0;
     model->cuda_device_kv_cache_last_position = 0;
+    model->cuda_device_kv_cache_guard_last_layer = 0;
+    model->cuda_device_kv_cache_guard_last_head = 0;
+    model->cuda_device_kv_cache_guard_last_position = 0;
+    model->cuda_device_kv_cache_guard_last_count = 0;
+    model->cuda_device_kv_cache_guard_last_page_start = 0;
+    model->cuda_device_kv_cache_guard_last_page_end = 0;
+    model->cuda_device_kv_cache_guard_last_operation[0] = '\0';
+    model->cuda_device_kv_cache_guard_last_failure[0] = '\0';
     model->cuda_device_kv_cache_attempted = false;
     model->cuda_device_kv_cache_available = false;
     model->cuda_device_kv_cache_shape_ready = false;
     model->cuda_device_kv_cache_allocated = false;
     model->cuda_device_kv_cache_f32 = false;
     model->cuda_device_kv_cache_dtod_available = false;
+    model->cuda_device_kv_cache_guard_fail_closed = true;
+    model->cuda_device_kv_cache_guard_last_page_crossed = false;
 }
 
 static void king_inference_cuda_device_kv_cache_set_error(
@@ -129,6 +141,8 @@ static zend_ulong king_inference_cuda_device_kv_cache_plan_long(
         ? (zend_ulong) Z_LVAL_P(value)
         : fallback;
 }
+
+#include "cuda_device_kv_cache_guard.inc"
 
 static bool king_inference_cuda_device_kv_cache_shape(
     king_inference_model_object *model,
@@ -317,11 +331,14 @@ static zend_result king_inference_cuda_device_kv_cache_slot_ptrs(
 
     *key_ptr = 0;
     *value_ptr = 0;
-    if (!model->cuda_device_kv_cache_allocated
-        || layer >= model->cuda_device_kv_cache_layers
-        || head >= model->cuda_device_kv_cache_kv_heads
-        || position >= model->cuda_device_kv_cache_context_tokens) {
-        king_inference_cuda_device_kv_cache_set_error(model, -1, "cuda_device_kv_cache_slot_invalid");
+    if (king_inference_cuda_device_kv_cache_guard_slot(
+            model,
+            "slot_ptr",
+            layer,
+            head,
+            position,
+            true
+    ) != SUCCESS) {
         return FAILURE;
     }
 
@@ -358,7 +375,15 @@ static zend_result king_inference_cuda_device_kv_cache_head(
 
     *cache_ptr = 0;
     *stride = 0;
-    if (king_inference_cuda_device_kv_cache_reserve(model) != SUCCESS
+    if (king_inference_cuda_device_kv_cache_guard_slot(
+            model,
+            value_cache ? "read_value_head" : "read_key_head",
+            layer,
+            head,
+            0,
+            false
+    ) != SUCCESS
+        || king_inference_cuda_device_kv_cache_reserve(model) != SUCCESS
         || king_inference_cuda_device_kv_cache_slot_ptrs(model, layer, head, 0, &key_ptr, &value_ptr) != SUCCESS) {
         return FAILURE;
     }
@@ -384,15 +409,22 @@ static zend_result king_inference_cuda_device_kv_cache_write(
     king_inference_cuda_device_ptr value_slot;
     int result;
 
-    if (key_vector == 0 || value_vector == 0) {
-        king_inference_cuda_device_kv_cache_set_error(model, -1, "cuda_device_kv_cache_vector_invalid");
-        return FAILURE;
-    }
-    if (key_length == 0
-        || value_length == 0
-        || key_length > model->cuda_device_kv_cache_key_length
-        || value_length > model->cuda_device_kv_cache_value_length) {
-        king_inference_cuda_device_kv_cache_set_error(model, -1, "cuda_device_kv_cache_vector_shape_invalid");
+    if (king_inference_cuda_device_kv_cache_guard_vectors(
+            model,
+            "single_write_vectors",
+            key_vector,
+            key_length,
+            value_vector,
+            value_length
+    ) != SUCCESS
+        || king_inference_cuda_device_kv_cache_guard_slot(
+            model,
+            "single_write_slot",
+            layer,
+            head,
+            position,
+            false
+    ) != SUCCESS) {
         return FAILURE;
     }
     if (king_inference_cuda_device_kv_cache_reserve(model) != SUCCESS
@@ -474,17 +506,38 @@ static zend_result king_inference_cuda_device_kv_cache_write_batch_strided(
     king_inference_cuda_device_kv_cache_memcpy_dtod_async_fn cu_memcpy_dtod_async = NULL;
     zend_ulong index;
 
-    if (key_matrix == 0 || value_matrix == 0 || count == 0
-        || key_length == 0 || value_length == 0
-        || key_offset > key_row_stride
-        || value_offset > value_row_stride
-        || key_length > key_row_stride - key_offset
-        || value_length > value_row_stride - value_offset
-        || key_length > model->cuda_device_kv_cache_key_length
-        || value_length > model->cuda_device_kv_cache_value_length
-        || position_start >= model->cuda_device_kv_cache_context_tokens
-        || count > model->cuda_device_kv_cache_context_tokens - position_start) {
-        king_inference_cuda_device_kv_cache_set_error(model, -1, "cuda_device_kv_cache_batch_shape_invalid");
+    if (key_matrix == 0 || value_matrix == 0) {
+        king_inference_cuda_device_kv_cache_guard_record(
+            model,
+            "batch_write_vectors",
+            "cuda_device_kv_cache_guard_batch_matrix_invalid",
+            layer,
+            head,
+            position_start,
+            count
+        );
+        return FAILURE;
+    }
+    if (king_inference_cuda_device_kv_cache_guard_batch_source(
+            model,
+            "batch_write_source",
+            count,
+            key_row_stride,
+            key_offset,
+            key_length,
+            value_row_stride,
+            value_offset,
+            value_length
+    ) != SUCCESS
+        || king_inference_cuda_device_kv_cache_guard_range(
+            model,
+            "batch_write_range",
+            layer,
+            head,
+            position_start,
+            count,
+            false
+    ) != SUCCESS) {
         return FAILURE;
     }
     if (king_inference_cuda_device_kv_cache_reserve(model) != SUCCESS) {
@@ -585,6 +638,11 @@ static void king_inference_cuda_device_kv_cache_add_status(
     add_assoc_bool(&cache, "lazy_allocation", true);
     add_assoc_bool(&cache, "f32", model->cuda_device_kv_cache_f32);
     add_assoc_bool(&cache, "device_to_device_copy_available", model->cuda_device_kv_cache_dtod_available);
+    add_assoc_bool(&cache, "read_write_bounds_checked", true);
+    add_assoc_bool(&cache, "context_overflow_fails_closed", true);
+    add_assoc_bool(&cache, "page_boundary_tracked", true);
+    add_assoc_bool(&cache, "reset_clears_device_pointers", true);
+    add_assoc_bool(&cache, "reset_clears_guard_state", true);
     add_assoc_long(&cache, "bytes", (zend_long) model->cuda_device_kv_cache_bytes);
     add_assoc_long(&cache, "key_bytes", (zend_long) model->cuda_device_kv_cache_key_bytes);
     add_assoc_long(&cache, "value_bytes", (zend_long) model->cuda_device_kv_cache_value_bytes);
@@ -597,6 +655,18 @@ static void king_inference_cuda_device_kv_cache_add_status(
     add_assoc_long(&cache, "value_length", (zend_long) model->cuda_device_kv_cache_value_length);
     add_assoc_long(&cache, "writes", (zend_long) model->cuda_device_kv_cache_write_count);
     add_assoc_long(&cache, "batch_writes", (zend_long) model->cuda_device_kv_cache_batch_write_count);
+    add_assoc_bool(&cache, "guard_fail_closed", model->cuda_device_kv_cache_guard_fail_closed);
+    add_assoc_long(&cache, "guard_checks", (zend_long) model->cuda_device_kv_cache_guard_check_count);
+    add_assoc_long(&cache, "guard_failures", (zend_long) model->cuda_device_kv_cache_guard_failure_count);
+    add_assoc_string(&cache, "guard_last_operation", model->cuda_device_kv_cache_guard_last_operation);
+    add_assoc_string(&cache, "guard_last_failure", model->cuda_device_kv_cache_guard_last_failure);
+    add_assoc_long(&cache, "guard_last_layer", (zend_long) model->cuda_device_kv_cache_guard_last_layer);
+    add_assoc_long(&cache, "guard_last_head", (zend_long) model->cuda_device_kv_cache_guard_last_head);
+    add_assoc_long(&cache, "guard_last_position", (zend_long) model->cuda_device_kv_cache_guard_last_position);
+    add_assoc_long(&cache, "guard_last_count", (zend_long) model->cuda_device_kv_cache_guard_last_count);
+    add_assoc_long(&cache, "guard_last_page_start", (zend_long) model->cuda_device_kv_cache_guard_last_page_start);
+    add_assoc_long(&cache, "guard_last_page_end", (zend_long) model->cuda_device_kv_cache_guard_last_page_end);
+    add_assoc_bool(&cache, "guard_last_page_crossed", model->cuda_device_kv_cache_guard_last_page_crossed);
     add_assoc_long(&cache, "last_layer", (zend_long) model->cuda_device_kv_cache_last_layer);
     add_assoc_long(&cache, "last_head", (zend_long) model->cuda_device_kv_cache_last_head);
     add_assoc_long(&cache, "last_position", (zend_long) model->cuda_device_kv_cache_last_position);

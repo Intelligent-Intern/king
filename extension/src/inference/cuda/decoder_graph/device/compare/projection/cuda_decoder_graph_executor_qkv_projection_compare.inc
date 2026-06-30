@@ -187,6 +187,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_qkv_projec
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             label,
+            "qkv_projection",
+            0,
+            ZSTR_VAL(linear_weight_tensor),
+            0,
             linear_output,
             slice_length,
             expected,

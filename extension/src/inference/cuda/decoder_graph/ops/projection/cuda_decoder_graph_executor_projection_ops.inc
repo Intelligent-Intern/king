@@ -2,6 +2,8 @@
  * CUDA decoder graph attention output-projection helpers for native King GPU inference.
  */
 
+#include "../../device/compare/attention/cuda_decoder_graph_executor_attention_residual_compare.inc"
+
 static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_output_projection(
     king_inference_model_object *model,
     zval *graph,
@@ -159,6 +161,19 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_attention_
                 ? model->cuda_device_vector_ops_error
                 : "cuda_decoder_graph_attention_residual_add_failed"
         );
+        return FAILURE;
+    }
+    if (king_inference_cuda_decoder_graph_executor_compare_attention_residual_add(
+            model,
+            hidden_output,
+            hidden_width,
+            projection_output,
+            projection_width,
+            *residual_output,
+            hidden_width,
+            residual_probe
+    ) != SUCCESS) {
+        (void) king_inference_cuda_decoder_graph_executor_release_device_ptr(model, residual_output);
         return FAILURE;
     }
 

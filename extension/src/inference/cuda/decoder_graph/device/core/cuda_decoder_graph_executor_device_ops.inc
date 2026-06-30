@@ -87,43 +87,34 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_bool(&embedding_probe, "executed", false);
     add_assoc_bool(&embedding_probe, "prefill_copy_available", model->cuda_decoder_prompt_prefill_embeddings_active);
     add_assoc_bool(&embedding_probe, "retained_device_output", false);
-
     array_init(&rms_norm_probe);
     add_assoc_string(&rms_norm_probe, "type", "gpu_decoder_rms_norm_device_execution");
     add_assoc_bool(&rms_norm_probe, "attempted", false);
     add_assoc_bool(&rms_norm_probe, "available", model->cuda_decoder_graph_executor_rms_norm_execution_available);
     add_assoc_bool(&rms_norm_probe, "executed", false);
     add_assoc_bool(&rms_norm_probe, "retained_device_output", false);
-
     array_init(&linear_probe);
     add_assoc_string(&linear_probe, "type", "gpu_decoder_linear_device_execution");
     add_assoc_bool(&linear_probe, "attempted", false);
     add_assoc_bool(&linear_probe, "available", model->cuda_decoder_graph_executor_linear_execution_available);
     add_assoc_bool(&linear_probe, "executed", false);
     add_assoc_bool(&linear_probe, "retained_device_output", false);
-
     array_init(&slice_probe);
     add_assoc_string(&slice_probe, "type", "gpu_decoder_slice_device_execution");
     add_assoc_bool(&slice_probe, "attempted", false);
     add_assoc_bool(&slice_probe, "available", model->cuda_decoder_graph_executor_slice_execution_available);
     add_assoc_bool(&slice_probe, "executed", false);
     add_assoc_bool(&slice_probe, "retained_device_output", false);
-
     array_init(&rope_probe);
     add_assoc_string(&rope_probe, "type", "gpu_decoder_rope_device_execution");
     add_assoc_bool(&rope_probe, "attempted", false);
     add_assoc_bool(&rope_probe, "available", model->cuda_decoder_graph_executor_rope_execution_available);
     add_assoc_bool(&rope_probe, "executed", false);
     add_assoc_bool(&rope_probe, "retained_device_output", false);
-
     array_init(&kv_head_prepare_probe);
     add_assoc_string(&kv_head_prepare_probe, "type", "gpu_decoder_kv_head_prepare_device_execution");
     add_assoc_bool(&kv_head_prepare_probe, "attempted", false);
-    add_assoc_bool(
-        &kv_head_prepare_probe,
-        "available",
-        model->cuda_decoder_graph_executor_kv_head_prepare_execution_available
-    );
+    add_assoc_bool(&kv_head_prepare_probe, "available", model->cuda_decoder_graph_executor_kv_head_prepare_execution_available);
     add_assoc_bool(&kv_head_prepare_probe, "executed", false);
     add_assoc_bool(&kv_head_prepare_probe, "retained_device_output", false);
 
@@ -249,7 +240,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
     add_assoc_long(&embedding_probe, "width", (zend_long) width);
     add_assoc_long(&embedding_probe, "bytes", (zend_long) bytes);
     add_assoc_double(&embedding_probe, "scale", embedding_scale);
-    if (!used_prefill_embedding && king_inference_cuda_decoder_graph_executor_compare_embedding_row(model, token_id, embedding_output, width, &embedding_probe) != SUCCESS) {
+    if (!used_prefill_embedding && king_inference_cuda_decoder_graph_executor_compare_embedding_row(model, token_id, embedding_output, width, embedding_scale, &embedding_probe) != SUCCESS) {
         add_assoc_bool(&embedding_probe, "numeric_compare_failed", true);
     }
 
@@ -338,7 +329,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_execute_initial_de
         add_assoc_long(&rms_norm_probe, "width", (zend_long) width);
         add_assoc_long(&rms_norm_probe, "bytes", (zend_long) bytes);
         add_assoc_double(&rms_norm_probe, "epsilon", epsilon);
-        king_inference_cuda_decoder_graph_executor_record_first_rms_norm_compare(model, token_id, rms_weight, rms_norm_output, width, epsilon, &rms_norm_probe);
+        king_inference_cuda_decoder_graph_executor_record_first_rms_norm_compare(model, token_id, rms_weight, rms_norm_output, width, epsilon, embedding_scale, &rms_norm_probe);
 
         linear_op = king_inference_cuda_decoder_graph_executor_op_for_input(graph, rms_norm_id, "linear");
         add_assoc_bool(&linear_probe, "attempted", linear_op != NULL);

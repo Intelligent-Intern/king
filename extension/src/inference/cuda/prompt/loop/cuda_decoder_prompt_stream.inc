@@ -151,7 +151,7 @@ static zend_result king_inference_cuda_decoder_prompt_stream_initialize(
     state->plan_constructions_start = model->cuda_decoder_graph_executor_plan_count;
 
     if (state->token_count >= KING_INFERENCE_CUDA_PROMPT_BATCH_PREFILL_MIN_TOKENS
-        && model->cuda_decoder_prompt_loop_batch_prefill_available) {
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
         if (king_inference_cuda_decoder_prompt_loop_prefill_batch_template(
                 model,
                 &state->tokenized_prompt,
@@ -264,6 +264,9 @@ static void king_inference_cuda_decoder_prompt_stream_finish(
         add_assoc_bool(&event, "prompt_loop_ready", true);
         add_assoc_bool(&event, "lazy_native_token_stream", true);
         add_assoc_bool(&event, "prompt_batch_prefill_available", model->cuda_decoder_prompt_loop_batch_prefill_available);
+        add_assoc_bool(&event, "prompt_batch_prefill_admitted", king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model));
+        add_assoc_string(&event, "prompt_batch_prefill_status", king_inference_cuda_decoder_prompt_loop_batch_prefill_status(model));
+        add_assoc_string(&event, "prompt_batch_prefill_admission_reason", king_inference_cuda_decoder_prompt_loop_batch_prefill_admission_reason(model));
         add_assoc_bool(&event, "prompt_batch_prefill_used", model->cuda_decoder_prompt_loop_last_used_batch_prefill);
         add_assoc_bool(&event, "decode_graph_template_resident", true);
         add_assoc_bool(&event, "decode_graph_constructed_on_hot_path", false);

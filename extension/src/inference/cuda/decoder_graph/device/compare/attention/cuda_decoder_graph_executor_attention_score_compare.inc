@@ -118,6 +118,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_bos
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             "block0_bos_attention_score_head0_slot0",
+            "attention_score",
+            (zend_long) layer,
+            "qk_score",
+            0,
             scores_output,
             1,
             &expected,
@@ -258,6 +262,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_bos
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             "block0_bos_attention_softmax_head0_slot0",
+            "attention_softmax",
+            (zend_long) layer,
+            "attention_probability",
+            0,
             probabilities_output,
             1,
             &expected_probability,
@@ -428,6 +436,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_block0_bos
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             "block0_bos_attention_value_context_head0",
+            "attention_value",
+            (zend_long) layer,
+            "attention_value_context",
+            0,
             context_output,
             value_length,
             expected,

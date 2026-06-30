@@ -77,19 +77,31 @@ static zend_result king_inference_cuda_decoder_graph_executor_kv_attention_shape
         "value_length",
         model->cuda_device_kv_cache_value_length
     );
-    if (!model->cuda_device_kv_cache_available
-        || query_length == 0
+    if (query_length == 0
         || declared_key_length != query_length
         || query_length > model->cuda_device_kv_cache_key_length
         || declared_value_length == 0
         || declared_value_length > model->cuda_device_kv_cache_value_length
-        || *slot_count == 0
-        || *slot_start >= model->cuda_device_kv_cache_context_tokens
-        || *slot_count > model->cuda_device_kv_cache_context_tokens - *slot_start
-        || (zend_ulong) parsed_layer >= model->cuda_device_kv_cache_layers
-        || (zend_ulong) parsed_head >= model->cuda_device_kv_cache_kv_heads
         || !isfinite(*scale)) {
         king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_kv_attention_shape_invalid");
+        return FAILURE;
+    }
+    if (king_inference_cuda_device_kv_cache_guard_range(
+            model,
+            "attention_read_range",
+            (zend_ulong) parsed_layer,
+            (zend_ulong) parsed_head,
+            *slot_start,
+            *slot_count,
+            false
+    ) != SUCCESS) {
+        king_inference_cuda_decoder_graph_executor_set_error(
+            model,
+            model->cuda_device_kv_cache_result,
+            model->cuda_device_kv_cache_error[0] != '\0'
+                ? model->cuda_device_kv_cache_error
+                : "cuda_decoder_graph_kv_attention_read_range_invalid"
+        );
         return FAILURE;
     }
 

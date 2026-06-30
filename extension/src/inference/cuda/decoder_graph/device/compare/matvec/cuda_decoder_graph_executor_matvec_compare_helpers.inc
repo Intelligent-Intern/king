@@ -1,3 +1,17 @@
+static double king_inference_cuda_decoder_graph_executor_reference_embedding_scale(
+    king_inference_model_object *model
+) {
+    zend_ulong embedding = model->gguf.architecture_params[KING_INFERENCE_ARCH_EMBEDDING_LENGTH];
+
+    if ((king_inference_gguf_architecture_is_gemma3(&model->gguf)
+            || king_inference_gguf_architecture_is_gemma4(&model->gguf))
+        && embedding > 0) {
+        return king_inference_graph_sqrt((double) embedding);
+    }
+
+    return 1.0;
+}
+
 static zend_result king_inference_cuda_decoder_graph_executor_build_bos_first_rms_norm_vector(
     king_inference_model_object *model,
     zend_ulong token_id,
@@ -14,6 +28,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_build_bos_first_rm
     zend_ulong rows = 0;
     zend_ulong base;
     double *vector;
+    double embedding_scale = king_inference_cuda_decoder_graph_executor_reference_embedding_scale(model);
     double sumsq = 0.0;
     double scale;
 
@@ -54,6 +69,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_build_bos_first_rm
             efree(vector);
             return FAILURE;
         }
+        value *= embedding_scale;
         sumsq += value * value;
         vector[i] = value;
     }

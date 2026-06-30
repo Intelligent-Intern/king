@@ -251,6 +251,10 @@ static zend_result king_inference_king_native_gpu_prepare_direct_token_event(
     add_assoc_bool(graph_result, "token_result_ready", true);
     add_assoc_bool(graph_result, "decoded_token_ready", true);
     add_assoc_bool(graph_result, "direct_token_graph", true);
+    add_assoc_bool(graph_result, "synthetic_token_vector_graph", true);
+    add_assoc_bool(graph_result, "prompt_to_logits_inference", false);
+    add_assoc_string(graph_result, "result_source", "synthetic_token_vector_graph");
+    add_assoc_string(graph_result, "token_selection_contract", "direct_token_id");
     if (token_id <= (zend_ulong) ZEND_LONG_MAX) {
         add_assoc_long(graph_result, "selected_token_id", (zend_long) token_id);
     } else {
@@ -259,6 +263,9 @@ static zend_result king_inference_king_native_gpu_prepare_direct_token_event(
     add_assoc_double(graph_result, "selected_token_probability", 1.0);
     add_assoc_double(graph_result, "selected_token_logit", 0.0);
     add_assoc_double(graph_result, "selected_token_rank", 0.0);
+    add_assoc_bool(graph_result, "selected_token_probability_synthetic", true);
+    add_assoc_bool(graph_result, "selected_token_logit_synthetic", true);
+    add_assoc_bool(graph_result, "selected_token_rank_synthetic", true);
 
     stream->native_decoder_token_count++;
     stream->native_decoder_last_token_id = token_id;
@@ -667,7 +674,9 @@ static void king_inference_king_native_gpu_model_info(
     add_assoc_bool(return_value, "decoder_prompt_loop_ready", intern->cuda_decoder_prompt_loop_available);
     add_assoc_bool(return_value, "decoder_prompt_batch_prefill_compiled", true);
     add_assoc_bool(return_value, "decoder_prompt_batch_prefill_ready", intern->cuda_decoder_prompt_loop_batch_prefill_available);
-    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_admitted", intern->cuda_decoder_prompt_loop_batch_prefill_available);
+    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_experimental_enabled", king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(intern));
+    add_assoc_bool(return_value, "decoder_prompt_batch_prefill_admitted", king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(intern));
+    add_assoc_string(return_value, "decoder_prompt_batch_prefill_status", king_inference_cuda_decoder_prompt_loop_batch_prefill_status(intern));
     add_assoc_string(
         return_value,
         "decoder_prompt_batch_prefill_admission_reason",

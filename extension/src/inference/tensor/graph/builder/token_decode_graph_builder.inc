@@ -335,6 +335,7 @@ static zend_result king_inference_token_decode_graph_array(
     zend_ulong key_length;
     zend_ulong value_length;
     zend_ulong vocab;
+    zend_ulong model_layers;
     zend_ulong sliding_window = model->gguf.architecture_params[KING_INFERENCE_ARCH_ATTENTION_SLIDING_WINDOW];
     zend_ulong slot_start;
     zend_ulong slot_count;
@@ -356,6 +357,7 @@ static zend_result king_inference_token_decode_graph_array(
     const char *token_selection_op = NULL;
     double token_selection_temperature = 0.0;
     zend_long token_selection_top_k = 0;
+    zend_long debug_layer_limit = 0;
     double epsilon_default = model->gguf.attention_layer_norm_rms_epsilon > 0.0
         ? model->gguf.attention_layer_norm_rms_epsilon
         : 0.000001;
@@ -381,8 +383,22 @@ static zend_result king_inference_token_decode_graph_array(
             model->gguf.rope_freq_base_swa > 0.0 ? model->gguf.rope_freq_base_swa : rope_base,
             &rope_base_swa
         ) != SUCCESS
+        || king_inference_decode_graph_non_negative_long_option(
+            options,
+            "debug_layer_limit",
+            0,
+            &debug_layer_limit
+        ) != SUCCESS
         || king_inference_decode_graph_token_id_from_source(model, token_source, position, &token_id) != SUCCESS) {
         return FAILURE;
+    }
+    model_layers = layers;
+    if (debug_layer_limit > 0) {
+        if ((zend_ulong) debug_layer_limit > model_layers) {
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph debug_layer_limit exceeds the loaded model block count.");
+            return FAILURE;
+        }
+        layers = (zend_ulong) debug_layer_limit;
     }
     if (epsilon <= 0.0 || rope_base <= 0.0 || rope_base_swa <= 0.0) {
         zend_throw_exception_ex(king_ce_validation_exception, 0, "King inference token decode graph epsilon and rope_base must be positive.");
@@ -693,6 +709,10 @@ static zend_result king_inference_token_decode_graph_array(
     add_assoc_long(return_value, "token_id", (zend_long) token_id);
     add_assoc_long(return_value, "position", (zend_long) position);
     add_assoc_long(return_value, "block_count", (zend_long) layers);
+    add_assoc_long(return_value, "model_block_count", (zend_long) model_layers);
+    if (debug_layer_limit > 0) {
+        add_assoc_long(return_value, "debug_layer_limit", debug_layer_limit);
+    }
     add_assoc_long(return_value, "attention_head_count", (zend_long) heads);
     add_assoc_long(return_value, "attention_head_count_kv", (zend_long) kv_heads);
     add_assoc_long(return_value, "attention_key_length", (zend_long) key_length);

@@ -123,6 +123,50 @@ static bool king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_r
         && model->cuda_decoder_graph_executor_ffn_output_residual_execution_available;
 }
 
+static bool king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(
+    king_inference_model_object *model
+) {
+    zval *gpu;
+
+    if (model == NULL) {
+        return false;
+    }
+
+    gpu = king_inference_array_find(&model->config, "gpu");
+    if (gpu != NULL && Z_TYPE_P(gpu) == IS_ARRAY) {
+        return king_inference_bool_from_array(
+            gpu,
+            "batch_prefill_experimental_enable",
+            king_high_perf_compute_ai_config.inference_gpu_batch_prefill_experimental_enable
+        );
+    }
+
+    return king_high_perf_compute_ai_config.inference_gpu_batch_prefill_experimental_enable;
+}
+
+static bool king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(
+    king_inference_model_object *model
+) {
+    return model != NULL
+        && model->cuda_decoder_prompt_loop_batch_prefill_available
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model)
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model);
+}
+
+static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_status(
+    king_inference_model_object *model
+) {
+    if (model == NULL) {
+        return "unavailable";
+    }
+    if (!model->cuda_decoder_prompt_loop_batch_prefill_available) {
+        return "disabled";
+    }
+    return king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)
+        ? "experimental_admitted"
+        : "disabled";
+}
+
 static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_admission_reason(
     king_inference_model_object *model
 ) {
@@ -140,9 +184,13 @@ static const char *king_inference_cuda_decoder_prompt_loop_batch_prefill_admissi
     if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model)) {
         return "batch_prefill_decoder_dependencies_unavailable";
     }
-    return model->cuda_decoder_prompt_loop_batch_prefill_available
-        ? "ready"
-        : "batch_prefill_admission_disabled";
+    if (!king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model)) {
+        return "batch_prefill_experimental_config_disabled";
+    }
+    if (!model->cuda_decoder_prompt_loop_batch_prefill_available) {
+        return "batch_prefill_disabled_until_kv_correctness_hardened";
+    }
+    return "batch_prefill_experimental_admitted";
 }
 
 #include "cuda_decoder_prompt_loop_sampling.inc"
@@ -226,7 +274,9 @@ static void king_inference_cuda_decoder_prompt_loop_init(
         model->cuda_decoder_graph_executor_available;
     model->cuda_decoder_prompt_loop_result_contract_ready =
         model->cuda_decoder_graph_executor_result_contract_available;
-    model->cuda_decoder_prompt_loop_batch_prefill_available = false;
+    model->cuda_decoder_prompt_loop_batch_prefill_available =
+        king_inference_cuda_decoder_prompt_loop_batch_prefill_experimental_enabled(model)
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_dependencies_ready(model);
 
     if (!model->cuda_decoder_prompt_loop_tokenizer_ready) {
         king_inference_cuda_decoder_prompt_loop_set_error(
@@ -255,13 +305,11 @@ static void king_inference_cuda_decoder_prompt_loop_init(
 
     model->cuda_decoder_prompt_loop_available = true;
     /*
-     * Batch prefill is a performance optimization, not a correctness boundary.
-     * The current batch path can produce invalid KV state for normal Gemma chat
-     * prompts at the 16-token admission threshold, which corrupts the first
-     * decoded tokens. Keep generation on the validated sequential GPU prefill
-     * path until the batch mutation/template path is hardened.
+     * Batch prefill remains experimental because the current batch path can
+     * produce invalid KV state around the 16-token admission threshold. Normal
+     * generation must stay on sequential GPU prefill unless an operator enables
+     * king.inference_gpu_batch_prefill_experimental_enable explicitly.
      */
-    model->cuda_decoder_prompt_loop_batch_prefill_available = false;
     model->cuda_decoder_prompt_loop_result = 0;
     model->cuda_decoder_prompt_loop_error[0] = '\0';
 }
@@ -338,7 +386,7 @@ static zend_result king_inference_cuda_decoder_prompt_loop_validate_prompt(
     king_inference_king_native_prompt_add_default_stops(model, &stops);
     king_inference_king_native_prompt_decode_options(stream, &decode_options);
     if (token_count >= KING_INFERENCE_CUDA_PROMPT_BATCH_PREFILL_MIN_TOKENS
-        && model->cuda_decoder_prompt_loop_batch_prefill_available) {
+        && king_inference_cuda_decoder_prompt_loop_batch_prefill_admitted(model)) {
         if (king_inference_cuda_decoder_prompt_loop_prefill_batch_template(
                 model,
                 &tokenized_prompt,

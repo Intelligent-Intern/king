@@ -247,74 +247,7 @@ static zval *king_inference_cuda_decoder_graph_executor_indexed_nth_op_for_input
     return entry != NULL && Z_TYPE_P(entry) == IS_ARRAY ? entry : NULL;
 }
 
-static zend_result king_inference_cuda_decoder_graph_executor_prepare_plan(
-    king_inference_model_object *model,
-    zval *graph,
-    zval *result
-) {
-    zval *ops = king_inference_cuda_decoder_graph_executor_ops(graph);
-    zval *entry;
-    zval plan;
-    zend_ulong total_ops = 0;
-    zend_ulong device_ops = 0;
-    zend_ulong host_sampling_ops = 0;
-
-    if (ops == NULL) {
-        king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_plan_ops_missing");
-        return FAILURE;
-    }
-
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(ops), entry) {
-        zend_string *op_name = NULL;
-
-        if (entry == NULL
-            || Z_TYPE_P(entry) != IS_ARRAY
-            || king_inference_graph_required_string(entry, "op", &op_name) != SUCCESS) {
-            king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_plan_op_invalid");
-            return FAILURE;
-        }
-        if (king_inference_cuda_decoder_graph_executor_device_op(op_name)) {
-            device_ops++;
-        } else if (king_inference_cuda_decoder_graph_executor_host_sampling_op(op_name)) {
-            host_sampling_ops++;
-        } else {
-            king_inference_cuda_decoder_graph_executor_set_error(model, -1, "cuda_decoder_graph_plan_op_unsupported");
-            return FAILURE;
-        }
-        total_ops++;
-    } ZEND_HASH_FOREACH_END();
-
-    if (host_sampling_ops > 0 && !model->cuda_decoder_graph_executor_sampling_readback_available) {
-        king_inference_cuda_decoder_graph_executor_set_error(
-            model,
-            -1,
-            "cuda_decoder_graph_plan_sampling_readback_unavailable"
-        );
-        return FAILURE;
-    }
-
-    array_init(&plan);
-    add_assoc_string(&plan, "type", "gpu_decoder_graph_execution_plan");
-    add_assoc_bool(&plan, "ready", true);
-    add_assoc_bool(&plan, "device_execution_result_ready", false);
-    add_assoc_bool(&plan, "token_result_ready", false);
-    add_assoc_bool(&plan, "device_ops_ready", true);
-    add_assoc_bool(&plan, "host_sampling_after_bounded_readback", host_sampling_ops > 0);
-    add_assoc_long(&plan, "total_ops", (zend_long) total_ops);
-    add_assoc_long(&plan, "device_ops", (zend_long) device_ops);
-    add_assoc_long(&plan, "host_sampling_ops", (zend_long) host_sampling_ops);
-    add_assoc_string(&plan, "next_bridge", "execute_device_ops_and_write_bounded_logits_result");
-    add_assoc_zval(result, "execution_plan", &plan);
-    add_assoc_bool(result, "execution_plan_ready", true);
-    add_assoc_long(result, "planned_device_ops", (zend_long) device_ops);
-    add_assoc_long(result, "planned_host_sampling_ops", (zend_long) host_sampling_ops);
-
-    model->cuda_decoder_graph_executor_plan_count++;
-    model->cuda_decoder_graph_executor_last_plan_op_count = total_ops;
-    model->cuda_decoder_graph_executor_last_plan_device_ops = device_ops;
-    model->cuda_decoder_graph_executor_last_plan_host_sampling_ops = host_sampling_ops;
-    return SUCCESS;
-}
+#include "cuda_decoder_graph_executor_execution_plan.inc"
 
 static zval *king_inference_cuda_decoder_graph_executor_first_op(
     zval *graph,

@@ -98,6 +98,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_q6_embeddi
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             "token_embd_q6_k_row0",
+            "matvec",
+            0,
+            ZSTR_VAL(linear_weight_tensor),
+            0,
             linear_output,
             1,
             &expected_f32,

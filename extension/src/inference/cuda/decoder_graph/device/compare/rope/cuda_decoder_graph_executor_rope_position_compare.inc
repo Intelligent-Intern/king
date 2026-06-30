@@ -263,6 +263,10 @@ static zend_result king_inference_cuda_decoder_graph_executor_compare_rope_posit
     if (king_inference_cuda_device_vector_numeric_compare(
             model,
             position == 0 ? "rope_position0_identity" : "rope_position1_cpu_reference",
+            "rope",
+            0,
+            "rope_head_slice",
+            offset,
             rope_output,
             length,
             expected,

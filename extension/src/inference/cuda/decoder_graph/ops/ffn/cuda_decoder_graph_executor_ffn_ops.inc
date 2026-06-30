@@ -2,7 +2,6 @@
  * CUDA decoder graph FFN execution helpers for native King GPU inference.
  */
 
-#include "../../device/compare/attention/cuda_decoder_graph_executor_attention_residual_compare.inc"
 #include "../../device/compare/ffn/cuda_decoder_graph_executor_ffn_gate_up_compare.inc"
 
 static zend_result king_inference_cuda_decoder_graph_executor_execute_ffn_gate_up_projections(
