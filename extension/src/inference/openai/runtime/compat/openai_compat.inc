@@ -477,99 +477,7 @@ static void king_inference_openai_set_finish_reason(
     *finish_reason_out = zend_string_init(reason, strlen(reason), 0);
 }
 
-static void king_inference_openai_apply_stop_sequences_to_content(
-    zval *request,
-    smart_str *content,
-    zend_string **finish_reason_out)
-{
-    size_t offset = 0;
-    zend_string *trimmed;
-
-    if (content == NULL || content->s == NULL) {
-        return;
-    }
-    smart_str_0(content);
-    if (!king_inference_openai_stop_trim_offset(request, content->s, &offset)) {
-        return;
-    }
-
-    trimmed = zend_string_init(ZSTR_VAL(content->s), offset, 0);
-    smart_str_free(content);
-    smart_str_append(content, trimmed);
-    zend_string_release(trimmed);
-    smart_str_0(content);
-    king_inference_openai_set_finish_reason(finish_reason_out, "stop");
-}
-
-static zend_result king_inference_openai_drain_stream(
-    king_inference_stream_object *stream,
-    zval *stream_value,
-    const king_inference_openai_drain_controls *controls,
-    smart_str *content,
-    smart_str *sse_body,
-    zend_string **finish_reason_out)
-{
-    zend_long events = 0;
-    zend_long idle_events = 0;
-
-    (void) stream_value;
-
-    if (finish_reason_out != NULL) {
-        *finish_reason_out = zend_string_init("stop", sizeof("stop") - 1, 0);
-    }
-
-    while (events < controls->max_events && idle_events < controls->max_idle_events) {
-        zval event;
-
-        ZVAL_UNDEF(&event);
-        if (king_inference_stream_next_event(stream, controls->read_timeout_ms, &event) != SUCCESS) {
-            if (!Z_ISUNDEF(event)) {
-                zval_ptr_dtor(&event);
-            }
-            return FAILURE;
-        }
-
-        if (Z_TYPE(event) == IS_NULL) {
-            zval_ptr_dtor(&event);
-            if (stream->done) {
-                king_inference_openai_apply_stop_sequences_to_content(&stream->request, content, finish_reason_out);
-                return SUCCESS;
-            }
-            idle_events++;
-            continue;
-        }
-
-        idle_events = 0;
-        events++;
-        if (sse_body != NULL) {
-            if (king_inference_openai_sse_append(sse_body, &event) != SUCCESS) {
-                zval_ptr_dtor(&event);
-                return FAILURE;
-            }
-        }
-        if (content != NULL) {
-            king_inference_openai_append_delta_content(&event, content);
-        }
-        {
-            const char *event_finish_reason = NULL;
-            if (king_inference_openai_chunk_is_terminal(&event, &event_finish_reason)) {
-                if (finish_reason_out != NULL && event_finish_reason != NULL) {
-                    zend_string_release(*finish_reason_out);
-                    *finish_reason_out = zend_string_init(event_finish_reason, strlen(event_finish_reason), 0);
-                }
-                king_inference_openai_apply_stop_sequences_to_content(&stream->request, content, finish_reason_out);
-                zval_ptr_dtor(&event);
-                return SUCCESS;
-            }
-        }
-        zval_ptr_dtor(&event);
-    }
-
-    stream->cancelled = true;
-    stream->done = true;
-    king_inference_stream_close_process(stream, true);
-    return FAILURE;
-}
+#include "openai_drain_stream.inc"
 
 static zend_result king_inference_openai_sse_append_content_chunk(
     king_inference_stream_object *stream,
@@ -660,6 +568,7 @@ static zend_result king_inference_openai_payload_response(
     const char *limit_error = NULL;
     const char *response_format_error = NULL;
     bool response_format_failed = false;
+    bool stream_timed_out = false;
 
     if (!king_inference_openai_positive_router_limit(
         options,
@@ -776,6 +685,7 @@ static zend_result king_inference_openai_payload_response(
             smart_str_appends(&sse, "data: [DONE]\n\n");
         }
         smart_str_0(&sse);
+        stream_timed_out = result != SUCCESS && stream->timed_out;
         zval_ptr_dtor(&stream_value);
         if (finish_reason != NULL) {
             zend_string_release(finish_reason);
@@ -795,10 +705,19 @@ static zend_result king_inference_openai_payload_response(
                     "server_error"
                 );
             }
+            if (stream_timed_out) {
+                return king_inference_openai_error_response_classified(
+                    return_value,
+                    504,
+                    "Inference stream timed out before completion.",
+                    "server_error",
+                    "king.timeout.deadline_exceeded"
+                );
+            }
             return king_inference_openai_error_response(
                 return_value,
-                504,
-                "Inference stream did not finish within the configured bounded drain window.",
+                500,
+                "Inference stream failed before completion.",
                 "server_error"
             );
         }
@@ -837,6 +756,7 @@ static zend_result king_inference_openai_payload_response(
             finish_reason = NULL;
         }
         smart_str_free(&content);
+        stream_timed_out = result != SUCCESS && stream->timed_out;
         zval_ptr_dtor(&stream_value);
         if (result != SUCCESS) {
             if (EG(exception)) {
@@ -850,10 +770,19 @@ static zend_result king_inference_openai_payload_response(
                     "server_error"
                 );
             }
+            if (stream_timed_out) {
+                return king_inference_openai_error_response_classified(
+                    return_value,
+                    504,
+                    "Inference response timed out before completion.",
+                    "server_error",
+                    "king.timeout.deadline_exceeded"
+                );
+            }
             return king_inference_openai_error_response(
                 return_value,
-                504,
-                "Inference response did not finish within the configured bounded drain window.",
+                500,
+                "Inference response failed before completion.",
                 "server_error"
             );
         }

@@ -596,6 +596,7 @@ typedef struct _king_inference_stream_object {
     bool gpu_power_aborted;
     bool done;
     bool cancelled;
+    bool timed_out;
     zend_object std;
 } king_inference_stream_object;
 

@@ -81,7 +81,8 @@ static zend_result king_inference_completion_run_prompt(
     zval *options,
     const king_inference_openai_drain_controls *drain_controls,
     zend_long choice_index,
-    zval *choice_out)
+    zval *choice_out,
+    bool *timed_out_out)
 {
     zval chat_payload;
     zval stream_value;
@@ -90,6 +91,9 @@ static zend_result king_inference_completion_run_prompt(
     zend_string *finish_reason = NULL;
     zend_result result;
 
+    if (timed_out_out != NULL) {
+        *timed_out_out = false;
+    }
     if (king_inference_completion_prompt_to_chat_payload(payload, prompt, &chat_payload) != SUCCESS) {
         return FAILURE;
     }
@@ -122,6 +126,9 @@ static zend_result king_inference_completion_run_prompt(
         zend_string_release(finish_reason);
     }
     smart_str_free(&content);
+    if (timed_out_out != NULL) {
+        *timed_out_out = result != SUCCESS && stream->timed_out;
+    }
     zval_ptr_dtor(&stream_value);
     zval_ptr_dtor(&chat_payload);
     return result;
@@ -133,7 +140,8 @@ static zend_result king_inference_completion_stream_response(
     zval *payload,
     zval *prompt,
     zval *options,
-    const king_inference_openai_drain_controls *drain_controls)
+    const king_inference_openai_drain_controls *drain_controls,
+    bool *timed_out_out)
 {
     zval chat_payload;
     zval stream_value;
@@ -148,6 +156,9 @@ static zend_result king_inference_completion_stream_response(
     smart_str content = {0};
     zend_string *finish_reason = NULL;
 
+    if (timed_out_out != NULL) {
+        *timed_out_out = false;
+    }
     if (king_inference_completion_prompt_to_chat_payload(payload, prompt, &chat_payload) != SUCCESS) {
         return FAILURE;
     }
@@ -247,6 +258,10 @@ static zend_result king_inference_completion_stream_response(
     zend_string_release(completion_id);
     zend_string_release(model_name);
     if (!finished) {
+        king_inference_stream_timeout_state(stream);
+        if (timed_out_out != NULL) {
+            *timed_out_out = true;
+        }
         zval_ptr_dtor(&stream_value);
         zval_ptr_dtor(&chat_payload);
         smart_str_free(&content);
@@ -346,6 +361,7 @@ static zend_result king_inference_openai_completions_payload_response(
     const char *choice_count_error = NULL;
     const char *feature_error = NULL;
     const char *limit_error = NULL;
+    bool stream_timed_out = false;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -455,12 +471,29 @@ static zend_result king_inference_openai_completions_payload_response(
         );
     }
     if (stream_requested) {
-        result = king_inference_completion_stream_response(return_value, model, payload, prompt, options, &drain_controls);
+        result = king_inference_completion_stream_response(
+            return_value,
+            model,
+            payload,
+            prompt,
+            options,
+            &drain_controls,
+            &stream_timed_out
+        );
         if (result != SUCCESS && !EG(exception)) {
+            if (stream_timed_out) {
+                return king_inference_openai_error_response_classified(
+                    return_value,
+                    504,
+                    "Completion stream timed out before completion.",
+                    "server_error",
+                    "king.timeout.deadline_exceeded"
+                );
+            }
             return king_inference_openai_error_response(
                 return_value,
-                504,
-                "Completion stream did not finish within the configured bounded drain window.",
+                500,
+                "Completion stream failed before completion.",
                 "server_error"
             );
         }
@@ -470,16 +503,34 @@ static zend_result king_inference_openai_completions_payload_response(
     array_init(&choices);
     if (Z_TYPE_P(prompt) == IS_STRING) {
         zval choice;
-        result = king_inference_completion_run_prompt(model, payload, prompt, options, &drain_controls, 0, &choice);
+        result = king_inference_completion_run_prompt(
+            model,
+            payload,
+            prompt,
+            options,
+            &drain_controls,
+            0,
+            &choice,
+            &stream_timed_out
+        );
         if (result != SUCCESS) {
             zval_ptr_dtor(&choices);
             if (EG(exception)) {
                 return FAILURE;
             }
+            if (stream_timed_out) {
+                return king_inference_openai_error_response_classified(
+                    return_value,
+                    504,
+                    "Completion request timed out before completion.",
+                    "server_error",
+                    "king.timeout.deadline_exceeded"
+                );
+            }
             return king_inference_openai_error_response(
                 return_value,
-                504,
-                "Completion request did not finish within the configured bounded drain window.",
+                500,
+                "Completion request failed before completion.",
                 "server_error"
             );
         }
@@ -509,6 +560,7 @@ static zend_result king_inference_openai_completions_payload_response(
         }
         ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(prompt), entry) {
             zval choice;
+            bool prompt_timed_out = false;
             if (Z_TYPE_P(entry) != IS_STRING) {
                 zval_ptr_dtor(&choices);
                 return king_inference_openai_error_response(
@@ -518,16 +570,34 @@ static zend_result king_inference_openai_completions_payload_response(
                     "invalid_request_error"
                 );
             }
-            result = king_inference_completion_run_prompt(model, payload, entry, options, &drain_controls, index++, &choice);
+            result = king_inference_completion_run_prompt(
+                model,
+                payload,
+                entry,
+                options,
+                &drain_controls,
+                index++,
+                &choice,
+                &prompt_timed_out
+            );
             if (result != SUCCESS) {
                 zval_ptr_dtor(&choices);
                 if (EG(exception)) {
                     return FAILURE;
                 }
+                if (prompt_timed_out) {
+                    return king_inference_openai_error_response_classified(
+                        return_value,
+                        504,
+                        "Completion request timed out before completion.",
+                        "server_error",
+                        "king.timeout.deadline_exceeded"
+                    );
+                }
                 return king_inference_openai_error_response(
                     return_value,
-                    504,
-                    "Completion request did not finish within the configured bounded drain window.",
+                    500,
+                    "Completion request failed before completion.",
                     "server_error"
                 );
             }

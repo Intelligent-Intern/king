@@ -111,16 +111,30 @@ static void king_inference_stream_reset_decoder_metrics(king_inference_stream_ob
     stream->native_decoder_last_score_available = false;
 }
 
-static void king_inference_stream_cancel_state(king_inference_stream_object *stream)
+static void king_inference_stream_abort_state(king_inference_stream_object *stream)
 {
-    stream->cancelled = true;
     stream->start_event_pending = false;
     if (king_inference_stream_has_native_events(stream)) {
         stream->native_event_index = (zend_ulong) zend_hash_num_elements(Z_ARRVAL(stream->native_events));
     }
+    king_inference_cuda_decoder_prompt_stream_release(stream);
     king_inference_stream_close_process(stream, true);
     stream->done = true;
     king_inference_stream_model_runtime_finished(stream);
+}
+
+static void king_inference_stream_cancel_state(king_inference_stream_object *stream)
+{
+    stream->cancelled = true;
+    stream->timed_out = false;
+    king_inference_stream_abort_state(stream);
+}
+
+static void king_inference_stream_timeout_state(king_inference_stream_object *stream)
+{
+    stream->cancelled = true;
+    stream->timed_out = true;
+    king_inference_stream_abort_state(stream);
 }
 
 static void king_inference_stream_openai_chunk(
@@ -486,6 +500,7 @@ static void king_inference_stream_metrics(king_inference_stream_object *stream, 
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
     add_assoc_bool(return_value, "done", stream->done);
     add_assoc_bool(return_value, "cancelled", stream->cancelled);
+    add_assoc_bool(return_value, "timed_out", stream->timed_out);
     add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
     add_assoc_long(return_value, "gpu_thermal_abort_at", stream->gpu_thermal_abort_at);
     if (stream->gpu_thermal_aborted) {
@@ -605,6 +620,7 @@ static void king_inference_stream_done_event(king_inference_stream_object *strea
     add_assoc_long(return_value, "exit_code", stream->exit_code);
     add_assoc_long(return_value, "chunks", stream->chunk_count);
     add_assoc_long(return_value, "bytes", stream->bytes_emitted);
+    add_assoc_bool(return_value, "timed_out", stream->timed_out);
     add_assoc_bool(return_value, "gpu_thermal_aborted", stream->gpu_thermal_aborted);
     add_assoc_bool(return_value, "gpu_power_aborted", stream->gpu_power_aborted);
 }

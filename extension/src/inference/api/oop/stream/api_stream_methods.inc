@@ -47,6 +47,7 @@ PHP_METHOD(King_Inference_Stream, __construct)
     stream->start_event_pending = true;
     stream->done = false;
     stream->cancelled = false;
+    stream->timed_out = false;
     stream->exit_code = -1;
     stream->chunk_count = 0;
     stream->stderr_count = 0;

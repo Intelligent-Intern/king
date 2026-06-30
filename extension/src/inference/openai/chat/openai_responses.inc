@@ -279,9 +279,7 @@ static zend_result king_inference_responses_stream_response(
     }
 
     if (!finished) {
-        stream->cancelled = true;
-        stream->done = true;
-        king_inference_stream_close_process(stream, true);
+        king_inference_stream_timeout_state(stream);
         zend_string_release(model_name);
         smart_str_free(&sse);
         smart_str_free(&content);
@@ -358,6 +356,7 @@ static zend_result king_inference_openai_responses_payload_response(
     const char *instructions_error = NULL;
     const char *feature_error = NULL;
     const char *limit_error = NULL;
+    bool stream_timed_out = false;
 
     if (!king_inference_openai_model_field_valid(payload, &model_error)) {
         return king_inference_openai_error_response(
@@ -528,15 +527,25 @@ static zend_result king_inference_openai_responses_payload_response(
         }
     }
 
+    stream_timed_out = result != SUCCESS && stream->timed_out;
     zend_string_release(response_id);
     zend_string_release(message_id);
     zval_ptr_dtor(&stream_value);
     zval_ptr_dtor(&chat_payload);
     if (result != SUCCESS && !EG(exception)) {
+        if (stream_timed_out) {
+            return king_inference_openai_error_response_classified(
+                return_value,
+                504,
+                "Responses request timed out before completion.",
+                "server_error",
+                "king.timeout.deadline_exceeded"
+            );
+        }
         return king_inference_openai_error_response(
             return_value,
-            504,
-            "Responses request did not finish within the configured bounded drain window.",
+            500,
+            "Responses request failed before completion.",
             "server_error"
         );
     }

@@ -186,6 +186,7 @@ static zend_object *king_inference_stream_object_create(zend_class_entry *ce)
     intern->gpu_power_aborted = false;
     intern->done = false;
     intern->cancelled = false;
+    intern->timed_out = false;
     zend_object_std_init(&intern->std, ce);
     object_properties_init(&intern->std, ce);
     intern->std.handlers = &king_inference_stream_object_handlers;
