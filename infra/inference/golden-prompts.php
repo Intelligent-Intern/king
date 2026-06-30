@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/fine-tune/result-recorder.php';
+
 function king_golden_usage(): void
 {
     fwrite(STDERR, "Usage: php infra/inference/golden-prompts.php [--url=http://127.0.0.1:8080/v1] [--model=name] [--artifact=/path/model.gguf] [--case=name] [--scope=all|fast|model] [--pack=none|core|/path/pack.php] [--pack-summary] [--strict] [--json]\n");
@@ -664,6 +666,7 @@ function king_golden_run_case(string $url, string $model, array $case, int $time
 }
 
 $options = king_golden_parse_args($argv);
+$recordConfig = king_ir_config_from_env();
 
 try {
     if ($options['pack_summary']) {
@@ -704,6 +707,7 @@ try {
             break;
         }
     }
+    $modelSummary = king_golden_model_summary($selected);
 
     $pack = king_golden_load_prompt_pack((string) $options['pack']);
     $packCases = king_golden_prompt_pack_runtime_cases($pack);
@@ -716,8 +720,13 @@ try {
     }
 
     $results = [];
+    $recorded = 0;
     foreach ($cases as $case) {
-        $results[] = king_golden_run_case((string) $options['url'], $model, $case, (int) $options['timeout']);
+        $result = king_golden_run_case((string) $options['url'], $model, $case, (int) $options['timeout']);
+        $results[] = $result;
+        if (king_ir_record_case($recordConfig, $case, $result, $model, $artifact, $modelSummary) !== null) {
+            $recorded++;
+        }
     }
 
     $failed = array_values(array_filter($results, static fn(array $result): bool => !$result['ok']));
@@ -728,8 +737,9 @@ try {
         'model' => $model,
         'scope' => $options['scope'],
         'artifact' => $artifact,
-        'model_entry' => king_golden_model_summary($selected),
+        'model_entry' => $modelSummary,
         'prompt_pack' => king_golden_prompt_pack_summary($pack),
+        'result_recording' => ['enabled' => (bool) $recordConfig['enabled'], 'path' => $recordConfig['path'], 'records' => $recorded],
         'available_case_count' => count($allCases),
         'case_count' => count($results),
         'passed' => count($results) - count($failed),
@@ -747,6 +757,9 @@ try {
         echo "artifact={$artifact['path']}\n";
         echo "scope={$report['scope']}\n";
         echo "mode=" . ($report['strict'] ? 'strict' : 'report') . "\n";
+        if ($recorded > 0) {
+            echo "result_records={$recorded}\n";
+        }
         foreach ($results as $result) {
             echo sprintf(
                 "[%s] %s (%s/%s, %.1fms): %s\n",
