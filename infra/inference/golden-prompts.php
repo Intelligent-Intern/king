@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function king_golden_usage(): void
 {
-    fwrite(STDERR, "Usage: php infra/inference/golden-prompts.php [--url=http://127.0.0.1:8080/v1] [--model=name] [--artifact=/path/model.gguf] [--case=name] [--strict] [--json]\n");
+    fwrite(STDERR, "Usage: php infra/inference/golden-prompts.php [--url=http://127.0.0.1:8080/v1] [--model=name] [--artifact=/path/model.gguf] [--case=name] [--scope=all|fast|model] [--strict] [--json]\n");
 }
 
 function king_golden_env_bool(string $name, bool $fallback = false): bool
@@ -22,6 +22,7 @@ function king_golden_parse_args(array $argv): array
         'model' => getenv('KING_INFERENCE_GOLDEN_MODEL') ?: '',
         'artifact' => getenv('KING_INFERENCE_GOLDEN_MODEL_PATH') ?: '',
         'case' => getenv('KING_INFERENCE_GOLDEN_CASE') ?: '',
+        'scope' => getenv('KING_INFERENCE_GOLDEN_SCOPE') ?: 'all',
         'strict' => king_golden_env_bool('KING_INFERENCE_GOLDEN_STRICT', false),
         'json' => king_golden_env_bool('KING_INFERENCE_GOLDEN_JSON', false),
         'timeout' => max(1, (int) (getenv('KING_INFERENCE_GOLDEN_TIMEOUT_SEC') ?: 45)),
@@ -40,7 +41,7 @@ function king_golden_parse_args(array $argv): array
             king_golden_usage();
             exit(0);
         }
-        foreach (['url', 'model', 'artifact', 'case', 'timeout'] as $key) {
+        foreach (['url', 'model', 'artifact', 'case', 'scope', 'timeout'] as $key) {
             $prefix = '--' . $key . '=';
             if (str_starts_with($arg, $prefix)) {
                 $options[$key] = substr($arg, strlen($prefix));
@@ -54,6 +55,9 @@ function king_golden_parse_args(array $argv): array
 
     $options['url'] = rtrim((string) $options['url'], '/');
     $options['timeout'] = max(1, (int) $options['timeout']);
+    $options['scope'] = in_array((string) $options['scope'], ['all', 'fast', 'model'], true)
+        ? (string) $options['scope']
+        : 'all';
     return $options;
 }
 
@@ -63,8 +67,9 @@ function king_golden_cases(): array
 
     return [
         [
-            'name' => 'exact_output',
-            'coverage' => 'exact output',
+            'name' => 'simple_exact_output',
+            'coverage' => 'simple language',
+            'scope' => 'fast',
             'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1001],
             'max_tokens' => 8,
             'messages' => [
@@ -77,13 +82,14 @@ function king_golden_cases(): array
             ],
         ],
         [
-            'name' => 'counting',
+            'name' => 'count_banana',
             'coverage' => 'counting',
+            'scope' => 'fast',
             'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1002],
             'max_tokens' => 8,
             'messages' => [
                 ['role' => 'system', 'content' => $system],
-                ['role' => 'user', 'content' => 'How many letters r are in the word strawberry? Answer with only the number.'],
+                ['role' => 'user', 'content' => 'How many letters a are in the word banana? Answer with only the number.'],
             ],
             'expected' => [
                 'type' => 'exact',
@@ -91,25 +97,26 @@ function king_golden_cases(): array
             ],
         ],
         [
-            'name' => 'german_instruction',
-            'coverage' => 'German instruction following',
+            'name' => 'count_hallo_welt',
+            'coverage' => 'counting',
+            'scope' => 'fast',
             'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1003],
-            'max_tokens' => 32,
+            'max_tokens' => 8,
             'messages' => [
                 ['role' => 'system', 'content' => $system],
-                ['role' => 'user', 'content' => 'Antworte auf Deutsch in einem kurzen Satz: Was ist ein Token?'],
+                ['role' => 'user', 'content' => 'Wie viele Buchstaben l hat Hallo Welt? Antworte nur mit der Zahl.'],
             ],
             'expected' => [
-                'type' => 'regex',
-                'pattern' => '/\\bToken\\b/u',
-                'description' => 'contains the German term Token',
+                'type' => 'exact',
+                'tokens' => ['3'],
             ],
         ],
         [
-            'name' => 'json_only',
+            'name' => 'json_status_contract',
             'coverage' => 'JSON-only response',
+            'scope' => 'model',
             'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1004],
-            'max_tokens' => 32,
+            'max_tokens' => 48,
             'messages' => [
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => 'Return only a JSON object with exactly one key named status and the value ok.'],
@@ -120,14 +127,39 @@ function king_golden_cases(): array
             ],
         ],
         [
+            'name' => 'german_token_explanation',
+            'coverage' => 'German instruction following',
+            'scope' => 'model',
+            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1005],
+            'max_tokens' => 48,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => 'Antworte auf Deutsch in einem kurzen Satz: Was ist ein Token?'],
+            ],
+            'expected' => [
+                'type' => 'all',
+                'expectations' => [
+                    [
+                        'type' => 'contains_any',
+                        'texts' => ['Token', 'Zeichen', 'Worteinheit', 'Texteinheit'],
+                    ],
+                    [
+                        'type' => 'max_chars',
+                        'max' => 220,
+                    ],
+                ],
+            ],
+        ],
+        [
             'name' => 'stop_boundary',
             'coverage' => 'stop token behavior',
-            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1005],
+            'scope' => 'fast',
+            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1006],
             'max_tokens' => 32,
             'stop' => ['STOP_HERE'],
             'messages' => [
                 ['role' => 'system', 'content' => $system],
-                ['role' => 'user', 'content' => 'Write alpha STOP_HERE beta.'],
+                ['role' => 'user', 'content' => 'Respond with exactly: alpha STOP_HERE beta'],
             ],
             'expected' => [
                 'type' => 'not_contains',
@@ -137,7 +169,8 @@ function king_golden_cases(): array
         [
             'name' => 'php_generation',
             'coverage' => 'simple PHP generation',
-            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1006],
+            'scope' => 'model',
+            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1007],
             'max_tokens' => 96,
             'messages' => [
                 ['role' => 'system', 'content' => $system],
@@ -146,6 +179,42 @@ function king_golden_cases(): array
             'expected' => [
                 'type' => 'contains_all',
                 'texts' => ['```php', 'function king_example', 'return', 'ok'],
+            ],
+        ],
+        [
+            'name' => 'concise_logits_explanation',
+            'coverage' => 'short explanation',
+            'scope' => 'model',
+            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1008],
+            'max_tokens' => 64,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => 'Explain logits in one concise sentence.'],
+            ],
+            'expected' => [
+                'type' => 'all',
+                'expectations' => [
+                    ['type' => 'regex', 'pattern' => '/\\blogits?\\b/i', 'description' => 'mentions logit/logits'],
+                    ['type' => 'max_chars', 'max' => 240],
+                ],
+            ],
+        ],
+        [
+            'name' => 'markdown_source_contract',
+            'coverage' => 'Markdown source contract',
+            'scope' => 'model',
+            'sampler' => ['temperature' => 0.0, 'top_p' => 1.0, 'seed' => 1009],
+            'max_tokens' => 96,
+            'messages' => [
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => 'Return Markdown source for a heading named King Notes. Wrap the Markdown source in a triple-tilde markdown fence.'],
+            ],
+            'expected' => [
+                'type' => 'all',
+                'expectations' => [
+                    ['type' => 'regex', 'pattern' => '/^~~~markdown\\R/i', 'description' => 'starts with markdown source fence'],
+                    ['type' => 'contains_all', 'texts' => ['# King Notes', '~~~']],
+                ],
             ],
         ],
     ];
@@ -263,10 +332,43 @@ function king_golden_expected_text(array $expected): ?string
     return implode('', array_map(static fn($value): string => (string) $value, $tokens));
 }
 
+function king_golden_string_length(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
 function king_golden_evaluate(string $content, array $expected): array
 {
     $type = (string) ($expected['type'] ?? '');
     $trimmed = trim($content);
+
+    if ($type === 'all') {
+        $checks = [];
+        $ok = true;
+        foreach (($expected['expectations'] ?? []) as $nested) {
+            if (!is_array($nested)) {
+                $checks[] = [
+                    'ok' => false,
+                    'reason' => 'invalid_nested_expectation',
+                    'expected' => $nested,
+                    'actual' => $trimmed,
+                ];
+                $ok = false;
+                continue;
+            }
+            $check = king_golden_evaluate($content, $nested);
+            $checks[] = $check;
+            $ok = $ok && !empty($check['ok']);
+        }
+        $failed = array_values(array_filter($checks, static fn(array $check): bool => empty($check['ok'])));
+        return [
+            'ok' => $ok,
+            'expected' => $expected['expectations'] ?? [],
+            'actual' => $trimmed,
+            'reason' => $ok ? 'all_expectations_match' : 'nested_failure: ' . implode('; ', array_column($failed, 'reason')),
+            'checks' => $checks,
+        ];
+    }
 
     if ($type === 'exact') {
         $expectedText = king_golden_expected_text($expected);
@@ -322,6 +424,26 @@ function king_golden_evaluate(string $content, array $expected): array
         ];
     }
 
+    if ($type === 'contains_any') {
+        $needles = is_array($expected['texts'] ?? null) ? $expected['texts'] : [];
+        foreach ($needles as $needle) {
+            if (is_string($needle) && $needle !== '' && str_contains($content, $needle)) {
+                return [
+                    'ok' => true,
+                    'expected' => $needles,
+                    'actual' => $trimmed,
+                    'reason' => 'one_needle_present: ' . $needle,
+                ];
+            }
+        }
+        return [
+            'ok' => false,
+            'expected' => $needles,
+            'actual' => $trimmed,
+            'reason' => 'no_expected_needle_present',
+        ];
+    }
+
     if ($type === 'contains_all') {
         $missing = [];
         foreach (($expected['texts'] ?? []) as $needle) {
@@ -334,6 +456,18 @@ function king_golden_evaluate(string $content, array $expected): array
             'expected' => $expected['texts'] ?? [],
             'actual' => $trimmed,
             'reason' => $missing === [] ? 'all_needles_present' : 'missing: ' . implode(', ', $missing),
+        ];
+    }
+
+    if ($type === 'max_chars') {
+        $max = max(0, (int) ($expected['max'] ?? 0));
+        $actual = king_golden_string_length($trimmed);
+        $ok = $max > 0 && $actual <= $max;
+        return [
+            'ok' => $ok,
+            'expected' => 'at most ' . $max . ' chars',
+            'actual' => $actual,
+            'reason' => $ok ? 'within_char_limit' : 'char_limit_exceeded',
         ];
     }
 
@@ -363,6 +497,25 @@ function king_golden_request_payload(string $model, array $case): array
     return $payload;
 }
 
+function king_golden_filter_cases(array $cases, string $caseName, string $scope): array
+{
+    if ($scope !== 'all') {
+        $cases = array_values(array_filter(
+            $cases,
+            static fn(array $case): bool => (($case['scope'] ?? 'model') === $scope)
+        ));
+    }
+
+    if ($caseName !== '') {
+        $cases = array_values(array_filter(
+            $cases,
+            static fn(array $case): bool => $case['name'] === $caseName
+        ));
+    }
+
+    return $cases;
+}
+
 function king_golden_run_case(string $url, string $model, array $case, int $timeout): array
 {
     $payload = king_golden_request_payload($model, $case);
@@ -383,6 +536,7 @@ function king_golden_run_case(string $url, string $model, array $case, int $time
     return [
         'name' => $case['name'],
         'coverage' => $case['coverage'],
+        'scope' => $case['scope'] ?? 'model',
         'model' => $model,
         'sampler' => $case['sampler'],
         'max_tokens' => $case['max_tokens'],
@@ -414,15 +568,12 @@ try {
         }
     }
 
-    $cases = king_golden_cases();
-    if ((string) $options['case'] !== '') {
-        $cases = array_values(array_filter(
-            $cases,
-            static fn(array $case): bool => $case['name'] === (string) $options['case']
-        ));
-        if ($cases === []) {
-            throw new RuntimeException('Unknown golden case: ' . $options['case']);
-        }
+    $allCases = king_golden_cases();
+    $cases = king_golden_filter_cases($allCases, (string) $options['case'], (string) $options['scope']);
+    if ($cases === []) {
+        throw new RuntimeException(
+            ((string) $options['case'] !== '' ? 'Unknown golden case or scope mismatch: ' . $options['case'] : 'No golden cases match scope: ' . $options['scope'])
+        );
     }
 
     $results = [];
@@ -436,11 +587,14 @@ try {
         'strict' => (bool) $options['strict'],
         'url' => $options['url'],
         'model' => $model,
+        'scope' => $options['scope'],
         'artifact' => $artifact,
         'model_entry' => king_golden_model_summary($selected),
+        'available_case_count' => count($allCases),
         'case_count' => count($results),
         'passed' => count($results) - count($failed),
         'failed' => count($failed),
+        'coverage' => array_values(array_unique(array_map(static fn(array $result): string => (string) $result['coverage'], $results))),
         'results' => $results,
     ];
 
@@ -451,13 +605,15 @@ try {
         echo "url={$report['url']}\n";
         echo "model={$report['model']}\n";
         echo "artifact={$artifact['path']}\n";
+        echo "scope={$report['scope']}\n";
         echo "mode=" . ($report['strict'] ? 'strict' : 'report') . "\n";
         foreach ($results as $result) {
             echo sprintf(
-                "[%s] %s (%s, %.1fms): %s\n",
+                "[%s] %s (%s/%s, %.1fms): %s\n",
                 $result['ok'] ? 'PASS' : 'FAIL',
                 $result['name'],
                 $result['coverage'],
+                $result['scope'],
                 (float) $result['duration_ms'],
                 $result['reason']
             );

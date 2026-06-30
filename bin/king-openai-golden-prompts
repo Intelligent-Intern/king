@@ -3,10 +3,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
+EXTENSION="${KING_EXTENSION:-$ROOT/extension/modules/king.so}"
 HOST="${KING_INFERENCE_GOLDEN_HOST:-127.0.0.1}"
 PORT="${KING_INFERENCE_GOLDEN_PORT:-18092}"
 URL="${KING_INFERENCE_GOLDEN_BASE_URL:-http://${HOST}:${PORT}/v1}"
 ARTIFACT="${KING_INFERENCE_GOLDEN_MODEL_PATH:-$ROOT/var/inference-models/gemma3-1b.gguf}"
+MODEL="${KING_INFERENCE_GOLDEN_MODEL:-gemma3:1b}"
+BACKEND="${KING_INFERENCE_GOLDEN_BACKEND:-cpu}"
 START_TIMEOUT_SEC="${KING_INFERENCE_GOLDEN_START_TIMEOUT_SEC:-45}"
 USE_EXISTING="${KING_INFERENCE_GOLDEN_USE_EXISTING_SERVER:-0}"
 LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/king-openai-golden.XXXXXX.log")"
@@ -26,13 +29,59 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 if [[ "$USE_EXISTING" != "1" ]]; then
+  if [[ ! -f "$EXTENSION" ]]; then
+    echo "king-openai-golden-prompts: King extension module not found at $EXTENSION" >&2
+    exit 127
+  fi
+  if [[ ! -r "$ARTIFACT" ]]; then
+    echo "king-openai-golden-prompts: model artifact is not readable: $ARTIFACT" >&2
+    exit 1
+  fi
+  ARTIFACT_CONFIG="$ARTIFACT"
+  if [[ "$ARTIFACT_CONFIG" != /* ]]; then
+    ARTIFACT_CONFIG="$ROOT/${ARTIFACT_CONFIG#./}"
+  fi
+  GPU_ENABLE=0
+  GPU_DEFAULT_BACKEND=disabled
+  PROFILE=cpu
+  case "$BACKEND" in
+    gpu|cuda|king_native_gpu)
+      GPU_ENABLE=1
+      GPU_DEFAULT_BACKEND=cuda
+      PROFILE=gpu
+      BACKEND=king_native_gpu
+      ;;
+    cpu|king_native_cpu)
+      BACKEND=king_native_cpu
+      ;;
+  esac
+  PHP_ARGS=(
+    -n
+    -d "extension=$EXTENSION"
+    -d king.security_allow_config_override=1
+    -d "king.inference_preferred_model_profile=$PROFILE"
+    -d "king.inference_models=${MODEL},${BACKEND},${ARTIFACT_CONFIG},golden"
+    -d "memory_limit=${KING_INFERENCE_PHP_MEMORY_LIMIT:-4G}"
+    -d display_errors=stderr
+    -d log_errors=1
+  )
+  if [[ "$PROFILE" == "gpu" ]]; then
+    PHP_ARGS+=(
+      -d "king.gpu_bindings_enable=$GPU_ENABLE"
+      -d "king.gpu_default_backend=$GPU_DEFAULT_BACKEND"
+      -d king.inference_gpu_max_gpu_layers=99
+      -d king.inference_gpu_vram_reserve_mb=2048
+      -d king.inference_gpu_min_free_vram_mb=4096
+      -d king.inference_gpu_allow_system_ram_offload=0
+    )
+  fi
+
   KING_OPENAI_HOST="$HOST" \
   KING_OPENAI_PORT="$PORT" \
   KING_OPENAI_DEFAULT_MAX_TOKENS="${KING_OPENAI_DEFAULT_MAX_TOKENS:-128}" \
   KING_OPENAI_MAX_COMPLETION_TOKENS="${KING_OPENAI_MAX_COMPLETION_TOKENS:-256}" \
   KING_OPENAI_CONTEXT_POLICY="${KING_OPENAI_CONTEXT_POLICY:-full}" \
-  KING_OPENAI_CONFIRM_START=1 \
-    "$ROOT/bin/king-openai-router-start" --confirm >"$LOG_FILE" 2>&1 &
+    "$PHP_BIN" "${PHP_ARGS[@]}" "$ROOT/infra/inference/openai-router.php" >"$LOG_FILE" 2>&1 &
   ROUTER_PID=$!
 
   deadline=$((SECONDS + START_TIMEOUT_SEC))
@@ -50,5 +99,6 @@ if [[ "$USE_EXISTING" != "1" ]]; then
 fi
 
 KING_INFERENCE_GOLDEN_BASE_URL="$URL" \
+KING_INFERENCE_GOLDEN_MODEL="$MODEL" \
 KING_INFERENCE_GOLDEN_MODEL_PATH="$ARTIFACT" \
   "$PHP_BIN" "$ROOT/infra/inference/golden-prompts.php" "$@"
