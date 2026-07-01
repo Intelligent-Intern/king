@@ -18,4 +18,9 @@
  */
 void kg_config_dynamic_admin_api_defaults_load(void);
 
+/**
+ * @brief Releases persistent config strings owned by dynamic admin callbacks.
+ */
+void kg_config_dynamic_admin_api_defaults_release(void);
+
 #endif /* KING_CONFIG_DYNAMIC_ADMIN_API_DEFAULT_H */
