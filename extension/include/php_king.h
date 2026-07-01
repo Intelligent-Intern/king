@@ -18,9 +18,6 @@
 #endif
 
 #include <php.h>
-#include <zend_object_handlers.h>
-#include <Zend/zend_execute.h>
-#include <zend_exceptions.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdatomic.h>
