@@ -8,6 +8,9 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
 
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
         if ($fixedPort !== null) {
+            if ($fixedPort < 1 || $fixedPort > 65535) {
+                throw new RuntimeException('fixed on-wire HTTP/1 test port is outside the valid TCP port range');
+            }
             $port = $fixedPort;
         } else {
             $errno = 0;
@@ -19,37 +22,53 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
 
             $serverName = stream_socket_get_name($probe, false);
             fclose($probe);
-            [, $port] = explode(':', $serverName, 2);
-            $port = (int) $port;
+            if (!is_string($serverName)) {
+                throw new RuntimeException('failed to read reserved on-wire HTTP/1 test port name');
+            }
+
+            $colon = strrpos($serverName, ':');
+            if ($colon === false) {
+                throw new RuntimeException('reserved on-wire HTTP/1 test port name did not contain a port');
+            }
+
+            $portText = substr($serverName, $colon + 1);
+            if ($portText === '' || !ctype_digit($portText)) {
+                throw new RuntimeException('reserved on-wire HTTP/1 test port was not numeric');
+            }
+
+            $port = (int) $portText;
+            if ($port < 1 || $port > 65535) {
+                throw new RuntimeException('reserved on-wire HTTP/1 test port is outside the valid TCP port range');
+            }
         }
 
         $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
+        if ($capture === false) {
+            throw new RuntimeException('failed to create on-wire HTTP/1 websocket capture file');
+        }
+
         $extensionPath = dirname(__DIR__) . '/modules/king.so';
-        $commandParts = [
-            escapeshellarg(PHP_BINARY),
+        $command = [
+            PHP_BINARY,
             '-n',
             '-d',
-            escapeshellarg('extension=' . $extensionPath),
+            'extension=' . $extensionPath,
             '-d',
-            escapeshellarg('king.security_allow_config_override=1'),
+            'king.security_allow_config_override=1',
         ];
 
         if ($mode === 'cors-allowlist') {
-            $commandParts[] = '-d';
-            $commandParts[] = escapeshellarg(
-                'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
-            );
+            $command[] = '-d';
+            $command[] = 'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test';
         }
 
-        $commandParts = array_merge($commandParts, [
-            escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
-            escapeshellarg($capture),
+        $command = array_merge($command, [
+            __DIR__ . '/server_websocket_wire_server.inc',
+            $capture,
             (string) (int) $port,
-            escapeshellarg($mode),
+            $mode,
             (string) max(1, $iterations),
         ]);
-
-        $command = implode(' ', $commandParts);
 
         $processEnv = null;
         if ($env !== []) {
@@ -93,6 +112,17 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
     }
 
     throw new RuntimeException('failed to launch on-wire HTTP/1 websocket server');
+}
+
+function king_server_websocket_wire_assert_request_target(string $path): void
+{
+    if ($path === '' || $path[0] !== '/') {
+        throw new RuntimeException('raw websocket request target must be an absolute path');
+    }
+
+    if (str_contains($path, "\r") || str_contains($path, "\n")) {
+        throw new RuntimeException('raw websocket request target must not contain CRLF bytes');
+    }
 }
 
 function king_server_websocket_wire_stop_server(array $server): array
@@ -283,6 +313,8 @@ function king_server_websocket_wire_raw_client_connect(int $port, string $path)
     $deadline = microtime(true) + 3.0;
     $socket = false;
     $message = 'connection failed';
+
+    king_server_websocket_wire_assert_request_target($path);
 
     if (!function_exists('socket_create')) {
         throw new RuntimeException('The sockets extension is required for raw websocket client fixtures. Please enable it in php.ini.');
