@@ -522,7 +522,7 @@ static zend_result king_inference_cuda_decoder_graph_executor_linear_shape(
             error,
             sizeof(error),
             "cuda_decoder_graph_linear_quantized_shape_invalid weight=%s input_width=%lu cols=%lu rows=%lu rank=%lu type=%lu",
-            weight_name != NULL && *weight_name != NULL ? ZSTR_VAL(*weight_name) : "",
+            *weight_name != NULL ? ZSTR_VAL(*weight_name) : "",
             (unsigned long) input_width,
             (unsigned long) cols,
             (unsigned long) tensor_rows,
