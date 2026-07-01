@@ -23,4 +23,5 @@ void kg_config_dynamic_admin_api_init(void)
 void kg_config_dynamic_admin_api_shutdown(void)
 {
     kg_config_dynamic_admin_api_ini_unregister();
+    kg_config_dynamic_admin_api_defaults_release();
 }
