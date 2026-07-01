@@ -6,7 +6,7 @@
 #define KING_PHP_KING_CONSTANTS_H
 
 #ifndef PHP_KING_VERSION
-#  define PHP_KING_VERSION "1.0.9"
+#  define PHP_KING_VERSION "1.0.10-beta"
 #endif
 
 #ifndef KING_MAX_TICKET_SIZE
