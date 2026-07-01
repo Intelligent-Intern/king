@@ -75,7 +75,7 @@ write_scalar_output() {
 }
 
 cache_from="type=gha,scope=${SCOPE}"
-cache_to="type=gha,mode=max,scope=${SCOPE}"
+cache_to="type=gha,mode=max,scope=${SCOPE},ignore-error=true"
 local_root="${KING_CI_LOCAL_DOCKER_BUILDX_CACHE_DIR:-}"
 use_local="false"
 local_dir=""
