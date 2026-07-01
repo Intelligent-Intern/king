@@ -40,15 +40,10 @@ var_dump(str_contains($selector, '-install_name'));
 var_dump(str_contains($selector, '-undefined dynamic_lookup'));
 var_dump(str_contains($selector, 'no_undefined_flag="-undefined dynamic_lookup"'));
 
-$configureDarwin = '';
-if (preg_match('/darwin\* \| rhapsody\*\).*?archive_cmds_need_lc=no/ms', $configure, $match)) {
-    $configureDarwin = $match[0];
-}
-
-var_dump($configure === '' || $configureDarwin !== '');
-var_dump($configure === '' || str_contains($configureDarwin, '${wl}-undefined ${wl}dynamic_lookup'));
-var_dump($configure === '' || !str_contains($configureDarwin, '-undefined ${wl}suppress'));
-var_dump($configure === '' || !str_contains($configureDarwin, '-flat_namespace'));
+var_dump($configure === '' || str_contains($configure, "_lt_dar_allow_undefined='\$wl-undefined \${wl}dynamic_lookup'"));
+var_dump($configure === '' || !str_contains($configure, "_lt_dar_allow_undefined='\$wl-undefined \${wl}suppress'"));
+var_dump($configure === '' || !str_contains($configure, "_lt_dar_allow_undefined='\$wl-flat_namespace \$wl-undefined \${wl}suppress'"));
+var_dump($configure === '' || str_contains($configure, 'allow_undefined_flag=$_lt_dar_allow_undefined'));
 var_dump($configure === '' || str_contains($configure, "_lt_dar_single_mod=''"));
 
 $templateDarwin = '';

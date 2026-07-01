@@ -6,14 +6,14 @@
  * PURPOSE:
  * Default-value loader for the SSH-over-QUIC config family. This slice
  * seeds the baseline gateway-disabled state, bind/target endpoints, auth
- * and mapping modes, MCP/user-profile agent placeholders, timeout values,
+ * and mapping modes, MCP/user-profile agent fields, timeout values,
  * and session-activity logging before INI and any allowed userland
  * overrides refine the live snapshot.
  * =========================================================================
  */
 
-#include "include/config/ssh_over_quic/default.h"
-#include "include/config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/default.h"
+#include "config/ssh_over_quic/base_layer.h"
 
 void kg_config_ssh_over_quic_defaults_load(void)
 {

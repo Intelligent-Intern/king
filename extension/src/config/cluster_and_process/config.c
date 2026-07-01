@@ -11,9 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/cluster_and_process/config.h"
-#include "include/config/cluster_and_process/base_layer.h"
-#include "include/king_globals.h"
+#include "config/cluster_and_process/config.h"
+#include "config/cluster_and_process/base_layer.h"
+#include "php_king/globals.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>

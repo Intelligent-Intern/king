@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST="${KING_OPENAI_SMOKE_HOST:-127.0.0.1}"
+PORT="${KING_OPENAI_SMOKE_PORT:-18090}"
+URL="http://${HOST}:${PORT}/v1"
+MODEL="${KING_OPENAI_SMOKE_MODEL:-gemma4:12b}"
+MESSAGE="${KING_OPENAI_SMOKE_MESSAGE:-Hello}"
+MAX_TOKENS="${KING_OPENAI_SMOKE_MAX_TOKENS:-2}"
+START_TIMEOUT_SEC="${KING_OPENAI_SMOKE_START_TIMEOUT_SEC:-45}"
+REQUEST_TIMEOUT_SEC="${KING_OPENAI_SMOKE_REQUEST_TIMEOUT_SEC:-30}"
+LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/king-openai-smoke.XXXXXX.log")"
+
+cleanup() {
+  local status=$?
+  if [[ -n "${ROUTER_PID:-}" ]] && kill -0 "$ROUTER_PID" 2>/dev/null; then
+    kill "$ROUTER_PID" 2>/dev/null || true
+    wait "$ROUTER_PID" 2>/dev/null || true
+  fi
+  if [[ "$status" -ne 0 ]]; then
+    echo "king-openai-smoke: router log follows:" >&2
+    tail -n 80 "$LOG_FILE" >&2 || true
+  fi
+  rm -f "$LOG_FILE"
+}
+trap cleanup EXIT INT TERM
+
+KING_OPENAI_HOST="$HOST" \
+KING_OPENAI_PORT="$PORT" \
+KING_OPENAI_DEFAULT_MAX_TOKENS="$MAX_TOKENS" \
+KING_OPENAI_MAX_COMPLETION_TOKENS="$MAX_TOKENS" \
+KING_OPENAI_CONTEXT_POLICY="${KING_OPENAI_CONTEXT_POLICY:-full}" \
+KING_OPENAI_CONFIRM_START=1 \
+  "$ROOT/bin/king-openai-router-start" --confirm >"$LOG_FILE" 2>&1 &
+ROUTER_PID=$!
+
+deadline=$((SECONDS + START_TIMEOUT_SEC))
+until curl -fsS --max-time 1 "${URL}/models" >/dev/null 2>&1; do
+  if ! kill -0 "$ROUTER_PID" 2>/dev/null; then
+    echo "king-openai-smoke: router exited before /v1/models became reachable" >&2
+    exit 1
+  fi
+  if (( SECONDS >= deadline )); then
+    echo "king-openai-smoke: timed out waiting for ${URL}/models" >&2
+    exit 1
+  fi
+  sleep 0.5
+done
+
+payload="$(
+  KING_OPENAI_SMOKE_MODEL="$MODEL" \
+  KING_OPENAI_SMOKE_MESSAGE="$MESSAGE" \
+  KING_OPENAI_SMOKE_MAX_TOKENS="$MAX_TOKENS" \
+  php -r '
+    echo json_encode([
+      "model" => getenv("KING_OPENAI_SMOKE_MODEL") ?: "gemma4:12b",
+      "stream" => true,
+      "max_tokens" => (int) (getenv("KING_OPENAI_SMOKE_MAX_TOKENS") ?: 2),
+      "messages" => [[
+        "role" => "user",
+        "content" => getenv("KING_OPENAI_SMOKE_MESSAGE") ?: "Hello",
+      ]],
+    ], JSON_UNESCAPED_SLASHES);
+  '
+)"
+
+body="$(
+  curl -sS --max-time "$REQUEST_TIMEOUT_SEC" -N \
+    -H 'content-type: application/json' \
+    -d "$payload" \
+    "${URL}/chat/completions"
+)"
+
+if [[ "$body" != *'"delta":{"content":'* ]]; then
+  echo "king-openai-smoke: response did not contain a streamed content delta" >&2
+  exit 1
+fi
+if [[ "$body" != *'[DONE]'* ]]; then
+  echo "king-openai-smoke: response did not finish with [DONE]" >&2
+  exit 1
+fi
+if [[ "$body" == *'event: error'* ]]; then
+  echo "king-openai-smoke: response contained an SSE error event" >&2
+  exit 1
+fi
+
+  KING_OPENAI_SMOKE_URL="$URL" \
+  KING_OPENAI_SMOKE_MODEL="$MODEL" \
+  php -r '
+  $body = stream_get_contents(STDIN);
+  echo json_encode([
+    "ok" => true,
+    "url" => getenv("KING_OPENAI_SMOKE_URL") ?: "",
+    "model" => getenv("KING_OPENAI_SMOKE_MODEL") ?: "gemma4:12b",
+    "bytes" => strlen($body),
+    "has_content_delta" => str_contains($body, "\"delta\":{\"content\":"),
+    "has_done" => str_contains($body, "[DONE]"),
+    "has_error_event" => str_contains($body, "event: error"),
+  ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), "\n";
+' <<<"$body"

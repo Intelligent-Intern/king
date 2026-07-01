@@ -6,13 +6,13 @@
  * PURPOSE:
  * Default-value loader for the router and load-balancer config family.
  * This slice seeds the baseline router-disabled state, hashing mode,
- * backend discovery placeholders, MCP poll cadence, and forwarding cap
+ * backend discovery fields, MCP poll cadence, and forwarding cap
  * before INI and any allowed userland overrides refine the live snapshot.
  * =========================================================================
  */
 
-#include "include/config/router_and_loadbalancer/default.h"
-#include "include/config/router_and_loadbalancer/base_layer.h"
+#include "config/router_and_loadbalancer/default.h"
+#include "config/router_and_loadbalancer/base_layer.h"
 
 void kg_config_router_and_loadbalancer_defaults_load(void)
 {

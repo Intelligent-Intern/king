@@ -18,7 +18,6 @@ static zend_long king_cdn_cache_stale_serve_count = 0;
 static king_cdn_cache_entry *king_cdn_cache_registry_get_entry_allow_expired(
     zend_string *object_id
 );
-void king_cdn_sweep_expired(void);
 
 static void king_cdn_counter_add(zend_long *counter, zend_long delta)
 {

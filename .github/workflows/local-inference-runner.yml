@@ -1,0 +1,59 @@
+name: King Local Inference Runner
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+  workflow_dispatch:
+
+concurrency:
+  group: king-local-inference-runner-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  KING_CI_LOCAL_INFERENCE_MODEL_DIR: /opt/king/cache/inference-models
+  KING_CI_LOCAL_LSQUIC_CACHE_DIR: /opt/king/cache/lsquic/runtime
+
+jobs:
+  local-inference-runner:
+    name: Local inference cache readiness
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: king
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Resolve local GGUF inference model cache
+        id: inference-model
+        run: bash ./infra/scripts/local-inference-model-cache.sh resolve --require --github-output "${GITHUB_OUTPUT}"
+
+      - name: Export local inference model path
+        env:
+          MODEL_PRESENT: ${{ steps.inference-model.outputs.model-present }}
+          MODEL_PATH: ${{ steps.inference-model.outputs.model-realpath }}
+        run: |
+          test "${MODEL_PRESENT}" = "true"
+          test -r "${MODEL_PATH}"
+          printf 'KING_INFERENCE_TEST_MODEL_PATH=%s\n' "${MODEL_PATH}" >> "${GITHUB_ENV}"
+          printf 'KING_INFERENCE_CPU_TEST_MODEL_PATH=%s\n' "${MODEL_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Verify heavy native dependency cache hook
+        run: |
+          test -x ./infra/scripts/local-lsquic-runtime-cache.sh
+          test -n "${KING_CI_LOCAL_LSQUIC_CACHE_DIR}"
+
+      - name: Verify no public inference port is exposed
+        run: bash ./infra/scripts/check-inference-port-exposure.sh --ports 8080,18129

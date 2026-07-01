@@ -2,6 +2,7 @@ libcurl
 quiche
 llama-fork/
 node_modules
+.venv/
 .cargo/
 
 # Archived source snapshots
@@ -39,6 +40,7 @@ compat-artifacts/
 dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
+var/
 .cache/
 .vite/
 .codex
@@ -46,6 +48,9 @@ dist/
 # Local machine-specific environment overrides.
 .env.local
 *.env.local
+
+# Local planning notes that are not part of the public docs set.
+docs/future-plan.md
 
 # Model weights MUST NEVER be checked in (they are large and provenance
 # belongs on a model registry / object store, not in git). Catch-all

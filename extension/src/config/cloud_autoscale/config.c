@@ -11,15 +11,15 @@
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/config.h"
-#include "include/config/cloud_autoscale/base_layer.h"
-#include "include/king_globals.h"
+#include "config/cloud_autoscale/config.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "php_king/globals.h"
 
-#include "include/validation/config_param/validate_generic_string.h"
-#include "include/validation/config_param/validate_long_range.h"
-#include "include/validation/config_param/validate_non_negative_long.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
+#include "validation/config_param/validate_generic_string.h"
+#include "validation/config_param/validate_long_range.h"
+#include "validation/config_param/validate_non_negative_long.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string_from_allowlist.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

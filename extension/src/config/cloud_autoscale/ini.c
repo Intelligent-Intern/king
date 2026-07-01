@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/ini.h"
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/ini.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -147,7 +148,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.cluster_autoscale_instance_tags", "", PHP_INI_SYSTEM, OnUpdateString, instance_tags, kg_cloud_autoscale_config_t, king_cloud_autoscale_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_cloud_autoscale_ini_register(void)
 {

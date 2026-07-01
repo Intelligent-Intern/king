@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/security_and_traffic/default.h"
-#include "include/config/security_and_traffic/base_layer.h"
+#include "config/security_and_traffic/default.h"
+#include "config/security_and_traffic/base_layer.h"
 
 void kg_config_security_defaults_load(void)
 {

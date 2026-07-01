@@ -12,9 +12,8 @@
  * - MINIT wires all config modules and registers their INI directives
  * - No legacy QUIC backend config is created during MINIT
  * - Exception classes register in the correct hierarchy
- * - The first OO class entries now include active Config/Session wrappers
- *   over the same Runtime resource runtime; broader method parity and the
- *   remaining object-backed classes are still pending
+ * - OO class and object-handler registration is delegated through
+ *   module-owned registration hooks
  * - Resource type handles bootstrap as -1 until MINIT registers them
  * - Core health/version and a small config-backed introspection surface are real
  * =========================================================================
@@ -31,20 +30,16 @@
 #include "zend_object_handlers.h"
 
 #include "php_king.h"
-#include "include/king_globals.h"
-#include "include/king_init.h"
 
 #include "php_king/state.inc"
-#include "php_king/externals.inc"
-#include "php_king/arginfo.inc"
-#include "php_king/db_ingestor.inc"
-#include "php_king/function_table.inc"
+#include "php_king/arginfo.h"
+#include "php_king/init.h"
+#include "php_king/registration.h"
+#include "php_king/resources.h"
 #include "php_king/resources.inc"
 #include "php_king/exceptions.inc"
 #include "php_king/classes.inc"
-#include "php_king/cancel_token.inc"
-#include "php_king/mcp.inc"
-#include "php_king/objects.inc"
-#include "php_king/awaitable.inc"
+#include "php_king/class_registration.inc"
 #include "php_king/lifecycle.inc"
+#include "php_king/function_table.inc"
 #include "php_king/module_entry.inc"

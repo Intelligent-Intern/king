@@ -24,6 +24,41 @@ typedef struct _kg_high_perf_compute_ai_config_t {
     bool dataframe_string_interning_enable;
     zend_long dataframe_cpu_parallelism_default;
 
+    bool inference_with_memory;
+    zend_long inference_context_tokens;
+    zend_long inference_kv_page_tokens;
+    zend_long inference_kv_element_bytes;
+    char *inference_preferred_model_profile;
+    char *inference_models;
+    char *inference_cpu_model_name;
+    char *inference_cpu_model_artifact;
+    char *inference_gpu_model_name;
+    char *inference_gpu_model_artifact;
+    zend_long inference_gpu_max_gpu_layers;
+    zend_long inference_gpu_vram_reserve_mb;
+    zend_long inference_gpu_min_free_vram_mb;
+    bool inference_gpu_allow_system_ram_offload;
+    zend_long inference_gpu_system_ram_offload_max_mb;
+    zend_long inference_gpu_system_ram_offload_min_free_mb;
+    char *inference_gpu_thermal_sensor_path;
+    char *inference_gpu_thermal_sensor_command;
+    double inference_gpu_thermal_max_temperature_c;
+    zend_long inference_gpu_thermal_check_interval_sec;
+    bool inference_gpu_allow_unmonitored;
+    char *inference_gpu_power_sensor_command;
+    double inference_gpu_power_max_watts;
+    zend_long inference_gpu_power_check_interval_sec;
+    bool inference_gpu_batch_prefill_experimental_enable;
+    bool inference_cuda_numeric_compare_enable;
+    zend_long inference_cuda_numeric_compare_max_values;
+    bool inference_llm_cache_enable;
+    char *inference_llm_cache_path;
+    zend_long inference_llm_cache_min_free_mb;
+    bool inference_llm_cache_fail_closed;
+    char *inference_llm_cache_disk_alert_webhook;
+    char *inference_llm_cache_disk_alert_mcp_service;
+    char *inference_llm_cache_disk_alert_mcp_method;
+
     /* --- General GPU Configuration --- */
     bool gpu_bindings_enable;
     char *gpu_default_backend;

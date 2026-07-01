@@ -12,8 +12,9 @@
  * =========================================================================
  */
 
-#include "include/config/quic_transport/ini.h"
-#include "include/config/quic_transport/base_layer.h"
+#include "config/quic_transport/ini.h"
+#include "config/quic_transport/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -149,7 +150,6 @@ PHP_INI_BEGIN()
         OnUpdateQuicPositiveLong, &king_quic_transport_config.dgram_send_queue_len, NULL)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_quic_transport_ini_register(void)
 {

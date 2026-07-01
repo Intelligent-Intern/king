@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/state_management/ini.h"
-#include "include/config/state_management/base_layer.h"
+#include "config/state_management/ini.h"
+#include "config/state_management/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <ext/spl/spl_exceptions.h>
@@ -49,7 +50,6 @@ PHP_INI_BEGIN()
         default_uri, kg_state_management_config_t, king_state_management_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_state_management_ini_register(void)
 {

@@ -11,13 +11,13 @@
  * =========================================================================
  */
 
-#include "include/config/smart_dns/config.h"
-#include "include/config/smart_dns/base_layer.h"
-#include "include/king_globals.h"
+#include "config/smart_dns/config.h"
+#include "config/smart_dns/base_layer.h"
+#include "php_king/globals.h"
 
-#include "include/validation/config_param/validate_bool.h"
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string.h"
+#include "validation/config_param/validate_bool.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -146,6 +146,10 @@ int kg_config_smart_dns_apply_userland_config_to(
             return kg_smart_dns_reject_system_only_setting("dns.live_probe_allowed_hosts");
         } else if (zend_string_equals_literal(key, "dns_mothernode_uri")) {
             if (kg_validate_string(value, &target->mothernode_uri) != SUCCESS) {
+                return FAILURE;
+            }
+        } else if (zend_string_equals_literal(key, "dns_state_path")) {
+            if (kg_validate_string(value, &target->state_path) != SUCCESS) {
                 return FAILURE;
             }
         }

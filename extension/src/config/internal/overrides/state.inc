@@ -30,6 +30,7 @@ typedef struct _king_config_override_state_t {
     king_config_override_bucket_t cdn;
     king_config_override_bucket_t dns;
     king_config_override_bucket_t otel;
+    king_config_override_bucket_t compute_ai;
 } king_config_override_state_t;
 
 static king_config_override_bucket_t *king_config_override_bucket_for_module(
@@ -63,6 +64,8 @@ static king_config_override_bucket_t *king_config_override_bucket_for_module(
             return &state->dns;
         case KING_CONFIG_OVERRIDE_OTEL:
             return &state->otel;
+        case KING_CONFIG_OVERRIDE_COMPUTE_AI:
+            return &state->compute_ai;
         case KING_CONFIG_OVERRIDE_NONE:
             return NULL;
     }
@@ -128,4 +131,5 @@ static void king_config_cleanup_override_state(king_config_override_state_t *sta
     king_config_destroy_override_bucket(&state->cdn);
     king_config_destroy_override_bucket(&state->dns);
     king_config_destroy_override_bucket(&state->otel);
+    king_config_destroy_override_bucket(&state->compute_ai);
 }

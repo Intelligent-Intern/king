@@ -15,7 +15,7 @@
 #  include <pthread.h>
 #endif
 
-#include "include/client/session.h"
+#include "client/session.h"
 
 
 #ifndef __has_include

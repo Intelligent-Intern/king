@@ -126,19 +126,97 @@ static int king_semantic_dns_state_dir_is_secure(const struct stat *st)
     return SUCCESS;
 }
 
+static const char *king_semantic_dns_state_file_path(void)
+{
+    if (king_semantic_dns_runtime.initialized
+        && king_semantic_dns_runtime.config.state_path[0] != '\0') {
+        return king_semantic_dns_runtime.config.state_path;
+    }
+
+    return KING_SEMANTIC_DNS_DEFAULT_STATE_FILE;
+}
+
+int king_semantic_dns_state_build_directory_path(char *dest, size_t dest_len)
+{
+    const char *state_path = king_semantic_dns_state_file_path();
+    const char *last_separator;
+    size_t dir_len;
+
+    if (dest == NULL || dest_len == 0 || state_path == NULL || state_path[0] != '/') {
+        return FAILURE;
+    }
+
+    last_separator = strrchr(state_path, '/');
+    if (last_separator == NULL || last_separator[1] == '\0') {
+        return FAILURE;
+    }
+
+    dir_len = (last_separator == state_path)
+        ? 1
+        : (size_t) (last_separator - state_path);
+    if (dir_len == 0 || dir_len >= dest_len) {
+        return FAILURE;
+    }
+
+    memcpy(dest, state_path, dir_len);
+    dest[dir_len] = '\0';
+    return SUCCESS;
+}
+
+static int king_semantic_dns_state_build_lock_path(char *dest, size_t dest_len)
+{
+    const char *state_path = king_semantic_dns_state_file_path();
+
+    if (dest == NULL || dest_len == 0 || state_path == NULL || state_path[0] == '\0') {
+        return FAILURE;
+    }
+
+    if (snprintf(dest, dest_len, "%s.lock", state_path) >= (int) dest_len) {
+        dest[0] = '\0';
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static int king_semantic_dns_state_build_tmp_template(char *dest, size_t dest_len)
+{
+    char state_dir[PATH_MAX];
+
+    if (dest == NULL || dest_len == 0) {
+        return FAILURE;
+    }
+
+    if (king_semantic_dns_state_build_directory_path(state_dir, sizeof(state_dir)) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (snprintf(dest, dest_len, "%s/.state.XXXXXX", state_dir) >= (int) dest_len) {
+        dest[0] = '\0';
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static int king_semantic_dns_state_ensure_directory(void)
 {
     struct stat st;
+    char state_dir[PATH_MAX];
 
-    if (php_check_open_basedir(KING_SEMANTIC_DNS_STATE_DIR) != 0) {
+    if (king_semantic_dns_state_build_directory_path(state_dir, sizeof(state_dir)) != SUCCESS) {
         return FAILURE;
     }
 
-    if (mkdir(KING_SEMANTIC_DNS_STATE_DIR, 0700) != 0 && errno != EEXIST) {
+    if (php_check_open_basedir(state_dir) != 0) {
         return FAILURE;
     }
 
-    if (lstat(KING_SEMANTIC_DNS_STATE_DIR, &st) != 0) {
+    if (mkdir(state_dir, 0700) != 0 && errno != EEXIST) {
+        return FAILURE;
+    }
+
+    if (lstat(state_dir, &st) != 0) {
         return FAILURE;
     }
 
@@ -148,8 +226,13 @@ static int king_semantic_dns_state_ensure_directory(void)
 static int king_semantic_dns_state_path_is_regular_file(void)
 {
     struct stat state_stat;
+    const char *state_path = king_semantic_dns_state_file_path();
 
-    if (lstat(KING_SEMANTIC_DNS_STATE_FILE, &state_stat) != 0) {
+    if (php_check_open_basedir(state_path) != 0) {
+        return 0;
+    }
+
+    if (lstat(state_path, &state_stat) != 0) {
         return 0;
     }
 
@@ -161,6 +244,7 @@ static int king_semantic_dns_state_lock_acquire(int *lock_fd_out)
     int flags = O_RDWR | O_CREAT;
     int fd;
     struct stat lock_stat;
+    char lock_path[PATH_MAX];
 
     if (lock_fd_out == NULL) {
         return FAILURE;
@@ -172,7 +256,11 @@ static int king_semantic_dns_state_lock_acquire(int *lock_fd_out)
         return FAILURE;
     }
 
-    if (php_check_open_basedir(KING_SEMANTIC_DNS_STATE_LOCK_FILE) != 0) {
+    if (king_semantic_dns_state_build_lock_path(lock_path, sizeof(lock_path)) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (php_check_open_basedir(lock_path) != 0) {
         return FAILURE;
     }
 
@@ -183,7 +271,7 @@ static int king_semantic_dns_state_lock_acquire(int *lock_fd_out)
     flags |= O_NOFOLLOW;
 #endif
 
-    fd = open(KING_SEMANTIC_DNS_STATE_LOCK_FILE, flags, 0600);
+    fd = open(lock_path, flags, 0600);
     if (fd < 0) {
         return FAILURE;
     }
@@ -220,4 +308,3 @@ static int king_semantic_dns_state_refresh_locked(void)
 
     return king_semantic_dns_state_load();
 }
-

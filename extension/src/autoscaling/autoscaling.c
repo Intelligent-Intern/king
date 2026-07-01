@@ -9,11 +9,13 @@
  * =========================================================================
  */
 #include "php_king.h"
-#include "include/autoscaling/autoscaling.h"
-#include "include/config/cloud_autoscale/base_layer.h"
-#include "include/config/cloud_autoscale/config.h"
-#include "include/king_globals.h"
-#include "include/telemetry/telemetry.h"
+#include "php_king/core_arginfo.h"
+#include "autoscaling/arginfo/index.h"
+#include "autoscaling/autoscaling.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/config.h"
+#include "php_king/globals.h"
+#include "telemetry/telemetry.h"
 #include "autoscaling/autoscaling_internal.h"
 
 #include <errno.h>
@@ -62,7 +64,9 @@ king_autoscaling_runtime_state_t king_autoscaling_runtime = {0};
 uint32_t king_current_instances = 1;
 
 
-#include "autoscaling/runtime_config.inc"
-#include "autoscaling/signal_and_monitoring.inc"
-#include "autoscaling/runtime_state.inc"
-#include "autoscaling/public_api.inc"
+#include "state.inc"
+#include "runtime/runtime_config.inc"
+#include "runtime/signal_and_monitoring.inc"
+#include "runtime/runtime_state.inc"
+#include "runtime/public_api.inc"
+#include "registration.inc"

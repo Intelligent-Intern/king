@@ -33,5 +33,6 @@ zend_result king_http1_request_dispatch(
  * @return A PHP array on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http1_request_send);
+PHP_FUNCTION(king_http1_request_send_async);
 
 #endif // KING_CLIENT_HTTP1_H

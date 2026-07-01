@@ -15,6 +15,7 @@
 #include "php_king.h"
 #include "config/smart_dns/base_layer.h"
 #include "semantic_dns/semantic_dns.h"
+#include "semantic_dns/lifecycle.h"
 #include <stdbool.h>
 #include <limits.h>
 #include <sys/types.h>
@@ -51,6 +52,7 @@ int king_semantic_dns_state_write_snapshot_file(const char *path, zval *payload)
 int king_semantic_dns_state_read_snapshot_file(const char *path, zval *payload);
 int king_semantic_dns_state_remove_snapshot_file(const char *path);
 int king_semantic_dns_listener_write_runtime_snapshot(void);
+int king_semantic_dns_state_build_directory_path(char *dest, size_t dest_len);
 
 /* Registry/runtime refresh helpers */
 int king_semantic_dns_refresh_distributed_state(void);

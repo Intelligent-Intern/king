@@ -26,7 +26,7 @@ signals, and cluster-facing workflows in one coherent runtime model.
 The current line is beta. The repo-local baseline is green, the multi-backend
 object-store and control-plane surfaces are real, and the remaining closure
 work is now about narrower hardening, distributed-operating proof, and
-multi-node fleet behavior rather than placeholder subsystem stories.
+multi-node fleet behavior rather than paper subsystem claims.
 
 If you do not have a Hetzner account yet, it is time to fix that. Use the
 [Hetzner Cloud referral link](https://hetzner.cloud/?ref=VYfKUSIni63u) and you
@@ -186,7 +186,8 @@ King brings the following into one extension:
 - Smart DNS / Semantic DNS for service discovery and routing
 - router and load-balancer control-plane configuration and policy
 - IIBIN for schema-defined native binary encoding and decoding
-- MCP for agent and tool protocol integration
+- MCP public server handling over JSON-RPC stdio and Streamable HTTP
+- King-internal MCP peer calls, transfers, deadlines, and configured IIBIN payload contracts
 - XSLT 2.0/3.0 transformation hooks for XML standards and Schematron/SVRL pipelines through optional SaxonC runtime loading
 - real multi-backend object-store and CDN primitives
 - telemetry, metrics, tracing, and admin control surfaces
@@ -229,9 +230,12 @@ the application logic.
 ### 3. Control Plane
 
 The control plane is for remote work that is not just "serve one response now".
-This is where MCP and the pipeline orchestrator live.
-MCP moves structured requests, uploads, downloads, deadlines, and cancellation
-between peers.
+This is where MCP and the pipeline orchestrator live. King's public MCP server
+surface handles JSON-RPC stdio and Streamable HTTP requests for tools,
+resources, prompts, initialization, and ping. The internal MCP peer surface
+moves structured requests, uploads, downloads, deadlines, and cancellation
+between trusted King peers. IIBIN schemas for internal MCP calls are fixed on
+the connection config, not passed as mutable request-time switches.
 The orchestrator manages multi-step work, queue-backed execution, remote-worker
 execution, run snapshots, and restart-aware control flow.
 If work needs to continue beyond one request, move to another process, or be
@@ -323,7 +327,7 @@ King includes a native control-plane model around:
 King is also a data and protocol runtime:
 
 - IIBIN for schema-defined binary serialization
-- MCP for tool and agent protocol traffic
+- MCP for public JSON-RPC tool/resource/prompt servers and King-internal peer traffic
 - XSLT-backed XML transformation and validation pipelines for standards-heavy payloads
 - real multi-backend object-store primitives
 - CDN-oriented cache distribution hooks
@@ -352,8 +356,89 @@ The core programming model is:
 - `King\MCP`, `King\IIBIN`, `King\ObjectStore`,
   `King\PipelineOrchestrator`, `King\Autoscaling`, and
   `King\WebSocket\Connection` expose subsystem-specific runtime surfaces.
-- Procedural `king_xslt_*` functions expose the SaxonC-backed XSLT runtime
-  status and file transformation primitives.
+- `King\RTP\Socket` exposes the native RTP/ICE-lite/DTLS-SRTP runtime as a
+  resource-backed OO surface.
+- `King\XSLT\Processor` and the procedural `king_xslt_*` functions expose the
+  SaxonC-backed XSLT runtime status and file transformation primitives.
+- `King\Inference`, `King\Inference\Model`, `King\Inference\Stream`, and the
+  procedural `king_inference_*` functions expose local quantized GGUF model
+  registration through a backend contract. King parses GGUF metadata and tensor
+  directories natively, `local` provides the current token-streaming runner
+  contract, and `king_native_cpu` exposes model structure, native tokenizer
+  lookup, paged KV-cache planning, public tensor views, bounded
+  dequantization, K-quant block decoding, first CPU tensor/vector math, and
+  a native mini-graph for embedding, RMSNorm, linear projection, RoPE, dot,
+  stack, softmax, weighted-sum context assembly, serializable KV state,
+  range-based KV attention, token selection from logits, scale, add steps, and
+  graph-backed native CPU token streaming without an external inference runtime.
+  Plain-text OpenAI-compatible chat requests on `king_native_cpu` now compile
+  validated `messages` into transient native CPU prompt/decode graphs instead
+  of requiring callers to provide `graph` or `graphs` manually, and
+  `stream=true` returns OpenAI-compatible Chat Completions SSE chunks from the
+  same native event stream.
+  `king_native_gpu` uses the same OpenAI streaming surface when GPU runtime
+  readiness admits the native prompt loop, while graph payloads stay on the
+  native stream contract.
+  Native graph streams are stateless by default; `king.inference_with_memory`
+  sets the php.ini baseline and `with_memory` opts into carrying graph result
+  state between decode steps. The LLM cache for that memory mode is also
+  disabled by default and becomes active only when both memory mode and
+  `king.inference_llm_cache_enable=1` are configured. The stream layer can emit
+  explicit OpenAI-compatible Chat
+  Completions chunks, and the HTTP helper can serve
+  `GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`,
+  `POST /v1/responses`, legacy `POST /v1/completions`, and
+  `POST /v1/embeddings` through King server response arrays while broader
+  native layer coverage and quantized kernels are added. Omitted inference
+  backend config selects `king_native_cpu`; the runtime model primitive can
+  resolve the configured `auto|gpu|cpu` model profile, preferring
+  `gemma4:12b` when GPU use and a GPU GGUF artifact are configured, and
+  falling back to `gemma3:1b` for CPU. `gemma3:1b` is the compact King baseline:
+  useful for fast local preflight and smoke checks, but still expected to handle
+  simple chat, exact output, language following, small PHP/King snippets, and
+  basic local Coder help. Future fine-tuning keeps that baseline useful instead
+  of treating it as a disposable test model. The GPU path owns a CUDA context,
+  allocates device memory, uploads required weights, caches uploaded tensors,
+  and exposes token embedding row loading, native Q8_0 quantized matrix/vector,
+  device vector operations, a lazy F32 device KV-cache with device-to-device
+  slot writes, RMSNorm, RoPE, attention score, attention softmax, attention
+  value aggregation, FFN/SwiGLU, final output projection paths, bounded top-K
+  logits readback, and a decoder graph executor contract for the complete
+  token-decode op set. The executor also exposes a graph result envelope for
+  native GPU graph streams, carrying graph, terminal, and token-selection
+  metadata plus a graph execution plan that separates CUDA-device work from
+  host sampling after bounded logits readback. The first graph device op,
+  token embedding row loading, now executes through the CUDA embedding kernel;
+  the following RMSNorm op can run on that device vector through the CUDA
+  RMSNorm kernel, and the following Q8_0 linear projection can run through the
+  CUDA quantized matvec kernel. When the next graph op slices that linear
+  output for attention heads, the CUDA slice vector kernel runs. When that
+  slice feeds RoPE, the CUDA RoPE kernel rotates the head vector. The executor
+  also prepares the sibling K/V head path by running K and V projections,
+  slicing the first key/value head, and rotating the key slice before temporary
+  buffers are released. The contract still refuses to claim decoded token
+  output before full device execution results exist. The native GPU
+  prompt-loop admission path can
+  tokenize prompt text, build token-decode graphs, and validate those graphs
+  into result envelopes against the GPU executor without falling back to CPU
+  execution. The GPU
+  backend now uses the same native stream object contract as the CPU backend
+  for start events, native events, cancellation, metrics, and thermal
+  preflight/abort metadata, while OpenAI
+  text generation remains blocked until the full GPU decoder loop is ready.
+  GPU metadata exposes the remaining bridge explicitly: the remaining residual,
+  FFN, and logits device ops after the initial embedding/RMSNorm/linear/slice/
+  RoPE plus K/V head-preparation, KV-cache write, and KV-attention chain still
+  need execution and bounded logits results before the prompt loop may emit
+  decoded tokens.
+  Sampling stays CPU-side for the current native GPU
+  contract: the GPU narrows logits to bounded candidates, then the existing
+  deterministic token-selection policy applies temperature, top-k, top-p, and
+  seed handling without copying the full vocabulary logits back. Memory-enabled
+  native graph streams also
+  enforce an LLM-cache admission policy with a configurable disk-free floor and
+  webhook/MCP alert metadata. The process-runner path is explicit `local`
+  configuration.
 
 The procedural API exists for direct systems work and low-friction interop.
 The OO API exists for typed composition and long-lived application structure.
@@ -401,6 +486,10 @@ It is supposed to look like one native system with a PHP-facing control surface.
 Core source areas:
 
 - [`extension/`](extension/): PHP extension source, tests, headers, and build glue.
+  The public native header root is [`extension/include/`](extension/include/)
+  and the active runtime source root is [`extension/src/`](extension/src/).
+  See [`docs/source-layout.md`](docs/source-layout.md) for the subsystem layout
+  and bootstrap boundaries.
 - [`infra/scripts/`](infra/scripts/): build, package, release, and local install scripts.
 - [`libcurl/`](libcurl/): vendored curl headers used by the extension build.
 - [`userland/flow-php/`](userland/flow-php/): repository-local PHP adapters for streaming ETL, checkpointing, and King-backed pipeline orchestration.

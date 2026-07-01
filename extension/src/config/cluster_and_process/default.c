@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/cluster_and_process/default.h"
-#include "include/config/cluster_and_process/base_layer.h"
+#include "config/cluster_and_process/default.h"
+#include "config/cluster_and_process/base_layer.h"
 
 void kg_config_cluster_and_process_defaults_load(void)
 {

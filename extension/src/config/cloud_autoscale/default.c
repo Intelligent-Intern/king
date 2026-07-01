@@ -6,13 +6,13 @@
  * PURPOSE:
  * Default-value loader for the cloud-autoscale config family. This slice
  * seeds the provider-neutral autoscale defaults plus the current Hetzner-
- * flavored endpoint/budget placeholders before INI and any allowed userland
+ * flavored endpoint and budget fields before INI and any allowed userland
  * overrides refine the live autoscale snapshot.
  * =========================================================================
  */
 
-#include "include/config/cloud_autoscale/default.h"
-#include "include/config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/default.h"
+#include "config/cloud_autoscale/base_layer.h"
 
 void kg_config_cloud_autoscale_defaults_load(void)
 {

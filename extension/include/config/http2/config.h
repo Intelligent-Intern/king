@@ -21,7 +21,7 @@
 #define KING_CONFIG_HTTP2_CONFIG_H
 
 #include "php.h"
-#include "include/config/http2/base_layer.h"
+#include "config/http2/base_layer.h"
 
 /**
  * @brief Applies HTTP/2 settings from a PHP array to the live runtime state.

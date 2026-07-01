@@ -12,9 +12,9 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/client/tls.h"
-#include "include/config/tls_and_crypto/base_layer.h"
+#include "client/session.h"
+#include "client/tls.h"
+#include "config/tls_and_crypto/base_layer.h"
 
 #include "main/php_streams.h"
 #include <stdio.h>

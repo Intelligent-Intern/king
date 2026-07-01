@@ -13,12 +13,12 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/client/websocket.h"
-#include "include/config/config.h"
-#include "include/server/http1.h"
-#include "include/server/session.h"
-#include "include/server/websocket.h"
+#include "client/session.h"
+#include "client/websocket.h"
+#include "config/config.h"
+#include "server/http1.h"
+#include "server/session.h"
+#include "server/websocket.h"
 
 #include "Zend/zend_smart_str.h"
 
@@ -34,6 +34,10 @@
 #include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifndef MSG_NOSIGNAL
+#  define MSG_NOSIGNAL 0
+#endif
 
 #include "local_listener.inc"
 

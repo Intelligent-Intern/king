@@ -5,14 +5,14 @@
  *
  * PURPOSE:
  * Default-value loader for the dynamic-admin-api config family. This slice
- * seeds the local bind/port defaults and empty mTLS path/auth placeholders
+ * seeds the local bind/port defaults and unset mTLS path/auth fields
  * before INI and any allowed userland overrides refine the live admin-api
  * snapshot.
  * =========================================================================
  */
 
-#include "include/config/dynamic_admin_api/default.h"
-#include "include/config/dynamic_admin_api/base_layer.h"
+#include "config/dynamic_admin_api/default.h"
+#include "config/dynamic_admin_api/base_layer.h"
 
 void kg_config_dynamic_admin_api_defaults_load(void)
 {

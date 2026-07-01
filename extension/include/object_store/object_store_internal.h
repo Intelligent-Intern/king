@@ -14,6 +14,7 @@
 
 #include <stdbool.h>
 #include "object_store/object_store.h"
+#include "object_store/lifecycle.h"
 #include <zend_hash.h>
 #include "main/php_streams.h"
 
@@ -204,6 +205,5 @@ int king_object_store_acquire_object_lock(
     size_t error_size
 );
 void king_object_store_release_object_lock(int *lock_fd);
-void king_object_store_request_shutdown(void);
 
 #endif /* KING_OBJECT_STORE_INTERNAL_H */

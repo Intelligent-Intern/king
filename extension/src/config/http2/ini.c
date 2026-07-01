@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/http2/ini.h"
-#include "include/config/http2/base_layer.h"
+#include "config/http2/ini.h"
+#include "config/http2/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -76,7 +77,6 @@ PHP_INI_BEGIN()
         OnUpdateHttp2MaxFrameSize, &king_http2_config.max_frame_size, NULL)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_http2_ini_register(void)
 {

@@ -12,8 +12,9 @@
  * =========================================================================
  */
 
-#include "include/config/smart_contracts/ini.h"
-#include "include/config/smart_contracts/base_layer.h"
+#include "config/smart_contracts/ini.h"
+#include "config/smart_contracts/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include <Zend/zend_exceptions.h>
@@ -113,7 +114,6 @@ PHP_INI_BEGIN()
         OnUpdateBool, event_listener_enable, kg_smart_contracts_config_t, king_smart_contracts_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_smart_contracts_ini_register(void)
 {

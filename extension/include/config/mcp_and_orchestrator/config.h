@@ -21,7 +21,7 @@
 #define KING_CONFIG_MCP_ORCHESTRATOR_CONFIG_H
 
 #include "php.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
 
 /**
  * @brief Applies MCP/orchestrator settings from a PHP array to live runtime state.

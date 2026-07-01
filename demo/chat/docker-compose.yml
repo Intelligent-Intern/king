@@ -1,0 +1,62 @@
+services:
+  inference:
+    image: king-local:php8.4-inference
+    working_dir: /workspace
+    command: ["./bin/king-openai-router-start", "--confirm"]
+    environment:
+      KING_OPENAI_HOST: 0.0.0.0
+      KING_OPENAI_PORT: 8080
+      KING_OPENAI_CONFIRM_START: "1"
+      KING_OPENAI_CONTEXT_POLICY: full
+      KING_OPENAI_DEFAULT_MAX_TOKENS: "64"
+      KING_OPENAI_MAX_COMPLETION_TOKENS: "128"
+      KING_OPENAI_CODER_INSTRUCTION_WRAPPER: "0"
+      KING_INFERENCE_PHP_INI: /workspace/infra/inference/local-gpu.php.ini
+      KING_EXTENSION: /workspace/extension/modules/king.so
+      PHP_INI_SCAN_DIR: ""
+      LD_LIBRARY_PATH: /usr/local/cuda/targets/x86_64-linux/lib:/opt/king/package/runtime
+    volumes:
+      - ../..:/workspace
+      - /usr/local/cuda/targets/x86_64-linux/lib:/usr/local/cuda/targets/x86_64-linux/lib:ro
+      - ${KING_MODEL_BLOBS:-/usr/share/ollama/.ollama/models/blobs}:/usr/share/ollama/.ollama/models/blobs:ro
+    ports:
+      - "8080:8080"
+      - "19481:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8080/v1/models') === false ? 1 : 0);"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+  chat:
+    image: king-local:php8.4-inference
+    working_dir: /app
+    user: "${KING_CHAT_UID:-1000}:${KING_CHAT_GID:-1000}"
+    command: ["php", "-d", "variables_order=EGPCS", "-S", "0.0.0.0:8090", "-t", "public", "backend/router.php"]
+    environment:
+      KING_CHAT_INFERENCE_URL: http://inference:8080/v1/chat/completions
+      KING_CHAT_MODELS_URL: http://inference:8080/v1/models
+      KING_CHAT_MODEL: gemma3:1b
+      KING_CHAT_MAX_MESSAGES: "40"
+      KING_CHAT_MAX_MESSAGE_CHARS: "12000"
+      KING_CHAT_MAX_TOKENS: "64"
+      KING_CHAT_MAX_COMPLETION_TOKENS: "128"
+      KING_CHAT_REQUEST_TIMEOUT_SECONDS: "240"
+      KING_CHAT_DB_PATH: /app/var/chat.sqlite
+    volumes:
+      - ./public:/app/public:ro
+      - ./backend:/app/backend:ro
+      - ./var:/app/var
+    ports:
+      - "19480:8090"
+    depends_on:
+      inference:
+        condition: service_healthy

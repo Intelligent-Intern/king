@@ -14,15 +14,16 @@
 #include <zend_hash.h>
 #include <zend_smart_str.h>
 
-#include "include/king_globals.h"
-#include "include/config/cloud_autoscale/base_layer.h"
-#include "include/config/iibin/base_layer.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/config/native_cdn/base_layer.h"
-#include "include/config/native_object_store/base_layer.h"
-#include "include/config/open_telemetry/base_layer.h"
-#include "include/config/smart_dns/base_layer.h"
-#include "include/iibin/iibin_internal.h"
+#include "php_king/globals.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "config/iibin/base_layer.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "config/native_cdn/base_layer.h"
+#include "config/native_object_store/base_layer.h"
+#include "config/open_telemetry/base_layer.h"
+#include "config/smart_dns/base_layer.h"
+#include "iibin/iibin_internal.h"
+#include "object_store/object_store_internal.h"
 
 HashTable king_semantic_dns_service_registry;
 HashTable king_semantic_dns_mother_node_registry;

@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/native_object_store/index.h"
-#include "include/config/native_object_store/default.h"
-#include "include/config/native_object_store/ini.h"
+#include "config/native_object_store/index.h"
+#include "config/native_object_store/default.h"
+#include "config/native_object_store/ini.h"
 
 void kg_config_native_object_store_init(void)
 {

@@ -85,6 +85,303 @@ static zend_result king_server_http1_send_early_hints(
     return rc;
 }
 
+static zval *king_server_http1_response_body_stream(zval *retval)
+{
+    zval *body_stream = zend_hash_str_find(
+        Z_ARRVAL_P(retval),
+        "body_stream",
+        sizeof("body_stream") - 1
+    );
+
+    if (body_stream == NULL || Z_TYPE_P(body_stream) == IS_NULL) {
+        return NULL;
+    }
+
+    return body_stream;
+}
+
+static int king_server_http1_persistent_listener_fd = -1;
+static zend_string *king_server_http1_persistent_listener_host = NULL;
+static zend_long king_server_http1_persistent_listener_port = 0;
+
+static bool king_server_http1_config_bool(
+    zval *config,
+    const char *key,
+    size_t key_len
+)
+{
+    zval *value;
+
+    if (config == NULL || Z_TYPE_P(config) != IS_ARRAY) {
+        return false;
+    }
+
+    value = zend_hash_str_find(Z_ARRVAL_P(config), key, key_len);
+    if (value == NULL || Z_TYPE_P(value) == IS_NULL) {
+        return false;
+    }
+
+    return zend_is_true(value);
+}
+
+static void king_server_http1_close_persistent_listener(void)
+{
+    if (king_server_http1_persistent_listener_fd >= 0) {
+        close(king_server_http1_persistent_listener_fd);
+        king_server_http1_persistent_listener_fd = -1;
+    }
+
+    if (king_server_http1_persistent_listener_host != NULL) {
+        zend_string_release(king_server_http1_persistent_listener_host);
+        king_server_http1_persistent_listener_host = NULL;
+    }
+
+    king_server_http1_persistent_listener_port = 0;
+}
+
+static zend_result king_server_http1_resolve_listener_socket(
+    char *host,
+    size_t host_len,
+    zend_long port,
+    bool persistent,
+    int *listener_fd_out,
+    const char *function_name
+)
+{
+    int listener_fd = -1;
+
+    if (!persistent) {
+        return king_server_http1_open_listener_socket(
+            host,
+            port,
+            listener_fd_out,
+            function_name
+        );
+    }
+
+    if (
+        king_server_http1_persistent_listener_fd >= 0
+        && king_server_http1_persistent_listener_host != NULL
+        && king_server_http1_persistent_listener_port == port
+        && ZSTR_LEN(king_server_http1_persistent_listener_host) == host_len
+        && memcmp(ZSTR_VAL(king_server_http1_persistent_listener_host), host, host_len) == 0
+    ) {
+        *listener_fd_out = king_server_http1_persistent_listener_fd;
+        return SUCCESS;
+    }
+
+    king_server_http1_close_persistent_listener();
+
+    if (
+        king_server_http1_open_listener_socket(
+            host,
+            port,
+            &listener_fd,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    king_server_http1_persistent_listener_fd = listener_fd;
+    king_server_http1_persistent_listener_host = zend_string_init(host, host_len, 0);
+    king_server_http1_persistent_listener_port = port;
+    *listener_fd_out = listener_fd;
+
+    return SUCCESS;
+}
+
+static zend_long king_server_http1_write_deadline(king_client_session_t *session)
+{
+    return king_server_http1_now_ms() + king_server_http1_resolve_timeout_ms(session);
+}
+
+static zend_result king_server_http1_call_body_stream(
+    zval *body_stream,
+    zval *chunk,
+    const char *function_name
+)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    if (zend_fcall_info_init(body_stream, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
+        king_server_local_set_errorf(
+            "%s() failed to initialize the HTTP body stream callback.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    fci.retval = chunk;
+    fci.param_count = 0;
+    fci.params = NULL;
+
+    if (zend_call_function(&fci, &fcc) != SUCCESS) {
+        if (EG(exception) == NULL) {
+            king_server_local_set_errorf(
+                "%s() failed to invoke the HTTP body stream callback.",
+                function_name
+            );
+        }
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_server_http1_write_chunk(
+    king_client_session_t *session,
+    const char *bytes,
+    size_t bytes_len,
+    const char *function_name
+)
+{
+    char prefix[32];
+    int prefix_len;
+
+    if (bytes_len == 0) {
+        return SUCCESS;
+    }
+
+    prefix_len = snprintf(prefix, sizeof(prefix), "%zx\r\n", bytes_len);
+    if (prefix_len <= 0 || (size_t) prefix_len >= sizeof(prefix)) {
+        king_server_local_set_errorf(
+            "%s() failed to materialize an HTTP chunk header.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (king_server_http1_write_all_fd(
+            session->transport_socket_fd,
+            prefix,
+            (size_t) prefix_len,
+            king_server_http1_write_deadline(session),
+            function_name
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+    if (king_server_http1_write_all_fd(
+            session->transport_socket_fd,
+            bytes,
+            bytes_len,
+            king_server_http1_write_deadline(session),
+            function_name
+        ) != SUCCESS) {
+        return FAILURE;
+    }
+    return king_server_http1_write_all_fd(
+        session->transport_socket_fd,
+        "\r\n",
+        sizeof("\r\n") - 1,
+        king_server_http1_write_deadline(session),
+        function_name
+    );
+}
+
+static zend_result king_server_http1_finish_chunked_response(
+    king_client_session_t *session,
+    const char *function_name
+)
+{
+    return king_server_http1_write_all_fd(
+        session->transport_socket_fd,
+        "0\r\n\r\n",
+        sizeof("0\r\n\r\n") - 1,
+        king_server_http1_write_deadline(session),
+        function_name
+    );
+}
+
+static zend_result king_server_http1_send_chunked_response(
+    king_client_session_t *session,
+    zval *body_stream,
+    zend_long status,
+    zval *headers_zv,
+    zend_long stream_id,
+    zend_long deadline_ms,
+    const char *function_name
+)
+{
+    smart_str response = {0};
+    zend_result rc;
+
+    if (
+        king_server_http1_send_early_hints(
+            session,
+            stream_id,
+            deadline_ms,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    smart_str_appends(&response, "HTTP/1.1 ");
+    smart_str_append_long(&response, status);
+    smart_str_appendc(&response, ' ');
+    smart_str_appends(&response, king_server_http1_status_text(status));
+    smart_str_appends(&response, "\r\n");
+
+    if (king_server_http1_append_response_headers(&response, headers_zv) != SUCCESS) {
+        smart_str_free(&response);
+        return FAILURE;
+    }
+
+    smart_str_appends(&response, "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n");
+    smart_str_0(&response);
+
+    rc = king_server_http1_write_all_fd(
+        session->transport_socket_fd,
+        ZSTR_VAL(response.s),
+        ZSTR_LEN(response.s),
+        deadline_ms,
+        function_name
+    );
+    smart_str_free(&response);
+    if (rc != SUCCESS) {
+        return FAILURE;
+    }
+
+    while (true) {
+        zval chunk;
+
+        ZVAL_UNDEF(&chunk);
+        if (king_server_http1_call_body_stream(body_stream, &chunk, function_name) != SUCCESS) {
+            if (!Z_ISUNDEF(chunk)) {
+                zval_ptr_dtor(&chunk);
+            }
+            return FAILURE;
+        }
+
+        if (Z_TYPE(chunk) == IS_NULL || Z_TYPE(chunk) == IS_FALSE) {
+            zval_ptr_dtor(&chunk);
+            return king_server_http1_finish_chunked_response(session, function_name);
+        }
+
+        if (Z_TYPE(chunk) != IS_STRING) {
+            zval_ptr_dtor(&chunk);
+            king_server_local_set_errorf(
+                "%s() HTTP body stream callback must return a string chunk, null, or false.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        rc = king_server_http1_write_chunk(
+            session,
+            Z_STRVAL(chunk),
+            Z_STRLEN(chunk),
+            function_name
+        );
+        zval_ptr_dtor(&chunk);
+        if (rc != SUCCESS) {
+            return FAILURE;
+        }
+    }
+}
+
 static zend_result king_server_http1_send_response(
     king_client_session_t *session,
     zval *retval,
@@ -96,6 +393,7 @@ static zend_result king_server_http1_send_response(
     zval *status_zv;
     zval *headers_zv;
     zval *body_zv;
+    zval *body_stream;
     zend_long status = 200;
     zend_string *body = NULL;
     smart_str response = {0};
@@ -111,6 +409,19 @@ static zend_result king_server_http1_send_response(
 
     if (status_zv != NULL && Z_TYPE_P(status_zv) != IS_NULL) {
         status = zval_get_long(status_zv);
+    }
+
+    body_stream = king_server_http1_response_body_stream(retval);
+    if (body_stream != NULL) {
+        return king_server_http1_send_chunked_response(
+            session,
+            body_stream,
+            status,
+            headers_zv,
+            stream_id,
+            deadline_ms,
+            function_name
+        );
     }
 
     if (body_zv != NULL && Z_TYPE_P(body_zv) != IS_NULL) {
@@ -263,6 +574,7 @@ PHP_FUNCTION(king_http1_server_listen_once)
     zend_long stream_id = 0;
     int listener_fd = -1;
     int accepted_fd = -1;
+    bool persistent_listener = false;
     zend_bool rc = 0;
 
     ZEND_PARSE_PARAMETERS_START(4, 4)
@@ -283,6 +595,19 @@ PHP_FUNCTION(king_http1_server_listen_once)
 
     ZVAL_UNDEF(&request);
     ZVAL_UNDEF(&retval);
+    persistent_listener = king_server_http1_config_bool(
+        config,
+        "persistent_listener",
+        sizeof("persistent_listener") - 1
+    ) || king_server_http1_config_bool(
+        config,
+        "tcp.persistent_listener",
+        sizeof("tcp.persistent_listener") - 1
+    ) || king_server_http1_config_bool(
+        config,
+        "tcp_persistent_listener",
+        sizeof("tcp_persistent_listener") - 1
+    );
 
     session = king_server_local_open_session(
         "king_http1_server_listen_once",
@@ -303,9 +628,11 @@ PHP_FUNCTION(king_http1_server_listen_once)
     }
 
     if (
-        king_server_http1_open_listener_socket(
+        king_server_http1_resolve_listener_socket(
             host,
+            host_len,
             port,
+            persistent_listener,
             &listener_fd,
             "king_http1_server_listen_once"
         ) != SUCCESS
@@ -326,8 +653,10 @@ PHP_FUNCTION(king_http1_server_listen_once)
         goto cleanup;
     }
 
-    close(listener_fd);
-    listener_fd = -1;
+    if (!persistent_listener) {
+        close(listener_fd);
+        listener_fd = -1;
+    }
 
     if (
         king_server_http1_apply_transport_snapshot_from_socket(
@@ -439,7 +768,7 @@ PHP_FUNCTION(king_http1_server_listen_once)
     rc = 1;
 
 cleanup:
-    if (listener_fd >= 0) {
+    if (listener_fd >= 0 && !persistent_listener) {
         close(listener_fd);
     }
 

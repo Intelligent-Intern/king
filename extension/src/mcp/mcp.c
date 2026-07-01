@@ -4,10 +4,11 @@
  * the persisted transfer-state helpers that keep transfers resumable across
  * restart and multi-host execution paths.
  */
-#include "include/mcp/mcp.h"
-#include "include/php_king.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/king_hrtime.h"
+#include "mcp/mcp.h"
+#include "php_king.h"
+#include "mcp/arginfo/index.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "king_hrtime.h"
 
 #include "Zend/zend_smart_str.h"
 #include "ext/standard/base64.h"
@@ -32,8 +33,12 @@
 #define KING_MCP_TRANSFER_STATE_VERSION 1
 
 
-#include "mcp/state_and_validation.inc"
-#include "mcp/transfer_state.inc"
-#include "mcp/transport_control.inc"
-#include "mcp/remote_protocol.inc"
-#include "mcp/lifecycle_and_api.inc"
+#include "state.inc"
+#include "runtime/state_and_validation.inc"
+#include "runtime/transfer_state.inc"
+#include "runtime/transport_control.inc"
+#include "runtime/remote_protocol.inc"
+#include "runtime/lifecycle_and_api.inc"
+
+#include "php_binding.inc"
+#include "registration.inc"

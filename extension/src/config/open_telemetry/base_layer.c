@@ -12,7 +12,7 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/base_layer.h"
 #include "ext/standard/url.h"
 #include "zend_smart_str.h"
 

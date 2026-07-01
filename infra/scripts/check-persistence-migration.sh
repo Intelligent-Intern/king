@@ -23,11 +23,13 @@ PHP_BIN="${PHP_BIN:-php}"
 ARTIFACTS_DIR=""
 SCRATCH_DIR=""
 PREVIOUS_WORKTREE=""
+BASELINE_REF=""
 
 SEMANTIC_DNS_STATE_DIR="/tmp/king_semantic_dns_state"
 SEMANTIC_DNS_STATE_FILE="${SEMANTIC_DNS_STATE_DIR}/durable_state.bin"
 SEMANTIC_DNS_STATE_DIR_EXISTED=0
 SEMANTIC_DNS_BACKUP_FILE=""
+SEMANTIC_DNS_COMPAT_LOCK="/tmp/king_semantic_dns_release_compat.lock"
 
 resolve_existing_path() {
     local candidate="$1"
@@ -58,6 +60,10 @@ resolve_path_for_output() {
 }
 
 restore_semantic_dns_state() {
+    if [[ -z "${SEMANTIC_DNS_STATE_DIR}" || -z "${SEMANTIC_DNS_STATE_FILE}" ]]; then
+        return 0
+    fi
+
     if [[ -n "${SEMANTIC_DNS_BACKUP_FILE}" && -f "${SEMANTIC_DNS_BACKUP_FILE}" ]]; then
         mkdir -p "${SEMANTIC_DNS_STATE_DIR}"
         chmod 0700 "${SEMANTIC_DNS_STATE_DIR}"
@@ -174,6 +180,8 @@ OBJECT_STORE_ROOT="${ARTIFACTS_DIR}/persisted-object-store"
 ORCHESTRATOR_STATE_PATH="${ARTIFACTS_DIR}/orchestrator-state.bin"
 mkdir -p "${PREVIOUS_BUILD_DIR}" "${CURRENT_BUILD_DIR}"
 
+exec 9>"${SEMANTIC_DNS_COMPAT_LOCK}"
+flock 9
 if [[ -d "${SEMANTIC_DNS_STATE_DIR}" ]]; then
     SEMANTIC_DNS_STATE_DIR_EXISTED=1
 fi
@@ -184,6 +192,20 @@ fi
 mkdir -p "${SEMANTIC_DNS_STATE_DIR}"
 chmod 0700 "${SEMANTIC_DNS_STATE_DIR}"
 rm -f "${SEMANTIC_DNS_STATE_FILE}"
+
+prepare_legacy_packaging_tree() {
+    local tree_root="$1"
+    local package_script="${tree_root}/infra/scripts/package-release.sh"
+    local constants_header="${tree_root}/extension/include/php_king/constants.h"
+
+    if [[ ! -f "${package_script}" || ! -f "${constants_header}" ]]; then
+        return 0
+    fi
+
+    sed -i \
+        -e 's#${EXT_DIR}/include/php_king.h#${EXT_DIR}/include/php_king/constants.h#g' \
+        "${package_script}"
+}
 
 package_tree() {
     local tree_root="$1"
@@ -212,7 +234,7 @@ package_tree() {
             echo "Last 40 log lines from ${log_path}:" >&2
             tail -n 40 "${log_path}" >&2
         fi
-        exit "${package_status}"
+        return "${package_status}"
     fi
 
     archive_path="$(
@@ -236,12 +258,12 @@ package_tree() {
 
     if [[ -z "${archive_path}" ]]; then
         echo "Failed to resolve package archive from ${tree_root}." >&2
-        exit 1
+        return 1
     fi
 
     resolve_existing_path "${archive_path}" || {
         echo "Resolved package archive path does not exist: ${archive_path}" >&2
-        exit 1
+        return 1
     }
 }
 
@@ -258,8 +280,59 @@ verify_archive() {
 
     (
         cd "${ROOT_DIR}"
-        PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
+        KING_SEMANTIC_DNS_STATE_PATH="${SEMANTIC_DNS_STATE_FILE}" \
+            PHP_BIN="${PHP_BIN}" "${verify_args[@]}"
     ) 2>&1 | tee "${log_path}"
+}
+
+prepare_previous_archive() {
+    local candidate_ref="$1"
+    local package_log=""
+    local verify_log=""
+    local next_candidate=""
+    local attempt=0
+    local short_ref=""
+
+    while [[ -n "${candidate_ref}" ]]; do
+        short_ref="$(git -C "${ROOT_DIR}" rev-parse --short "${candidate_ref}")"
+        package_log="${PREVIOUS_BUILD_DIR}/package-${short_ref}.log"
+        verify_log="${PREVIOUS_BUILD_DIR}/verify-${short_ref}.log"
+
+        printf 'Preparing previous release archive from %s\n' "${candidate_ref}"
+        PREVIOUS_WORKTREE="$(mktemp -d)"
+        rm -rf "${PREVIOUS_WORKTREE}"
+        git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${candidate_ref}" >/dev/null
+        git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
+        prepare_legacy_packaging_tree "${PREVIOUS_WORKTREE}"
+
+        if PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${package_log}")"; then
+            printf 'Verifying previous archive candidate from %s\n' "${candidate_ref}"
+            if verify_archive "${PREVIOUS_ARCHIVE}" "${verify_log}" "1"; then
+                BASELINE_REF="${candidate_ref}"
+                return 0
+            fi
+
+            echo "Packaged baseline ${candidate_ref} failed release-package verification. Last 40 log lines from ${verify_log}:" >&2
+            if [[ -f "${verify_log}" ]]; then
+                tail -n 40 "${verify_log}" >&2
+            fi
+        fi
+
+        next_candidate="$(git -C "${ROOT_DIR}" rev-parse "${candidate_ref}^" 2>/dev/null || true)"
+        if [[ -z "${next_candidate}" ]]; then
+            break
+        fi
+
+        echo "Persistence baseline ${candidate_ref} is not package-smokeable. Trying parent ${next_candidate} (attempt $((attempt + 1)))." >&2
+        attempt=$((attempt + 1))
+
+        git -C "${ROOT_DIR}" worktree remove --force "${PREVIOUS_WORKTREE}" >/dev/null 2>&1 || rm -rf "${PREVIOUS_WORKTREE}"
+        PREVIOUS_WORKTREE=""
+        candidate_ref="${next_candidate}"
+    done
+
+    echo "Failed to build and verify a package from ${FROM_REF} or any first-parent ancestor." >&2
+    exit 1
 }
 
 extract_archive_to_prefix() {
@@ -288,21 +361,12 @@ run_package_fixture() {
     ) 2>&1 | tee "${log_path}"
 }
 
-printf 'Preparing previous release archive from %s\n' "${FROM_REF}"
-PREVIOUS_WORKTREE="$(mktemp -d)"
-rm -rf "${PREVIOUS_WORKTREE}"
-git -C "${ROOT_DIR}" worktree add --detach "${PREVIOUS_WORKTREE}" "${FROM_REF}" >/dev/null
-git -C "${PREVIOUS_WORKTREE}" submodule update --init --recursive >/dev/null
-
-PREVIOUS_ARCHIVE="$(package_tree "${PREVIOUS_WORKTREE}" "${PREVIOUS_BUILD_DIR}/dist" "${PREVIOUS_BUILD_DIR}/package.log")"
+prepare_previous_archive "${FROM_REF}"
 
 if [[ -z "${CURRENT_ARCHIVE}" ]]; then
     printf 'Preparing current release archive from working tree\n'
     CURRENT_ARCHIVE="$(package_tree "${ROOT_DIR}" "${CURRENT_BUILD_DIR}/dist" "${CURRENT_BUILD_DIR}/package.log")"
 fi
-
-printf 'Verifying previous archive\n'
-verify_archive "${PREVIOUS_ARCHIVE}" "${PREVIOUS_BUILD_DIR}/verify.log" "1"
 
 printf 'Verifying current archive\n'
 verify_archive "${CURRENT_ARCHIVE}" "${CURRENT_BUILD_DIR}/verify.log" "0"
@@ -323,7 +387,7 @@ run_package_fixture "${CURRENT_PREFIX}" "read" "${CURRENT_BUILD_DIR}/migration-r
 
 cat > "${ARTIFACTS_DIR}/summary.txt" <<EOF
 persistence_migration=ok
-previous_ref=${FROM_REF}
+previous_ref=${BASELINE_REF}
 previous_archive=${PREVIOUS_ARCHIVE}
 current_archive=${CURRENT_ARCHIVE}
 php_bin=${PHP_BIN}

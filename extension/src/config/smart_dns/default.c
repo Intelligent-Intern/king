@@ -7,13 +7,13 @@
  * Default-value loader for the Smart-DNS config family. This slice seeds
  * the baseline server-disabled state, bind/port, TTL, service-discovery
  * fan-out limit, semantic-mode toggle, and mothernode / live-probe
- * placeholders before INI and any allowed userland overrides refine the
+ * fields before INI and any allowed userland overrides refine the
  * live DNS snapshot.
  * =========================================================================
  */
 
-#include "include/config/smart_dns/default.h"
-#include "include/config/smart_dns/base_layer.h"
+#include "config/smart_dns/default.h"
+#include "config/smart_dns/base_layer.h"
 
 void kg_config_smart_dns_defaults_load(void)
 {
@@ -28,4 +28,5 @@ void kg_config_smart_dns_defaults_load(void)
     king_smart_dns_config.semantic_mode_enable = false;
     king_smart_dns_config.mothernode_uri = NULL;
     king_smart_dns_config.live_probe_allowed_hosts = NULL;
+    king_smart_dns_config.state_path = NULL;
 }

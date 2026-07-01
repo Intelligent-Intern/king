@@ -261,6 +261,8 @@ PHP_FUNCTION(king_system_get_component_info)
             king_safe_string(king_smart_dns_config.live_probe_allowed_hosts));
         add_assoc_string(&configuration, "mothernode_uri",
             king_safe_string(king_smart_dns_config.mothernode_uri));
+        add_assoc_string(&configuration, "state_path",
+            king_safe_string(king_smart_dns_config.state_path));
     } else if (zend_string_equals_literal(component_name, "mcp")) {
         king_component_info_init(return_value, "mcp", "config_backed");
         array_init(&configuration);

@@ -14,7 +14,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/king_globals.h"
+#include "php_king/globals.h"
 #include <unistd.h>
 
 static const char *const king_active_runtime_names[] = {
@@ -38,6 +38,7 @@ static const char *const king_active_runtime_names[] = {
     "server_tls_runtime",
     "server_cors_runtime",
     "server_open_telemetry_runtime",
+    "rtp_runtime",
     "iibin_proto",
     "semantic_dns_registry",
     "semantic_dns_server_runtime",
@@ -94,7 +95,7 @@ const char *king_get_active_runtime_summary(void)
         "server_early_hints_runtime, server_websocket_upgrade_runtime, "
         "server_admin_api_runtime, server_tls_runtime, "
         "server_cors_runtime, server_open_telemetry_runtime, "
-        "iibin_proto, semantic_dns_registry, semantic_dns_server_runtime, "
+        "rtp_runtime, iibin_proto, semantic_dns_registry, semantic_dns_server_runtime, "
         "object_store_registry, cdn_cache_registry, xslt_saxonc_runtime, mcp_runtime, "
         "pipeline_orchestrator_runtime, telemetry_runtime, "
         "autoscaling_runtime, system_integration_runtime";
@@ -118,7 +119,7 @@ const char *king_get_stubbed_api_summary(void)
  *     'php_version'      => '8.4.x',
  *     'pid'              => 12345,
  *     'config_override_allowed' => false, // king_globals.is_userland_override_allowed
- *     'active_runtime_count' => 31,
+ *     'active_runtime_count' => 32,
  *     'active_runtimes'  => [...],
  *     'stubbed_api_group_count' => 0,
  *     'stubbed_api_groups' => [...],

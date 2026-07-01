@@ -4,9 +4,9 @@
  * required by the current MINIT/MSHUTDOWN surface.
  */
 
-#include "include/config/config.h"
-#include "include/pipeline_orchestrator/orchestrator.h"
-#include "include/telemetry/telemetry.h"
+#include "config/config.h"
+#include "pipeline_orchestrator/orchestrator.h"
+#include "telemetry/telemetry.h"
 
 int king_init_modules(int type, int module_number)
 {

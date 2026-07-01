@@ -117,11 +117,11 @@ PHP_METHOD(King_Config, get)
         RETURN_COPY(explicit_value);
     }
 
-    king_set_error("Requested config key is outside the active OO parity slice.");
+    king_set_error("Requested config key is not exposed by this King\\Config snapshot.");
     zend_throw_exception_ex(
         spl_ce_InvalidArgumentException,
         0,
-        "Config::get() does not yet expose runtime key '%s' outside the active OO parity slice.",
+        "Config::get() exposes keys present in Config::toArray() plus explicit OO overrides; key '%s' is not part of that snapshot.",
         ZSTR_VAL(canonical_key)
     );
     zend_string_release(canonical_key);
@@ -199,11 +199,4 @@ PHP_METHOD(King_Config, toArray)
     king_set_error("");
 }
 
-const zend_function_entry king_config_class_methods[] = {
-    PHP_ME(King_Config, __construct, arginfo_class_King_Config___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(King_Config, new, arginfo_class_King_Config_new, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    PHP_ME(King_Config, get, arginfo_class_King_Config_get, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Config, set, arginfo_class_King_Config_set, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Config, toArray, arginfo_class_King_Config_toArray, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
+#include "config/internal/class_method_entries.h"

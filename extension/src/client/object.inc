@@ -11,44 +11,7 @@
  * =========================================================================
  */
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_getStatusCode_ret, 0, 0, IS_LONG, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_getHeaders, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_getBody, 0, 0, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_read, 0, 0, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, length, IS_LONG, 0, "8192")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Response_isEndOfBody, 0, 0, _IS_BOOL, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_INFO_EX(arginfo_class_King_Client_HttpClient___construct, 0, 0, 0)
-    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, config, King\\Config, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Client_HttpClient_request, 0, 2, King\\Response, 0)
-    ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, headers, IS_ARRAY, 0, "[]")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, body, IS_STRING, 0, "\"\"")
-    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_King_Client_HttpClient_requestAsync, 0, 2, King\\Awaitable, 0)
-    ZEND_ARG_TYPE_INFO(0, method, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, url, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, headers, IS_ARRAY, 0, "[]")
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, body, IS_STRING, 0, "\"\"")
-    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, cancel, King\\CancelToken, 1, "null")
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_Client_HttpClient_close, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
+#include "client/objects_arginfo.h"
 
 static zval *king_response_object_read_member(
     king_response_object *intern,
@@ -626,19 +589,4 @@ PHP_METHOD(King_Client_HttpClient, close)
     king_set_error("");
 }
 
-const zend_function_entry king_response_class_methods[] = {
-    PHP_ME(King_Response, getStatusCode, arginfo_class_King_Response_getStatusCode_ret, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Response, getHeaders, arginfo_class_King_Response_getHeaders, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Response, getBody, arginfo_class_King_Response_getBody, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Response, read, arginfo_class_King_Response_read, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Response, isEndOfBody, arginfo_class_King_Response_isEndOfBody, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
-
-const zend_function_entry king_http_client_class_methods[] = {
-    PHP_ME(King_Client_HttpClient, __construct, arginfo_class_King_Client_HttpClient___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(King_Client_HttpClient, request, arginfo_class_King_Client_HttpClient_request, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Client_HttpClient, requestAsync, arginfo_class_King_Client_HttpClient_requestAsync, ZEND_ACC_PUBLIC)
-    PHP_ME(King_Client_HttpClient, close, arginfo_class_King_Client_HttpClient_close, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
+#include "client/objects_class_method_entries.h"

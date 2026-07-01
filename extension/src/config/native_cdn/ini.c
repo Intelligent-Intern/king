@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/native_cdn/ini.h"
-#include "include/config/native_cdn/base_layer.h"
+#include "config/native_cdn/ini.h"
+#include "config/native_cdn/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -93,7 +94,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.cdn_allowed_http_methods", "GET,HEAD", PHP_INI_SYSTEM, OnUpdateString, allowed_http_methods, kg_native_cdn_config_t, king_native_cdn_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_native_cdn_ini_register(void)
 {

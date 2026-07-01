@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/mcp_and_orchestrator/ini.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "config/mcp_and_orchestrator/ini.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -107,7 +108,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.orchestrator_state_path", "", PHP_INI_SYSTEM, OnUpdateString, orchestrator_state_path, kg_mcp_orchestrator_config_t, king_mcp_orchestrator_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_mcp_and_orchestrator_ini_register(void)
 {

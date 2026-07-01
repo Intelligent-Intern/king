@@ -21,7 +21,7 @@
 #define KING_CONFIG_SEMANTIC_GEOMETRY_CONFIG_H
 
 #include "php.h"
-#include "include/config/semantic_geometry/base_layer.h"
+#include "config/semantic_geometry/base_layer.h"
 
 /**
  * @brief Applies semantic-geometry settings from a PHP array to the live runtime state.

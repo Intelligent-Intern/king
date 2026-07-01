@@ -40,6 +40,8 @@
 
 #include <php.h>
 
+#include "config/object.h"
+
 typedef void king_quic_backend_config;
 
 /*
@@ -50,50 +52,50 @@ typedef void king_quic_backend_config;
  * The `index.h` headers provide the module lifecycle hooks.
  */
 
-#include "include/config/app_http3_websockets_webtransport/base_layer.h"
-#include "include/config/app_http3_websockets_webtransport/index.h"
-#include "include/config/bare_metal_tuning/base_layer.h"
-#include "include/config/bare_metal_tuning/index.h"
-#include "include/config/cloud_autoscale/base_layer.h"
-#include "include/config/cloud_autoscale/index.h"
-#include "include/config/cluster_and_process/base_layer.h"
-#include "include/config/cluster_and_process/index.h"
-#include "include/config/dynamic_admin_api/base_layer.h"
-#include "include/config/dynamic_admin_api/index.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
-#include "include/config/high_perf_compute_and_ai/index.h"
-#include "include/config/http2/base_layer.h"
-#include "include/config/http2/index.h"
-#include "include/config/iibin/base_layer.h"
-#include "include/config/iibin/index.h"
-#include "include/config/mcp_and_orchestrator/base_layer.h"
-#include "include/config/mcp_and_orchestrator/index.h"
-#include "include/config/native_cdn/base_layer.h"
-#include "include/config/native_cdn/index.h"
-#include "include/config/native_object_store/base_layer.h"
-#include "include/config/native_object_store/index.h"
-#include "include/config/open_telemetry/base_layer.h"
-#include "include/config/open_telemetry/index.h"
-#include "include/config/quic_transport/base_layer.h"
-#include "include/config/quic_transport/index.h"
-#include "include/config/router_and_loadbalancer/base_layer.h"
-#include "include/config/router_and_loadbalancer/index.h"
-#include "include/config/security_and_traffic/base_layer.h"
-#include "include/config/security_and_traffic/index.h"
-#include "include/config/semantic_geometry/base_layer.h"
-#include "include/config/semantic_geometry/index.h"
-#include "include/config/smart_contracts/base_layer.h"
-#include "include/config/smart_contracts/index.h"
-#include "include/config/smart_dns/base_layer.h"
-#include "include/config/smart_dns/index.h"
-#include "include/config/ssh_over_quic/base_layer.h"
-#include "include/config/ssh_over_quic/index.h"
-#include "include/config/state_management/base_layer.h"
-#include "include/config/state_management/index.h"
-#include "include/config/tcp_transport/base_layer.h"
-#include "include/config/tcp_transport/index.h"
-#include "include/config/tls_and_crypto/base_layer.h"
-#include "include/config/tls_and_crypto/index.h"
+#include "config/app_http3_websockets_webtransport/base_layer.h"
+#include "config/app_http3_websockets_webtransport/index.h"
+#include "config/bare_metal_tuning/base_layer.h"
+#include "config/bare_metal_tuning/index.h"
+#include "config/cloud_autoscale/base_layer.h"
+#include "config/cloud_autoscale/index.h"
+#include "config/cluster_and_process/base_layer.h"
+#include "config/cluster_and_process/index.h"
+#include "config/dynamic_admin_api/base_layer.h"
+#include "config/dynamic_admin_api/index.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
+#include "config/high_perf_compute_and_ai/index.h"
+#include "config/http2/base_layer.h"
+#include "config/http2/index.h"
+#include "config/iibin/base_layer.h"
+#include "config/iibin/index.h"
+#include "config/mcp_and_orchestrator/base_layer.h"
+#include "config/mcp_and_orchestrator/index.h"
+#include "config/native_cdn/base_layer.h"
+#include "config/native_cdn/index.h"
+#include "config/native_object_store/base_layer.h"
+#include "config/native_object_store/index.h"
+#include "config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/index.h"
+#include "config/quic_transport/base_layer.h"
+#include "config/quic_transport/index.h"
+#include "config/router_and_loadbalancer/base_layer.h"
+#include "config/router_and_loadbalancer/index.h"
+#include "config/security_and_traffic/base_layer.h"
+#include "config/security_and_traffic/index.h"
+#include "config/semantic_geometry/base_layer.h"
+#include "config/semantic_geometry/index.h"
+#include "config/smart_contracts/base_layer.h"
+#include "config/smart_contracts/index.h"
+#include "config/smart_dns/base_layer.h"
+#include "config/smart_dns/index.h"
+#include "config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/index.h"
+#include "config/state_management/base_layer.h"
+#include "config/state_management/index.h"
+#include "config/tcp_transport/base_layer.h"
+#include "config/tcp_transport/index.h"
+#include "config/tls_and_crypto/base_layer.h"
+#include "config/tls_and_crypto/index.h"
 
 /**
  * @brief The master C-level representation of a `King\Config` snapshot.
@@ -121,6 +123,7 @@ typedef struct king_cfg_s {
     zend_bool owns_tcp_strings;
     zend_bool owns_quic_cc_algorithm;
     zend_bool owns_mcp_orchestrator_strings;
+    zend_bool owns_compute_ai_strings;
 
     /* Composed configuration modules. */
     kg_app_protocols_config_t      app_protocols;

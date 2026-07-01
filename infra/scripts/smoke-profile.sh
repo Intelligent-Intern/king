@@ -128,6 +128,7 @@ case "${PROFILE}" in
 esac
 
 "${PHP_BIN}" \
+    -n \
     -d "extension=${EXT_SO}" \
     -d "king.security_allow_config_override=1" \
     "${SCRIPT_DIR}/runtime-install-smoke.php"

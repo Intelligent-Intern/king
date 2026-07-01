@@ -12,8 +12,9 @@
  * =========================================================================
  */
 
-#include "include/config/ssh_over_quic/ini.h"
-#include "include/config/ssh_over_quic/base_layer.h"
+#include "config/ssh_over_quic/ini.h"
+#include "config/ssh_over_quic/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -120,7 +121,6 @@ PHP_INI_BEGIN()
         OnUpdateBool, gateway_log_session_activity, kg_ssh_over_quic_config_t, king_ssh_over_quic_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_ssh_over_quic_ini_register(void)
 {

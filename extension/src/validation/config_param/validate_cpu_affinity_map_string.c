@@ -3,7 +3,7 @@
  * the bounded CPU-set grammar accepted by the cluster/process config surface.
  */
 
-#include "include/validation/config_param/validate_cpu_affinity_map_string.h"
+#include "validation/config_param/validate_cpu_affinity_map_string.h"
 #include "ext/standard/php_string.h"
 #include "zend_exceptions.h"
 #include <ext/spl/spl_exceptions.h>

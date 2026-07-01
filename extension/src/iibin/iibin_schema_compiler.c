@@ -5,7 +5,7 @@
  */
 
 #include "php_king.h"
-#include "include/iibin/iibin_internal.h"
+#include "iibin/iibin_internal.h"
 
 static const char * const king_proto_primitive_types[] = {
     "double",

@@ -10,6 +10,7 @@ int king_semantic_dns_state_load(void)
     uint32_t magic, version, node_count;
     uint32_t payload_len = 0;
     unsigned char *payload_buffer = NULL;
+    const char *state_path;
     zval state_payload;
     zend_bool has_state_payload = 0;
 
@@ -23,8 +24,13 @@ int king_semantic_dns_state_load(void)
         return FAILURE;
     }
 
+    state_path = king_semantic_dns_state_file_path();
+    if (php_check_open_basedir(state_path) != 0) {
+        return FAILURE;
+    }
+
     fd = open(
-        KING_SEMANTIC_DNS_STATE_FILE,
+        state_path,
         O_RDONLY
 #ifdef O_NOFOLLOW
         | O_NOFOLLOW
@@ -154,4 +160,3 @@ int king_semantic_dns_state_load(void)
 
     return SUCCESS;
 }
-

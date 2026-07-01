@@ -3,7 +3,7 @@
  * and verifies that every token belongs to the provided allowlist.
  */
 
-#include "include/validation/config_param/validate_comma_separated_string_from_allowlist.h"
+#include "validation/config_param/validate_comma_separated_string_from_allowlist.h"
 #include "ext/standard/php_string.h"
 #include "zend_exceptions.h"
 #include <ext/spl/spl_exceptions.h>

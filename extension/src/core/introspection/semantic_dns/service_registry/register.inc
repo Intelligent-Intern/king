@@ -42,9 +42,20 @@ PHP_FUNCTION(king_semantic_dns_register_service)
 
     existing_service = king_semantic_dns_registry_get_service(service->service_id);
     if (existing_service != NULL && king_semantic_dns_service_equals(existing_service, service)) {
+        existing_service->last_health_check = service->last_health_check;
         king_semantic_dns_service_free(service);
+        if (use_state_transaction
+            && !king_semantic_dns_state_persist_locked_or_throw(
+                "king_semantic_dns_register_service"
+            )) {
+            king_semantic_dns_state_transaction_end(lock_fd);
+            RETURN_THROWS();
+        }
         if (use_state_transaction) {
             king_semantic_dns_state_transaction_end(lock_fd);
+        }
+        if (!king_semantic_dns_listener_snapshot_or_throw("king_semantic_dns_register_service")) {
+            RETURN_THROWS();
         }
         RETURN_TRUE;
     }

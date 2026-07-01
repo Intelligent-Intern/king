@@ -44,6 +44,182 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
         cfg->autoscale.provider != NULL ? cfg->autoscale.provider : ""
     );
     add_assoc_long(target, "autoscale.max_nodes", cfg->autoscale.max_nodes);
+    add_assoc_bool(target, "inference.with_memory", cfg->compute_ai.inference_with_memory);
+    add_assoc_long(target, "inference.context_tokens", cfg->compute_ai.inference_context_tokens);
+    add_assoc_long(target, "inference.kv_page_tokens", cfg->compute_ai.inference_kv_page_tokens);
+    add_assoc_long(target, "inference.kv_element_bytes", cfg->compute_ai.inference_kv_element_bytes);
+    add_assoc_string(
+        target,
+        "inference.preferred_model_profile",
+        cfg->compute_ai.inference_preferred_model_profile != NULL
+            ? cfg->compute_ai.inference_preferred_model_profile
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.models",
+        cfg->compute_ai.inference_models != NULL
+            ? cfg->compute_ai.inference_models
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.cpu_model_name",
+        cfg->compute_ai.inference_cpu_model_name != NULL
+            ? cfg->compute_ai.inference_cpu_model_name
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.cpu_model_artifact",
+        cfg->compute_ai.inference_cpu_model_artifact != NULL
+            ? cfg->compute_ai.inference_cpu_model_artifact
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_model_name",
+        cfg->compute_ai.inference_gpu_model_name != NULL
+            ? cfg->compute_ai.inference_gpu_model_name
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_model_artifact",
+        cfg->compute_ai.inference_gpu_model_artifact != NULL
+            ? cfg->compute_ai.inference_gpu_model_artifact
+            : ""
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_max_gpu_layers",
+        cfg->compute_ai.inference_gpu_max_gpu_layers
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_vram_reserve_mb",
+        cfg->compute_ai.inference_gpu_vram_reserve_mb
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_min_free_vram_mb",
+        cfg->compute_ai.inference_gpu_min_free_vram_mb
+    );
+    add_assoc_bool(
+        target,
+        "inference.gpu_allow_system_ram_offload",
+        cfg->compute_ai.inference_gpu_allow_system_ram_offload
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_system_ram_offload_max_mb",
+        cfg->compute_ai.inference_gpu_system_ram_offload_max_mb
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_system_ram_offload_min_free_mb",
+        cfg->compute_ai.inference_gpu_system_ram_offload_min_free_mb
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_thermal_sensor_path",
+        cfg->compute_ai.inference_gpu_thermal_sensor_path != NULL
+            ? cfg->compute_ai.inference_gpu_thermal_sensor_path
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_thermal_sensor_command",
+        cfg->compute_ai.inference_gpu_thermal_sensor_command != NULL
+            ? cfg->compute_ai.inference_gpu_thermal_sensor_command
+            : ""
+    );
+    add_assoc_double(
+        target,
+        "inference.gpu_thermal_max_temperature_c",
+        cfg->compute_ai.inference_gpu_thermal_max_temperature_c
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_thermal_check_interval_sec",
+        cfg->compute_ai.inference_gpu_thermal_check_interval_sec
+    );
+    add_assoc_bool(
+        target,
+        "inference.gpu_allow_unmonitored",
+        cfg->compute_ai.inference_gpu_allow_unmonitored
+    );
+    add_assoc_string(
+        target,
+        "inference.gpu_power_sensor_command",
+        cfg->compute_ai.inference_gpu_power_sensor_command != NULL
+            ? cfg->compute_ai.inference_gpu_power_sensor_command
+            : ""
+    );
+    add_assoc_double(
+        target,
+        "inference.gpu_power_max_watts",
+        cfg->compute_ai.inference_gpu_power_max_watts
+    );
+    add_assoc_long(
+        target,
+        "inference.gpu_power_check_interval_sec",
+        cfg->compute_ai.inference_gpu_power_check_interval_sec
+    );
+    add_assoc_bool(
+        target,
+        "inference.gpu_batch_prefill_experimental_enable",
+        cfg->compute_ai.inference_gpu_batch_prefill_experimental_enable
+    );
+    add_assoc_bool(
+        target,
+        "inference.cuda_numeric_compare_enable",
+        cfg->compute_ai.inference_cuda_numeric_compare_enable
+    );
+    add_assoc_long(
+        target,
+        "inference.cuda_numeric_compare_max_values",
+        cfg->compute_ai.inference_cuda_numeric_compare_max_values
+    );
+    add_assoc_bool(target, "inference.llm_cache_enable", cfg->compute_ai.inference_llm_cache_enable);
+    add_assoc_string(
+        target,
+        "inference.llm_cache_path",
+        cfg->compute_ai.inference_llm_cache_path != NULL
+            ? cfg->compute_ai.inference_llm_cache_path
+            : ""
+    );
+    add_assoc_long(
+        target,
+        "inference.llm_cache_min_free_mb",
+        cfg->compute_ai.inference_llm_cache_min_free_mb
+    );
+    add_assoc_bool(
+        target,
+        "inference.llm_cache_fail_closed",
+        cfg->compute_ai.inference_llm_cache_fail_closed
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_webhook",
+        cfg->compute_ai.inference_llm_cache_disk_alert_webhook != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_webhook
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_mcp_service",
+        cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_service
+            : ""
+    );
+    add_assoc_string(
+        target,
+        "inference.llm_cache_disk_alert_mcp_method",
+        cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method != NULL
+            ? cfg->compute_ai.inference_llm_cache_disk_alert_mcp_method
+            : ""
+    );
     add_assoc_bool(target, "mcp.enable_request_caching", cfg->mcp.mcp_enable_request_caching);
     add_assoc_long(
         target,

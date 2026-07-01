@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/semantic_geometry/index.h"
-#include "include/config/semantic_geometry/default.h"
-#include "include/config/semantic_geometry/ini.h"
+#include "config/semantic_geometry/index.h"
+#include "config/semantic_geometry/default.h"
+#include "config/semantic_geometry/ini.h"
 
 void kg_config_semantic_geometry_init(void)
 {

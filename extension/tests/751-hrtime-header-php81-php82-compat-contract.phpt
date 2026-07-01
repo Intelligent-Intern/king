@@ -6,12 +6,12 @@ $root = dirname(__DIR__, 2);
 $paths = [
     'extension/src/pipeline_orchestrator/orchestrator.c',
     'extension/src/mcp/mcp.c',
-    'extension/src/php_king/mcp.inc',
+    'extension/src/mcp/php_binding.inc',
 ];
 
 foreach ($paths as $path) {
     $source = (string) file_get_contents($root . '/' . $path);
-    var_dump(str_contains($source, 'include/king_hrtime.h'));
+    var_dump(str_contains($source, '#include "king_hrtime.h"'));
     var_dump(!str_contains($source, 'Zend/zend_hrtime.h'));
     var_dump(!str_contains($source, 'zend_hrtime()'));
 }

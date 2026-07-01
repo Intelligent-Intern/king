@@ -19,6 +19,7 @@
 #define KING_CONFIG_HIGH_PERF_COMPUTE_AI_CONFIG_H
 
 #include "php.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
 
 /**
  * @brief Applies high-performance compute and AI settings from a PHP array.
@@ -28,5 +29,9 @@
  * `FAILURE` otherwise.
  */
 int kg_config_high_perf_compute_and_ai_apply_userland_config(zval *config_arr);
+
+int kg_config_high_perf_compute_and_ai_apply_userland_config_to(
+    kg_high_perf_compute_ai_config_t *target,
+    zval *config_arr);
 
 #endif /* KING_CONFIG_HIGH_PERF_COMPUTE_AI_CONFIG_H */

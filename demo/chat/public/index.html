@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>King Chat</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar" aria-label="Chat controls">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">K</div>
+        <div>
+          <h1>King Chat</h1>
+          <p>Local OpenAI-compatible inference</p>
+        </div>
+      </div>
+
+      <div class="status-card">
+        <div class="status-row">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Checking router</span>
+        </div>
+      </div>
+
+      <section class="threads-panel" aria-label="Threads">
+        <div class="threads-header">
+          <h2>Threads</h2>
+          <button type="button" id="newThreadButton">New</button>
+        </div>
+        <div class="thread-list" id="threadList"></div>
+      </section>
+
+      <button class="secondary danger" id="deleteThreadButton" type="button">Delete thread</button>
+    </aside>
+
+    <section class="chat-panel" aria-label="Chat">
+      <div class="messages" id="messages" aria-live="polite"></div>
+
+      <form class="composer" id="chatForm">
+        <label for="promptInput">Message</label>
+        <div class="composer-row">
+          <textarea id="promptInput" name="prompt" rows="3" spellcheck="true" placeholder="Ask King something local..."></textarea>
+          <button id="sendButton" type="submit">Send</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

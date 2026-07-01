@@ -1,27 +1,3 @@
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_getConnections, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_send, 0, 2, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_sendBinary, 0, 2, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, connectionId, IS_STRING, 0)
-    ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_broadcast, 0, 1, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_broadcastBinary, 0, 1, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_stop, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
 PHP_METHOD(King_WebSocket_Server, getConnections)
 {
     king_ws_server_object *intern;
@@ -172,14 +148,4 @@ PHP_METHOD(King_WebSocket_Server, stop)
     king_set_error("");
 }
 
-const zend_function_entry king_ws_server_class_methods[] = {
-    PHP_ME(King_WebSocket_Server, __construct, arginfo_class_King_WebSocket_Server___construct, ZEND_ACC_PUBLIC | ZEND_ACC_CTOR)
-    PHP_ME(King_WebSocket_Server, accept, arginfo_class_King_WebSocket_Server_accept, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, getConnections, arginfo_class_King_WebSocket_Server_getConnections, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, send, arginfo_class_King_WebSocket_Server_send, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, sendBinary, arginfo_class_King_WebSocket_Server_sendBinary, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, broadcast, arginfo_class_King_WebSocket_Server_broadcast, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, broadcastBinary, arginfo_class_King_WebSocket_Server_broadcastBinary, ZEND_ACC_PUBLIC)
-    PHP_ME(King_WebSocket_Server, stop, arginfo_class_King_WebSocket_Server_stop, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
+#include "server/websocket_server_class_method_entries.h"

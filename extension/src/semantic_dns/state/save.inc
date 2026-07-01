@@ -3,6 +3,7 @@ int king_semantic_dns_state_save(void)
     FILE *fp = NULL;
     int fd;
     char tmp_template[PATH_MAX];
+    const char *state_path;
     uint32_t magic = KING_SEMANTIC_DNS_STATE_MAGIC;
     uint32_t version = KING_SEMANTIC_DNS_STATE_VERSION;
     uint32_t payload_len = 0;
@@ -19,11 +20,12 @@ int king_semantic_dns_state_save(void)
         return FAILURE;
     }
 
-    if (php_check_open_basedir(KING_SEMANTIC_DNS_STATE_FILE) != 0) {
+    state_path = king_semantic_dns_state_file_path();
+    if (php_check_open_basedir(state_path) != 0) {
         return FAILURE;
     }
 
-    if (snprintf(tmp_template, sizeof(tmp_template), "%s/.state.XXXXXX", KING_SEMANTIC_DNS_STATE_DIR) >= (int) sizeof(tmp_template)) {
+    if (king_semantic_dns_state_build_tmp_template(tmp_template, sizeof(tmp_template)) != SUCCESS) {
         return FAILURE;
     }
 
@@ -123,11 +125,10 @@ int king_semantic_dns_state_save(void)
         return FAILURE;
     }
 
-    if (rename(tmp_template, KING_SEMANTIC_DNS_STATE_FILE) != 0) {
+    if (rename(tmp_template, state_path) != 0) {
         unlink(tmp_template);
         return FAILURE;
     }
 
     return SUCCESS;
 }
-

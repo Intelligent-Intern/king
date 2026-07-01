@@ -3,7 +3,7 @@
  * the current `VCWD_ACCESS(..., R_OK)` readability check used by config paths.
  */
 
-#include "include/validation/config_param/validate_readable_file_path.h"
+#include "validation/config_param/validate_readable_file_path.h"
 #include "main/php_streams.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>

@@ -12,13 +12,13 @@
  * =========================================================================
  */
 
-#include "include/config/semantic_geometry/config.h"
-#include "include/config/semantic_geometry/base_layer.h"
-#include "include/king_globals.h"
+#include "config/semantic_geometry/config.h"
+#include "config/semantic_geometry/base_layer.h"
+#include "php_king/globals.h"
 
-#include "include/validation/config_param/validate_positive_long.h"
-#include "include/validation/config_param/validate_string_from_allowlist.h"
-#include "include/validation/config_param/validate_double_range.h"
+#include "validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_string_from_allowlist.h"
+#include "validation/config_param/validate_double_range.h"
 
 #include "php.h"
 #include "zend_exceptions.h"

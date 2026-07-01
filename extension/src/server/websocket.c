@@ -14,7 +14,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/server/websocket.h"
+#include "server/websocket.h"
 
 #include "main/php_network.h"
 #include "ext/standard/base64.h"

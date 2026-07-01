@@ -26,9 +26,9 @@ array(8) {
   ["config_override_allowed"]=>
   bool(false)
   ["active_runtime_count"]=>
-  int(31)
+  int(32)
   ["active_runtimes"]=>
-  array(31) {
+  array(32) {
     [0]=>
     string(6) "config"
     [1]=>
@@ -70,26 +70,28 @@ array(8) {
     [19]=>
     string(29) "server_open_telemetry_runtime"
     [20]=>
-    string(11) "iibin_proto"
+    string(11) "rtp_runtime"
     [21]=>
-    string(21) "semantic_dns_registry"
+    string(11) "iibin_proto"
     [22]=>
-    string(27) "semantic_dns_server_runtime"
+    string(21) "semantic_dns_registry"
     [23]=>
-    string(21) "object_store_registry"
+    string(27) "semantic_dns_server_runtime"
     [24]=>
-    string(18) "cdn_cache_registry"
+    string(21) "object_store_registry"
     [25]=>
-    string(19) "xslt_saxonc_runtime"
+    string(18) "cdn_cache_registry"
     [26]=>
-    string(11) "mcp_runtime"
+    string(19) "xslt_saxonc_runtime"
     [27]=>
-    string(29) "pipeline_orchestrator_runtime"
+    string(11) "mcp_runtime"
     [28]=>
-    string(17) "telemetry_runtime"
+    string(29) "pipeline_orchestrator_runtime"
     [29]=>
-    string(19) "autoscaling_runtime"
+    string(17) "telemetry_runtime"
     [30]=>
+    string(19) "autoscaling_runtime"
+    [31]=>
     string(26) "system_integration_runtime"
   }
   ["stubbed_api_group_count"]=>

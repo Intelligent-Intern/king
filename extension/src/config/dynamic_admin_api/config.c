@@ -11,9 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/dynamic_admin_api/config.h"
-#include "include/config/dynamic_admin_api/base_layer.h"
-#include "include/king_globals.h"
+#include "config/dynamic_admin_api/config.h"
+#include "config/dynamic_admin_api/base_layer.h"
+#include "php_king/globals.h"
 
 #include "php.h"
 #include "main/php_streams.h"

@@ -1,0 +1,5 @@
+/*
+ * Server PHP class-entry storage.
+ */
+
+zend_class_entry *king_ce_ws_server = NULL;

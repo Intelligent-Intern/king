@@ -1,0 +1,8 @@
+#include "../../../openai/runtime/stream/openai_drain_controls.inc"
+#include "../../../openai/runtime/stream/openai_stream_factory.inc"
+#include "../../../openai/runtime/compat/openai_compat.inc"
+#include "../../../openai/chat/openai_responses.inc"
+#include "../../../openai/chat/openai_completions.inc"
+#include "../../../openai/resources/openai_embeddings.inc"
+#include "../../../openai/resources/openai_models.inc"
+#include "../../../openai/http/openai_http_router.inc"

@@ -20,7 +20,7 @@
 #define KING_CONFIG_OPEN_TELEMETRY_CONFIG_H
 
 #include "php.h"
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/base_layer.h"
 
 /**
  * @brief Applies OpenTelemetry settings from a PHP array to the live runtime state.

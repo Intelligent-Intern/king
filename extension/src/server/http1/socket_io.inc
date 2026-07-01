@@ -148,7 +148,7 @@ static zend_result king_server_http1_write_all_fd(
             return FAILURE;
         }
 
-        ssize_t chunk = send(fd, buffer + written, buffer_len - written, 0);
+        ssize_t chunk = send(fd, buffer + written, buffer_len - written, MSG_NOSIGNAL);
 
         if (chunk < 0 && errno == EINTR) {
             continue;

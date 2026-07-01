@@ -14,7 +14,7 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/server/early_hints.h"
+#include "server/early_hints.h"
 
 #include <stdarg.h>
 #include <time.h>

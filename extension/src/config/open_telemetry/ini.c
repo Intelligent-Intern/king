@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/open_telemetry/ini.h"
-#include "include/config/open_telemetry/base_layer.h"
+#include "config/open_telemetry/ini.h"
+#include "config/open_telemetry/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -215,7 +216,6 @@ PHP_INI_BEGIN()
     ZEND_INI_ENTRY("king.otel_logs_exporter_batch_size", "512", PHP_INI_SYSTEM, OnUpdateOtelPositiveLong)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_open_telemetry_ini_register(void)
 {

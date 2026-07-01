@@ -20,7 +20,7 @@
 #define KING_CONFIG_NATIVE_CDN_CONFIG_H
 
 #include "php.h"
-#include "include/config/native_cdn/base_layer.h"
+#include "config/native_cdn/base_layer.h"
 
 /**
  * @brief Applies native CDN settings from a PHP array to the live runtime state.

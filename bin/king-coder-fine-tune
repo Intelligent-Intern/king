@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PHP_BIN="${PHP_BIN:-php}"
+EXTENSION="${KING_EXTENSION:-$ROOT/extension/modules/king.so}"
+SCRIPT="$ROOT/infra/inference/fine-tune/coder-dataset.php"
+MEMORY_LIMIT="${KING_FINE_TUNE_PHP_MEMORY_LIMIT:-4G}"
+
+if [[ ! -f "$EXTENSION" ]]; then
+  echo "king-coder-fine-tune: King extension module not found at $EXTENSION" >&2
+  exit 127
+fi
+
+exec "$PHP_BIN" -n \
+  -d "extension=$EXTENSION" \
+  -d king.security_allow_config_override=1 \
+  -d "memory_limit=$MEMORY_LIMIT" \
+  -d display_errors=stderr \
+  -d log_errors=1 \
+  "$SCRIPT" "$@"

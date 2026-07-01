@@ -33,6 +33,8 @@ zend_result king_http2_request_dispatch(
  * @return A PHP array on success, FALSE on failure.
  */
 PHP_FUNCTION(king_http2_request_send);
+PHP_FUNCTION(king_http2_request_send_async);
 PHP_FUNCTION(king_http2_request_send_multi);
+PHP_FUNCTION(king_http2_request_send_multi_async);
 
 #endif // KING_CLIENT_HTTP2_H

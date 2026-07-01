@@ -5,7 +5,7 @@
  * surfaces reuse.
  */
 
-#include "include/semantic_dns/semantic_dns_internal.h"
+#include "semantic_dns/semantic_dns_internal.h"
 
 static void king_semantic_dns_attribute_zval_dtor(zval *zv)
 {

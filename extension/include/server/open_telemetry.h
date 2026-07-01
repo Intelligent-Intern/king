@@ -15,7 +15,7 @@
 #define KING_SERVER_OPEN_TELEMETRY_H
 
 #include <php.h>
-#include "include/client/session.h"
+#include "client/session.h"
 
 /* Validates telemetry config and records the resulting snapshot on a session. */
 PHP_FUNCTION(king_server_init_telemetry);

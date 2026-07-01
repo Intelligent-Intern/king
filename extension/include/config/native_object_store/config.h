@@ -21,7 +21,7 @@
 #define KING_CONFIG_NATIVE_OBJECT_STORE_CONFIG_H
 
 #include "php.h"
-#include "include/config/native_object_store/base_layer.h"
+#include "config/native_object_store/base_layer.h"
 
 /**
  * @brief Applies native object-store settings from a PHP array to live runtime state.

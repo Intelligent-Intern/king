@@ -16,8 +16,8 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/server/tls.h"
+#include "client/session.h"
+#include "server/tls.h"
 
 #include "main/php_streams.h"
 #include <time.h>

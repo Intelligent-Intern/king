@@ -11,7 +11,7 @@
  */
 
 #include "php_king.h"
-#include "include/client/early_hints.h"
+#include "client/early_hints.h"
 
 #include <zend_exceptions.h>
 #include <ctype.h>

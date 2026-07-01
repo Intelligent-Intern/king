@@ -3,7 +3,7 @@
  * a duplicated value suitable for persistent module-config storage.
  */
 
-#include "include/validation/config_param/validate_string.h"
+#include "validation/config_param/validate_string.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h> /* spl_ce_InvalidArgumentException */
 

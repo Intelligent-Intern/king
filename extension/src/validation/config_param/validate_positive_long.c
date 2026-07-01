@@ -3,7 +3,7 @@
  * the `> 0` contract used by multiple config families.
  */
 
-#include "include/validation/config_param/validate_positive_long.h"
+#include "validation/config_param/validate_positive_long.h"
 #include "php.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>

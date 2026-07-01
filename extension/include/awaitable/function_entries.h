@@ -1,0 +1,6 @@
+    PHP_FE(king_await, arginfo_king_await)
+    PHP_FE(king_awaitable_poll, arginfo_king_awaitable_poll)
+    PHP_FE(king_awaitable_cancel, arginfo_king_awaitable_cancel)
+    PHP_FE(king_awaitable_status, arginfo_king_awaitable_status)
+    PHP_FE(king_awaitable_any, arginfo_king_awaitable_any)
+    PHP_FE(king_awaitable_all, arginfo_king_awaitable_all)

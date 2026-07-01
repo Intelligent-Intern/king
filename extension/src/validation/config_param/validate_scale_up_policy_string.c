@@ -3,7 +3,7 @@
  * input and the bounded policy names accepted by the autoscaling config.
  */
 
-#include "include/validation/config_param/validate_scale_up_policy_string.h"
+#include "validation/config_param/validate_scale_up_policy_string.h"
 #include "ext/standard/php_string.h"
 #include "zend_exceptions.h"
 #include <ext/spl/spl_exceptions.h>

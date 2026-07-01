@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/state_management/index.h"
-#include "include/config/state_management/default.h"
-#include "include/config/state_management/ini.h"
+#include "config/state_management/index.h"
+#include "config/state_management/default.h"
+#include "config/state_management/ini.h"
 
 void kg_config_state_management_init(void)
 {

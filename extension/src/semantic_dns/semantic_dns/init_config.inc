@@ -291,6 +291,15 @@ static bool king_semantic_dns_parse_init_config(
             0,
             parsed->mothernode_uri,
             sizeof(parsed->mothernode_uri)
+        )
+        || !king_semantic_dns_require_non_empty_string_option(
+            config,
+            "state_path",
+            sizeof("state_path") - 1,
+            "dns_state_path",
+            sizeof("dns_state_path") - 1,
+            parsed->state_path,
+            sizeof(parsed->state_path)
         )) {
         king_semantic_dns_config_clear(parsed);
         return false;
@@ -336,5 +345,4 @@ static bool king_semantic_dns_runtime_require_initialized(const char *function_n
     return false;
 }
 
-#include "include/king_globals.h"
-
+#include "php_king/globals.h"

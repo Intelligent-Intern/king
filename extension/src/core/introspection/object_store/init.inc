@@ -8,7 +8,7 @@
 
 #include "object_store/object_store_internal.h"
 
-#include "include/king_globals.h"
+#include "php_king/globals.h"
 
 static int king_object_store_parse_backend_config(
     zval *value_zv,

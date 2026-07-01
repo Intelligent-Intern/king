@@ -13,14 +13,12 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/config/config.h"
-#include "include/server/http1.h"
-#include "include/server/http2.h"
-#include "include/server/http3.h"
-#include "include/server/index.h"
+#include "config/config.h"
+#include "server/http1.h"
+#include "server/http2.h"
+#include "server/http3.h"
+#include "server/index.h"
 #include <zend_exceptions.h>
-
-extern int le_king_cfg;
 
 static const char *king_server_select_listener_name(const king_cfg_t *cfg)
 {
@@ -213,3 +211,7 @@ PHP_FUNCTION(king_server_listen)
     zval_ptr_dtor(&listener_result);
     RETURN_FALSE;
 }
+
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"

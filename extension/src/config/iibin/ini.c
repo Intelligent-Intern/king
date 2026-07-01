@@ -11,8 +11,9 @@
  * =========================================================================
  */
 
-#include "include/config/iibin/ini.h"
-#include "include/config/iibin/base_layer.h"
+#include "config/iibin/ini.h"
+#include "config/iibin/base_layer.h"
+#include "php_king/init.h"
 
 #include "php.h"
 #include "zend_exceptions.h"
@@ -54,7 +55,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("king.io_shm_path", "/king_io_shm", PHP_INI_SYSTEM, OnUpdateString, shm_path, kg_iibin_config_t, king_iibin_config)
 PHP_INI_END()
 
-extern int king_ini_module_number;
 
 void kg_config_iibin_ini_register(void)
 {

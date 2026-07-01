@@ -6,10 +6,12 @@
  */
 
 #include "php_king.h"
+#include "php_king/core_arginfo.h"
+#include "object_store/arginfo/index.h"
 #include "object_store/object_store_internal.h"
-#include "include/runtime/libcurl_candidates.h"
-#include "include/config/native_cdn/base_layer.h"
-#include "include/config/native_object_store/base_layer.h"
+#include "runtime/libcurl_candidates.h"
+#include "config/native_cdn/base_layer.h"
+#include "config/native_object_store/base_layer.h"
 #include "Zend/zend_smart_str.h"
 #include "main/php_streams.h"
 #include "ext/standard/base64.h"
@@ -562,3 +564,5 @@ static int king_object_store_append_metadata_headers(
 #include "internal/object_store_metadata_headers_and_upload_api.inc"
 #include "internal/object_store_local_fallbacks.inc"
 #include "internal/object_store_dispatch.inc"
+#include "state.inc"
+#include "registration.inc"

@@ -36,6 +36,7 @@ static int king_config_apply_override_state_to_cfg(
     KING_CONFIG_APPLY_OVERRIDE_BUCKET(cdn, cdn, kg_config_native_cdn_apply_userland_config_to);
     KING_CONFIG_APPLY_OVERRIDE_BUCKET(dns, dns, kg_config_smart_dns_apply_userland_config_to);
     KING_CONFIG_APPLY_OVERRIDE_BUCKET(otel, observability, kg_config_open_telemetry_apply_userland_config_to);
+    KING_CONFIG_APPLY_OVERRIDE_BUCKET(compute_ai, compute_ai, kg_config_high_perf_compute_and_ai_apply_userland_config_to);
 
     return SUCCESS;
 }

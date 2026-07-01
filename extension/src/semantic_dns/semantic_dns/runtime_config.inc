@@ -59,6 +59,23 @@ static void king_semantic_dns_config_assign_defaults(king_semantic_dns_config_t 
         );
         config->mothernode_uri[sizeof(config->mothernode_uri) - 1] = '\0';
     }
+
+    if (king_smart_dns_config.state_path != NULL
+        && king_smart_dns_config.state_path[0] != '\0') {
+        strncpy(
+            config->state_path,
+            king_smart_dns_config.state_path,
+            sizeof(config->state_path) - 1
+        );
+        config->state_path[sizeof(config->state_path) - 1] = '\0';
+    } else {
+        strncpy(
+            config->state_path,
+            "/tmp/king_semantic_dns_state/durable_state.bin",
+            sizeof(config->state_path) - 1
+        );
+        config->state_path[sizeof(config->state_path) - 1] = '\0';
+    }
 }
 
 static void king_semantic_dns_config_copy(
@@ -85,6 +102,8 @@ static void king_semantic_dns_config_copy(
     target->bind_address[sizeof(target->bind_address) - 1] = '\0';
     strncpy(target->mothernode_uri, source->mothernode_uri, sizeof(target->mothernode_uri) - 1);
     target->mothernode_uri[sizeof(target->mothernode_uri) - 1] = '\0';
+    strncpy(target->state_path, source->state_path, sizeof(target->state_path) - 1);
+    target->state_path[sizeof(target->state_path) - 1] = '\0';
 
 }
 
@@ -97,14 +116,21 @@ static void king_semantic_dns_runtime_reset(void)
 
 static bool king_semantic_dns_listener_snapshot_path_init(void)
 {
+    char state_dir[PATH_MAX];
+
     if (king_semantic_dns_runtime.listener_state_path[0] != '\0') {
         return true;
+    }
+
+    if (king_semantic_dns_state_build_directory_path(state_dir, sizeof(state_dir)) != SUCCESS) {
+        return false;
     }
 
     if (snprintf(
             king_semantic_dns_runtime.listener_state_path,
             sizeof(king_semantic_dns_runtime.listener_state_path),
-            "/tmp/king_semantic_dns_state/listener_state." ZEND_LONG_FMT ".bin",
+            "%s/listener_state." ZEND_LONG_FMT ".bin",
+            state_dir,
             (zend_long) getpid()
         ) >= (int) sizeof(king_semantic_dns_runtime.listener_state_path)) {
         king_semantic_dns_runtime.listener_state_path[0] = '\0';
@@ -191,4 +217,3 @@ static void king_semantic_dns_listener_stop(void)
 
     king_semantic_dns_listener_unlink_snapshot();
 }
-

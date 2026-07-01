@@ -12,8 +12,8 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/cancel.h"
-#include "include/client/session.h"
+#include "client/cancel.h"
+#include "client/session.h"
 
 #include <stdio.h>
 

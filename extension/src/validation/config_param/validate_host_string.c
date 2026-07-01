@@ -3,7 +3,7 @@
  * host-literal checks used by the current transport and control-plane config.
  */
 
-#include "include/validation/config_param/validate_host_string.h"
+#include "validation/config_param/validate_host_string.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h>
 #include <ctype.h>

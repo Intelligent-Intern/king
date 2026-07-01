@@ -239,6 +239,7 @@ if test "$PHP_KING" != "no"; then
         src/king_globals.c    \
         src/king_init.c       \
         src/config/config.c   \
+        src/db_ingest/db_ingest.c \
         src/config/app_http3_websockets_webtransport/base_layer.c \
         src/config/app_http3_websockets_webtransport/config.c \
         src/config/app_http3_websockets_webtransport/default.c \
@@ -368,6 +369,7 @@ if test "$PHP_KING" != "no"; then
         src/validation/config_param/validate_scheduler_policy.c \
         src/validation/config_param/validate_string.c \
         src/validation/config_param/validate_string_from_allowlist.c \
+        src/awaitable/awaitable.c \
         src/client/session.c \
         src/client/cancel.c \
         src/client/tls.c \
@@ -381,6 +383,7 @@ if test "$PHP_KING" != "no"; then
         src/iibin/iibin_api.c \
         src/autoscaling/autoscaling.c \
         src/autoscaling/provisioning.c \
+        src/inference/inference.c \
         src/integration/system_integration.c \
         src/iibin/iibin_registry.c \
         src/iibin/iibin_schema.c \
@@ -410,6 +413,7 @@ if test "$PHP_KING" != "no"; then
         src/server/tls.c \
         src/server/websocket.c \
         src/xslt/xslt.c \
+        src/media/media.c \
         src/media/rtp.c \
         src/core/version.c       \
         src/core/health.c        \
@@ -421,7 +425,7 @@ if test "$PHP_KING" != "no"; then
     PHP_SUBST([KING_SHARED_LIBADD])
 
     dnl Signal to php_king.h that we are in runtime mode.
-    dnl This disables includes for component headers that don't exist yet.
+    dnl This keeps the public header on the lightweight runtime include surface.
     PHP_ADD_EXTENSION_DEP(king, standard)
     CFLAGS="$CFLAGS -DKING_RUNTIME_BUILD"
 

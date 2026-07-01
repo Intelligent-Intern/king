@@ -1,0 +1,1946 @@
+# Local Quantized Inference
+
+The interactive transformer-flow map lives at
+[`docs/inference/index.html`](inference/index.html).
+
+King inference is available procedurally through `king_inference_*` and as the
+native OO surface `King\Inference`, `King\Inference\Model`, and
+`King\Inference\Stream`.
+
+This primitive is local and concrete: it registers a materialized GGUF model
+artifact, parses the GGUF structure inside King, resolves an inference backend,
+and streams backend output as King events. Model artifacts are passed as direct
+filesystem paths through `artifact`, `artifact.path`, or `artifact_path`.
+Those fields must be non-empty strings; object-store references are rejected
+until they are materialized to a local GGUF path.
+Optional public metadata fields are also strict: `name`, `quantization`,
+`owned_by`, `embedding_tensor`, `token_embedding_tensor`, `output_tensor`,
+`output_projection_tensor`, `lm_head_tensor`,
+`attention_query_tensor_pattern`, `attention_key_tensor_pattern`,
+`attention_value_tensor_pattern`, `attention_output_tensor_pattern`,
+`rms_norm_attention_tensor_pattern`, `rms_norm_ffn_tensor_pattern`, and
+`rms_norm_final_tensor`, `ffn_gate_tensor_pattern`, `ffn_up_tensor_pattern`,
+and `ffn_down_tensor_pattern` must be non-empty strings when provided, and
+`context_tokens` must be a positive integer. Invalid model metadata is rejected
+during model load instead of being silently ignored by later model listings,
+embedding routes, decoder graph construction, or runner argument mapping.
+`king_inference_token_decode()` and `King\Inference\Model::tokenDecode()`
+decode one native token id through the tokenizer loaded from the same GGUF
+artifact. `king_inference_token_decode_graph()` and
+`King\Inference\Model::tokenDecodeGraph()` build the complete native CPU
+decode graph for one token position from the loaded model metadata and tensor
+resolvers. The graph builder accepts either a direct token id or the tokenizer
+output returned by `king_inference_tokenize()`; in the tokenizer-output form,
+`tokens[position]` is validated and wired into the embedding operation.
+
+The implemented token-streaming backends are `local` and `king_native_cpu`.
+`local` uses a King-owned process runner contract while the public backend name
+stays independent from the runner implementation. The `king_native_cpu` backend
+uses King's native GGUF loader, metadata parser, tokenizer lookup, paged
+KV-cache planning, public tensor views, bounded tensor dequantization, first
+CPU tensor/vector math, complete per-token decode graph construction, token
+selection from logits, and a read-only memory map of the model artifact. Native
+CPU streaming accepts explicit `graph` or `graphs` requests and decodes the
+selected token ids through the artifact tokenizer; it does not call an external
+inference runtime. For OpenAI-compatible plain-text chat requests, King renders
+the validated `messages` into a deterministic prompt, tokenizes that prompt
+with the loaded model tokenizer, runs prefix tokens through native CPU decode
+graphs without emitting them, emits generated assistant tokens from the final
+prompt state, and keeps that KV state transiently inside the one response
+without enabling persistent graph memory.
+For `stream=true`, the same native CPU prompt path emits OpenAI-compatible SSE
+chunks from native token events, and `/v1/models` advertises that with
+`x_king.openai_chat_completions_stream=true` plus
+`x_king.capabilities.openai_chat_completions_stream=true`. UI integrations
+should read the versioned `x_king.client_capabilities` object for selection and
+button state instead of inferring support from the backend name.
+
+When `backend` is omitted, King selects `king_native_cpu`. The process-runner
+backend is still available, but it must be selected intentionally with
+`backend => 'local'`, `backend.name => 'local'`, `backend.type => 'local'`, or
+a runner-bearing backend config.
+
+The repository ships `bin/king-local-infer` as the default local runner. It
+loads the current King extension, materializes a GGUF model through the native
+loader, builds token-step graphs through `king_inference_token_decode_graph()`,
+keeps KV state between steps, and streams decoded token text on stdout for the
+OpenAI-compatible router. Prompt processing passes the tokenizer output into the
+graph builder, so each `tokens[position]` value enters the embedding operation
+and then flows through every resolved transformer layer in the native graph. The
+runner fails closed when `king_inference_graph_run()` does not return a
+non-empty `state.kv_cache`, because later generated tokens must inherit the KV
+entries written by earlier prompt and decode steps. It also owns the local
+special-token policy: the prompt gets at most one leading BOS token when the
+model metadata exposes one, generated BOS/EOS tokens stop generation before
+they are decoded to text, and configured stop strings are withheld from stdout
+instead of being emitted and recognized afterwards.
+
+`bin/king-native-hello-world` is the direct King-only native stream smoke for
+the CPU and GPU backends. It resolves local GGUF artifacts from
+`KING_INFERENCE_HELLO_CPU_MODEL_PATH`,
+`KING_INFERENCE_HELLO_GPU_MODEL_PATH`, `KING_INFERENCE_HELLO_MODEL_PATH`,
+`KING_INFERENCE_CPU_MODEL_PATH`, `KING_INFERENCE_GPU_MODEL_PATH`,
+`KING_INFERENCE_MODEL_PATH`, `KING_INFERENCE_TEST_MODEL_PATH`, or
+`var/inference-models/gemma3-1b.gguf`, then tokenizes `Hello world` and streams
+the resulting token-vector graphs through `king_inference_stream()`. The CPU
+path executes the native graph runner. The GPU path requires
+`gpu.enabled=true`, opens the CUDA-backed model profile, refuses silent CPU
+fallback, and emits token events for explicit token-vector graphs after GPU
+graph admission succeeds. The command exits non-zero unless every requested
+backend streams `Hello world`.
+
+The default backend is `both` and the default mode is `roundtrip`, so the plain
+command is a deterministic CPU plus GPU `Hello world` proof. Use
+`--backend=cpu`, `--backend=gpu`, or `--backend=both` to select the surface.
+Use `--mode=prompt` only when you intentionally want a short native generation
+smoke; prompt output depends on the current decoder quality and model behavior
+and is not the deterministic Hello-World contract. The command does not contact
+Ollama, vLLM, or another model server; the only model runtime in that path is
+the King extension plus the local GGUF artifact.
+
+```bash
+bin/king-native-hello-world --backend=both
+KING_INFERENCE_HELLO_GPU_MODEL_PATH=/models/gemma3-1b.gguf bin/king-native-hello-world --backend=gpu
+```
+
+With `--json`, the command also emits the local performance measurement surface
+used for native inference hardening: prompt token count, generated token count,
+stream TTFB, stream total time, end-to-end time, model load time, tokens per
+second, resident state, and GPU before/after/delta snapshots for temperature,
+utilization, VRAM, and power. Set `KING_INFERENCE_GPU_POWER_MAX_WATTS` to enable
+the optional power guardrail in that local smoke.
+
+For the local OpenAI-compatible router, `bin/king-openai-router` loads
+`infra/inference/local-gpu.php.ini`. That local profile enables GPU bindings,
+selects `gemma3:1b` for the CPU and GPU profiles, expects the materialized GGUF
+artifact at `var/inference-models/gemma3-1b.gguf`, uses a 4096-token context,
+keeps graph memory disabled, configures GPU layer admission, and uses
+`nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits` as the
+temperature source. The router loads exactly the model selected by
+`king_inference_runtime_model_config()` and
+`king_inference_runtime_model_load()`. CPU/GPU model names, artifacts, context,
+memory mode, VRAM reserve, power limits, and thermal policy therefore come from
+the effective King config snapshot instead of separate router-side inference
+overrides.
+
+## Local Chat App
+
+The repository includes a browser chat under `demo/chat` for exercising the
+OpenAI-compatible inference route with real streaming. The chat is intentionally
+thin: it persists threads in SQLite, validates browser requests in PHP, proxies
+to the King router, and streams the router's Server-Sent Events back to the
+browser. It does not call Ollama, vLLM, or a hosted API at runtime.
+
+Required local inputs:
+
+- `extension/modules/king.so` built from the current tree.
+- Local Docker image `king-local:php8.4-inference`.
+- A materialized GGUF model at `var/inference-models/gemma3-1b.gguf`.
+- Docker Compose and, for GPU execution, a working NVIDIA container runtime.
+
+Build the extension from the repository root whenever native code has changed:
+
+```bash
+make build
+```
+
+Build the local runtime image when it is missing. The Dockerfile consumes the
+release package artifacts from `dist/docker-packages`; create them first when
+that directory is not present for PHP 8.4:
+
+```bash
+make release-package
+docker build --load \
+  -f infra/php-runtime.Dockerfile \
+  -t king-local:php8.4-inference \
+  --build-arg PHP_VERSION=8.4 \
+  .
+```
+
+Provide the model artifact. King needs a direct local GGUF file path; model
+weights remain ignored by git. If you already have an approved GGUF artifact,
+copy or symlink it to the path used by the local profile:
+
+```bash
+mkdir -p var/inference-models
+ln -sf /absolute/path/to/gemma3-1b.gguf var/inference-models/gemma3-1b.gguf
+```
+
+If the artifact source is a local Ollama installation, Ollama is only used to
+download and store the model. The King router still reads the GGUF blob directly
+and does not call Ollama's HTTP API:
+
+```bash
+ollama pull gemma3:1b
+ollama show --modelfile gemma3:1b
+mkdir -p var/inference-models
+ln -sf /path/to/ollama/models/blobs/sha256-... var/inference-models/gemma3-1b.gguf
+```
+
+Use the `FROM` digest shown by `ollama show --modelfile gemma3:1b` to choose the
+matching blob. Common blob roots are `/usr/share/ollama/.ollama/models/blobs`
+for the Linux service user and `$HOME/.ollama/models/blobs` for a user-local
+Ollama installation. When the symlink points into the service path, make the same
+directory visible to the container through `demo/chat/.env`:
+
+```bash
+cd demo/chat
+cp .env.example .env
+# Adjust KING_MODEL_BLOBS when your Ollama blob directory is not the default.
+```
+
+Start the chat:
+
+```bash
+cd demo/chat
+docker compose up -d
+```
+
+Open:
+
+- Chat UI: `http://127.0.0.1:19480`
+- OpenAI-compatible base URL: `http://127.0.0.1:8080/v1`
+- Compose-scoped model list: `http://127.0.0.1:19481/v1/models`
+
+The chat backend stores threads in `demo/chat/var/chat.sqlite`, which is local
+runtime state and ignored by git. Stop the stack with:
+
+```bash
+cd demo/chat
+docker compose down
+```
+
+If `/v1/models` works but chat generation is slow, inspect the router start log
+first. It prints the effective model profile, artifact paths, context policy,
+GPU backend, VRAM guardrails, thermal ceiling, and immediate-streaming flags
+before binding the port.
+
+Native graph stream memory is opt-in. The compiled default is stateless and the
+system baseline can be changed in `php.ini`:
+
+```ini
+king.inference_with_memory=0
+```
+
+The effective order is built-in default, `php.ini`, model config
+`with_memory`, stream request, stream options, and finally `graph_options`.
+Use `with_memory => true` only when a later graph should inherit the previous
+graph result state. The alias `with-memory` is accepted for external payloads;
+do not provide both spellings in the same array.
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'king-native-stateless',
+    'artifact' => '/models/king-small-q4.gguf',
+    'backend' => 'king_native_cpu',
+    'with_memory' => false,
+]);
+
+$stateless = king_inference_stream($model, [
+    'graphs' => $decodeSteps,
+], [
+    'with_memory' => false,
+]);
+
+$stateful = king_inference_stream($model, [
+    'graphs' => $decodeSteps,
+], [
+    'with_memory' => true,
+]);
+```
+
+## GraphAttention Memory Cache
+
+PagedAttention is not the first target here. The practical first step is
+GraphAttention-style memory: native graph streams can carry state forward,
+and a later evaluation pipeline can label prompts, inference results, and graph
+paths as useful. A labelled "works well" path can then be promoted by
+application code into a smaller candidate set for the next run instead of
+forcing the model to see the full catalogue again.
+
+King now exposes the cache admission policy for that memory mode. The LLM cache
+is never active for stateless inference. It is checked only when effective
+`with_memory` is `true`. The compiled and php.ini defaults keep it disabled;
+set `king.inference_llm_cache_enable=1` only for deployments that explicitly
+want memory-enabled graph cache admission.
+
+```ini
+king.inference_llm_cache_enable=1
+king.inference_llm_cache_path=/tmp/king-llm-cache
+king.inference_llm_cache_min_free_mb=5120
+king.inference_llm_cache_fail_closed=1
+king.inference_llm_cache_disk_alert_webhook=
+king.inference_llm_cache_disk_alert_mcp_service=
+king.inference_llm_cache_disk_alert_mcp_method=
+```
+
+When active, King checks the cache path and the configured free-disk floor
+before native graph streaming starts. With `fail_closed=1`, memory-enabled
+inference is refused when the disk floor cannot be satisfied. With
+`fail_closed=0`, a native King stream continues and emits a `llm_cache_status`
+event before token events so the application can notify the configured webhook
+or MCP target. OpenAI-compatible streams keep their response format pure; the
+same cache policy is still checked, but the status should be queried through
+`king_inference_llm_cache_status()` when an out-of-band preflight is needed.
+
+```php
+<?php
+$config = King\Config::new([
+    'inference.with_memory' => true,
+    'inference.llm_cache_path' => '/var/cache/king/llm',
+    'inference.llm_cache_min_free_mb' => 8192,
+    'inference.llm_cache_fail_closed' => true,
+    'inference.llm_cache_disk_alert_webhook' => 'https://ops.example/cache-alert',
+    'inference.llm_cache_disk_alert_mcp_service' => 'ops.cache',
+    'inference.llm_cache_disk_alert_mcp_method' => 'diskFloorWarning',
+]);
+
+$status = king_inference_llm_cache_status($config, ['with_memory' => true]);
+```
+
+Runtime-loaded models carry the same cache policy in their model config under
+`llm_cache`, so `king_inference_runtime_model_load($config)` is enough for the
+native stream to enforce the policy. Manual model configs may also provide a
+`llm_cache` array with `enabled`, `path`, `min_free_mb`, `fail_closed`,
+`disk_alert_webhook`, `disk_alert_mcp_service`, and
+`disk_alert_mcp_method`. Request, stream options, and `graph_options` may
+override that array for a single run.
+
+GPU execution is conservative. CPU-only execution is the default. GPU use must
+be explicitly enabled in the model config, the global
+`king.gpu_bindings_enable` setting must allow it, and either a thermal sensor
+path or a thermal sensor command is required unless the operator explicitly
+accepts unmonitored GPU execution.
+The `gpu` config itself is strict: `gpu.enabled` must be a boolean,
+`gpu.max_gpu_layers`, `gpu.vram_reserve_mb`, and `gpu.min_free_vram_mb` must be
+non-negative integers,
+`gpu.thermal` must be an array when provided, `gpu.thermal.sensor_path` and
+`gpu.thermal.sensor_command` must be non-empty strings when provided,
+`gpu.thermal.max_temperature_c` must be a positive finite number, and
+`gpu.thermal.check_interval_seconds` must be a non-negative integer when
+provided. `gpu.thermal.allow_unmonitored_gpu` must be a boolean. Optional
+`gpu.power` guardrails use a command-based watt sensor. `gpu.power.max_watts=0`
+keeps the power guardrail disabled; values greater than zero require
+`gpu.power.sensor_command`, and `gpu.power.check_interval_seconds` must be a
+non-negative integer.
+
+## Runtime Model Profile
+
+Applications that should use "the configured King model" do not have to build
+the model config array themselves. King exposes a runtime model primitive with
+one explicit profile switch:
+
+```ini
+king.inference_preferred_model_profile=auto
+king.inference_cpu_model_name=gemma3:1b
+king.inference_cpu_model_artifact=/models/gemma3-1b.gguf
+king.inference_gpu_model_name=gemma4:12b
+king.inference_gpu_model_artifact=/models/gemma4-12b.gguf
+king.inference_gpu_max_gpu_layers=99
+king.inference_gpu_vram_reserve_mb=2048
+king.inference_gpu_min_free_vram_mb=4096
+king.inference_gpu_thermal_sensor_path=/sys/class/hwmon/hwmon0/temp1_input
+king.inference_gpu_thermal_sensor_command=
+king.inference_gpu_thermal_max_temperature_c=78
+king.inference_gpu_thermal_check_interval_sec=15
+king.inference_gpu_allow_unmonitored=0
+king.inference_gpu_power_sensor_command="nvidia-smi --query-gpu=power.draw --format=csv,noheader,nounits"
+king.inference_gpu_power_max_watts=450
+king.inference_gpu_power_check_interval_sec=15
+king.inference_llm_cache_enable=0
+king.inference_llm_cache_path=/tmp/king-llm-cache
+king.inference_llm_cache_min_free_mb=5120
+king.inference_llm_cache_fail_closed=1
+```
+
+`auto` selects the GPU profile only when process-level GPU bindings are enabled,
+the config-level GPU bindings are enabled, and
+`inference_gpu_model_artifact` points to a materialized local GGUF file.
+Otherwise it selects the CPU profile. `gpu` requires the GPU profile and fails
+fast when the GPU artifact, config-level GPU allowance, or process-level GPU
+allowance is missing. `cpu` always selects the CPU profile.
+
+`gemma3:1b` is the compact baseline model for local King inference. It is small
+enough for fast CPU/GPU preflight and short smoke checks, but it is not treated
+as a disposable smoke-only artifact. The expected capability floor is simple
+chat, exact-output following, language following, small PHP and King snippets,
+and basic local Coder assistance. If one of those contracts regresses, the
+problem is in runtime admission, prompt formatting, tokenizer handling, model
+configuration, or the fine-tune dataset, not in a lowered expectation for the
+model.
+
+The stronger GPU profile can prefer a larger local model such as `gemma4:12b`
+after the `gemma3:1b` hot path is fast and honest. That keeps a cheap baseline
+available for diagnostics while allowing editor and production-like workflows to
+select a larger GPU model when configured. Future supervised tuning should keep
+the 1B family useful for King/PHP/Coder tasks instead of replacing it with a
+generic benchmark-only model.
+
+The same settings can be scoped to a `King\Config` snapshot:
+
+```php
+<?php
+$config = King\Config::new([
+    'inference.preferred_model_profile' => 'auto',
+    'inference.cpu_model_name' => 'gemma3:1b',
+    'inference.cpu_model_artifact' => '/models/gemma3-1b.gguf',
+    'inference.gpu_model_name' => 'gemma4:12b',
+    'inference.gpu_model_artifact' => '/models/gemma4-12b.gguf',
+    'inference.gpu_max_gpu_layers' => 48,
+    'inference.gpu_vram_reserve_mb' => 2048,
+    'inference.gpu_min_free_vram_mb' => 4096,
+    'inference.gpu_thermal_sensor_path' => '/sys/class/hwmon/hwmon0/temp1_input',
+    'inference.gpu_thermal_sensor_command' => '',
+    'inference.gpu_thermal_max_temperature_c' => 78.0,
+    'inference.gpu_allow_unmonitored' => false,
+    'inference.llm_cache_path' => '/var/cache/king/llm',
+    'inference.llm_cache_min_free_mb' => 5120,
+]);
+
+$modelConfig = king_inference_runtime_model_config($config);
+$model = king_inference_runtime_model_load($config);
+```
+
+The procedural and OO surfaces are equivalent:
+
+```php
+<?php
+$modelConfig = King\Inference::runtimeModelConfig($config);
+$model = King\Inference::runtimeModelLoad($config);
+```
+
+The GPU decoder graph now executes the first real attention bridge after KV
+aggregation: the retained device-side attention context is copied into the
+matching `stack` slot by the CUDA vector copy-to-offset primitive. That status
+is exposed as `decoder_graph_attention_stack_slot_execution_ready` and
+`attention_stack_slot_device_execution_ready`. King also iterates all query
+head slices from the attention query projection and runs their K/V write,
+attention aggregation, and stack-slot copy path; the aggregate status is exposed
+as `decoder_graph_attention_heads_execution_ready` and
+`attention_heads_device_execution_ready`. The complete multi-head attention
+stack is now returned as one retained device buffer until the current GPU
+device-op cleanup point, and that bridge is exposed as
+`decoder_graph_attention_stack_execution_ready` and
+`attention_stack_device_execution_ready`. King now consumes that retained stack
+through the attention output projection linear op; that bridge is exposed as
+`decoder_graph_attention_output_projection_execution_ready` and
+`attention_output_projection_device_execution_ready`. The projected attention
+output is then added to the retained hidden state through the CUDA vector-add
+path, exposed as `decoder_graph_attention_residual_execution_ready` and
+`attention_residual_device_execution_ready`. The feed-forward RMSNorm is now
+executed directly from that attention residual bridge, exposed as
+`decoder_graph_ffn_norm_execution_ready` and
+`ffn_norm_device_execution_ready`. The FFN Gate and Up projections are then
+materialized from the retained FFN norm buffer through the same quantized GPU
+linear path, exposed as `decoder_graph_ffn_gate_up_projection_execution_ready`
+and `ffn_gate_up_projection_device_execution_ready`. The Gate and Up projection
+buffers now feed the CUDA FFN-SwiGLU kernel, exposed as
+`decoder_graph_ffn_swiglu_execution_ready` and
+`ffn_swiglu_device_execution_ready`. The SwiGLU output then feeds the FFN Down
+projection through the quantized GPU linear path, exposed as
+`decoder_graph_ffn_down_projection_execution_ready` and
+`ffn_down_projection_device_execution_ready`. The Down projection is then added
+back to the retained attention residual on device, exposed as
+`decoder_graph_ffn_output_residual_execution_ready` and
+`ffn_output_residual_device_execution_ready`. When that residual is the graph's
+terminal hidden state, King runs the final RMSNorm on device, exposed as
+`decoder_graph_final_norm_execution_ready` and
+`final_norm_device_execution_ready`. When logits are requested, that final norm
+output is projected through the output projection tensor on device, exposed as
+`decoder_graph_logits_projection_execution_ready` and
+`logits_projection_device_execution_ready`.
+
+This is still an intermediate decoder contract. Plain-text GPU generation
+remains blocked until King finishes bounded logits readback into the sampler.
+
+GPU readiness is inspectable before model load:
+
+For an operator-facing startup gate that uses the same fields and explains the
+expected refusal reasons, see the [GPU Readiness Runbook](gpu-readiness.md).
+
+```php
+<?php
+$status = king_inference_gpu_runtime_status($config);
+
+if (!$status['generation_ready']) {
+    error_log('King GPU inference is not ready: ' . $status['reason']);
+    error_log('All refusal reasons: ' . implode(', ', $status['refusal_reasons']));
+}
+
+$sameStatus = King\Inference::gpuRuntimeStatus($config);
+```
+
+The status probe is native. King opens the CUDA driver library at runtime when
+available, checks driver initialization and device visibility, and reports the
+first CUDA device name, total memory, and current free memory where the driver
+exposes it. King also compares the configured model artifact size with the
+reported free VRAM and reports `model_vram_admitted=false` when the artifact
+alone cannot fit. Once a model is loaded, the same `gpu_runtime` payload also
+includes the paged KV-cache estimate from context length, layer count, KV heads,
+key/value dimensions, and element size. Loaded-model readiness then compares
+`artifact_bytes + kv_cache_estimated_bytes` against
+`free_vram_after_reserve_bytes`, which is the raw `free_vram_bytes` minus the
+configured `inference_gpu_vram_reserve_mb`. This keeps desktop VRAM available
+for the compositor and other operator work while still exposing both raw and
+reserved admission values through `gpu_runtime`. King also enforces
+`inference_gpu_min_free_vram_mb` as a hard floor: when the driver reports less
+free VRAM than that configured minimum, GPU readiness fails closed with
+`gpu_free_vram_below_configured_floor` before model execution is considered.
+Thermal guardrails still come from the configured sensor path or command,
+because operators may prefer platform-specific sensor files over driver-level
+telemetry.
+
+For loaded `king_native_gpu` models, King also opens and owns the CUDA primary
+context for the first visible device when GPU execution is enabled. The driver
+handle and context stay attached to the loaded model object until the model is
+freed, so later GPU decoder leaves can allocate memory and launch kernels
+without reopening the driver. `gpu_runtime.cuda_context` exposes whether context
+opening was attempted, whether the context is available and owned, the selected
+device ordinal, the raw CUDA result code, and the last context error. When the
+loaded GPU model cannot own a context, `config_ready` is false and
+`gpu_cuda_context_unavailable` is included in `refusal_reasons`.
+
+Once the CUDA context is available, King initializes a model-owned device-memory
+allocator on top of the CUDA driver API. The allocator resolves `cuMemAlloc` /
+`cuMemAlloc_v2` and `cuMemFree` / `cuMemFree_v2`, keeps the model context
+current before allocations, tracks every active device pointer, and frees
+remaining tracked allocations before the CUDA context is released. The
+`gpu_runtime.device_memory_allocator` status object exposes whether allocator
+initialization was attempted, whether the required symbols are available,
+whether allocation is ready, active allocation count, active bytes, peak bytes,
+the last CUDA result, and the last allocator error. If a loaded GPU model has a
+CUDA context but cannot initialize the allocator, `config_ready` is false and
+`gpu_device_memory_allocator_unavailable` is included in `refusal_reasons`.
+
+With the allocator ready, King resolves the decoder-required weight set through
+the same tensor resolvers used by the native token graph and uploads those GGUF
+tensor bytes from the read-only host mapping into CUDA device memory with
+`cuMemcpyHtoD` / `cuMemcpyHtoD_v2`. The required set currently covers token
+embedding, output projection, final RMSNorm, and for every decoder block the
+attention RMSNorm, Q/K/V/output projections, feed-forward RMSNorm, and
+gate/up/down FFN projections. Tied output projection tensors are detected and
+not uploaded twice. `gpu_runtime.required_weight_upload` exposes attempted,
+complete, required/resolved/uploaded/duplicate/failed tensor counts, uploaded
+bytes, cache readiness, cache entries, cache hits, cache misses, the last CUDA
+result, and the last upload error. Uploaded tensors are cached per loaded model
+by tensor name, and later GPU decoder leaves can resolve the cached device
+pointer and byte length without scanning the upload list or copying the same
+tied tensor twice. If allocator setup succeeds but required weights cannot be
+resolved, copied, or cached, `config_ready` is false and
+`gpu_required_weight_upload_incomplete` is included in `refusal_reasons`.
+
+`reason` is the primary refusal reason, ordered by the first gate King would
+need an operator to fix. `refusal_reasons` contains the complete ordered list of
+currently active refusal reasons, so a broken setup can show, for example, a
+missing artifact, unavailable VRAM telemetry, and a missing thermal monitor in
+one response instead of hiding later blockers behind the first one.
+
+GPU stream startup performs fresh thermal and optional power preflight
+immediately before the backend run is admitted. For the local process backend
+this check happens after the command line is assembled and directly before
+`fork/exec`; for native streams it happens directly before native graph events
+are prepared. Stream start events and `King\Inference\Stream::getMetrics()`
+expose `gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`,
+`gpu_thermal_preflight_temperature_c`, `gpu_power_preflight_checked`,
+`gpu_power_preflight_at`, and `gpu_power_preflight_watts` so operators can
+distinguish stale model metadata from the last run-time admission check.
+During an active GPU stream, King checks the same thermal ceiling and optional
+power ceiling at the configured `gpu.thermal.check_interval_seconds` and
+`gpu.power.check_interval_seconds` cadence. The default is 15 seconds; `0`
+keeps startup preflight but disables running rechecks for that guardrail. The
+native CUDA prompt decoder calls this guardrail path from the token loop, so a
+resident native decode is protected before all token events have been read by
+userland. When a ceiling is reached, the stream is marked cancelled, the runner
+process is terminated when applicable, and metrics expose
+`gpu_thermal_aborted`, `gpu_thermal_abort_at`,
+`gpu_thermal_abort_temperature_c`, `gpu_thermal_abort_ceiling_c`,
+`gpu_power_aborted`, `gpu_power_abort_at`, `gpu_power_abort_watts`, and
+`gpu_power_abort_ceiling_watts`.
+
+Internal CUDA numeric comparison is a local diagnostic surface, not a public
+inference API. The single supported hook is
+`king_inference_cuda_device_vector_numeric_compare()`, and all decoder
+component compares call through that hook. It is disabled by default through
+`king.inference_cuda_numeric_compare_enable=0`; the default bounded readback
+limit is `king.inference_cuda_numeric_compare_max_values=8` and is clamped to
+`1024`. A loaded model may override the same hook locally with
+`gpu.debug.numeric_compare_enabled` and
+`gpu.debug.numeric_compare_max_values`. When disabled, compare records report
+`status=disabled` and no device-to-host diagnostic readback is performed.
+`Model::info()` exposes this as `device_vector_ops.numeric_compare_hook` with
+`public_api=false`, `scope=internal_cuda_device_vector_readback_compare`, and
+`unavailable_by_default=true`.
+
+The GPU profile resolves to `king_native_gpu`. That is intentional: a 12B model
+configured for GPU execution must not silently fall back to CPU. Current status
+fields separate the layers:
+
+- `config_ready` means King can see the GPU-facing configuration, artifact,
+  driver signal, and thermal policy.
+- `decoder_kernel_ready` means the native GPU decoder graph and prompt loop can
+  execute token generation from bounded logits.
+- `generation_ready` means both are true and plain-text token generation may
+  run without CPU fallback.
+
+The local OpenAI-compatible router exposes the configured large model with
+explicit `x_king.gpu_runtime` metadata and accepts `stream=false` plain-text
+chat completions when `gpu_runtime.generation_ready=true`. King still refuses
+GPU generation if runtime policy or decoder blockers are present, and it still
+does not burn the CPU accidentally for a GPU profile.
+The refusal is not a generic placeholder: `gpu_runtime.decoder_blockers`
+identifies missing runtime layers between the available CUDA leaves and
+plain-text chat generation.
+
+`king_native_gpu` model registration is still allowed. Registration means King
+can load the materialized GGUF artifact, parse metadata, build tokenizer/tensor
+indexes, map the file for native access, and expose the model through
+`/v1/models`. Runtime status still decides whether GPU token generation is
+currently admitted. The backend capability map describes implemented surfaces,
+not current execution admission: it keeps `model_registration=true`,
+`implemented=true`, `streaming=true`, `native_stream_contract=true`,
+`gpu_decoder_stream_contract=true`, `token_generation=true`, and
+`openai_generation=true` for the GPU backend. Clients must still use
+`x_king.openai_generation`, `x_king.readiness.openai_generation_ready`, and
+`x_king.client_capabilities.*` for runtime UI decisions.
+The same capabilities explicitly describe the ready GPU support surfaces:
+`gpu_runtime_status`, `gpu_cuda_driver_probe`, `gpu_cuda_context`,
+`gpu_cuda_context_owned`, `gpu_device_memory_allocator`, `gpu_vram_admission`,
+`gpu_host_to_device_weight_upload`, `gpu_uploaded_weight_cache`,
+`gpu_quantized_matvec_kernel`, `gpu_rms_norm_kernel`, `gpu_rope_kernel`,
+`gpu_attention_scores_kernel`, `gpu_attention_softmax_kernel`,
+`gpu_attention_value_aggregation_kernel`, `gpu_ffn_swiglu_path`,
+`gpu_output_projection_path`, `gpu_embedding_row_loader`,
+`gpu_device_vector_ops`, `gpu_device_kv_cache`,
+`gpu_minimized_logits_readback`, `gpu_decoder_graph_executor`,
+`gpu_decoder_graph_result_envelope`, `gpu_decoder_graph_execution_plan`,
+`gpu_decoder_graph_embedding_execution`, `gpu_decoder_graph_rms_norm_execution`,
+`gpu_decoder_graph_linear_execution`, `gpu_decoder_graph_slice_execution`,
+`gpu_decoder_graph_rope_execution`,
+`gpu_decoder_graph_kv_head_prepare_execution`,
+`gpu_decoder_graph_kv_write_execution`,
+`gpu_decoder_graph_kv_attention_execution`,
+`gpu_decoder_graph_attention_stack_slot_execution`,
+`gpu_decoder_graph_attention_heads_execution`,
+`gpu_decoder_graph_attention_stack_execution`,
+`gpu_decoder_graph_attention_output_projection_execution`,
+`gpu_decoder_graph_attention_residual_execution`,
+`gpu_decoder_graph_ffn_norm_execution`,
+`gpu_decoder_graph_ffn_gate_up_projection_execution`,
+`gpu_decoder_graph_ffn_swiglu_execution`,
+`gpu_decoder_graph_ffn_down_projection_execution`,
+`gpu_decoder_graph_ffn_output_residual_execution`,
+`gpu_decoder_graph_final_norm_execution`, `gpu_prompt_decoder_loop`,
+`gpu_kv_cache_vram_estimate`, `gpu_thermal_policy`, `gpu_thermal_preflight`,
+`gpu_thermal_stream_abort`, and `gpu_decoder_stream_contract` are true for the
+GPU backend.
+`openai_chat_completions_stream` is true for the GPU backend when runtime
+readiness admits prompt generation. `silent_cpu_fallback` remains false.
+The GPU model info, `/v1/models` metadata, and the opt-in native GPU diagnostic
+stream contract expose the same boundary with `embedding_row_loader_ready`,
+`device_vector_ops_ready`, `device_kv_cache_ready`,
+`decoder_graph_executor_ready`, `decoder_graph_result_contract_ready`,
+`decoder_graph_execution_plan_ready`, `decoder_graph_embedding_execution_ready`,
+`decoder_graph_rms_norm_execution_ready`, `decoder_graph_linear_execution_ready`,
+`decoder_graph_slice_execution_ready`, `decoder_graph_rope_execution_ready`,
+`decoder_graph_kv_head_prepare_execution_ready`,
+`decoder_graph_kv_write_execution_ready`,
+`decoder_graph_kv_attention_execution_ready`, `decoder_prompt_loop_ready`,
+`plain_text_chat_ready`, and `gpu_plain_text_chat_generation`.
+The embedding row loader resolves the selected token embedding tensor, uses the
+uploaded GPU weight cache, and writes one token row into a device-side `float`
+vector. The current kernel supports `F32`, `F16`, `BF16`, and row-aligned
+`Q8_0` embedding tensors.
+The device vector ops leaf provides GPU kernels for `add`, `mul`, `scale`,
+`silu`, `slice`, and `copy_to_offset`; those cover the simple vector operations
+the decoder graph needs before attention execution can be orchestrated fully on
+device. The device KV-cache leaf derives its shape from GGUF metadata and the
+paged KV-cache plan, exposes contiguous per-layer/per-head key and value cache
+pointers, and writes key/value vectors with CUDA device-to-device copies. It is
+lazy-allocated: registration reports the runtime surface and byte requirements,
+while the actual key/value buffers are reserved on the first cache write.
+The decoder graph executor validates the complete token-decode graph op set
+that the CPU builder emits and binds that contract to the available CUDA leaves,
+including bounded logits readback for CPU-side sampling. Explicit native GPU
+`graph` and `graphs` streams now emit one `gpu_decoder_graph_execution_result`
+envelope per validated graph. That envelope carries graph type, token position,
+terminal output, token-selection metadata, and a `gpu_decoder_graph_execution_plan`
+object that separates CUDA-device graph work from host sampling after bounded
+logits readback. When the graph contains an `embedding` op, the executor now
+allocates a temporary device vector, runs the CUDA embedding row loader for
+that token, then runs the following RMSNorm op on that device vector when the
+graph wires it directly from the embedding output. When the next linear op is
+wired from that RMSNorm output and the weight is Q8_0, the executor also runs
+the CUDA quantized matvec kernel. When the next graph op is a slice wired from
+that linear output, the executor runs the CUDA vector slice kernel. When the
+next graph op is RoPE wired from that slice, the executor runs the CUDA RoPE
+kernel. It also prepares the sibling key/value head path by running the next
+two linear projections from the same RMSNorm output, slicing the first key and
+value heads, running RoPE for the key head, writing that K/V pair into the
+device KV cache through the graph's `kv_write` op, then executing the first
+`kv_attention` op by running attention scores, softmax, and value aggregation
+against the device KV cache. The resulting context vector is retained inside
+the K/V helper until the downstream residual bridge can consume it, then
+released during the helper cleanup path. The attention residual now feeds the
+feed-forward RMSNorm on device before that temporary buffer is released, and the
+FFN Gate/Up projections run from the retained FFN norm buffer before their
+temporary outputs feed the CUDA FFN-SwiGLU kernel. The retained SwiGLU output
+then feeds the FFN Down projection, and the Down output is added back to the
+retained attention residual before those temporary buffers are released after
+the admitted initial device chain. When that residual is the terminal hidden
+state, the final RMSNorm runs on device before its temporary buffer is released.
+If the graph requests logits, King now projects that final norm buffer into a
+GPU logits buffer through the output projection tensor and releases it after the
+device execution probe records the row count. The executor then runs the
+bounded Top-K readback kernel against that GPU logits buffer, returns candidate
+token ids and logits in `logits_projection_device_execution.candidates`, and
+marks `bounded_logits_result_ready=true` plus
+`device_execution_result_ready=true`. The GPU prompt-loop admission path
+accepts `native_prompt_text`, tokenizes it, builds the same token-decode graphs
+used by the CPU loop, and validates those graphs into result envelopes against
+the GPU executor without CPU execution fallback. It now consumes the bounded
+candidate set for the final prompt graph and each following generated-token
+graph until `max_tokens` is reached, applies the same argmax/temperature/top-k/
+top-p/seed sampling policy on CPU over those bounded candidates, writes a
+CPU-compatible `final.next_token.values` token vector into each graph result,
+and emits the decoded token text pieces in the native event stream. When
+server-side stream options set `include_stream_diagnostics=true` or
+`diagnostics.stream_contracts=true`, King also emits the structured
+`gpu_decoder_stream_contract` and `gpu_prompt_decoder_loop_contract` events for
+local diagnostics. OpenAI-compatible GPU chat uses that prompt loop for both
+`stream=false` and `stream=true`, and does not fall back to CPU.
+
+The native GPU backend is connected to the same stream object contract as the
+native CPU backend: `king_inference_stream()` creates a `King\Inference\Stream`,
+the start event reports `backend=king_native_gpu`, native events are read
+through `king_inference_next()`, cancellation moves the stream to a terminal
+state, and stream metrics expose native event indexes plus GPU thermal
+preflight/abort metadata. The default GPU native stream emits normal
+`start`/`token`/`done` events. Internal diagnostics can opt in to the structured
+`gpu_decoder_stream_contract` event with `stream_contract=king_native_events`,
+`decoder_stream_contract_ready=true`, prompt-loop readiness, and the current
+`gpu_runtime` object. OpenAI-compatible GPU chat is admitted only through plain
+text prompt generation; OpenAI graph payloads stay on the native stream
+contract.
+
+## GPU Sampling Decision
+
+Sampling stays CPU-side for the current native GPU decoder contract. The GPU
+path owns the high-volume tensor work: projection into logits, bounded top-K
+candidate selection, and the transfer boundary that avoids copying the full
+vocabulary logits to host memory. The CPU receives only bounded candidate ids
+and their logits for token selection.
+
+That boundary is intentional. King already has one deterministic token-selection
+contract for `argmax_token` and `sample_token`: temperature, top-k, top-p,
+seeded sampling, `sample_index`, token offset handling, and deterministic
+tie-breaking live in the graph sampling layer. Duplicating that policy in CUDA
+before the GPU decoder stream is fully connected would create two behavioral
+sources of truth. Keeping sampling CPU-side preserves reproducibility while the
+GPU path removes the expensive full-logits readback.
+
+Full-logits CPU readback is therefore not part of the normal GPU generation
+path. It is only appropriate for explicit diagnostic or `emit_logits` style
+inspection flows. The default generation path is GPU logits projection, GPU
+bounded top-K candidate extraction, bounded candidate readback into candidate
+records, then CPU policy sampling. A later GPU sampler may replace the CPU policy step only when it can
+produce the same observable semantics for argmax, temperature, top-k, top-p,
+seeded sampling, and deterministic tie-breaking.
+
+## Internal Backend Layout
+
+The public API stays stable while backend internals can be optimized one module
+at a time:
+
+```text
+extension/src/inference/
+├── inference.c
+├── api/
+├── backends/
+├── binding/
+│   └── php_binding.inc
+├── core/
+├── cuda/
+│   ├── decoder_graph/
+│   ├── kernels/
+│   ├── prompt/
+│   └── runtime/
+├── gguf/
+├── openai/
+│   ├── chat/
+│   ├── http/
+│   ├── resources/
+│   └── runtime/
+├── runtime/
+├── tensor/
+│   ├── core/
+│   ├── graph/
+│   └── resolvers/
+└── tokenizer/
+```
+
+The object and metadata contracts live in
+`extension/include/inference/surface/inference.h`. PHP arginfo, function-table
+entries, class entries, registration hooks, and OO method-table entries live in
+their matching subdirectories under `extension/include/inference/` and are
+consumed by the extension bootstrap through `extension/include/php_king/`. The
+runtime implementation remains under `extension/src/inference/` and is included
+directly by the extension bootstrap. `binding/php_binding.inc` is the single
+aggregation boundary; leaf files stay in the directory that owns their concern
+instead of being flattened into the root inference directory.
+
+`backends/contracts/backend_contract.inc` owns backend names and capabilities.
+`backends/registry/backend_registry.inc` dispatches stream startup to the selected
+backend. `backends/local/backend_king_local.inc` owns the current process runner path, executable
+preflight, argument mapping, fork/exec handoff, and prompt normalization. If a
+configured local runner path is not executable, or a PATH-based runner name
+cannot be resolved before `fork()`, King raises a runtime error before stream
+startup instead of returning an empty stream with a child-process exit code.
+Resource and thermal policy are intentionally separate so CPU/GPU scheduling,
+VRAM limits, and temperature behavior can evolve without changing userland code.
+`openai/http/openai_http_router.inc` owns route selection only. Request extraction,
+response helpers, body decoding, model registry handling, route generation
+helpers, and endpoint-specific payloads live in the focused `openai_*`
+fragments so the OpenAI-compatible router remains inspectable as it grows.
+`gguf_loader.inc` validates the model artifact, parses GGUF metadata key/value
+entries, records architecture and tokenizer metadata where present, walks the
+tensor directory, builds an internal tensor index keyed by tensor name, computes
+the aligned tensor-data offset, and exposes tensor type counts before the
+normal model object is exposed to userland.
+`gguf_metadata_helpers.inc` keeps scalar and tokenizer metadata loading out of
+the loader core. `tokenizer.inc` owns native tokenizer normalization and
+longest-prefix token lookup so application code can call
+`king_inference_tokenize()` or `King\Inference\Model::tokenize()` without
+leaving the King extension.
+`tensor_view.inc` turns the internal GGUF tensor directory into a read-only
+userland contract. It resolves tensor names to shape, quantized block format,
+file offsets, byte ranges, bounds status, and native mapping readiness without
+exposing process-local native pointers to PHP.
+`tensor_math.inc` owns the first native CPU tensor operations on top of those
+views. It reads bytes from the read-only model mapping, dequantizes bounded
+ranges for supported scalar and block formats, including Q5_0, and can multiply
+rank-1 or rank-2 tensors by a PHP vector with explicit safety limits.
+`tensor_resolver.inc` centralizes model tensor name resolution. The token
+embedding resolver honors explicit `tensor`, `embedding_tensor`, and
+`token_embedding_tensor` configuration first, then checks known GGUF names, and
+finally performs a guarded shape/name-hint scan when architecture embedding
+length and tokenizer row count are available. The output projection resolver
+uses the same explicit-first order for `tensor`, `output_tensor`,
+`output_projection_tensor`, and `lm_head_tensor`, then checks known GGUF
+output/lm-head names and performs a guarded shape/name-hint scan. If the model
+does not carry a separate output projection tensor but the token embedding
+tensor resolves, King reports the output projection as `tied_token_embedding`
+instead of guessing a second tensor. `tensor_attention_resolver.inc` resolves
+per-layer attention query, key, value, and output projection tensors. It checks
+configured `{layer}` patterns first, then known GGUF layer-name patterns, and
+finally a guarded layer/name/shape scan. Shape validation uses the loaded
+embedding length, attention head count, KV head count, and key/value head
+dimensions, so grouped-query attention tensors are not mistaken for full-width
+query projections. `tensor_rms_norm_resolver.inc` resolves per-layer
+attention/feed-forward RMSNorm tensors and the final output RMSNorm tensor. It
+checks configured `{layer}` patterns first for layer norms, direct configured
+final tensor names first for the final norm, then known GGUF/HF-style names,
+and finally guarded name/shape scans. Shape validation requires rank-1 tensors
+whose width matches the loaded embedding length. `tensor_ffn_resolver.inc`
+resolves per-layer FFN gate, up, and down projection tensors. It checks
+configured `{layer}` patterns first, then known GGUF/HF-style names, and
+finally guarded layer/name/shape scans. Shape validation requires `gate` and
+`up` matrices to project from embedding width to feed-forward width, and
+`down` matrices to project from feed-forward width back to embedding width.
+`token_decode_graph_builder.inc` uses those resolvers to create the full
+single-position CPU decode graph: token embedding, per-layer attention norm,
+Q/K/V projections, RoPE, KV write/read attention, attention residual, FFN
+SwiGLU, final norm, output projection, and token sampling/argmax. The returned
+graph includes a `terminal` descriptor that names the final hidden node,
+`final_norm`, the resolved final RMSNorm tensor, and, when token emission is
+enabled, the `logits` node plus the resolved output projection tensor and
+tied-token-embedding status. Set `emit_token => false` and
+`emit_logits => true` to make a single decode graph return the next-token
+logits as its primary `final` output without running `sample_token` or
+`argmax_token`.
+`gguf_architecture_metadata.inc` captures model-shape metadata such as context
+length, layer count, head count, KV head count, embedding length, and
+key/value dimensions. It also classifies the loaded GGUF architecture against
+King's native decoder target set. `gemma3` and `gemma4` are exposed as
+supported decoder profiles; unsupported or missing architecture metadata remains
+inspectable, but is not reported as decoder-ready. `paged_kv_cache.inc` turns
+the shape metadata into a deterministic page plan for the native attention
+cache.
+`native_memory.inc` owns the read-only `mmap()` lifecycle used by native King
+backends so tensor bytes can be addressed directly by later graph execution
+without handing the model to an external runtime.
+
+`King\Inference\Model::info()` and `king_inference_model_info()` expose backend
+metadata, including `backend`, `configured_backend`, `active_backend`,
+`active_device`, `fallback_mode`, `silent_cpu_fallback`,
+`gpu_admission_reason`, `with_memory`, `memory_mode`, `memory`, `readiness`,
+`engine`, `artifact_bytes`, `gguf`, `runner_path`, `runner_protocol`,
+`runner_executable`, `gpu_enabled`, and `backend_capabilities`. `/v1/models`
+exposes the same runtime-surface fields under `x_king`. For `king_native_gpu`,
+model info also exposes
+`gpu_runtime.cuda_context`, `gpu_runtime.device_memory_allocator`,
+`gpu_runtime.required_weight_upload`, `decoder_stream_contract_ready=true`,
+`decoder_kernel_ready`, `plain_text_chat_ready`, and `generation_ready`
+directly, plus `device_vector_ops.numeric_compare_hook` for local diagnostics.
+That hook is explicitly marked `public_api=false`, so clients do not need to
+infer decoder or generation state from model registration or backend name and
+must not treat numeric comparison as a production inference feature.
+The `gguf` entry contains `architecture`, `architecture_supported`,
+`architecture_family`, `architecture_generation`, `decoder_profile`,
+`decoder_shape_ready`, `decoder_ready`, `architecture_support_status`,
+`architecture_missing_fields`, `supported_architectures`, `tokenizer_model`,
+`tokenizer_token_count`, `tensor_data_offset`, `tensor_type_counts`, and parser
+status fields when the source artifact provides them. Native backend info
+additionally exposes `native_model_mapped`, `native_map_bytes`,
+`native_tensor_index_count`, `native_tokenizer_token_count`,
+`native_tokenizer_merge_count`, `tokenization_ready`, and
+`paged_kv_cache_ready`. The model info payload also contains `paged_kv_cache`
+and `resolved_tensors.token_embedding` plus
+`resolved_tensors.output_projection` plus `resolved_tensors.attention` plus
+`resolved_tensors.rms_norm` plus `resolved_tensors.ffn`, so callers can inspect
+the selected embedding, logits projection, per-layer attention tensors, RMSNorm
+weights, and FFN projection tensors before building decoder graphs. The output
+projection entry includes
+`tied_token_embedding=true` when the model uses the token embedding matrix for
+logits projection. The attention entry exposes one layer record per GGUF block
+with `query`, `key`, `value`, and `output` entries, including the resolved
+tensor name, source, status, and expected matrix dimensions. The RMSNorm entry
+exposes one layer record per GGUF block with `attention` and `feed_forward`
+entries plus a `final` entry for the output norm. The FFN entry exposes one
+layer record per GGUF block with `gate`, `up`, and `down` entries, including
+the resolved tensor name, source, status, and expected matrix dimensions.
+`backend_capabilities.gpu` and `backend_capabilities.gpu_backend` describe the
+selected backend kind; configured GPU use remains visible through
+`gpu_enabled`. `backend_capabilities.native_token_selection` refers to King
+graph finishers such as `argmax_token` and `sample_token`, not to local runner
+text generation. GPU-specific capability flags separate registration,
+metadata, CUDA probing, CUDA context ownership, device-memory allocation, VRAM
+admission, host-to-device weight upload, uploaded-weight caching, thermal
+enforcement, bounded logits readback, and decoder generation so clients do not
+infer generation readiness from model presence. `gpu_minimized_logits_readback`
+means the GPU backend has a top-K candidate readback boundary; it does not mean
+that final token sampling has moved to CUDA.
+
+Generation stream options are validated before the local runner process starts.
+`max_tokens` must be a positive integer, numeric generation options must be
+finite numbers, `temperature` must be non-negative, `top_p` must be greater than
+zero and at most one, and `top_k` must be a non-negative integer. `stop` can be
+one non-empty string or one to four non-empty strings; invalid stop sequences are
+rejected before runner arguments are built. The runner also enforces the same
+direct-CLI stop contract and buffers the trailing prefix of each possible stop
+sequence so streamed output never includes the matched stop text.
+
+## Function, Tensor Index and Tensor View
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+]);
+
+$index = king_inference_tensor_index($model, [
+    'prefix' => 'blk.0.',
+    'limit' => 64,
+]);
+
+foreach ($index['tensors'] as $name => $tensor) {
+    printf(
+        "%s %s elements=%d bytes=%d ready=%s\n",
+        $name,
+        $tensor['type_name'],
+        $tensor['elements'],
+        $tensor['byte_length'],
+        $tensor['native_view_ready'] ? 'yes' : 'no',
+    );
+}
+
+$query = king_inference_tensor_view($model, 'blk.0.attn_q.weight');
+if (!$query['bounds_safe']) {
+    throw new RuntimeException('Tensor byte range is outside the mapped model artifact.');
+}
+```
+
+Tensor views are the stable handoff between the GGUF parser and later native
+execution. The view describes where a tensor lives in the memory-mapped model
+file and how its bytes are packed. PHP receives the descriptor, not a raw
+native address. Native kernels can use the same descriptor path internally when
+the quantized block decoders and matrix operations are wired into King.
+
+## Function, Tensor Dequantization and CPU Matmul
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+]);
+
+$sample = king_inference_tensor_dequantize($model, 'blk.0.attn_q.weight', [
+    'offset' => 0,
+    'count' => 32,
+]);
+
+print_r($sample['values']);
+
+$input = array_fill(0, 4096, 0.0);
+$input[0] = 1.0;
+
+$projection = king_inference_tensor_matmul($model, 'blk.0.attn_q.weight', $input, [
+    'row_limit' => 64,
+    'max_operations' => 262144,
+]);
+
+printf(
+    "rows=%d cols=%d output=%d complete=%s\n",
+    $projection['rows'],
+    $projection['cols'],
+    $projection['output_count'],
+    $projection['complete'] ? 'yes' : 'no',
+);
+```
+
+This is one compute step inside the native graph path. The CPU path currently
+supports scalar F32, F16, BF16, I8, I16, I32, I64, F64 and the Q4_0, Q4_1,
+Q5_0, Q8_0, Q4_K, Q5_K, and Q6_K block formats. Rank-2 matmul follows GGUF tensor
+order: dimension 0 is the input width and dimension 1 is the output row count.
+Quantized rows use blockwise dot decoding where supported. The operation
+guards input size, output size, and total multiply-add count so a large model
+tensor cannot accidentally consume the host without an explicit operator
+decision.
+
+## Function, Mini Tensor Graph
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+]);
+
+$result = king_inference_graph_run($model, [
+    'state' => [
+        'kv_cache' => [
+            'default/11/key' => [
+                'cache' => 'default',
+                'slot' => 11,
+                'kind' => 'key',
+                'length' => 8,
+                'values' => [0.12, -0.04, 0.25, 0.31, -0.19, 0.08, 0.44, -0.11],
+            ],
+            'default/11/value' => [
+                'cache' => 'default',
+                'slot' => 11,
+                'kind' => 'value',
+                'length' => 8,
+                'values' => [0.03, 0.14, -0.09, 0.21, 0.18, -0.05, 0.07, 0.12],
+            ],
+        ],
+    ],
+    'ops' => [
+        [
+            'id' => 'x',
+            'op' => 'embedding',
+            'tensor' => 'token_embd.weight',
+            'token_id' => 42,
+        ],
+        [
+            'id' => 'norm',
+            'op' => 'rms_norm',
+            'input' => 'x',
+            'weight' => 'blk.0.attn_norm.weight',
+            'epsilon' => 1e-6,
+        ],
+        [
+            'id' => 'query',
+            'op' => 'linear',
+            'input' => 'norm',
+            'weight' => 'blk.0.attn_q.weight',
+            'row_limit' => 8,
+        ],
+        [
+            'id' => 'key',
+            'op' => 'linear',
+            'input' => 'norm',
+            'weight' => 'blk.0.attn_k.weight',
+            'row_limit' => 8,
+        ],
+        [
+            'id' => 'value',
+            'op' => 'linear',
+            'input' => 'norm',
+            'weight' => 'blk.0.attn_v.weight',
+            'row_limit' => 8,
+        ],
+        [
+            'id' => 'query_rope',
+            'op' => 'rope',
+            'input' => 'query',
+            'position' => 12,
+            'head_dim' => 8,
+            'inv_freqs' => [1.0, 0.1, 0.01, 0.001],
+        ],
+        [
+            'id' => 'key_rope',
+            'op' => 'rope',
+            'input' => 'key',
+            'position' => 12,
+            'head_dim' => 8,
+            'inv_freqs' => [1.0, 0.1, 0.01, 0.001],
+        ],
+        [
+            'id' => 'cache_write',
+            'op' => 'kv_write',
+            'slot' => 12,
+            'key' => 'key_rope',
+            'value' => 'value',
+        ],
+        [
+            'id' => 'attention_context',
+            'op' => 'kv_attention',
+            'query' => 'query_rope',
+            'slot_start' => 11,
+            'slot_count' => 2,
+            'scale' => 0.353553,
+        ],
+        [
+            'id' => 'logits',
+            'op' => 'linear',
+            'input' => 'attention_context',
+            'weight' => 'output.weight',
+            'row_limit' => 32000,
+        ],
+        [
+            'id' => 'next_token',
+            'op' => 'sample_token',
+            'logits' => 'logits',
+            'temperature' => 0.7,
+            'top_k' => 40,
+            'top_p' => 0.95,
+            'seed' => 123456,
+            'sample_index' => 12,
+        ],
+    ],
+    'output' => 'next_token',
+], [
+    'max_vector_values' => 65536,
+    'max_operations' => 524288,
+]);
+
+print_r($result['final']);
+$nextState = $result['state'];
+```
+
+The graph runner is a small native execution surface for layer-sized work. It
+does not decide a model topology by itself; the local runner builds the
+Gemma3 token-step graph on top of these operations. The graph runner executes
+named operations in order, stores each vector by id, and feeds those vectors
+into later steps.
+`embedding` gathers one row from a rank-2 tensor. Its `tensor` field may be
+omitted when the shared token embedding resolver can identify exactly one
+supported embedding matrix from model config, known GGUF names, or guarded
+shape scan. `rms_norm` applies native RMSNorm with an optional weight tensor,
+and `linear` reuses the blockwise CPU matmul path. `rope` applies rotary
+position embedding to an even head slice using caller-supplied inverse
+frequencies or a previously produced frequency vector. `slice` isolates
+head-sized spans for per-head normalization, and
+`silu` plus `mul` cover the gated feed-forward path used by local decoder
+layers. `dot`, `stack`, `softmax`, and `weighted_sum` cover the first useful
+attention path: scores become probabilities and probabilities produce a context
+vector from value vectors. `scale` and `add` cover score scaling and
+residual-style vector composition. `kv_read` and `kv_write` make the KV cache a
+serializable graph state: callers pass `state` into `graphRun()` and pass the
+returned `state` into the next token step. `kv_attention` is the compact path for
+token decoding: it reads a strict slot range from `state.kv_cache`, computes
+scaled QK softmax, and returns the weighted context vector from the cached value
+vectors. `argmax_token` and `sample_token` are the native token-selection
+finishers for logits. `king_inference_token_decode_graph()` emits
+`argmax_token` directly when options contain `sampler => 'argmax'` or
+`temperature => 0`; the returned graph and `terminal` metadata expose
+`token_selection=argmax`, `token_selection_op=argmax_token`, and
+`token_selection_temperature=0` for that path; `token_selection_top_k=1`
+describes the effective single-token selection.
+Argmax selection is deterministic: the highest logit wins, and equal logits
+keep the lowest token index.
+For positive finite temperatures, the graph emits `sample_token`, forwards the
+temperature value unchanged into the sampling op, and exposes the same effective
+temperature through `token_selection_temperature`. The process-runner backend
+passes temperature to `bin/king-local-infer` with double round-trip precision
+instead of rounding it for display.
+`sample_token` supports temperature, top-k, top-p, optional
+seeded deterministic sampling, `sample_index` as a per-step seed salt, and
+`token_offset` for sharded vocab projections. `seed` must be an integer when
+provided; the decode graph builder forwards it unchanged into `sample_token`,
+and the local runner rejects non-integer CLI seed values before graph
+construction. For identical logits, temperature, top-k, top-p, seed, and
+sample-index inputs, the selected rank is reproducible. Direct `sample_token`
+ops without a seed keep the sorted top candidate; the decode graph builder and
+local runner default to seed `0` so generated-token loops stay reproducible.
+Graph numeric options such as
+sampling temperature, top-p, vector scales, softmax scale, KV-attention scale,
+RMS epsilon, and RoPE position scale must be finite numbers. `top_k` must be a
+non-negative integer. `top_k=0` means no top-k cap; positive values cap the
+candidate set after logits are converted to probabilities and sorted by
+probability with token id as the deterministic tie-breaker. The graph and
+`terminal` metadata expose the effective `token_selection_top_k` value. `top_p`
+must be greater than zero and at most one. `top_p=1` keeps the top-k candidate
+set intact; smaller values narrow the sorted candidate list until cumulative
+probability reaches or exceeds the threshold. The decode graph builder forwards
+the finite `top_p` value unchanged into `sample_token`, and the local runner
+rejects invalid CLI values before building a graph. Both
+token-selection ops return `[token_id, probability, logit, rank]`. This is still
+CPU-side vector state, but it matches the page-table contract that later native
+paged attention needs.
+
+Set graph option `return_outputs => false` for decoder loops that only need
+`final` and `state`; the default stays `true` for interactive inspection.
+Use `sampler => 'sample'` to force the sampling finalizer when temperature is
+positive. Non-finite or negative temperature values are rejected while the graph
+is built, and the local runner applies the same validation to CLI input before
+it builds a decode graph. Any other sampler name is rejected while the graph is
+built.
+
+## Function, Paged KV-Cache Plan
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+    'paged_attention' => [
+        'page_tokens' => 16,
+        'element_bytes' => 2,
+    ],
+]);
+
+$plan = king_inference_kv_cache_plan($model, [
+    'max_context_tokens' => 8192,
+]);
+
+if (!$plan['ready']) {
+    throw new RuntimeException('Incomplete model metadata: ' . implode(', ', $plan['missing_fields']));
+}
+
+printf(
+    "pages=%d pageBytes=%d maxSequenceBytes=%d\n",
+    $plan['pages_per_sequence'],
+    $plan['page_bytes_all_layers'],
+    $plan['max_sequence_bytes'],
+);
+```
+
+The plan is exposed before native token generation because it is the memory
+contract the later graph executor needs. Sequence state can reference fixed
+KV pages by block table instead of reallocating one large contiguous cache per
+request. Copy-on-write is intentionally reported as not ready until shared
+prefix handling exists.
+
+## Function, Native Tokenization
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+]);
+
+$encoded = king_inference_tokenize($model, 'Reject invoice if VAT total is missing.');
+
+printf(
+    "tokens=%d unknown=%d normalization=%s\n",
+    $encoded['token_count'],
+    $encoded['unknown_count'],
+    $encoded['normalization'],
+);
+
+print_r($encoded['tokens']);
+```
+
+The tokenizer API uses the token table embedded in the GGUF artifact. For
+SentencePiece-style models King applies the expected space marker
+normalization, then performs greedy longest-prefix matching against the loaded
+token lookup. If the artifact exposes byte fallback tokens, those are used
+before falling back to the model's unknown token id.
+
+## Function, Example 1: Compact Streaming
+
+```php
+<?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$model = king_inference_model_load([
+    'name' => 'invoice-assistant-small',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+
+$stream = king_inference_stream($model, [
+    'prompt' => 'Explain why this invoice was rejected.',
+    'max_tokens' => 256,
+    'temperature' => 0.2,
+]);
+
+while (($event = king_inference_next($stream, 1000)) !== null) {
+    if ($event['type'] === 'token') {
+        echo $event['text'];
+    }
+    if ($event['type'] === 'done') {
+        break;
+    }
+}
+```
+
+## Function, Example 1a: OpenAI-Compatible Chat Streaming
+
+```php
+<?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$model = king_inference_model_load([
+    'name' => 'king-local-invoice',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+
+$stream = king_inference_stream($model, [
+    'model' => 'king-local-invoice',
+    'messages' => [
+        ['role' => 'system', 'content' => 'You explain invoice validation decisions.'],
+        ['role' => 'user', 'content' => 'Why was invoice HU-2026-0007 rejected?'],
+    ],
+    'stream' => true,
+    'max_tokens' => 256,
+    'temperature' => 0.2,
+], [
+    'format' => 'openai_chat_completions',
+]);
+
+while (($chunk = king_inference_next($stream, 1000)) !== null) {
+    // $chunk is shaped like a Chat Completions streaming chunk:
+    // id, object=chat.completion.chunk, created, model, choices[0].delta.
+    print json_encode($chunk, JSON_UNESCAPED_SLASHES) . "\n";
+
+    if (($chunk['choices'][0]['finish_reason'] ?? null) === 'stop') {
+        break;
+    }
+}
+```
+
+The compatibility mode is explicit. Set `openai_compatible => true` or
+`format => openai_chat_completions` in the request/options and King returns
+Chat-Completions-style streaming chunks from `king_inference_next()`. The same
+stream object still supports King-native events when the mode is not enabled.
+`openai_compatible` must be a boolean when provided, and `format` must be one
+of `openai`, `openai_chat`, or `openai_chat_completions`.
+For native decoder streams, generated token text is emitted as
+`chat.completion.chunk` content deltas with the same id, created timestamp, and
+model name. The first read emits the assistant role chunk and the terminal read
+emits `finish_reason=stop`; structured King-native status events are not leaked
+raw into OpenAI-compatible streams.
+For `king_native_cpu`, the request must provide a native `graph` or `graphs`
+sequence whose final output is a token vector produced by `argmax_token` or
+`sample_token`. Direct stream requests use the same native graph shape contract
+as the HTTP router: `graph` is an object array, `graphs` is a list array, and
+`graph_options` is an object array. King decodes those token ids through the
+model tokenizer and emits the same stream surface without creating a second
+inference runtime.
+
+## Function, Example 1b: Native Graph Streaming
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'king-native-invoice',
+    'artifact' => '/models/invoice-assistant-q4.gguf',
+    'backend' => 'king_native_cpu',
+    'with_memory' => false,
+]);
+
+$encoded = king_inference_tokenize($model, 'Explain invoice rejection HU-2026-0007.');
+
+$graphs = [];
+for ($position = 0; $position < $encoded['token_count']; $position++) {
+    $graphs[] = king_inference_token_decode_graph($model, $encoded, $position, [
+        'temperature' => 0.4,
+        'top_k' => 40,
+        'top_p' => 0.95,
+        'seed' => 90210,
+    ]);
+}
+
+$stream = king_inference_stream($model, [
+    'graphs' => $graphs,
+], [
+    'max_native_stream_tokens' => 64,
+    'with_memory' => true,
+    'graph_options' => [
+        'max_vector_values' => 65536,
+        'max_operations' => 524288,
+    ],
+]);
+
+while (($event = king_inference_next($stream, 0)) !== null) {
+    if (($event['type'] ?? '') === 'token') {
+        echo $event['text'];
+    }
+    if (($event['type'] ?? '') === 'done') {
+        break;
+    }
+}
+```
+
+The native stream path is intentionally graph-driven. A request can provide a
+`graphs` sequence for explicit decode steps. When a single `graph` is a
+`king_native_cpu_token_decode` graph, King runs it once, decodes the selected
+token, builds the next token-decode graph from that token id at the next
+position, carries the original token-selection settings, and continues until
+`max_tokens` is reached. Other single graphs keep the bounded repeat behavior
+for custom graph finishers. Streams are stateless by default: King does not
+carry graph result state into the next graph unless
+`with_memory => true` is set in the stream options, request, or `graph_options`.
+When memory is enabled and a graph omits `state`, King carries the previous
+graph result state into the next graph, so KV cache entries written by
+`kv_write` can be read by later steps through `kv_read` or `kv_attention`. This
+is the current native handoff for generated token events; higher-level
+prompt-to-graph compilation is a later layer and does not need a second
+inference runtime.
+
+Native graph stream startup is bounded by `max_native_stream_tokens`, which can
+be set as a stream option or graph option. If it is not set, King allows up to
+4096 native token steps before rejecting the stream request.
+`with_memory` and the alias `with-memory` must be booleans when provided.
+
+## CI and Test Model Strategy
+
+King keeps the default CI path independent from downloaded model artifacts.
+Contract tests can validate exported functions, INI defaults, strict config
+validation, OpenAI-compatible routing, and error contracts without a GGUF file.
+Native model integration tests remain opt-in through
+`KING_INFERENCE_TEST_MODEL_PATH`, because CI should not silently fetch hundreds
+of megabytes or depend on an external model host.
+GPU runtime readiness and model-metadata checks are opt-in through
+`KING_INFERENCE_GPU_TEST_MODEL_PATH` and fall back to
+`KING_INFERENCE_TEST_MODEL_PATH` only when the GPU-specific variable is not
+set. Those checks require a local GGUF artifact, visible CUDA driver state, and
+free-VRAM status; they do not downgrade a GPU profile into a CPU-only check.
+The metadata checks load the configured GPU model, inspect
+`king_inference_model_info()`, and verify that `/v1/models` exposes matching
+`x_king.gpu_runtime` and `x_king.client_capabilities` state.
+
+The split is deliberate:
+
+- Model-free CI tests prove the extension API, INI surface, and validation.
+- Optional GGUF tests prove loader, tokenizer, tensor, graph, and stream
+  behavior against a real artifact.
+- Optional GPU GGUF tests prove local GPU configuration, model registration,
+  metadata exposure, and runtime status against a real artifact and a visible
+  GPU runtime.
+- Release or nightly CI can mount a cached GGUF artifact and set
+  `KING_INFERENCE_TEST_MODEL_PATH` and `KING_INFERENCE_GPU_TEST_MODEL_PATH`.
+
+For a small King command model, start with a compact instruct model and
+fine-tune it on deterministic King-specific command traces instead of training
+from scratch. The initial dataset should be JSONL chat records with:
+
+- system prompt describing the King runtime contract
+- user request in natural language
+- assistant response containing one validated King command or structured plan
+- tool/result records for negative cases and error handling
+- metadata tags for primitive, sync/async, stateless/stateful, and security
+
+Example record:
+
+```json
+{"messages":[{"role":"system","content":"You emit precise King PHP runtime calls. Prefer stateless inference unless memory is explicitly requested."},{"role":"user","content":"Open a native inference stream without memory for three decode graphs."},{"role":"assistant","content":"$stream = king_inference_stream($model, ['graphs' => $graphs], ['with_memory' => false]);"}],"metadata":{"primitive":"inference","mode":"stateless","language":"php"}}
+```
+
+Build the first dataset from King docs, public stubs, PHPT tests, and manually
+reviewed examples. Do not train on failing or obsolete snippets unless the
+assistant answer explicitly fixes them. The first useful target is command
+selection and argument correctness, not general chat quality.
+
+## Function, Example 1c: OpenAI-Compatible HTTP Route
+
+```php
+<?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+$modelPath = getenv('KING_INFERENCE_MODEL_PATH');
+if (!is_string($modelPath) || $modelPath === '') {
+    throw new RuntimeException('KING_INFERENCE_MODEL_PATH must point to a local GGUF model artifact.');
+}
+
+$model = king_inference_model_load([
+    'name' => 'local-small-model',
+    'artifact_path' => $modelPath,
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+
+while (true) {
+    king_http1_server_listen_once(
+        '127.0.0.1',
+        8080,
+        null,
+        static function (array $request) use ($model): array {
+            return king_inference_openai_chat_http_response($model, $request, [
+                'read_timeout_ms' => 250,
+                'max_events' => 4096,
+                'max_idle_events' => 240,
+            ]);
+        }
+    );
+}
+```
+
+The helper accepts the normalized King HTTP request array and owns the
+OpenAI-compatible endpoint contract for `POST /v1/chat/completions`. The request
+body is decoded as a Chat Completions JSON payload, `messages` are validated,
+and the loaded King model is used for both normal and streaming responses. For
+`king_native_cpu` models, the same route accepts normal plain-text `messages`
+as well as an explicit `graph` object or `graphs` array in the JSON payload and
+emits OpenAI-shaped responses from the native CPU decoder. Plain text chat uses
+transient KV state for the prompt and generated tokens but does not enable the
+optional persistent graph-memory/cache policy. `graph_options` must be a JSON
+object when provided. Explicit native graph streams are stateless unless the
+payload or options set `with_memory` or `with-memory` to `true`.
+
+For `stream=false`, the helper drains native decoder content deltas into one
+OpenAI-shaped `chat.completion` JSON response with `choices[0].message.content`.
+Decoder text is treated as assistant content. Tool-call request fields are
+accepted for editor-client compatibility and ignored by plain inference. Until
+a real King MCP execution path is bound to the route, King does not dispatch
+those tools, does not synthesize tool-call responses from decoder text, and does
+not fail the request; the local router logs the tool metadata and continues
+normal inference.
+For `stream=true`, it returns a bounded `text/event-stream` body with
+`data: {chunk}` events and a final `data: [DONE]` marker.
+For `king_native_cpu`, that streaming response is backed by native decoder
+events rather than the external process runner.
+If the selected model uses `king_native_gpu`, `POST /v1/chat/completions`
+accepts plain-text `messages` when the native GPU prompt loop is ready. The
+route renders those messages into `native_prompt_text`, runs bounded GPU token
+generation, drains the native OpenAI deltas into one response for
+`stream=false`, or writes the same deltas as SSE chunks for `stream=true`. GPU
+graph payloads remain on the native stream contract instead of being mixed into
+the OpenAI chat route.
+Clients should treat the `/v1/models` `x_king.gpu_runtime` object as the
+authoritative runtime readiness source for GPU models. A registered
+`king_native_gpu` model can be listed and selected for inspection, but UI and
+autodetect flows must not infer current generation readiness from the model id
+or backend name. For direct UI wiring, `x_king.client_capabilities` mirrors the
+effective runtime contract with plain booleans for
+`openai_chat_completions`, `openai_chat_completions_stream`,
+`openai_responses`, `openai_completions`, `openai_embeddings`,
+`native_graph_streaming`, `requires_gpu`, `gpu_runtime_required`, and
+`gpu_generation_ready`. Tool-call related flags stay false until King has a
+real tool execution path behind the OpenAI-compatible route.
+
+## Function, Example 1d: OpenAI-Compatible Model Router
+
+```php
+<?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+$supportModelPath = getenv('KING_SUPPORT_MODEL_PATH');
+if (!is_string($supportModelPath) || $supportModelPath === '') {
+    throw new RuntimeException('KING_SUPPORT_MODEL_PATH must point to a local GGUF model artifact.');
+}
+$invoiceModelPath = getenv('KING_INVOICE_MODEL_PATH');
+if (!is_string($invoiceModelPath) || $invoiceModelPath === '') {
+    throw new RuntimeException('KING_INVOICE_MODEL_PATH must point to a local GGUF model artifact.');
+}
+
+$models = [
+    'support-small' => king_inference_model_load([
+        'name' => 'support-small',
+        'artifact_path' => $supportModelPath,
+        'backend' => ['name' => 'local', 'runner_path' => $runner],
+        'owned_by' => 'internal-platform',
+    ]),
+    'invoice-checker' => king_inference_model_load([
+        'name' => 'invoice-checker',
+        'artifact_path' => $invoiceModelPath,
+        'backend' => ['name' => 'local', 'runner_path' => $runner],
+        'owned_by' => 'internal-platform',
+    ]),
+];
+
+while (true) {
+    king_http1_server_listen_once('127.0.0.1', 8080, null, static fn (array $request): array =>
+        king_inference_openai_http_response($models, $request, [
+            'read_timeout_ms' => 250,
+            'max_events' => 4096,
+            'max_idle_events' => 240,
+        ])
+    );
+}
+```
+`king_inference_openai_http_response()` is the higher-level router for
+`GET /v1/models`, `GET /v1/models/{model}`, `POST /v1/chat/completions`, and
+`POST /v1/responses`, legacy `POST /v1/completions`, and `POST /v1/embeddings`; generation requests
+resolve the JSON `model` field against the `$models` key first and then against
+the loaded model name. If exactly one model is registered, `model` may be omitted.
+
+The Responses route accepts string or message-list `input`, top-level
+`instructions`, and maps into the same King model stream. Non-streaming calls
+return a `response` object with `output` and `output_text`; `stream=true`
+returns semantic SSE events such as `response.created`,
+`response.output_text.delta`, and `response.completed`.
+The legacy completions route accepts string prompts; embeddings use the native tokenizer plus the configured token embedding tensor.
+
+## Function, Example 1e: Configured Model Path
+
+```php
+<?php
+$modelPath = getenv('KING_INFERENCE_MODEL_PATH');
+if (!is_string($modelPath) || $modelPath === '') {
+    throw new RuntimeException('KING_INFERENCE_MODEL_PATH must point to a local GGUF model artifact.');
+}
+
+$model = king_inference_model_load([
+    'name' => 'local-small-model',
+    'artifact' => [
+        'path' => $modelPath,
+    ],
+    'backend' => 'local',
+]);
+
+print_r(king_inference_model_info($model));
+```
+
+## Function, Example 2: GPU With Thermal Guard
+
+```php
+<?php
+$model = king_inference_model_load([
+    'name' => 'local-support-model',
+    'artifact' => [
+        'path' => '/models/support-q5.gguf',
+    ],
+    'quantization' => 'q5',
+    'context_tokens' => 8192,
+    'backend' => [
+        'type' => 'local',
+        'runner' => [
+            'path' => '/opt/king/bin/king-local-infer',
+        ],
+    ],
+    'gpu' => [
+        'enabled' => true,
+        'max_gpu_layers' => 24,
+        'vram_reserve_mb' => 2048,
+        'min_free_vram_mb' => 4096,
+        'thermal' => [
+            'sensor_path' => '/sys/class/hwmon/hwmon2/temp1_input',
+            'max_temperature_c' => 78.0,
+            'check_interval_seconds' => 15,
+        ],
+    ],
+]);
+
+$stream = king_inference_stream($model, [
+    'messages' => [
+        ['role' => 'system', 'content' => 'Answer precisely and do not invent facts.'],
+        ['role' => 'user', 'content' => 'Summarize this NAV error.'],
+    ],
+    'max_tokens' => 512,
+    'temperature' => 0.1,
+    'seed' => 42,
+    'top_k' => 40,
+    'top_p' => 0.92,
+]);
+
+while (($event = king_inference_next($stream, 250)) !== null) {
+    if ($event['type'] === 'stderr') {
+        error_log($event['text']);
+        continue;
+    }
+    if ($event['type'] === 'token') {
+        echo $event['text'];
+    }
+    if ($event['type'] === 'done' || $event['type'] === 'cancelled') {
+        break;
+    }
+}
+```
+
+## Function, Example 3: Parallel Stream Reads with king_awaitable_any
+
+```php
+<?php
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$supportModel = king_inference_model_load([
+    'name' => 'support-routing',
+    'artifact' => '/models/support-routing-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+$invoiceModel = king_inference_model_load([
+    'name' => 'invoice-format-check',
+    'artifact' => '/models/invoice-format-check-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+
+$streams = [
+    'support' => king_inference_stream($supportModel, [
+        'messages' => [
+            ['role' => 'system', 'content' => 'Classify support requests by department.'],
+            ['role' => 'user', 'content' => 'Customer cannot download an invoice PDF.'],
+        ],
+        'max_tokens' => 128,
+        'temperature' => 0.1,
+    ]),
+    'invoice' => king_inference_stream($invoiceModel, [
+        'messages' => [
+            ['role' => 'system', 'content' => 'Return concise validation observations.'],
+            ['role' => 'user', 'content' => 'Check whether this invoice has all required buyer tax fields.'],
+        ],
+        'max_tokens' => 256,
+        'temperature' => 0.0,
+    ]),
+];
+
+$reads = [];
+foreach ($streams as $name => $stream) {
+    $reads[$name] = king_inference_next_async($stream, 0);
+}
+
+while ($reads !== []) {
+    $readyAwaitable = king_awaitable_any($reads);
+
+    if (!king_awaitable_poll($readyAwaitable, 25)) {
+        usleep(5_000);
+        continue;
+    }
+
+    $ready = king_await($readyAwaitable);
+    $name = $ready['key'];
+    $event = $ready['value'];
+
+    if ($ready['status'] !== 'resolved') {
+        error_log($name . ' failed: ' . ($ready['error'] ?? $ready['status']));
+        unset($reads[$name]);
+        continue;
+    }
+
+    if ($event === null || ($event['type'] ?? '') === 'done' || ($event['type'] ?? '') === 'cancelled') {
+        unset($reads[$name]);
+        continue;
+    }
+
+    if (($event['type'] ?? '') === 'token') {
+        echo '[' . $name . '] ' . $event['text'];
+    }
+
+    $reads[$name] = king_inference_next_async($streams[$name], 0);
+}
+```
+
+## OO, Example 1: Static Facade
+
+```php
+<?php
+use King\Inference;
+
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$model = Inference::loadModel([
+    'name' => 'assistant',
+    'artifact_path' => '/models/assistant-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+$info = Inference::modelInfo($model);
+
+$stream = Inference::stream($model, [
+    'prompt' => 'Write a short customer support answer.',
+    'max_tokens' => 128,
+]);
+
+while (($event = Inference::next($stream, 500)) !== null) {
+    if ($event['type'] === 'token') {
+        echo $event['text'];
+    }
+}
+```
+
+The static facade mirrors the procedural surface: `Inference::nextAsync($stream)`
+returns a `King\Awaitable`, and `Inference::cancel($stream)` closes the stream.
+For native decoder streams, cancellation also drops any pending start event and
+advances the native event cursor to the end of the prepared token buffer, so no
+buffered decoder tokens are emitted after cancellation.
+
+## OO, Example 2: Explicit Model And Cancellation
+
+```php
+<?php
+use King\Inference\Model;
+use King\Inference\Stream;
+
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$model = new Model([
+    'name' => 'procurement-assistant',
+    'artifact' => '/models/procurement-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'type' => 'local',
+        'runner' => [
+            'path' => $runner,
+        ],
+    ],
+]);
+
+$stream = new Stream($model, [
+    'messages' => [
+        ['role' => 'user', 'content' => 'Compare these supplier offers.'],
+    ],
+    'max_tokens' => 512,
+]);
+
+while (!$stream->isDone()) {
+    $event = $stream->next(1000);
+    if ($event === null) {
+        continue;
+    }
+    if (($event['type'] ?? '') === 'token') {
+        echo $event['text'];
+    }
+}
+
+$metrics = $stream->getMetrics();
+```
+
+`Stream::getMetrics()` reports emitted token chunks, stderr chunks, bytes,
+terminal state, cancellation state, exit code, OpenAI-compatible mode, and for
+native graph streams also `native_stream`, `native_event_count`,
+`native_event_index`, `native_decoder_tokens`,
+`native_decoder_last_token_id`, `native_decoder_last_probability`,
+`native_decoder_last_logit`, and `native_decoder_last_rank`. After native
+stream cancellation, `native_event_index` points at the end of the prepared
+native event buffer. `native_decoder_tokens` counts native token selections
+prepared by the decoder; `chunks` remains the count of emitted stream reads.
+GPU-enabled streams also report the last run preflight through
+`gpu_thermal_preflight_checked`, `gpu_thermal_preflight_at`, and the optional
+`gpu_thermal_preflight_temperature_c`. If a running GPU stream is
+aborted at the configured thermal ceiling, metrics include
+`gpu_thermal_aborted`, `gpu_thermal_abort_at`,
+`gpu_thermal_abort_temperature_c`, and `gpu_thermal_abort_ceiling_c`.
+
+## OO, Example 3: Parallel Inference Streams
+
+```php
+<?php
+use King\Awaitable;
+use King\Inference\Model;
+use King\Inference\Stream;
+
+$runner = getenv('KING_INFERENCE_RUNNER');
+if (!is_string($runner) || $runner === '') {
+    throw new RuntimeException('KING_INFERENCE_RUNNER must point to the local King inference runner.');
+}
+
+$model = new Model([
+    'name' => 'operations-assistant',
+    'artifact_path' => '/models/operations-assistant-q4.gguf',
+    'quantization' => 'q4',
+    'backend' => [
+        'name' => 'local',
+        'runner_path' => $runner,
+    ],
+]);
+
+$streams = [
+    'purchase-order' => new Stream($model, [
+        'prompt' => 'Summarize open procurement risks for PO-1009.',
+        'max_tokens' => 192,
+    ]),
+    'invoice' => new Stream($model, [
+        'prompt' => 'Explain the invoice rounding difference for INV-1009.',
+        'max_tokens' => 192,
+    ]),
+];
+
+$reads = [];
+foreach ($streams as $name => $stream) {
+    $reads[$name] = $stream->nextAsync(0);
+}
+
+while ($reads !== []) {
+    $first = Awaitable::any($reads);
+
+    if (!$first->poll(25)) {
+        usleep(5_000);
+        continue;
+    }
+
+    $ready = $first->await();
+    $name = $ready['key'];
+    $event = $ready['value'];
+
+    if ($ready['status'] !== 'resolved' || $event === null) {
+        unset($reads[$name]);
+        continue;
+    }
+
+    if (($event['type'] ?? '') === 'token') {
+        echo '[' . $name . '] ' . $event['text'];
+        $reads[$name] = $streams[$name]->nextAsync(0);
+        continue;
+    }
+
+    if (($event['type'] ?? '') === 'stderr') {
+        error_log('inference stderr: ' . $event['text']);
+        $reads[$name] = $streams[$name]->nextAsync(0);
+        continue;
+    }
+
+    unset($reads[$name]);
+}
+```

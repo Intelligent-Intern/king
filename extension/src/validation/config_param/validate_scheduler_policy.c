@@ -3,7 +3,7 @@
  * and the bounded scheduler names accepted by the cluster/process config.
  */
 
-#include "include/validation/config_param/validate_scheduler_policy.h"
+#include "validation/config_param/validate_scheduler_policy.h"
 #include <zend_exceptions.h>
 #include <ext/spl/spl_exceptions.h> /* For spl_ce_InvalidArgumentException */
 

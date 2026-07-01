@@ -2,10 +2,23 @@
 #define KING_CLIENT_INDEX_H
 
 #include <php.h>
+#include "cancel.h"
+#include "class_entries.h"
+#include "early_hints.h"
+#include "http1.h"
+#include "http2.h"
+#include "http3.h"
+#include "legacy.h"
+#include "objects.h"
+#include "registration.h"
+#include "resource_ids.h"
+#include "session.h"
+#include "tls.h"
+#include "websocket.h"
 
 /**
  * @file extension/include/client/index.h
- * @brief Protocol-agnostic client request entry point.
+ * @brief Public umbrella header and protocol-agnostic client request entry point.
  *
  * `king_client_send_request()` is the general client-facing dispatcher. In the
  * current runtime it defaults to the live HTTP/1 path and can force the active
@@ -32,5 +45,6 @@
  * protocol-specific `King\Exception` subclass.
  */
 PHP_FUNCTION(king_client_send_request);
+PHP_FUNCTION(king_client_send_request_async);
 
 #endif // KING_CLIENT_INDEX_H

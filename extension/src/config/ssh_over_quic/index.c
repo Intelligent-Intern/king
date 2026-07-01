@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/ssh_over_quic/index.h"
-#include "include/config/ssh_over_quic/default.h"
-#include "include/config/ssh_over_quic/ini.h"
+#include "config/ssh_over_quic/index.h"
+#include "config/ssh_over_quic/default.h"
+#include "config/ssh_over_quic/ini.h"
 
 void kg_config_ssh_over_quic_init(void)
 {

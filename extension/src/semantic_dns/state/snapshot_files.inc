@@ -3,6 +3,7 @@ int king_semantic_dns_state_write_snapshot_file(const char *path, zval *payload)
     FILE *fp = NULL;
     int fd = -1;
     char tmp_template[PATH_MAX];
+    char state_dir[PATH_MAX];
     zend_string *serialized_payload = NULL;
 
     if (path == NULL || path[0] == '\0' || payload == NULL) {
@@ -17,7 +18,11 @@ int king_semantic_dns_state_write_snapshot_file(const char *path, zval *payload)
         return FAILURE;
     }
 
-    if (snprintf(tmp_template, sizeof(tmp_template), "%s/.listener.XXXXXX", KING_SEMANTIC_DNS_STATE_DIR) >= (int) sizeof(tmp_template)) {
+    if (king_semantic_dns_state_build_directory_path(state_dir, sizeof(state_dir)) != SUCCESS) {
+        return FAILURE;
+    }
+
+    if (snprintf(tmp_template, sizeof(tmp_template), "%s/.listener.XXXXXX", state_dir) >= (int) sizeof(tmp_template)) {
         return FAILURE;
     }
 

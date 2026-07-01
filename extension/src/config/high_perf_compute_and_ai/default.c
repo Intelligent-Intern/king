@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/high_perf_compute_and_ai/default.h"
-#include "include/config/high_perf_compute_and_ai/base_layer.h"
+#include "config/high_perf_compute_and_ai/default.h"
+#include "config/high_perf_compute_and_ai/base_layer.h"
 
 void kg_config_high_perf_compute_and_ai_defaults_load(void)
 {
@@ -20,6 +20,40 @@ void kg_config_high_perf_compute_and_ai_defaults_load(void)
     king_high_perf_compute_ai_config.dataframe_memory_limit_mb = 1024;
     king_high_perf_compute_ai_config.dataframe_string_interning_enable = true;
     king_high_perf_compute_ai_config.dataframe_cpu_parallelism_default = 0;
+    king_high_perf_compute_ai_config.inference_with_memory = false;
+    king_high_perf_compute_ai_config.inference_context_tokens = 2048;
+    king_high_perf_compute_ai_config.inference_kv_page_tokens = 16;
+    king_high_perf_compute_ai_config.inference_kv_element_bytes = 2;
+    king_high_perf_compute_ai_config.inference_preferred_model_profile = pestrdup("auto", 1);
+    king_high_perf_compute_ai_config.inference_models = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_cpu_model_name = pestrdup("gemma3:1b", 1);
+    king_high_perf_compute_ai_config.inference_cpu_model_artifact = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_model_name = pestrdup("gemma4:12b", 1);
+    king_high_perf_compute_ai_config.inference_gpu_model_artifact = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_max_gpu_layers = 0;
+    king_high_perf_compute_ai_config.inference_gpu_vram_reserve_mb = 2048;
+    king_high_perf_compute_ai_config.inference_gpu_min_free_vram_mb = 4096;
+    king_high_perf_compute_ai_config.inference_gpu_allow_system_ram_offload = false;
+    king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_max_mb = 0;
+    king_high_perf_compute_ai_config.inference_gpu_system_ram_offload_min_free_mb = 8192;
+    king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_thermal_max_temperature_c = 78.0;
+    king_high_perf_compute_ai_config.inference_gpu_thermal_check_interval_sec = 15;
+    king_high_perf_compute_ai_config.inference_gpu_allow_unmonitored = false;
+    king_high_perf_compute_ai_config.inference_gpu_power_sensor_command = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_gpu_power_max_watts = 0.0;
+    king_high_perf_compute_ai_config.inference_gpu_power_check_interval_sec = 15;
+    king_high_perf_compute_ai_config.inference_gpu_batch_prefill_experimental_enable = false;
+    king_high_perf_compute_ai_config.inference_cuda_numeric_compare_enable = false;
+    king_high_perf_compute_ai_config.inference_cuda_numeric_compare_max_values = 8;
+    king_high_perf_compute_ai_config.inference_llm_cache_enable = false;
+    king_high_perf_compute_ai_config.inference_llm_cache_path = pestrdup("/tmp/king-llm-cache", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_min_free_mb = 5120;
+    king_high_perf_compute_ai_config.inference_llm_cache_fail_closed = true;
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_webhook = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_service = pestrdup("", 1);
+    king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_method = pestrdup("", 1);
 
     king_high_perf_compute_ai_config.gpu_bindings_enable = false;
     king_high_perf_compute_ai_config.gpu_default_backend = NULL;

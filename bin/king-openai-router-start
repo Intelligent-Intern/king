@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INI="${KING_INFERENCE_PHP_INI:-$ROOT/infra/inference/local-gpu.php.ini}"
+CONFIRM="${KING_OPENAI_CONFIRM_START:-0}"
+
+usage() {
+  cat <<'EOF'
+Usage: bin/king-openai-router-start --confirm
+
+Prints the selected local inference profile and current GPU state, then starts
+the King OpenAI-compatible router on the configured host/port.
+EOF
+}
+
+for arg in "$@"; do
+  case "$arg" in
+    --confirm)
+      CONFIRM=1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "king-openai-router-start: unknown argument: $arg" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+ini_value() {
+  local key="$1"
+  local fallback="${2:-}"
+  local value=""
+
+  if [[ -f "$INI" ]]; then
+    value="$(
+      awk -F= -v key="$key" '
+        {
+          lhs = $1
+          gsub(/^[ \t]+|[ \t]+$/, "", lhs)
+          if (lhs == key) {
+            rhs = substr($0, index($0, "=") + 1)
+            gsub(/^[ \t]+|[ \t\r]+$/, "", rhs)
+            gsub(/^"|"$/, "", rhs)
+            print rhs
+            exit
+          }
+        }
+      ' "$INI"
+    )"
+  fi
+
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+
+resolve_king_root() {
+  local value="$1"
+  value="${value//\$\{KING_ROOT\}/$ROOT}"
+  value="${value//\$KING_ROOT/$ROOT}"
+  printf '%s\n' "$value"
+}
+
+gpu_snapshot() {
+  if ! command -v nvidia-smi >/dev/null 2>&1; then
+    printf 'unavailable,nvidia-smi-missing\n'
+    return
+  fi
+
+  nvidia-smi \
+    --query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw \
+    --format=csv,noheader,nounits 2>/dev/null \
+    | head -n 1 \
+    | awk -F, '{for (i=1;i<=NF;i++) {gsub(/^[ \t]+|[ \t]+$/, "", $i)}; print $1 "," $2 "," $3 "," $4 "," $5}'
+}
+
+HOST="${KING_OPENAI_HOST:-127.0.0.1}"
+PORT="${KING_OPENAI_PORT:-8080}"
+PROFILE="$(ini_value king.inference_preferred_model_profile auto)"
+MODEL_REGISTRY="$(ini_value king.inference_models "")"
+GPU_ENABLED="$(ini_value king.gpu_bindings_enable 0)"
+GPU_BACKEND="$(ini_value king.gpu_default_backend disabled)"
+GPU_LAYERS="$(ini_value king.inference_gpu_max_gpu_layers 0)"
+CPU_MODEL="$(ini_value king.inference_cpu_model_name gemma3:1b)"
+GPU_MODEL="$(ini_value king.inference_gpu_model_name gemma4:12b)"
+CPU_ARTIFACT="$(resolve_king_root "$(ini_value king.inference_cpu_model_artifact "$ROOT/var/inference-models/gemma3-1b.gguf")")"
+GPU_ARTIFACT="$(resolve_king_root "$(ini_value king.inference_gpu_model_artifact "$ROOT/var/inference-models/gemma4-12b.gguf")")"
+THERMAL_CEILING="$(ini_value king.inference_gpu_thermal_max_temperature_c 78)"
+THERMAL_INTERVAL="$(ini_value king.inference_gpu_thermal_check_interval_sec 15)"
+VRAM_RESERVE="$(ini_value king.inference_gpu_vram_reserve_mb 2048)"
+MIN_FREE_VRAM="$(ini_value king.inference_gpu_min_free_vram_mb 4096)"
+SYSTEM_RAM_OFFLOAD="$(ini_value king.inference_gpu_allow_system_ram_offload 0)"
+SYSTEM_RAM_OFFLOAD_MAX="$(ini_value king.inference_gpu_system_ram_offload_max_mb 0)"
+SYSTEM_RAM_OFFLOAD_MIN_FREE="$(ini_value king.inference_gpu_system_ram_offload_min_free_mb 8192)"
+CONTEXT_TOKENS="$(ini_value king.inference_context_tokens 2048)"
+KV_PAGE_TOKENS="$(ini_value king.inference_kv_page_tokens 16)"
+KV_ELEMENT_BYTES="$(ini_value king.inference_kv_element_bytes 2)"
+WITH_MEMORY="$(ini_value king.inference_with_memory 0)"
+LLM_CACHE_ENABLE="$(ini_value king.inference_llm_cache_enable 0)"
+LLM_CACHE_MIN_FREE="$(ini_value king.inference_llm_cache_min_free_mb 5120)"
+CONTEXT_POLICY="${KING_OPENAI_CONTEXT_POLICY:-full}"
+DEFAULT_MAX_TOKENS="${KING_OPENAI_DEFAULT_MAX_TOKENS:-128}"
+MAX_COMPLETION_TOKENS="${KING_OPENAI_MAX_COMPLETION_TOKENS:-512}"
+
+IFS=, read -r GPU_TEMP GPU_UTIL GPU_MEM_USED GPU_MEM_TOTAL GPU_POWER <<<"$(gpu_snapshot)"
+
+cat <<EOF
+King OpenAI router start
+root=$ROOT
+ini=$INI
+bind=$HOST:$PORT
+profile=$PROFILE
+model.registry=$MODEL_REGISTRY
+gpu.enabled=$GPU_ENABLED
+gpu.backend=$GPU_BACKEND
+gpu.layers=$GPU_LAYERS
+gpu.temperature_c=$GPU_TEMP
+gpu.utilization_percent=$GPU_UTIL
+gpu.vram_used_mb=$GPU_MEM_USED
+gpu.vram_total_mb=$GPU_MEM_TOTAL
+gpu.power_w=$GPU_POWER
+gpu.thermal_ceiling_c=$THERMAL_CEILING
+gpu.thermal_check_interval_sec=$THERMAL_INTERVAL
+gpu.vram_reserve_mb=$VRAM_RESERVE
+gpu.min_free_vram_mb=$MIN_FREE_VRAM
+gpu.system_ram_offload=$SYSTEM_RAM_OFFLOAD
+gpu.system_ram_offload_max_mb=$SYSTEM_RAM_OFFLOAD_MAX
+gpu.system_ram_offload_min_free_mb=$SYSTEM_RAM_OFFLOAD_MIN_FREE
+cpu.model=$CPU_MODEL
+cpu.artifact=$CPU_ARTIFACT
+gpu.model=$GPU_MODEL
+gpu.artifact=$GPU_ARTIFACT
+context.policy=$CONTEXT_POLICY
+context.tokens=$CONTEXT_TOKENS
+kv.page_tokens=$KV_PAGE_TOKENS
+kv.element_bytes=$KV_ELEMENT_BYTES
+memory.with_memory=$WITH_MEMORY
+memory.llm_cache_enable=$LLM_CACHE_ENABLE
+memory.llm_cache_min_free_mb=$LLM_CACHE_MIN_FREE
+prefill.batch.status=runtime_reported_via_/v1/models:x_king.openai_route
+openai.stream_transport=http1_chunked_body_stream
+openai.stream_flush=one_sse_event_per_body_stream_callback
+openai.immediate_token_streaming=runtime_reported_via_/v1/models:x_king.openai_route
+openai.hot_path=runtime_reported_via_/v1/models:x_king.openai_route
+max_tokens.default=$DEFAULT_MAX_TOKENS
+max_tokens.cap=$MAX_COMPLETION_TOKENS
+EOF
+
+if [[ "$CONFIRM" != "1" ]]; then
+  echo "king-openai-router-start: refusing to bind $HOST:$PORT without --confirm or KING_OPENAI_CONFIRM_START=1" >&2
+  exit 2
+fi
+
+exec "$ROOT/bin/king-openai-router"

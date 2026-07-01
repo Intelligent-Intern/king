@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/security_and_traffic/index.h"
-#include "include/config/security_and_traffic/default.h"
-#include "include/config/security_and_traffic/ini.h"
+#include "config/security_and_traffic/index.h"
+#include "config/security_and_traffic/default.h"
+#include "config/security_and_traffic/ini.h"
 
 void kg_config_security_and_traffic_init(void)
 {

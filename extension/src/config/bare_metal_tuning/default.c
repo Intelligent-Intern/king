@@ -11,8 +11,8 @@
  * =========================================================================
  */
 
-#include "include/config/bare_metal_tuning/default.h"
-#include "include/config/bare_metal_tuning/base_layer.h"
+#include "config/bare_metal_tuning/default.h"
+#include "config/bare_metal_tuning/base_layer.h"
 
 void kg_config_bare_metal_tuning_defaults_load(void)
 {

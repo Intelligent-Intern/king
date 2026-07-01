@@ -57,7 +57,13 @@
 static int srtp_initialized = 0;
 #endif
 
-#include "rtp.h"
+#include "media/rtp.h"
+
+static king_rtp_peer_t *king_rtp_peer_by_addr_str(
+    king_rtp_socket_t *sock,
+    const char *ip,
+    int port
+);
 
 /* ── Resource registration ──────────────────────────────────────────────── */
 
@@ -287,6 +293,156 @@ void king_rtp_socket_free(king_rtp_socket_t *sock)
     if (sock->ssl_ctx) SSL_CTX_free(sock->ssl_ctx);
     close(sock->fd);
     efree(sock);
+}
+
+int king_rtp_socket_recv_packet(
+    king_rtp_socket_t *sock,
+    int timeout_ms,
+    king_rtp_receive_result_t *out
+)
+{
+    uint8_t buf[KING_RTP_MTU + 16]; /* +16 for SRTP auth tag */
+    struct sockaddr_storage from;
+    socklen_t flen = sizeof(from);
+    struct timeval deadline;
+
+    if (sock == NULL || out == NULL) {
+        return 0;
+    }
+
+    memset(out, 0, sizeof(*out));
+    gettimeofday(&deadline, NULL);
+    deadline.tv_usec += (timeout_ms % 1000) * 1000;
+    deadline.tv_sec  += timeout_ms / 1000 + deadline.tv_usec / 1000000;
+    deadline.tv_usec %= 1000000;
+
+    for (;;) {
+        struct timeval now;
+        long rem;
+        fd_set fds;
+        struct timeval tv;
+        ssize_t n;
+        king_rtp_packet_t pkt;
+        king_rtp_peer_t *peer2;
+
+        gettimeofday(&now, NULL);
+        rem = (deadline.tv_sec - now.tv_sec) * 1000000
+            + (deadline.tv_usec - now.tv_usec);
+        if (rem <= 0) {
+            return 0;
+        }
+
+        FD_ZERO(&fds);
+        FD_SET(sock->fd, &fds);
+        tv.tv_sec = rem / 1000000;
+        tv.tv_usec = rem % 1000000;
+        if (select(sock->fd + 1, &fds, NULL, NULL, &tv) <= 0) {
+            return 0;
+        }
+
+        flen = sizeof(from);
+        n = recvfrom(sock->fd, buf, sizeof(buf), 0, (struct sockaddr *)&from, &flen);
+        if (n < 0) {
+            return 0;
+        }
+
+        if (king_rtp_handle_stun(sock, buf, (size_t)n, (struct sockaddr *)&from, flen)) {
+            continue;
+        }
+
+#ifdef KING_HAVE_SRTP
+        king_rtp_peer_t *peer = king_rtp_peer_get(sock, (struct sockaddr *)&from, flen);
+        if (peer->srtp_ready) {
+            int pkt_len = (int)n;
+            srtp_err_status_t st = srtp_unprotect(peer->srtp_recv, buf, &pkt_len);
+            if (st != srtp_err_status_ok) {
+                continue;
+            }
+            n = (ssize_t)pkt_len;
+        }
+#endif
+
+        if (king_rtp_parse(buf, (size_t)n, &pkt) != 0) {
+            continue;
+        }
+
+        peer2 = king_rtp_peer_get(sock, (struct sockaddr *)&from, flen);
+        peer2->ssrc = pkt.ssrc;
+
+        out->ssrc = pkt.ssrc;
+        out->payload_type = pkt.payload_type;
+        out->seq = pkt.seq;
+        out->timestamp = pkt.timestamp;
+        out->marker = pkt.marker;
+        out->data_len = pkt.payload_len;
+        memcpy(out->data, pkt.payload, pkt.payload_len);
+
+        if (from.ss_family == AF_INET) {
+            struct sockaddr_in *s4 = (struct sockaddr_in *)&from;
+            inet_ntop(AF_INET, &s4->sin_addr, out->from_ip, sizeof(out->from_ip));
+            out->from_port = ntohs(s4->sin_port);
+        } else {
+            struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)&from;
+            inet_ntop(AF_INET6, &s6->sin6_addr, out->from_ip, sizeof(out->from_ip));
+            out->from_port = ntohs(s6->sin6_port);
+        }
+
+        out->ice_consented = peer2->ice_consented;
+        out->srtp = peer2->dtls_done;
+        return 1;
+    }
+}
+
+int king_rtp_socket_send_packet(
+    king_rtp_socket_t *sock,
+    const char *host,
+    int port,
+    const char *data,
+    size_t data_len
+)
+{
+    king_rtp_peer_t *peer;
+    uint8_t buf[KING_RTP_MTU + 256];
+    size_t out_len;
+    struct addrinfo hints = {0}, *res = NULL;
+    char ps[8];
+    ssize_t sent;
+
+    if (sock == NULL || host == NULL || data == NULL) {
+        return 0;
+    }
+
+    peer = king_rtp_peer_by_addr_str(sock, host, port);
+
+    if (data_len > KING_RTP_MTU) {
+        data_len = KING_RTP_MTU;
+    }
+    memcpy(buf, data, data_len);
+    out_len = data_len;
+
+#ifdef KING_HAVE_SRTP
+    if (peer && peer->srtp_ready) {
+        int l = (int)out_len;
+        srtp_err_status_t st = srtp_protect(peer->srtp_send, buf, &l);
+        if (st != srtp_err_status_ok) {
+            return 0;
+        }
+        out_len = (size_t)l;
+    }
+#else
+    (void) peer;
+#endif
+
+    snprintf(ps, sizeof(ps), "%d", port);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(host, ps, &hints, &res) != 0 || !res) {
+        return 0;
+    }
+
+    sent = sendto(sock->fd, buf, out_len, 0, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+    return sent == (ssize_t)out_len ? 1 : 0;
 }
 
 /* ── Peer management ────────────────────────────────────────────────────── */
@@ -592,211 +748,4 @@ int king_rtp_dtls_do_accept(king_rtp_socket_t *sock,
     return 0;
 }
 
-/* ── PHP functions ──────────────────────────────────────────────────────── */
-
-PHP_FUNCTION(king_rtp_bind)
-{
-    char *host; size_t hlen; zend_long port;
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_STRING(host, hlen)
-        Z_PARAM_LONG(port)
-    ZEND_PARSE_PARAMETERS_END();
-
-    char errbuf[256] = {0};
-    king_rtp_socket_t *sock = king_rtp_socket_create(host, (int)port,
-                                                      errbuf, sizeof(errbuf));
-    if (!sock) {
-        php_error_docref(NULL, E_WARNING, "king_rtp_bind: %s", errbuf);
-        RETURN_FALSE;
-    }
-    RETURN_RES(zend_register_resource(sock, le_king_rtp_socket));
-}
-
-PHP_FUNCTION(king_rtp_ice_credentials)
-{
-    zval *z; ZEND_PARSE_PARAMETERS_START(1,1) Z_PARAM_RESOURCE(z) ZEND_PARSE_PARAMETERS_END();
-    king_rtp_socket_t *s = (king_rtp_socket_t *)zend_fetch_resource(Z_RES_P(z),
-                               "King\\RtpSocket", le_king_rtp_socket);
-    if (!s) RETURN_FALSE;
-    array_init(return_value);
-    add_assoc_string(return_value, "ufrag", s->ufrag);
-    add_assoc_string(return_value, "pwd",   s->pwd);
-}
-
-/*
- * king_rtp_dtls_fingerprint(resource $socket): string
- * Returns "SHA-256 XX:XX:…" for the SDP a=fingerprint attribute.
- */
-PHP_FUNCTION(king_rtp_dtls_fingerprint)
-{
-    zval *z; ZEND_PARSE_PARAMETERS_START(1,1) Z_PARAM_RESOURCE(z) ZEND_PARSE_PARAMETERS_END();
-    king_rtp_socket_t *s = (king_rtp_socket_t *)zend_fetch_resource(Z_RES_P(z),
-                               "King\\RtpSocket", le_king_rtp_socket);
-    if (!s) RETURN_FALSE;
-    RETURN_STRING(s->fingerprint);
-}
-
-/*
- * king_rtp_dtls_accept(resource $socket, string $peer_ip, int $peer_port,
- *                      int $timeout_ms = 5000): bool
- *
- * Performs the DTLS handshake with the named peer, extracts SRTP keying
- * material and initialises libsrtp2 send/recv contexts.
- * After this call king_rtp_recv() / king_rtp_send() transparently en/decrypt.
- */
-PHP_FUNCTION(king_rtp_dtls_accept)
-{
-    zval *z; char *ip; size_t iplen; zend_long port; zend_long tms = 5000;
-    ZEND_PARSE_PARAMETERS_START(3, 4)
-        Z_PARAM_RESOURCE(z)
-        Z_PARAM_STRING(ip, iplen)
-        Z_PARAM_LONG(port)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_LONG(tms)
-    ZEND_PARSE_PARAMETERS_END();
-
-    king_rtp_socket_t *s = (king_rtp_socket_t *)zend_fetch_resource(Z_RES_P(z),
-                               "King\\RtpSocket", le_king_rtp_socket);
-    if (!s) RETURN_FALSE;
-
-    char errbuf[256] = {0};
-    int rc = king_rtp_dtls_do_accept(s, ip, (int)port, (int)tms,
-                                      errbuf, sizeof(errbuf));
-    if (rc != 0) {
-        php_error_docref(NULL, E_WARNING, "king_rtp_dtls_accept: %s", errbuf);
-        RETURN_FALSE;
-    }
-    RETURN_TRUE;
-}
-
-PHP_FUNCTION(king_rtp_recv)
-{
-    zval *z; zend_long tms = 0;
-    ZEND_PARSE_PARAMETERS_START(1, 2)
-        Z_PARAM_RESOURCE(z)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_LONG(tms)
-    ZEND_PARSE_PARAMETERS_END();
-
-    king_rtp_socket_t *sock = (king_rtp_socket_t *)zend_fetch_resource(Z_RES_P(z),
-                                  "King\\RtpSocket", le_king_rtp_socket);
-    if (!sock) RETURN_FALSE;
-
-    uint8_t buf[KING_RTP_MTU + 16]; /* +16 for SRTP auth tag */
-    struct sockaddr_storage from; socklen_t flen = sizeof(from);
-
-    struct timeval deadline; gettimeofday(&deadline, NULL);
-    deadline.tv_usec += (tms % 1000) * 1000;
-    deadline.tv_sec  += tms / 1000 + deadline.tv_usec / 1000000;
-    deadline.tv_usec %= 1000000;
-
-    for (;;) {
-        struct timeval now; gettimeofday(&now, NULL);
-        long rem = (deadline.tv_sec - now.tv_sec) * 1000000
-                 + (deadline.tv_usec - now.tv_usec);
-        if (rem <= 0) RETURN_FALSE;
-
-        fd_set fds; FD_ZERO(&fds); FD_SET(sock->fd, &fds);
-        struct timeval tv = { rem / 1000000, rem % 1000000 };
-        if (select(sock->fd + 1, &fds, NULL, NULL, &tv) <= 0) RETURN_FALSE;
-
-        flen = sizeof(from);
-        ssize_t n = recvfrom(sock->fd, buf, sizeof(buf), 0,
-                             (struct sockaddr *)&from, &flen);
-        if (n < 0) RETURN_FALSE;
-
-        if (king_rtp_handle_stun(sock, buf, (size_t)n,
-                                 (struct sockaddr *)&from, flen)) continue;
-
-#ifdef KING_HAVE_SRTP
-        king_rtp_peer_t *peer = king_rtp_peer_get(sock,
-                                    (struct sockaddr *)&from, flen);
-        if (peer->srtp_ready) {
-            int pkt_len = (int)n;
-            srtp_err_status_t st = srtp_unprotect(peer->srtp_recv, buf, &pkt_len);
-            if (st != srtp_err_status_ok) continue; /* drop bad packet */
-            n = (ssize_t)pkt_len;
-        }
-#endif
-
-        king_rtp_packet_t pkt;
-        if (king_rtp_parse(buf, (size_t)n, &pkt) != 0) continue;
-
-        king_rtp_peer_t *peer2 = king_rtp_peer_get(sock,
-                                     (struct sockaddr *)&from, flen);
-        peer2->ssrc = pkt.ssrc;
-
-        char ip[INET6_ADDRSTRLEN] = {0}; int rport = 0;
-        if (from.ss_family == AF_INET) {
-            struct sockaddr_in *s4 = (struct sockaddr_in *)&from;
-            inet_ntop(AF_INET, &s4->sin_addr, ip, sizeof(ip));
-            rport = ntohs(s4->sin_port);
-        } else {
-            struct sockaddr_in6 *s6 = (struct sockaddr_in6 *)&from;
-            inet_ntop(AF_INET6, &s6->sin6_addr, ip, sizeof(ip));
-            rport = ntohs(s6->sin6_port);
-        }
-
-        array_init(return_value);
-        add_assoc_long(   return_value, "ssrc",          (zend_long)pkt.ssrc);
-        add_assoc_long(   return_value, "payload_type",  pkt.payload_type);
-        add_assoc_long(   return_value, "seq",           pkt.seq);
-        add_assoc_long(   return_value, "timestamp",     (zend_long)pkt.timestamp);
-        add_assoc_bool(   return_value, "marker",        pkt.marker);
-        add_assoc_stringl(return_value, "data",
-                          (char *)pkt.payload, pkt.payload_len);
-        add_assoc_string( return_value, "from_ip",       ip);
-        add_assoc_long(   return_value, "from_port",     rport);
-        add_assoc_bool(   return_value, "ice_consented", peer2->ice_consented);
-        add_assoc_bool(   return_value, "srtp",          peer2->dtls_done);
-        return;
-    }
-}
-
-PHP_FUNCTION(king_rtp_send)
-{
-    zval *z; char *host, *data; size_t hlen, dlen; zend_long port;
-    ZEND_PARSE_PARAMETERS_START(4, 4)
-        Z_PARAM_RESOURCE(z)
-        Z_PARAM_STRING(host, hlen)
-        Z_PARAM_LONG(port)
-        Z_PARAM_STRING(data, dlen)
-    ZEND_PARSE_PARAMETERS_END();
-
-    king_rtp_socket_t *sock = (king_rtp_socket_t *)zend_fetch_resource(Z_RES_P(z),
-                                  "King\\RtpSocket", le_king_rtp_socket);
-    if (!sock) RETURN_FALSE;
-
-    /* Find peer entry for optional SRTP */
-    king_rtp_peer_t *peer = king_rtp_peer_by_addr_str(sock, host, (int)port);
-
-    uint8_t buf[KING_RTP_MTU + 256];
-    if (dlen > KING_RTP_MTU) dlen = KING_RTP_MTU;
-    memcpy(buf, data, dlen);
-    size_t out_len = dlen;
-
-#ifdef KING_HAVE_SRTP
-    if (peer && peer->srtp_ready) {
-        int l = (int)out_len;
-        srtp_err_status_t st = srtp_protect(peer->srtp_send, buf, &l);
-        if (st != srtp_err_status_ok) RETURN_FALSE;
-        out_len = (size_t)l;
-    }
-#endif
-
-    struct addrinfo hints = {0}, *res = NULL;
-    char ps[8]; snprintf(ps, sizeof(ps), ZEND_LONG_FMT, (zend_long) port);
-    hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
-    if (getaddrinfo(host, ps, &hints, &res) != 0 || !res) RETURN_FALSE;
-
-    ssize_t sent = sendto(sock->fd, buf, out_len, 0,
-                          res->ai_addr, res->ai_addrlen);
-    freeaddrinfo(res);
-    RETURN_BOOL(sent == (ssize_t)out_len);
-}
-
-PHP_FUNCTION(king_rtp_close)
-{
-    zval *z; ZEND_PARSE_PARAMETERS_START(1,1) Z_PARAM_RESOURCE(z) ZEND_PARSE_PARAMETERS_END();
-    zend_list_close(Z_RES_P(z));
-}
+#include "rtp/procedural_api.inc"

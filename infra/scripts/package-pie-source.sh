@@ -52,7 +52,7 @@ done
 
 resolve_version() {
     sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' \
-        "${ROOT_DIR}/extension/include/php_king.h" | head -n 1
+        "${ROOT_DIR}/extension/include/php_king/constants.h" | head -n 1
 }
 
 resolve_source_epoch() {

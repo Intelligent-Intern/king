@@ -1,0 +1,468 @@
+:root {
+  color-scheme: dark;
+  --bg: #0b0d10;
+  --panel: #15191f;
+  --panel-2: #1d232b;
+  --text: #f4f7fb;
+  --muted: #aab4c0;
+  --line: #303946;
+  --blue: #00a3ff;
+  --green: #00d06d;
+  --red: #ff4242;
+  --yellow: #ffd400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  height: 100vh;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.sidebar {
+  min-height: 0;
+  border-right: 1px solid var(--line);
+  padding: 22px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: auto;
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: var(--blue);
+  color: #00131f;
+  font-weight: 800;
+  border-radius: 8px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.status-card {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+.status-dot.ok {
+  background: var(--green);
+}
+
+.status-dot.error {
+  background: var(--red);
+}
+
+dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+dt {
+  color: var(--muted);
+}
+
+.threads-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.threads-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.threads-header h2 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.threads-header button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  background: #222a34;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.threads-header button:hover {
+  border-color: var(--blue);
+}
+
+.thread-list {
+  min-height: 150px;
+  max-height: 34vh;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.thread-item {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  background: #10161d;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 10px;
+  text-align: left;
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.thread-item:hover {
+  border-color: var(--blue);
+}
+
+.thread-item.active {
+  border-color: var(--blue);
+  background: #082234;
+}
+
+.thread-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 750;
+}
+
+.thread-meta,
+.thread-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.thread-empty {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.secondary,
+#sendButton {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  background: #222a34;
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.secondary:hover,
+#sendButton:hover {
+  border-color: var(--blue);
+}
+
+.secondary {
+  margin-top: auto;
+}
+
+.secondary.danger:hover {
+  border-color: var(--red);
+  color: #ffd8d8;
+}
+
+.chat-panel {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.messages {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overscroll-behavior: contain;
+}
+
+.message {
+  max-width: 920px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px 14px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+
+.message.user {
+  margin-left: auto;
+  background: #0c2d3f;
+  border-color: #12618a;
+}
+
+.message.assistant {
+  margin-right: auto;
+}
+
+.message.error {
+  border-color: var(--red);
+  color: #ffd8d8;
+}
+
+.message .role {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.message .content {
+  display: grid;
+  gap: 10px;
+}
+
+.message.user .content {
+  white-space: pre-wrap;
+}
+
+.rendered-markdown {
+  display: grid;
+  gap: 10px;
+}
+
+.rendered-markdown > * {
+  margin: 0;
+}
+
+.rendered-markdown h2,
+.rendered-markdown h3,
+.rendered-markdown h4,
+.rendered-markdown h5 {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.rendered-markdown ul {
+  padding-left: 22px;
+}
+
+.rendered-markdown blockquote {
+  border-left: 3px solid var(--blue);
+  padding-left: 12px;
+  color: var(--muted);
+}
+
+.rendered-markdown a {
+  color: var(--blue);
+}
+
+.rendered-markdown :not(pre) > code {
+  border: 1px solid #3b4654;
+  background: #07090c;
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: #ffd400;
+}
+
+.codebox {
+  margin: 2px 0;
+  border: 1px solid #3b4654;
+  background: #05070a;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.codebox figcaption {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #3b4654;
+  background: #10161d;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.codebox pre {
+  margin: 0;
+  padding: 13px 14px;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.codebox code {
+  font: 13px/1.55 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color: #f4f7fb;
+}
+
+.tok-keyword {
+  color: #00a3ff;
+}
+
+.tok-key,
+.tok-const {
+  color: #ffd400;
+}
+
+.tok-string {
+  color: #00d06d;
+}
+
+.tok-number {
+  color: #ff4242;
+}
+
+.tok-comment {
+  color: #8a96a3;
+}
+
+.composer {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+  padding: 18px 24px 22px;
+  background: var(--panel);
+  box-shadow: 0 -10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.composer label {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-weight: 650;
+}
+
+.composer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 12px;
+  align-items: end;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 76px;
+  max-height: 240px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #0f1318;
+  color: var(--text);
+  padding: 12px;
+  outline: none;
+}
+
+textarea:focus {
+  border-color: var(--blue);
+}
+
+#sendButton {
+  background: var(--blue);
+  color: #00131f;
+  border-color: var(--blue);
+  font-weight: 800;
+}
+
+#sendButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (max-width: 820px) {
+  .shell {
+    height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    max-height: 38dvh;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .composer-row {
+    grid-template-columns: 1fr;
+  }
+}

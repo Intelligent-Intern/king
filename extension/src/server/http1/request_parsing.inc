@@ -438,6 +438,7 @@ static zend_result king_server_http1_append_response_headers(
         if (
             zend_string_equals_literal_ci(header_name, "Content-Length")
             || zend_string_equals_literal_ci(header_name, "Connection")
+            || zend_string_equals_literal_ci(header_name, "Transfer-Encoding")
         ) {
             continue;
         }

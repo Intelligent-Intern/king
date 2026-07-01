@@ -21,25 +21,24 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/config/cloud_autoscale/config.h"
-#include "include/config/config.h"
-#include "include/config/http2/config.h"
-#include "include/config/mcp_and_orchestrator/config.h"
-#include "include/config/native_cdn/config.h"
-#include "include/config/native_object_store/config.h"
-#include "include/config/open_telemetry/config.h"
-#include "include/config/quic_transport/config.h"
-#include "include/config/semantic_geometry/config.h"
-#include "include/config/smart_contracts/config.h"
-#include "include/config/smart_dns/config.h"
-#include "include/config/ssh_over_quic/config.h"
-#include "include/config/tcp_transport/config.h"
-#include "include/config/tls_and_crypto/config.h"
-#include "include/king_globals.h"
+#include "config/cloud_autoscale/config.h"
+#include "config/config.h"
+#include "config/high_perf_compute_and_ai/config.h"
+#include "config/http2/config.h"
+#include "config/mcp_and_orchestrator/config.h"
+#include "config/native_cdn/config.h"
+#include "config/native_object_store/config.h"
+#include "config/open_telemetry/config.h"
+#include "config/quic_transport/config.h"
+#include "config/semantic_geometry/config.h"
+#include "config/smart_contracts/config.h"
+#include "config/smart_dns/config.h"
+#include "config/ssh_over_quic/config.h"
+#include "config/tcp_transport/config.h"
+#include "config/tls_and_crypto/config.h"
+#include "php_king/globals.h"
 #include <ext/spl/spl_exceptions.h>
 #include "zend_exceptions.h"
-
-extern int le_king_cfg;
 
 typedef enum _king_config_override_module_t {
     KING_CONFIG_OVERRIDE_NONE = 0,
@@ -55,7 +54,8 @@ typedef enum _king_config_override_module_t {
     KING_CONFIG_OVERRIDE_STORAGE,
     KING_CONFIG_OVERRIDE_CDN,
     KING_CONFIG_OVERRIDE_DNS,
-    KING_CONFIG_OVERRIDE_OTEL
+    KING_CONFIG_OVERRIDE_OTEL,
+    KING_CONFIG_OVERRIDE_COMPUTE_AI
 } king_config_override_module_t;
 
 #define KING_CONFIG_FREE_PERSISTENT(field) \
@@ -71,6 +71,10 @@ typedef enum _king_config_override_module_t {
 #include "internal/overrides.inc"
 #include "internal/api.inc"
 #include "internal/object.inc"
+#include "internal/resource_helpers.inc"
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"
 
 void king_config_release_module_globals(void)
 {
@@ -89,7 +93,21 @@ void king_config_release_module_globals(void)
     KING_CONFIG_FREE_PERSISTENT(king_dynamic_admin_api_config.key_file);
     memset(&king_dynamic_admin_api_config, 0, sizeof(king_dynamic_admin_api_config));
 
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_preferred_model_profile);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_models);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_name);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_cpu_model_artifact);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_name);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_model_artifact);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_path);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_thermal_sensor_command);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_gpu_power_sensor_command);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_path);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_webhook);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_service);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.inference_llm_cache_disk_alert_mcp_method);
     KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.gpu_default_backend);
+    KING_CONFIG_FREE_PERSISTENT(king_high_perf_compute_ai_config.worker_gpu_affinity_map);
     memset(&king_high_perf_compute_ai_config, 0, sizeof(king_high_perf_compute_ai_config));
 
     memset(&king_iibin_config, 0, sizeof(king_iibin_config));

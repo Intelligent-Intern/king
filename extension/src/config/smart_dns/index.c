@@ -10,9 +10,9 @@
  * =========================================================================
  */
 
-#include "include/config/smart_dns/index.h"
-#include "include/config/smart_dns/default.h"
-#include "include/config/smart_dns/ini.h"
+#include "config/smart_dns/index.h"
+#include "config/smart_dns/default.h"
+#include "config/smart_dns/ini.h"
 
 void kg_config_smart_dns_init(void)
 {

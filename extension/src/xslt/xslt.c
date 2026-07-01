@@ -10,13 +10,16 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/runtime/saxonc_candidates.h"
+#include "runtime/saxonc_candidates.h"
+#include "xslt/arginfo/index.h"
 #include "xslt/xslt.h"
 #include "Zend/zend_exceptions.h"
 #include <dlfcn.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef PATH_MAX
@@ -24,31 +27,85 @@
 #endif
 
 #include "saxonc_loader.inc"
+#include "state.inc"
+#include "php_binding.inc"
+#include "registration.inc"
 
-static zend_string *king_xslt_realpath_or_throw(zend_string *path, const char *label)
+static zend_string *king_xslt_realpath_checked_or_throw(
+    zend_string *path,
+    const char *label,
+    bool require_directory
+)
 {
     char resolved[PATH_MAX];
+    struct stat path_stat;
 
     if (ZSTR_LEN(path) == 0) {
-        zend_throw_exception(king_ce_validation_exception, label, 0);
+        char message[256];
+        snprintf(message, sizeof(message), "%s must not be empty.", label);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
     if (realpath(ZSTR_VAL(path), resolved) == NULL) {
         char message[512];
-        snprintf(message, sizeof(message), "%s is not a readable local file: %s", label, ZSTR_VAL(path));
+        snprintf(
+            message,
+            sizeof(message),
+            "%s is not a readable local %s: %s",
+            label,
+            require_directory ? "directory" : "file",
+            ZSTR_VAL(path)
+        );
         zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
-    if (access(resolved, R_OK) != 0) {
+    if (stat(resolved, &path_stat) != 0) {
         char message[512];
-        snprintf(message, sizeof(message), "%s is not readable: %s", label, resolved);
+        snprintf(message, sizeof(message), "%s could not be inspected: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+
+    if (require_directory && !S_ISDIR(path_stat.st_mode)) {
+        char message[512];
+        snprintf(message, sizeof(message), "%s must be a local directory: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+    if (!require_directory && !S_ISREG(path_stat.st_mode)) {
+        char message[512];
+        snprintf(message, sizeof(message), "%s must be a local file: %s", label, resolved);
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return NULL;
+    }
+
+    if (access(resolved, require_directory ? (R_OK | X_OK) : R_OK) != 0) {
+        char message[512];
+        snprintf(
+            message,
+            sizeof(message),
+            "%s is not %s: %s",
+            label,
+            require_directory ? "accessible" : "readable",
+            resolved
+        );
         zend_throw_exception(king_ce_validation_exception, message, 0);
         return NULL;
     }
 
     return zend_string_init(resolved, strlen(resolved), 0);
+}
+
+static zend_string *king_xslt_realpath_file_or_throw(zend_string *path, const char *label)
+{
+    return king_xslt_realpath_checked_or_throw(path, label, false);
+}
+
+static zend_string *king_xslt_realpath_directory_or_throw(zend_string *path, const char *label)
+{
+    return king_xslt_realpath_checked_or_throw(path, label, true);
 }
 
 static zend_string *king_xslt_dirname_from_path(zend_string *path)
@@ -107,12 +164,106 @@ static zend_string *king_xslt_cwd_from_options(zval *options, zend_string *style
         && (cwd_value = zend_hash_str_find(Z_ARRVAL_P(options), "cwd", sizeof("cwd") - 1)) != NULL
         && Z_TYPE_P(cwd_value) != IS_NULL) {
         cwd_string = zval_get_string(cwd_value);
-        resolved = king_xslt_realpath_or_throw(cwd_string, "XSLT cwd");
+        resolved = king_xslt_realpath_directory_or_throw(cwd_string, "XSLT cwd");
         zend_string_release(cwd_string);
         return resolved;
     }
 
     return king_xslt_dirname_from_path(stylesheet_path);
+}
+
+static bool king_xslt_option_value_is_stringable(zval *value)
+{
+    if (value == NULL) {
+        return false;
+    }
+
+    switch (Z_TYPE_P(value)) {
+        case IS_NULL:
+        case IS_FALSE:
+        case IS_TRUE:
+        case IS_LONG:
+        case IS_DOUBLE:
+        case IS_STRING:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static zend_result king_xslt_validate_properties_option(zval *properties_value)
+{
+    zend_string *key;
+    zval *entry;
+
+    if (properties_value == NULL || Z_TYPE_P(properties_value) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(properties_value) != IS_ARRAY) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT properties option must be an associative array.", 0);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(properties_value), key, entry) {
+        if (key == NULL) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT property names must be strings.", 0);
+            return FAILURE;
+        }
+        if (!king_xslt_option_value_is_stringable(entry)) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT property values must be scalar or null.", 0);
+            return FAILURE;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
+}
+
+zend_result king_xslt_validate_options(zval *options)
+{
+    zend_string *key;
+    zval *entry;
+    char message[256];
+
+    if (options == NULL || Z_TYPE_P(options) == IS_NULL) {
+        return SUCCESS;
+    }
+    if (Z_TYPE_P(options) != IS_ARRAY) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT options must be an array.", 0);
+        return FAILURE;
+    }
+
+    ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(options), key, entry) {
+        if (key == NULL) {
+            zend_throw_exception(king_ce_validation_exception, "XSLT option names must be strings.", 0);
+            return FAILURE;
+        }
+
+        if (zend_string_equals_literal(key, "cwd")) {
+            if (entry != NULL && Z_TYPE_P(entry) != IS_NULL && Z_TYPE_P(entry) != IS_STRING) {
+                zend_throw_exception(king_ce_validation_exception, "XSLT cwd option must be a string or null.", 0);
+                return FAILURE;
+            }
+            continue;
+        }
+
+        if (zend_string_equals_literal(key, "properties")) {
+            if (king_xslt_validate_properties_option(entry) != SUCCESS) {
+                return FAILURE;
+            }
+            continue;
+        }
+
+        snprintf(
+            message,
+            sizeof(message),
+            "XSLT option '%s' is not supported. Supported options are 'cwd' and 'properties'.",
+            ZSTR_VAL(key)
+        );
+        zend_throw_exception(king_ce_validation_exception, message, 0);
+        return FAILURE;
+    } ZEND_HASH_FOREACH_END();
+
+    return SUCCESS;
 }
 
 static zend_result king_xslt_apply_properties_from_options(
@@ -135,16 +286,8 @@ static zend_result king_xslt_apply_properties_from_options(
     if (properties_value == NULL || Z_TYPE_P(properties_value) == IS_NULL) {
         return SUCCESS;
     }
-    if (Z_TYPE_P(properties_value) != IS_ARRAY) {
-        zend_throw_exception(king_ce_validation_exception, "XSLT properties option must be an associative array.", 0);
-        return FAILURE;
-    }
 
     ZEND_HASH_FOREACH_STR_KEY_VAL(Z_ARRVAL_P(properties_value), key, entry) {
-        if (key == NULL) {
-            zend_throw_exception(king_ce_validation_exception, "XSLT property names must be strings.", 0);
-            return FAILURE;
-        }
         value = zval_get_string(entry);
         king_saxonc.setProperty_fn(
             properties,
@@ -168,12 +311,12 @@ static zend_result king_xslt_prepare_context(
     zend_string **cwd
 )
 {
-    *source_abs = king_xslt_realpath_or_throw(source_path, "XSLT source XML");
+    *source_abs = king_xslt_realpath_file_or_throw(source_path, "XSLT source XML");
     if (*source_abs == NULL) {
         return FAILURE;
     }
 
-    *stylesheet_abs = king_xslt_realpath_or_throw(stylesheet_path, "XSLT stylesheet");
+    *stylesheet_abs = king_xslt_realpath_file_or_throw(stylesheet_path, "XSLT stylesheet");
     if (*stylesheet_abs == NULL) {
         zend_string_release(*source_abs);
         *source_abs = NULL;
@@ -205,6 +348,43 @@ static const char *king_xslt_saxon_error(sxnc_environment *environment)
         : "SaxonC XSLT transformation failed.";
 }
 
+static bool king_xslt_saxon_has_error(sxnc_environment *environment, const char **message)
+{
+    *message = NULL;
+
+    if (environment != NULL && king_saxonc.c_getErrorMessage_fn != NULL) {
+        *message = king_saxonc.c_getErrorMessage_fn(environment);
+    }
+
+    return *message != NULL && (*message)[0] != '\0';
+}
+
+static zend_string *king_xslt_temporary_output_path(zend_string *output_abs)
+{
+    char path_template[PATH_MAX];
+    int fd;
+
+    if (ZSTR_LEN(output_abs) + sizeof(".kingtmpXXXXXX") >= PATH_MAX) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT output temporary path is too long.", 0);
+        return NULL;
+    }
+
+    snprintf(path_template, sizeof(path_template), "%s.kingtmpXXXXXX", ZSTR_VAL(output_abs));
+    fd = mkstemp(path_template);
+    if (fd < 0) {
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output temporary file could not be created.", 0);
+        return NULL;
+    }
+
+    close(fd);
+    if (unlink(path_template) != 0) {
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output temporary file could not be prepared.", 0);
+        return NULL;
+    }
+
+    return zend_string_init(path_template, strlen(path_template), 0);
+}
+
 void king_xslt_shutdown_system(void)
 {
     king_saxonc_close_runtime_handle();
@@ -219,7 +399,7 @@ void king_xslt_add_component_info(zval *configuration)
     add_assoc_string(configuration, "supported_use", "XSLT 2.0/3.0 transformation for Schematron/SVRL pipelines");
 }
 
-PHP_FUNCTION(king_xslt_engine_status)
+void king_xslt_engine_status_array(zval *return_value)
 {
     sxnc_environment *environment = NULL;
     sxnc_processor *processor = NULL;
@@ -227,8 +407,6 @@ PHP_FUNCTION(king_xslt_engine_status)
     sxnc_property *properties = NULL;
     const char *version = NULL;
     const char *variant = NULL;
-
-    ZEND_PARSE_PARAMETERS_NONE();
 
     array_init(return_value);
     add_assoc_string(return_value, "engine", "saxonc");
@@ -261,11 +439,13 @@ PHP_FUNCTION(king_xslt_engine_status)
     king_saxonc.freeSaxonc_fn(&environment, &processor, &parameters, &properties);
 }
 
-PHP_FUNCTION(king_xslt_transform_file)
+zend_result king_xslt_transform_file_result(
+    zend_string *source_path,
+    zend_string *stylesheet_path,
+    zval *options,
+    zval *return_value
+)
 {
-    zend_string *source_path;
-    zend_string *stylesheet_path;
-    zval *options = NULL;
     zend_string *source_abs = NULL;
     zend_string *stylesheet_abs = NULL;
     zend_string *cwd = NULL;
@@ -277,20 +457,17 @@ PHP_FUNCTION(king_xslt_transform_file)
     int property_cap = 4;
     const char *result;
 
-    ZEND_PARSE_PARAMETERS_START(2, 3)
-        Z_PARAM_STR(source_path)
-        Z_PARAM_STR(stylesheet_path)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_ARRAY_OR_NULL(options)
-    ZEND_PARSE_PARAMETERS_END();
-
     if (king_saxonc_ensure_ready() != SUCCESS) {
         zend_throw_exception(king_ce_runtime_exception, king_saxonc.load_error, 0);
-        RETURN_THROWS();
+        return FAILURE;
+    }
+
+    if (king_xslt_validate_options(options) != SUCCESS) {
+        return FAILURE;
     }
 
     if (king_xslt_prepare_context(source_path, stylesheet_path, options, &source_abs, &stylesheet_abs, &cwd) != SUCCESS) {
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     king_saxonc.initSaxonc_fn(&environment, &processor, &parameters, &properties, 0, property_cap);
@@ -299,7 +476,7 @@ PHP_FUNCTION(king_xslt_transform_file)
         zend_string_release(stylesheet_abs);
         zend_string_release(cwd);
         zend_throw_exception(king_ce_runtime_exception, "SaxonC processor could not be initialized.", 0);
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     if (king_xslt_apply_properties_from_options(&properties, &property_len, &property_cap, options) != SUCCESS) {
@@ -307,7 +484,7 @@ PHP_FUNCTION(king_xslt_transform_file)
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(cwd);
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     result = king_saxonc.xsltApplyStylesheet_fn(
@@ -324,12 +501,14 @@ PHP_FUNCTION(king_xslt_transform_file)
 
     if (result == NULL) {
         const char *message = king_xslt_saxon_error(environment);
+        zend_string *saxon_message = zend_string_init(message, strlen(message), 0);
         king_saxonc.freeSaxonc_fn(&environment, &processor, &parameters, &properties);
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(cwd);
-        zend_throw_exception(king_ce_validation_exception, message, 0);
-        RETURN_THROWS();
+        zend_throw_exception(king_ce_validation_exception, ZSTR_VAL(saxon_message), 0);
+        zend_string_release(saxon_message);
+        return FAILURE;
     }
 
     array_init(return_value);
@@ -342,18 +521,24 @@ PHP_FUNCTION(king_xslt_transform_file)
     zend_string_release(source_abs);
     zend_string_release(stylesheet_abs);
     zend_string_release(cwd);
+
+    return SUCCESS;
 }
 
-PHP_FUNCTION(king_xslt_transform_to_file)
+zend_result king_xslt_transform_to_file_result(
+    zend_string *source_path,
+    zend_string *stylesheet_path,
+    zend_string *output_path,
+    zval *options,
+    zval *return_value
+)
 {
-    zend_string *source_path;
-    zend_string *stylesheet_path;
-    zend_string *output_path;
-    zval *options = NULL;
     zend_string *source_abs = NULL;
     zend_string *stylesheet_abs = NULL;
     zend_string *output_abs = NULL;
+    zend_string *temp_output_abs = NULL;
     zend_string *cwd = NULL;
+    struct stat output_stat;
     sxnc_environment *environment = NULL;
     sxnc_processor *processor = NULL;
     sxnc_parameter *parameters = NULL;
@@ -363,33 +548,45 @@ PHP_FUNCTION(king_xslt_transform_to_file)
     const char *message;
     zend_string *saxon_message = NULL;
 
-    ZEND_PARSE_PARAMETERS_START(3, 4)
-        Z_PARAM_STR(source_path)
-        Z_PARAM_STR(stylesheet_path)
-        Z_PARAM_STR(output_path)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_ARRAY_OR_NULL(options)
-    ZEND_PARSE_PARAMETERS_END();
-
     if (ZSTR_LEN(output_path) == 0) {
         zend_throw_exception(king_ce_validation_exception, "XSLT output path must not be empty.", 0);
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     if (king_saxonc_ensure_ready() != SUCCESS) {
         zend_throw_exception(king_ce_runtime_exception, king_saxonc.load_error, 0);
-        RETURN_THROWS();
+        return FAILURE;
+    }
+
+    if (king_xslt_validate_options(options) != SUCCESS) {
+        return FAILURE;
     }
 
     if (king_xslt_prepare_context(source_path, stylesheet_path, options, &source_abs, &stylesheet_abs, &cwd) != SUCCESS) {
-        RETURN_THROWS();
+        return FAILURE;
     }
     output_abs = king_xslt_absolute_output_path(output_path);
     if (output_abs == NULL) {
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(cwd);
-        RETURN_THROWS();
+        return FAILURE;
+    }
+    if (stat(ZSTR_VAL(output_abs), &output_stat) == 0 && !S_ISREG(output_stat.st_mode)) {
+        zend_throw_exception(king_ce_validation_exception, "XSLT output path must be a local file path.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
+    }
+    temp_output_abs = king_xslt_temporary_output_path(output_abs);
+    if (temp_output_abs == NULL) {
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
     }
 
     king_saxonc.initSaxonc_fn(&environment, &processor, &parameters, &properties, 0, property_cap);
@@ -397,9 +594,10 @@ PHP_FUNCTION(king_xslt_transform_to_file)
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
         zend_throw_exception(king_ce_runtime_exception, "SaxonC processor could not be initialized.", 0);
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     if (king_xslt_apply_properties_from_options(&properties, &property_len, &property_cap, options) != SUCCESS) {
@@ -407,8 +605,9 @@ PHP_FUNCTION(king_xslt_transform_to_file)
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
-        RETURN_THROWS();
+        return FAILURE;
     }
 
     king_saxonc.xsltSaveResultToFile_fn(
@@ -417,26 +616,53 @@ PHP_FUNCTION(king_xslt_transform_to_file)
         ZSTR_VAL(cwd),
         ZSTR_VAL(source_abs),
         ZSTR_VAL(stylesheet_abs),
-        ZSTR_VAL(output_abs),
+        ZSTR_VAL(temp_output_abs),
         parameters,
         properties,
         0,
         property_len
     );
 
-    message = king_xslt_saxon_error(environment);
-    saxon_message = zend_string_init(message, strlen(message), 0);
+    if (king_xslt_saxon_has_error(environment, &message)) {
+        saxon_message = zend_string_init(message, strlen(message), 0);
+    }
 
     king_saxonc.freeSaxonc_fn(&environment, &processor, &parameters, &properties);
 
-    if (access(ZSTR_VAL(output_abs), R_OK) != 0) {
-        zend_throw_exception(king_ce_runtime_exception, ZSTR_VAL(saxon_message), 0);
+    if (saxon_message != NULL) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_validation_exception, ZSTR_VAL(saxon_message), 0);
         zend_string_release(source_abs);
         zend_string_release(stylesheet_abs);
         zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
         zend_string_release(cwd);
         zend_string_release(saxon_message);
-        RETURN_THROWS();
+        return FAILURE;
+    }
+
+    if (stat(ZSTR_VAL(temp_output_abs), &output_stat) != 0
+        || !S_ISREG(output_stat.st_mode)
+        || access(ZSTR_VAL(temp_output_abs), R_OK) != 0) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_runtime_exception, "SaxonC XSLT transformation did not produce a readable output file.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
+    }
+
+    if (rename(ZSTR_VAL(temp_output_abs), ZSTR_VAL(output_abs)) != 0) {
+        unlink(ZSTR_VAL(temp_output_abs));
+        zend_throw_exception(king_ce_runtime_exception, "XSLT output file could not be moved into place.", 0);
+        zend_string_release(source_abs);
+        zend_string_release(stylesheet_abs);
+        zend_string_release(output_abs);
+        zend_string_release(temp_output_abs);
+        zend_string_release(cwd);
+        return FAILURE;
     }
 
     array_init(return_value);
@@ -448,6 +674,53 @@ PHP_FUNCTION(king_xslt_transform_to_file)
     zend_string_release(source_abs);
     zend_string_release(stylesheet_abs);
     zend_string_release(output_abs);
+    zend_string_release(temp_output_abs);
     zend_string_release(cwd);
-    zend_string_release(saxon_message);
+
+    return SUCCESS;
+}
+
+PHP_FUNCTION(king_xslt_engine_status)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    king_xslt_engine_status_array(return_value);
+}
+
+PHP_FUNCTION(king_xslt_transform_file)
+{
+    zend_string *source_path;
+    zend_string *stylesheet_path;
+    zval *options = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_STR(source_path)
+        Z_PARAM_STR(stylesheet_path)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (king_xslt_transform_file_result(source_path, stylesheet_path, options, return_value) != SUCCESS) {
+        RETURN_THROWS();
+    }
+}
+
+PHP_FUNCTION(king_xslt_transform_to_file)
+{
+    zend_string *source_path;
+    zend_string *stylesheet_path;
+    zend_string *output_path;
+    zval *options = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(3, 4)
+        Z_PARAM_STR(source_path)
+        Z_PARAM_STR(stylesheet_path)
+        Z_PARAM_STR(output_path)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (king_xslt_transform_to_file_result(source_path, stylesheet_path, output_path, options, return_value) != SUCCESS) {
+        RETURN_THROWS();
+    }
 }

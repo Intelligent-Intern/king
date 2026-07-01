@@ -1,0 +1,8 @@
+#include "../../../gguf/loader/gguf_loader.inc"
+#include "../../../runtime/memory/native_memory.inc"
+#include "../../../tensor/core/tensor_view.inc"
+#include "../../../tensor/core/tensor_math.inc"
+#include "../../../tensor/resolvers/tensor_resolver.inc"
+#include "../../../tensor/resolvers/attention/tensor_attention_resolver.inc"
+#include "../../../tensor/resolvers/rms_norm/tensor_rms_norm_resolver.inc"
+#include "../../../tensor/resolvers/ffn/tensor_ffn_resolver.inc"

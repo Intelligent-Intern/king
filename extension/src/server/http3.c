@@ -13,13 +13,13 @@
 
 #include "php.h"
 #include "php_king.h"
-#include "include/client/session.h"
-#include "include/config/config.h"
-#include "include/config/quic_transport/base_layer.h"
-#include "include/config/tcp_transport/base_layer.h"
-#include "include/config/tls_and_crypto/base_layer.h"
-#include "include/server/http3.h"
-#include "include/server/session.h"
+#include "client/session.h"
+#include "config/config.h"
+#include "config/quic_transport/base_layer.h"
+#include "config/tcp_transport/base_layer.h"
+#include "config/tls_and_crypto/base_layer.h"
+#include "server/http3.h"
+#include "server/session.h"
 
 #include "Zend/zend_smart_str.h"
 

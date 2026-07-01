@@ -3,7 +3,91 @@
 declare(strict_types=1);
 
 $schema = 'InstallSmoke_' . getmypid();
-$dnsPort = 10000 + (getmypid() % 40000);
+$semanticDnsStatePath = getenv('KING_SEMANTIC_DNS_STATE_PATH');
+
+function install_smoke_allocate_udp_port(): int
+{
+    $errno = 0;
+    $errstr = '';
+    $probe = @stream_socket_server(
+        'udp://127.0.0.1:0',
+        $errno,
+        $errstr,
+        STREAM_SERVER_BIND
+    );
+    if ($probe === false) {
+        throw new RuntimeException("Failed to allocate UDP smoke port: {$errstr} ({$errno})");
+    }
+
+    $name = stream_socket_get_name($probe, false);
+    fclose($probe);
+    if (!is_string($name) || $name === '') {
+        throw new RuntimeException('Failed to read allocated UDP smoke port.');
+    }
+
+    $separator = strrpos($name, ':');
+    if ($separator === false) {
+        throw new RuntimeException("Unexpected UDP socket name: {$name}");
+    }
+
+    $port = (int) substr($name, $separator + 1);
+    if ($port < 1 || $port > 65535) {
+        throw new RuntimeException("Invalid allocated UDP smoke port: {$name}");
+    }
+
+    return $port;
+}
+
+function install_smoke_default_semantic_dns_state_path(): string
+{
+    return sys_get_temp_dir()
+        . '/king_install_smoke_semantic_dns_' . getmypid()
+        . '/semantic_dns_state.bin';
+}
+
+function install_smoke_semantic_dns_config(int $dnsPort, ?string $statePath): array
+{
+    return [
+        'enabled' => true,
+        'bind_address' => '127.0.0.1',
+        'dns_port' => $dnsPort,
+        'default_record_ttl_sec' => 120,
+        'service_discovery_max_ips_per_response' => 5,
+        'semantic_mode_enable' => true,
+        'state_path' => is_string($statePath) && $statePath !== ''
+            ? $statePath
+            : install_smoke_default_semantic_dns_state_path(),
+        'mothernode_uri' => 'mother://install-smoke',
+        'routing_policies' => ['mode' => 'local'],
+    ];
+}
+
+function install_smoke_start_semantic_dns(?string $statePath): int
+{
+    $lastError = null;
+    for ($attempt = 0; $attempt < 8; $attempt++) {
+        $dnsPort = install_smoke_allocate_udp_port();
+        if (!king_semantic_dns_init(install_smoke_semantic_dns_config($dnsPort, $statePath))) {
+            fwrite(STDERR, "Semantic-DNS init smoke failed.\n");
+            exit(1);
+        }
+
+        try {
+            if (king_semantic_dns_start_server()) {
+                return $dnsPort;
+            }
+            $lastError = 'king_semantic_dns_start_server returned false';
+        } catch (Throwable $error) {
+            $lastError = $error->getMessage();
+            if (!str_contains($lastError, 'could not bind the UDP DNS listener')) {
+                throw $error;
+            }
+        }
+    }
+
+    fwrite(STDERR, "Semantic-DNS start smoke failed after retries: {$lastError}\n");
+    exit(1);
+}
 
 if (!function_exists('king_connect')) {
     fwrite(STDERR, "King extension functions are unavailable.\n");
@@ -64,23 +148,7 @@ try {
     @rmdir($root);
 }
 
-if (!king_semantic_dns_init([
-    'enabled' => true,
-    'bind_address' => '127.0.0.1',
-    'dns_port' => $dnsPort,
-    'default_record_ttl_sec' => 120,
-    'service_discovery_max_ips_per_response' => 5,
-    'semantic_mode_enable' => true,
-    'mothernode_uri' => 'mother://install-smoke',
-    'routing_policies' => ['mode' => 'local'],
-])) {
-    fwrite(STDERR, "Semantic-DNS init smoke failed.\n");
-    exit(1);
-}
-if (!king_semantic_dns_start_server()) {
-    fwrite(STDERR, "Semantic-DNS start smoke failed.\n");
-    exit(1);
-}
+install_smoke_start_semantic_dns(is_string($semanticDnsStatePath) ? $semanticDnsStatePath : null);
 if (!king_semantic_dns_register_service([
     'service_id' => 'install-smoke',
     'service_name' => 'install-smoke',
