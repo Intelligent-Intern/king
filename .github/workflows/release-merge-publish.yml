@@ -8,6 +8,7 @@ on:
       - closed
 
 permissions:
+  actions: write
   contents: write
   pull-requests: read
   packages: write
@@ -576,7 +577,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout release merge commit
         uses: actions/checkout@v6
@@ -638,6 +639,21 @@ jobs:
         working-directory: packages/iibin
         run: npm run typecheck && npm run build
 
+      - name: Pack package release asset
+        working-directory: packages/iibin
+        run: |
+          set -euo pipefail
+          mkdir -p ../../release-assets
+          npm pack --pack-destination ../../release-assets
+
+      - name: Upload package archive to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.resolve-release-merge.outputs.release-tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "${RELEASE_TAG}" release-assets/*.tgz --clobber
+
       - name: Check if package version already exists
         id: iibin-npm-check
         env:
@@ -660,10 +676,24 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required to publish @intelligentintern/iibin." >&2
-            exit 1
+            echo "::warning::NPM_TOKEN is not configured; the verified IIBIN package archive remains attached to the GitHub release."
+            exit 0
           fi
-          npm publish --access public --tag "${NPM_TAG}"
+
+          publish_log="$(mktemp)"
+          set +e
+          npm publish --access public --tag "${NPM_TAG}" >"${publish_log}" 2>&1
+          status="$?"
+          set -e
+          cat "${publish_log}"
+          if [[ "${status}" -eq 0 ]]; then
+            exit 0
+          fi
+          if grep -Eq 'npm error code E(401|403|404)' "${publish_log}"; then
+            echo "::warning::npm rejected @intelligentintern/iibin publish with an authorization or package-scope error; the verified archive remains attached to the GitHub release."
+            exit 0
+          fi
+          exit "${status}"
 
   dockerhub-runtime-release:
     name: Build and push Docker Hub runtime image
