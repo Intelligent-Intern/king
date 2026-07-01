@@ -2,6 +2,11 @@
 
 /* Test helper for starting the on-wire HTTP/1/WebSocket one-shot listener harness. */
 
+function king_server_websocket_wire_is_decimal_digits(string $value): bool
+{
+    return $value !== '' && strspn($value, '0123456789') === strlen($value);
+}
+
 function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null, array $env = []): array
 {
     $maxAttempts = $fixedPort !== null ? 1 : 10;
@@ -32,7 +37,7 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
             }
 
             $portText = substr($serverName, $colon + 1);
-            if ($portText === '' || !ctype_digit($portText)) {
+            if (!king_server_websocket_wire_is_decimal_digits($portText)) {
                 throw new RuntimeException('reserved on-wire HTTP/1 test port was not numeric');
             }
 
