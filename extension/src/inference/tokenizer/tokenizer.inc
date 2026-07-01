@@ -130,6 +130,234 @@ static bool king_inference_tokenizer_add_byte_fallback(
     return true;
 }
 
+static bool king_inference_tokenizer_unigram_ready(king_inference_model_object *model)
+{
+    return king_inference_tokenizer_uses_sentencepiece(model)
+        && model->gguf.tokenizer_scores_loaded
+        && Z_TYPE(model->tokenizer_scores) == IS_ARRAY
+        && Z_TYPE(model->tokenizer_types) == IS_ARRAY
+        && zend_hash_num_elements(Z_ARRVAL(model->tokenizer_scores)) > 0;
+}
+
+static bool king_inference_tokenizer_token_type_allowed(
+    king_inference_model_object *model,
+    zend_long token_id
+) {
+    zval *type;
+
+    if (!model->gguf.tokenizer_types_loaded || Z_TYPE(model->tokenizer_types) != IS_ARRAY || token_id < 0) {
+        return true;
+    }
+
+    type = zend_hash_index_find(Z_ARRVAL(model->tokenizer_types), (zend_ulong) token_id);
+    if (type == NULL || Z_TYPE_P(type) != IS_LONG) {
+        return true;
+    }
+
+    return Z_LVAL_P(type) != 3 && Z_LVAL_P(type) != 5;
+}
+
+static bool king_inference_tokenizer_score_for_token(
+    king_inference_model_object *model,
+    zend_long token_id,
+    double *score
+) {
+    zval *value;
+
+    if (token_id < 0 || Z_TYPE(model->tokenizer_scores) != IS_ARRAY) {
+        return false;
+    }
+
+    value = zend_hash_index_find(Z_ARRVAL(model->tokenizer_scores), (zend_ulong) token_id);
+    if (value == NULL) {
+        return false;
+    }
+    if (Z_TYPE_P(value) == IS_DOUBLE) {
+        *score = Z_DVAL_P(value);
+        return isfinite(*score);
+    }
+    if (Z_TYPE_P(value) == IS_LONG) {
+        *score = (double) Z_LVAL_P(value);
+        return true;
+    }
+
+    return false;
+}
+
+static zend_result king_inference_tokenizer_greedy_encode_range(
+    king_inference_model_object *model,
+    const char *bytes,
+    size_t start,
+    size_t segment_length,
+    zval *token_ids,
+    zend_long *unknown_count
+) {
+    size_t position = start;
+    size_t end = start + segment_length;
+
+    while (position < end) {
+        size_t remaining = end - position;
+        size_t try_len = model->gguf.tokenizer_max_token_bytes > 0
+            ? (size_t) model->gguf.tokenizer_max_token_bytes
+            : remaining;
+        bool matched = false;
+
+        if (try_len > remaining) {
+            try_len = remaining;
+        }
+        while (try_len > 0) {
+            zval *id = zend_hash_str_find(
+                Z_ARRVAL(model->tokenizer_lookup),
+                bytes + position,
+                try_len
+            );
+
+            if (id != NULL && Z_TYPE_P(id) == IS_LONG) {
+                add_next_index_long(token_ids, Z_LVAL_P(id));
+                position += try_len;
+                matched = true;
+                break;
+            }
+            try_len--;
+        }
+
+        if (matched) {
+            continue;
+        }
+
+        if (king_inference_tokenizer_add_byte_fallback(model, (unsigned char) bytes[position], token_ids)) {
+            position++;
+            continue;
+        }
+
+        if (model->gguf.tokenizer_unknown_id >= 0) {
+            add_next_index_long(token_ids, model->gguf.tokenizer_unknown_id);
+            (*unknown_count)++;
+            position++;
+            continue;
+        }
+
+        zend_throw_exception_ex(
+            king_ce_runtime_exception,
+            0,
+            "King native tokenizer could not encode byte 0x%02X and the model has no unknown token id.",
+            (unsigned int) (unsigned char) bytes[position]
+        );
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static bool king_inference_tokenizer_unigram_encode_range(
+    king_inference_model_object *model,
+    const char *bytes,
+    size_t start,
+    size_t segment_length,
+    zval *token_ids
+) {
+    const double impossible = -1.0e300;
+    double *scores;
+    zend_long *prev_token;
+    size_t *prev_offset;
+    zend_long *path;
+    size_t i;
+    size_t count = 0;
+    size_t cursor;
+    size_t max_token_bytes;
+    bool success = false;
+
+    if (segment_length == 0) {
+        return true;
+    }
+    if (!king_inference_tokenizer_unigram_ready(model) || segment_length > 65536) {
+        return false;
+    }
+
+    scores = safe_emalloc(segment_length + 1, sizeof(double), 0);
+    prev_token = safe_emalloc(segment_length + 1, sizeof(zend_long), 0);
+    prev_offset = safe_emalloc(segment_length + 1, sizeof(size_t), 0);
+    path = safe_emalloc(segment_length + 1, sizeof(zend_long), 0);
+
+    for (i = 0; i <= segment_length; i++) {
+        scores[i] = impossible;
+        prev_token[i] = -1;
+        prev_offset[i] = 0;
+        path[i] = -1;
+    }
+    scores[0] = 0.0;
+    max_token_bytes = model->gguf.tokenizer_max_token_bytes > 0
+        ? (size_t) model->gguf.tokenizer_max_token_bytes
+        : segment_length;
+
+    for (i = 0; i < segment_length; i++) {
+        size_t max_len;
+        size_t token_len;
+
+        if (scores[i] <= impossible / 2.0) {
+            continue;
+        }
+        max_len = segment_length - i;
+        if (max_len > max_token_bytes) {
+            max_len = max_token_bytes;
+        }
+
+        for (token_len = 1; token_len <= max_len; token_len++) {
+            zval *id = zend_hash_str_find(
+                Z_ARRVAL(model->tokenizer_lookup),
+                bytes + start + i,
+                token_len
+            );
+            zend_long token_id;
+            double token_score;
+            double candidate;
+            size_t next = i + token_len;
+
+            if (id == NULL || Z_TYPE_P(id) != IS_LONG) {
+                continue;
+            }
+
+            token_id = Z_LVAL_P(id);
+            if (!king_inference_tokenizer_token_type_allowed(model, token_id)
+                || !king_inference_tokenizer_score_for_token(model, token_id, &token_score)) {
+                continue;
+            }
+
+            candidate = scores[i] + token_score;
+            if (candidate > scores[next]) {
+                scores[next] = candidate;
+                prev_token[next] = token_id;
+                prev_offset[next] = i;
+            }
+        }
+    }
+
+    if (scores[segment_length] <= impossible / 2.0) {
+        goto cleanup;
+    }
+
+    cursor = segment_length;
+    while (cursor > 0) {
+        if (prev_token[cursor] < 0 || prev_offset[cursor] >= cursor || count > segment_length) {
+            goto cleanup;
+        }
+        path[count++] = prev_token[cursor];
+        cursor = prev_offset[cursor];
+    }
+
+    while (count > 0) {
+        add_next_index_long(token_ids, path[--count]);
+    }
+    success = true;
+
+cleanup:
+    efree(path);
+    efree(prev_offset);
+    efree(prev_token);
+    efree(scores);
+    return success;
+}
+
 static void king_inference_tokenizer_status_array(
     king_inference_model_object *model,
     zval *return_value
@@ -143,10 +371,15 @@ static void king_inference_tokenizer_status_array(
         && zend_hash_num_elements(Z_ARRVAL(model->tokenizer_lookup)) > 0);
     add_assoc_bool(return_value, "tokens_loaded", model->gguf.tokenizer_tokens_loaded);
     add_assoc_bool(return_value, "lookup_loaded", model->gguf.tokenizer_lookup_loaded);
+    add_assoc_bool(return_value, "scores_loaded", model->gguf.tokenizer_scores_loaded);
+    add_assoc_bool(return_value, "types_loaded", model->gguf.tokenizer_types_loaded);
     add_assoc_bool(return_value, "merges_loaded", model->gguf.tokenizer_merges_loaded);
     add_assoc_long(return_value, "token_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_tokens)));
     add_assoc_long(return_value, "lookup_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_lookup)));
+    add_assoc_long(return_value, "score_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_scores)));
+    add_assoc_long(return_value, "type_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_types)));
     add_assoc_long(return_value, "merge_count", (zend_long) zend_hash_num_elements(Z_ARRVAL(model->tokenizer_merges)));
+    add_assoc_bool(return_value, "sentencepiece_unigram_ready", king_inference_tokenizer_unigram_ready(model));
     add_assoc_long(return_value, "unknown_token_id", model->gguf.tokenizer_unknown_id);
     add_assoc_bool(return_value, "last_encode_available", model->tokenizer_last_encode_available);
     add_assoc_long(return_value, "last_token_count", model->tokenizer_last_token_count);
@@ -191,10 +424,6 @@ static zend_result king_inference_tokenizer_encode(
         size_t control_length = 0;
         size_t next_control;
         size_t remaining;
-        size_t try_len = model->gguf.tokenizer_max_token_bytes > 0
-            ? (size_t) model->gguf.tokenizer_max_token_bytes
-            : length - position;
-        bool matched = false;
 
         if (king_inference_tokenizer_control_token_at(model, bytes, length, position, &control_length)) {
             zval *id = zend_hash_str_find(Z_ARRVAL(model->tokenizer_lookup), bytes + position, control_length);
@@ -208,49 +437,25 @@ static zend_result king_inference_tokenizer_encode(
 
         next_control = king_inference_tokenizer_next_control_token_offset(model, bytes, length, position + 1);
         remaining = next_control > position ? next_control - position : length - position;
-        if (try_len > remaining) {
-            try_len = remaining;
+        if (!king_inference_tokenizer_unigram_encode_range(
+            model,
+            bytes,
+            position,
+            remaining,
+            &token_ids
+        ) && king_inference_tokenizer_greedy_encode_range(
+            model,
+            bytes,
+            position,
+            remaining,
+            &token_ids,
+            &unknown_count
+        ) != SUCCESS) {
+            zend_string_release(normalized);
+            zval_ptr_dtor(&token_ids);
+            return FAILURE;
         }
-        while (try_len > 0) {
-            zval *id = zend_hash_str_find(
-                Z_ARRVAL(model->tokenizer_lookup),
-                bytes + position,
-                try_len
-            );
-            if (id != NULL && Z_TYPE_P(id) == IS_LONG) {
-                add_next_index_long(&token_ids, Z_LVAL_P(id));
-                position += try_len;
-                matched = true;
-                break;
-            }
-            try_len--;
-        }
-
-        if (matched) {
-            continue;
-        }
-
-        if (king_inference_tokenizer_add_byte_fallback(model, (unsigned char) bytes[position], &token_ids)) {
-            position++;
-            continue;
-        }
-
-        if (model->gguf.tokenizer_unknown_id >= 0) {
-            add_next_index_long(&token_ids, model->gguf.tokenizer_unknown_id);
-            unknown_count++;
-            position++;
-            continue;
-        }
-
-        zend_string_release(normalized);
-        zval_ptr_dtor(&token_ids);
-        zend_throw_exception_ex(
-            king_ce_runtime_exception,
-            0,
-            "King native tokenizer could not encode byte 0x%02X and the model has no unknown token id.",
-            (unsigned int) (unsigned char) bytes[position]
-        );
-        return FAILURE;
+        position += remaining;
     }
 
     token_count = (zend_long) zend_hash_num_elements(Z_ARRVAL(token_ids));

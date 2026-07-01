@@ -27,6 +27,14 @@ static void king_inference_model_object_free(zend_object *object)
         zval_ptr_dtor(&intern->tokenizer_lookup);
         ZVAL_UNDEF(&intern->tokenizer_lookup);
     }
+    if (!Z_ISUNDEF(intern->tokenizer_scores)) {
+        zval_ptr_dtor(&intern->tokenizer_scores);
+        ZVAL_UNDEF(&intern->tokenizer_scores);
+    }
+    if (!Z_ISUNDEF(intern->tokenizer_types)) {
+        zval_ptr_dtor(&intern->tokenizer_types);
+        ZVAL_UNDEF(&intern->tokenizer_types);
+    }
     if (!Z_ISUNDEF(intern->tokenizer_merges)) {
         zval_ptr_dtor(&intern->tokenizer_merges);
         ZVAL_UNDEF(&intern->tokenizer_merges);
@@ -78,6 +86,10 @@ static zend_object *king_inference_model_object_create(zend_class_entry *ce)
     array_init(&intern->tokenizer_tokens);
     ZVAL_UNDEF(&intern->tokenizer_lookup);
     array_init(&intern->tokenizer_lookup);
+    ZVAL_UNDEF(&intern->tokenizer_scores);
+    array_init(&intern->tokenizer_scores);
+    ZVAL_UNDEF(&intern->tokenizer_types);
+    array_init(&intern->tokenizer_types);
     ZVAL_UNDEF(&intern->tokenizer_merges);
     array_init(&intern->tokenizer_merges);
     ZVAL_UNDEF(&intern->paged_kv_cache_plan);

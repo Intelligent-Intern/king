@@ -304,6 +304,8 @@ static zend_result king_inference_gguf_read_metadata_value(
     king_inference_gguf_metadata *metadata,
     zval *tokenizer_tokens,
     zval *tokenizer_lookup,
+    zval *tokenizer_scores,
+    zval *tokenizer_types,
     zval *tokenizer_merges
 ) {
     zend_string *string_value;
@@ -355,8 +357,43 @@ static zend_result king_inference_gguf_read_metadata_value(
             }
         } else if (zend_string_equals_literal(key, "tokenizer.ggml.scores")) {
             metadata->tokenizer_score_count = array_count;
+            if (array_type == KING_GGUF_TYPE_FLOAT32 || array_type == KING_GGUF_TYPE_FLOAT64) {
+                if (king_inference_gguf_read_double_array(
+                    file,
+                    file_size,
+                    array_type,
+                    array_count,
+                    path,
+                    tokenizer_scores
+                ) != SUCCESS) {
+                    return FAILURE;
+                }
+                metadata->tokenizer_scores_loaded = true;
+                return SUCCESS;
+            }
         } else if (zend_string_equals_literal(key, "tokenizer.ggml.token_type")) {
             metadata->tokenizer_type_count = array_count;
+            if (array_type == KING_GGUF_TYPE_UINT8
+                || array_type == KING_GGUF_TYPE_INT8
+                || array_type == KING_GGUF_TYPE_UINT16
+                || array_type == KING_GGUF_TYPE_INT16
+                || array_type == KING_GGUF_TYPE_UINT32
+                || array_type == KING_GGUF_TYPE_INT32
+                || array_type == KING_GGUF_TYPE_UINT64
+                || array_type == KING_GGUF_TYPE_INT64) {
+                if (king_inference_gguf_read_long_array(
+                    file,
+                    file_size,
+                    array_type,
+                    array_count,
+                    path,
+                    tokenizer_types
+                ) != SUCCESS) {
+                    return FAILURE;
+                }
+                metadata->tokenizer_types_loaded = true;
+                return SUCCESS;
+            }
         } else if (zend_string_equals_literal(key, "tokenizer.ggml.merges")) {
             metadata->tokenizer_merge_count = array_count;
             if (array_type == KING_GGUF_TYPE_STRING) {
@@ -499,6 +536,8 @@ static zend_result king_inference_gguf_parse_metadata(
     king_inference_gguf_metadata *metadata,
     zval *tokenizer_tokens,
     zval *tokenizer_lookup,
+    zval *tokenizer_scores,
+    zval *tokenizer_types,
     zval *tokenizer_merges
 ) {
     zend_ulong i;
@@ -523,6 +562,8 @@ static zend_result king_inference_gguf_parse_metadata(
             metadata,
             tokenizer_tokens,
             tokenizer_lookup,
+            tokenizer_scores,
+            tokenizer_types,
             tokenizer_merges
         ) != SUCCESS) {
             zend_string_release(key);
@@ -672,6 +713,8 @@ static zend_result king_inference_load_gguf_metadata(
     zval *tensor_index,
     zval *tokenizer_tokens,
     zval *tokenizer_lookup,
+    zval *tokenizer_scores,
+    zval *tokenizer_types,
     zval *tokenizer_merges
 ) {
     struct stat st;
@@ -750,6 +793,8 @@ static zend_result king_inference_load_gguf_metadata(
             metadata,
             tokenizer_tokens,
             tokenizer_lookup,
+            tokenizer_scores,
+            tokenizer_types,
             tokenizer_merges
         ) != SUCCESS
         || king_inference_gguf_parse_tensor_directory(file, path, metadata, tensor_index) != SUCCESS) {

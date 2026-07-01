@@ -239,6 +239,8 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     zval tensor_index;
     zval tokenizer_tokens;
     zval tokenizer_lookup;
+    zval tokenizer_scores;
+    zval tokenizer_types;
     zval tokenizer_merges;
     zval *name_value;
     king_inference_model_object *intern;
@@ -268,6 +270,10 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     array_init(&tokenizer_tokens);
     ZVAL_UNDEF(&tokenizer_lookup);
     array_init(&tokenizer_lookup);
+    ZVAL_UNDEF(&tokenizer_scores);
+    array_init(&tokenizer_scores);
+    ZVAL_UNDEF(&tokenizer_types);
+    array_init(&tokenizer_types);
     ZVAL_UNDEF(&tokenizer_merges);
     array_init(&tokenizer_merges);
 
@@ -277,9 +283,13 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
         &tensor_index,
         &tokenizer_tokens,
         &tokenizer_lookup,
+        &tokenizer_scores,
+        &tokenizer_types,
         &tokenizer_merges
     ) != SUCCESS) {
         zval_ptr_dtor(&tokenizer_merges);
+        zval_ptr_dtor(&tokenizer_types);
+        zval_ptr_dtor(&tokenizer_scores);
         zval_ptr_dtor(&tokenizer_lookup);
         zval_ptr_dtor(&tokenizer_tokens);
         zval_ptr_dtor(&tensor_index);
@@ -289,6 +299,8 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     if (king_inference_backend_kind_from_config(config, &backend_kind, function_name) != SUCCESS
         || king_inference_backend_validate_model_config(config, function_name) != SUCCESS) {
         zval_ptr_dtor(&tokenizer_merges);
+        zval_ptr_dtor(&tokenizer_types);
+        zval_ptr_dtor(&tokenizer_scores);
         zval_ptr_dtor(&tokenizer_lookup);
         zval_ptr_dtor(&tokenizer_tokens);
         zval_ptr_dtor(&tensor_index);
@@ -298,6 +310,8 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     }
     if (king_inference_check_gpu_policy(config, function_name) != SUCCESS) {
         zval_ptr_dtor(&tokenizer_merges);
+        zval_ptr_dtor(&tokenizer_types);
+        zval_ptr_dtor(&tokenizer_scores);
         zval_ptr_dtor(&tokenizer_lookup);
         zval_ptr_dtor(&tokenizer_tokens);
         zval_ptr_dtor(&tensor_index);
@@ -314,6 +328,8 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
             &native_map_size
         ) != SUCCESS) {
         zval_ptr_dtor(&tokenizer_merges);
+        zval_ptr_dtor(&tokenizer_types);
+        zval_ptr_dtor(&tokenizer_scores);
         zval_ptr_dtor(&tokenizer_lookup);
         zval_ptr_dtor(&tokenizer_tokens);
         zval_ptr_dtor(&tensor_index);
@@ -331,6 +347,10 @@ static zend_result king_inference_model_init(zval *target, zval *config, const c
     ZVAL_COPY_VALUE(&intern->tokenizer_tokens, &tokenizer_tokens);
     zval_ptr_dtor(&intern->tokenizer_lookup);
     ZVAL_COPY_VALUE(&intern->tokenizer_lookup, &tokenizer_lookup);
+    zval_ptr_dtor(&intern->tokenizer_scores);
+    ZVAL_COPY_VALUE(&intern->tokenizer_scores, &tokenizer_scores);
+    zval_ptr_dtor(&intern->tokenizer_types);
+    ZVAL_COPY_VALUE(&intern->tokenizer_types, &tokenizer_types);
     zval_ptr_dtor(&intern->tokenizer_merges);
     ZVAL_COPY_VALUE(&intern->tokenizer_merges, &tokenizer_merges);
     zval_ptr_dtor(&intern->paged_kv_cache_plan);
@@ -416,6 +436,16 @@ static void king_inference_model_info_array(king_inference_model_object *intern,
         return_value,
         "native_tokenizer_token_count",
         (zend_long) zend_hash_num_elements(Z_ARRVAL(intern->tokenizer_tokens))
+    );
+    add_assoc_long(
+        return_value,
+        "native_tokenizer_score_count",
+        (zend_long) zend_hash_num_elements(Z_ARRVAL(intern->tokenizer_scores))
+    );
+    add_assoc_long(
+        return_value,
+        "native_tokenizer_type_count",
+        (zend_long) zend_hash_num_elements(Z_ARRVAL(intern->tokenizer_types))
     );
     add_assoc_long(
         return_value,

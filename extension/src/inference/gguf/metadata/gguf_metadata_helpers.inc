@@ -1,3 +1,19 @@
+static zend_result king_inference_gguf_read_numeric_long(
+    FILE *file,
+    zend_ulong file_size,
+    zend_ulong type,
+    zend_string *path,
+    zend_long *value
+);
+
+static zend_result king_inference_gguf_read_numeric_double(
+    FILE *file,
+    zend_ulong file_size,
+    zend_ulong type,
+    zend_string *path,
+    double *value
+);
+
 static zend_result king_inference_gguf_read_string_array(
     FILE *file,
     zend_ulong file_size,
@@ -28,6 +44,58 @@ static zend_result king_inference_gguf_read_string_array(
         } else {
             zend_string_release(entry);
         }
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_gguf_read_double_array(
+    FILE *file,
+    zend_ulong file_size,
+    zend_ulong array_type,
+    zend_ulong array_count,
+    zend_string *path,
+    zval *values
+) {
+    zend_ulong i;
+
+    if (values == NULL || Z_TYPE_P(values) != IS_ARRAY) {
+        return king_inference_gguf_skip_array_payload(file, file_size, array_type, array_count, path, 0);
+    }
+
+    for (i = 0; i < array_count; i++) {
+        double value;
+
+        if (king_inference_gguf_read_numeric_double(file, file_size, array_type, path, &value) != SUCCESS) {
+            return FAILURE;
+        }
+        add_next_index_double(values, value);
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_inference_gguf_read_long_array(
+    FILE *file,
+    zend_ulong file_size,
+    zend_ulong array_type,
+    zend_ulong array_count,
+    zend_string *path,
+    zval *values
+) {
+    zend_ulong i;
+
+    if (values == NULL || Z_TYPE_P(values) != IS_ARRAY) {
+        return king_inference_gguf_skip_array_payload(file, file_size, array_type, array_count, path, 0);
+    }
+
+    for (i = 0; i < array_count; i++) {
+        zend_long value;
+
+        if (king_inference_gguf_read_numeric_long(file, file_size, array_type, path, &value) != SUCCESS) {
+            return FAILURE;
+        }
+        add_next_index_long(values, value);
     }
 
     return SUCCESS;

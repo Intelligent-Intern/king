@@ -55,8 +55,8 @@ static zend_result king_inference_cuda_decoder_graph_executor_kv_write_shape(
     if (!model->cuda_device_kv_cache_available
         || key_length == 0
         || value_length == 0
-        || key_length != model->cuda_device_kv_cache_key_length
-        || value_length != model->cuda_device_kv_cache_value_length
+        || key_length > model->cuda_device_kv_cache_key_length
+        || value_length > model->cuda_device_kv_cache_value_length
         || (zend_ulong) parsed_layer >= model->cuda_device_kv_cache_layers
         || (zend_ulong) parsed_head >= model->cuda_device_kv_cache_kv_heads
         || (zend_ulong) Z_LVAL_P(slot) >= model->cuda_device_kv_cache_context_tokens) {

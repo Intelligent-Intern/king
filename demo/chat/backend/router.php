@@ -41,6 +41,52 @@ function chat_error(int $status, string $code, string $message): void
     ]);
 }
 
+function chat_http_status_from_headers(array $headers): ?int
+{
+    foreach ($headers as $header) {
+        if (preg_match('#^HTTP/\S+\s+(\d{3})#', (string) $header, $match) === 1) {
+            return (int) $match[1];
+        }
+    }
+    return null;
+}
+
+function chat_runtime_models(): array
+{
+    $modelsUrl = chat_env_string('KING_CHAT_MODELS_URL', 'http://inference:8080/v1/models');
+    $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 2, 'ignore_errors' => true]]);
+    $raw = @file_get_contents($modelsUrl, false, $context);
+    $status = chat_http_status_from_headers($http_response_header ?? []);
+    if ($status !== 200 || !is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || !is_array($decoded['data'] ?? null)) {
+        return [];
+    }
+
+    $models = [];
+    foreach ($decoded['data'] as $model) {
+        if (!is_array($model) || !is_string($model['id'] ?? null) || trim($model['id']) === '') {
+            continue;
+        }
+        $models[] = trim($model['id']);
+    }
+
+    return array_values(array_unique($models));
+}
+
+function chat_runtime_model(): string
+{
+    $configured = chat_env_string('KING_CHAT_MODEL', 'gemma4:12b');
+    $models = chat_runtime_models();
+    if (in_array($configured, $models, true)) {
+        return $configured;
+    }
+    return $models[0] ?? $configured;
+}
+
 function chat_read_json_body(): array
 {
     $raw = file_get_contents('php://input');
@@ -106,17 +152,16 @@ function chat_normalize_messages(mixed $messages, int $maxMessages, int $maxChar
     return array_values($normalized);
 }
 
-function chat_system_instruction(): array
+function chat_system_instruction(): ?array
 {
+    $content = chat_env_string('KING_CHAT_SYSTEM_PROMPT', '');
+    if ($content === '') {
+        return null;
+    }
+
     return [
         'role' => 'system',
-        'content' => implode("\n", [
-            'King Chat UI contract:',
-            '- If the user asks for rendered Markdown, answer with a ```markdown fenced Markdown document.',
-            '- If the user asks for Markdown source or says they want Markdown, wrap the Markdown source in a triple-tilde fence: ~~~markdown ... ~~~.',
-            '- Put generated code in fenced code blocks with the correct language tag.',
-            '- If a King deterministic mini-op verifier is present, use its verified result for string, counting, regex-like, or arithmetic questions.',
-        ]),
+        'content' => $content,
     ];
 }
 
@@ -194,6 +239,10 @@ function chat_extract_count_occurrences_task(string $text): ?array
 
 function chat_miniops_verifier_message(array $messages): ?array
 {
+    if (chat_env_string('KING_CHAT_MINIOPS_ENABLE', '0') !== '1') {
+        return null;
+    }
+
     $task = chat_extract_count_occurrences_task(chat_latest_user_text($messages));
     if ($task === null) {
         return null;
@@ -229,7 +278,12 @@ function chat_miniops_verifier_message(array $messages): ?array
 
 function chat_prepare_model_messages(array $messages): array
 {
-    $prepared = [chat_system_instruction()];
+    $prepared = [];
+    $instruction = chat_system_instruction();
+    if ($instruction !== null) {
+        $prepared[] = $instruction;
+    }
+
     $verifier = chat_miniops_verifier_message($messages);
     if ($verifier !== null) {
         $prepared[] = $verifier;
@@ -524,17 +578,16 @@ function chat_health(): void
     $modelsUrl = chat_env_string('KING_CHAT_MODELS_URL', 'http://inference:8080/v1/models');
     $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 2, 'ignore_errors' => true]]);
     $raw = @file_get_contents($modelsUrl, false, $context);
-    $status = null;
-    foreach (($http_response_header ?? []) as $header) {
-        if (preg_match('#^HTTP/\S+\s+(\d{3})#', $header, $match) === 1) {
-            $status = (int) $match[1];
-            break;
-        }
-    }
+    $status = chat_http_status_from_headers($http_response_header ?? []);
 
     chat_json_response($status === 200 ? 200 : 503, [
         'ok' => $status === 200,
         'models_status' => $status,
+        'model' => [
+            'configured' => chat_env_string('KING_CHAT_MODEL', 'gemma4:12b'),
+            'effective' => chat_runtime_model(),
+            'available' => chat_runtime_models(),
+        ],
         'storage' => [
             'driver' => 'sqlite',
             'ready' => is_file(chat_db_path()) || is_dir(dirname(chat_db_path())),
@@ -575,7 +628,7 @@ function chat_stream_completion(): void
     );
 
     $payload = [
-        'model' => chat_env_string('KING_CHAT_MODEL', 'gemma3:1b'),
+        'model' => chat_runtime_model(),
         'stream' => true,
         'messages' => chat_prepare_model_messages($modelMessages),
         'max_tokens' => $maxTokens,
@@ -626,6 +679,8 @@ function chat_stream_completion(): void
 
     chat_send_sse('status', ['state' => 'streaming']);
     $buffer = '';
+    $streamEvent = 'message';
+    $streamError = null;
     $finishReason = null;
     while (!feof($stream)) {
         $line = fgets($stream);
@@ -634,6 +689,10 @@ function chat_stream_completion(): void
         }
         $line = trim($line);
         if ($line === '') {
+            continue;
+        }
+        if (str_starts_with($line, 'event:')) {
+            $streamEvent = trim(substr($line, 6));
             continue;
         }
         if (!str_starts_with($line, 'data:')) {
@@ -648,6 +707,13 @@ function chat_stream_completion(): void
         $event = json_decode($data, true);
         if (!is_array($event)) {
             continue;
+        }
+
+        if ($streamEvent === 'error') {
+            $message = $event['message'] ?? 'King inference stream returned an error.';
+            $streamError = is_string($message) ? $message : 'King inference stream returned an error.';
+            chat_send_sse('error', ['message' => $streamError]);
+            break;
         }
 
         $choice = $event['choices'][0] ?? null;
@@ -671,6 +737,9 @@ function chat_stream_completion(): void
     }
 
     fclose($stream);
+    if ($streamError !== null) {
+        return;
+    }
     if ($buffer === '') {
         chat_send_sse('error', [
             'message' => 'King inference returned HTTP 200 but no assistant content.',

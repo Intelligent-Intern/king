@@ -45,6 +45,8 @@ static void king_inference_add_gguf_metadata_array(
     add_assoc_long(&gguf, "tokenizer_max_token_bytes", (zend_long) metadata->tokenizer_max_token_bytes);
     add_assoc_bool(&gguf, "tokenizer_tokens_loaded", metadata->tokenizer_tokens_loaded);
     add_assoc_bool(&gguf, "tokenizer_lookup_loaded", metadata->tokenizer_lookup_loaded);
+    add_assoc_bool(&gguf, "tokenizer_scores_loaded", metadata->tokenizer_scores_loaded);
+    add_assoc_bool(&gguf, "tokenizer_types_loaded", metadata->tokenizer_types_loaded);
     add_assoc_bool(&gguf, "tokenizer_merges_loaded", metadata->tokenizer_merges_loaded);
     add_assoc_long(&gguf, "tokenizer_bos_id", metadata->tokenizer_bos_id);
     add_assoc_long(&gguf, "tokenizer_eos_id", metadata->tokenizer_eos_id);

@@ -37,6 +37,7 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     bool system_ram_offload_supported = false;
     bool system_ram_offload_admitted = false;
     bool weights_resident = false;
+    bool kv_cache_resident = false;
     const char *runtime_reason = NULL;
     const char *runtime_required_source = "artifact_plus_kv_cache";
     zend_long artifact_bytes = 0;
@@ -149,9 +150,16 @@ static void king_inference_gpu_runtime_add_kv_cache_estimate(
     weights_resident = model->cuda_weight_upload_result == 0
         && model->cuda_weight_uploaded_bytes > 0
         && model->cuda_device_bytes_allocated > 0;
+    kv_cache_resident = model->cuda_device_kv_cache_allocated
+        && model->cuda_device_kv_cache_bytes > 0;
     if (weights_resident) {
-        runtime_required_bytes = estimate_available ? estimated_bytes : 0;
-        runtime_required_source = estimate_available ? "kv_cache_after_weight_upload" : "weights_already_loaded";
+        if (kv_cache_resident) {
+            runtime_required_bytes = 0;
+            runtime_required_source = "weights_and_kv_cache_already_loaded";
+        } else {
+            runtime_required_bytes = estimate_available ? estimated_bytes : 0;
+            runtime_required_source = estimate_available ? "kv_cache_after_weight_upload" : "weights_already_loaded";
+        }
     } else if (estimate_available && estimated_bytes > ZEND_LONG_MAX - artifact_bytes) {
         overflow = true;
         runtime_required_bytes = ZEND_LONG_MAX;

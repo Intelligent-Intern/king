@@ -35,6 +35,8 @@ typedef struct _king_inference_gguf_metadata {
     zend_long tokenizer_pad_id;
     bool tokenizer_tokens_loaded;
     bool tokenizer_lookup_loaded;
+    bool tokenizer_scores_loaded;
+    bool tokenizer_types_loaded;
     bool tokenizer_merges_loaded;
     zend_ulong max_tensor_elements;
     zend_ulong max_tensor_rank;
@@ -57,6 +59,8 @@ typedef struct _king_inference_model_object {
     zval tensor_index;
     zval tokenizer_tokens;
     zval tokenizer_lookup;
+    zval tokenizer_scores;
+    zval tokenizer_types;
     zval tokenizer_merges;
     zval paged_kv_cache_plan;
     zend_string *name;

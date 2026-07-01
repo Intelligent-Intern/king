@@ -99,19 +99,6 @@ static void king_inference_decode_graph_attention_window(
     zend_ulong start = sliding_window > 0 && position >= sliding_window
         ? position - sliding_window + 1
         : 0;
-    zend_ulong page_tokens = king_inference_cuda_device_kv_cache_plan_long(
-        model,
-        "page_tokens",
-        KING_INFERENCE_DEFAULT_KV_PAGE_TOKENS
-    );
-
-    if (page_tokens > 0) {
-        zend_ulong page_start = (position / page_tokens) * page_tokens;
-        if (start < page_start) {
-            start = page_start;
-        }
-    }
-
     *slot_start = start;
     *slot_count = position - start + 1;
 }

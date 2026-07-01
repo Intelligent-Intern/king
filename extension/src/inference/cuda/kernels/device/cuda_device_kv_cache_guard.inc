@@ -99,10 +99,6 @@ static zend_result king_inference_cuda_device_kv_cache_guard_range(
     } else if (position_start >= model->cuda_device_kv_cache_context_tokens
         || count > model->cuda_device_kv_cache_context_tokens - position_start) {
         failure = "cuda_device_kv_cache_guard_context_overflow";
-    } else if (page_tokens == 0) {
-        failure = "cuda_device_kv_cache_guard_page_size_invalid";
-    } else if ((position_start / page_tokens) != ((position_start + count - 1) / page_tokens)) {
-        failure = "cuda_device_kv_cache_guard_page_boundary_crossed";
     }
 
     king_inference_cuda_device_kv_cache_guard_record(
@@ -150,8 +146,8 @@ static zend_result king_inference_cuda_device_kv_cache_guard_vectors(
         failure = "cuda_device_kv_cache_guard_vector_invalid";
     } else if (key_length == 0 || value_length == 0) {
         failure = "cuda_device_kv_cache_guard_vector_empty";
-    } else if (key_length != model->cuda_device_kv_cache_key_length
-        || value_length != model->cuda_device_kv_cache_value_length) {
+    } else if (key_length > model->cuda_device_kv_cache_key_length
+        || value_length > model->cuda_device_kv_cache_value_length) {
         failure = "cuda_device_kv_cache_guard_vector_shape_invalid";
     } else if (key_length > (zend_ulong) (SIZE_MAX / sizeof(float))
         || value_length > (zend_ulong) (SIZE_MAX / sizeof(float))) {
@@ -190,8 +186,8 @@ static zend_result king_inference_cuda_device_kv_cache_guard_batch_source(
         || key_length > key_row_stride - key_offset
         || value_length > value_row_stride - value_offset) {
         failure = "cuda_device_kv_cache_guard_batch_stride_invalid";
-    } else if (key_length != model->cuda_device_kv_cache_key_length
-        || value_length != model->cuda_device_kv_cache_value_length) {
+    } else if (key_length > model->cuda_device_kv_cache_key_length
+        || value_length > model->cuda_device_kv_cache_value_length) {
         failure = "cuda_device_kv_cache_guard_batch_vector_shape_invalid";
     } else if (!king_inference_cuda_device_kv_cache_mul_size((size_t) last_index, (size_t) key_row_stride, &key_units)
         || !king_inference_cuda_device_kv_cache_add_size(key_units, (size_t) key_offset, &key_units)
