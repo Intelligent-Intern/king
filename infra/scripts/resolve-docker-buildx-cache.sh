@@ -56,6 +56,11 @@ if [[ ! "${SCOPE}" =~ ^[A-Za-z0-9._-]+$ ]]; then
     exit 1
 fi
 
+if [[ "${SCOPE}" == "." || "${SCOPE}" == ".." ]]; then
+    echo "--scope must not be a relative path segment." >&2
+    exit 1
+fi
+
 write_output() {
     local key="$1"
     local value="$2"
@@ -77,15 +82,39 @@ write_scalar_output() {
 cache_from="type=gha,scope=${SCOPE}"
 cache_to="type=gha,mode=max,scope=${SCOPE},ignore-error=true"
 local_root="${KING_CI_LOCAL_DOCKER_BUILDX_CACHE_DIR:-}"
+local_root_real=""
 use_local="false"
 local_dir=""
 local_next_dir=""
 
 if [[ -n "${local_root}" && -d "${local_root}" && -w "${local_root}" ]]; then
-    local_dir="${local_root%/}/${SCOPE}"
-    local_next_dir="${local_root%/}/${SCOPE}.next"
+    local_root_real="$(realpath -m "${local_root}")"
+    if [[ "${local_root_real}" == "/" ]]; then
+        echo "Refusing to use filesystem root as Docker Buildx local cache root." >&2
+        exit 1
+    fi
+
+    local_dir="${local_root_real}/${SCOPE}"
+    local_next_dir="${local_root_real}/${SCOPE}.next"
+
+    case "${local_dir}" in
+        "${local_root_real}/"*) ;;
+        *)
+            echo "Resolved local cache directory escaped the configured cache root." >&2
+            exit 1
+            ;;
+    esac
+
+    case "${local_next_dir}" in
+        "${local_root_real}/"*) ;;
+        *)
+            echo "Resolved local cache next directory escaped the configured cache root." >&2
+            exit 1
+            ;;
+    esac
+
     mkdir -p "${local_dir}"
-    rm -rf "${local_next_dir}"
+    rm -rf -- "${local_next_dir}"
     mkdir -p "${local_next_dir}"
 
     cache_from=$(printf '%s\n%s' "type=local,src=${local_dir}" "${cache_from}")
