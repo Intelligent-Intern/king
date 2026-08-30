@@ -213,6 +213,11 @@
         </p>
       </section>
 
+      <!--
+        Server-side avatar/Sputnik controls are intentionally dormant until a
+        dedicated hardware pool is available. Keep this UI block for the later
+        reactivation together with its WorkspaceShell wiring.
+
       <section
         v-if="showSputnikControls"
         class="call-left-settings-block call-left-sputnik-block"
@@ -241,6 +246,7 @@
           {{ sputnikSwarmState.status || 'Nur User 1 kann serverseitige Test-Teilnehmer starten.' }}
         </p>
       </section>
+      -->
 
       <section
         v-if="showCallOwnerInviteLink"
@@ -406,20 +412,6 @@ const props = defineProps({
   workspaceSttState: {
     type: Object,
     default: () => ({}),
-  },
-  showSputnikControls: {
-    type: Boolean,
-    default: false,
-  },
-  sputnikSwarmState: {
-    type: Object,
-    default: () => ({
-      pending: false,
-      running: false,
-      status: '',
-      spawn: () => {},
-      stop: () => {},
-    }),
   },
   apiRequest: {
     type: Function,

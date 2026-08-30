@@ -904,7 +904,8 @@ VIDEOCHAT_V1_FRONTEND_WS_PORT_FALLBACK=
 VIDEOCHAT_V1_FRONTEND_SFU_PORT_FALLBACK=
 VIDEOCHAT_VUE_ALLOWED_HOSTS=\${VUE_ALLOWED_HOSTS}
 VIDEOCHAT_FRONTEND_ORIGIN=https://\${APP_DOMAIN}
-VIDEOCHAT_SPUTNIK_RUNNER_ENABLED=1
+# Keep server-side avatar spawning off until dedicated runner hardware exists.
+VIDEOCHAT_SPUTNIK_RUNNER_ENABLED=0
 VIDEOCHAT_SPUTNIK_RUNNER_URL=http://videochat-sputnik-runner-v1:19090
 VIDEOCHAT_SPUTNIK_APP_ORIGIN=https://\${APP_DOMAIN}
 VIDEOCHAT_SPUTNIK_DEFAULT_COUNT=10
@@ -953,7 +954,7 @@ services:
       VIDEOCHAT_CALL_APP_MCP_ENDPOINT: mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.mcp
       VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER: "1"
       VIDEOCHAT_CALL_APP_PACKAGE_ROOT: /call-app
-      VIDEOCHAT_SPUTNIK_RUNNER_ENABLED: "1"
+      VIDEOCHAT_SPUTNIK_RUNNER_ENABLED: "0"
       VIDEOCHAT_SPUTNIK_RUNNER_URL: http://videochat-sputnik-runner-v1:19090
       VIDEOCHAT_SPUTNIK_APP_ORIGIN: https://\${APP_DOMAIN}
       VIDEOCHAT_SPUTNIK_STALE_JOIN_MS: "180000"
@@ -1166,7 +1167,8 @@ set_env_value VIDEOCHAT_V1_FRONTEND_WS_PORT_FALLBACK ""
 set_env_value VIDEOCHAT_V1_FRONTEND_SFU_PORT_FALLBACK ""
 set_env_value VIDEOCHAT_VUE_ALLOWED_HOSTS "\${VUE_ALLOWED_HOSTS}"
 set_env_value VIDEOCHAT_FRONTEND_ORIGIN "https://\${APP_DOMAIN}"
-set_env_value VIDEOCHAT_SPUTNIK_RUNNER_ENABLED 1
+# An existing remote .env.local must not re-enable avatars on a later deploy.
+set_env_value VIDEOCHAT_SPUTNIK_RUNNER_ENABLED 0
 set_env_value VIDEOCHAT_SPUTNIK_RUNNER_URL http://videochat-sputnik-runner-v1:19090
 set_env_value VIDEOCHAT_SPUTNIK_APP_ORIGIN "https://\${APP_DOMAIN}"
 set_env_value VIDEOCHAT_SPUTNIK_DEFAULT_COUNT 10
@@ -1206,6 +1208,8 @@ remove_existing_service_containers() {
   fi
 }
 
+# Keep the legacy avatar runner in this cleanup list, so this rollout also
+# stops any runner container left behind by an earlier deployment.
 for service in \\
   videochat-frontend-v1 \\
   videochat-backend-v1 \\
@@ -1222,11 +1226,9 @@ docker compose --env-file .env --env-file .env.local \\
   -f docker-compose.deploy.local.yml \\
   --profile edge \\
   --profile turn \\
-  --profile sputnik \\
   up -d --build --remove-orphans \\
   videochat-backend-v1 \\
   videochat-backend-ws-v1 \\
-  videochat-sputnik-runner-v1 \\
   videochat-turn-v1 \\
   videochat-edge-v1
 

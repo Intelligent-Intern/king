@@ -45,7 +45,8 @@ function videochat_sputnik_config(): array
     }
 
     return [
-        'enabled' => !in_array(strtolower(trim((string) (getenv('VIDEOCHAT_SPUTNIK_RUNNER_ENABLED') ?: '1'))), ['0', 'false', 'off', 'no'], true),
+        // Avatar automation is opt-in: it needs dedicated runner hardware.
+        'enabled' => !in_array(strtolower(trim((string) (getenv('VIDEOCHAT_SPUTNIK_RUNNER_ENABLED') ?: '0'))), ['0', 'false', 'off', 'no'], true),
         'runner_url' => $runnerUrl,
         'app_origin' => $appOrigin,
         'default_count' => videochat_sputnik_env_int('VIDEOCHAT_SPUTNIK_DEFAULT_COUNT', 10, 1, 25),
