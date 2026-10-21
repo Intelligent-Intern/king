@@ -53,6 +53,32 @@ Tagged releases that publish the matching PIE source asset can be installed
 with `pie install intelligent-intern/king-ext`. Packaging and verification are
 handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
+### Bundled PHP runtime images
+
+`ghcr.io/intelligent-intern/king:php8.4` bundles PHP and the King extension;
+other published runtime tags select their PHP minor version in the same way.
+To inspect the installed versions:
+
+```bash
+docker pull ghcr.io/intelligent-intern/king:php8.4
+docker run --rm ghcr.io/intelligent-intern/king:php8.4 php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
+```
+
+Pulling a tag retrieves its published image; it does not update packages inside
+an older published image. Release builds refresh the PHP base without reusing
+APT build layers, and final runtime builds update PHP even when it is already
+installed. PHP 8.2–8.5 must meet the security floors from the
+[2026-10-21 PHP advisory](https://www.php.net/index.php): 8.2.35, 8.3.36, 8.4.27
+and 8.5.12 respectively. Publication fails if the package mirror is behind.
+PHP 8.1 compatibility remains available, but that branch is upstream EOL and
+is not covered by these supported-branch security floors.
+
+For a local base rebuild, use `docker build --pull --no-cache
+--build-arg PHP_VERSION=8.4 -f infra/php-runtime-base.Dockerfile
+-t king-php-base:php8.4 .` from the repository root. Rebuild and publish the
+bundled runtime image afterwards; updating the base alone does not replace
+an existing runtime tag.
+
 ## Small But Oho
 
 One good first King application is this:
