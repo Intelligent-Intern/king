@@ -40,9 +40,8 @@ USER root
 COPY --from=php-build /usr/bin/tar /usr/local/bin/tar
 # Keep configuration before removing the replaced distro PHP packages. This
 # prevents retaining vulnerable, unused PHP modules or misleading package state.
-RUN if [ ! -f /opt/php/etc/conf.d/00-extension-directory.ini ]; then \
-      mkdir -p /opt/php/etc/conf.d; \
-      cp -L /etc/php/${PHP_MINOR_VERSION}/cli/conf.d/*.ini /opt/php/etc/conf.d/; fi \
+RUN mkdir -p /opt/php/etc/conf.d \
+    && cp -L /etc/php/${PHP_MINOR_VERSION}/cli/conf.d/*.ini /opt/php/etc/conf.d/ \
     && dpkg-query -W -f='${binary:Package} ${db:Status-Status}\n' "php${PHP_MINOR_VERSION}-*" php-common \
       | awk '$2 == "installed" { print $1 }' \
       | xargs -r dpkg --remove --force-depends
