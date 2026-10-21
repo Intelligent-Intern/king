@@ -48,10 +48,13 @@ RUN if [ ! -f /opt/php/etc/conf.d/00-extension-directory.ini ]; then \
       | xargs -r dpkg --remove --force-depends
 RUN rm /usr/local/bin/tar
 COPY --from=php-build /opt/php/ /opt/php/
+ENV PHP_INI_SCAN_DIR=/etc/php/${PHP_MINOR_VERSION}/cli/conf.d
 # Preserve the existing PHP settings and module order, including King's config.
 RUN mkdir -p /opt/php/etc/conf.d \
     && extension_dir="$(find /opt/php/lib/php/extensions -mindepth 1 -maxdepth 1 -type d)" \
     && printf 'extension_dir="%s"\n' "$extension_dir" > /opt/php/etc/conf.d/00-extension-directory.ini \
+    && mkdir -p /etc/php/${PHP_MINOR_VERSION}/cli/conf.d \
+    && cp /opt/php/etc/conf.d/*.ini /etc/php/${PHP_MINOR_VERSION}/cli/conf.d/ \
     && for tool in php php-config phpize phar phar.phar; do \
       ln -sf "/opt/php/bin/$tool" "/usr/local/bin/$tool"; done \
     && ln -sf /opt/php/bin/php /usr/bin/php \
