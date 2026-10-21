@@ -107,5 +107,21 @@ apt-get install -y --no-install-recommends \
     "php${PHP_VERSION}-sqlite3" \
     "php${PHP_VERSION}-xml"
 
+# PHP's 2026-10-21 security release fixes CVE-2026-109618/109619.
+# https://www.php.net/releases/8_4_27.php
+# Reject an outdated mirror instead of publishing a vulnerable supported runtime.
+minimum_version=""
+case "${PHP_VERSION}" in
+    8.2) minimum_version=8.2.35 ;;
+    8.3) minimum_version=8.3.36 ;;
+    8.4) minimum_version=8.4.27 ;;
+    8.5) minimum_version=8.5.12 ;;
+esac
+installed_version="$("/usr/bin/php${PHP_VERSION}" -n -r 'echo PHP_VERSION;')"
+if [[ -n "${minimum_version}" ]] && ! dpkg --compare-versions "${installed_version}" ge "${minimum_version}"; then
+    echo "PHP ${installed_version} is below required security version ${minimum_version}." >&2
+    exit 1
+fi
+
 ln -sf "/usr/bin/php${PHP_VERSION}" /usr/local/bin/php
 rm -rf /var/lib/apt/lists/*

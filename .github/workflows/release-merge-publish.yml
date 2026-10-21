@@ -21,7 +21,6 @@ env:
   DEBIAN_FRONTEND: noninteractive
   REGISTRY: ghcr.io
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  PHP_BASE_MAX_AGE_DAYS: "14"
   KING_CI_LOCAL_DOCKER_BUILDX_CACHE_DIR: /opt/king/cache/docker/buildx
 
 jobs:
@@ -174,88 +173,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Decide whether base image rebuild is required
-        id: decide-base
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          owner="${{ steps.meta-base.outputs.owner }}"
-          package_name="${{ steps.meta-base.outputs.package_name }}"
-          target_tag="${{ steps.meta-base.outputs.tag }}"
-          max_age_days="${PHP_BASE_MAX_AGE_DAYS}"
-          versions_json="$(mktemp)"
-          decision_file="$(mktemp)"
-
-          if gh api -H "Accept: application/vnd.github+json" "/orgs/${owner}/packages/container/${package_name}/versions?per_page=100" >"${versions_json}" 2>/dev/null; then
-            :
-          elif gh api -H "Accept: application/vnd.github+json" "/users/${owner}/packages/container/${package_name}/versions?per_page=100" >"${versions_json}" 2>/dev/null; then
-            :
-          else
-            {
-              echo "rebuild=true"
-              echo "reason=package lookup failed; forcing base rebuild"
-            } >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
-          python3 - "${versions_json}" "${target_tag}" "${max_age_days}" >"${decision_file}" <<'PY'
-          import datetime
-          import json
-          import sys
-
-          versions_path, target_tag, max_age_days_raw = sys.argv[1:4]
-          max_age_days = int(max_age_days_raw)
-          now = datetime.datetime.now(datetime.timezone.utc)
-
-          with open(versions_path, "r", encoding="utf-8") as fh:
-              versions = json.load(fh)
-
-          tag_version = None
-          for item in versions:
-              tags = (((item.get("metadata") or {}).get("container") or {}).get("tags") or [])
-              if target_tag in tags:
-                  tag_version = item
-                  break
-
-          if tag_version is None:
-              print("rebuild=true")
-              print("reason=base image tag missing")
-              sys.exit(0)
-
-          updated_at = tag_version.get("updated_at") or tag_version.get("created_at")
-          if not isinstance(updated_at, str) or not updated_at:
-              print("rebuild=true")
-              print("reason=base image timestamp missing")
-              sys.exit(0)
-
-          timestamp = datetime.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-          age_days = (now - timestamp).total_seconds() / 86400.0
-
-          if age_days > max_age_days:
-              print("rebuild=true")
-              print(f"reason=base image stale ({age_days:.1f}d>{max_age_days}d)")
-          else:
-              print("rebuild=false")
-              print(f"reason=base image fresh ({age_days:.1f}d<={max_age_days}d)")
-          PY
-
-          cat "${decision_file}" >> "${GITHUB_OUTPUT}"
-
-      - name: Report PHP base image decision
-        run: |
-          set -euo pipefail
-          echo "Base image: ${{ steps.meta-base.outputs.ref }}"
-          echo "Decision : rebuild=${{ steps.decide-base.outputs.rebuild }}"
-          echo "Reason   : ${{ steps.decide-base.outputs.reason }}"
-
       - name: Build and push PHP base image
-        if: steps.decide-base.outputs.rebuild == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./infra/php-runtime-base.Dockerfile
+          # Always refresh APT packages; image age does not establish patch status.
+          pull: true
+          no-cache: true
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-base.outputs.ref }}
@@ -266,7 +191,7 @@ jobs:
             PHP_VERSION=${{ matrix.php-version }}
 
       - name: Commit local Docker Buildx cache
-        if: steps.decide-base.outputs.rebuild == 'true' && steps.base-buildx-cache.outputs.use-local-cache == 'true'
+        if: steps.base-buildx-cache.outputs.use-local-cache == 'true'
         run: |
           bash ./infra/scripts/commit-docker-buildx-cache.sh \
             --cache-dir "${{ steps.base-buildx-cache.outputs.local-cache-dir }}" \
@@ -792,6 +717,7 @@ jobs:
         with:
           context: .
           file: ./infra/php-runtime.Dockerfile
+          pull: true
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-dockerhub.outputs.tags }}
@@ -945,6 +871,7 @@ jobs:
         with:
           context: .
           file: ./infra/php-runtime.Dockerfile
+          pull: true
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -35,11 +35,7 @@ LABEL org.opencontainers.image.title="king" \
 
 RUN --mount=type=bind,source=infra/scripts/install-ubuntu-php-runtime.sh,target=/tmp/install-ubuntu-php-runtime.sh,readonly \
     set -eux; \
-    if command -v "php${PHP_VERSION}" >/dev/null 2>&1; then \
-      ln -sf "/usr/bin/php${PHP_VERSION}" /usr/local/bin/php; \
-    else \
-      /tmp/install-ubuntu-php-runtime.sh "${PHP_VERSION}"; \
-    fi
+    /tmp/install-ubuntu-php-runtime.sh "${PHP_VERSION}"
 
 RUN mkdir -p /opt/king /workspace
 

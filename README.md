@@ -53,6 +53,52 @@ Tagged releases that publish the matching PIE source asset can be installed
 with `pie install intelligent-intern/king-ext`. Packaging and verification are
 handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
+### Bundled PHP runtime images
+
+`ghcr.io/intelligent-intern/king:php8.4` bundles PHP and the King extension;
+other published runtime tags select their PHP minor version in the same way.
+To inspect the installed versions:
+
+```bash
+docker pull ghcr.io/intelligent-intern/king:php8.4
+docker run --rm ghcr.io/intelligent-intern/king:php8.4 php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
+```
+
+Pulling a tag retrieves its published image; it does not update packages inside
+an older published image. Release builds refresh the PHP base without reusing
+APT build layers, and final runtime builds update PHP even when it is already
+installed. PHP 8.2–8.5 must meet the security floors from the
+[2026-10-21 PHP advisory](https://www.php.net/index.php): 8.2.35, 8.3.36, 8.4.27
+and 8.5.12 respectively. Publication fails if the package mirror is behind.
+PHP 8.1 compatibility remains available, but that branch is upstream EOL and
+is not covered by these supported-branch security floors.
+
+For a local base rebuild, use `docker build --pull --no-cache
+--build-arg PHP_VERSION=8.4 -f infra/php-runtime-base.Dockerfile
+-t king-php-base:php8.4 .` from the repository root. Rebuild and publish the
+bundled runtime image afterwards; updating the base alone does not replace
+an existing runtime tag.
+
+When distribution packages lag behind an official PHP security release, use
+`infra/php-runtime-security.Dockerfile`. It rebuilds PHP from the official
+source distribution on Ubuntu 24.04, retains the published King's extension,
+QUIC libraries and PHP settings, and replaces the old PHP packages and modules.
+The build verifies the exact PHP version and that King loads before publishing.
+For PHP 8.4.27:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --build-arg PHP_PATCH_VERSION=8.4.27 \
+  --build-arg PHP_MINOR_VERSION=8.4 \
+  -f infra/php-runtime-security.Dockerfile \
+  -t ghcr.io/intelligent-intern/king:php8.4.27 \
+  -t ghcr.io/intelligent-intern/king:php8.4 --push .
+```
+
+This updates the bundled runtime independently of an extension release. A
+running application still needs to pull the resulting image and recreate its
+containers to use it.
+
 ## Small But Oho
 
 One good first King application is this:
