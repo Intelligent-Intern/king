@@ -79,6 +79,26 @@ For a local base rebuild, use `docker build --pull --no-cache
 bundled runtime image afterwards; updating the base alone does not replace
 an existing runtime tag.
 
+When distribution packages lag behind an official PHP security release, use
+`infra/php-runtime-security.Dockerfile`. It rebuilds PHP from the official
+source distribution on Ubuntu 24.04, retains the published King's extension,
+QUIC libraries and PHP settings, and replaces the old PHP packages and modules.
+The build verifies the exact PHP version and that King loads before publishing.
+For PHP 8.4.27:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --build-arg PHP_PATCH_VERSION=8.4.27 \
+  --build-arg PHP_MINOR_VERSION=8.4 \
+  -f infra/php-runtime-security.Dockerfile \
+  -t ghcr.io/intelligent-intern/king:php8.4.27 \
+  -t ghcr.io/intelligent-intern/king:php8.4 --push .
+```
+
+This updates the bundled runtime independently of an extension release. A
+running application still needs to pull the resulting image and recreate its
+containers to use it.
+
 ## Small But Oho
 
 One good first King application is this:
