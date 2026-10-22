@@ -11,6 +11,7 @@
 
 #include "php.h"
 #include "php_king.h"
+#include "http3/header_budget.h"
 #include "client/http3.h"
 #include "config/config.h"
 #include "config/quic_transport/base_layer.h"
@@ -23,6 +24,9 @@
 
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 #include <lsquic.h>
+#if LSQUIC_MAJOR_VERSION < 4 || (LSQUIC_MAJOR_VERSION == 4 && LSQUIC_MINOR_VERSION < 9)
+#error "King HTTP/3 requires LSQUIC 4.9.0 or newer"
+#endif
 #include <lsxpack_header.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -101,6 +105,7 @@ typedef struct _king_http3_response {
     long status_code;
     size_t body_bytes;
     size_t header_bytes;
+    size_t header_budget_bytes;
     bool headers_initialized;
     bool body_overflowed;
     bool header_overflowed;

@@ -421,6 +421,8 @@ static zend_result king_http3_lsquic_runtime_init(
     runtime->lsquic_tls_verify_host = ZSTR_VAL(target->host);
 
     king_http3_lsquic.lsquic_engine_init_settings_fn(&runtime->lsquic_settings, engine_flags);
+    runtime->lsquic_settings.es_max_header_sets = LSQUIC_DF_MAX_HEADER_SETS_CLIENT;
+    runtime->lsquic_settings.es_max_header_list_size = KING_HTTP3_MAX_HEADER_BYTES;
     if (king_http3_lsquic_apply_quic_options(runtime, options, function_name) != SUCCESS) {
         return FAILURE;
     }

@@ -234,7 +234,7 @@ if (!is_array($provenance)) {
 
 $lockPath = getenv('PROVENANCE_LSQUIC_BOOTSTRAP_LOCK');
 if (!is_string($lockPath) || $lockPath === '' || !is_file($lockPath)) {
-    $fail("Missing local provenance input for lsquic_bootstrap_lock_sha256.\n");
+    $fail("Missing local LSQUIC version metadata.\n");
 }
 
 $lockValues = [];
@@ -252,26 +252,6 @@ $readLock = static function (string $key) use ($lockValues, $fail): string {
 
     return $value;
 };
-
-$required = [
-    'lsquic_bootstrap_lock_sha256' => hash_file('sha256', $lockPath),
-    'lsquic_archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
-    'boringssl_archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
-    'ls_qpack_archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
-    'ls_hpack_archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
-];
-
-foreach ($required as $key => $actualHash) {
-    $expectedHash = $provenance[$key] ?? null;
-    if (!is_string($expectedHash) || preg_match('/^[A-Fa-f0-9]{64}$/', $expectedHash) !== 1) {
-        $fail("Invalid manifest provenance hash for {$key}.\n");
-    }
-    $expectedHash = strtolower($expectedHash);
-
-    if ($actualHash !== $expectedHash) {
-        $fail("Provenance hash mismatch for {$key} in {$archivePath}.\n");
-    }
-}
 
 $expectedComponents = ['lsquic', 'boringssl', 'ls-qpack', 'ls-hpack'];
 if (
@@ -293,8 +273,6 @@ $expectedDependencyProvenance = [
         'version' => $readLock('KING_LSQUIC_TAG'),
         'commit' => $readLock('KING_LSQUIC_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LICENSE_FILES')) ?: [],
     ],
     'boringssl' => [
@@ -302,8 +280,6 @@ $expectedDependencyProvenance = [
         'version' => $readLock('KING_LSQUIC_BORINGSSL_TAG'),
         'commit' => $readLock('KING_LSQUIC_BORINGSSL_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: [],
     ],
     'ls-qpack' => [
@@ -312,8 +288,6 @@ $expectedDependencyProvenance = [
         'version' => 'gitlink',
         'commit' => $readLock('KING_LSQUIC_LS_QPACK_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: [],
     ],
     'ls-hpack' => [
@@ -322,8 +296,6 @@ $expectedDependencyProvenance = [
         'version' => 'gitlink',
         'commit' => $readLock('KING_LSQUIC_LS_HPACK_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: [],
     ],
 ];

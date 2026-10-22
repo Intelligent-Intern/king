@@ -84,14 +84,16 @@ static int king_server_http3_collect_request_header(
     king_server_http3_request_state_t *state = context->state;
     zend_string **slot = NULL;
 
-    state->header_bytes += name_len + value_len;
-    if (state->header_bytes > KING_SERVER_HTTP3_MAX_HEADER_BYTES) {
+    if (!king_http3_header_budget_consume(
+            &state->header_budget_bytes, KING_SERVER_HTTP3_MAX_HEADER_BYTES, name_len, value_len)) {
         king_server_local_set_errorf(
             "%s() received an HTTP/3 request whose headers exceed the active one-shot limit.",
             context->function_name
         );
         return -1;
     }
+
+    state->header_bytes += name_len + value_len;
 
     if (name_len == sizeof(":method") - 1 && memcmp(name, ":method", sizeof(":method") - 1) == 0) {
         slot = &state->method;
