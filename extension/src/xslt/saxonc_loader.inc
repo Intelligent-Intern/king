@@ -1,120 +1,46 @@
-/*
- * Runtime loader for SaxonC. King intentionally does not link against SaxonC
- * at build time; deployments provide the SaxonC shared object next to the King
- * module, through KING_SAXONC_LIBRARY, SAXONC_HOME, or the platform linker path.
+/* SaxonC 13 core ABI. The legacy convenience C API discards saxon_error_t
+ * (c_getErrorMessage() always returns NULL in 13.1.1), so call the supported
+ * core entry points directly and propagate structured failures to PHP.
+ * ABI declarations mirror Saxonica's shipped saxonc-core-he.h/saxon_error.h.
+ * SaxonC is optional and dynamically loaded: no JVM process is launched.
  */
-
-typedef struct sxnc_environment sxnc_environment;
-typedef struct sxnc_processor sxnc_processor;
-typedef struct sxnc_parameter sxnc_parameter;
-typedef struct sxnc_property sxnc_property;
-
-typedef void (*king_saxonc_init_fn)(
-    sxnc_environment **environi,
-    sxnc_processor **proc,
-    sxnc_parameter **param,
-    sxnc_property **prop,
-    int cap,
-    int propCap
-);
-typedef void (*king_saxonc_free_fn)(
-    sxnc_environment **environi,
-    sxnc_processor **proc,
-    sxnc_parameter **param,
-    sxnc_property **prop
-);
-typedef const char *(*king_saxonc_version_fn)(
-    sxnc_environment *environi,
-    sxnc_processor *proc
-);
-typedef const char *(*king_saxonc_variant_fn)(
-    sxnc_environment *environi,
-    sxnc_processor *proc
-);
-typedef const char *(*king_saxonc_error_fn)(sxnc_environment *environi);
-typedef const char *(*king_saxonc_xslt_apply_fn)(
-    sxnc_environment *environi,
-    sxnc_processor *proc,
-    char *cwd,
-    char *source,
-    char *stylesheet,
-    sxnc_parameter *parameters,
-    sxnc_property *properties,
-    int parLen,
-    int propLen
-);
-typedef void (*king_saxonc_xslt_save_fn)(
-    sxnc_environment *environi,
-    sxnc_processor *proc,
-    char *cwd,
-    char *source,
-    char *stylesheet,
-    char *outputfile,
-    sxnc_parameter *parameters,
-    sxnc_property *properties,
-    int parLen,
-    int propLen
-);
-typedef void (*king_saxonc_set_property_fn)(
-    sxnc_property **properties,
-    int *propLen,
-    int *propCap,
-    const char *name,
-    const char *value
-);
-
-typedef struct _king_saxonc_runtime_api_t {
-    void *handle;
-    zend_bool ready;
-    zend_bool load_attempted;
-    char loaded_library[PATH_MAX];
-    char load_error[512];
-    king_saxonc_init_fn initSaxonc_fn;
-    king_saxonc_free_fn freeSaxonc_fn;
-    king_saxonc_version_fn version_fn;
-    king_saxonc_variant_fn getProductVariantAndVersion_fn;
-    king_saxonc_error_fn c_getErrorMessage_fn;
-    king_saxonc_xslt_apply_fn xsltApplyStylesheet_fn;
-    king_saxonc_xslt_save_fn xsltSaveResultToFile_fn;
-    king_saxonc_set_property_fn setProperty_fn;
+#include <stdint.h>
+typedef struct { int status; const char *error_code; const char *message;
+    const char *system_id; int line_number; int num_of_errors; } king_saxon_error;
+typedef struct { void *isolate; void *thread; char error[2048]; char *result; } sxnc_environment;
+typedef struct { int64_t value; } sxnc_processor;
+typedef struct { char *unused; } sxnc_parameter;
+typedef struct { char *name; char *value; } sxnc_property;
+typedef struct {
+    void *handle; zend_bool ready, load_attempted;
+    char loaded_library[PATH_MAX], load_error[512];
+    int (*create_isolate)(void *, void **, void **);
+    int (*tear_down)(void *);
+    int64_t (*create_processor)(void *, int);
+    char *(*product)(void *, void *);
+    int64_t (*create_data)(void *, int);
+    void (*add_property)(void *, void *, char *, char *, king_saxon_error *);
+    int64_t (*configure)(void *, void *, char *, char *, king_saxon_error *);
+    void (*destroy)(void *, void *);
+    char *(*transform)(void *, void *, char *, char *, char *, void *, king_saxon_error *);
 } king_saxonc_runtime_api_t;
-
 static king_saxonc_runtime_api_t king_saxonc = {0};
-
-static zend_result king_saxonc_load_symbol(void **target, const char *name)
-{
+static zend_result king_saxonc_load_symbol(void **target, const char *name) {
     *target = dlsym(king_saxonc.handle, name);
-    if (*target == NULL) {
-        snprintf(
-            king_saxonc.load_error,
-            sizeof(king_saxonc.load_error),
-            "Failed to load SaxonC symbol '%s'.",
-            name
-        );
-        return FAILURE;
-    }
-
+    if (!*target) { snprintf(king_saxonc.load_error,sizeof(king_saxonc.load_error),
+        "Unsupported SaxonC ABI: missing '%s'; install SaxonC HE core 13.1.1 or newer 13.x.",name); return FAILURE; }
     return SUCCESS;
 }
-
-static void king_saxonc_close_runtime_handle(void)
-{
-    if (king_saxonc.handle != NULL) {
-        dlclose(king_saxonc.handle);
-    }
-    memset(&king_saxonc, 0, sizeof(king_saxonc));
+static void king_saxonc_close_runtime_handle(void) {
+    if (king_saxonc.handle) dlclose(king_saxonc.handle);
+    memset(&king_saxonc,0,sizeof(king_saxonc));
 }
-
-static void king_saxonc_close_runtime_handle_preserve_error(void)
-{
-    char load_error[sizeof(king_saxonc.load_error)];
-
-    snprintf(load_error, sizeof(load_error), "%s", king_saxonc.load_error);
+static void king_saxonc_close_runtime_handle_preserve_error(void) {
+    char error[512]; snprintf(error,sizeof(error),"%s",king_saxonc.load_error);
     king_saxonc_close_runtime_handle();
-    snprintf(king_saxonc.load_error, sizeof(king_saxonc.load_error), "%s", load_error);
-    king_saxonc.load_attempted = 1;
+    snprintf(king_saxonc.load_error,sizeof(king_saxonc.load_error),"%s",error);
+    king_saxonc.load_attempted=1;
 }
-
 static zend_result king_saxonc_build_module_relative_candidate(
     char *buffer,
     size_t buffer_size,
@@ -156,7 +82,7 @@ static zend_bool king_saxonc_try_dlopen(const char *path)
         return 0;
     }
 
-    king_saxonc.handle = dlopen(path, RTLD_LAZY | RTLD_LOCAL);
+    king_saxonc.handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (king_saxonc.handle == NULL) {
         return 0;
     }
@@ -170,91 +96,99 @@ static zend_bool king_saxonc_try_dlopen(const char *path)
     return 1;
 }
 
-static zend_result king_saxonc_ensure_ready(void)
-{
-    const char *env_path = getenv("KING_SAXONC_LIBRARY");
-    const char *home_path = getenv("SAXONC_HOME");
-    char home_candidate[PATH_MAX];
-    char module_runtime_candidate[PATH_MAX];
-    char module_local_candidate[PATH_MAX];
-    const char *const candidates[] = {KING_SAXONC_RUNTIME_CANDIDATES};
-    size_t i;
 
-    if (king_saxonc.ready) {
-        return SUCCESS;
-    }
-
-    if (king_saxonc.load_attempted) {
-        return FAILURE;
-    }
-    king_saxonc.load_attempted = 1;
-
-    if (!king_saxonc_try_dlopen(env_path) && home_path != NULL && home_path[0] != '\0') {
-        snprintf(
-            home_candidate,
-            sizeof(home_candidate),
+static zend_result king_saxonc_ensure_ready(void) {
+    const char *explicit_path=getenv("KING_SAXONC_LIBRARY"), *home=getenv("SAXONC_HOME");
+    const char *const candidates[]={KING_SAXONC_RUNTIME_CANDIDATES}; char path[PATH_MAX]; size_t i;
+    if (king_saxonc.ready) return SUCCESS;
+    if (king_saxonc.load_attempted) return FAILURE;
+    king_saxonc.load_attempted=1;
+    /* An explicit deployment choice must never silently fall back. */
+    if (explicit_path && *explicit_path) {
+        if (!king_saxonc_try_dlopen(explicit_path)) {
+            snprintf(king_saxonc.load_error,sizeof(king_saxonc.load_error),"Cannot load KING_SAXONC_LIBRARY: %.350s",dlerror());
+            return FAILURE;
+        }
+    } else {
 #if defined(__APPLE__)
-            "%s/libsaxon-hec.dylib",
+        const char *core="libsaxonc-core-he.dylib";
 #else
-            "%s/libsaxon-hec.so",
+        const char *core="libsaxonc-core-he.so";
 #endif
-            home_path
-        );
-        king_saxonc_try_dlopen(home_candidate);
+        if (home && *home) {
+            snprintf(path,sizeof(path),"%s/%s",home,core); king_saxonc_try_dlopen(path);
+            if (!king_saxonc.handle) { snprintf(path,sizeof(path),"%s/SaxonCCoreHE/lib/%s",home,core); king_saxonc_try_dlopen(path); }
+        }
+        if (!king_saxonc.handle && king_saxonc_build_module_relative_candidate(path,sizeof(path),core)==SUCCESS) king_saxonc_try_dlopen(path);
+        for(i=0; !king_saxonc.handle && candidates[i];i++) king_saxonc_try_dlopen(candidates[i]);
     }
-
-    if (king_saxonc.handle == NULL
-        && king_saxonc_build_module_relative_candidate(
-            module_runtime_candidate,
-            sizeof(module_runtime_candidate),
-#if defined(__APPLE__)
-            "king/runtime/libsaxon-hec.dylib"
-#else
-            "king/runtime/libsaxon-hec.so"
-#endif
-        ) == SUCCESS) {
-        king_saxonc_try_dlopen(module_runtime_candidate);
+    if (!king_saxonc.handle) {
+        snprintf(king_saxonc.load_error,sizeof(king_saxonc.load_error),"SaxonC 13 core unavailable. Set KING_SAXONC_LIBRARY to libsaxonc-core-he.so from SaxonC HE 13.1.1+."); return FAILURE;
     }
-
-    if (king_saxonc.handle == NULL
-        && king_saxonc_build_module_relative_candidate(
-            module_local_candidate,
-            sizeof(module_local_candidate),
-#if defined(__APPLE__)
-            "libsaxon-hec.dylib"
-#else
-            "libsaxon-hec.so"
-#endif
-        ) == SUCCESS) {
-        king_saxonc_try_dlopen(module_local_candidate);
-    }
-
-    for (i = 0; king_saxonc.handle == NULL && candidates[i] != NULL; ++i) {
-        king_saxonc_try_dlopen(candidates[i]);
-    }
-
-    if (king_saxonc.handle == NULL) {
-        snprintf(
-            king_saxonc.load_error,
-            sizeof(king_saxonc.load_error),
-            "Failed to load SaxonC. Set KING_SAXONC_LIBRARY to the SaxonC shared object, set SAXONC_HOME, or install %s in the dynamic linker path.",
-            KING_SAXONC_RUNTIME_CANDIDATE_NAMES
-        );
-        return FAILURE;
-    }
-
-    if (king_saxonc_load_symbol((void **) &king_saxonc.initSaxonc_fn, "initSaxonc") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.freeSaxonc_fn, "freeSaxonc") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.version_fn, "version") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.getProductVariantAndVersion_fn, "getProductVariantAndVersion") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.c_getErrorMessage_fn, "c_getErrorMessage") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.xsltApplyStylesheet_fn, "xsltApplyStylesheet") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.xsltSaveResultToFile_fn, "xsltSaveResultToFile") != SUCCESS
-        || king_saxonc_load_symbol((void **) &king_saxonc.setProperty_fn, "setProperty") != SUCCESS) {
-        king_saxonc_close_runtime_handle_preserve_error();
-        return FAILURE;
-    }
-
-    king_saxonc.ready = 1;
+#define KING_SAXON_SYMBOL(field,name) if(king_saxonc_load_symbol((void **)&king_saxonc.field,name)!=SUCCESS) goto unsupported
+    KING_SAXON_SYMBOL(create_isolate,"graal_create_isolate");
+    KING_SAXON_SYMBOL(tear_down,"graal_tear_down_isolate");
+    KING_SAXON_SYMBOL(create_processor,"createSaxonProcessor");
+    KING_SAXON_SYMBOL(product,"j_c_getProductVersion");
+    KING_SAXON_SYMBOL(create_data,"createProcessorDataWithCapacity");
+    KING_SAXON_SYMBOL(add_property,"addProcessorPropertyPair");
+    KING_SAXON_SYMBOL(configure,"j_applyPropertyToConfiguration");
+    KING_SAXON_SYMBOL(destroy,"j_handles_destroy");
+    KING_SAXON_SYMBOL(transform,"c_xsltApplyStylesheet");
+#undef KING_SAXON_SYMBOL
+    king_saxonc.ready=1; return SUCCESS;
+unsupported: king_saxonc_close_runtime_handle_preserve_error(); return FAILURE;
+}
+static void king_saxonc_record_error(sxnc_environment *env, king_saxon_error *error) {
+    snprintf(env->error,sizeof(env->error),"%s%s%s%s%s (line %d)",
+        error->error_code?error->error_code:"SaxonC", error->message?": ":"",
+        error->message?error->message:"native XSLT operation failed",
+        error->system_id?" in ":"",error->system_id?error->system_id:"",error->line_number);
+}
+static zend_result king_saxonc_context_create(sxnc_environment **env,sxnc_processor **proc) {
+    *env=calloc(1,sizeof(**env)); *proc=calloc(1,sizeof(**proc));
+    if (!*env || !*proc) return FAILURE;
+    if (king_saxonc.create_isolate(NULL,&(*env)->isolate,&(*env)->thread)!=0) return FAILURE;
+    (*proc)->value=king_saxonc.create_processor((*env)->thread,0);
+    if ((*proc)->value<=0) return FAILURE;
     return SUCCESS;
+}
+static void king_saxonc_context_free(sxnc_environment **env,sxnc_processor **proc,sxnc_property **props,int prop_len) {
+    int i;
+    for(i=0;*props && i<prop_len;i++){free((*props)[i].name);free((*props)[i].value);} free(*props); *props=NULL;
+    if (*env) {
+        /* c_xsltApplyStylesheet returns isolate-owned memory. Copy to a Zend
+         * string before teardown; libc free() is invalid for this pointer. */
+        if ((*env)->thread) {
+            if (*proc && (*proc)->value>0) king_saxonc.destroy((*env)->thread,(void *)(intptr_t)(*proc)->value);
+            king_saxonc.tear_down((*env)->thread);
+        }
+        free(*env); *env=NULL;
+    }
+    free(*proc); *proc=NULL;
+}
+static zend_result king_saxonc_set_property(sxnc_property **props,int *len,const char *name,const char *value) {
+    sxnc_property *next=realloc(*props,(*len+1)*sizeof(**props)); if(!next) return FAILURE;
+    *props=next; next[*len].name=strdup(name); next[*len].value=strdup(value); (*len)++; return SUCCESS;
+}
+static const char *king_saxonc_apply(sxnc_environment *env,sxnc_processor *proc,char *cwd,char *source,char *style,sxnc_property *props,int len) {
+    king_saxon_error error={0}; int i; int64_t data;
+    /* Network and extension calls are disabled for every processor. Local
+     * resource reads remain possible: deploy trusted rules in an OS sandbox. */
+    king_saxonc.configure(env->thread,(void *)(intptr_t)proc->value,"http://saxon.sf.net/feature/allowedProtocols","file",&error);
+    if(error.status) {king_saxonc_record_error(env,&error);return NULL;}
+    king_saxonc.configure(env->thread,(void *)(intptr_t)proc->value,"http://saxon.sf.net/feature/allow-external-functions","false",&error);
+    if(error.status) {king_saxonc_record_error(env,&error);return NULL;}
+    king_saxonc.configure(env->thread,(void *)(intptr_t)proc->value,"http://saxon.sf.net/feature/parserFeature?uri=http%3A//apache.org/xml/features/disallow-doctype-decl","true",&error);
+    if(error.status) {king_saxonc_record_error(env,&error);return NULL;}
+    data=king_saxonc.create_data(env->thread,len);
+    if(data<=0){snprintf(env->error,sizeof(env->error),"SaxonC property container could not be created.");return NULL;}
+    for(i=0;i<len;i++) {
+        king_saxonc.add_property(env->thread,(void *)(intptr_t)data,props[i].name,props[i].value,&error);
+        if(error.status) {king_saxonc_record_error(env,&error);king_saxonc.destroy(env->thread,(void *)(intptr_t)data);return NULL;}
+    }
+    env->result=king_saxonc.transform(env->thread,(void *)(intptr_t)proc->value,cwd,source,style,(void *)(intptr_t)data,&error);
+    king_saxonc.destroy(env->thread,(void *)(intptr_t)data);
+    if(error.status || !env->result) {king_saxonc_record_error(env,&error);return NULL;}
+    return env->result;
 }

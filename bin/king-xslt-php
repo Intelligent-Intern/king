@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Isolated CLI, deliberately does not load system php.ini or install King.
+set -euo pipefail
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+php_bin="${PHP_BIN:-php}"
+extension_path="${KING_EXTENSION:-$root_dir/extension/modules/king.so}"
+export KING_SAXONC_LIBRARY="${KING_SAXONC_LIBRARY:-$root_dir/extension/build/runtime/saxonc/libsaxonc-core-he.so}"
+if [[ ! -f "$extension_path" || ! -f "$KING_SAXONC_LIBRARY" ]]; then
+    echo 'Run make build and bash infra/scripts/bootstrap-saxonc.sh first (or set KING_EXTENSION/KING_SAXONC_LIBRARY).' >&2
+    exit 1
+fi
+php_options=(-n)
+for php_extension in dom xml iconv; do
+    if ! "$php_bin" -n -r "exit(extension_loaded('$php_extension') ? 0 : 1);"; then
+        php_options+=(-d "extension=$php_extension")
+    fi
+done
+exec "$php_bin" "${php_options[@]}" -d "extension=$extension_path" "$@"
