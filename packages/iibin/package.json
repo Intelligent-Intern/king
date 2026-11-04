@@ -43,6 +43,6 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "esbuild": "0.28.1"
+    "esbuild": "0.28.2"
   }
 }
