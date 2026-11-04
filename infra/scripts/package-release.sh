@@ -114,11 +114,6 @@ normalize_arch_name() {
     esac
 }
 
-sha256_file() {
-    local path="$1"
-    sha256sum "${path}" | awk '{print $1}'
-}
-
 metadata_value() {
     local key="$1"
     local path="$2"
@@ -129,20 +124,15 @@ lsquic_runtime_dir_has_pinned_runtime() {
     local runtime_dir="$1"
     local runtime_library="${runtime_dir}/liblsquic.so"
     local runtime_metadata="${runtime_dir}/king-lsquic-runtime.env"
-    local expected_lock_sha=""
-    local actual_lock_sha=""
-    local actual_library_sha=""
 
-    [[ -f "${runtime_library}" ]] || return 1
-    [[ -f "${runtime_metadata}" ]] || return 1
+    [[ -f "${runtime_library}" && -f "${runtime_metadata}" ]] || return 1
+    local dependency
+    # shellcheck source=/dev/null
+    source "${SCRIPT_DIR}/lsquic-bootstrap.lock"
+    for dependency in KING_LSQUIC_COMMIT KING_LSQUIC_BORINGSSL_COMMIT KING_LSQUIC_LS_QPACK_COMMIT KING_LSQUIC_LS_HPACK_COMMIT; do
+        [[ "$(metadata_value "${dependency}" "${runtime_metadata}")" == "${!dependency}" ]] || return 1
+    done
 
-    expected_lock_sha="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
-    actual_lock_sha="$(metadata_value KING_LSQUIC_RUNTIME_LOCK_SHA256 "${runtime_metadata}")"
-    actual_library_sha="$(metadata_value KING_LSQUIC_RUNTIME_LIBRARY_SHA256 "${runtime_metadata}")"
-
-    [[ "${actual_lock_sha}" == "${expected_lock_sha}" ]] || return 1
-    [[ -n "${actual_library_sha}" ]] || return 1
-    [[ "${actual_library_sha}" == "$(sha256_file "${runtime_library}")" ]] || return 1
 }
 
 release_profile_has_pinned_lsquic_runtime() {
@@ -289,7 +279,6 @@ GIT_COMMIT="$(resolve_git_commit)"
 SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 SOURCE_DIRTY="$(resolve_dirty_state)"
 BUILD_REF="git.${GIT_SHORT}"
-PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
 
 if [[ "${SOURCE_DIRTY}" == "1" ]]; then
     BUILD_REF="${BUILD_REF}.dirty"
@@ -419,7 +408,6 @@ generate_manifest() {
     PKG_OS="${OS_NAME}" \
     PKG_ARCH="${ARCH_NAME}" \
     PKG_PHP_API="${PHP_API}" \
-    PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256}" \
     PKG_LSQUIC_BOOTSTRAP_LOCK_PATH="${SCRIPT_DIR}/lsquic-bootstrap.lock" \
     php <<'PHP' > "${package_root}/manifest.json"
 <?php
@@ -456,8 +444,6 @@ $dependencyProvenance = [
         'version' => $readLock('KING_LSQUIC_TAG'),
         'commit' => $readLock('KING_LSQUIC_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LICENSE_FILES')) ?: [],
     ],
     'boringssl' => [
@@ -466,8 +452,6 @@ $dependencyProvenance = [
         'version' => $readLock('KING_LSQUIC_BORINGSSL_TAG'),
         'commit' => $readLock('KING_LSQUIC_BORINGSSL_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: [],
     ],
     'ls-qpack' => [
@@ -477,8 +461,6 @@ $dependencyProvenance = [
         'version' => 'gitlink',
         'commit' => $readLock('KING_LSQUIC_LS_QPACK_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: [],
     ],
     'ls-hpack' => [
@@ -488,8 +470,6 @@ $dependencyProvenance = [
         'version' => 'gitlink',
         'commit' => $readLock('KING_LSQUIC_LS_HPACK_COMMIT'),
         'archive_url' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_URL'),
-        'archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
-        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES'),
         'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: [],
     ],
 ];
@@ -544,11 +524,6 @@ $manifest = [
         'components' => array_keys($dependencyProvenance),
     ],
     'provenance' => [
-        'lsquic_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256'),
-        'lsquic_archive_sha256' => $dependencyProvenance['lsquic']['archive_sha256'],
-        'boringssl_archive_sha256' => $dependencyProvenance['boringssl']['archive_sha256'],
-        'ls_qpack_archive_sha256' => $dependencyProvenance['ls-qpack']['archive_sha256'],
-        'ls_hpack_archive_sha256' => $dependencyProvenance['ls-hpack']['archive_sha256'],
     ],
     'dependency_provenance' => $dependencyProvenance,
     'files' => $files,

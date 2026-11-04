@@ -111,6 +111,7 @@ static zend_result king_server_http3_lsquic_runtime_init(
     runtime->lsquic_settings.es_idle_timeout = idle_timeout_seconds;
     runtime->lsquic_settings.es_idle_conn_to = (unsigned long) options->timeout_ms * 1000UL;
     runtime->lsquic_settings.es_max_header_list_size = KING_SERVER_HTTP3_MAX_HEADER_BYTES;
+    runtime->lsquic_settings.es_max_header_sets = LSQUIC_DF_MAX_HEADER_SETS_SERVER;
     runtime->lsquic_settings.es_max_udp_payload_size_rx = KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE;
     runtime->lsquic_settings.es_allow_migration = 0;
     runtime->lsquic_settings.es_support_push = 0;

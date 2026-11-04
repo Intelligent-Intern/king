@@ -105,6 +105,13 @@ static struct lsxpack_header *king_server_http3_lsquic_hsi_prepare_decode(
         return NULL;
     }
 
+    if (set->request == NULL
+        || !king_http3_header_decode_allowed(set->request->header_budget_bytes,
+            KING_SERVER_HTTP3_MAX_HEADER_BYTES, space)
+        || space > LSXPACK_MAX_STRLEN) {
+        return NULL;
+    }
+
     if (space == 0) {
         space = 1;
     }

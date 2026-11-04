@@ -24,6 +24,7 @@ extension/*.la
 extension/modules/*.so
 extension/modules/*.la
 extension/build/profiles/
+extension/build/runtime/
 extension/src/**/*.dep
 extension/src/**/*.lo
 extension/src/**/*.o

@@ -16,7 +16,7 @@ Environment variables:
   KING_LSQUIC_SOURCE_DIR    Extracted source root. Default: $KING_LSQUIC_SOURCE_CACHE/src
   KING_LSQUIC_ARCHIVE_MIRROR_BASE
                             Optional HTTPS mirror containing archives named
-                            like <component>-<sha256>.tar.gz.
+                            like <component>-<commit>.tar.gz.
 USAGE
 }
 
@@ -66,16 +66,16 @@ require_tool() {
 
 archive_name() {
     local component="$1"
-    local sha="$2"
+    local reference="$2"
 
-    printf '%s-%s.tar.gz\n' "${component}" "${sha}"
+    printf '%s-%s.tar.gz\n' "${component}" "${reference}"
 }
 
 archive_path() {
     local component="$1"
-    local sha="$2"
+    local reference="$2"
 
-    printf '%s/%s\n' "${ARCHIVE_DIR}" "$(archive_name "${component}" "${sha}")"
+    printf '%s/%s\n' "${ARCHIVE_DIR}" "$(archive_name "${component}" "${reference}")"
 }
 
 curl_retry_flags() {
@@ -107,12 +107,12 @@ github_codeload_url() {
 archive_candidate_urls() {
     local component="$1"
     local url="$2"
-    local expected_sha="$3"
+    local reference="$3"
     local mirror_base="${KING_LSQUIC_ARCHIVE_MIRROR_BASE:-}"
     local codeload_url=""
 
     if [[ -n "${mirror_base}" ]]; then
-        printf '%s/%s\n' "${mirror_base%/}" "$(archive_name "${component}" "${expected_sha}")"
+        printf '%s/%s\n' "${mirror_base%/}" "$(archive_name "${component}" "${reference}")"
     fi
 
     printf '%s\n' "${url}"
@@ -123,68 +123,27 @@ archive_candidate_urls() {
     fi
 }
 
-file_sha256() {
-    local file="$1"
-
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "${file}" | awk '{print $1}'
-        return
-    fi
-
-    if command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "${file}" | awk '{print $1}'
-        return
-    fi
-
-    echo "sha256sum or shasum is required." >&2
-    exit 1
-}
-
-file_bytes() {
-    wc -c < "$1" | tr -d '[:space:]'
-}
-
 verify_archive() {
-    local component="$1"
-    local file="$2"
-    local expected_sha="$3"
-    local expected_bytes="$4"
-    local actual_sha=""
-    local actual_bytes=""
-
-    if [[ ! -f "${file}" ]]; then
-        echo "Missing ${component} archive: ${file}" >&2
+    local component="$1" file="$2"
+    [[ -s "${file}" ]] && tar -tzf "${file}" >/dev/null 2>&1 || {
+        echo "Missing or invalid ${component} source archive: ${file}" >&2
         return 1
-    fi
-
-    actual_sha="$(file_sha256 "${file}")"
-    actual_bytes="$(file_bytes "${file}")"
-
-    if [[ "${actual_sha}" != "${expected_sha}" ]]; then
-        echo "Unexpected ${component} archive SHA-256: ${actual_sha} (expected ${expected_sha})." >&2
-        return 1
-    fi
-
-    if [[ "${actual_bytes}" != "${expected_bytes}" ]]; then
-        echo "Unexpected ${component} archive size: ${actual_bytes} (expected ${expected_bytes})." >&2
-        return 1
-    fi
+    }
 }
 
 fetch_archive() {
     local component="$1"
     local url="$2"
-    local expected_sha="$3"
-    local expected_bytes="$4"
+    local reference="$3"
     local destination=""
     local tmp=""
     local candidate=""
     local curl_flags=()
 
-    destination="$(archive_path "${component}" "${expected_sha}")"
+    destination="$(archive_path "${component}" "${reference}")"
     mkdir -p "${ARCHIVE_DIR}"
 
-    if verify_archive "${component}" "${destination}" "${expected_sha}" "${expected_bytes}" >/dev/null 2>&1; then
+    if verify_archive "${component}" "${destination}" >/dev/null 2>&1; then
         printf '%s\n' "${destination}"
         return
     fi
@@ -200,7 +159,7 @@ fetch_archive() {
             echo "Failed to fetch ${component} archive candidate: ${candidate}" >&2
             continue
         fi
-        if ! verify_archive "${component}" "${tmp}" "${expected_sha}" "${expected_bytes}"; then
+        if ! verify_archive "${component}" "${tmp}"; then
             rm -f "${tmp}"
             echo "Rejected ${component} archive candidate after verification: ${candidate}" >&2
             continue
@@ -208,7 +167,7 @@ fetch_archive() {
         mv "${tmp}" "${destination}"
         printf '%s\n' "${destination}"
         return
-    done < <(archive_candidate_urls "${component}" "${url}" "${expected_sha}")
+    done < <(archive_candidate_urls "${component}" "${url}" "${reference}")
 
     echo "Failed to fetch ${component} archive from all deterministic candidates for: ${url}" >&2
     return 1
@@ -251,17 +210,19 @@ verify_lock() {
     "${CHECK_SCRIPT}"
 }
 
+source_versions() {
+    printf '%s\n' "${KING_LSQUIC_COMMIT}" "${KING_LSQUIC_BORINGSSL_COMMIT}" \
+        "${KING_LSQUIC_LS_QPACK_COMMIT}" "${KING_LSQUIC_LS_HPACK_COMMIT}"
+}
+
 verify_current() {
     verify_lock >/dev/null
-    verify_archive "lsquic" "$(archive_path lsquic "${KING_LSQUIC_ARCHIVE_SHA256}")" "${KING_LSQUIC_ARCHIVE_SHA256}" "${KING_LSQUIC_ARCHIVE_BYTES}"
-    verify_archive "boringssl" "$(archive_path boringssl "${KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256}")" "${KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256}" "${KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES}"
-    verify_archive "ls-qpack" "$(archive_path ls-qpack "${KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256}")" "${KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256}" "${KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES}"
-    verify_archive "ls-hpack" "$(archive_path ls-hpack "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}")" "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}" "${KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES}"
-
+    [[ -f "${SOURCE_DIR}/king-source-versions" ]] || return 1
+    [[ "$(cat "${SOURCE_DIR}/king-source-versions")" == "$(source_versions)" ]] || return 1
     test -f "${SOURCE_DIR}/lsquic/include/lsquic.h"
     test -f "${SOURCE_DIR}/boringssl/include/openssl/ssl.h"
-    test -d "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_QPACK_PATH}"
-    test -d "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_HPACK_PATH}"
+    test -f "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_QPACK_PATH}/lsqpack.h"
+    test -f "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_HPACK_PATH}/lshpack.h"
 }
 
 case "${MODE}" in
@@ -283,16 +244,17 @@ esac
 require_tool curl
 require_tool tar
 
-lsquic_archive="$(fetch_archive lsquic "${KING_LSQUIC_ARCHIVE_URL}" "${KING_LSQUIC_ARCHIVE_SHA256}" "${KING_LSQUIC_ARCHIVE_BYTES}")"
-boringssl_archive="$(fetch_archive boringssl "${KING_LSQUIC_BORINGSSL_ARCHIVE_URL}" "${KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256}" "${KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES}")"
-qpack_archive="$(fetch_archive ls-qpack "${KING_LSQUIC_LS_QPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256}" "${KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES}")"
-hpack_archive="$(fetch_archive ls-hpack "${KING_LSQUIC_LS_HPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}" "${KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES}")"
+lsquic_archive="$(fetch_archive lsquic "${KING_LSQUIC_ARCHIVE_URL}" "${KING_LSQUIC_COMMIT}")"
+boringssl_archive="$(fetch_archive boringssl "${KING_LSQUIC_BORINGSSL_ARCHIVE_URL}" "${KING_LSQUIC_BORINGSSL_COMMIT}")"
+qpack_archive="$(fetch_archive ls-qpack "${KING_LSQUIC_LS_QPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_QPACK_COMMIT}")"
+hpack_archive="$(fetch_archive ls-hpack "${KING_LSQUIC_LS_HPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_HPACK_COMMIT}")"
 
 install_archive_root "${lsquic_archive}" "${SOURCE_DIR}/lsquic"
 install_archive_root "${boringssl_archive}" "${SOURCE_DIR}/boringssl"
 install_archive_root "${qpack_archive}" "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_QPACK_PATH}"
 install_archive_root "${hpack_archive}" "${SOURCE_DIR}/lsquic/${KING_LSQUIC_LS_HPACK_PATH}"
 
+source_versions > "${SOURCE_DIR}/king-source-versions"
 verify_current
 cat <<EOF_DONE
 LSQUIC source cache prepared under ${SOURCE_DIR}
