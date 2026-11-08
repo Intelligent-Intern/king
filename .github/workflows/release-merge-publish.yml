@@ -493,132 +493,8 @@ jobs:
               release-assets/*
           fi
 
-  publish-iibin:
-    name: Publish @intelligentintern/iibin to npm
-    needs:
-      - resolve-release-merge
-      - publish-release
-    if: needs.resolve-release-merge.outputs.is-merge-to-main == 'true' && needs.resolve-release-merge.outputs.should-publish == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout release merge commit
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.resolve-release-merge.outputs.release-commit }}
-          submodules: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-          scope: "@intelligentintern"
-
-      - name: Resolve IIBIN package publish metadata
-        id: iibin-meta
-        run: |
-          set -euo pipefail
-
-          release_version="${{ needs.resolve-release-merge.outputs.release-version }}"
-          if [[ -z "${release_version}" ]]; then
-            echo "Missing release version output from resolve-release-merge." >&2
-            exit 1
-          fi
-
-          package_version="${release_version#v}"
-          if [[ -z "${package_version}" ]]; then
-            echo "Failed to derive package version from release version: ${release_version}" >&2
-            exit 1
-          fi
-
-          npm_tag="latest"
-          if [[ "${package_version}" == *-* ]]; then
-            npm_tag="beta"
-          fi
-
-          echo "package-version=${package_version}" >> "${GITHUB_OUTPUT}"
-          echo "npm-tag=${npm_tag}" >> "${GITHUB_OUTPUT}"
-
-      - name: Sync package version to release
-        env:
-          PACKAGE_VERSION: ${{ steps.iibin-meta.outputs.package-version }}
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const path = 'packages/iibin/package.json';
-          const version = process.env.PACKAGE_VERSION;
-          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
-          pkg.version = version;
-          fs.writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);
-          NODE
-
-      - name: Install package dependencies
-        working-directory: packages/iibin
-        run: npm ci
-
-      - name: Verify package build
-        working-directory: packages/iibin
-        run: npm run typecheck && npm run build
-
-      - name: Pack package release asset
-        working-directory: packages/iibin
-        run: |
-          set -euo pipefail
-          mkdir -p ../../release-assets
-          npm pack --pack-destination ../../release-assets
-
-      - name: Upload package archive to GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.resolve-release-merge.outputs.release-tag }}
-        run: |
-          set -euo pipefail
-          gh release upload "${RELEASE_TAG}" release-assets/*.tgz --clobber
-
-      - name: Check if package version already exists
-        id: iibin-npm-check
-        env:
-          PACKAGE_VERSION: ${{ steps.iibin-meta.outputs.package-version }}
-        run: |
-          set -euo pipefail
-          if npm view "@intelligentintern/iibin@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
-            echo "::notice::@intelligentintern/iibin@${PACKAGE_VERSION} already exists on npm; skipping publish."
-            echo "exists=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "exists=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Publish package to npm
-        if: steps.iibin-npm-check.outputs.exists != 'true'
-        working-directory: packages/iibin
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TAG: ${{ steps.iibin-meta.outputs.npm-tag }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "::warning::NPM_TOKEN is not configured; the verified IIBIN package archive remains attached to the GitHub release."
-            exit 0
-          fi
-
-          publish_log="$(mktemp)"
-          set +e
-          npm publish --access public --tag "${NPM_TAG}" >"${publish_log}" 2>&1
-          status="$?"
-          set -e
-          cat "${publish_log}"
-          if [[ "${status}" -eq 0 ]]; then
-            exit 0
-          fi
-          if grep -Eq 'npm error code E(401|403|404)' "${publish_log}"; then
-            echo "::warning::npm rejected @intelligentintern/iibin publish with an authorization or package-scope error; the verified archive remains attached to the GitHub release."
-            exit 0
-          fi
-          exit "${status}"
+  # IIBIN releases are owned by Intelligent-Intern/iibin-js and iibin-py.
+  # A King release must not republish the historical 1.x codec as a new npm version.
 
   dockerhub-runtime-release:
     name: Build and push Docker Hub runtime image
@@ -666,7 +542,7 @@ jobs:
             exit 1
           fi
 
-          tags=("${image}:${release_version}")
+          tags=("${image}:${release_version}" "${image}:iibin2" "${image}:php8.5")
           if [[ "${release_version}" != *-* ]]; then
             tags+=("${image}:latest")
           fi

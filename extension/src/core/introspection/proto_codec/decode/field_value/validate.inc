@@ -63,32 +63,6 @@ static bool king_proto_runtime_decode_field_value_validate(
             }
             return true;
 
-        case KING_PROTO_RUNTIME_FIELD_UINT64:
-            if (raw_value > (uint64_t) ZEND_LONG_MAX) {
-                zend_throw_exception_ex(
-                    king_ce_validation_exception,
-                    0,
-                    "Decoding error: Field '%s' exceeds PHP integer range for uint64 in schema '%s'.",
-                    ZSTR_VAL(field->name),
-                    ZSTR_VAL(schema_name)
-                );
-                return false;
-            }
-            return true;
-
-        case KING_PROTO_RUNTIME_FIELD_FIXED64:
-            if (raw_fixed64 > (uint64_t) ZEND_LONG_MAX) {
-                zend_throw_exception_ex(
-                    king_ce_validation_exception,
-                    0,
-                    "Decoding error: Field '%s' exceeds PHP integer range for fixed64 in schema '%s'.",
-                    ZSTR_VAL(field->name),
-                    ZSTR_VAL(schema_name)
-                );
-                return false;
-            }
-            return true;
-
         default:
             return true;
     }

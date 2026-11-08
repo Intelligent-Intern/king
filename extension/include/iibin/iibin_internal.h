@@ -11,6 +11,8 @@
 
 #include <php.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <math.h>
 #include <string.h>
 #include <zend_hash.h>
 #include <zend_smart_str.h>
@@ -22,6 +24,34 @@
 #define KING_WIRETYPE_FIXED64        1
 #define KING_WIRETYPE_LENGTH_DELIM   2
 #define KING_WIRETYPE_FIXED32        5
+
+/* Protobuf string fields contain Unicode scalar values; bytes remain opaque. */
+static inline bool king_iibin_valid_utf8(const unsigned char *s, size_t n)
+{
+    size_t i = 0;
+    while (i < n) {
+        unsigned char first = s[i++];
+        uint32_t scalar;
+        size_t remaining;
+        uint32_t minimum;
+        if (first < 0x80) continue;
+        if (first >= 0xc2 && first <= 0xdf) {
+            scalar = first & 0x1f; remaining = 1; minimum = 0x80;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            scalar = first & 0x0f; remaining = 2; minimum = 0x800;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            scalar = first & 0x07; remaining = 3; minimum = 0x10000;
+        } else return false;
+        if (remaining > n - i) return false;
+        while (remaining--) {
+            unsigned char next = s[i++];
+            if ((next & 0xc0) != 0x80) return false;
+            scalar = (scalar << 6) | (next & 0x3f);
+        }
+        if (scalar < minimum || scalar > 0x10ffff || (scalar >= 0xd800 && scalar <= 0xdfff)) return false;
+    }
+    return true;
+}
 
 /* --- Active Runtime Data Structures --- */
 
@@ -268,7 +298,7 @@ static inline double king_proto_bits_to_double(uint64_t bits) {
 }
 
 static inline uint32_t king_proto_zigzag_encode32(int32_t n) {
-    return (uint32_t)((n << 1) ^ (n >> 31));
+    return ((uint32_t)n << 1) ^ (uint32_t)-(n < 0);
 }
 
 static inline int32_t king_proto_zigzag_decode32(uint32_t n) {
@@ -276,7 +306,7 @@ static inline int32_t king_proto_zigzag_decode32(uint32_t n) {
 }
 
 static inline uint64_t king_proto_zigzag_encode64(int64_t n) {
-    return (uint64_t)((n << 1) ^ (n >> 63));
+    return ((uint64_t)n << 1) ^ (uint64_t)-(n < 0);
 }
 
 static inline int64_t king_proto_zigzag_decode64(uint64_t n) {

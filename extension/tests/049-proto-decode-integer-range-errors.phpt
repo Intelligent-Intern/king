@@ -36,7 +36,7 @@ try {
 }
 
 try {
-    king_proto_decode('U64', hex2bin('0880808080808080808001'));
+    var_dump(king_proto_decode('U64', hex2bin('0880808080808080808001')));
 } catch (King\Exception $e) {
     var_dump($e->getMessage());
 }
@@ -53,4 +53,7 @@ array(1) {
 string(63) "Decoding error: Field 'id' exceeds int32 range in schema 'I32'."
 string(67) "Decoding error: Field 'count' exceeds uint32 range in schema 'U32'."
 string(67) "Decoding error: Field 'delta' exceeds sint32 range in schema 'S32'."
-string(83) "Decoding error: Field 'count' exceeds PHP integer range for uint64 in schema 'U64'."
+array(1) {
+  ["count"]=>
+  string(19) "9223372036854775808"
+}

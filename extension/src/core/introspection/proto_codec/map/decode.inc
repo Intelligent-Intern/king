@@ -60,7 +60,7 @@ static bool king_proto_runtime_decode_map_field(
         uint32_t tag;
         uint32_t wire_type;
 
-        if (!king_proto_decode_varint(&entry_ptr, entry_end, &entry_key) || entry_key == 0) {
+        if (!king_proto_decode_varint(&entry_ptr, entry_end, &entry_key) || entry_key < 8 || (entry_key >> 3) >= ((uint64_t) 1 << 29)) {
             if (Z_TYPE(decoded_key) != IS_UNDEF) {
                 zval_ptr_dtor_nogc(&decoded_key);
             }

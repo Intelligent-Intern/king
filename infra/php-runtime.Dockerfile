@@ -40,6 +40,7 @@ RUN --mount=type=bind,source=infra/scripts/install-ubuntu-php-runtime.sh,target=
 RUN mkdir -p /opt/king /workspace
 
 COPY --from=package /opt/king/package /opt/king/package
+COPY docs/iibin.md /opt/king/package/docs/IIBIN-MIGRATION.md
 
 ENV KING_LSQUIC_LIBRARY=/opt/king/package/runtime/liblsquic.so \
     LD_LIBRARY_PATH=/opt/king/package/runtime

@@ -124,9 +124,10 @@ int king_telemetry_record_metric_internal(const char *metric_name, king_metric_t
     metric->max = value;
     metric->timestamp = time(NULL);
     
-    array_init(&metric->labels);
     if (labels) {
         ZVAL_COPY(&metric->labels, labels);
+    } else {
+        array_init(&metric->labels);
     }
     
     /* Aggregation logic for counters */
@@ -316,7 +317,7 @@ static zend_bool king_telemetry_snapshot_metric_registry(zval *metrics_snapshot)
         add_assoc_double(&m_info, "max", metric->max);
 
         if (Z_TYPE(metric->labels) == IS_ARRAY) {
-            Z_ADDREF(metric->labels);
+            Z_TRY_ADDREF(metric->labels);
             add_assoc_zval(&m_info, "labels", &metric->labels);
         }
 

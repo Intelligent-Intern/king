@@ -7,6 +7,7 @@
 #include "common/oneof.inc"
 #include "common/field_lookup.inc"
 #include "common/skip_unknown.inc"
+#include "common/uint64.inc"
 #include "common/validate_type.inc"
 #include "common/validate_range.inc"
 #include "common/validate.inc"
