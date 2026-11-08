@@ -552,6 +552,37 @@ PHP_METHOD(King_Client_HttpClient, requestAsync)
         zend_string_release(body);
     }
 
+    king_http_client_object *intern = php_king_http_client_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    if (intern->preferred_protocol != KING_CLIENT_PROTOCOL_HTTP3) {
+        zval options, value;
+        zend_result status;
+        array_init(&options);
+        if (intern->closed) {
+            for (index = 0; index < 5; index++) zval_ptr_dtor(&params[index]);
+            zval_ptr_dtor(&options);
+            zend_throw_exception_ex(king_ce_runtime_exception, 0, "HttpClient::requestAsync() cannot run on a closed client.");
+            RETURN_THROWS();
+        }
+        if (!Z_ISUNDEF(intern->config) && Z_TYPE(intern->config) != IS_NULL) {
+            ZVAL_COPY(&value, &intern->config); add_assoc_zval(&options, "connection_config", &value);
+        }
+        if (cancel != NULL && Z_TYPE_P(cancel) == IS_OBJECT) {
+            ZVAL_COPY(&value, cancel); add_assoc_zval(&options, KING_INTERNAL_OPTION_CANCEL_TOKEN, &value);
+        }
+        status = king_http_async_start(return_value, Z_STRVAL(params[1]), Z_STRLEN(params[1]),
+            Z_STRVAL(params[0]), Z_STRLEN(params[0]), &params[2], &params[3], &options,
+            "King\\Client\\HttpClient::requestAsync", true,
+            intern->preferred_protocol == KING_CLIENT_PROTOCOL_HTTP2 ? 2 : 1, ZEND_THIS);
+        zval_ptr_dtor(&options);
+        for (index = 0; index < 5; index++) zval_ptr_dtor(&params[index]);
+        if (status != SUCCESS) {
+            if (EG(exception) != NULL) RETURN_THROWS();
+            zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+            RETURN_THROWS();
+        }
+        return;
+    }
+
     if (king_awaitable_create_method_call(
             return_value,
             "King\\Client\\HttpClient::requestAsync",

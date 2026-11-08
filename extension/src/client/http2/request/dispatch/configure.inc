@@ -86,7 +86,7 @@ static zend_result king_http2_request_configure_tls_handle(
     return SUCCESS;
 }
 
-static zend_result king_http2_request_configure_handle(
+static zend_result king_http_request_configure_handle(
     CURL *easy_handle,
     const char *url_str,
     const char *method_str,
@@ -96,7 +96,7 @@ static zend_result king_http2_request_configure_handle(
     bool body_was_supplied,
     zend_string *body_string,
     king_http2_response_buffer_t *response,
-    const char *function_name
+    const char *function_name, int protocol
 )
 {
     king_http2_libcurl.curl_easy_reset_fn(easy_handle);
@@ -108,7 +108,8 @@ static zend_result king_http2_request_configure_handle(
         || king_http2_libcurl.curl_easy_setopt_fn(
             easy_handle,
             CURLOPT_HTTP_VERSION,
-            (long) (secure_transport ? CURL_HTTP_VERSION_2TLS : CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE)
+            (long) (protocol == 1 ? CURL_HTTP_VERSION_1_1 :
+                (secure_transport ? CURL_HTTP_VERSION_2TLS : CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE))
         ) != CURLE_OK
         || king_http2_libcurl.curl_easy_setopt_fn(easy_handle, CURLOPT_NOSIGNAL, 1L) != CURLE_OK
         || king_http2_libcurl.curl_easy_setopt_fn(easy_handle, CURLOPT_NOPROGRESS, 1L) != CURLE_OK
@@ -172,4 +173,15 @@ static zend_result king_http2_request_configure_handle(
     }
 
     return SUCCESS;
+}
+
+/* Keep the synchronous HTTP/2 callers on their existing protocol contract. */
+static zend_result king_http2_request_configure_handle(
+    CURL *easy, const char *url, const char *method, bool secure,
+    const king_http2_request_options_t *options, struct curl_slist *headers,
+    bool has_body, zend_string *body, king_http2_response_buffer_t *response,
+    const char *operation)
+{
+    return king_http_request_configure_handle(easy, url, method, secure, options,
+        headers, has_body, body, response, operation, 2);
 }

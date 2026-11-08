@@ -347,6 +347,23 @@ static void king_client_send_request_async_internal(
         Z_PARAM_ARRAY_OR_NULL(options_array)
     ZEND_PARSE_PARAMETERS_END();
 
+    king_client_protocol_preference_t preference;
+    bool streaming = false;
+    if (king_client_dispatch_parse_protocol_preference(options_array, operation_name, &preference) != SUCCESS
+        || king_client_dispatch_parse_streaming_mode(options_array, operation_name, &streaming) != SUCCESS) RETURN_FALSE;
+    if (preference != KING_CLIENT_PROTOCOL_HTTP3) {
+        if (streaming) {
+            zend_throw_exception_ex(king_ce_protocol_exception, 0, "Async response_stream is not supported; use bounded buffered responses.");
+            RETURN_THROWS();
+        }
+        if (king_http_async_start(return_value, url_str, url_len, method_str, method_len,
+            headers_array, body_zval, options_array, operation_name, false,
+            preference == KING_CLIENT_PROTOCOL_HTTP2 ? 2 : 1, NULL) != SUCCESS) {
+            if (EG(exception) != NULL) RETURN_THROWS();
+            RETURN_FALSE;
+        }
+        return;
+    }
     ZVAL_STRINGL(&params[0], url_str, url_len);
     ZVAL_STRINGL(&params[1], method_str, method_len);
     if (headers_array != NULL) {

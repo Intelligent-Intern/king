@@ -14,6 +14,7 @@
 #include "php_king.h"
 #include "client/early_hints.h"
 #include "client/http1.h"
+#include "client/http2.h"
 #include "config/config.h"
 #include "config/tcp_transport/base_layer.h"
 #include "telemetry/telemetry.h"

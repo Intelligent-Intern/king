@@ -1,9 +1,7 @@
-/*
- * Native Awaitable surface for King async contracts. The current backend is a
- * deferred native task runner: the stored operation executes on first poll or
- * await, while the object/state contract is stable for a later non-blocking
- * scheduler backend.
- */
+/* Awaitables combine a shared native I/O loop with legacy deferred runners. */
+#include <time.h>
+#include "Zend/zend_gc.h"
+ZEND_TLS uint64_t king_awaitable_completion_sequence;
 
 static zend_object_handlers king_awaitable_object_handlers;
 
@@ -27,6 +25,8 @@ static void king_awaitable_object_free(zend_object *object)
 {
     king_awaitable_object *intern = php_king_awaitable_obj_from_zend(object);
 
+    if (intern->native_free != NULL && intern->native_data != NULL) intern->native_free(intern);
+
     if (intern->operation != NULL) {
         zend_string_release(intern->operation);
         intern->operation = NULL;
@@ -42,6 +42,10 @@ static void king_awaitable_object_free(zend_object *object)
     if (!Z_ISUNDEF(intern->error)) {
         zval_ptr_dtor(&intern->error);
         ZVAL_UNDEF(&intern->error);
+    }
+    if (!Z_ISUNDEF(intern->exception)) {
+        zval_ptr_dtor(&intern->exception);
+        ZVAL_UNDEF(&intern->exception);
     }
     if (!Z_ISUNDEF(intern->cancel_token)) {
         zval_ptr_dtor(&intern->cancel_token);
@@ -60,8 +64,15 @@ static zend_object *king_awaitable_object_create(zend_class_entry *ce)
     ZVAL_UNDEF(&intern->payload);
     ZVAL_UNDEF(&intern->result);
     ZVAL_UNDEF(&intern->error);
+    ZVAL_UNDEF(&intern->exception);
     ZVAL_UNDEF(&intern->cancel_token);
     intern->runner = NULL;
+    intern->native_data = NULL;
+    intern->native_poll = NULL;
+    intern->native_cancel = NULL;
+    intern->native_free = NULL;
+    intern->error_ce = NULL;
+    intern->completion_order = 0;
     intern->started = false;
     intern->cancel_requested = false;
     zend_object_std_init(&intern->std, ce);
@@ -69,6 +80,43 @@ static zend_object *king_awaitable_object_create(zend_class_entry *ce)
     intern->std.handlers = &king_awaitable_object_handlers;
 
     return &intern->std;
+}
+
+static HashTable *king_awaitable_get_gc(zend_object *object, zval **table, int *n)
+{
+    king_awaitable_object *intern = php_king_awaitable_obj_from_zend(object);
+    zend_get_gc_buffer *buffer = zend_get_gc_buffer_create();
+    zend_get_gc_buffer_add_zval(buffer, &intern->payload);
+    zend_get_gc_buffer_add_zval(buffer, &intern->result);
+    zend_get_gc_buffer_add_zval(buffer, &intern->error);
+    zend_get_gc_buffer_add_zval(buffer, &intern->exception);
+    zend_get_gc_buffer_add_zval(buffer, &intern->cancel_token);
+    zend_get_gc_buffer_use(buffer, table, n);
+    return zend_std_get_properties(object);
+}
+
+void king_awaitable_resolve(king_awaitable_object *intern, zval *value)
+{
+    if (intern->status != KING_AWAITABLE_PENDING) return;
+    ZVAL_COPY(&intern->result, value);
+    intern->status = KING_AWAITABLE_RESOLVED;
+    intern->completion_order = ++king_awaitable_completion_sequence;
+}
+
+void king_awaitable_reject(king_awaitable_object *intern, zend_class_entry *ce, const char *message)
+{
+    if (intern->status != KING_AWAITABLE_PENDING) return;
+    ZVAL_STRING(&intern->error, message);
+    intern->error_ce = ce;
+    intern->status = KING_AWAITABLE_REJECTED;
+    intern->completion_order = ++king_awaitable_completion_sequence;
+}
+
+static uint64_t king_awaitable_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
 static void king_awaitable_object_handlers_init(void)
@@ -81,6 +129,7 @@ static void king_awaitable_object_handlers_init(void)
     king_awaitable_object_handlers.offset = XtOffsetOf(king_awaitable_object, std);
     king_awaitable_object_handlers.free_obj = king_awaitable_object_free;
     king_awaitable_object_handlers.clone_obj = NULL;
+    king_awaitable_object_handlers.get_gc = king_awaitable_get_gc;
     king_ce_awaitable->create_object = king_awaitable_object_create;
 }
 
@@ -371,24 +420,45 @@ static void king_awaitable_cancel_native(king_awaitable_object *intern)
         php_king_cancel_token_obj_from_zend(Z_OBJ(intern->cancel_token))->cancelled = true;
     }
     if (intern->status == KING_AWAITABLE_PENDING) {
+        if (intern->native_cancel != NULL && intern->native_data != NULL) intern->native_cancel(intern);
         intern->status = KING_AWAITABLE_CANCELLED;
+        intern->completion_order = ++king_awaitable_completion_sequence;
     }
+}
+
+bool king_awaitable_check_cancel(king_awaitable_object *intern)
+{
+    if (intern->status != KING_AWAITABLE_PENDING) return intern->status == KING_AWAITABLE_CANCELLED;
+    if (intern->cancel_requested || (!Z_ISUNDEF(intern->cancel_token)
+        && Z_TYPE(intern->cancel_token) == IS_OBJECT
+        && instanceof_function(Z_OBJCE(intern->cancel_token), king_ce_cancel_token)
+        && php_king_cancel_token_obj_from_zend(Z_OBJ(intern->cancel_token))->cancelled)) {
+        king_awaitable_cancel_native(intern);
+        return true;
+    }
+    return false;
 }
 
 static zend_result king_awaitable_reject_current_error(king_awaitable_object *intern)
 {
     const char *message = king_get_error();
+    king_awaitable_reject(intern, king_ce_runtime_exception,
+        message != NULL && message[0] ? message : "King\\Awaitable operation failed.");
+    return SUCCESS;
+}
 
-    if (message == NULL || message[0] == '\0') {
-        message = "King\\Awaitable operation failed.";
-    }
-
-    if (!Z_ISUNDEF(intern->error)) {
-        zval_ptr_dtor(&intern->error);
-    }
-    ZVAL_STRING(&intern->error, message);
-    intern->status = KING_AWAITABLE_REJECTED;
-
+static zend_result king_awaitable_capture_exception(king_awaitable_object *intern)
+{
+    zend_object *exception = EG(exception);
+    zval rv, *message;
+    if (zend_is_unwind_exit(exception) || zend_is_graceful_exit(exception)) return FAILURE;
+    ZVAL_UNDEF(&rv);
+    message = zend_read_property(exception->ce, exception, "message", sizeof("message") - 1, true, &rv);
+    king_awaitable_reject(intern, exception->ce,
+        message != NULL && Z_TYPE_P(message) == IS_STRING ? Z_STRVAL_P(message) : "Awaitable operation threw an exception.");
+    ZVAL_OBJ_COPY(&intern->exception, exception);
+    zend_clear_exception();
+    if (!Z_ISUNDEF(rv)) zval_ptr_dtor(&rv);
     return SUCCESS;
 }
 
@@ -401,17 +471,8 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
         return SUCCESS;
     }
 
-    if (intern->cancel_requested) {
-        king_awaitable_cancel_native(intern);
-        return SUCCESS;
-    }
-    if (!Z_ISUNDEF(intern->cancel_token)
-        && Z_TYPE(intern->cancel_token) == IS_OBJECT
-        && instanceof_function(Z_OBJCE(intern->cancel_token), king_ce_cancel_token)
-        && php_king_cancel_token_obj_from_zend(Z_OBJ(intern->cancel_token))->cancelled) {
-        king_awaitable_cancel_native(intern);
-        return SUCCESS;
-    }
+    if (king_awaitable_check_cancel(intern)) return SUCCESS;
+    if (intern->native_poll != NULL) return intern->native_poll(intern, timeout_ms);
 
     if (intern->runner == NULL) {
         king_set_error("King\\Awaitable has no native runner.");
@@ -425,25 +486,20 @@ static zend_result king_awaitable_drive(king_awaitable_object *intern, zend_long
         if (!Z_ISUNDEF(result)) {
             zval_ptr_dtor(&result);
         }
-        if (EG(exception) != NULL) {
-            return FAILURE;
-        }
+        if (EG(exception) != NULL) return king_awaitable_capture_exception(intern);
         return king_awaitable_reject_current_error(intern);
     }
 
     if (EG(exception) != NULL) {
-        if (!Z_ISUNDEF(result)) {
-            zval_ptr_dtor(&result);
-        }
-        return FAILURE;
+        if (!Z_ISUNDEF(result)) zval_ptr_dtor(&result);
+        return king_awaitable_capture_exception(intern);
     }
 
     if (Z_ISUNDEF(result)) {
         return SUCCESS;
     }
-    ZVAL_COPY(&intern->result, &result);
+    king_awaitable_resolve(intern, &result);
     zval_ptr_dtor(&result);
-    intern->status = KING_AWAITABLE_RESOLVED;
 
     return SUCCESS;
 }
@@ -465,8 +521,14 @@ static void king_awaitable_return_or_throw(king_awaitable_object *intern, zval *
     }
 
     if (intern->status == KING_AWAITABLE_REJECTED) {
+        if (Z_TYPE(intern->exception) == IS_OBJECT) {
+            zval exception;
+            ZVAL_COPY(&exception, &intern->exception);
+            zend_throw_exception_object(&exception);
+            RETURN_THROWS();
+        }
         zend_throw_exception_ex(
-            king_ce_runtime_exception,
+            intern->error_ce != NULL ? intern->error_ce : king_ce_runtime_exception,
             0,
             "%s",
             !Z_ISUNDEF(intern->error) && Z_TYPE(intern->error) == IS_STRING

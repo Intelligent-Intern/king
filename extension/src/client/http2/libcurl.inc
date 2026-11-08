@@ -44,12 +44,10 @@ static void king_http2_libcurl_close_runtime_handle(void)
     }
 }
 
-static zend_result king_http2_ensure_libcurl_ready(void)
+static zend_result king_http_ensure_libcurl_ready(void)
 {
     const char *const candidates[] = {KING_LIBCURL_RUNTIME_CANDIDATES};
     size_t i;
-    curl_version_info_data *version_info;
-
     if (king_http2_libcurl.ready) {
         return SUCCESS;
     }
@@ -102,6 +100,7 @@ static zend_result king_http2_ensure_libcurl_ready(void)
         return FAILURE;
     }
 
+    king_http2_try_load_symbol((void **) &king_http2_libcurl.curl_multi_poll_fn, "curl_multi_poll");
     king_http2_try_load_symbol(
         (void **) &king_http2_libcurl.curl_pushheader_bynum_fn,
         "curl_pushheader_bynum"
@@ -117,19 +116,20 @@ static zend_result king_http2_ensure_libcurl_ready(void)
         return FAILURE;
     }
 
+    king_http2_libcurl.ready = true;
+    return SUCCESS;
+}
+
+static zend_result king_http2_ensure_libcurl_ready(void)
+{
+    curl_version_info_data *version_info;
+    if (king_http_ensure_libcurl_ready() != SUCCESS) return FAILURE;
     version_info = king_http2_libcurl.curl_version_info_fn(CURLVERSION_NOW);
     if (version_info == NULL || (version_info->features & CURL_VERSION_HTTP2) == 0) {
-        snprintf(
-            king_http2_libcurl.load_error,
-            sizeof(king_http2_libcurl.load_error),
-            "The loaded libcurl runtime does not advertise HTTP/2 support."
-        );
-        king_http2_libcurl.curl_global_cleanup_fn();
-        king_http2_libcurl_close_runtime_handle();
+        snprintf(king_http2_libcurl.load_error, sizeof(king_http2_libcurl.load_error),
+            "The loaded libcurl runtime does not advertise HTTP/2 support.");
         return FAILURE;
     }
-
-    king_http2_libcurl.ready = true;
     return SUCCESS;
 }
 
