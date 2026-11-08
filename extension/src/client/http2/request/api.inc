@@ -58,8 +58,6 @@ PHP_FUNCTION(king_http2_request_send_async)
     zval *headers_array = NULL;
     zval *body_zval = NULL;
     zval *options_array = NULL;
-    zval params[5];
-    uint32_t index;
 
     ZEND_PARSE_PARAMETERS_START(1, 5)
         Z_PARAM_STRING(url_str, url_len)
@@ -70,41 +68,9 @@ PHP_FUNCTION(king_http2_request_send_async)
         Z_PARAM_ARRAY_OR_NULL(options_array)
     ZEND_PARSE_PARAMETERS_END();
 
-    ZVAL_STRINGL(&params[0], url_str, url_len);
-    ZVAL_STRINGL(&params[1], method_str, method_len);
-    if (headers_array != NULL) {
-        ZVAL_COPY(&params[2], headers_array);
-    } else {
-        ZVAL_NULL(&params[2]);
-    }
-    if (body_zval != NULL) {
-        ZVAL_COPY(&params[3], body_zval);
-    } else {
-        ZVAL_NULL(&params[3]);
-    }
-    if (options_array != NULL) {
-        ZVAL_COPY(&params[4], options_array);
-    } else {
-        ZVAL_NULL(&params[4]);
-    }
-
-    if (king_awaitable_create_function_call(
-            return_value,
-            "king_http2_request_send_async",
-            sizeof("king_http2_request_send_async") - 1,
-            "king_http2_request_send",
-            sizeof("king_http2_request_send") - 1,
-            params,
-            5,
-            NULL
-        ) != SUCCESS) {
-        for (index = 0; index < 5; index++) {
-            zval_ptr_dtor(&params[index]);
-        }
+    if (king_http_async_start(return_value, url_str, url_len, method_str, method_len,
+        headers_array, body_zval, options_array, "king_http2_request_send_async", false, 2, NULL) != SUCCESS) {
+        if (EG(exception) != NULL) RETURN_THROWS();
         RETURN_FALSE;
-    }
-
-    for (index = 0; index < 5; index++) {
-        zval_ptr_dtor(&params[index]);
     }
 }

@@ -122,3 +122,12 @@ final class InvoiceSearchClient
 $service = new InvoiceSearchClient(new Http1Client());
 var_dump($service->search(42, 'accepted'));
 ```
+
+## Native async transport
+
+Buffered async requests start immediately in the shared libcurl multi loop.
+Submit multiple requests, then collect results with `King\Awaitable::any()`
+or `King\Awaitable::all()`. See [Async and Awaitables](async-awaitables.md)
+for wait deadlines, cancellation, concurrency windows and the remaining
+legacy deferred APIs. Async streaming, automatic redirects and push capture
+are explicitly unsupported; synchronous support is unchanged.

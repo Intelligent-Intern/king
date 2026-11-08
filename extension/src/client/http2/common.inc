@@ -130,10 +130,10 @@ static zend_result king_http2_validate_positive_timeout(
     return SUCCESS;
 }
 
-static zend_result king_http2_parse_options(
+static zend_result king_http2_parse_options_for_protocol(
     zval *options_array,
     king_http2_request_options_t *options,
-    const char *function_name)
+    const char *function_name, bool require_http2)
 {
     zval *option_value;
 
@@ -252,7 +252,7 @@ validate:
         return FAILURE;
     }
 
-    if (!options->http2_enable) {
+    if (require_http2 && !options->http2_enable) {
         king_http2_set_error(
             "%s() cannot issue an HTTP/2 request while http2.enable is disabled.",
             function_name
@@ -324,4 +324,9 @@ static zend_result king_http2_build_origin_key(
     zend_string_release(lower_host);
 
     return *origin_out != NULL ? SUCCESS : FAILURE;
+}
+
+static zend_result king_http2_parse_options(zval *array, king_http2_request_options_t *options, const char *name)
+{
+    return king_http2_parse_options_for_protocol(array, options, name, true);
 }

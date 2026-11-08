@@ -148,6 +148,7 @@ typedef struct _king_http2_libcurl_api {
         int timeout_ms,
         int *ret
     );
+    CURLMcode (*curl_multi_poll_fn)(CURLM *, struct curl_waitfd *, unsigned int, int, int *);
     CURLMcode (*curl_multi_perform_fn)(CURLM *multi_handle, int *running_handles);
     CURLMcode (*curl_multi_cleanup_fn)(CURLM *multi_handle);
     CURLMsg *(*curl_multi_info_read_fn)(CURLM *multi_handle, int *msgs_in_queue);
@@ -161,6 +162,8 @@ typedef struct _king_http2_libcurl_api {
 
 static king_http2_libcurl_api_t king_http2_libcurl = {0};
 static king_http2_pool_entry_t *king_http2_pool = NULL;
+
+static zend_result king_http_async_start_batch(zval *, zval *, zval *);
 
 static void king_http2_multi_transfer_destroy(king_http2_multi_transfer_t *transfer);
 static zend_result king_http2_request_execute_multi_batch(
@@ -177,3 +180,5 @@ static zend_result king_http2_request_execute_multi_batch(
 #include "http2/libcurl.inc"
 #include "http2/response.inc"
 #include "http2/request.inc"
+
+#include "http2/async.inc"

@@ -67,6 +67,7 @@ PHP_RSHUTDOWN_FUNCTION(king)
 {
     king_object_store_request_shutdown();
     king_semantic_dns_request_shutdown();
+    king_http_async_request_shutdown();
     king_http1_pool_request_shutdown();
     king_http2_pool_request_shutdown();
     return king_request_shutdown(type, module_number);

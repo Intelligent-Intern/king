@@ -30,8 +30,16 @@ struct _king_awaitable_object {
     zval payload;
     zval result;
     zval error;
+    zval exception;
     zval cancel_token;
     king_awaitable_runner runner;
+    /* Native I/O is registered eagerly; poll drives the shared request loop. */
+    void *native_data;
+    zend_result (*native_poll)(king_awaitable_object *, zend_long);
+    void (*native_cancel)(king_awaitable_object *);
+    void (*native_free)(king_awaitable_object *);
+    zend_class_entry *error_ce;
+    uint64_t completion_order;
     bool started;
     bool cancel_requested;
     zend_object std;
@@ -73,6 +81,10 @@ zend_result king_awaitable_create_method_call(
     uint32_t param_count,
     zval *cancel_token
 );
+
+void king_awaitable_resolve(king_awaitable_object *intern, zval *value);
+void king_awaitable_reject(king_awaitable_object *intern, zend_class_entry *ce, const char *message);
+bool king_awaitable_check_cancel(king_awaitable_object *intern);
 
 PHP_FUNCTION(king_await);
 PHP_FUNCTION(king_awaitable_poll);

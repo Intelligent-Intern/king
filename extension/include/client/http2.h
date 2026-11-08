@@ -37,4 +37,10 @@ PHP_FUNCTION(king_http2_request_send_async);
 PHP_FUNCTION(king_http2_request_send_multi);
 PHP_FUNCTION(king_http2_request_send_multi_async);
 
+zend_result king_http_async_start(
+    zval *out, const char *url, size_t url_len, const char *method, size_t method_len,
+    zval *headers, zval *body, zval *options, const char *operation,
+    bool response_object, int protocol, zval *owner);
+void king_http_async_request_shutdown(void);
+
 #endif // KING_CLIENT_HTTP2_H
