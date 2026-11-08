@@ -111,3 +111,21 @@ if (!$awaitable->isCancelled()) {
 
 $client->close();
 ```
+
+## Decoded header resource limits
+
+King requires LSQUIC 4.9.0 or newer. The server and client enforce a cumulative
+128 KiB field-section budget while receiving headers, before retaining each
+field. The charge is the decoded name length plus value length plus 32 bytes
+per field, including duplicates and pseudo-headers (RFC 9114, section 4.2.2).
+The budget is not reset for another header block on the same request/response.
+
+QPACK scratch allocations are independently bounded before allocation to the
+field-section ceiling and the LSXPACK length representation. The scratch buffer
+is reused rather than retained for each repeated reference. LSQUIC buffers at
+most one completed header set per server stream and two per client stream
+awaiting application processing, preserving interim-response buffering.
+`header_bytes` telemetry continues to count decoded name/value bytes only.
+
+Dependency archives and build caches use fixed version and commit identities;
+the LSQUIC bootstrap and runtime admission do not compute content checksums.

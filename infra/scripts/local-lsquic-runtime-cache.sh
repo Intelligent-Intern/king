@@ -70,21 +70,6 @@ if [[ ! -x "${BUILD_SCRIPT}" ]]; then
     exit 1
 fi
 
-file_sha256() {
-    if command -v sha256sum >/dev/null 2>&1; then
-        sha256sum "$1" | awk '{print $1}'
-        return
-    fi
-
-    if command -v shasum >/dev/null 2>&1; then
-        shasum -a 256 "$1" | awk '{print $1}'
-        return
-    fi
-
-    echo "sha256sum or shasum is required." >&2
-    exit 1
-}
-
 host_os() {
     case "$(uname -s)" in
         Darwin)
@@ -128,8 +113,8 @@ write_output() {
     fi
 }
 
-LOCK_SHA="$(file_sha256 "${LOCK_FILE}")"
-CACHE_KEY="$(runtime_arch)-${LOCK_SHA}"
+source "${LOCK_FILE}"
+CACHE_KEY="$(runtime_arch)-${KING_LSQUIC_COMMIT}-${KING_LSQUIC_BORINGSSL_COMMIT}-${KING_LSQUIC_LS_QPACK_COMMIT}-${KING_LSQUIC_LS_HPACK_COMMIT}"
 CACHE_DIR="${CACHE_ROOT%/}/${CACHE_KEY}"
 CACHE_PREFIX="${CACHE_DIR}/prefix"
 

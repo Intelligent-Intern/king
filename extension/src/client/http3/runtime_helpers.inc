@@ -190,11 +190,13 @@ static int king_http3_collect_response_header(
     king_http3_response_header_context_t *context = (king_http3_response_header_context_t *) argp;
     king_http3_response_t *response = context->response;
 
-    response->header_bytes += name_len + value_len;
-    if (response->header_bytes > KING_HTTP3_MAX_HEADER_BYTES) {
+    if (!king_http3_header_budget_consume(
+            &response->header_budget_bytes, KING_HTTP3_MAX_HEADER_BYTES, name_len, value_len)) {
         response->header_overflowed = true;
         return -1;
     }
+
+    response->header_bytes += name_len + value_len;
 
     if (name_len == sizeof(":status") - 1
         && memcmp(name, ":status", sizeof(":status") - 1) == 0) {

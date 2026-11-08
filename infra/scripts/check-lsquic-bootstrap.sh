@@ -44,12 +44,8 @@ validate_source_ref() {
 validate_archive() {
     local prefix="$1"
     local url_var="${prefix}_ARCHIVE_URL"
-    local sha_var="${prefix}_ARCHIVE_SHA256"
-    local bytes_var="${prefix}_ARCHIVE_BYTES"
 
     require_regex "${!url_var}" '^https://github[.]com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/archive/.+[.]tar[.]gz$' "${url_var}"
-    require_regex "${!sha_var}" '^[0-9a-f]{64}$' "${sha_var}"
-    require_regex "${!bytes_var}" '^[1-9][0-9]*$' "${bytes_var}"
 }
 
 validate_commit() {
@@ -80,29 +76,21 @@ required_vars=(
     KING_LSQUIC_TAG
     KING_LSQUIC_COMMIT
     KING_LSQUIC_ARCHIVE_URL
-    KING_LSQUIC_ARCHIVE_SHA256
-    KING_LSQUIC_ARCHIVE_BYTES
     KING_LSQUIC_LICENSE_FILES
     KING_LSQUIC_BORINGSSL_REPO_URL
     KING_LSQUIC_BORINGSSL_TAG
     KING_LSQUIC_BORINGSSL_COMMIT
     KING_LSQUIC_BORINGSSL_ARCHIVE_URL
-    KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256
-    KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES
     KING_LSQUIC_BORINGSSL_LICENSE_FILES
     KING_LSQUIC_LS_QPACK_PATH
     KING_LSQUIC_LS_QPACK_REPO_URL
     KING_LSQUIC_LS_QPACK_COMMIT
     KING_LSQUIC_LS_QPACK_ARCHIVE_URL
-    KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256
-    KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES
     KING_LSQUIC_LS_QPACK_LICENSE_FILES
     KING_LSQUIC_LS_HPACK_PATH
     KING_LSQUIC_LS_HPACK_REPO_URL
     KING_LSQUIC_LS_HPACK_COMMIT
     KING_LSQUIC_LS_HPACK_ARCHIVE_URL
-    KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256
-    KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES
     KING_LSQUIC_LS_HPACK_LICENSE_FILES
 )
 
@@ -132,23 +120,11 @@ require_regex "${KING_LSQUIC_LS_QPACK_PATH}" '^src/liblsquic/ls-qpack$' "KING_LS
 require_regex "${KING_LSQUIC_LS_HPACK_PATH}" '^src/lshpack$' "KING_LSQUIC_LS_HPACK_PATH"
 
 if [[ "${MODE}" == "--print-source-plan" ]]; then
-    printf 'component\tarchive_url\tsha256\tbytes\n'
-    printf 'lsquic\t%s\t%s\t%s\n' \
-        "${KING_LSQUIC_ARCHIVE_URL}" \
-        "${KING_LSQUIC_ARCHIVE_SHA256}" \
-        "${KING_LSQUIC_ARCHIVE_BYTES}"
-    printf 'boringssl\t%s\t%s\t%s\n' \
-        "${KING_LSQUIC_BORINGSSL_ARCHIVE_URL}" \
-        "${KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256}" \
-        "${KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES}"
-    printf 'ls-qpack\t%s\t%s\t%s\n' \
-        "${KING_LSQUIC_LS_QPACK_ARCHIVE_URL}" \
-        "${KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256}" \
-        "${KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES}"
-    printf 'ls-hpack\t%s\t%s\t%s\n' \
-        "${KING_LSQUIC_LS_HPACK_ARCHIVE_URL}" \
-        "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}" \
-        "${KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES}"
+    printf 'component\tarchive_url\tcommit\n'
+    printf 'lsquic\t%s\t%s\n' "${KING_LSQUIC_ARCHIVE_URL}" "${KING_LSQUIC_COMMIT}"
+    printf 'boringssl\t%s\t%s\n' "${KING_LSQUIC_BORINGSSL_ARCHIVE_URL}" "${KING_LSQUIC_BORINGSSL_COMMIT}"
+    printf 'ls-qpack\t%s\t%s\n' "${KING_LSQUIC_LS_QPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_QPACK_COMMIT}"
+    printf 'ls-hpack\t%s\t%s\n' "${KING_LSQUIC_LS_HPACK_ARCHIVE_URL}" "${KING_LSQUIC_LS_HPACK_COMMIT}"
 else
-    echo "LSQUIC bootstrap lock is deterministic."
+    echo "LSQUIC source versions are pinned."
 fi
