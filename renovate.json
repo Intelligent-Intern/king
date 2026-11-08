@@ -4,7 +4,7 @@
     "config:recommended",
     "docker:pinDigests"
   ],
-  "dependencyDashboard": true,
+  "dependencyDashboard": false,
   "automerge": false,
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
