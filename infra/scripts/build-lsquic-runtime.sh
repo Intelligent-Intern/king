@@ -120,6 +120,21 @@ require_tool() {
     fi
 }
 
+file_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+        return
+    fi
+
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+        return
+    fi
+
+    echo "sha256sum or shasum is required." >&2
+    exit 1
+}
+
 runtime_arch() {
     local os=""
 
@@ -137,11 +152,17 @@ runtime_arch() {
     esac
 }
 
+expected_lock_sha256() {
+    file_sha256 "${LOCK_FILE}"
+}
+
 write_metadata() {
     local library="$1"
 
     cat > "${METADATA_FILE}" <<EOF
 KING_LSQUIC_RUNTIME_ARCH="$(runtime_arch)"
+KING_LSQUIC_RUNTIME_LOCK_SHA256="$(expected_lock_sha256)"
+KING_LSQUIC_RUNTIME_LIBRARY_SHA256="$(file_sha256 "${library}")"
 KING_LSQUIC_COMMIT="${KING_LSQUIC_COMMIT}"
 KING_LSQUIC_BORINGSSL_COMMIT="${KING_LSQUIC_BORINGSSL_COMMIT}"
 KING_LSQUIC_LS_QPACK_COMMIT="${KING_LSQUIC_LS_QPACK_COMMIT}"
@@ -166,7 +187,9 @@ verify_runtime() {
     local boringssl_ssl="${PREFIX_DIR}/boringssl/lib/libssl.a"
     local boringssl_crypto="${PREFIX_DIR}/boringssl/lib/libcrypto.a"
     local symbols_file=""
+    local lock_sha=""
     local arch=""
+    local library_sha=""
 
     [[ -f "${library}" ]] || return 1
     [[ -f "${header}" ]] || return 1
@@ -177,13 +200,13 @@ verify_runtime() {
     [[ -f "${boringssl_crypto}" ]] || return 1
     [[ -f "${METADATA_FILE}" ]] || return 1
 
+    lock_sha="$(metadata_value KING_LSQUIC_RUNTIME_LOCK_SHA256)"
     arch="$(metadata_value KING_LSQUIC_RUNTIME_ARCH)"
+    library_sha="$(metadata_value KING_LSQUIC_RUNTIME_LIBRARY_SHA256)"
 
+    [[ "${lock_sha}" == "$(expected_lock_sha256)" ]] || return 1
     [[ "${arch}" == "$(runtime_arch)" ]] || return 1
-    local dependency
-    for dependency in KING_LSQUIC_COMMIT KING_LSQUIC_BORINGSSL_COMMIT KING_LSQUIC_LS_QPACK_COMMIT KING_LSQUIC_LS_HPACK_COMMIT; do
-        [[ "$(metadata_value "${dependency}")" == "${!dependency}" ]] || return 1
-    done
+    [[ "${library_sha}" == "$(file_sha256 "${library}")" ]] || return 1
 
     symbols_file="$(mktemp)"
     case "$(host_os)" in
