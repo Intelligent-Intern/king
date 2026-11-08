@@ -18,7 +18,7 @@ Options:
   --output PATH      Output JSON path.
                      Default: dist/release-cve-inventory.json
   --scanner-image    Trivy container image to use.
-                     Default: aquasec/trivy:0.56.2
+                     Default: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
   -h, --help         Show this help text.
 
 Example:
@@ -55,7 +55,7 @@ IMAGES_CSV="${IMAGES_CSV:-intelligentintern/king:v1.0.5-beta}"
 PLATFORMS_CSV="${PLATFORMS_CSV:-linux/amd64,linux/arm64}"
 CVES_CSV="${CVES_CSV:-CVE-2025-45582,CVE-2024-56433,CVE-2024-2236}"
 OUTPUT_PATH="${OUTPUT_PATH:-${ROOT_DIR}/dist/release-cve-inventory.json}"
-SCANNER_IMAGE="${SCANNER_IMAGE:-aquasec/trivy:0.56.2}"
+SCANNER_IMAGE="${SCANNER_IMAGE:-aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -178,7 +178,7 @@ for ((i = 0; i < SCAN_COUNT; i++)); do
         --quiet \
         --format json \
         --scanners vuln \
-        --vuln-type os,library \
+        --pkg-types os,library \
         --platform "${PLATFORM}" \
         "${IMAGE}" > "${RAW_SCAN_PATH}"
 
