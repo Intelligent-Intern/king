@@ -1,6 +1,8 @@
 # King PHP Extension
 **Systems-grade networking and infrastructure primitives for PHP**
 
+> **IIBIN interoperability update:** JavaScript 2.0 and Python 2.0 use the schema codec shared with King; JavaScript 1.x payloads use different formats. This native update adds lossless unsigned 64-bit values and stricter validation. Rebuild and deploy King separately from npm/pip upgrades. Read the [IIBIN migration and compatibility notes](docs/iibin.md) before switching existing clients or stored data.
+
 <p align="center">
   <img src="crowned-elephant-mascot.jpg" alt="King mascot: the crowned elephant" width="320">
 </p>
@@ -54,6 +56,16 @@ with `pie install intelligent-intern/king-ext`. Packaging and verification are
 handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
 ### Bundled PHP runtime images
+
+Docker Hub's `intelligentintern/king:v1.0.12-beta` contains the native IIBIN 2
+interoperability update with PHP 8.5.12 for amd64/arm64. See the
+[Docker Hub usage and migration notes](docs/dockerhub.md). Pull the new image
+and recreate existing containers to load the updated extension.
+
+```bash
+docker pull intelligentintern/king:v1.0.12-beta
+docker run --rm intelligentintern/king:v1.0.12-beta php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
+```
 
 `ghcr.io/intelligent-intern/king:php8.4` bundles PHP and the King extension;
 other published runtime tags select their PHP minor version in the same way.

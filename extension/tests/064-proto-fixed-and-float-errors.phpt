@@ -31,7 +31,7 @@ foreach ([
     '0d01020304',
 ] as $hex) {
     try {
-        king_proto_decode('DecodeFixed64', hex2bin($hex));
+        var_dump(king_proto_decode('DecodeFixed64', hex2bin($hex)));
     } catch (King\Exception $e) {
         var_dump($e->getMessage());
     }
@@ -44,5 +44,8 @@ string(82) "Encoding failed: Field 'u32' expects an unsigned 32-bit fixed intege
 string(87) "Encoding failed: Field 's32' expects a 32-bit signed fixed integer, but got 2147483648."
 string(82) "Encoding failed: Field 'u64' expects an unsigned 64-bit fixed integer, but got -1."
 bool(true)
-string(94) "Decoding error: Field 'value' exceeds PHP integer range for fixed64 in schema 'DecodeFixed64'."
+array(1) {
+  ["value"]=>
+  string(20) "18446744073709551615"
+}
 string(114) "Schema 'DecodeFixed64': Wire type mismatch for field 'value' (tag 1). Expected wire type 1, but got 5 on the wire."

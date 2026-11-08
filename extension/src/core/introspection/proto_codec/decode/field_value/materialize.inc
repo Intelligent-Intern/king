@@ -70,10 +70,18 @@ static bool king_proto_runtime_decode_field_value(
         }
 
         case KING_PROTO_RUNTIME_FIELD_DOUBLE:
+            if (!isfinite(king_proto_bits_to_double(raw_fixed64))) {
+                zend_throw_exception_ex(king_ce_validation_exception, 0, "Decoding error: non-finite double for field '%s'.", ZSTR_VAL(field->name));
+                return false;
+            }
             ZVAL_DOUBLE(decoded_value, king_proto_bits_to_double(raw_fixed64));
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_FLOAT:
+            if (!isfinite(king_proto_bits_to_float(raw_fixed32))) {
+                zend_throw_exception_ex(king_ce_validation_exception, 0, "Decoding error: non-finite float for field '%s'.", ZSTR_VAL(field->name));
+                return false;
+            }
             ZVAL_DOUBLE(decoded_value, (double) king_proto_bits_to_float(raw_fixed32));
             return true;
 
@@ -98,7 +106,7 @@ static bool king_proto_runtime_decode_field_value(
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_UINT64:
-            ZVAL_LONG(decoded_value, (zend_long) raw_value);
+            king_proto_runtime_uint64_to_zval(raw_value, decoded_value);
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_SINT64:
@@ -106,7 +114,7 @@ static bool king_proto_runtime_decode_field_value(
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_FIXED64:
-            ZVAL_LONG(decoded_value, (zend_long) raw_fixed64);
+            king_proto_runtime_uint64_to_zval(raw_fixed64, decoded_value);
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_SFIXED64:
@@ -126,6 +134,14 @@ static bool king_proto_runtime_decode_field_value(
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_STRING:
+            if (!king_iibin_valid_utf8(*buf_ptr, (size_t) length)) {
+                zend_throw_exception_ex(king_ce_validation_exception, 0, "Decoding error: invalid UTF-8 for field '%s'.", ZSTR_VAL(field->name));
+                return false;
+            }
+            ZVAL_STRINGL(decoded_value, (const char *) *buf_ptr, (size_t) length);
+            *buf_ptr += (size_t) length;
+            return true;
+
         case KING_PROTO_RUNTIME_FIELD_BYTES:
             ZVAL_STRINGL(decoded_value, (const char *) *buf_ptr, (size_t) length);
             *buf_ptr += (size_t) length;

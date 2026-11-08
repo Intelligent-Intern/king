@@ -40,9 +40,7 @@ static bool king_proto_runtime_validate_field_value_type(
         case KING_PROTO_RUNTIME_FIELD_UINT32:
         case KING_PROTO_RUNTIME_FIELD_SINT32:
         case KING_PROTO_RUNTIME_FIELD_INT64:
-        case KING_PROTO_RUNTIME_FIELD_UINT64:
         case KING_PROTO_RUNTIME_FIELD_SINT64:
-        case KING_PROTO_RUNTIME_FIELD_FIXED64:
         case KING_PROTO_RUNTIME_FIELD_SFIXED64:
         case KING_PROTO_RUNTIME_FIELD_FIXED32:
         case KING_PROTO_RUNTIME_FIELD_SFIXED32:
@@ -54,6 +52,16 @@ static bool king_proto_runtime_validate_field_value_type(
                     ZSTR_VAL(field->name),
                     zend_zval_type_name(value)
                 );
+                return false;
+            }
+            return true;
+
+        case KING_PROTO_RUNTIME_FIELD_UINT64:
+        case KING_PROTO_RUNTIME_FIELD_FIXED64:
+            if (Z_TYPE_P(value) != IS_LONG && Z_TYPE_P(value) != IS_STRING) {
+                zend_throw_exception_ex(king_ce_validation_exception, 0,
+                    "Encoding failed: Field '%s' expects an unsigned 64-bit integer or decimal string.",
+                    ZSTR_VAL(field->name));
                 return false;
             }
             return true;

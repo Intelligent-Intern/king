@@ -38,7 +38,7 @@ static bool king_proto_runtime_decode_schema_payload(
             uint32_t tag;
             uint32_t wire_type;
 
-            if (!king_proto_decode_varint(&buf_ptr, buf_end, &key) || key == 0) {
+            if (!king_proto_decode_varint(&buf_ptr, buf_end, &key) || key < 8 || (key >> 3) >= ((uint64_t) 1 << 29)) {
                 zval_ptr_dtor(decoded_result);
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
@@ -89,7 +89,7 @@ static bool king_proto_runtime_decode_schema_payload(
         bool decoded_any_values = false;
         zval decoded_value;
 
-        if (!king_proto_decode_varint(&buf_ptr, buf_end, &key) || key == 0) {
+        if (!king_proto_decode_varint(&buf_ptr, buf_end, &key) || key < 8 || (key >> 3) >= ((uint64_t) 1 << 29)) {
             efree(seen_fields);
             zval_ptr_dtor(decoded_result);
             zend_throw_exception_ex(

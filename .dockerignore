@@ -3,6 +3,8 @@
 dist/*
 !dist/docker-packages/
 !dist/docker-packages/**
+!dist/docker-source/
+!dist/docker-source/**
 compat-artifacts/
 .cache/
 benchmarks/results

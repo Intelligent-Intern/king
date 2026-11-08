@@ -1,7 +1,51 @@
 # IIBIN
 
+> **IIBIN 2.0 interoperability update:** use JavaScript 2.0's `Schema` API and Python 2.0 for native schema messages. Legacy JavaScript 1.x payloads use different wire formats. Updating npm or pip packages does not update the PHP extension; rebuild and deploy the native King update separately.
+
+The native update adds lossless `uint64`/`fixed64` values above `PHP_INT_MAX`
+as decimal strings and aligns UTF-8, finite-number and field-tag validation.
+King already used protobuf wire encoding; valid existing messages remain in
+that format. Inputs previously accepted with invalid UTF-8 or non-finite
+floating-point values are now rejected. Large unsigned values previously
+rejected on decode now return decimal strings; applications must handle both
+PHP integers and those strings. PHP schema APIs (`tag`, named messages,
+required/default fields, maps and oneof) continue to have their own API shape.
+
+For a mixed-version rollout, choose the codec through endpoint negotiation or
+stored metadata. There is no automatic legacy detector or version header in
+the schema payload. Convert old stored JS payloads with the matching legacy
+decoder and then encode the mapped values using an explicit schema.
+
 IIBIN is King's native binary serialization format. The procedural API is
 `king_proto_*`; the native OO facade is `King\IIBIN`.
+
+## Python and JavaScript wire contract
+
+The native codec uses protobuf wire encoding, matching Python `iibin` 2.0 and
+JavaScript `@intelligentintern/iibin` 2.0's `Schema` API. PHP schemas use `tag`
+where Python/JavaScript use `id`; a named PHP message type corresponds to a
+nested `schema`, and `repeated_int32` corresponds to `type: 'int32', repeated: true`.
+
+Fields encode in ascending tag order. Explicit zero/false/empty scalar values
+are preserved. Numeric repeated fields accept packed and unpacked payloads;
+unknown fields are skipped and duplicate singular fields use the last value.
+String fields require valid UTF-8; `bytes` fields accept arbitrary bytes.
+Non-finite float/double values, float32 overflow, invalid field tags and
+out-of-range integer encodings are rejected.
+
+`uint64` and `fixed64` accept PHP integers or canonical unsigned decimal
+strings from `0` through `18446744073709551615`. Decode returns a PHP integer
+when representable, otherwise a decimal string. No float conversion is used.
+Python uses `int` and JavaScript uses `bigint` for the same wire values.
+
+For messages exchanged with the Python/JavaScript packages, stay within their
+16 MiB frame limit and maximum nesting of 32. King's maps, enum registries,
+oneof declarations, required/default fields and named recursive schemas are
+additional PHP schema APIs, not features exposed by those packages.
+
+The workspace's `iibin/interop/check.py` verifies fixed wire vectors and every
+direction of Python/JavaScript/King decoding. Native regression coverage is in
+`extension/tests/716-iibin-cross-language-wire-contract.phpt`.
 
 ## Internal Layout
 

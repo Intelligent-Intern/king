@@ -13,6 +13,7 @@ static bool king_proto_runtime_append_encoded_field_value(
     float float_value;
     double double_value;
     zend_long resolved_enum_value;
+    uint64_t unsigned_value;
 
     switch (field->kind) {
         case KING_PROTO_RUNTIME_FIELD_MESSAGE:
@@ -84,7 +85,8 @@ static bool king_proto_runtime_append_encoded_field_value(
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_UINT64:
-            king_proto_encode_varint(buf, (uint64_t) Z_LVAL_P(value));
+            if (!king_proto_runtime_uint64_from_zval(value, &unsigned_value)) return false;
+            king_proto_encode_varint(buf, unsigned_value);
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_SINT64:
@@ -92,7 +94,8 @@ static bool king_proto_runtime_append_encoded_field_value(
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_FIXED64:
-            king_proto_encode_fixed64(buf, (uint64_t) Z_LVAL_P(value));
+            if (!king_proto_runtime_uint64_from_zval(value, &unsigned_value)) return false;
+            king_proto_encode_fixed64(buf, unsigned_value);
             return true;
 
         case KING_PROTO_RUNTIME_FIELD_SFIXED64:
