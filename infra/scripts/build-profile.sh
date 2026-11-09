@@ -63,7 +63,6 @@ LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 LSQUIC_RUNTIME_SCRIPT="${SCRIPT_DIR}/build-lsquic-runtime.sh"
 NATIVE_CURL_PREREQS_SCRIPT="${SCRIPT_DIR}/native-curl-build-prereqs.sh"
 NATIVE_OPENSSL_PREREQS_SCRIPT="${SCRIPT_DIR}/native-openssl-build-prereqs.sh"
-PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 
 default_jobs() {
@@ -157,17 +156,7 @@ sanitizer_kind=""
 lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-}"
 phpize_bin=""
 php_config_bin=""
-declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
 declare -a CONFIGURE_ENV=()
-PHPIZE_SNAPSHOT_DIR=""
-
-trim_ascii_whitespace() {
-    local value="$1"
-
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%"${value##*[![:space:]]}"}"
-    printf '%s\n' "${value}"
-}
 
 php_binary_suffix() {
     local binary_name=""
@@ -243,92 +232,6 @@ resolve_php_toolchain() {
             echo "  ${phpize_bin}: ${phpize_reported_api}"
         } >&2
     fi
-}
-
-load_phpize_generated_relative_paths() {
-    local raw_line=""
-    local normalized_line=""
-
-    if [[ ! -f "${PHPIZE_GENERATED_LIST}" ]]; then
-        echo "Missing phpize generated-file list: ${PHPIZE_GENERATED_LIST}" >&2
-        exit 1
-    fi
-
-    while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
-        normalized_line="${raw_line%%#*}"
-        normalized_line="$(trim_ascii_whitespace "${normalized_line}")"
-        if [[ -z "${normalized_line}" ]]; then
-            continue
-        fi
-
-        if [[ "${normalized_line}" != extension/* ]]; then
-            echo "Invalid path in ${PHPIZE_GENERATED_LIST}: ${normalized_line}" >&2
-            exit 1
-        fi
-
-        PHPIZE_GENERATED_RELATIVE_PATHS+=("${normalized_line#extension/}")
-    done < "${PHPIZE_GENERATED_LIST}"
-}
-
-snapshot_phpize_generated_files() {
-    local relative_path=""
-    local source_path=""
-    local snapshot_path=""
-    local state_path=""
-
-    PHPIZE_SNAPSHOT_DIR="$(mktemp -d)"
-
-    for relative_path in "${PHPIZE_GENERATED_RELATIVE_PATHS[@]}"; do
-        source_path="${EXT_DIR}/${relative_path}"
-        snapshot_path="${PHPIZE_SNAPSHOT_DIR}/${relative_path}"
-        state_path="${snapshot_path}.state"
-        mkdir -p "$(dirname "${snapshot_path}")"
-
-        if [[ -e "${source_path}" ]]; then
-            cp -a "${source_path}" "${snapshot_path}"
-            printf '%s\n' "present" > "${state_path}"
-        else
-            printf '%s\n' "absent" > "${state_path}"
-        fi
-    done
-}
-
-restore_phpize_generated_files() {
-    local relative_path=""
-    local snapshot_path=""
-    local state_path=""
-    local target_path=""
-    local state_value=""
-
-    if [[ -z "${PHPIZE_SNAPSHOT_DIR}" || ! -d "${PHPIZE_SNAPSHOT_DIR}" ]]; then
-        return 0
-    fi
-
-    for relative_path in "${PHPIZE_GENERATED_RELATIVE_PATHS[@]}"; do
-        snapshot_path="${PHPIZE_SNAPSHOT_DIR}/${relative_path}"
-        state_path="${snapshot_path}.state"
-        target_path="${EXT_DIR}/${relative_path}"
-        state_value=""
-        if [[ -f "${state_path}" ]]; then
-            state_value="$(<"${state_path}")"
-        fi
-
-        if [[ "${state_value}" == "present" ]]; then
-            mkdir -p "$(dirname "${target_path}")"
-            if [[ -e "${target_path}" && ! -w "${target_path}" ]]; then
-                chmod u+w "${target_path}"
-            fi
-            cp -a "${snapshot_path}" "${target_path}"
-        else
-            if [[ -e "${target_path}" && ! -w "${target_path}" ]]; then
-                chmod u+w "${target_path}"
-            fi
-            rm -f "${target_path}"
-        fi
-    done
-
-    rm -rf "${PHPIZE_SNAPSHOT_DIR}"
-    PHPIZE_SNAPSHOT_DIR=""
 }
 
 resolve_sanitizer_arch_suffix() {
@@ -570,10 +473,6 @@ echo "PHP binary: ${PHP_BIN}"
 echo "phpize: ${phpize_bin}"
 echo "php-config: ${php_config_bin}"
 
-load_phpize_generated_relative_paths
-snapshot_phpize_generated_files
-trap restore_phpize_generated_files EXIT
-
 cd "${EXT_DIR}"
 
 if [[ -f Makefile ]]; then
@@ -628,8 +527,5 @@ if [[ -n "${sanitizer_kind}" ]]; then
 
     cp "${runtime_path}" "${PROFILE_DIR}/$(basename "${runtime_path}")"
 fi
-
-restore_phpize_generated_files
-trap - EXIT
 
 echo "Staged ${PROFILE} artifacts under ${PROFILE_DIR}"

@@ -22,6 +22,8 @@ descriptions=(
   "Cargo build target directories must not be versioned"
   "Legacy Quiche runtime artifacts must not be versioned"
   "Unclassified Cargo manifests/locks must not be versioned"
+  "Generated PHP build tools and test runners must not be versioned"
+  "Generated PHP configure output must not be versioned"
 )
 
 patterns=(
@@ -37,6 +39,8 @@ patterns=(
   '(^|/)target/'
   '(^|/)(libquiche\.(so|dylib|dll|a|la)|quiche-server(\.exe)?)$'
   '(^|/)Cargo\.(toml|lock)$'
+  '^extension/(build/|([.]codex-)?run-tests[.]php$)'
+  '^extension/(config[.]h([.]in)?|configure([.]ac)?|libtool)$'
 )
 
 failed=0
