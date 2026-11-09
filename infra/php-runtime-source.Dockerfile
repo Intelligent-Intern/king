@@ -44,7 +44,7 @@ ARG BUILD_DATE
 ARG VCS_REF
 ARG SOURCE_SHA256
 LABEL org.opencontainers.image.title="king" \
-      org.opencontainers.image.version="1.0.13-beta" \
+      org.opencontainers.image.version="1.0.14-beta" \
       org.opencontainers.image.description="King PHP runtime with the IIBIN 2 schema contract and full unsigned 64-bit values" \
       org.opencontainers.image.source="https://github.com/Intelligent-Intern/king" \
       org.opencontainers.image.created="${BUILD_DATE}" \
@@ -59,7 +59,7 @@ RUN mkdir -p /workspace \
        > "/etc/php/${PHP_VERSION}/cli/conf.d/zz-king.ini" \
     && if command -v phpdismod >/dev/null 2>&1; then phpdismod -v "${PHP_VERSION}" -s cli xsl || true; fi \
     && rm -f /etc/php/${PHP_VERSION}/cli/conf.d/*xsl.ini /etc/php/${PHP_VERSION}/mods-available/xsl.ini \
-    && php -r 'if (phpversion("king") !== "1.0.13-beta") exit(1);' \
+    && php -r 'if (phpversion("king") !== "1.0.14-beta") exit(1);' \
     && PHP_BIN=php /opt/king/package/bin/smoke.sh \
     && dpkg --remove --force-remove-essential --force-depends libgcrypt20 login passwd tar
 WORKDIR /workspace

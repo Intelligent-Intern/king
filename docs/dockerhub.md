@@ -1,12 +1,12 @@
 # King PHP runtime — IIBIN 2 interoperability update
 
-**`v1.0.13-beta` includes the native King update for Python `iibin` 2.0 and
+**`v1.0.14-beta` includes the native King update for Python `iibin` 2.0 and
 JavaScript `@intelligentintern/iibin` 2.0's schema codec.** The image bundles
-PHP 8.5.12 or later and King 1.0.13-beta for Linux amd64 and arm64.
+PHP 8.5.12 or later and King 1.0.14-beta for Linux amd64 and arm64.
 
 ```bash
-docker pull intelligentintern/king:v1.0.13-beta
-docker run --rm intelligentintern/king:v1.0.13-beta \
+docker pull intelligentintern/king:v1.0.14-beta
+docker run --rm intelligentintern/king:v1.0.14-beta \
   php -r 'echo "PHP ", PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
 ```
 
@@ -20,7 +20,7 @@ must be recreated after pulling the update.
   integers or canonical decimal strings above `PHP_INT_MAX`.
 - UTF-8, finite-number and field-tag validation aligned with the Python and
   JavaScript schema codecs.
-- PHP 8.5.12 or later runtime and an explicit King 1.0.13-beta version inside the image.
+- PHP 8.5.12 or later runtime and an explicit King 1.0.14-beta version inside the image.
 - Migration notes in `/opt/king/package/docs/IIBIN-MIGRATION.md`.
 
 **Legacy JavaScript 1.x payloads use different formats.** Use its matching
@@ -37,7 +37,7 @@ the King binary loaded by PHP; pull and recreate this runtime separately.
 ## Example
 
 ```bash
-docker run --rm intelligentintern/king:v1.0.13-beta php -r '
+docker run --rm intelligentintern/king:v1.0.14-beta php -r '
 King\IIBIN::defineSchema("Counter", [
     "value" => ["tag" => 1, "type" => "uint64"],
 ]);

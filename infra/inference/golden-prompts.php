@@ -337,7 +337,7 @@ function king_golden_prompt_pack_runtime_cases(array $pack): array
 function king_golden_http_json(string $method, string $url, ?array $payload, int $timeout): array
 {
     if (!function_exists('curl_init')) {
-        throw new RuntimeException('golden-prompts requires the PHP curl extension.');
+        throw new RuntimeException('golden-prompts requires ext-curl.');
     }
 
     $ch = curl_init($url);
