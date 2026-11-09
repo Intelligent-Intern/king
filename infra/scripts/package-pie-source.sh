@@ -106,7 +106,20 @@ SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 
 mkdir -p "${STAGE_ROOT}"
 
+# phpize recreates these tools for the target PHP version. Exclude them even
+# when packaging a working tree that has already been built locally.
+GENERATED_EXCLUDES=()
+while IFS= read -r generated_path || [[ -n "${generated_path}" ]]; do
+    [[ -z "${generated_path}" || "${generated_path}" == \#* ]] && continue
+    if [[ "${generated_path}" != extension/* ]]; then
+        echo "Invalid generated-file path: ${generated_path}" >&2
+        exit 1
+    fi
+    GENERATED_EXCLUDES+=("--exclude=./${generated_path}")
+done < "${SCRIPT_DIR}/phpize-generated-files.list"
+
 tar \
+    "${GENERATED_EXCLUDES[@]}" \
     --exclude-vcs \
     --exclude='./dist' \
     --exclude='./compat-artifacts' \

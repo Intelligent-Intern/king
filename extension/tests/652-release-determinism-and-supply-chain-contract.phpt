@@ -4,7 +4,6 @@ King release determinism and supply-chain gates stay pinned in scripts and CI wo
 <?php
 $extensionDir = dirname(__DIR__);
 $rootDir = dirname($extensionDir);
-$buildScript = (string) file_get_contents($rootDir . '/infra/scripts/build-profile.sh');
 $packageScript = (string) file_get_contents($rootDir . '/infra/scripts/package-release.sh');
 $fuzzScript = (string) file_get_contents($rootDir . '/infra/scripts/fuzz-runtime.sh');
 $supplyChainScript = (string) file_get_contents($rootDir . '/infra/scripts/verify-release-supply-chain.sh');
@@ -12,8 +11,10 @@ $ciWorkflow = (string) file_get_contents($rootDir . '/.github/workflows/ci.yml')
 $releaseWorkflow = (string) file_get_contents($rootDir . '/.github/workflows/release-merge-publish.yml');
 
 var_dump(file_exists($rootDir . '/infra/scripts/phpize-generated-files.list'));
-var_dump(str_contains($buildScript, 'phpize-generated-files.list'));
-var_dump(str_contains($buildScript, 'restore_phpize_generated_files'));
+// phpize supplies these tools for the selected PHP version. The build must
+// leave them available for PHPT execution and subsequent make invocations.
+var_dump(is_file($extensionDir . '/run-tests.php'));
+var_dump(is_file($extensionDir . '/build/gen_stub.php'));
 var_dump(str_contains($packageScript, 'normalize_arch_name'));
 var_dump(str_contains($packageScript, "'provenance' => ["));
 var_dump(str_contains($fuzzScript, '--suite NAME'));

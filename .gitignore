@@ -23,8 +23,14 @@ extension/Makefile.fragments
 extension/*.la
 extension/modules/*.so
 extension/modules/*.la
-extension/build/profiles/
-extension/build/runtime/
+# phpize supplies the PHP test runner and build tools from the host toolchain.
+extension/build/
+extension/run-tests.php
+extension/.codex-run-tests.php
+extension/config.h
+extension/config.h.in
+extension/configure.ac
+extension/libtool
 extension/src/**/*.dep
 extension/src/**/*.lo
 extension/src/**/*.o
