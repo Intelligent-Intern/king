@@ -57,14 +57,14 @@ handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
 ### Bundled PHP runtime images
 
-Docker Hub's `intelligentintern/king:v1.0.13-beta` contains the native IIBIN 2
+Docker Hub's `intelligentintern/king:v1.0.14-beta` contains the native IIBIN 2
 interoperability update with PHP 8.5.12 for amd64/arm64. See the
 [Docker Hub usage and migration notes](docs/dockerhub.md). Pull the new image
 and recreate existing containers to load the updated extension.
 
 ```bash
-docker pull intelligentintern/king:v1.0.13-beta
-docker run --rm intelligentintern/king:v1.0.13-beta php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
+docker pull intelligentintern/king:v1.0.14-beta
+docker run --rm intelligentintern/king:v1.0.14-beta php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
 ```
 
 `ghcr.io/intelligent-intern/king:php8.4` bundles PHP and the King extension;

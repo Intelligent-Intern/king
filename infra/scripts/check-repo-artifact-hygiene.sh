@@ -63,6 +63,17 @@ for i in "${!descriptions[@]}"; do
   printf '%s\n' "${matches}" | sed 's/^/ - /' >&2
 done
 
+# PkgRadar examines PHP diagnostic text as well as executable code. Keep
+# extension names unambiguous (ext-curl) and review shell downloader wording.
+php_download_markers="$(git grep -n -I -i -E '(^|[^[:alnum:]_])(curl|wget)[[:blank:]]+' -- '*.php' || true)"
+if [[ -n "${php_download_markers}" ]]; then
+  failed=1
+  match_count="$(printf '%s\n' "${php_download_markers}" | wc -l | tr -d ' ')"
+  total_matches=$((total_matches + match_count))
+  echo "PHP source contains shell-downloader wording that triggers package heuristics; review command usage or extension naming:" >&2
+  printf '%s\n' "${php_download_markers}" | sed 's/^/ - /' >&2
+fi
+
 if [[ "${failed}" -ne 0 ]]; then
   echo "Repo artifact hygiene check failed with ${total_matches} offending tracked path(s)." >&2
   exit 1
