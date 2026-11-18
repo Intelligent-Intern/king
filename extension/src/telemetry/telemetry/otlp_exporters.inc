@@ -64,6 +64,21 @@ static double king_telemetry_otlp_metric_double_from_snapshot(zval *value_zval, 
     return zval_get_double(value_zval);
 }
 
+/* OTLP JSON uses ProtoJSON doubles: finite numbers must round-trip, while
+ * non-finite IEEE-754 values use the three canonical quoted spellings. */
+static void king_telemetry_otlp_append_double(smart_str *json_payload, double value)
+{
+    if (zend_isnan(value)) {
+        smart_str_appends(json_payload, "\"NaN\"");
+    } else if (!zend_finite(value)) {
+        smart_str_appends(json_payload, value < 0 ? "\"-Infinity\"" : "\"Infinity\"");
+    } else {
+        /* -1 selects Zend's shortest round-trip representation, independently
+         * of precision/serialize_precision INI settings. Keep signed zero. */
+        smart_str_append_double(json_payload, value, -1, 1);
+    }
+}
+
 static void king_telemetry_otlp_append_metric_labels(
     smart_str *json_payload,
     zval *labels_zval)
@@ -97,7 +112,7 @@ static void king_telemetry_otlp_append_gauge_metric(
     smart_str_appends(json_payload, "\"gauge\":{\"dataPoints\":[{\"timeUnixNano\":\"");
     king_telemetry_otlp_append_unix_time_nano(json_payload, metric_timestamp);
     smart_str_appends(json_payload, "\",\"asDouble\":");
-    smart_str_append_double(json_payload, metric_value, 6, 0);
+    king_telemetry_otlp_append_double(json_payload, metric_value);
     king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
     smart_str_appends(json_payload, "}]}");
 }
@@ -114,7 +129,7 @@ static void king_telemetry_otlp_append_histogram_metric(
     smart_str_appends(json_payload, "\",\"count\":\"");
     smart_str_append_long(json_payload, count);
     smart_str_appends(json_payload, "\",\"sum\":");
-    smart_str_append_double(json_payload, sum, 6, 0);
+    king_telemetry_otlp_append_double(json_payload, sum);
     king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
     smart_str_appends(json_payload, ",\"bucketCounts\":[\"");
     smart_str_append_long(json_payload, count);
@@ -134,10 +149,10 @@ static void king_telemetry_otlp_append_summary_metric(
     smart_str_appends(json_payload, "\",\"count\":\"");
     smart_str_append_long(json_payload, count);
     smart_str_appends(json_payload, "\",\"sum\":");
-    smart_str_append_double(json_payload, sum, 6, 0);
+    king_telemetry_otlp_append_double(json_payload, sum);
     king_telemetry_otlp_append_metric_labels(json_payload, labels_zval);
     smart_str_appends(json_payload, ",\"quantileValues\":[{\"quantile\":1,\"value\":");
-    smart_str_append_double(json_payload, latest_value, 6, 0);
+    king_telemetry_otlp_append_double(json_payload, latest_value);
     smart_str_appends(json_payload, "}]}]}");
 }
 

@@ -4,6 +4,16 @@ Telemetry records spans, metrics, and logs and can propagate trace context.
 The native API is procedural `king_telemetry_*`. A native OO class is not
 exported yet; the OO examples are userland adapters.
 
+## OTLP numeric precision
+
+OTLP gauge values, histogram sums, summary sums, and summary latest values use
+lossless double serialization. Unix timestamps recorded as gauges retain their
+seconds and fractional seconds instead of being rounded to six significant
+digits. Serialization is independent of PHP's `precision` and
+`serialize_precision` settings. The `timeUnixNano` timestamp strings and integer
+counter encoding are unchanged. Non-finite doubles use the ProtoJSON strings
+`"NaN"`, `"Infinity"`, and `"-Infinity"`.
+
 ## Internal Layout
 
 The telemetry runtime lives under `extension/src/telemetry/` with public
