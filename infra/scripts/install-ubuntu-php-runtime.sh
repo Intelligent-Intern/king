@@ -72,7 +72,15 @@ install_ondrej_php_keyring() {
 
 normalize_ubuntu_sources_to_scheme http
 
-apt-get "${APT_RETRY_OPTIONS[@]}" update
+apt-get "${APT_RETRY_OPTIONS[@]}" -o Acquire::Retries=0 update
+apt-get -o Acquire::Retries=0 install -y --no-install-recommends --only-upgrade apt libapt-pkg6.0t64
+for package in apt libapt-pkg6.0t64; do
+    installed_apt_version="$(dpkg-query -W -f='${Version}' "${package}")"
+    if ! dpkg --compare-versions "${installed_apt_version}" ge '2.8.4ubuntu0.1'; then
+        echo "${package} ${installed_apt_version} is below required security version 2.8.4ubuntu0.1." >&2
+        exit 1
+    fi
+done
 
 apt-get install -y --no-install-recommends \
     ca-certificates \
