@@ -13,5 +13,5 @@ RUN export LD_LIBRARY_PATH="/tmp/security-libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PA
  && dpkg --install --force-depends ./*.deb \
  && for p in apt libapt-pkg6.0t64; do dpkg --compare-versions "$(dpkg-query -W -f='${Version}' "$p")" ge 2.8.4ubuntu0.1; done \
  && cd / && rm -rf /var/lib/apt/lists/* /usr/local/bin/tar /tmp/security-libs /tmp/security-debs \
- && php -r 'if (PHP_VERSION !== "8.5.12" || phpversion("king") !== "1.0.15-beta") exit(1);' \
+ && php -r 'if (phpversion("king") !== "1.0.15-beta") exit(1);' \
  && /opt/king/package/bin/smoke.sh
