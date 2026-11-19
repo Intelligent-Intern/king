@@ -32,7 +32,7 @@ jobs:
             docker run --rm --platform "$platform" --entrypoint sh king-base-check:${{ matrix.php }} -c '
               set -eu
               for p in apt libapt-pkg6.0t64; do
-                version=$(dpkg-query -W -f="${Version}" "$p")
+                version=$(dpkg-query -W "$p" | cut -f2)
                 dpkg --compare-versions "$version" ge 2.8.4ubuntu0.1
               done
               php -v
