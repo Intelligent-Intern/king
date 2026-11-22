@@ -57,14 +57,14 @@ handled by the release scripts under [`infra/scripts/`](./infra/scripts/).
 
 ### Bundled PHP runtime images
 
-Docker Hub's `intelligentintern/king:v1.0.15-beta` preserves full OTLP metric precision, including Unix timestamps recorded as
+Docker Hub's `intelligentintern/king:v1.1.0-beta` preserves full OTLP metric precision, including Unix timestamps recorded as
 gauges, with PHP 8.5.12 for amd64/arm64. See the
 [Docker Hub usage and migration notes](docs/dockerhub.md). Pull the new image
 and recreate existing containers to load the updated extension.
 
 ```bash
-docker pull intelligentintern/king:v1.0.15-beta
-docker run --rm intelligentintern/king:v1.0.15-beta php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
+docker pull intelligentintern/king:v1.1.0-beta
+docker run --rm intelligentintern/king:v1.1.0-beta php -r 'echo PHP_VERSION, " King ", phpversion("king"), PHP_EOL;'
 ```
 
 `ghcr.io/intelligent-intern/king:php8.4` bundles PHP and the King extension;
