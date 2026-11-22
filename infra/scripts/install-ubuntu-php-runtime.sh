@@ -107,6 +107,18 @@ printf 'deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpad
 
 apt-get "${APT_RETRY_OPTIONS[@]}" update
 
+# Installing PHP alone leaves vulnerable packages from the pinned Ubuntu base
+# untouched. Refresh all installed packages before producing runtime images.
+apt-get "${APT_RETRY_OPTIONS[@]}" upgrade -y --no-install-recommends
+for package_minimum in 'libc6 2.39-0ubuntu8.12' 'libc-bin 2.39-0ubuntu8.12' 'libpcre2-8-0 10.42-4ubuntu2.2'; do
+    read -r package minimum <<< "${package_minimum}"
+    installed="$(dpkg-query -W -f='${Version}' "${package}")"
+    if ! dpkg --compare-versions "${installed}" ge "${minimum}"; then
+        echo "${package} ${installed} is below required security version ${minimum}." >&2
+        exit 1
+    fi
+done
+
 apt-get install -y --no-install-recommends \
     "php${PHP_VERSION}-cli" \
     "php${PHP_VERSION}-curl" \
